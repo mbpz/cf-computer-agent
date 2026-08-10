@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { safeId, searchNotes, type SearchDocument } from "../../src/search";
+import { safeId, searchNotes } from "../../src/knowledge/search";
+import type { SearchDocument } from "../../src/knowledge/types";
 
 const doc = (data: Partial<SearchDocument>): SearchDocument => ({
   id: "one", title: "Project notes", tags: ["work"], content: "The launch checklist contains monitoring.",
