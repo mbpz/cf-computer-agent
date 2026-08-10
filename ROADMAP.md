@@ -23,21 +23,21 @@
 
 范围：
 
-- 将 `src/index.ts` 拆分为认证、路由、知识服务、Computer 存储、检索和 AI provider。
-- 将内嵌 HTML 拆为独立前端构建入口。
-- 使用 `wrangler types` 生成 Env，消除手写 Env 漂移。
-- APP_TOKEN 改为恒定时间比较，并降级为运维兼容鉴权。
-- 消除 Computer RPC 边界的双重类型断言，封装 `WorkspaceRepository`。
-- 引入 `@cloudflare/vitest-pool-workers`，覆盖 Worker 路由与 Durable Object 持久性。
-- 增加结构化错误、request_id、安全响应头和日志脱敏。
-- 补全生产 smoke 脚本：health、新增、列表、检索、问答和未授权。
+- [x] 将 `src/index.ts` 拆分为认证、路由、知识服务、Computer 存储、检索和 AI provider。（本地 `rtk npm run check`）
+- [x] 将内嵌 HTML 拆为独立前端构建入口。（本地 `rtk npm run check`）
+- [x] 使用 `wrangler types` 生成 Env，消除手写 Env 漂移。（本地 `rtk npm run check`）
+- [x] APP_TOKEN 改为恒定时间比较，并降级为运维兼容鉴权。（本地 `rtk npm run check`）
+- [x] 消除 Computer RPC 边界的双重类型断言，封装 `WorkspaceRepository`。（本地 `rtk npm run check`）
+- [x] 引入 `@cloudflare/vitest-pool-workers`，覆盖 Worker 路由与 Durable Object 持久性。（本地 `rtk npm run check`）
+- [x] 增加结构化错误、request_id、安全响应头和日志脱敏。（本地 `rtk npm run check`）
+- [x] 补全生产 smoke 脚本：health、新增、列表、检索、问答和未授权。（本地 mock 验证；尚未调用远程环境）
 
 退出标准：
 
-- `npm run check` 覆盖类型、单元、Worker 集成和构建。
-- 远程新增、检索、问答成功；错误 Token 返回 401。
-- Durable Object 重启后能读回笔记。
-- 当前生产域名验证完成且不记录密钥。
+- [x] `rtk npm run check` 覆盖类型、单元、Worker 集成和构建。（2026-08-11：38 个单元测试、19 个 Worker 测试与 dry build 通过）
+- [ ] 远程新增、检索、问答成功；错误 Token 返回 401。
+- [ ] Durable Object 重启后能读回笔记。
+- [ ] 当前生产域名验证完成且不记录密钥。
 
 ## Phase 1 — 身份、角色与 D1 控制面
 

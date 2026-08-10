@@ -28,23 +28,27 @@ Browser UI → Worker API → personal Durable Object
 
 ```bash
 npm install
-npm run check
-npm run dev
+rtk npm run check
+rtk npm run dev
 ```
 
-本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。若要启用共享令牌：
+`rtk npm run check` 只验证生成类型、TypeScript、单元测试、workerd 集成测试和 Wrangler dry build。它不会请求远程 Workers AI、不会验证已部署 Durable Object 的持久性，也不构成生产域名或 Provider 成熟度证据。
+
+本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。部署环境必须设置共享令牌：
 
 ```bash
-npx wrangler secret put APP_TOKEN
+rtk npx wrangler secret put APP_TOKEN
 ```
 
-然后在页面右上角“设置令牌”。不要把令牌写进 `wrangler.jsonc` 或提交 `.dev.vars`。
+未设置 `APP_TOKEN` 的部署会以 `503 AUTH_MISCONFIGURED` 拒绝 API 请求。只有显式设置 `ALLOW_INSECURE_LOCAL=true` 的本地兼容环境才允许无令牌访问；不要把它部署到远程环境。然后在页面右上角“设置令牌”。不要把令牌写进 `wrangler.jsonc`、`.dev.vars` 或命令行参数。
+
+静态浏览器文件位于 `public/`，由 Worker 的 `ASSETS` binding 提供；`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
 
 ## 部署
 
 ```bash
-npx wrangler login
-npm run deploy
+rtk npx wrangler login
+rtk npm run deploy
 ```
 
 部署后建议在 Cloudflare Zero Trust 中为该 Worker 自定义域配置 Access 自托管应用，仅允许自己的邮箱。Cloudflare Access 免费层政策与额度可能变化，部署时应以控制台显示为准。
@@ -59,9 +63,23 @@ npm run deploy
 
 配置了 `APP_TOKEN` 后，所有 API 请求须带 `Authorization: Bearer <token>`。单条笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
 
+## 远程 smoke 验证
+
+部署授权后，使用交互式输入设置令牌，再运行 smoke。令牌只从 `MEMORY_GARDEN_TOKEN` 读取，脚本不会打印令牌、请求头、笔记正文或完整 Agent 回答。
+
+```bash
+read -s MEMORY_GARDEN_TOKEN
+export MEMORY_GARDEN_TOKEN
+export MEMORY_GARDEN_BASE_URL=https://memory-garden-agent.apples398.workers.dev
+rtk npm run smoke
+unset MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
+```
+
+Smoke 依次验证未授权与授权 health、创建、列表、检索和带来源的问答；每次会写入一条 `smoke-<uuid>` 笔记。当前没有删除 API，因此不会自动清理；Phase 3 的回收站/删除能力完成前，这条可识别笔记会保留。仅在 workers.dev 与自定义域都成功执行后，才是远程 API 与 Provider 的一次运行证据；它仍不能单独证明长期 Durable Object 重启恢复或 `@cloudflare/computer` Preview 的生产成熟度。
+
 ## 免费层边界
 
-平台不会保证“永远免费”。当前设计只依赖 Workers、SQLite-backed Durable Objects 和 Workers AI 的免费额度；超过每日额度时请求会失败而不会自动扩展成本。仓库没有绑卡、预算或账户级设置能力，因此部署者仍应在 Cloudflare 控制台检查计划与用量。详见 [ROADMAP.md](./ROADMAP.md)。
+平台不会保证“永远免费”。当前设计只依赖 Workers、SQLite-backed Durable Objects 和 Workers AI 的免费额度；超过每日额度时请求会失败而不会自动扩展成本。Smoke 的问答请求会消耗 Workers AI 配额，故只能在明确授权的已部署环境执行。仓库没有绑卡、预算或账户级设置能力，也无法强制账户零计费；部署者仍应在 Cloudflare 控制台确认计划、预算保护和用量。详见 [ROADMAP.md](./ROADMAP.md)。
 
 ## 数据与隐私
 
