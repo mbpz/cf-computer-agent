@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:unit && npm run test:worker",
+    "test": "npm run test:smoke && npm run test:unit && npm run test:worker",
+    "test:smoke": "node --test scripts/smoke.test.mjs",
     "test:unit": "vitest run test/unit",
     "test:worker": "vitest run test/worker --passWithNoTests",
     "typecheck": "tsc --noEmit",

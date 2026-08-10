@@ -30,6 +30,8 @@ Use this runbook only with deployment authorization. It changes a remote Worker 
 
 If either smoke run fails, stop the rollout and roll back to the version captured in step 1:
 
+Before changing the Worker version, gate the target on compatibility with the currently applied `KnowledgeBase` Durable Object migration and its persisted VFS, index, and journal data. A Worker rollback never reverses Durable Object migrations or stored data. Preserve and inspect that data as needed; never try to undo the migration, delete Durable Object storage, or reset the object as part of this rollback. If the earlier Worker cannot safely read the current schema, stop and use a compatible forward fix instead.
+
 ```bash
 rtk npx wrangler rollback <VERSION_ID>
 ```

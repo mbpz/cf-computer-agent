@@ -16,7 +16,7 @@ rtk npm run smoke
 unset MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
 ```
 
-The script accepts only `MEMORY_GARDEN_TOKEN` for authentication. It prints each step's name, HTTP status, request ID, and elapsed time; it never prints the token, request headers, note content, or complete Agent answer.
+The script accepts only `MEMORY_GARDEN_TOKEN` for authentication. Remote smoke URLs must use HTTPS. `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` exists solely for an opted-in local contract mock on `localhost`, `127.0.0.0/8`, or `::1`; it cannot enable general HTTP and must not be used for a deployed domain. The script prints each step's name, HTTP status, request ID, and elapsed time; it never prints the token, request headers, note content, or complete Agent answer.
 
 ## Expected evidence
 

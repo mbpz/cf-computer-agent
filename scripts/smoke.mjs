@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 
 const baseUrl = process.env.MEMORY_GARDEN_BASE_URL;
 const token = process.env.MEMORY_GARDEN_TOKEN;
@@ -107,10 +108,26 @@ async function run() {
   } catch {
     throw new Error("MEMORY_GARDEN_BASE_URL must be a valid HTTP(S) URL");
   }
-  if (!/^https?:$/.test(origin.protocol)) {
+  if (origin.protocol === "https:") return runChecks();
+  if (
+    origin.protocol !== "http:"
+    || process.env.MEMORY_GARDEN_ALLOW_HTTP_LOCAL !== "true"
+    || !isLoopbackHost(origin.hostname)
+  ) {
     throw new Error("MEMORY_GARDEN_BASE_URL must be a valid HTTP(S) URL");
   }
 
+  return runChecks();
+}
+
+function isLoopbackHost(hostname) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return normalized === "localhost"
+    || (isIP(normalized) === 4 && normalized.startsWith("127."))
+    || normalized === "::1";
+}
+
+async function runChecks() {
   const title = `smoke-${randomUUID()}`;
   const note = {
     title,

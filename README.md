@@ -21,7 +21,7 @@ Browser UI → Worker API → personal Durable Object
 - 中英文关键词检索，标题/标签加权
 - RAG 问答，只将命中的笔记片段交给 Workers AI
 - `[1]` 形式引用与原始来源卡片
-- 可选 `APP_TOKEN` 保护 API；正式使用建议再配置 Cloudflare Access
+- 已部署 API 必须配置 `APP_TOKEN`；无令牌仅限显式本地兼容模式，正式使用建议再配置 Cloudflare Access
 - 单 Worker 静态界面，无 Pages、外部数据库或第三方模型费用
 
 ## 本地运行
@@ -65,7 +65,7 @@ rtk npm run deploy
 
 ## 远程 smoke 验证
 
-部署授权后，使用交互式输入设置令牌，再运行 smoke。令牌只从 `MEMORY_GARDEN_TOKEN` 读取，脚本不会打印令牌、请求头、笔记正文或完整 Agent 回答。
+部署授权后，使用交互式输入设置令牌，再运行 smoke。令牌只从 `MEMORY_GARDEN_TOKEN` 读取，脚本不会打印令牌、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
 
 ```bash
 read -s MEMORY_GARDEN_TOKEN
