@@ -111,13 +111,17 @@ function assertSafePath(note: NoteRecord): void {
   }
 }
 
-async function ensureDirectory(
+export async function ensureDirectory(
   workspace: WorkspaceClient,
   parent: string,
   path: string,
 ): Promise<void> {
   if (await hasEntry(workspace, parent, fileName(path))) return;
-  await workspace.fs.mkdir(path);
+  try {
+    await workspace.fs.mkdir(path);
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error;
+  }
 }
 
 async function ensureWorkspaceDirectories(workspace: WorkspaceClient): Promise<void> {
@@ -132,4 +136,11 @@ async function hasEntry(workspace: WorkspaceClient, directory: string, name: str
 
 function fileName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate?.code === "EEXIST"
+    || (typeof candidate?.message === "string"
+      && (candidate.message.includes("EEXIST") || candidate.message.includes("WorkspaceFsError: path exists:")));
 }

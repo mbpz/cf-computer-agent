@@ -27,3 +27,15 @@ Executed successfully:
 ## Remaining boundary
 
 These are local workerd checks only. The Workers AI binding emits its standard local warning, but this task's tests do not call it. Remote provider, deployed persistence, and production smoke evidence remain out of scope for Task 6.
+
+## P1 review follow-up
+
+- Changed the Wrangler asset routing rule to `run_worker_first: true`, so every static asset passes through the Worker before `env.ASSETS.fetch`. The root page and stylesheet regression both require dynamic request and security headers.
+- Restored POST note compatibility: a new ID returns 201, an existing ID returns 200, and missing or non-array tags normalize to an empty array. The response body remains `{ note }`.
+- Made directory initialization safe for concurrent request-scoped Workspace clients: only the documented `EEXIST` code or the observed RPC `WorkspaceFsError: path exists:` shape is treated as success. The focused unit test also proves unrelated storage errors propagate, and the workerd suite sends two fresh-note POSTs concurrently.
+
+Follow-up verification passed:
+
+- `rtk npx vitest run test/unit/workspace-repository.test.ts` — 3 tests passed.
+- `rtk npx vitest run test/worker/app.test.ts` — 5 tests passed.
+- `rtk npm run typecheck` — passed.

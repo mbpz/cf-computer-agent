@@ -47,7 +47,8 @@ async function dispatchApiRequest(
         return jsonResponse({ notes: await knowledge.listNotes() }, 200, context.requestId);
       }
       if (request.method === "POST") {
-        return jsonResponse({ note: await knowledge.createNote(await request.json()) }, 201, context.requestId);
+        const result = await knowledge.createNoteWithOutcome(await request.json());
+        return jsonResponse({ note: result.note }, result.created ? 201 : 200, context.requestId);
       }
       return methodNotAllowed("GET, POST", context);
     }

@@ -7,8 +7,13 @@ import type { KnowledgeRepository } from "./workspace-repository";
 export interface CreateNoteInput {
   id?: string;
   title: string;
-  tags: string[];
+  tags?: string[];
   content: string;
+}
+
+export interface CreateNoteResult {
+  note: NoteRecord;
+  created: boolean;
 }
 
 export interface KnowledgeServiceOptions {
@@ -29,6 +34,10 @@ export class KnowledgeService {
   }
 
   async createNote(input: unknown): Promise<NoteRecord> {
+    return (await this.createNoteWithOutcome(input)).note;
+  }
+
+  async createNoteWithOutcome(input: unknown): Promise<CreateNoteResult> {
     if (!isCreateNoteContainer(input)) {
       throw new AppError("NOTE_INVALID", "Note must be an object", 400);
     }
@@ -49,7 +58,7 @@ export class KnowledgeService {
     };
     const nextIndex = [note, ...index.filter((item) => item.id !== id)];
     await this.repository.save(note, content, nextIndex);
-    return note;
+    return { note, created: !existing };
   }
 
   listNotes(): Promise<NoteRecord[]> {
@@ -91,10 +100,8 @@ function validateContent(value: unknown): string {
 }
 
 function validateTags(value: unknown): string[] {
-  if (!Array.isArray(value) || value.some((tag) => typeof tag !== "string")) {
-    throw new AppError("NOTE_INVALID", "Tags must be text", 400);
-  }
-  return value.map((tag) => tag.trim()).filter(Boolean).slice(0, 20);
+  if (!Array.isArray(value)) return [];
+  return value.map(String).map((tag) => tag.trim()).filter(Boolean).slice(0, 20);
 }
 
 function validateId(value: unknown, fallback: string): string {
