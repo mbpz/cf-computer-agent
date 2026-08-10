@@ -1,19 +1,16 @@
 import { AppError } from "../http";
 import { APP_CONFIG } from "../config";
 import { safeId, searchNotes } from "./search";
-import type { NoteRecord, SearchDocument, SearchHit } from "./types";
+import type { CreateNoteResult, NoteRecord, SearchDocument, SearchHit } from "./types";
 import type { KnowledgeRepository } from "./workspace-repository";
+
+export type { CreateNoteResult } from "./types";
 
 export interface CreateNoteInput {
   id?: string;
   title: string;
   tags?: string[];
   content: string;
-}
-
-export interface CreateNoteResult {
-  note: NoteRecord;
-  created: boolean;
 }
 
 export interface KnowledgeServiceOptions {

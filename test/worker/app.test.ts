@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { createExecutionContext, env, evictDurableObject, reset, SELF } from "cloudflare:test";
+import { createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF } from "cloudflare:test";
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SEED_NOTES } from "../fixtures/seed-notes";
@@ -52,9 +52,43 @@ function incomingRequest(url: string, init?: RequestInit): Request<unknown, Inco
   return new Request(url, init) as Request<unknown, IncomingRequestCfProperties<unknown>>;
 }
 
+function encodedByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function streamBody(value: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(value);
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
 async function openWorkspace(): Promise<WorkspaceClient> {
   const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
   return getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+}
+
+async function seedPendingJournal(note: Record<string, unknown>, content: string): Promise<void> {
+  const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+  await runInDurableObject(stub, (_instance, state) => {
+    state.storage.sql.exec(
+      "INSERT INTO memory_garden_note_journal (workspace, note_json, content) VALUES (?, ?, ?)",
+      APP_CONFIG.workspaceName,
+      JSON.stringify(note),
+      content,
+    );
+  });
+}
+
+async function expectJournalCleared(): Promise<void> {
+  const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+  const rows = await runInDurableObject(stub, (_instance, state) => state.storage.sql
+    .exec<{ workspace: string }>("SELECT workspace FROM memory_garden_note_journal")
+    .toArray());
+  expect(rows).toEqual([]);
 }
 
 describe("Worker application", () => {
@@ -110,7 +144,7 @@ describe("Worker application", () => {
     const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
 
     await expect(stub.commitNote({ id: "direct-rpc", title: "Direct RPC", content: "local workspace write" }))
-      .resolves.toMatchObject({ note: { id: "direct-rpc", title: "Direct RPC" }, created: true });
+      .resolves.toMatchObject({ ok: true, value: { note: { id: "direct-rpc", title: "Direct RPC" }, created: true } });
 
     const listed = await api("/api/notes");
     await expect(listed.json()).resolves.toMatchObject({ notes: [{ id: "direct-rpc" }] });
@@ -182,6 +216,125 @@ describe("Worker application", () => {
     expect(method.headers.get("allow")).toBe("GET, POST");
   });
 
+  it("accepts exactly 128 KiB of UTF-8 content but rejects one additional byte", async () => {
+    const exactContent = `${"你".repeat(43_690)}aa`;
+    expect(encodedByteLength(exactContent)).toBe(APP_CONFIG.maxNoteBytes);
+
+    const exact = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ id: "utf8-exact", title: "UTF-8 exact", content: exactContent }),
+    });
+    expect(exact.status).toBe(201);
+
+    const over = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ id: "utf8-over", title: "UTF-8 over", content: `${exactContent}a` }),
+    });
+    await expectError(over, 413, "NOTE_TOO_LARGE");
+  });
+
+  it("enforces a separate exact UTF-8 JSON envelope limit", async () => {
+    const base = { id: "envelope-exact", title: "Envelope", tags: [""], content: "x" };
+    const padding = "a".repeat(APP_CONFIG.maxJsonRequestBytes - encodedByteLength(JSON.stringify(base)));
+    const exactBody = JSON.stringify({ ...base, tags: [padding] });
+    expect(encodedByteLength(exactBody)).toBe(APP_CONFIG.maxJsonRequestBytes);
+
+    const exact = await api("/api/notes", {
+      method: "POST",
+      headers: { "content-length": String(encodedByteLength(exactBody)) },
+      body: exactBody,
+    });
+    expect(exact.status).toBe(201);
+
+    const overBody = `${exactBody} `;
+    const over = await api("/api/notes", {
+      method: "POST",
+      headers: { "content-length": String(encodedByteLength(overBody)) },
+      body: streamBody(overBody),
+    });
+    await expectError(over, 413, "REQUEST_TOO_LARGE");
+  });
+
+  it("maps a corrupt index from the note-commit RPC without exposing repository data", async () => {
+    const workspace = await openWorkspace();
+    await workspace.fs.mkdir("/workspace");
+    await workspace.fs.mkdir("/workspace/.memory");
+    await workspace.fs.writeFile(APP_CONFIG.indexPath, "raw-corrupt-index");
+    disposeWorkspace(workspace);
+
+    const response = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ id: "corrupt-post", title: "Corrupt", content: "no leak" }),
+    });
+    const body = await expectError(response, 500, "INDEX_CORRUPT");
+    expect(JSON.stringify(body)).not.toContain("raw-corrupt-index");
+  });
+
+  it("replays an app-owned pending journal before exposing workspace reads after eviction", async () => {
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+    await seedPendingJournal({
+      id: "journal-recovery",
+      title: "Recovered journal note",
+      tags: ["recovery"],
+      path: "/workspace/notes/journal-recovery.md",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }, "recovered content");
+    await evictDurableObject(stub);
+
+    const response = await api("/api/notes");
+    await expect(response.json()).resolves.toMatchObject({ notes: [{ id: "journal-recovery", title: "Recovered journal note" }] });
+    await expectJournalCleared();
+  });
+
+  it("replays a pending journal after Markdown is written but before the index", async () => {
+    const note = {
+      id: "journal-markdown",
+      title: "Markdown before index",
+      tags: ["recovery"],
+      path: "/workspace/notes/journal-markdown.md",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    await seedPendingJournal(note, "markdown already written");
+    const workspace = await openWorkspace();
+    await workspace.fs.mkdir("/workspace");
+    await workspace.fs.mkdir("/workspace/notes");
+    await workspace.fs.writeFile(note.path, "markdown already written");
+    disposeWorkspace(workspace);
+
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+    await evictDurableObject(stub);
+    const response = await api("/api/search?q=markdown%20already%20written");
+    await expect(response.json()).resolves.toMatchObject({ hits: [{ id: "journal-markdown" }] });
+    await expectJournalCleared();
+  });
+
+  it("replays idempotently when the index was written before journal deletion", async () => {
+    const note = {
+      id: "journal-index",
+      title: "Index before journal deletion",
+      tags: ["recovery"],
+      path: "/workspace/notes/journal-index.md",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    await seedPendingJournal(note, "index already written");
+    const workspace = await openWorkspace();
+    await workspace.fs.mkdir("/workspace");
+    await workspace.fs.mkdir("/workspace/.memory");
+    await workspace.fs.mkdir("/workspace/notes");
+    await workspace.fs.writeFile(note.path, "index already written");
+    await workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify([note]));
+    disposeWorkspace(workspace);
+
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+    await evictDurableObject(stub);
+    const response = await api("/api/notes");
+    await expect(response.json()).resolves.toMatchObject({ notes: [{ id: "journal-index" }] });
+    await expectJournalCleared();
+  });
+
   it("redacts corrupt repository content from stable errors", async () => {
     const workspace = await openWorkspace();
     await workspace.fs.mkdir("/workspace");
@@ -251,5 +404,22 @@ describe("Worker application", () => {
     const stylesheet = await SELF.fetch("https://example.test/styles.css");
     expect(stylesheet.status).toBe(200);
     expectProtectedResponse(stylesheet);
+  });
+
+  it("does not encode unexpected journal corruption as a domain error", async () => {
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        "INSERT INTO memory_garden_note_journal (workspace, note_json, content) VALUES (?, ?, ?)",
+        APP_CONFIG.workspaceName,
+        "not-json-journal-content",
+        "not-a-secret",
+      );
+    });
+    await evictDurableObject(stub);
+
+    const response = await api("/api/notes");
+    const body = await expectError(response, 500, "INTERNAL_ERROR");
+    expect(JSON.stringify(body)).not.toContain("not-json-journal-content");
   });
 });

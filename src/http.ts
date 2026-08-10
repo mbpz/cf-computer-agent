@@ -24,7 +24,7 @@ export async function parseJsonRequest(request: Request, maxBytes: number): Prom
 
   const contentLength = request.headers.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
-    throw new AppError("NOTE_TOO_LARGE", "Note exceeds 128 KiB", 413);
+    throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
   }
 
   const body = await readBoundedBody(request, maxBytes);
@@ -76,7 +76,7 @@ async function readBoundedBody(request: Request, maxBytes: number): Promise<stri
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maxBytes) throw new AppError("NOTE_TOO_LARGE", "Note exceeds 128 KiB", 413);
+      if (total > maxBytes) throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
       chunks.push(value);
     }
   } finally {

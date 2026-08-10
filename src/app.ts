@@ -47,7 +47,7 @@ async function dispatchApiRequest(
         return jsonResponse({ notes: await knowledge.listNotes() }, 200, context.requestId);
       }
       if (request.method === "POST") {
-        const result = await repository.commitNote(await parseJsonRequest(request, APP_CONFIG.maxNoteBytes));
+        const result = await repository.commitNote(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
         return jsonResponse({ note: result.note }, result.created ? 201 : 200, context.requestId);
       }
       return methodNotAllowed("GET, POST", context);
@@ -60,7 +60,7 @@ async function dispatchApiRequest(
 
     if (url.pathname === "/api/chat") {
       if (request.method !== "POST") return methodNotAllowed("POST", context);
-      const body = await parseJsonRequest(request, APP_CONFIG.maxNoteBytes);
+      const body = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
       const question = getQuestion(body);
       const sources = await knowledge.search(question, 6);
       return jsonResponse(await answers.answer(question, sources), 200, context.requestId);

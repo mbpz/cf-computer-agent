@@ -1,8 +1,7 @@
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
-import type { CreateNoteResult } from "./service";
-import type { NoteRecord, SearchDocument } from "./types";
+import type { CreateNoteResult, NoteRecord, RpcResult, SearchDocument } from "./types";
 
 const INDEX_DIRECTORY = APP_CONFIG.indexPath.slice(0, APP_CONFIG.indexPath.lastIndexOf("/"));
 const WORKSPACE_ROOT = APP_CONFIG.notesRoot.slice(0, APP_CONFIG.notesRoot.lastIndexOf("/"));
@@ -33,9 +32,8 @@ export class WorkspaceRepository implements KnowledgeRepository {
   }
 
   async commitNote(input: unknown): Promise<CreateNoteResult> {
-    if (!this.namespace || !this.name) throw new Error("A Durable Object workspace is required to commit notes");
-    const stub = this.namespace.get(this.namespace.idFromName(this.name));
-    return stub.commitNote(input);
+    const result = await this.getStub().commitNote(input);
+    return unwrapRpcResult(result);
   }
 
   async list(): Promise<NoteRecord[]> {
@@ -89,15 +87,25 @@ export class WorkspaceRepository implements KnowledgeRepository {
 
   private async getWorkspace(): Promise<WorkspaceClient> {
     if (!this.workspace) {
-      if (!this.namespace || !this.name) throw new Error("A workspace client is required");
-      this.workspace = await getWorkspace(toWorkspaceHandle(this.namespace, this.name));
+      const stub = this.getStub();
+      unwrapRpcResult(await stub.recoverWorkspace());
+      this.workspace = await getWorkspace(toWorkspaceHandle(stub));
     }
     return this.workspace;
   }
+
+  private getStub(): ReturnType<Env["KNOWLEDGE"]["get"]> {
+    if (!this.namespace || !this.name) throw new Error("A Durable Object workspace is required");
+    return this.namespace.get(this.namespace.idFromName(this.name));
+  }
 }
 
-function toWorkspaceHandle(namespace: Env["KNOWLEDGE"], name: string): Parameters<typeof getWorkspace>[0] {
-  const stub = namespace.get(namespace.idFromName(name));
+function unwrapRpcResult<T>(result: RpcResult<T>): T {
+  if (result.ok) return result.value;
+  throw new AppError(result.error.code, result.error.message, result.error.status, result.error.retryable);
+}
+
+function toWorkspaceHandle(stub: ReturnType<Env["KNOWLEDGE"]["get"]>): Parameters<typeof getWorkspace>[0] {
   // @cloudflare/computer currently expects its internal WorkspaceStubHost while
   // a generated DurableObjectNamespace exposes a structurally incompatible stub.
   return stub as unknown as Parameters<typeof getWorkspace>[0];
