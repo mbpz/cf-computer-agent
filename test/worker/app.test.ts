@@ -236,9 +236,8 @@ describe("Worker application", () => {
   });
 
   it("enforces a separate exact UTF-8 JSON envelope limit", async () => {
-    const base = { id: "envelope-exact", title: "Envelope", tags: [""], content: "x" };
-    const padding = "a".repeat(APP_CONFIG.maxJsonRequestBytes - encodedByteLength(JSON.stringify(base)));
-    const exactBody = JSON.stringify({ ...base, tags: [padding] });
+    const base = JSON.stringify({ id: "envelope-exact", title: "Envelope", tags: ["bounded"], content: "x" });
+    const exactBody = `${base}${" ".repeat(APP_CONFIG.maxJsonRequestBytes - encodedByteLength(base))}`;
     expect(encodedByteLength(exactBody)).toBe(APP_CONFIG.maxJsonRequestBytes);
 
     const exact = await api("/api/notes", {
@@ -255,6 +254,24 @@ describe("Worker application", () => {
       body: streamBody(overBody),
     });
     await expectError(over, 413, "REQUEST_TOO_LARGE");
+  });
+
+  it("rejects oversized note metadata through the Durable Object RPC", async () => {
+    const invalidNotes = [
+      { id: "i".repeat(APP_CONFIG.maxNoteIdBytes + 1), title: "Title", content: "body" },
+      { title: "t".repeat(APP_CONFIG.maxNoteTitleBytes + 1), content: "body" },
+      { title: "Title", tags: ["t".repeat(APP_CONFIG.maxNoteTagBytes + 1)], content: "body" },
+      { title: "Title", tags: Array.from({ length: APP_CONFIG.maxNoteTags + 1 }, () => "tag"), content: "body" },
+      {
+        title: "Title",
+        tags: Array.from({ length: APP_CONFIG.maxNoteTags }, () => "t".repeat(APP_CONFIG.maxNoteTagBytes)),
+        content: "body",
+      },
+    ];
+
+    for (const note of invalidNotes) {
+      await expectError(await api("/api/notes", { method: "POST", body: JSON.stringify(note) }), 400, "NOTE_INVALID");
+    }
   });
 
   it("maps a corrupt index from the note-commit RPC without exposing repository data", async () => {
@@ -420,6 +437,12 @@ describe("Worker application", () => {
       );
     });
     await evictDurableObject(stub);
+
+    const recoveryError = await stub.recoverWorkspace().catch((error: unknown) => error);
+    expect(recoveryError).toBeInstanceOf(Error);
+    expect((recoveryError as Error).message).toBe("Invalid pending note journal");
+    expect((recoveryError as Error).message).not.toContain(sensitiveMarker);
+    expect(Object.prototype.hasOwnProperty.call(recoveryError, "cause")).toBe(false);
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {

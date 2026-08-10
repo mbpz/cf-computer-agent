@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NoteRecord } from "../../src/knowledge/types";
+import { APP_CONFIG } from "../../src/config";
 import type { KnowledgeRepository } from "../../src/knowledge/workspace-repository";
 import { KnowledgeService } from "../../src/knowledge/service";
 
@@ -80,6 +81,22 @@ describe("KnowledgeService.createNote", () => {
 
     await expect(service.createNote({ title: "Large", tags: [], content: "x".repeat(128 * 1024 + 1) }))
       .rejects.toMatchObject({ code: "NOTE_TOO_LARGE" });
+  });
+
+  it.each([
+    ["id", { id: "i".repeat(APP_CONFIG.maxNoteIdBytes + 1), title: "Title", content: "body" }],
+    ["title", { title: "t".repeat(APP_CONFIG.maxNoteTitleBytes + 1), content: "body" }],
+    ["tag", { title: "Title", tags: ["t".repeat(APP_CONFIG.maxNoteTagBytes + 1)], content: "body" }],
+    ["tag count", { title: "Title", tags: Array.from({ length: APP_CONFIG.maxNoteTags + 1 }, () => "tag"), content: "body" }],
+    ["aggregate metadata", {
+      title: "Title",
+      tags: Array.from({ length: APP_CONFIG.maxNoteTags }, () => "t".repeat(APP_CONFIG.maxNoteTagBytes)),
+      content: "body",
+    }],
+  ])("rejects oversized normalized %s metadata", async (_label, input) => {
+    const service = new KnowledgeService(new MemoryRepository(), { now: clock, createId: () => "generated" });
+
+    await expect(service.createNote(input)).rejects.toMatchObject({ code: "NOTE_INVALID", status: 400 });
   });
 });
 

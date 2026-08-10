@@ -21,14 +21,18 @@ Review follow-up: the envelope limit is now derived from the worst JSON escape e
 
 Journal parse failures now discard `JSON.parse`'s raw syntax error and throw the fixed non-domain `Invalid pending note journal` error. The test seeds a unique sensitive marker, captures application diagnostics, and asserts the marker is absent from both logs and the HTTP error; workerd's reset diagnostic likewise contains only the fixed message.
 
+Final metadata follow-up: the 16 KiB metadata allowance is now enforced over the serialized stored `NoteRecord`, so its JSON escaping is part of the measured budget. Input validation also rejects oversized UTF-8 IDs (192 bytes), titles (480 bytes), tags (1 KiB each), more than 20 normalized tags, and aggregate stored metadata beyond that budget with `NOTE_INVALID` 400. The envelope absolute-boundary test uses JSON whitespace instead of an oversized tag, preserving the metadata invariant. Unit and workerd tests cover every bound.
+
+The malformed-journal workerd case now calls `recoverWorkspace()` directly and asserts that the RPC rejects with exactly `Invalid pending note journal`, carries neither marker nor `cause`, then verifies the public HTTP response remains redacted. This directly proves the safe error contract independently of console interception.
+
 The existing concurrent first-write regression was not a flake: two Worker-side `list -> save` sequences could both read an empty index and overwrite each other's one-record index. The new coordinator keeps the full mutation inside the single Durable Object. The regression executes three concurrent pairs, then evicts the object and confirms all six records remain.
 
 ## Verification
 
 Executed successfully:
 
-- `rtk npx vitest run test/worker/app.test.ts` — 18 real workerd tests passed, including post-concurrency eviction, recovery replay, union error mapping, exact escaped UTF-8 content, and absolute-envelope limits.
-- `rtk npm run check` — generated-type drift check, TypeScript, 33 unit tests, 18 Worker tests, and Wrangler dry build passed.
+- `rtk npx vitest run test/worker/app.test.ts` — 19 real workerd tests passed, including post-concurrency eviction, recovery replay, union error mapping, exact escaped UTF-8 content, metadata bounds, and absolute-envelope limits.
+- `rtk npm run check` — generated-type drift check, TypeScript, 38 unit tests, 19 Worker tests, and Wrangler dry build passed.
 - `rtk git diff --check` — passed.
 
 ## Remaining boundary

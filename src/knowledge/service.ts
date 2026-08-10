@@ -53,6 +53,7 @@ export class KnowledgeService {
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
+    validateStoredMetadata(note);
     const nextIndex = [note, ...index.filter((item) => item.id !== id)];
     await this.repository.save(note, content, nextIndex);
     return { note, created: !existing };
@@ -83,7 +84,9 @@ function validateTitle(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new AppError("NOTE_INVALID", "Title is required", 400);
   }
-  return value.trim().slice(0, 160);
+  const title = value.trim();
+  assertUtf8Limit(title, APP_CONFIG.maxNoteTitleBytes, "Title is too long");
+  return title;
 }
 
 function validateContent(value: unknown): string {
@@ -98,13 +101,34 @@ function validateContent(value: unknown): string {
 
 function validateTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.map(String).map((tag) => tag.trim()).filter(Boolean).slice(0, 20);
+  const tags = value.map(String).map((tag) => tag.trim()).filter(Boolean);
+  if (tags.length > APP_CONFIG.maxNoteTags) {
+    throw new AppError("NOTE_INVALID", "Too many tags", 400);
+  }
+  tags.forEach((tag) => assertUtf8Limit(tag, APP_CONFIG.maxNoteTagBytes, "Tag is too long"));
+  return tags;
 }
 
 function validateId(value: unknown, fallback: string): string {
   if (value === undefined || value === "") return fallback;
   if (typeof value !== "string") throw new AppError("NOTE_INVALID", "Note id must be text", 400);
+  assertUtf8Limit(value, APP_CONFIG.maxNoteIdBytes, "Note id is too long");
   return value;
+}
+
+function validateStoredMetadata(note: NoteRecord): void {
+  assertUtf8Limit(note.id, APP_CONFIG.maxNoteIdBytes, "Note id is too long");
+  if (utf8ByteLength(JSON.stringify(note)) > APP_CONFIG.maxNoteMetadataBytes) {
+    throw new AppError("NOTE_INVALID", "Note metadata is too large", 400);
+  }
+}
+
+function assertUtf8Limit(value: string, limit: number, message: string): void {
+  if (utf8ByteLength(value) > limit) throw new AppError("NOTE_INVALID", message, 400);
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
 function isCreateNoteContainer(value: unknown): value is Record<string, unknown> {
