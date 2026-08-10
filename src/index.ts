@@ -100,7 +100,12 @@ export class KnowledgeBase extends withWorkspace(
       .toArray()[0];
     if (!row) return undefined;
 
-    const note = JSON.parse(row.note_json) as unknown;
+    let note: unknown;
+    try {
+      note = JSON.parse(row.note_json) as unknown;
+    } catch {
+      throw new Error("Invalid pending note journal");
+    }
     if (!isNoteRecord(note) || typeof row.content !== "string") throw new Error("Invalid pending note journal");
     return { note, content: row.content };
   }

@@ -2,7 +2,7 @@
 
 import { createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF } from "cloudflare:test";
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SEED_NOTES } from "../fixtures/seed-notes";
 import { createApp } from "../../src/app";
 import { APP_CONFIG } from "../../src/config";
@@ -216,9 +216,11 @@ describe("Worker application", () => {
     expect(method.headers.get("allow")).toBe("GET, POST");
   });
 
-  it("accepts exactly 128 KiB of UTF-8 content but rejects one additional byte", async () => {
-    const exactContent = `${"你".repeat(43_690)}aa`;
+  it("accepts exactly 128 KiB of escaped JSON content but rejects one additional byte", async () => {
+    const exactContent = `${"\u0001".repeat(APP_CONFIG.maxNoteBytes - 2)}"\\`;
     expect(encodedByteLength(exactContent)).toBe(APP_CONFIG.maxNoteBytes);
+    expect(encodedByteLength(JSON.stringify({ id: "utf8-exact", title: "UTF-8 exact", content: exactContent })))
+      .toBeLessThanOrEqual(APP_CONFIG.maxJsonRequestBytes);
 
     const exact = await api("/api/notes", {
       method: "POST",
@@ -407,19 +409,26 @@ describe("Worker application", () => {
   });
 
   it("does not encode unexpected journal corruption as a domain error", async () => {
+    const sensitiveMarker = "journal-sensitive-marker-do-not-log";
     const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
     await runInDurableObject(stub, (_instance, state) => {
       state.storage.sql.exec(
         "INSERT INTO memory_garden_note_journal (workspace, note_json, content) VALUES (?, ?, ?)",
         APP_CONFIG.workspaceName,
-        "not-json-journal-content",
+        sensitiveMarker,
         "not-a-secret",
       );
     });
     await evictDurableObject(stub);
 
-    const response = await api("/api/notes");
-    const body = await expectError(response, 500, "INTERNAL_ERROR");
-    expect(JSON.stringify(body)).not.toContain("not-json-journal-content");
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = await api("/api/notes");
+      const body = await expectError(response, 500, "INTERNAL_ERROR");
+      expect(JSON.stringify(body)).not.toContain(sensitiveMarker);
+      expect(JSON.stringify(error.mock.calls)).not.toContain(sensitiveMarker);
+    } finally {
+      error.mockRestore();
+    }
   });
 });
