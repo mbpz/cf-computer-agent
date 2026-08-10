@@ -84,7 +84,7 @@ function validateTitle(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new AppError("NOTE_INVALID", "Title is required", 400);
   }
-  const title = value.trim();
+  const title = value.trim().slice(0, 160);
   assertUtf8Limit(title, APP_CONFIG.maxNoteTitleBytes, "Title is too long");
   return title;
 }
@@ -101,10 +101,7 @@ function validateContent(value: unknown): string {
 
 function validateTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  const tags = value.map(String).map((tag) => tag.trim()).filter(Boolean);
-  if (tags.length > APP_CONFIG.maxNoteTags) {
-    throw new AppError("NOTE_INVALID", "Too many tags", 400);
-  }
+  const tags = value.map(String).map((tag) => tag.trim()).filter(Boolean).slice(0, APP_CONFIG.maxNoteTags);
   tags.forEach((tag) => assertUtf8Limit(tag, APP_CONFIG.maxNoteTagBytes, "Tag is too long"));
   return tags;
 }

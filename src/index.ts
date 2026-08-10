@@ -127,6 +127,7 @@ class JournaledWorkspaceRepository implements KnowledgeRepository {
   }
 
   async save(note: NoteRecord, content: string, nextIndex: NoteRecord[]): Promise<void> {
+    this.workspace.validateSave(note, nextIndex);
     this.writeJournal(note, content);
     await this.workspace.save(note, content, nextIndex);
     this.clearJournal();

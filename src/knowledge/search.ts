@@ -1,4 +1,5 @@
 import type { SearchDocument, SearchHit } from "./types";
+import { APP_CONFIG } from "../config";
 
 const tokens = (text: string) =>
   text.toLocaleLowerCase().split(/[^\p{L}\p{N}_-]+/u).filter((word) => word.length > 1);
@@ -35,9 +36,16 @@ export function searchNotes(query: string, documents: SearchDocument[], limit = 
 }
 
 export function safeId(input: string, createId: () => string = () => crypto.randomUUID()): string {
-  const id = input.toLocaleLowerCase().normalize("NFKC")
+  const normalized = input.toLocaleLowerCase().normalize("NFKC")
     .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 64);
+    .replace(/^-|-$/g, "");
+  let id = "";
+  for (const character of normalized) {
+    if ([...id].length >= 64) break;
+    const candidate = id + character;
+    if (new TextEncoder().encode(candidate).byteLength > APP_CONFIG.maxNoteIdBytes) break;
+    id = candidate;
+  }
+  id = id.replace(/-$/u, "");
   return id || createId();
 }

@@ -83,11 +83,20 @@ describe("KnowledgeService.createNote", () => {
       .rejects.toMatchObject({ code: "NOTE_TOO_LARGE" });
   });
 
+  it("preserves legacy title truncation and first-20 tag normalization", async () => {
+    const service = new KnowledgeService(new MemoryRepository(), { now: clock, createId: () => "generated" });
+    const title = "t".repeat(161);
+    const tags = Array.from({ length: 21 }, (_, index) => `tag-${index}`);
+
+    const saved = await service.createNote({ title, tags, content: "body" });
+
+    expect(saved.title).toBe("t".repeat(160));
+    expect(saved.tags).toEqual(tags.slice(0, 20));
+  });
+
   it.each([
     ["id", { id: "i".repeat(APP_CONFIG.maxNoteIdBytes + 1), title: "Title", content: "body" }],
-    ["title", { title: "t".repeat(APP_CONFIG.maxNoteTitleBytes + 1), content: "body" }],
     ["tag", { title: "Title", tags: ["t".repeat(APP_CONFIG.maxNoteTagBytes + 1)], content: "body" }],
-    ["tag count", { title: "Title", tags: Array.from({ length: APP_CONFIG.maxNoteTags + 1 }, () => "tag"), content: "body" }],
     ["aggregate metadata", {
       title: "Title",
       tags: Array.from({ length: APP_CONFIG.maxNoteTags }, () => "t".repeat(APP_CONFIG.maxNoteTagBytes)),

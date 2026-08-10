@@ -140,6 +140,30 @@ describe("Worker application", () => {
     await expect(search.json()).resolves.toMatchObject({ hits: [{ id: "compat-note" }] });
   });
 
+  it("keeps supplementary-Unicode generated ids safe and leaves recovery healthy", async () => {
+    const title = `a${"\u{10401}".repeat(64)}`;
+    const created = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ title, tags: [], content: "unicode path body" }),
+    });
+    expect(created.status).toBe(201);
+    const payload = await created.json() as { note: { id: string; path: string } };
+    expect([...payload.note.id].length).toBeLessThanOrEqual(64);
+    expect(encodedByteLength(payload.note.id)).toBeLessThanOrEqual(APP_CONFIG.maxNoteIdBytes);
+    expect(payload.note.id).toMatch(/^[\p{L}\p{N}]+$/u);
+    expect(payload.note.path).toBe(`${APP_CONFIG.notesRoot}/${payload.note.id}.md`);
+
+    const listed = await api("/api/notes");
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toMatchObject({ notes: [{ id: payload.note.id }] });
+
+    const followUp = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ id: "after-unicode", title: "After Unicode", content: "healthy" }),
+    });
+    expect(followUp.status).toBe(201);
+  });
+
   it("runs a public Durable Object commit against its local workspace", async () => {
     const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
 
@@ -259,9 +283,7 @@ describe("Worker application", () => {
   it("rejects oversized note metadata through the Durable Object RPC", async () => {
     const invalidNotes = [
       { id: "i".repeat(APP_CONFIG.maxNoteIdBytes + 1), title: "Title", content: "body" },
-      { title: "t".repeat(APP_CONFIG.maxNoteTitleBytes + 1), content: "body" },
       { title: "Title", tags: ["t".repeat(APP_CONFIG.maxNoteTagBytes + 1)], content: "body" },
-      { title: "Title", tags: Array.from({ length: APP_CONFIG.maxNoteTags + 1 }, () => "tag"), content: "body" },
       {
         title: "Title",
         tags: Array.from({ length: APP_CONFIG.maxNoteTags }, () => "t".repeat(APP_CONFIG.maxNoteTagBytes)),

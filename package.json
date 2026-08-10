@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "test": "npm run test:smoke && npm run test:unit && npm run test:worker",
     "test:smoke": "node --test scripts/smoke.test.mjs",
     "test:unit": "vitest run test/unit",

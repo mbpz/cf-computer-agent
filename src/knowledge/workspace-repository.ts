@@ -54,13 +54,17 @@ export class WorkspaceRepository implements KnowledgeRepository {
   }
 
   async save(note: NoteRecord, content: string, nextIndex: NoteRecord[]): Promise<void> {
-    assertSafePath(note);
-    nextIndex.forEach(assertSafePath);
+    this.validateSave(note, nextIndex);
     await this.withWorkspace(async (workspace) => {
       await ensureWorkspaceDirectories(workspace);
       await workspace.fs.writeFile(note.path, content);
       await workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify(nextIndex));
     });
+  }
+
+  validateSave(note: NoteRecord, nextIndex: NoteRecord[]): void {
+    assertSafePath(note);
+    nextIndex.forEach(assertSafePath);
   }
 
   async searchDocuments(): Promise<SearchDocument[]> {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { safeId, searchNotes } from "../../src/knowledge/search";
 import type { SearchDocument } from "../../src/knowledge/types";
+import { APP_CONFIG } from "../../src/config";
 
 const doc = (data: Partial<SearchDocument>): SearchDocument => ({
   id: "one", title: "Project notes", tags: ["work"], content: "The launch checklist contains monitoring.",
@@ -21,4 +22,14 @@ describe("searchNotes", () => {
 
 describe("safeId", () => {
   it("normalizes a title without path characters", () => expect(safeId(" My / First Note ")).toBe("my-first-note"));
+  it("truncates supplementary Unicode without leaving an unpaired surrogate", () => {
+    const id = safeId(`a${"\u{10401}".repeat(64)}`);
+    expect([...id].length).toBeLessThanOrEqual(64);
+    expect(new TextEncoder().encode(id).byteLength).toBeLessThanOrEqual(APP_CONFIG.maxNoteIdBytes);
+    expect(id).toMatch(/^[\p{L}\p{N}]+$/u);
+    expect([...id].some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint >= 0xd800 && codePoint <= 0xdfff;
+    })).toBe(false);
+  });
 });
