@@ -1,7 +1,7 @@
 import { AnswerService } from "./ai/answer-service";
 import { authorizeRequest } from "./auth";
 import { APP_CONFIG } from "./config";
-import { AppError, createRequestContext, errorResponse, jsonResponse, type RequestContext } from "./http";
+import { AppError, createRequestContext, errorResponse, jsonResponse, parseJsonRequest, type RequestContext } from "./http";
 import { KnowledgeService } from "./knowledge/service";
 import { WorkspaceRepository } from "./knowledge/workspace-repository";
 
@@ -47,7 +47,7 @@ async function dispatchApiRequest(
         return jsonResponse({ notes: await knowledge.listNotes() }, 200, context.requestId);
       }
       if (request.method === "POST") {
-        const result = await knowledge.createNoteWithOutcome(await request.json());
+        const result = await repository.commitNote(await parseJsonRequest(request, APP_CONFIG.maxNoteBytes));
         return jsonResponse({ note: result.note }, result.created ? 201 : 200, context.requestId);
       }
       return methodNotAllowed("GET, POST", context);
@@ -60,7 +60,7 @@ async function dispatchApiRequest(
 
     if (url.pathname === "/api/chat") {
       if (request.method !== "POST") return methodNotAllowed("POST", context);
-      const body = await request.json<unknown>();
+      const body = await parseJsonRequest(request, APP_CONFIG.maxNoteBytes);
       const question = getQuestion(body);
       const sources = await knowledge.search(question, 6);
       return jsonResponse(await answers.answer(question, sources), 200, context.requestId);

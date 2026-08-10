@@ -17,6 +17,27 @@ export const createRequestContext = (request: Request): RequestContext => ({
   requestId: request.headers.get("cf-ray") || crypto.randomUUID(),
 });
 
+export async function parseJsonRequest(request: Request, maxBytes: number): Promise<unknown> {
+  if (!isJsonContentType(request.headers.get("content-type"))) {
+    throw new AppError("UNSUPPORTED_MEDIA_TYPE", "Content type must be application/json", 415);
+  }
+
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    throw new AppError("NOTE_TOO_LARGE", "Note exceeds 128 KiB", 413);
+  }
+
+  const body = await readBoundedBody(request, maxBytes);
+  try {
+    return JSON.parse(body) as unknown;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new AppError("INVALID_JSON", "Request body must be valid JSON", 400);
+    }
+    throw error;
+  }
+}
+
 export function jsonResponse(value: unknown, status = 200, requestId?: string): Response {
   return Response.json(value, {
     status,
@@ -36,4 +57,37 @@ export function errorResponse(error: unknown, requestId: string): Response {
   return jsonResponse({
     error: { code: app.code, message: app.message, retryable: app.retryable, requestId },
   }, app.status, requestId);
+}
+
+function isJsonContentType(value: string | null): boolean {
+  if (!value) return false;
+  const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();
+  return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
+}
+
+async function readBoundedBody(request: Request, maxBytes: number): Promise<string> {
+  if (!request.body) return "";
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = request.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw new AppError("NOTE_TOO_LARGE", "Note exceeds 128 KiB", 413);
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }

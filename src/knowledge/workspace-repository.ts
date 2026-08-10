@@ -1,6 +1,7 @@
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import type { CreateNoteResult } from "./service";
 import type { NoteRecord, SearchDocument } from "./types";
 
 const INDEX_DIRECTORY = APP_CONFIG.indexPath.slice(0, APP_CONFIG.indexPath.lastIndexOf("/"));
@@ -13,12 +14,29 @@ export interface KnowledgeRepository {
 }
 
 export class WorkspaceRepository implements KnowledgeRepository {
+  private readonly namespace: Env["KNOWLEDGE"] | undefined;
+  private readonly name: string | undefined;
   private workspace: WorkspaceClient | undefined;
 
   constructor(
-    private readonly namespace: Env["KNOWLEDGE"],
-    private readonly name: string,
-  ) {}
+    namespace?: Env["KNOWLEDGE"],
+    name?: string,
+    workspace?: WorkspaceClient,
+  ) {
+    this.namespace = namespace;
+    this.name = name;
+    this.workspace = workspace;
+  }
+
+  static forLocalWorkspace(workspace: WorkspaceClient): WorkspaceRepository {
+    return new WorkspaceRepository(undefined, undefined, workspace);
+  }
+
+  async commitNote(input: unknown): Promise<CreateNoteResult> {
+    if (!this.namespace || !this.name) throw new Error("A Durable Object workspace is required to commit notes");
+    const stub = this.namespace.get(this.namespace.idFromName(this.name));
+    return stub.commitNote(input);
+  }
 
   async list(): Promise<NoteRecord[]> {
     return this.withWorkspace(async (workspace) => {
@@ -70,7 +88,10 @@ export class WorkspaceRepository implements KnowledgeRepository {
   }
 
   private async getWorkspace(): Promise<WorkspaceClient> {
-    this.workspace ??= await getWorkspace(toWorkspaceHandle(this.namespace, this.name));
+    if (!this.workspace) {
+      if (!this.namespace || !this.name) throw new Error("A workspace client is required");
+      this.workspace = await getWorkspace(toWorkspaceHandle(this.namespace, this.name));
+    }
     return this.workspace;
   }
 }
