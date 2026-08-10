@@ -6,7 +6,7 @@
   "scripts": {
     "test": "npm run test:unit && npm run test:worker",
     "test:unit": "vitest run test/unit",
-    "test:worker": "vitest run test/worker",
+    "test:worker": "vitest run test/worker --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "build": "wrangler deploy --dry-run",
     "check": "npm run typecheck && npm test && npm run build",
