@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Memory Garden</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <small>YOUR PRIVATE KNOWLEDGE AGENT</small>
+          <h1>Memory Garden</h1>
+        </div>
+        <button id="set-token" class="secondary" type="button">设置令牌</button>
+      </header>
+      <div class="grid">
+        <section class="card" aria-labelledby="write-heading">
+          <h2 id="write-heading">写入知识</h2>
+          <form id="note-form">
+            <input id="title" name="title" placeholder="标题" aria-label="标题" required>
+            <input id="tags" name="tags" placeholder="标签，用逗号分隔" aria-label="标签，用逗号分隔">
+            <textarea id="content" name="content" placeholder="粘贴 Markdown、想法或资料…" aria-label="笔记内容" required></textarea>
+            <button type="submit">保存笔记</button>
+          </form>
+          <p id="save-status" class="muted" aria-live="polite"></p>
+          <hr>
+          <h2>搜索</h2>
+          <form id="search-form">
+            <input id="search" name="search" placeholder="关键词" aria-label="搜索关键词">
+            <button class="secondary" type="submit">检索</button>
+          </form>
+          <div id="results" aria-live="polite"></div>
+        </section>
+        <section class="card" aria-labelledby="question-heading">
+          <h2 id="question-heading">向知识库提问</h2>
+          <form id="question-form">
+            <textarea id="question" name="question" class="question" placeholder="例如：根据我的笔记，下周最重要的三件事是什么？" aria-label="向知识库提问" required></textarea>
+            <button type="submit">询问 Agent</button>
+          </form>
+          <p id="answer" class="muted" aria-live="polite">回答会严格引用你的笔记；知识库中没有依据时会明确说明。</p>
+          <div id="sources" class="sources"></div>
+        </section>
+      </div>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

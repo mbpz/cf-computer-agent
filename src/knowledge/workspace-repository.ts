@@ -4,6 +4,7 @@ import { AppError } from "../http";
 import type { NoteRecord, SearchDocument } from "./types";
 
 const INDEX_DIRECTORY = APP_CONFIG.indexPath.slice(0, APP_CONFIG.indexPath.lastIndexOf("/"));
+const WORKSPACE_ROOT = APP_CONFIG.notesRoot.slice(0, APP_CONFIG.notesRoot.lastIndexOf("/"));
 
 export interface KnowledgeRepository {
   list(): Promise<NoteRecord[]>;
@@ -12,6 +13,8 @@ export interface KnowledgeRepository {
 }
 
 export class WorkspaceRepository implements KnowledgeRepository {
+  private workspace: WorkspaceClient | undefined;
+
   constructor(
     private readonly namespace: Env["KNOWLEDGE"],
     private readonly name: string,
@@ -19,25 +22,18 @@ export class WorkspaceRepository implements KnowledgeRepository {
 
   async list(): Promise<NoteRecord[]> {
     return this.withWorkspace(async (workspace) => {
-      try {
-        const raw = await workspace.fs.readFile(APP_CONFIG.indexPath, "utf8");
-        return parseIndex(raw);
-      } catch (error) {
-        if (isNotFound(error)) return [];
-        throw error;
-      }
+      await ensureWorkspaceDirectories(workspace);
+      if (!(await hasEntry(workspace, INDEX_DIRECTORY, fileName(APP_CONFIG.indexPath)))) return [];
+      return parseIndex(await workspace.fs.readFile(APP_CONFIG.indexPath, "utf8"));
     });
   }
 
   async read(note: NoteRecord): Promise<string | null> {
     assertSafePath(note);
     return this.withWorkspace(async (workspace) => {
-      try {
-        return await workspace.fs.readFile(note.path, "utf8");
-      } catch (error) {
-        if (isNotFound(error)) return null;
-        throw error;
-      }
+      await ensureWorkspaceDirectories(workspace);
+      if (!(await hasEntry(workspace, APP_CONFIG.notesRoot, fileName(note.path)))) return null;
+      return workspace.fs.readFile(note.path, "utf8");
     });
   }
 
@@ -45,8 +41,7 @@ export class WorkspaceRepository implements KnowledgeRepository {
     assertSafePath(note);
     nextIndex.forEach(assertSafePath);
     await this.withWorkspace(async (workspace) => {
-      await workspace.fs.mkdir(APP_CONFIG.notesRoot, { recursive: true });
-      await workspace.fs.mkdir(INDEX_DIRECTORY, { recursive: true });
+      await ensureWorkspaceDirectories(workspace);
       await workspace.fs.writeFile(note.path, content);
       await workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify(nextIndex));
     });
@@ -63,8 +58,20 @@ export class WorkspaceRepository implements KnowledgeRepository {
   }
 
   private async withWorkspace<T>(operation: (workspace: WorkspaceClient) => Promise<T>): Promise<T> {
-    using workspace = await getWorkspace(toWorkspaceHandle(this.namespace, this.name));
-    return operation(workspace);
+    return operation(await this.getWorkspace());
+  }
+
+  dispose(): void {
+    const disposeSymbol = (Symbol as typeof Symbol & { dispose?: symbol }).dispose;
+    const disposable = this.workspace as (Record<symbol, unknown> | undefined);
+    const dispose = disposeSymbol ? disposable?.[disposeSymbol] : undefined;
+    if (typeof dispose === "function") dispose.call(this.workspace);
+    this.workspace = undefined;
+  }
+
+  private async getWorkspace(): Promise<WorkspaceClient> {
+    this.workspace ??= await getWorkspace(toWorkspaceHandle(this.namespace, this.name));
+    return this.workspace;
   }
 }
 
@@ -104,6 +111,25 @@ function assertSafePath(note: NoteRecord): void {
   }
 }
 
-function isNotFound(error: unknown): boolean {
-  return (error as { code?: unknown })?.code === "ENOENT";
+async function ensureDirectory(
+  workspace: WorkspaceClient,
+  parent: string,
+  path: string,
+): Promise<void> {
+  if (await hasEntry(workspace, parent, fileName(path))) return;
+  await workspace.fs.mkdir(path);
+}
+
+async function ensureWorkspaceDirectories(workspace: WorkspaceClient): Promise<void> {
+  await ensureDirectory(workspace, "/", WORKSPACE_ROOT);
+  await ensureDirectory(workspace, WORKSPACE_ROOT, APP_CONFIG.notesRoot);
+  await ensureDirectory(workspace, WORKSPACE_ROOT, INDEX_DIRECTORY);
+}
+
+async function hasEntry(workspace: WorkspaceClient, directory: string, name: string): Promise<boolean> {
+  return (await workspace.fs.readdir(directory)).some((entry) => entry.name === name);
+}
+
+function fileName(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
 }
