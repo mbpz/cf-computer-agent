@@ -24,6 +24,12 @@ class MemoryRepository implements KnowledgeRepository {
 const clock = () => "2026-01-02T00:00:00.000Z";
 
 describe("KnowledgeService.createNote", () => {
+  it.each([null, 42])("rejects a non-object request container (%s)", async (input) => {
+    const service = new KnowledgeService(new MemoryRepository(), { now: clock, createId: () => "generated" });
+
+    await expect(service.createNote(input)).rejects.toMatchObject({ code: "NOTE_INVALID", status: 400 });
+  });
+
   it("rejects a title that contains only whitespace", async () => {
     const service = new KnowledgeService(new MemoryRepository(), { now: clock, createId: () => "generated" });
 

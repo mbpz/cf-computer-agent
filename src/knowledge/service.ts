@@ -1,10 +1,8 @@
 import { AppError } from "../http";
+import { APP_CONFIG } from "../config";
 import { safeId, searchNotes } from "./search";
 import type { NoteRecord, SearchDocument, SearchHit } from "./types";
 import type { KnowledgeRepository } from "./workspace-repository";
-
-const NOTES_ROOT = "/workspace/notes";
-const MAX_NOTE_BYTES = 128 * 1024;
 
 export interface CreateNoteInput {
   id?: string;
@@ -30,7 +28,10 @@ export class KnowledgeService {
     this.createId = options.createId ?? (() => crypto.randomUUID());
   }
 
-  async createNote(input: CreateNoteInput): Promise<NoteRecord> {
+  async createNote(input: unknown): Promise<NoteRecord> {
+    if (!isCreateNoteContainer(input)) {
+      throw new AppError("NOTE_INVALID", "Note must be an object", 400);
+    }
     const title = validateTitle(input.title);
     const content = validateContent(input.content);
     const tags = validateTags(input.tags);
@@ -42,7 +43,7 @@ export class KnowledgeService {
       id,
       title,
       tags,
-      path: `${NOTES_ROOT}/${id}.md`,
+      path: `${APP_CONFIG.notesRoot}/${id}.md`,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
@@ -83,7 +84,7 @@ function validateContent(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new AppError("NOTE_INVALID", "Content is required", 400);
   }
-  if (new TextEncoder().encode(value).byteLength > MAX_NOTE_BYTES) {
+  if (new TextEncoder().encode(value).byteLength > APP_CONFIG.maxNoteBytes) {
     throw new AppError("NOTE_TOO_LARGE", "Note exceeds 128 KiB", 413);
   }
   return value;
@@ -100,4 +101,8 @@ function validateId(value: unknown, fallback: string): string {
   if (value === undefined || value === "") return fallback;
   if (typeof value !== "string") throw new AppError("NOTE_INVALID", "Note id must be text", 400);
   return value;
+}
+
+function isCreateNoteContainer(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

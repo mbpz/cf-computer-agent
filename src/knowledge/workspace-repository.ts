@@ -1,9 +1,9 @@
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
+import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
 import type { NoteRecord, SearchDocument } from "./types";
 
-const INDEX_PATH = "/workspace/.memory/index.json";
-const NOTES_ROOT = "/workspace/notes";
+const INDEX_DIRECTORY = APP_CONFIG.indexPath.slice(0, APP_CONFIG.indexPath.lastIndexOf("/"));
 
 export interface KnowledgeRepository {
   list(): Promise<NoteRecord[]>;
@@ -20,7 +20,7 @@ export class WorkspaceRepository implements KnowledgeRepository {
   async list(): Promise<NoteRecord[]> {
     return this.withWorkspace(async (workspace) => {
       try {
-        const raw = await workspace.fs.readFile(INDEX_PATH, "utf8");
+        const raw = await workspace.fs.readFile(APP_CONFIG.indexPath, "utf8");
         return parseIndex(raw);
       } catch (error) {
         if (isNotFound(error)) return [];
@@ -45,10 +45,10 @@ export class WorkspaceRepository implements KnowledgeRepository {
     assertSafePath(note);
     nextIndex.forEach(assertSafePath);
     await this.withWorkspace(async (workspace) => {
-      await workspace.fs.mkdir(NOTES_ROOT, { recursive: true });
-      await workspace.fs.mkdir("/workspace/.memory", { recursive: true });
+      await workspace.fs.mkdir(APP_CONFIG.notesRoot, { recursive: true });
+      await workspace.fs.mkdir(INDEX_DIRECTORY, { recursive: true });
       await workspace.fs.writeFile(note.path, content);
-      await workspace.fs.writeFile(INDEX_PATH, JSON.stringify(nextIndex));
+      await workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify(nextIndex));
     });
   }
 
@@ -98,7 +98,7 @@ function isNoteRecord(value: unknown): value is NoteRecord {
 }
 
 function assertSafePath(note: NoteRecord): void {
-  const expected = `${NOTES_ROOT}/${note.id}.md`;
+  const expected = `${APP_CONFIG.notesRoot}/${note.id}.md`;
   if (!note.id || note.path !== expected || !note.id.match(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u)) {
     throw new AppError("INDEX_CORRUPT", "Knowledge index is corrupt", 500);
   }
