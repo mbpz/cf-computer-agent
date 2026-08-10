@@ -9,5 +9,13 @@
     "bindings": [{ "name": "KNOWLEDGE", "class_name": "KnowledgeBase" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KnowledgeBase"] }],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "ALLOW_INSECURE_LOCAL": "false"
+  },
   "observability": { "enabled": true }
 }

@@ -8,8 +8,9 @@
     "test:unit": "vitest run test/unit",
     "test:worker": "vitest run test/worker --passWithNoTests",
     "typecheck": "tsc --noEmit",
+    "types:check": "wrangler types --check",
     "build": "wrangler deploy --dry-run",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
@@ -17,7 +18,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.3",
-    "@cloudflare/workers-types": "5.20260804.1",
+    "@types/node": "^24.13.3",
     "typescript": "7.0.2",
     "vitest": "^4.1.10",
     "wrangler": "4.119.0"
