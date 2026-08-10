@@ -248,7 +248,8 @@ rtk git commit -m "chore: generate Worker binding types"
 
 **Interfaces:**
 - Produces: `AppError`, `jsonResponse`, `errorResponse`, `createRequestContext`.
-- Produces: `authorizeRequest(request: Request, env: Pick<Env, "APP_TOKEN" | "ALLOW_INSECURE_LOCAL">): Promise<void>`.
+- Produces: `AuthEnvironment` plus `authorizeRequest(request: Request, env: AuthEnvironment): Promise<void>`.
+- `AuthEnvironment.ALLOW_INSECURE_LOCAL` is a widened string because generated Wrangler types truthfully narrow the deployed configuration to the literal `"false"`, while unit tests must exercise the explicit local-only `"true"` branch.
 
 - [ ] **Step 1: Write failing auth tests**
 
@@ -360,9 +361,14 @@ async function constantTimeEqual(left: string, right: string): Promise<boolean> 
   return difference === 0;
 }
 
+export interface AuthEnvironment {
+  APP_TOKEN?: string;
+  ALLOW_INSECURE_LOCAL?: string;
+}
+
 export async function authorizeRequest(
   request: Request,
-  env: Pick<Env, "APP_TOKEN" | "ALLOW_INSECURE_LOCAL">,
+  env: AuthEnvironment,
 ): Promise<void> {
   if (!env.APP_TOKEN) {
     if (env.ALLOW_INSECURE_LOCAL === "true") return;
