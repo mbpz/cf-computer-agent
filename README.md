@@ -84,3 +84,6 @@ Smoke 依次验证未授权与授权 health、创建、列表、检索和带来�
 ## 数据与隐私
 
 这是单租户设计，固定使用名为 `personal` 的 Durable Object。不要在未配置 Access 或 `APP_TOKEN` 时把地址公开。当前版本没有附件、批量导出和删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
+
+
+openssl rand -hex 32
