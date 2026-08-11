@@ -9,9 +9,9 @@
     "test": "npm run test:smoke && npm run test:unit && npm run test:worker",
     "test:smoke": "node --test scripts/smoke.test.mjs",
     "test:unit": "vitest run test/unit",
-    "test:worker": "vitest run test/worker --passWithNoTests",
+    "test:worker": "vitest run test/worker",
     "typecheck": "tsc --noEmit",
-    "types:check": "wrangler types --check",
+    "types:check": "wrangler types --check --env-file config/types.env",
     "build": "wrangler deploy --dry-run",
     "check": "npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs"
