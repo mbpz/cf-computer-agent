@@ -7,6 +7,7 @@ const MAX_NOTE_TAG_BYTES = 1024;
 const MAX_NOTE_TAGS = 20;
 
 export const APP_CONFIG = {
+  accessJwtAssertionHeader: "cf-access-jwt-assertion",
   workspaceName: "personal",
   indexPath: "/workspace/.memory/index.json",
   notesRoot: "/workspace/notes",

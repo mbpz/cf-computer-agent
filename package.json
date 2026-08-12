@@ -19,7 +19,8 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@cloudflare/computer": "0.1.1"
+    "@cloudflare/computer": "0.1.1",
+    "jose": "^6.2.8"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.3",
