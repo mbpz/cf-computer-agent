@@ -1,4 +1,13 @@
 import type { CreateMember, Member, MemberPage, MemberStatus } from "./types";
+import { AppError } from "../http";
+
+export type MembersConflictKind = "access_sub" | "active_admin";
+
+export class MembersConflictError extends Error {
+  constructor(readonly kind: MembersConflictKind) {
+    super(`Member conflict: ${kind}`);
+  }
+}
 
 export interface MembersRepositoryPort {
   findByAccessSub(accessSub: string): Promise<Member | null>;
@@ -6,7 +15,7 @@ export interface MembersRepositoryPort {
   hasActiveAdmin(): Promise<boolean>;
   insert(member: CreateMember): Promise<Member>;
   touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean>;
-  list(limit?: number, cursor?: string): Promise<MemberPage>;
+  listPage(limit?: number, cursor?: string): Promise<MemberPage>;
   updateContributorStatus(id: string, status: MemberStatus, updatedAt?: string): Promise<Member | null>;
 }
 
@@ -37,11 +46,17 @@ export class MembersRepository implements MembersRepositoryPort {
   }
 
   async insert(member: CreateMember): Promise<Member> {
-    await this.db.prepare(
-      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(
-      member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt,
-    ).run();
+    try {
+      await this.db.prepare(
+        "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).bind(
+        member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt,
+      ).run();
+    } catch (error) {
+      const conflict = classifyMembersConflict(error);
+      if (conflict) throw new MembersConflictError(conflict);
+      throw error;
+    }
     return { ...member, lastSeenAt: null };
   }
 
@@ -52,14 +67,17 @@ export class MembersRepository implements MembersRepositoryPort {
     return result.meta.changes > 0;
   }
 
-  async list(limit = 20, cursor?: string): Promise<MemberPage> {
-    const boundedLimit = Math.min(Math.max(limit, 1), 50);
-    const rows = cursor
-      ? await this.db.prepare(`${memberSelect} WHERE id > ? ORDER BY id ASC LIMIT ?`).bind(cursor, boundedLimit + 1).all<MemberRow>()
-      : await this.db.prepare(`${memberSelect} ORDER BY id ASC LIMIT ?`).bind(boundedLimit + 1).all<MemberRow>();
-    const items = rows.results.slice(0, boundedLimit).map(mapMemberRow);
-    const extra = rows.results[boundedLimit];
-    return { items, ...(extra ? { nextCursor: items.at(-1)?.id } : {}) };
+  async listPage(limit: number = 20, cursor?: string): Promise<MemberPage> {
+    const pageLimit = validatePageLimit(limit);
+    const cursorId = cursor ? decodeCursor(cursor) : undefined;
+    const rows = cursorId
+      ? await this.db.prepare(`${memberSelect} WHERE id > ? ORDER BY id ASC LIMIT ?`).bind(cursorId, pageLimit + 1).all<MemberRow>()
+      : await this.db.prepare(`${memberSelect} ORDER BY id ASC LIMIT ?`).bind(pageLimit + 1).all<MemberRow>();
+    const items = rows.results.slice(0, pageLimit).map(mapMemberRow);
+    return {
+      items,
+      ...(rows.results.length > pageLimit ? { nextCursor: encodeCursor(items.at(-1)!.id) } : {}),
+    };
   }
 
   async updateContributorStatus(id: string, status: MemberStatus, updatedAt = new Date().toISOString()): Promise<Member | null> {
@@ -71,6 +89,45 @@ export class MembersRepository implements MembersRepositoryPort {
 }
 
 const memberSelect = "SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at FROM members";
+const maxCursorLength = 512;
+
+function classifyMembersConflict(error: unknown): MembersConflictKind | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const known = new Map<string, MembersConflictKind>([
+    ["UNIQUE constraint failed: members.access_sub", "access_sub"],
+    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT", "access_sub"],
+    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "access_sub"],
+    ["UNIQUE constraint failed: members.role", "active_admin"],
+    ["D1_ERROR: UNIQUE constraint failed: members.role: SQLITE_CONSTRAINT", "active_admin"],
+    ["D1_ERROR: UNIQUE constraint failed: members.role: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "active_admin"],
+  ]);
+  return known.get(error.message);
+}
+
+function validatePageLimit(limit: number): number {
+  if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw new AppError("PAGE_INVALID", "Page limit must be an integer from 1 to 50", 400);
+  }
+  return limit;
+}
+
+function encodeCursor(id: string): string {
+  return btoa(JSON.stringify({ v: 1, id })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeCursor(cursor: string): string {
+  try {
+    if (!/^[A-Za-z0-9_-]+$/.test(cursor) || cursor.length > maxCursorLength || cursor.length % 4 === 1) throw new Error();
+    const padded = cursor.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - cursor.length % 4) % 4);
+    const decoded = JSON.parse(atob(padded)) as unknown;
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    const { v, id } = decoded as Record<string, unknown>;
+    if (v !== 1 || typeof id !== "string" || !id) throw new Error();
+    return id;
+  } catch {
+    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  }
+}
 
 function mapMember(row: MemberRow | null): Member | null {
   return row ? mapMemberRow(row) : null;

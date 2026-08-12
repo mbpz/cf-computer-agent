@@ -28,3 +28,19 @@ Vitest emitted the existing local AI-binding warning. The worker suite also emit
 - Scoped changes are confined to the Task 3 files and this report.
 - `BOOTSTRAP_ADMIN_EMAIL` is canonicalized through the Access identity canonicalizer and no real email or configured value occurs in source, fixtures, tests, logs, or this report.
 - The partial D1 unique index remains the authoritative one-active-admin concurrency guard; recovery only handles unique-constraint races.
+
+## Fix round 1/5 — Complete
+
+### Review findings resolved
+
+- `MembersService` now accepts an optional `waitUntil(promise)` lifecycle sink. The scheduled `last_seen` promise catches internally, so its failure cannot reject authorization; without a sink, the service awaits that handled promise in unit/direct-call contexts. Task 7 can inject `ExecutionContext.waitUntil` without changing this contract.
+- `MembersRepository.listPage` now owns a small member-scoped implementation of the global page contract: opaque versioned base64url keyset cursors, default 20, maximum 50, finite-integer limit validation, and stable invalid-limit/cursor `AppError`s. Task 5 should consolidate this logic into shared `src/pagination.ts` without changing member behavior.
+- `insert` maps only exact known D1/SQLite messages for `members.access_sub` and the partial `members.role` admin index to typed `MembersConflictError` variants. The service re-reads/retries only those race types; unrelated unique constraints such as `members.id` and arbitrary D1 failures propagate unchanged.
+
+### Regression evidence
+
+- RED: focused member suites failed for the missing lifecycle sink, missing `listPage`, and absent typed conflict class; the tests also demonstrated the original raw-ID/limit behavior was non-conformant.
+- GREEN: `rtk npx vitest run test/unit/members-service.test.ts test/worker/members.test.ts` passed: 2 files, 18 tests.
+- Full gate: `rtk npm run check` passed (generated types, typecheck, 2 smoke tests, 58 unit tests, 29 worker tests, and dry-run build). `rtk git diff --check` passed.
+
+The same local AI-binding warning and intentional corrupt-journal workerd diagnostic appeared while all tests passed. No remote D1 migration, deployment, or network operation occurred.

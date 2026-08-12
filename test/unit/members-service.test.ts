@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AccessIdentity } from "../../src/identity/access-jwt";
 import { MembersService } from "../../src/members/service";
-import type { Member, MemberStatus } from "../../src/members/types";
 import type { MembersRepositoryPort } from "../../src/members/repository";
+import type { Member, MemberStatus } from "../../src/members/types";
 
 const identity: AccessIdentity = { sub: "access-subject", email: "member@example.test" };
 
@@ -62,13 +62,29 @@ describe("MembersService", () => {
     expect(repository.touchLastSeenIfStale).toHaveBeenCalledWith(existing.id, now.toISOString(), "2026-08-12T11:59:00.000Z");
   });
 
+  it("gives the exact handled last_seen promise to the lifecycle sink", async () => {
+    const existing = member({ accessSub: identity.sub });
+    const repository = new FakeMembersRepository([existing]);
+    let scheduled: Promise<unknown> | undefined;
+    let resolveWrite: (value: boolean) => void = () => undefined;
+    repository.touchLastSeenIfStale.mockImplementationOnce(() => new Promise<boolean>((resolve) => { resolveWrite = resolve; }));
+    const service = createService(repository, {}, { waitUntil: (promise) => { scheduled = promise; } });
+
+    await expect(service.resolveFirstLogin(identity)).resolves.toMatchObject({ id: existing.id });
+    expect(scheduled).toBeDefined();
+    resolveWrite(false);
+    await expect(scheduled).resolves.toBeUndefined();
+  });
+
   it("returns an authenticated active member when the best-effort last_seen write fails", async () => {
     const existing = member({ accessSub: identity.sub });
     const repository = new FakeMembersRepository([existing]);
     repository.touchLastSeenIfStale.mockRejectedValueOnce(new Error("D1 write unavailable"));
-    const service = createService(repository);
+    let scheduled: Promise<unknown> | undefined;
+    const service = createService(repository, {}, { waitUntil: (promise) => { scheduled = promise; } });
 
     await expect(service.resolveFirstLogin(identity)).resolves.toMatchObject({ id: existing.id });
+    await expect(scheduled).resolves.toBeUndefined();
   });
 
   it("propagates an arbitrary D1 insert failure without creating an account", async () => {
@@ -79,12 +95,21 @@ describe("MembersService", () => {
     await expect(service.resolveFirstLogin(identity)).rejects.toThrow("D1 unavailable");
     expect(repository.members).toEqual([]);
   });
+
+  it("does not recover an unrelated unique-constraint error as a member race", async () => {
+    const repository = new FakeMembersRepository();
+    repository.insert = async () => { throw new Error("UNIQUE constraint failed: members.id"); };
+    const service = createService(repository);
+
+    await expect(service.resolveFirstLogin(identity)).rejects.toThrow("UNIQUE constraint failed: members.id");
+    expect(repository.members).toEqual([]);
+  });
 });
 
 function createService(
   repository: FakeMembersRepository,
   environment: { BOOTSTRAP_ADMIN_EMAIL?: string } = {},
-  options: { now?: () => Date; lastSeenWindowMs?: number } = {},
+  options: { now?: () => Date; lastSeenWindowMs?: number; waitUntil?: (promise: Promise<unknown>) => void } = {},
 ): MembersService {
   return new MembersService(repository, environment, { id: () => "new-member", ...options });
 }
@@ -131,7 +156,7 @@ class FakeMembersRepository implements MembersRepositoryPort {
     return created;
   }
 
-  async list(): Promise<{ items: Member[]; nextCursor?: string }> {
+  async listPage(): Promise<{ items: Member[]; nextCursor?: string }> {
     return { items: [...this.members] };
   }
 
