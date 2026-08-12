@@ -64,7 +64,15 @@ describe("verifyAccessJwt", () => {
       .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
   });
 
-  it("rejects assertions missing a usable subject or email", async () => {
+  it("rejects an assertion without an expiration", async () => {
+    const fixture = await createAccessJwtFixture();
+    const options = { jwks: createLocalJWKSet({ keys: [fixture.publicJwk] }) };
+
+    await expect(verifyAccessJwt(request(await fixture.sign({ exp: undefined })), env, options))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+  });
+
+  it("rejects missing, wrong-type, and whitespace-only identity claims", async () => {
     const fixture = await createAccessJwtFixture();
     const options = { jwks: createLocalJWKSet({ keys: [fixture.publicJwk] }) };
 
@@ -72,6 +80,27 @@ describe("verifyAccessJwt", () => {
       .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
     await expect(verifyAccessJwt(request(await fixture.sign({ email: undefined })), env, options))
       .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+    await expect(verifyAccessJwt(request(await fixture.sign({ sub: 123 })), env, options))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+    await expect(verifyAccessJwt(request(await fixture.sign({ email: ["member@example.test"] })), env, options))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+    await expect(verifyAccessJwt(request(await fixture.sign({ sub: " \t " })), env, options))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+    await expect(verifyAccessJwt(request(await fixture.sign({ email: "\n " })), env, options))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID" });
+  });
+
+  it("returns a trimmed opaque subject and canonical email", async () => {
+    const fixture = await createAccessJwtFixture();
+    const options = { jwks: createLocalJWKSet({ keys: [fixture.publicJwk] }) };
+
+    await expect(verifyAccessJwt(request(await fixture.sign({
+      sub: "  Mixed-Case Subject  ",
+      email: "  ADMIN@Example.Test  ",
+    })), env, options)).resolves.toEqual({
+      sub: "Mixed-Case Subject",
+      email: "admin@example.test",
+    });
   });
 
   it("fails closed when Access configuration is incomplete", async () => {

@@ -39,10 +39,12 @@ export async function verifyAccessJwt(
       options.jwks || getJwks(teamDomain),
       verifyOptions(teamDomain, audience),
     );
-    if (typeof payload.sub !== "string" || !payload.sub || typeof payload.email !== "string" || !payload.email) {
+    const sub = normalizeSubject(payload.sub);
+    const email = canonicalizeEmail(payload.email);
+    if (!sub || !email) {
       throw new AppError("ACCESS_TOKEN_INVALID", "Access identity is invalid", 401);
     }
-    return { sub: payload.sub, email: payload.email };
+    return { sub, email };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("ACCESS_TOKEN_INVALID", "Access authentication failed", 401);
@@ -73,5 +75,18 @@ function verifyOptions(teamDomain: string, audience: string): JWTVerifyOptions {
   return {
     issuer: `https://${teamDomain}`,
     audience,
+    requiredClaims: ["exp"],
   };
+}
+
+export function canonicalizeEmail(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const email = value.trim().toLowerCase();
+  return email || undefined;
+}
+
+function normalizeSubject(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const sub = value.trim();
+  return sub || undefined;
 }
