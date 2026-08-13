@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SpacesService } from "../../src/spaces/service";
-import type { CollectionsRepositoryPort, SpacesRepositoryPort } from "../../src/spaces/repository";
+import { SpacesRepositoryConflictError, type CollectionsRepositoryPort, type SpacesRepositoryPort } from "../../src/spaces/repository";
 import type { Collection, CreateCollection, CreateSpace, Space, UpdateCollection, UpdateSpace } from "../../src/spaces/types";
 
 describe("SpacesService", () => {
@@ -87,19 +87,25 @@ class FakeSpacesRepository implements SpacesRepositoryPort, CollectionsRepositor
   constructor(private readonly spaces: Space[] = [], private readonly collections: Collection[] = []) {}
   async findSpaceById(id: string): Promise<Space | null> { return this.spaces.find((space) => space.id === id) ?? null; }
   async createSpace(input: CreateSpace): Promise<Space> {
-    if (this.spaces.some((space) => space.slug === input.slug)) throw new Error("UNIQUE constraint failed: spaces.slug");
+    if (this.spaces.some((space) => space.slug === input.slug)) throw new SpacesRepositoryConflictError("slug");
     const created = { ...input, kind: "shared" as const, readOnly: false };
     this.spaces.push(created);
     return created;
   }
   async updateSpace(id: string, input: UpdateSpace): Promise<Space | null> {
     const existing = await this.findSpaceById(id); if (!existing) return null;
-    if (input.slug !== undefined && this.spaces.some((space) => space.id !== id && space.slug === input.slug)) throw new Error("UNIQUE constraint failed: spaces.slug");
+    if (input.slug !== undefined && this.spaces.some((space) => space.id !== id && space.slug === input.slug)) throw new SpacesRepositoryConflictError("slug");
     const updated = { ...existing, ...input }; this.spaces.splice(this.spaces.indexOf(existing), 1, updated); return updated;
   }
   async listSpaces(): Promise<{ items: Space[]; nextCursor?: string }> { return { items: [...this.spaces].sort(byPositionThenId) }; }
   async findCollectionById(id: string): Promise<Collection | null> { return this.collections.find((item) => item.id === id) ?? null; }
-  async createCollection(input: CreateCollection): Promise<Collection> { const created = { ...input }; this.collections.push(created); return created; }
+  async createCollection(input: CreateCollection): Promise<Collection> {
+    const space = await this.findSpaceById(input.spaceId);
+    if (!space || space.kind === "legacy" || space.readOnly) throw new SpacesRepositoryConflictError("space_read_only");
+    const parent = input.parentId === null ? null : await this.findCollectionById(input.parentId);
+    if (input.parentId !== null && (!parent || parent.spaceId !== input.spaceId || parent.status !== "active")) throw new SpacesRepositoryConflictError("invalid_parent");
+    const created = { ...input }; this.collections.push(created); return created;
+  }
   async updateCollection(id: string, input: UpdateCollection): Promise<Collection | null> { const existing = await this.findCollectionById(id); if (!existing) return null; const updated = { ...existing, ...input }; this.collections.splice(this.collections.indexOf(existing), 1, updated); return updated; }
   async listCollections(): Promise<{ items: Collection[]; nextCursor?: string }> { return { items: [...this.collections].sort(byPositionThenId) }; }
 }

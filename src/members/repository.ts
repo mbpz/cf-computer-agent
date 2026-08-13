@@ -1,5 +1,6 @@
 import type { CreateMember, Member, MemberPage, MemberStatus } from "./types";
 import { AppError } from "../http";
+import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
 
 export type MembersConflictKind = "access_sub" | "active_admin";
 
@@ -68,7 +69,7 @@ export class MembersRepository implements MembersRepositoryPort {
   }
 
   async listPage(limit: number = 20, cursor?: string): Promise<MemberPage> {
-    const pageLimit = validatePageLimit(limit);
+    const pageLimit = parsePageRequest(limit).limit;
     const cursorId = cursor === undefined ? undefined : decodeCursor(cursor);
     const rows = cursorId
       ? await this.db.prepare(`${memberSelect} WHERE id > ? ORDER BY id ASC LIMIT ?`).bind(cursorId, pageLimit + 1).all<MemberRow>()
@@ -89,7 +90,6 @@ export class MembersRepository implements MembersRepositoryPort {
 }
 
 const memberSelect = "SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at FROM members";
-const maxCursorLength = 512;
 
 function classifyMembersConflict(error: unknown): MembersConflictKind | undefined {
   if (!(error instanceof Error)) return undefined;
@@ -104,29 +104,16 @@ function classifyMembersConflict(error: unknown): MembersConflictKind | undefine
   return known.get(error.message);
 }
 
-function validatePageLimit(limit: number): number {
-  if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit < 1 || limit > 50) {
-    throw new AppError("PAGE_INVALID", "Page limit must be an integer from 1 to 50", 400);
-  }
-  return limit;
-}
-
 function encodeCursor(id: string): string {
-  return btoa(JSON.stringify({ v: 1, id })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return encodeOpaqueCursor({ v: 1, id });
 }
 
 function decodeCursor(cursor: string): string {
-  try {
-    if (!/^[A-Za-z0-9_-]+$/.test(cursor) || cursor.length > maxCursorLength || cursor.length % 4 === 1) throw new Error();
-    const padded = cursor.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - cursor.length % 4) % 4);
-    const decoded = JSON.parse(atob(padded)) as unknown;
-    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
-    const { v, id } = decoded as Record<string, unknown>;
-    if (v !== 1 || typeof id !== "string" || !id) throw new Error();
-    return id;
-  } catch {
-    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
-  }
+  const decoded = decodeOpaqueCursor(cursor);
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  const { v, id } = decoded as Record<string, unknown>;
+  if (v !== 1 || typeof id !== "string" || !id) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  return id;
 }
 
 function mapMember(row: MemberRow | null): Member | null {
