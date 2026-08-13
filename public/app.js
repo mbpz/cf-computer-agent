@@ -1,103 +1,309 @@
+import { navigationForSession } from "/navigation.js";
+
 const byId = (id) => document.getElementById(id);
-const token = () => localStorage.getItem("memory-token") || "";
-const headers = () => ({
-  "content-type": "application/json",
-  authorization: `Bearer ${token()}`,
+const shell = byId("app-shell");
+const outlet = byId("page-outlet");
+const statusRegion = byId("status-region");
+let session;
+
+const routes = Object.freeze({
+  "/": renderHome,
+  "/submit": renderSubmit,
+  "/knowledge": renderKnowledge,
+  "/search": renderSearch,
+  "/agent": renderAgent,
+  "/my-submissions": renderMySubmissions,
+  "/admin": renderAdminDashboard,
+  "/admin/submissions": renderPendingSubmissions,
+  "/admin/members": renderMembers,
+  "/admin/spaces": renderSpaces,
+  "/admin/audit": renderAudit,
 });
 
-function setToken() {
-  const value = prompt("APP_TOKEN（未配置服务端令牌时可留空）", token());
-  if (value !== null) localStorage.setItem("memory-token", value);
+function element(tag, options = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [name, value] of Object.entries(options)) {
+    if (value === undefined || value === null) continue;
+    if (name === "className") node.className = value;
+    else if (name === "text") node.textContent = value;
+    else if (name.startsWith("on") && typeof value === "function") node.addEventListener(name.slice(2).toLowerCase(), value);
+    else node.setAttribute(name, String(value));
+  }
+  node.append(...children.filter(Boolean));
+  return node;
 }
+
+function page(title, description, children = []) {
+  return element("div", {}, [
+    element("header", { className: "page-header" }, [
+      element("p", { className: "eyebrow", text: "MEMORY GARDEN" }),
+      element("h1", { text: title }),
+      element("p", { className: "muted", text: description }),
+    ]),
+    ...children,
+  ]);
+}
+
+function card(title, children = []) {
+  return element("section", { className: "card" }, [element("h2", { text: title }), ...children]);
+}
+
+function empty(message) { return element("div", { className: "empty-state", text: message }); }
+function replaceOutlet(node) { outlet.replaceChildren(node); outlet.setAttribute("aria-busy", "false"); }
+function setStatus(message = "", kind = "") {
+  statusRegion.replaceChildren(message ? element("p", { className: "notice", "data-kind": kind, text: message }) : "");
+}
+function apiError(data, fallback) { return data?.error?.message || data?.error || fallback; }
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    headers: { ...headers(), ...(options.headers || {}) },
+    headers: { ...(options.body ? { "content-type": "application/json" } : {}), ...(options.headers || {}) },
+    credentials: "same-origin",
   });
-  const data = await response.json().catch(() => ({ error: response.statusText }));
-  if (!response.ok) throw Error(errorMessage(data, response.statusText));
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(apiError(data, response.statusText));
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
-function errorMessage(data, fallback) {
-  if (data && typeof data.error === "object" && typeof data.error.message === "string") {
-    return data.error.message;
-  }
-  return typeof data?.error === "string" ? data.error : fallback;
+function has(capability) { return session?.capabilities.includes(capability); }
+function isAdminRoute(path) { return path === "/admin" || path.startsWith("/admin/"); }
+function navigate(path, replace = false) {
+  const next = new URL(path, window.location.origin);
+  if (next.origin !== window.location.origin) return;
+  if (next.pathname !== window.location.pathname) history[replace ? "replaceState" : "pushState"]({}, "", `${next.pathname}${next.search}`);
+  shell.dataset.drawerOpen = "false";
+  byId("drawer-toggle").setAttribute("aria-expanded", "false");
+  void renderRoute();
 }
 
-async function saveNote() {
-  const status = byId("save-status");
+function renderNavigation() {
+  const nav = byId("primary-navigation");
+  const groups = new Map();
+  for (const item of navigationForSession(session)) {
+    const group = groups.get(item.group) || [];
+    group.push(item);
+    groups.set(item.group, group);
+  }
+  nav.replaceChildren(...[...groups.entries()].map(([group, items]) => element("section", { className: "nav-group" }, [
+    element("p", { className: "nav-group-label", text: group === "admin" ? "治理" : "工作区" }),
+    ...items.map((item) => element("a", {
+      href: item.href,
+      className: "nav-link",
+      "data-route": "",
+      "aria-current": item.href === window.location.pathname ? "page" : undefined,
+      text: item.label,
+    })),
+  ])));
+}
+
+async function renderRoute() {
+  const path = window.location.pathname;
+  setStatus();
+  renderNavigation();
+  outlet.setAttribute("aria-busy", "true");
+  if (isAdminRoute(path) && !has("submission:read-all")) {
+    replaceOutlet(page("403：没有管理权限", "管理路由由服务器独立授权；当前 Access 会话没有该能力。", [empty("请返回工作区，或联系管理员调整成员状态。")]));
+    return;
+  }
+  const renderer = routes[path];
+  if (!renderer) {
+    replaceOutlet(page("页面不存在", "此地址没有对应的工作区页面。", [element("div", { className: "actions" }, [routeLink("返回首页", "/")])]));
+    return;
+  }
   try {
-    const data = await api("/api/notes", {
-      method: "POST",
-      body: JSON.stringify({
-        title: byId("title").value,
-        tags: byId("tags").value.split(",").map((value) => value.trim()).filter(Boolean),
-        content: byId("content").value,
-      }),
-    });
-    status.textContent = `已保存：${data.note.title}`;
-    byId("content").value = "";
+    await renderer();
   } catch (error) {
-    status.textContent = error.message;
+    const label = error.status === 403 ? "403：访问被拒绝" : "无法加载页面";
+    replaceOutlet(page(label, error.message || "请稍后重试。", [empty("页面数据暂不可用；你的 Access 会话和服务器权限仍是最终依据。")]))
   }
 }
 
-function drawHits(hits, target = byId("results")) {
-  target.innerHTML = hits.map((hit) => `<div class="hit"><b>${escapeHtml(hit.title)}</b><p>${escapeHtml(hit.excerpt)}</p>${hit.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>`).join("") || "<p class=\"muted\">没有结果</p>";
+function routeLink(label, href) { return element("a", { href, "data-route": "", className: "nav-link", text: label }); }
+function list(items, itemRenderer, emptyText) { return items.length ? element("ul", { className: "item-list" }, items.map(itemRenderer)) : empty(emptyText); }
+function item(title, meta, extra = []) { return element("li", { className: "item" }, [element("h3", { text: title }), element("p", { className: "item-meta", text: meta }), ...extra]); }
+function formatDate(value) { return value ? new Date(value).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" }) : "—"; }
+
+async function renderHome() {
+  const submissions = await api("/api/submissions/mine?limit=5");
+  replaceOutlet(page("你的知识工作台", "向共享知识库提交内容，并继续使用已发布的旧版知识。", [
+    element("div", { className: "page-grid" }, [
+      card("快速开始", [
+        element("p", { text: "新内容会进入只读待审核队列；发布能力将在 Phase 3 提供。" }),
+        element("div", { className: "actions" }, [routeLink("提交知识", "/submit"), routeLink("搜索旧版知识", "/search"), routeLink("询问 Agent", "/agent")]),
+      ]),
+      card("最近投稿", [list(submissions.items, (submission) => item(submission.title, `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`), "你还没有投稿。")]),
+    ]),
+  ]));
 }
 
-async function search() {
-  const results = byId("results");
+async function loadSpaces() { return (await api("/api/spaces?limit=50")).items; }
+async function renderSubmit() {
+  const spaces = await loadSpaces();
+  const activeSpaces = spaces.filter((space) => space.status === "active" && !space.readOnly);
+  const title = element("input", { name: "title", required: "", maxlength: "256" });
+  const kind = element("select", { name: "kind" }, ["text", "markdown", "code"].map((value) => element("option", { value, text: value })));
+  const space = element("select", { name: "space", required: "" }, activeSpaces.map((value) => element("option", { value: value.id, text: value.name })));
+  const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: "输入纯文本、Markdown 或代码…" });
+  const form = element("form", { className: "stack", onsubmit: async (event) => {
+    event.preventDefault();
+    try {
+      const result = await api("/api/submissions", { method: "POST", body: JSON.stringify({ requestedSpaceId: space.value, kind: kind.value, title: title.value, content: content.value }) });
+      setStatus(`已提交“${result.submission.title}”，当前状态为 ${result.submission.status}。`, "success");
+      navigate("/my-submissions", true);
+    } catch (error) { setStatus(error.message, "error"); }
+  } }, [
+    field("标题", title), field("内容类型", kind), field("目标空间", space), field("内容", content),
+    element("button", { className: "primary", type: "submit", text: "提交到待审核队列", disabled: activeSpaces.length ? undefined : "" }),
+  ]);
+  replaceOutlet(page("提交知识", "Phase 1 只接受文本、Markdown 和代码；内容会保留为 review_pending。", [card("新投稿", [activeSpaces.length ? form : empty("没有可投稿的活动共享空间。")])]));
+}
+function field(label, control) { return element("label", { text: label }, [control]); }
+
+async function renderKnowledge() {
+  const spaces = await loadSpaces();
+  replaceOutlet(page("知识空间", "默认知识库可管理；旧版个人空间保持只读兼容。", [
+    element("div", { className: "page-grid" }, spaces.map((space) => card(space.name, [
+      element("p", { className: "muted", text: space.description || "没有说明。" }),
+      element("p", { text: `${space.kind === "legacy" ? "旧版" : "共享"} · ${space.readOnly ? "只读" : "可投稿"} · ${space.status}` }),
+      space.kind === "legacy" ? routeLink("搜索已发布知识", "/search") : routeLink("提交到此空间", "/submit"),
+    ]))),
+  ]));
+}
+
+async function renderSearch() {
+  const query = element("input", { type: "search", placeholder: "输入关键词", "aria-label": "搜索关键词" });
+  const results = element("div", { className: "stack" });
+  const form = element("form", { className: "actions", onsubmit: async (event) => {
+    event.preventDefault();
+    results.replaceChildren(empty("正在搜索…"));
+    try {
+      const data = await api(`/api/search?q=${encodeURIComponent(query.value)}`);
+      results.replaceChildren(list(data.hits, (hit) => item(hit.title, hit.excerpt || "没有摘要", (hit.tags || []).map((tag) => element("span", { className: "badge", text: tag }))), "没有匹配的已发布知识。"));
+    } catch (error) { results.replaceChildren(empty(error.message)); }
+  } }, [query, element("button", { className: "primary", type: "submit", text: "搜索" })]);
+  replaceOutlet(page("搜索已发布知识", "此页面检索 Phase 0 的兼容知识库，不包含待审核投稿。", [card("检索", [form, results])]));
+}
+
+async function renderAgent() {
+  const question = element("textarea", { required: "", placeholder: "例如：根据已发布的知识，下一步应关注什么？" });
+  const answer = element("div", { className: "stack" });
+  const form = element("form", { className: "stack", onsubmit: async (event) => {
+    event.preventDefault();
+    answer.replaceChildren(empty("正在阅读已发布知识…"));
+    try {
+      const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ question: question.value }) });
+      answer.replaceChildren(element("p", { text: data.answer }), element("h3", { text: "来源" }), list(data.sources || [], (source) => item(source.title, source.excerpt || ""), "没有可引用来源。"));
+    } catch (error) { answer.replaceChildren(empty(error.message)); }
+  } }, [field("问题", question), element("button", { className: "primary", type: "submit", text: "询问 Agent" })]);
+  replaceOutlet(page("向 Agent 提问", "回答只依据已发布的旧版知识；待审核投稿不会被用于回答。", [card("问题", [form, answer])]));
+}
+
+async function renderMySubmissions() {
+  const data = await api("/api/submissions/mine?limit=50");
+  replaceOutlet(page("我的投稿", "只有你自己的投稿会显示在这里。", [card("投稿记录", [list(data.items, (submission) => item(submission.title, `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`, [element("p", { className: "muted", text: submission.content })]), "你还没有投稿。")])]));
+}
+
+async function renderAdminDashboard() {
+  const [pending, members, spaces, audit] = await Promise.all([
+    api("/api/admin/submissions?status=review_pending&limit=5"), api("/api/admin/members?limit=5"), api("/api/spaces?limit=5"), api("/api/admin/audit-events?limit=5"),
+  ]);
+  replaceOutlet(page("管理概览", "治理操作仍由每个 API 的服务器授权执行。", [
+    element("div", { className: "page-grid" }, [
+      metricCard("待审核投稿", pending.items.length, "查看队列", "/admin/submissions"), metricCard("成员", members.items.length, "管理成员", "/admin/members"),
+      metricCard("空间", spaces.items.length, "管理空间", "/admin/spaces"), metricCard("审计事件", audit.items.length, "查看审计", "/admin/audit"),
+    ]),
+  ]));
+}
+function metricCard(title, value, label, href) { return card(title, [element("p", { text: String(value) }), routeLink(label, href)]); }
+
+async function renderPendingSubmissions() {
+  const data = await api("/api/admin/submissions?status=review_pending&limit=50");
+  replaceOutlet(page("待审核投稿", "该队列在 Phase 1 为只读；批准、驳回和发布将在 Phase 3 提供。", [
+    element("p", { className: "notice", text: "Phase 3 才会提供审核决定与发布能力。" }),
+    card("review_pending", [list(data.items, (submission) => item(submission.title, `${submission.kind} · ${submission.submitterId} · ${formatDate(submission.createdAt)}`, [element("p", { className: "muted", text: submission.content })]), "没有待审核投稿。")]),
+  ]));
+}
+
+async function renderMembers() {
+  const data = await api("/api/admin/members?limit=50");
+  const rows = data.items.map((member) => {
+    const status = element("button", { className: "secondary", type: "button", text: member.status === "active" ? "禁用 contributor" : "启用 contributor", disabled: member.role === "admin" ? "" : undefined, onclick: async () => {
+      try { await api(`/api/admin/members/${encodeURIComponent(member.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: member.status === "active" ? "disabled" : "active" }) }); setStatus("成员状态已更新。", "success"); await renderMembers(); }
+      catch (error) { setStatus(error.message, "error"); }
+    } });
+    return element("tr", {}, [element("td", { text: member.email }), element("td", { text: member.role }), element("td", { text: member.status }), element("td", {}, [status])]);
+  });
+  replaceOutlet(page("成员", "唯一管理员受服务器保护，不能通过 Web 界面变更。", [card("成员目录", [table(["邮箱", "角色", "状态", "操作"], rows)])]));
+}
+function table(headers, rows) { return element("div", { className: "table-wrap" }, [element("table", {}, [element("thead", {}, [element("tr", {}, headers.map((header) => element("th", { text: header }))) ]), element("tbody", {}, rows)])]); }
+
+async function renderSpaces() {
+  const spaces = await loadSpaces();
+  const managedSpaces = spaces.filter((space) => !space.readOnly && space.kind === "shared");
+  const collectionPages = await Promise.all(managedSpaces.map(async (space) => ({
+    space,
+    collections: (await api(`/api/spaces/${encodeURIComponent(space.id)}/collections?limit=50`)).items,
+  })));
+  const slug = element("input", { required: "", placeholder: "engineering" });
+  const name = element("input", { required: "", placeholder: "Engineering" });
+  const position = element("input", { type: "number", value: String(spaces.length) });
+  const form = element("form", { className: "stack", onsubmit: async (event) => {
+    event.preventDefault();
+    try { await api("/api/admin/spaces", { method: "POST", body: JSON.stringify({ slug: slug.value, name: name.value, position: Number(position.value) }) }); setStatus("空间已创建。", "success"); await renderSpaces(); }
+    catch (error) { setStatus(error.message, "error"); }
+  } }, [field("Slug", slug), field("名称", name), field("排序位置", position), element("button", { className: "primary", type: "submit", text: "创建共享空间" })]);
+  const collectionSpace = element("select", { required: "" }, managedSpaces.map((space) => element("option", { value: space.id, text: space.name })));
+  const collectionName = element("input", { required: "", placeholder: "Runbooks" });
+  const collectionPosition = element("input", { type: "number", value: "0" });
+  const collectionForm = element("form", { className: "stack", onsubmit: async (event) => {
+    event.preventDefault();
+    try {
+      await api("/api/admin/collections", { method: "POST", body: JSON.stringify({ spaceId: collectionSpace.value, name: collectionName.value, position: Number(collectionPosition.value) }) });
+      setStatus("集合已创建。", "success");
+      await renderSpaces();
+    } catch (error) { setStatus(error.message, "error"); }
+  } }, [field("目标空间", collectionSpace), field("集合名称", collectionName), field("排序位置", collectionPosition), element("button", { className: "primary", type: "submit", text: "创建集合", disabled: managedSpaces.length ? undefined : "" })]);
+  replaceOutlet(page("空间", "旧版个人空间永久只读；共享空间及其集合由服务器校验。", [
+    element("div", { className: "page-grid wide-left" }, [card("现有空间", [list(spaces, (space) => item(space.name, `${space.slug} · ${space.kind} · ${space.readOnly ? "只读" : space.status}`), "没有空间。")]), card("新共享空间", [form])]),
+    element("div", { className: "page-grid wide-left" }, [
+      card("集合", [collectionPages.length ? list(collectionPages, ({ space, collections }) => item(space.name, collections.length ? collections.map((collection) => collection.name).join(" · ") : "还没有集合。"), "没有可管理的共享空间。") : empty("没有可管理的共享空间。")]),
+      card("新集合", [collectionForm]),
+    ]),
+  ]));
+}
+
+async function renderAudit() {
+  const data = await api("/api/admin/audit-events?limit=50");
+  replaceOutlet(page("审计", "事件元数据由服务端按动作白名单脱敏。", [card("最近事件", [list(data.items, (event) => item(event.action, `${event.resourceType} · ${formatDate(event.createdAt)}`, [element("code", { text: JSON.stringify(event.metadata) })]), "没有审计事件。")])]));
+}
+
+async function bootstrap() {
   try {
-    const data = await api(`/api/search?q=${encodeURIComponent(byId("search").value)}`);
-    drawHits(data.hits);
+    session = await api("/api/session");
+    byId("session-summary").textContent = `${session.member.email} · ${session.member.role}`;
+    byId("logout-link").href = session.logoutUrl;
+    shell.dataset.ready = "true";
+    await renderRoute();
   } catch (error) {
-    results.textContent = error.message;
+    replaceOutlet(page("无法启动工作区", error.status === 401 ? "请先通过 Cloudflare Access 登录，然后重新打开此页面。" : error.message || "无法获取当前会话。", [empty("浏览器不会保存自动化密钥或手动注入身份凭据。")]))
   }
 }
 
-async function ask() {
-  const answer = byId("answer");
-  const sources = byId("sources");
-  answer.className = "muted";
-  answer.textContent = "正在阅读知识库…";
-  sources.innerHTML = "";
-  try {
-    const data = await api("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({ question: byId("question").value }),
-    });
-    answer.className = "";
-    answer.textContent = data.answer;
-    drawHits(data.sources, sources);
-  } catch (error) {
-    answer.textContent = error.message;
-  }
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  }[character]));
-}
-
-byId("set-token").addEventListener("click", setToken);
-byId("note-form").addEventListener("submit", (event) => {
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-route]");
+  if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target) return;
   event.preventDefault();
-  void saveNote();
+  navigate(link.getAttribute("href"));
 });
-byId("search-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  void search();
+window.addEventListener("popstate", () => { void renderRoute(); });
+byId("drawer-toggle").addEventListener("click", () => {
+  const open = shell.dataset.drawerOpen !== "true";
+  shell.dataset.drawerOpen = String(open);
+  byId("drawer-toggle").setAttribute("aria-expanded", String(open));
 });
-byId("question-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  void ask();
-});
+void bootstrap();
