@@ -15,15 +15,13 @@ async function constantTimeEqual(left: string, right: string): Promise<boolean> 
 
 export interface AuthEnvironment {
   APP_TOKEN?: string;
-  ALLOW_INSECURE_LOCAL?: string;
 }
 
-export async function authorizeRequest(
+export async function verifyAutomationToken(
   request: Request,
   env: AuthEnvironment,
 ): Promise<void> {
   if (!env.APP_TOKEN) {
-    if (env.ALLOW_INSECURE_LOCAL === "true") return;
     throw new AppError("AUTH_MISCONFIGURED", "Authentication is not configured", 503);
   }
   const header = request.headers.get("authorization") || "";
@@ -32,3 +30,7 @@ export async function authorizeRequest(
     throw new AppError("AUTH_REQUIRED", "Authentication required", 401);
   }
 }
+
+// Compatibility export for the Phase 0 app composition. Task 7 replaces its
+// blanket call site with resolvePrincipal and capability checks.
+export const authorizeRequest = verifyAutomationToken;

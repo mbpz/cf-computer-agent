@@ -1,0 +1,88 @@
+import { describe, expect, it, vi } from "vitest";
+import { AppError } from "../../src/http";
+import { resolvePrincipal, type ResolvePrincipalDependencies } from "../../src/identity/principal";
+import type { Member } from "../../src/members/types";
+
+const member = (): Member => ({
+  id: "member-1",
+  accessSub: "access-subject-1",
+  email: "member@example.test",
+  role: "contributor",
+  status: "active",
+  createdAt: "2026-08-12T00:00:00.000Z",
+  updatedAt: "2026-08-12T00:00:00.000Z",
+  lastSeenAt: null,
+});
+
+const request = (headers: HeadersInit = {}) => new Request("https://example.test/api/session", { headers });
+const env = { APP_TOKEN: "automation-token", ACCESS_TEAM_DOMAIN: "access.example.test", ACCESS_AUD: "audience" };
+
+describe("resolvePrincipal", () => {
+  it("resolves a verified Access assertion through the member lifecycle", async () => {
+    const dependencies = dependenciesFor(member());
+
+    await expect(resolvePrincipal(request({ "cf-access-jwt-assertion": "test-assertion" }), env, dependencies))
+      .resolves.toEqual({
+        kind: "member",
+        memberId: "member-1",
+        accessSub: "access-subject-1",
+        email: "member@example.test",
+        role: "contributor",
+      });
+  });
+
+  it("resolves a correct APP_TOKEN as the restricted automation principal", async () => {
+    await expect(resolvePrincipal(request({ authorization: "Bearer automation-token" }), env, dependenciesFor(member())))
+      .resolves.toEqual({ kind: "automation", role: "automation" });
+  });
+
+  it("fails closed when the member lifecycle rejects a disabled Access identity", async () => {
+    const dependencies = dependenciesFor(member(), new AppError("MEMBER_DISABLED", "Member access is disabled", 403));
+
+    await expect(resolvePrincipal(request({ "cf-access-jwt-assertion": "disabled-assertion" }), env, dependencies))
+      .rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
+  });
+
+  it("propagates invalid Access assertions without trying APP_TOKEN", async () => {
+    const dependencies = dependenciesFor(member(), undefined, new AppError("ACCESS_TOKEN_INVALID", "Access authentication failed", 401));
+
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "invalid-assertion",
+      authorization: "Bearer automation-token",
+    }), env, dependencies)).rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID", status: 401 });
+  });
+
+  it("rejects a wrong APP_TOKEN when no Access assertion is present", async () => {
+    await expect(resolvePrincipal(request({ authorization: "Bearer wrong-token" }), env, dependenciesFor(member())))
+      .rejects.toMatchObject({ code: "AUTH_REQUIRED", status: 401 });
+  });
+
+  it("always selects the member path when an assertion and APP_TOKEN are both supplied", async () => {
+    const dependencies = dependenciesFor(member(), undefined, new AppError("ACCESS_TOKEN_INVALID", "Access authentication failed", 401));
+
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "invalid-assertion",
+      authorization: "Bearer automation-token",
+    }), env, dependencies)).rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID", status: 401 });
+    expect(dependencies.members.resolveFirstLogin).not.toHaveBeenCalled();
+  });
+});
+
+function dependenciesFor(
+  resolvedMember: Member,
+  memberError?: Error,
+  verificationError?: Error,
+): ResolvePrincipalDependencies & { members: { resolveFirstLogin: ReturnType<typeof vi.fn> } } {
+  return {
+    members: {
+      resolveFirstLogin: vi.fn(async () => {
+        if (memberError) throw memberError;
+        return resolvedMember;
+      }),
+    },
+    verifyAccessJwt: async () => {
+      if (verificationError) throw verificationError;
+      return { sub: "access-subject-1", email: "member@example.test" };
+    },
+  };
+}
