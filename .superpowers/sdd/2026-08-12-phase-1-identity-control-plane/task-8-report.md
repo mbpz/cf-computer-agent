@@ -33,3 +33,14 @@ The worker test runner prints expected Durable Object recovery diagnostics from 
 
 - Focused regressions: 13 tests across `navigation`, `workspace-ui`, and `assets` passed.
 - Fresh `rtk npm run check` passed: 16 unit files / 120 tests, 7 worker files / 80 tests, smoke tests, generated types, type check, and dry build.
+
+## Fix round 2
+
+- Mutation callbacks now capture both their owning route generation and pathname before awaiting their request. Submission, member-status, Space, and Collection handlers verify ownership before every redirect, status message, refresh, or DOM-affecting error path; stale callbacks are no-ops and cannot mint a new route generation.
+- Browser back/forward now closes the mobile drawer before rendering the history route.
+- Added a pure regression for route/path mutation ownership.
+
+## Fix round 2 verification
+
+- Focused `navigation`, `workspace-ui`, and `assets` regressions: 14 tests passed.
+- Fresh `rtk npm run check` passed: 16 unit files / 121 tests, 7 worker files / 80 tests, smoke tests, generated types, type check, and dry build.

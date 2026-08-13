@@ -10,6 +10,15 @@ describe("createRouteGuard", () => {
     expect(guard.isCurrent(home)).toBe(false);
     expect(guard.isCurrent(search)).toBe(true);
   });
+
+  it("rejects a mutation completion when its owning route changed", () => {
+    const guard = createRouteGuard();
+    const submission = guard.capture("/submit");
+
+    expect(guard.owns(submission, "/submit")).toBe(true);
+    guard.begin();
+    expect(guard.owns(submission, "/knowledge")).toBe(false);
+  });
 });
 
 describe("drawerState", () => {

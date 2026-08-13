@@ -83,6 +83,8 @@ async function api(path, options = {}) {
 
 function has(capability) { return session?.capabilities.includes(capability); }
 function isAdminRoute(path) { return path === "/admin" || path.startsWith("/admin/"); }
+function currentMutationOwner() { return routeGuard.capture(window.location.pathname); }
+function ownsMutation(owner) { return routeGuard.owns(owner, window.location.pathname); }
 function setDrawer(open, focusDrawer = false) {
   if (!mobileViewport.matches) {
     shell.dataset.drawerOpen = "false";
@@ -181,10 +183,12 @@ async function renderSubmit(generation) {
   const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: "输入纯文本、Markdown 或代码…" });
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
+    const owner = currentMutationOwner();
     try {
       const result = await api("/api/submissions", { method: "POST", body: JSON.stringify({ requestedSpaceId: space.value, kind: kind.value, title: title.value, content: content.value }) });
+      if (!ownsMutation(owner)) return;
       navigate("/my-submissions", true, `已提交“${result.submission.title}”，当前状态为 ${result.submission.status}。`);
-    } catch (error) { setStatus(error.message, "error"); }
+    } catch (error) { if (ownsMutation(owner)) setStatus(error.message, "error"); }
   } }, [
     field("标题", title), field("内容类型", kind), field("目标空间", space), field("内容", content),
     element("button", { className: "primary", type: "submit", text: "提交到待审核队列", disabled: activeSpaces.length ? undefined : "" }),
@@ -262,8 +266,13 @@ async function renderMembers(generation) {
   const data = await api("/api/admin/members?limit=50");
   const rows = data.items.map((member) => {
     const status = element("button", { className: "secondary", type: "button", text: member.status === "active" ? "禁用 contributor" : "启用 contributor", disabled: member.role === "admin" ? "" : undefined, onclick: async () => {
-      try { await api(`/api/admin/members/${encodeURIComponent(member.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: member.status === "active" ? "disabled" : "active" }) }); setStatus("成员状态已更新。", "success"); await renderMembers(routeGuard.begin()); }
-      catch (error) { setStatus(error.message, "error"); }
+      const owner = currentMutationOwner();
+      try {
+        await api(`/api/admin/members/${encodeURIComponent(member.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: member.status === "active" ? "disabled" : "active" }) });
+        if (!ownsMutation(owner)) return;
+        setStatus("成员状态已更新。", "success");
+        await renderMembers(owner.generation);
+      } catch (error) { if (ownsMutation(owner)) setStatus(error.message, "error"); }
     } });
     return element("tr", {}, [element("td", { text: member.email }), element("td", { text: member.role }), element("td", { text: member.status }), element("td", {}, [status])]);
   });
@@ -283,19 +292,26 @@ async function renderSpaces(generation) {
   const position = element("input", { type: "number", value: String(spaces.length) });
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
-    try { await api("/api/admin/spaces", { method: "POST", body: JSON.stringify({ slug: slug.value, name: name.value, position: Number(position.value) }) }); setStatus("空间已创建。", "success"); await renderSpaces(routeGuard.begin()); }
-    catch (error) { setStatus(error.message, "error"); }
+    const owner = currentMutationOwner();
+    try {
+      await api("/api/admin/spaces", { method: "POST", body: JSON.stringify({ slug: slug.value, name: name.value, position: Number(position.value) }) });
+      if (!ownsMutation(owner)) return;
+      setStatus("空间已创建。", "success");
+      await renderSpaces(owner.generation);
+    } catch (error) { if (ownsMutation(owner)) setStatus(error.message, "error"); }
   } }, [field("Slug", slug), field("名称", name), field("排序位置", position), element("button", { className: "primary", type: "submit", text: "创建共享空间" })]);
   const collectionSpace = element("select", { required: "" }, managedSpaces.map((space) => element("option", { value: space.id, text: space.name })));
   const collectionName = element("input", { required: "", placeholder: "Runbooks" });
   const collectionPosition = element("input", { type: "number", value: "0" });
   const collectionForm = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
+    const owner = currentMutationOwner();
     try {
       await api("/api/admin/collections", { method: "POST", body: JSON.stringify({ spaceId: collectionSpace.value, name: collectionName.value, position: Number(collectionPosition.value) }) });
+      if (!ownsMutation(owner)) return;
       setStatus("集合已创建。", "success");
-      await renderSpaces(routeGuard.begin());
-    } catch (error) { setStatus(error.message, "error"); }
+      await renderSpaces(owner.generation);
+    } catch (error) { if (ownsMutation(owner)) setStatus(error.message, "error"); }
   } }, [field("目标空间", collectionSpace), field("集合名称", collectionName), field("排序位置", collectionPosition), element("button", { className: "primary", type: "submit", text: "创建集合", disabled: managedSpaces.length ? undefined : "" })]);
   if (replaceOutlet(page("空间", "旧版个人空间永久只读；共享空间及其集合由服务器校验。", [
     element("div", { className: "page-grid wide-left" }, [card("现有空间", [list(spaces, (space) => item(space.name, `${space.slug} · ${space.kind} · ${space.readOnly ? "只读" : space.status}`), "没有空间。")]), card("新共享空间", [form])]),
@@ -329,7 +345,7 @@ document.addEventListener("click", (event) => {
   event.preventDefault();
   navigate(link.getAttribute("href"));
 });
-window.addEventListener("popstate", () => { void renderRoute(); });
+window.addEventListener("popstate", () => { setDrawer(false); void renderRoute(); });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && shell.dataset.drawerOpen === "true") setDrawer(false); });
 drawerToggle.addEventListener("click", () => setDrawer(shell.dataset.drawerOpen !== "true", true));
 mobileViewport.addEventListener("change", () => setDrawer(false));
