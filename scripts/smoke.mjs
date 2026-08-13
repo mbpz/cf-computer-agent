@@ -43,7 +43,7 @@ async function check(step, request, assertBody) {
     throw new SmokeFailure(step, "request failed", "network", "missing", elapsed(started));
   }
 
-  const requestId = safeRequestId(response.headers.get("x-request-id"));
+  const requestId = safeRequestId(response.headers.get("x-request-id"), [token, accessClientId, accessClientSecret]);
   const duration = elapsed(started);
   let body;
   try {
@@ -92,8 +92,12 @@ function formatResult(result, step, status, requestId, elapsedMs) {
   return `[${result}] ${step} status=${status} request_id=${requestId} elapsed_ms=${elapsedMs}`;
 }
 
-function safeRequestId(value) {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : "invalid";
+function safeRequestId(value, credentials) {
+  return typeof value === "string"
+    && /^[A-Za-z0-9_-]{1,128}$/.test(value)
+    && credentials.every((credential) => !credential || !value.includes(credential))
+    ? value
+    : "invalid";
 }
 
 async function run() {

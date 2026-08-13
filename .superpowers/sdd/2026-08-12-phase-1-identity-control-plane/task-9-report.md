@@ -39,3 +39,12 @@ No remote D1 migration, deployment, Access/GitHub configuration, secret write, d
 
 - Focused: TypeScript plus 55 access/principal/workerd tests passed; 6 smoke-contract tests passed.
 - Fresh `rtk npm run check` passed on the exact task tree.
+
+## Fix round 2
+
+- Request-ID sanitization now receives all three required smoke credentials and replaces a syntactically valid ID when it equals or embeds any nonempty APP token, Access client ID, or Access client secret. Focused raw-response regressions cover every credential both exactly and inside a valid-looking composition; output shows only the fixed `invalid` marker and never the reflected values.
+- Member assertion classification now requires `common_name` to be genuinely absent. Null, numeric, blank-string, and nonblank `common_name` claims alongside member claims all fail with `ACCESS_TOKEN_INVALID`; the documented service shape remains `sub === ""`, absent email, and nonblank string `common_name`.
+
+## Fix round 2 verification
+
+- Focused smoke and Access assertion tests passed: 6 smoke contracts and 22 unit tests.

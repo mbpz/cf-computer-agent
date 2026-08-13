@@ -59,7 +59,7 @@ function classifyAssertion(payload: Record<string, unknown>): VerifiedAccessAsse
   const commonName = normalizeSubject(payload.common_name);
   const isService = payload.sub === "" && payload.email === undefined && Boolean(commonName);
   if (isService) return { kind: "service" };
-  if (sub && email && !commonName) return { kind: "member", sub, email };
+  if (sub && email && payload.common_name === undefined) return { kind: "member", sub, email };
   throw new AppError("ACCESS_TOKEN_INVALID", "Access identity is invalid", 401);
 }
 

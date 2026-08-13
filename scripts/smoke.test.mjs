@@ -193,10 +193,11 @@ test("rejects redirects before the redirect target receives automation credentia
 });
 
 test("redacts untrusted request IDs from smoke output", async () => {
-  const secretRequestId = "local-smoke-token.local-access-client-id.local-access-client-secret";
+  const credentials = ["local-smoke-token", "local-access-client-id", "local-access-client-secret"];
+  const reflectedRequestIds = credentials.flatMap((credential) => [credential, `prefix-${credential}-suffix`]);
   const longRequestId = "a".repeat(257);
   const controlRequestId = "request-id\u001b[31mcontrol";
-  for (const requestId of [secretRequestId, longRequestId, controlRequestId]) {
+  for (const requestId of [...reflectedRequestIds, longRequestId, controlRequestId]) {
     const server = await startRawRequestIdServer(requestId);
     try {
       const result = await runSmoke({
@@ -210,6 +211,7 @@ test("redacts untrusted request IDs from smoke output", async () => {
       assert.equal(result.code, 1);
       assert.doesNotMatch(result.output, /local-smoke-token|local-access-client-id|local-access-client-secret/);
       assert.doesNotMatch(result.output, /\u001b|a{257}|request-id/);
+      if (requestId !== controlRequestId) assert.match(result.output, /request_id=invalid/);
     } finally {
       await server.close();
     }

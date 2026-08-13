@@ -118,6 +118,9 @@ describe("verifyAccessJwt", () => {
 
     for (const token of [
       fixture.sign({ common_name: "service-client" }),
+      fixture.sign({ common_name: null }),
+      fixture.sign({ common_name: 123 }),
+      fixture.sign({ common_name: " \t " }),
       fixture.signService({ sub: "nonempty-subject" }),
       fixture.signService({ email: "member@example.test" }),
       fixture.sign({ sub: "", email: undefined, common_name: undefined }),
