@@ -30,6 +30,13 @@ describe("capabilitiesFor", () => {
   ])("returns the least-privilege capability set for %#", (principal, expected) => {
     expect(capabilitiesFor(principal)).toEqual(expected);
   });
+
+  it("returns an immutable capability set that cannot change the shared policy", () => {
+    const capabilities = capabilitiesFor(automation);
+
+    expect(() => (capabilities as Capability[]).push("member:manage")).toThrow();
+    expect(capabilitiesFor(automation)).toEqual(["legacy:read", "legacy:write"]);
+  });
 });
 
 describe("requireCapability", () => {

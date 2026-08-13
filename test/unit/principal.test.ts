@@ -18,10 +18,13 @@ const request = (headers: HeadersInit = {}) => new Request("https://example.test
 const env = { APP_TOKEN: "automation-token", ACCESS_TEAM_DOMAIN: "access.example.test", ACCESS_AUD: "audience" };
 
 describe("resolvePrincipal", () => {
-  it("resolves a verified Access assertion through the member lifecycle", async () => {
+  it("resolves a verified Access assertion as a member even with a valid APP_TOKEN", async () => {
     const dependencies = dependenciesFor(member());
 
-    await expect(resolvePrincipal(request({ "cf-access-jwt-assertion": "test-assertion" }), env, dependencies))
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "test-assertion",
+      authorization: "Bearer automation-token",
+    }), env, dependencies))
       .resolves.toEqual({
         kind: "member",
         memberId: "member-1",
@@ -64,6 +67,26 @@ describe("resolvePrincipal", () => {
       "cf-access-jwt-assertion": "invalid-assertion",
       authorization: "Bearer automation-token",
     }), env, dependencies)).rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID", status: 401 });
+    expect(dependencies.members.resolveFirstLogin).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty assertion instead of falling back to a valid APP_TOKEN", async () => {
+    const dependencies = dependenciesFor(member());
+
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "",
+      authorization: "Bearer automation-token",
+    }), env, { members: dependencies.members })).rejects.toMatchObject({ code: "ACCESS_TOKEN_REQUIRED", status: 401 });
+    expect(dependencies.members.resolveFirstLogin).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed assertion instead of falling back to a valid APP_TOKEN", async () => {
+    const dependencies = dependenciesFor(member());
+
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "malformed",
+      authorization: "Bearer automation-token",
+    }), env, { members: dependencies.members })).rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID", status: 401 });
     expect(dependencies.members.resolveFirstLogin).not.toHaveBeenCalled();
   });
 });

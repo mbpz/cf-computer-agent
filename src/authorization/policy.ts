@@ -11,13 +11,13 @@ export type Capability =
   | "space:manage"
   | "audit:read";
 
-const contributorCapabilities: readonly Capability[] = [
+const contributorCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
   "submission:create",
   "submission:read-own",
-];
+]);
 
-const adminCapabilities: readonly Capability[] = [
+const adminCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
   "legacy:write",
   "submission:create",
@@ -26,9 +26,9 @@ const adminCapabilities: readonly Capability[] = [
   "member:manage",
   "space:manage",
   "audit:read",
-];
+]);
 
-const automationCapabilities: readonly Capability[] = ["legacy:read", "legacy:write"];
+const automationCapabilities = Object.freeze<readonly Capability[]>(["legacy:read", "legacy:write"]);
 
 export function capabilitiesFor(principal: Principal): readonly Capability[] {
   if (principal.kind === "automation") return automationCapabilities;

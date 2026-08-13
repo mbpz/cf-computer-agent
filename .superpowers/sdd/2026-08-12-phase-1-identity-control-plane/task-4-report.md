@@ -23,3 +23,11 @@ rtk git diff --check
 ```
 
 The focused Vitest invocation emitted the existing local AI-binding warning but made no remote calls.
+
+## Fix round 1
+
+- Added a mixed-credential success regression: a valid Access member path with a valid `APP_TOKEN` returns the member principal, not automation.
+- Added empty and malformed assertion regressions using the real Access verifier. Both preserve assertion-selected verification and reject with `ACCESS_TOKEN_REQUIRED` or `ACCESS_TOKEN_INVALID` respectively, despite a valid `APP_TOKEN`.
+- Froze the shared capability arrays and added a regression proving a caller cannot mutate automation policy.
+
+Fresh focused verification for this round passed: `rtk npm run test:unit -- --run test/unit/principal.test.ts test/unit/policy.test.ts` (10 files, 73 tests) and `rtk npm run typecheck`.
