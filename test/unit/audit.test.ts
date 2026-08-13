@@ -8,7 +8,11 @@ describe("audit input validation", () => {
   };
 
   it("accepts only the discriminated allowlisted metadata for an action", () => {
-    expect(assertAuditEventInput(base)).toEqual(base);
+    const event = assertAuditEventInput(base);
+    expect(event).toEqual(base);
+    expect(event).not.toBe(base);
+    expect(event.metadata).not.toBe(base.metadata);
+    expect(Object.getPrototypeOf(event.metadata)).toBeNull();
   });
 
   it.each([
@@ -20,5 +24,25 @@ describe("audit input validation", () => {
     { ...base, content: "full submission" },
   ])("rejects sensitive or arbitrary audit metadata", (input) => {
     expect(() => assertAuditEventInput(input)).toThrow(/audit metadata/i);
+  });
+
+  it("rejects prototype and own toJSON tricks without invoking them", () => {
+    const inherited = Object.create({ toJSON: () => { throw new Error("inherited marker"); } }) as Record<string, unknown>;
+    inherited.kind = "code";
+    inherited.requestedSpaceId = "default";
+    const own = { kind: "code", requestedSpaceId: "default", toJSON: () => { throw new Error("own marker"); } };
+
+    expect(() => assertAuditEventInput({ ...base, metadata: inherited })).toThrow(/audit metadata/i);
+    expect(() => assertAuditEventInput({ ...base, metadata: own })).toThrow(/audit metadata/i);
+  });
+
+  it("rejects nested sensitive values before an audit payload can serialize them", () => {
+    const marker = "nested-sensitive-marker";
+    let serialized = "";
+
+    expect(() => { serialized = JSON.stringify(assertAuditEventInput({
+      ...base, metadata: { kind: "code", requestedSpaceId: { content: marker } },
+    })); }).toThrow(/audit metadata/i);
+    expect(serialized).not.toContain(marker);
   });
 });

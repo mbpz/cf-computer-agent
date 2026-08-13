@@ -10,12 +10,18 @@
 
 ## Local D1 batch boundary
 
-The workerd+D1 integration characterizes the observed local behavior: when the dependent audit insert fails on a duplicate audit ID, the earlier submission insert is absent afterwards. The implementation relies only on this tested D1 batch behavior for the paired local writes; it does not claim cross-service atomicity or a broader transaction guarantee beyond D1's batch operation.
+The workerd+D1 integration characterizes the observed local behavior: when the dependent audit insert fails on a duplicate audit ID, the earlier submission insert is absent afterwards. A zero-row dependent audit statement also makes the repository reject rather than return a successful submission. The implementation relies only on these tested D1 batch behaviors for the paired local writes; it does not claim cross-service atomicity or a broader transaction guarantee beyond D1's batch operation.
+
+## Review fix round 1
+
+- `assertAuditEventInput` now accepts only ordinary/null-prototype data objects with own data properties, rejects own/inherited `toJSON`, symbols, custom prototypes, nested values, and unallowlisted fields, then rebuilds null-prototype event and metadata DTOs from validated primitive fields. The repository serializes only that rebuilt DTO.
+- The paired-write repository validates exact submission/audit identity before `D1Database.batch`: member actor equals submitter, resource is the submitted ID/type, action is `submission.created`, and metadata exactly derives from the submission target and kind. It also rejects a zero-change audit batch result.
+- Regression coverage proves prototype and `toJSON` markers cannot reach serialized output; actor/resource mismatches persist no submission; and a zero-row audit write does not yield a successful create result.
 
 ## Verification
 
 - `rtk npm run typecheck` — passed.
-- `rtk npx vitest run test/unit/submissions-service.test.ts test/unit/audit.test.ts test/worker/submissions.test.ts` — passed (3 files, 17 tests).
+- `rtk npx vitest run test/unit/submissions-service.test.ts test/unit/audit.test.ts test/worker/submissions.test.ts` — passed (3 files, 21 tests).
 - `rtk npm run check` — passed: generated types, TypeScript, 2 smoke tests, 14 unit files/100 tests, 5 worker files/39 tests, and local dry-run build.
 - `rtk git diff --check` — passed.
 

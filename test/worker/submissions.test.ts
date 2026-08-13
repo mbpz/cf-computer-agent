@@ -76,12 +76,32 @@ describe("submissions D1 control plane", () => {
     expect(new Set([...first.items, ...second.items].map((event) => event.id))).toEqual(new Set(["id-1", "later-audit"]));
   });
 
-  it("forces review_pending at the persistence boundary", async () => {
+  it("rejects an actor-mismatched audit before the D1 batch can persist a submission", async () => {
     const repository = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
-    const input = { ...submissionInput("forced-status"), status: "rejected" } as never;
+    const submission = submissionInput("actor-mismatch");
+    const audit = { ...auditInput("actor-mismatch-audit"), actorId: "member-b", resourceId: submission.id };
 
-    await expect(repository.createWithAudit(input, auditInput("forced-status-audit"))).resolves.toMatchObject({ status: "review_pending" });
-    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = 'forced-status'").first()).resolves.toEqual({ status: "review_pending" });
+    await expect(repository.createWithAudit(submission, audit)).rejects.toThrow(/audit/i);
+    await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'actor-mismatch'").first()).resolves.toBeNull();
+  });
+
+  it("rejects a resource-mismatched audit before the D1 batch can persist a submission", async () => {
+    const repository = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
+    const submission = submissionInput("resource-mismatch");
+    const audit = { ...auditInput("resource-mismatch-audit"), resourceId: "other-submission" };
+
+    await expect(repository.createWithAudit(submission, audit)).rejects.toThrow(/audit/i);
+    await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'resource-mismatch'").first()).resolves.toBeNull();
+  });
+
+  it("fails instead of returning a submission when D1 reports a zero-row audit write", async () => {
+    const zeroAudit = { prepareWriteAudit: () => env.DB.prepare("INSERT INTO audit_events (id, actor_kind, action, resource_type, metadata, created_at) SELECT 'zero-audit', 'system', 'submission.created', 'submission', '{}', ? WHERE 0").bind(now) } as unknown as AuditRepository;
+    const repository = new SubmissionsRepository(env.DB, zeroAudit);
+    const submission = submissionInput("zero-audit-submission");
+    const audit = { ...auditInput("zero-audit"), resourceId: submission.id };
+
+    await expect(repository.createWithAudit(submission, audit)).rejects.toThrow(/audit write did not persist/i);
+    await expect(env.DB.prepare("SELECT id FROM audit_events WHERE id = 'zero-audit'").first()).resolves.toBeNull();
   });
 });
 

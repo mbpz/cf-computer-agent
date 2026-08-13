@@ -7,19 +7,19 @@ export class AuditRepository {
   constructor(private readonly db: D1Database) {}
 
   async writeAudit(input: CreateAuditEvent): Promise<AuditEvent> {
-    assertAuditEventInput(input);
-    await this.prepareWriteAudit(input).run();
-    return input;
+    const audit = assertAuditEventInput(input);
+    await this.prepareWriteAudit(audit).run();
+    return audit;
   }
 
   prepareWriteAudit(input: CreateAuditEvent, requireSubmissionId?: string): D1PreparedStatement {
-    assertAuditEventInput(input);
-    const values = [input.id, input.actorKind, input.actorId, input.action, input.resourceType, input.resourceId, JSON.stringify(input.metadata), input.createdAt];
+    const audit = assertAuditEventInput(input);
+    const values = [audit.id, audit.actorKind, audit.actorId, audit.action, audit.resourceType, audit.resourceId, JSON.stringify(audit.metadata), audit.createdAt];
     if (requireSubmissionId === undefined) {
       return this.db.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(...values);
     }
     return this.db.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM submissions WHERE id = ? AND submitter_id = ?)")
-      .bind(...values, requireSubmissionId, input.actorId);
+      .bind(...values, requireSubmissionId, audit.actorId);
   }
 
   async listAudit(request: PageRequest): Promise<AuditPage> {
