@@ -4,6 +4,7 @@ import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MembersRepository } from "../../src/members/repository";
 import { MembersService } from "../../src/members/service";
+import { AuditRepository } from "../../src/audit/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("members D1 control plane", () => {
@@ -13,7 +14,7 @@ describe("members D1 control plane", () => {
   });
 
   it("keeps exactly one active admin during concurrent bootstrap logins", async () => {
-    const service = () => new MembersService(new MembersRepository(env.DB), {
+    const service = () => new MembersService(new MembersRepository(env.DB, new AuditRepository(env.DB)), {
       BOOTSTRAP_ADMIN_EMAIL: "  BOOTSTRAP@EXAMPLE.TEST ",
     }, { waitUntil: () => undefined });
 
@@ -27,6 +28,60 @@ describe("members D1 control plane", () => {
       "SELECT id FROM members WHERE role = 'admin' AND status = 'active'",
     ).all<{ id: string }>();
     expect(activeAdmins.results).toHaveLength(1);
+    const loginAudits = await env.DB.prepare(
+      "SELECT actor_id, action, resource_type, resource_id, metadata FROM audit_events WHERE action = 'member.login' ORDER BY resource_id",
+    ).all<{ actor_id: string; action: string; resource_type: string; resource_id: string; metadata: string }>();
+    expect(loginAudits.results).toHaveLength(2);
+    expect(loginAudits.results.every((event) => event.actor_id === event.resource_id && event.resource_type === "member")).toBe(true);
+    expect(loginAudits.results.map((event) => JSON.parse(event.metadata))).toEqual(expect.arrayContaining([
+      { role: "admin" },
+      { role: "contributor" },
+    ]));
+  });
+
+  it("audits only first account creation and not repeat login or last_seen work", async () => {
+    const service = new MembersService(new MembersRepository(env.DB, new AuditRepository(env.DB)), {}, { waitUntil: () => undefined });
+    const identity = { sub: "repeat-subject", email: "repeat@example.test" };
+
+    const first = await service.resolveFirstLogin(identity);
+    await service.resolveFirstLogin(identity);
+    const audits = await env.DB.prepare("SELECT actor_id, resource_id, metadata FROM audit_events WHERE action = 'member.login'").all<{
+      actor_id: string; resource_id: string; metadata: string;
+    }>();
+    expect(audits.results).toEqual([{ actor_id: first.id, resource_id: first.id, metadata: '{"role":"contributor"}' }]);
+  });
+
+  it("rolls back first member creation when its paired login audit fails", async () => {
+    const audit = new AuditRepository(env.DB);
+    await audit.writeAudit({
+      id: "duplicate-audit", actorKind: "member", actorId: "existing", action: "member.login",
+      resourceType: "member", resourceId: "existing", metadata: { role: "contributor" }, createdAt: "2026-08-13T00:00:00.000Z",
+    });
+    const service = new MembersService(new MembersRepository(env.DB, audit), {}, {
+      id: () => "new-member", auditId: () => "duplicate-audit",
+      now: () => new Date("2026-08-13T00:00:00.000Z"), waitUntil: () => undefined,
+    });
+
+    await expect(service.resolveFirstLogin({ sub: "failed-subject", email: "failed@example.test" })).rejects.toThrow();
+    await expect(env.DB.prepare("SELECT id FROM members WHERE id = 'new-member'").first()).resolves.toBeNull();
+  });
+
+  it("rolls back a contributor status mutation when its paired audit fails", async () => {
+    const audit = new AuditRepository(env.DB);
+    const repository = new MembersRepository(env.DB, audit);
+    const admin = await repository.insert(memberInput("admin", "admin"));
+    const contributor = await repository.insert(memberInput("contributor", "contributor"));
+    await audit.writeAudit({
+      id: "duplicate-status-audit", actorKind: "member", actorId: admin.id, action: "member.status_updated",
+      resourceType: "member", resourceId: contributor.id,
+      metadata: { previousStatus: "active", newStatus: "disabled" }, createdAt: "2026-08-13T00:00:00.000Z",
+    });
+    const service = new MembersService(repository, {}, {
+      auditId: () => "duplicate-status-audit", now: () => new Date("2026-08-13T00:00:00.000Z"), waitUntil: () => undefined,
+    });
+
+    await expect(service.setContributorStatus(admin, contributor.id, "disabled")).rejects.toThrow();
+    await expect(repository.findById(contributor.id)).resolves.toMatchObject({ status: "active" });
   });
 
   it("rejects an Access-approved subject after its member record is disabled", async () => {
@@ -117,4 +172,11 @@ describe("members D1 control plane", () => {
 
 function toBase64Url(value: string): string {
   return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function memberInput(id: string, role: "admin" | "contributor") {
+  return {
+    id, accessSub: `sub-${id}`, email: `${id}@example.test`, role, status: "active" as const,
+    createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+  };
 }

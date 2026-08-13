@@ -50,12 +50,12 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 }
 
 function createRequestServices(env: Env, ctx: ExecutionContext) {
-  const memberRecords = new MembersRepository(env.DB);
+  const audit = new AuditRepository(env.DB);
+  const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
     waitUntil: (promise) => ctx.waitUntil(promise),
   });
-  const spaceRecords = new SpacesRepository(env.DB);
-  const audit = new AuditRepository(env.DB);
+  const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
   return {
     answers: new AnswerService(env.AI),

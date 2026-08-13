@@ -16,6 +16,52 @@ describe("audit input validation", () => {
   });
 
   it.each([
+    ["member.login", "member", { role: "contributor" }],
+    ["member.status_updated", "member", { previousStatus: "active", newStatus: "disabled" }],
+    ["space.created", "space", { status: "active" }],
+    ["space.updated", "space", { previousStatus: "active", newStatus: "disabled" }],
+    ["collection.created", "collection", { spaceId: "space-1", status: "active" }],
+    ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled" }],
+  ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
+    const input = {
+      id: `audit-${action}`,
+      actorKind: "member",
+      actorId: "member-1",
+      action,
+      resourceType,
+      resourceId: `${resourceType}-1`,
+      metadata,
+      createdAt: "2026-08-13T00:00:00.000Z",
+    };
+
+    const event = assertAuditEventInput(input);
+    expect(event).toEqual(input);
+    expect(event).not.toBe(input);
+    expect(event.metadata).not.toBe(metadata);
+    expect(Object.getPrototypeOf(event.metadata)).toBeNull();
+  });
+
+  it.each([
+    ["member.login", "member", { role: "contributor", email: "secret@example.test" }],
+    ["member.status_updated", "member", { previousStatus: "active", newStatus: "disabled", sub: "secret-sub" }],
+    ["space.created", "space", { status: "active", title: "Secret title" }],
+    ["space.updated", "space", { previousStatus: "active", newStatus: "disabled", token: "secret" }],
+    ["collection.created", "collection", { spaceId: "space-1", status: "active", content: "secret" }],
+    ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled", jwt: "secret" }],
+  ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
+    expect(() => assertAuditEventInput({
+      id: "audit-sensitive",
+      actorKind: "member",
+      actorId: "member-1",
+      action,
+      resourceType,
+      resourceId: `${resourceType}-1`,
+      metadata,
+      createdAt: "2026-08-13T00:00:00.000Z",
+    })).toThrow(/audit metadata/i);
+  });
+
+  it.each([
     { ...base, metadata: { ...base.metadata, token: "secret" } },
     { ...base, metadata: { ...base.metadata, jwt: "header.payload.signature" } },
     { ...base, metadata: { ...base.metadata, content: "full submission" } },

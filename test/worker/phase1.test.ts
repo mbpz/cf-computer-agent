@@ -163,6 +163,33 @@ describe("Phase 1 API permission matrix", () => {
       body: JSON.stringify({ status: "disabled" }),
     });
     await expectApiError(Promise.resolve(protectedAdmin), 403, "ADMIN_PROTECTED");
+
+    for (const action of [
+      "member.status_updated", "space.created", "space.updated", "collection.created", "collection.updated", "submission.created",
+    ]) {
+      const filtered = await memberApi("sub-admin", `/api/admin/audit-events?action=${action}`);
+      expect(filtered.status).toBe(200);
+      const body = await filtered.json<{ items: Array<{ action: string; metadata: Record<string, unknown> }> }>();
+      expect(body.items.length).toBeGreaterThan(0);
+      expect(body.items.every((event) => event.action === action)).toBe(true);
+      expect(JSON.stringify(body)).not.toMatch(/admin@example|sub-admin|Admin note|Operational runbooks/);
+    }
+
+    await expectApiError(memberApi("sub-admin", "/api/admin/audit-events?action=not.allowed"), 400, "FILTER_INVALID");
+  });
+
+  it("exposes a first-account member.login through the filtered admin audit API", async () => {
+    const firstJwt = await access.sign({ sub: "first-login-sub", email: "first-login@example.test" });
+    const firstLogin = await execute(request("/api/session", { jwt: firstJwt }));
+    expect(firstLogin.status).toBe(200);
+
+    const filtered = await memberApi("sub-admin", "/api/admin/audit-events?action=member.login");
+    expect(filtered.status).toBe(200);
+    const body = await filtered.json<{ items: Array<{ action: string; actorId: string; resourceId: string; metadata: unknown }> }>();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ action: "member.login", metadata: { role: "contributor" } });
+    expect(body.items[0]!.actorId).toBe(body.items[0]!.resourceId);
+    expect(JSON.stringify(body)).not.toMatch(/first-login@example|first-login-sub/);
   });
 
   it("allows automation only health and legacy read/write/search/chat", async () => {

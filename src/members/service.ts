@@ -10,6 +10,7 @@ export interface MembersEnvironment {
 
 export interface MembersServiceOptions {
   id?: () => string;
+  auditId?: () => string;
   now?: () => Date;
   lastSeenWindowMs?: number;
   waitUntil: (promise: Promise<unknown>) => void;
@@ -20,6 +21,7 @@ const defaultLastSeenWindowMs = 60_000;
 export class MembersService {
   private readonly id: () => string;
   private readonly now: () => Date;
+  private readonly auditId: () => string;
   private readonly lastSeenWindowMs: number;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
 
@@ -31,6 +33,7 @@ export class MembersService {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.bootstrapAdminEmail = canonicalizeEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
     this.id = options.id || (() => crypto.randomUUID());
+    this.auditId = options.auditId || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
     this.lastSeenWindowMs = options.lastSeenWindowMs ?? defaultLastSeenWindowMs;
     this.waitUntil = options.waitUntil;
@@ -54,14 +57,21 @@ export class MembersService {
     const target = await this.repository.findById(memberId);
     if (!target) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
     if (target.role !== "contributor") throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
-    const updated = await this.repository.updateContributorStatus(memberId, status, this.now().toISOString());
+    const now = this.now().toISOString();
+    const updated = this.repository.updateContributorStatusWithAudit
+      ? await this.repository.updateContributorStatusWithAudit(memberId, status, now, {
+        id: this.auditId(), actorKind: "member", actorId: actor.id, action: "member.status_updated",
+        resourceType: "member", resourceId: memberId,
+        metadata: { previousStatus: target.status, newStatus: status }, createdAt: now,
+      })
+      : await this.repository.updateContributorStatus(memberId, status, now);
     if (!updated) throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
     return updated;
   }
 
   private async insertWithConflictRecovery(identity: AccessIdentity, role: "admin" | "contributor"): Promise<Member> {
     try {
-      return await this.resolveExisting(await this.repository.insert(this.newMember(identity, role)));
+      return await this.resolveExisting(await this.insertMember(identity, role));
     } catch (error) {
       if (!(error instanceof MembersConflictError)) throw error;
       if (error.kind === "access_sub") {
@@ -77,7 +87,7 @@ export class MembersService {
     if (role !== "admin") throw new AppError("MEMBER_CONFLICT", "Member login conflicted", 409, true);
 
     try {
-      return await this.resolveExisting(await this.repository.insert(this.newMember(identity, "contributor")));
+      return await this.resolveExisting(await this.insertMember(identity, "contributor"));
     } catch (error) {
       if (!(error instanceof MembersConflictError)) throw error;
       if (error.kind !== "access_sub") throw error;
@@ -85,6 +95,15 @@ export class MembersService {
       if (retriedSubject) return this.resolveExisting(retriedSubject);
       throw new AppError("MEMBER_CONFLICT", "Member login conflicted", 409, true);
     }
+  }
+
+  private async insertMember(identity: AccessIdentity, role: "admin" | "contributor"): Promise<Member> {
+    const member = this.newMember(identity, role);
+    if (!this.repository.insertWithAudit) return this.repository.insert(member);
+    return this.repository.insertWithAudit(member, {
+      id: this.auditId(), actorKind: "member", actorId: member.id, action: "member.login",
+      resourceType: "member", resourceId: member.id, metadata: { role }, createdAt: member.createdAt,
+    });
   }
 
   private newMember(identity: AccessIdentity, role: "admin" | "contributor"): CreateMember {

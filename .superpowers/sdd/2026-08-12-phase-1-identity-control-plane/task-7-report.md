@@ -38,17 +38,26 @@ The first review found no Critical issues and identified four Important concerns
 
 Fix-round verdict: **READY for Task 7; no Critical or Important defects remain.** The reviewer independently ran typecheck, diff check, and a focused workerd suite (6 files / 66 tests).
 
-## Deferred audit design gap for controller adjudication
+## Audit adjudication and fix round 1
 
-The reviewer’s exact concern was that the design scope §2.1 includes “登录、成员、空间、集合和投稿审计,” while login/session and member/Space/Collection mutations currently do not create audit events. The approved Task 7 brief, however, requires composing the already approved Session, Submission, Member, Space/Collection, and Audit APIs; it does not define new audit actions or multi-resource write semantics. The existing Task 6 interface produced a discriminated action map containing only `submission.created`, a paired submission/audit D1 batch, and paged `listAudit`.
+The independent reviewer’s exact concern was that design scope §2.1 says “登录、成员、空间、集合和投稿审计,” while the first Task 7 implementation created only `submission.created`. The exact Task 7 interface text is “Produces exact approved Session, Submission, Member, Space/Collection, Audit APIs.” Because the brief did not itself define the missing actions or transaction semantics, the first report surfaced this for controller adjudication instead of silently changing the Task 6-owned action map.
 
-Per controller direction, Task 7 does not silently expand the Task 6 action map. The explicitly approved audit-producing operation remains wired: submission creation builds an allowlisted `submission.created`, writes it with the submission in the tested D1 batch, and exposes it through the capability-gated `/api/admin/audit-events?action=submission.created`. Login/member/Space/Collection audit action names, metadata allowlists, and failure/transaction boundaries remain a deferred design gap requiring an explicit cross-task interface decision.
+Human adjudication confirmed that the approved design governs and authorized the cross-task interface expansion. Fix round 1 therefore adds the closed discriminated action set `member.login`, `member.status_updated`, `space.created`, `space.updated`, `collection.created`, `collection.updated`, and the retained `submission.created`. Every action has a strict primitive-only metadata shape, and the validator rejects unknown keys, accessors, symbols, prototypes, `toJSON`, nested objects, and incorrect action/resource combinations before rebuilding null-prototype event and metadata DTOs. Metadata contains only roles, resource identifiers, and status transitions; it never contains email, Access subject, title, content, token, JWT, bootstrap email, or caller-provided arbitrary fields.
+
+First-login auditing means first member-row creation, not every authenticated request: the member insert and `member.login` audit are one D1 batch, bootstrap conflicts remain recoverable, concurrent bootstrap produces exactly one audit per successfully created member, and repeat login/`last_seen_at` background work produces no login audit. A failed paired audit rolls back member creation. The existing caught `waitUntil` last-seen path remains non-authoritative and cannot convert background failure into authentication failure.
+
+Member status and every Space/Collection create/update now pair the mutation and audit insert in one D1 batch. Real D1 regressions force the audit insert to fail and prove rollback for each mutation family. Audited updates also condition on the state observed before building the status-transition metadata, preventing a concurrent write from producing a stale transition audit. Submission creation retains its existing paired batch and ownership-derived actor binding.
+
+The `action` API filter is now passed into the audit repository and applied before cursor/order/`LIMIT + 1` in the keyset SQL. A mixed-action real D1 pagination test proves bounded, gap-free filtered pages, while the admin route test covers every action, invalid-filter rejection, response redaction, and first-login retrieval.
+
+An independent read-only review of fix round 1 returned **READY**, with no Critical, Important, or Minor findings. The reviewer independently passed typecheck, diff check, and 9 focused unit/workerd files with 115 tests; it made no repository changes.
 
 ## Verification
 
 - `rtk npx vitest run test/unit/members-service.test.ts test/worker/members.test.ts test/worker/phase1.test.ts` — passed, 3 files / 46 tests.
+- `rtk npx vitest run test/unit/audit.test.ts test/unit/members-service.test.ts test/unit/spaces-service.test.ts test/worker/members.test.ts test/worker/spaces.test.ts test/worker/submissions.test.ts test/worker/phase1.test.ts` — audit fix round passed, 7 files / 90 tests.
 - `rtk npm run typecheck` — passed.
 - `rtk git diff --check` — passed.
-- `rtk npm run check` — passed: generated types current, TypeScript clean, smoke 2/2, unit 14 files / 102 tests, worker 6 files / 66 tests, and Wrangler dry-run build successful.
+- `rtk npm run check` — passed after fix round 1: generated types current, TypeScript clean, smoke 2/2, unit 14 files / 114 tests, worker 6 files / 73 tests, and Wrangler dry-run build successful.
 
 The established worker suite intentionally prints negative `Invalid pending note journal` diagnostics while testing redaction/recovery and the local AI-binding warning; passing test counts and exit status are authoritative.

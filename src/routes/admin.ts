@@ -1,4 +1,5 @@
 import type { AuditRepository } from "../audit/repository";
+import { auditActions } from "../audit/types";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, jsonResponse, methodNotAllowed, parseJsonRequest, type RequestContext } from "../http";
@@ -65,13 +66,14 @@ export async function routeAdminApi(
     requireCapability(principal, "space:manage");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
+    const actor = requireAdminMember(principal);
     const space = await services.spaces.createSpace({
       slug: stringValue(input.slug),
       name: stringValue(input.name),
       description: optionalString(input.description),
       status: recordStatus(input.status),
       position: numberValue(input.position),
-    });
+    }, actor.memberId);
     return jsonResponse({ space }, 201, context.requestId);
   }
 
@@ -79,6 +81,7 @@ export async function routeAdminApi(
   if (space) {
     requireCapability(principal, "space:manage");
     if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);
+    const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     return jsonResponse({ space: await services.spaces.updateSpace(decodePathId(space[1]!), {
       ...(input.slug === undefined ? {} : { slug: stringValue(input.slug) }),
@@ -86,12 +89,13 @@ export async function routeAdminApi(
       ...(input.description === undefined ? {} : { description: stringValue(input.description) }),
       ...(input.status === undefined ? {} : { status: recordStatus(input.status) }),
       ...(input.position === undefined ? {} : { position: numberValue(input.position) }),
-    }) }, 200, context.requestId);
+    }, actor.memberId) }, 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/collections") {
     requireCapability(principal, "space:manage");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     const collection = await services.spaces.createCollection({
       spaceId: stringValue(input.spaceId),
@@ -100,7 +104,7 @@ export async function routeAdminApi(
       description: optionalString(input.description),
       status: recordStatus(input.status),
       position: numberValue(input.position),
-    });
+    }, actor.memberId);
     return jsonResponse({ collection }, 201, context.requestId);
   }
 
@@ -108,6 +112,7 @@ export async function routeAdminApi(
   if (collection) {
     requireCapability(principal, "space:manage");
     if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);
+    const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     return jsonResponse({ collection: await services.spaces.updateCollection(decodePathId(collection[1]!), {
       ...(input.parentId === undefined ? {} : { parentId: optionalNullableString(input.parentId) }),
@@ -115,17 +120,17 @@ export async function routeAdminApi(
       ...(input.description === undefined ? {} : { description: stringValue(input.description) }),
       ...(input.status === undefined ? {} : { status: recordStatus(input.status) }),
       ...(input.position === undefined ? {} : { position: numberValue(input.position) }),
-    }) }, 200, context.requestId);
+    }, actor.memberId) }, 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/audit-events") {
     requireCapability(principal, "audit:read");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    requireEnumFilter(url, "action", ["submission.created"]);
+    const action = requireEnumFilter(url, "action", auditActions);
     return jsonResponse(await services.audit.listAudit(parsePageRequest(
       pageRequest(url).limit,
       pageRequest(url).cursor,
-    )), 200, context.requestId);
+    ), action), 200, context.requestId);
   }
 
   return undefined;

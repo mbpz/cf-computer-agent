@@ -4,6 +4,7 @@ import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SpacesRepository } from "../../src/spaces/repository";
 import { SpacesService } from "../../src/spaces/service";
+import { AuditRepository } from "../../src/audit/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("Spaces D1 control plane", () => {
@@ -85,6 +86,61 @@ describe("Spaces D1 control plane", () => {
 
     await expect(env.DB.prepare("SELECT kind, status, read_only FROM spaces WHERE id = 'legacy-personal'").first())
       .resolves.toEqual({ kind: "legacy", status: "active", read_only: 1 });
+  });
+
+  it("writes minimal allowlisted audit events for every Space and Collection mutation", async () => {
+    let next = 0;
+    const audit = new AuditRepository(env.DB);
+    const repository = new SpacesRepository(env.DB, audit);
+    const service = new SpacesService(repository, repository, {
+      id: () => `mutation-${next++}`,
+      now: () => new Date(`2026-08-13T00:00:0${next}.000Z`),
+    });
+
+    const space = await service.createSpace({ slug: "audited", name: "Sensitive name", position: 2 }, "member-admin");
+    await service.updateSpace(space.id, { name: "Changed sensitive name", status: "disabled" }, "member-admin");
+    const other = await service.createSpace({ slug: "collections", name: "Collections", position: 3 }, "member-admin");
+    const collection = await service.createCollection({ spaceId: other.id, name: "Sensitive collection", position: 0 }, "member-admin");
+    await service.updateCollection(collection.id, { name: "Changed collection", status: "disabled" }, "member-admin");
+
+    const events = await audit.listAudit({ limit: 20 });
+    expect(events.items.map(({ action, actorId, resourceType, resourceId, metadata }) => ({ action, actorId, resourceType, resourceId, metadata })))
+      .toEqual(expect.arrayContaining([
+        { action: "space.created", actorId: "member-admin", resourceType: "space", resourceId: space.id, metadata: { status: "active" } },
+        { action: "space.updated", actorId: "member-admin", resourceType: "space", resourceId: space.id, metadata: { previousStatus: "active", newStatus: "disabled" } },
+        { action: "space.created", actorId: "member-admin", resourceType: "space", resourceId: other.id, metadata: { status: "active" } },
+        { action: "collection.created", actorId: "member-admin", resourceType: "collection", resourceId: collection.id, metadata: { spaceId: other.id, status: "active" } },
+        { action: "collection.updated", actorId: "member-admin", resourceType: "collection", resourceId: collection.id, metadata: { spaceId: other.id, previousStatus: "active", newStatus: "disabled" } },
+      ]));
+    expect(JSON.stringify(events)).not.toMatch(/Sensitive|Changed/);
+  });
+
+  it("rolls back every Space and Collection mutation when its paired audit insert fails", async () => {
+    const now = "2026-08-13T00:00:00.000Z";
+    const audit = new AuditRepository(env.DB);
+    await audit.writeAudit({
+      id: "duplicate-audit", actorKind: "member", actorId: "member-admin", action: "space.created",
+      resourceType: "space", resourceId: "existing-space", metadata: { status: "active" }, createdAt: now,
+    });
+    const repository = new SpacesRepository(env.DB, audit);
+    const service = new SpacesService(repository, repository, {
+      id: () => "failed-space", auditId: () => "duplicate-audit",
+      now: () => new Date(now),
+    });
+
+    await expect(service.createSpace({ slug: "failed", name: "Failed", position: 2 }, "member-admin")).rejects.toThrow();
+    await expect(env.DB.prepare("SELECT id FROM spaces WHERE id = 'failed-space'").first()).resolves.toBeNull();
+
+    await repository.createSpace({ id: "update-space", slug: "update-space", name: "Original", description: "", status: "active", position: 2, createdAt: now, updatedAt: now });
+    await expect(service.updateSpace("update-space", { name: "Changed", status: "disabled" }, "member-admin")).rejects.toThrow();
+    await expect(repository.findSpaceById("update-space")).resolves.toMatchObject({ name: "Original", status: "active" });
+
+    await expect(service.createCollection({ spaceId: "update-space", name: "Failed collection", position: 0 }, "member-admin")).rejects.toThrow();
+    await expect(env.DB.prepare("SELECT id FROM collections WHERE space_id = 'update-space'").first()).resolves.toBeNull();
+
+    await repository.createCollection(collectionInput({ id: "update-collection", spaceId: "update-space" }));
+    await expect(service.updateCollection("update-collection", { name: "Changed", status: "disabled" }, "member-admin")).rejects.toThrow();
+    await expect(repository.findCollectionById("update-collection")).resolves.toMatchObject({ name: "Direct", status: "active" });
   });
 });
 

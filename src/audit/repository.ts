@@ -1,7 +1,7 @@
 import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
-import { assertAuditEventInput, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
+import { assertAuditEventInput, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
 
-type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: "submission"; resource_id: string | null; metadata: string; created_at: string };
+type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
 
 export class AuditRepository {
   constructor(private readonly db: D1Database) {}
@@ -22,11 +22,34 @@ export class AuditRepository {
       .bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, requireSubmissionId);
   }
 
-  async listAudit(request: PageRequest): Promise<AuditPage> {
+  prepareResourceWriteAudit(
+    input: CreateAuditEvent,
+    resource: { table: "members" | "spaces" | "collections"; id: string },
+  ): D1PreparedStatement {
+    const audit = assertAuditEventInput(input);
+    if (audit.resourceId !== resource.id) throw new TypeError("Audit resource binding is invalid");
+    return this.db.prepare(
+      `INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1 AND EXISTS (SELECT 1 FROM ${resource.table} WHERE id = ?)`,
+    ).bind(
+      audit.id, audit.actorKind, audit.actorId, audit.action, audit.resourceType, audit.resourceId,
+      JSON.stringify(audit.metadata), audit.createdAt, resource.id,
+    );
+  }
+
+  async listAudit(request: PageRequest, action?: AuditAction): Promise<AuditPage> {
     const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor);
-    const rows = cursor
-      ? await this.db.prepare(`${auditSelect} WHERE (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?`).bind(timestamp(cursor.sort), timestamp(cursor.sort), cursor.id, request.limit + 1).all<AuditRow>()
-      : await this.db.prepare(`${auditSelect} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(request.limit + 1).all<AuditRow>();
+    const conditions = [
+      ...(action === undefined ? [] : ["action = ?"]),
+      ...(cursor === undefined ? [] : ["(created_at < ? OR (created_at = ? AND id < ?))"]),
+    ];
+    const rows = await this.db.prepare(
+      `${auditSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ?`,
+    ).bind(
+      ...(action === undefined ? [] : [action]),
+      ...(cursor === undefined ? [] : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id]),
+      request.limit + 1,
+    ).all<AuditRow>();
     return page(rows.results.map(mapAuditRow), request.limit);
   }
 }

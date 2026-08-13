@@ -80,6 +80,30 @@ describe("submissions D1 control plane", () => {
     expect(new Set([...first.items, ...second.items].map((event) => event.id))).toEqual(new Set(["id-1", "later-audit"]));
   });
 
+  it("filters audit keyset pages by action without gaps or mixed actions", async () => {
+    const audit = new AuditRepository(env.DB);
+    for (let index = 0; index < 12; index += 1) {
+      await audit.writeAudit(index % 2 === 0 ? {
+        id: `login-${String(index).padStart(2, "0")}`, actorKind: "member", actorId: `member-${index}`,
+        action: "member.login", resourceType: "member", resourceId: `member-${index}`,
+        metadata: { role: "contributor" }, createdAt: `2026-08-13T00:00:${String(index).padStart(2, "0")}.000Z`,
+      } : {
+        ...auditInput(`submission-${String(index).padStart(2, "0")}`),
+        createdAt: `2026-08-13T00:00:${String(index).padStart(2, "0")}.000Z`,
+      });
+    }
+
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await audit.listAudit({ limit: 2, cursor }, "member.login");
+      expect(page.items.every((event) => event.action === "member.login")).toBe(true);
+      ids.push(...page.items.map((event) => event.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(ids).toEqual(["login-10", "login-08", "login-06", "login-04", "login-02", "login-00"]);
+  });
+
   it("rejects an actor-mismatched audit before the D1 batch can persist a submission", async () => {
     const repository = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
     const submission = submissionInput("actor-mismatch");
