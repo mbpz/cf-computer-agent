@@ -28,7 +28,10 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
       try {
         if (!url.pathname.startsWith("/api/")) {
-          return withAssetSecurityHeaders(await env.ASSETS.fetch(request), context.requestId);
+          const assetRequest = knownWorkspaceRoute(url.pathname)
+            ? new Request(new URL("/", url), request)
+            : request;
+          return withAssetSecurityHeaders(await env.ASSETS.fetch(assetRequest), context.requestId);
         }
 
         const services = createRequestServices(env, ctx);
@@ -47,6 +50,15 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
       }
     },
   };
+}
+
+const workspaceRoutes = new Set([
+  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
+  "/admin", "/admin/submissions", "/admin/members", "/admin/spaces", "/admin/audit",
+]);
+
+function knownWorkspaceRoute(pathname: string): boolean {
+  return workspaceRoutes.has(pathname);
 }
 
 function createRequestServices(env: Env, ctx: ExecutionContext) {
