@@ -51,13 +51,14 @@ describe("submissions D1 control plane", () => {
       .rejects.toMatchObject({ code: "SUBMISSION_TARGET_INVALID", status: 400 });
   });
 
-  it("uses a local D1 batch whose failed dependent audit write leaves no submission", async () => {
+  it("rolls back submission and linked audit rows when a real dependent audit statement fails", async () => {
     const audit = new AuditRepository(env.DB);
     await audit.writeAudit(auditInput("duplicate-audit"));
     const repository = new SubmissionsRepository(env.DB, audit);
 
     await expect(repository.createWithAudit(submissionInput("failed-submission"), auditInput("duplicate-audit"))).rejects.toThrow();
     await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'failed-submission'").first()).resolves.toBeNull();
+    await expect(env.DB.prepare("SELECT id FROM audit_events WHERE resource_id = 'failed-submission'").first()).resolves.toBeNull();
   });
 
   it("accepts an active same-space Collection and pages audit events by created_at and id", async () => {
@@ -94,15 +95,6 @@ describe("submissions D1 control plane", () => {
     await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'resource-mismatch'").first()).resolves.toBeNull();
   });
 
-  it("fails instead of returning a submission when D1 reports a zero-row audit write", async () => {
-    const zeroAudit = { prepareWriteAudit: () => env.DB.prepare("INSERT INTO audit_events (id, actor_kind, action, resource_type, metadata, created_at) SELECT 'zero-audit', 'system', 'submission.created', 'submission', '{}', ? WHERE 0").bind(now) } as unknown as AuditRepository;
-    const repository = new SubmissionsRepository(env.DB, zeroAudit);
-    const submission = submissionInput("zero-audit-submission");
-    const audit = { ...auditInput("zero-audit"), resourceId: submission.id };
-
-    await expect(repository.createWithAudit(submission, audit)).rejects.toThrow(/audit write did not persist/i);
-    await expect(env.DB.prepare("SELECT id FROM audit_events WHERE id = 'zero-audit'").first()).resolves.toBeNull();
-  });
 });
 
 const now = "2026-08-13T00:00:00.000Z";

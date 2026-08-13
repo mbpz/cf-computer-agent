@@ -18,8 +18,8 @@ export class AuditRepository {
     if (requireSubmissionId === undefined) {
       return this.db.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(...values);
     }
-    return this.db.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM submissions WHERE id = ? AND submitter_id = ?)")
-      .bind(...values, requireSubmissionId, audit.actorId);
+    return this.db.prepare("INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) SELECT ?, 'member', submitter_id, 'submission.created', 'submission', id, ?, ? FROM submissions WHERE id = ?")
+      .bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, requireSubmissionId);
   }
 
   async listAudit(request: PageRequest): Promise<AuditPage> {

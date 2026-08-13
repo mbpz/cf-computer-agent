@@ -25,7 +25,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
       this.audit.prepareWriteAudit(audit, submission.id),
     ]);
     if (!results[0]?.meta.changes) throw new SubmissionsRepositoryConflictError("target_invalid");
-    if (!results[1]?.meta.changes) throw new Error("Submission audit write did not persist");
+    if (results[1]?.meta.changes !== 1) throw new Error("Submission audit write did not persist");
     return { ...submission, status: "review_pending" };
   }
 

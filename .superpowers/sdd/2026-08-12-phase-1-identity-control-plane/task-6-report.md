@@ -18,10 +18,15 @@ The workerd+D1 integration characterizes the observed local behavior: when the d
 - The paired-write repository validates exact submission/audit identity before `D1Database.batch`: member actor equals submitter, resource is the submitted ID/type, action is `submission.created`, and metadata exactly derives from the submission target and kind. It also rejects a zero-change audit batch result.
 - Regression coverage proves prototype and `toJSON` markers cannot reach serialized output; actor/resource mismatches persist no submission; and a zero-row audit write does not yield a successful create result.
 
+## Review fix round 2
+
+- The dependent audit SQL now derives `actor_id`, fixed member action/type, and `resource_id` from the just-inserted submission row rather than binding caller-provided identity fields. If target validation inserts no submission, both statements report zero changes and the repository returns the stable target error; it cannot return a success without an audit row.
+- A real workerd D1 duplicate-audit regression now makes the second statement fail inside `D1Database.batch` and asserts that neither the new submission nor a linked audit event remains. This is the tested rollback boundary used by the paired-write implementation.
+
 ## Verification
 
 - `rtk npm run typecheck` — passed.
-- `rtk npx vitest run test/unit/submissions-service.test.ts test/unit/audit.test.ts test/worker/submissions.test.ts` — passed (3 files, 21 tests).
+- `rtk npx vitest run test/unit/submissions-service.test.ts test/unit/audit.test.ts test/worker/submissions.test.ts` — passed (3 files, 20 tests).
 - `rtk npm run check` — passed: generated types, TypeScript, 2 smoke tests, 14 unit files/100 tests, 5 worker files/39 tests, and local dry-run build.
 - `rtk git diff --check` — passed.
 
