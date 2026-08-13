@@ -53,9 +53,9 @@ export class MembersService {
     }
     const target = await this.repository.findById(memberId);
     if (!target) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
-    if (target.role !== "contributor") throw new AppError("FORBIDDEN", "Administrators cannot be modified", 403);
+    if (target.role !== "contributor") throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
     const updated = await this.repository.updateContributorStatus(memberId, status, this.now().toISOString());
-    if (!updated) throw new AppError("FORBIDDEN", "Administrators cannot be modified", 403);
+    if (!updated) throw new AppError("ADMIN_PROTECTED", "Administrators cannot be modified", 403);
     return updated;
   }
 

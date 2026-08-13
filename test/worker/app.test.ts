@@ -127,17 +127,23 @@ describe("Worker application", () => {
       body: JSON.stringify({ id: "compat-note", title: "兼容笔记", content: "首次内容" }),
     });
     expect(created.status).toBe(201);
-    await expect(created.json()).resolves.toMatchObject({ note: { id: "compat-note", tags: [] } });
+    const createdBody = await created.json<{ note: { id: string; tags: string[] } }>();
+    expect(Object.keys(createdBody)).toEqual(["note"]);
+    expect(createdBody).toMatchObject({ note: { id: "compat-note", tags: [] } });
 
     const updated = await api("/api/notes", {
       method: "POST",
       body: JSON.stringify({ id: "compat-note", title: "兼容笔记", tags: "not-an-array", content: "更新后的内容" }),
     });
     expect(updated.status).toBe(200);
-    await expect(updated.json()).resolves.toMatchObject({ note: { id: "compat-note", tags: [] } });
+    const updatedBody = await updated.json<{ note: { id: string; tags: string[] } }>();
+    expect(Object.keys(updatedBody)).toEqual(["note"]);
+    expect(updatedBody).toMatchObject({ note: { id: "compat-note", tags: [] } });
 
     const search = await api(`/api/search?q=${encodeURIComponent("更新后的内容")}`);
-    await expect(search.json()).resolves.toMatchObject({ hits: [{ id: "compat-note" }] });
+    const searchBody = await search.json<{ hits: Array<{ id: string }> }>();
+    expect(Object.keys(searchBody)).toEqual(["hits"]);
+    expect(searchBody).toMatchObject({ hits: [{ id: "compat-note" }] });
   });
 
   it("keeps supplementary-Unicode generated ids safe and leaves recovery healthy", async () => {

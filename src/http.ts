@@ -59,6 +59,13 @@ export function errorResponse(error: unknown, requestId: string): Response {
   }, app.status, requestId);
 }
 
+export function methodNotAllowed(allow: string, context: RequestContext): Response {
+  const response = errorResponse(new AppError("METHOD_NOT_ALLOWED", "Method not allowed", 405), context.requestId);
+  const headers = new Headers(response.headers);
+  headers.set("allow", allow);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 function isJsonContentType(value: string | null): boolean {
   if (!value) return false;
   const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();

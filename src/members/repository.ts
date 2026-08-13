@@ -16,7 +16,7 @@ export interface MembersRepositoryPort {
   hasActiveAdmin(): Promise<boolean>;
   insert(member: CreateMember): Promise<Member>;
   touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean>;
-  listPage(limit?: number, cursor?: string): Promise<MemberPage>;
+  listPage(limit?: number, cursor?: string, status?: MemberStatus): Promise<MemberPage>;
   updateContributorStatus(id: string, status: MemberStatus, updatedAt?: string): Promise<Member | null>;
 }
 
@@ -68,12 +68,23 @@ export class MembersRepository implements MembersRepositoryPort {
     return result.meta.changes > 0;
   }
 
-  async listPage(limit: number = 20, cursor?: string): Promise<MemberPage> {
+  async listPage(limit: number = 20, cursor?: string, status?: MemberStatus): Promise<MemberPage> {
     const pageLimit = parsePageRequest(limit).limit;
+    if (status !== undefined && status !== "active" && status !== "disabled") {
+      throw new AppError("FILTER_INVALID", "Filter is invalid", 400);
+    }
     const cursorId = cursor === undefined ? undefined : decodeCursor(cursor);
-    const rows = cursorId
-      ? await this.db.prepare(`${memberSelect} WHERE id > ? ORDER BY id ASC LIMIT ?`).bind(cursorId, pageLimit + 1).all<MemberRow>()
-      : await this.db.prepare(`${memberSelect} ORDER BY id ASC LIMIT ?`).bind(pageLimit + 1).all<MemberRow>();
+    const conditions = [
+      ...(status === undefined ? [] : ["status = ?"]),
+      ...(cursorId === undefined ? [] : ["id > ?"]),
+    ];
+    const rows = await this.db.prepare(
+      `${memberSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY id ASC LIMIT ?`,
+    ).bind(
+      ...(status === undefined ? [] : [status]),
+      ...(cursorId === undefined ? [] : [cursorId]),
+      pageLimit + 1,
+    ).all<MemberRow>();
     const items = rows.results.slice(0, pageLimit).map(mapMemberRow);
     return {
       items,

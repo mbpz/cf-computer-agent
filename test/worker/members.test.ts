@@ -60,10 +60,47 @@ describe("members D1 control plane", () => {
     expect(second.nextCursor).toBeUndefined();
   });
 
+  it("keeps status-filtered keyset pages bounded and gap-free in D1", async () => {
+    const repository = new MembersRepository(env.DB);
+    for (let index = 0; index < 55; index += 1) {
+      const id = `member-${String(index).padStart(2, "0")}`;
+      const member = await repository.insert({
+        id,
+        accessSub: `sub-${id}`,
+        email: `${id}@example.test`,
+        role: "contributor",
+        status: "active",
+        createdAt: "2026-08-12T00:00:00.000Z",
+        updatedAt: "2026-08-12T00:00:00.000Z",
+      });
+      if (index % 2 === 1) await repository.updateContributorStatus(member.id, "disabled");
+    }
+
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await repository.listPage(7, cursor, "disabled");
+      expect(page.items.length).toBeLessThanOrEqual(7);
+      expect(page.items.every((member) => member.status === "disabled")).toBe(true);
+      ids.push(...page.items.map((member) => member.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    expect(ids).toEqual(Array.from({ length: 27 }, (_, index) => `member-${String(index * 2 + 1).padStart(2, "0")}`));
+    expect(new Set(ids)).toHaveLength(27);
+  });
+
   it.each([NaN, 1.5, 0, 51])("rejects invalid member page limits: %s", async (limit) => {
     const repository = new MembersRepository(env.DB);
 
     await expect(repository.listPage(limit)).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+  });
+
+  it("rejects an invalid member status filter at the repository boundary", async () => {
+    const repository = new MembersRepository(env.DB);
+
+    await expect(repository.listPage(20, undefined, "pending" as never))
+      .rejects.toMatchObject({ code: "FILTER_INVALID", status: 400 });
   });
 
   it("uses a default page limit and rejects malformed oversized or wrong-version cursors", async () => {

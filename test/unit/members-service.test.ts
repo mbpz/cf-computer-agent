@@ -54,7 +54,7 @@ describe("MembersService", () => {
     await expect(service.setContributorStatus(admin, contributor.id, "disabled"))
       .resolves.toMatchObject({ id: contributor.id, status: "disabled" });
     await expect(service.setContributorStatus(admin, protectedAdmin.id, "disabled"))
-      .rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+      .rejects.toMatchObject({ code: "ADMIN_PROTECTED", status: 403 });
     await expect(repository.findById(protectedAdmin.id)).resolves.toMatchObject({ status: "active" });
   });
 
