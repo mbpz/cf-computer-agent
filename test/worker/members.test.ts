@@ -15,7 +15,7 @@ describe("members D1 control plane", () => {
   it("keeps exactly one active admin during concurrent bootstrap logins", async () => {
     const service = () => new MembersService(new MembersRepository(env.DB), {
       BOOTSTRAP_ADMIN_EMAIL: "  BOOTSTRAP@EXAMPLE.TEST ",
-    });
+    }, { waitUntil: () => undefined });
 
     const members = await Promise.all([
       service().resolveFirstLogin({ sub: "first-subject", email: "bootstrap@example.test" }),
@@ -30,7 +30,7 @@ describe("members D1 control plane", () => {
   });
 
   it("rejects an Access-approved subject after its member record is disabled", async () => {
-    const service = new MembersService(new MembersRepository(env.DB), {});
+    const service = new MembersService(new MembersRepository(env.DB), {}, { waitUntil: () => undefined });
     const created = await service.resolveFirstLogin({ sub: "disabled-subject", email: "disabled@example.test" });
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(created.id).run();
 
@@ -72,7 +72,7 @@ describe("members D1 control plane", () => {
     const wrongVersion = toBase64Url(JSON.stringify({ v: 2, id: "member-a" }));
 
     await expect(repository.listPage()).resolves.toMatchObject({ items: [] });
-    for (const cursor of ["member-a", oversized, wrongVersion]) {
+    for (const cursor of ["", "member-a", oversized, wrongVersion]) {
       await expect(repository.listPage(20, cursor)).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
     }
   });

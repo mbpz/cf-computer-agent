@@ -44,3 +44,17 @@ Vitest emitted the existing local AI-binding warning. The worker suite also emit
 - Full gate: `rtk npm run check` passed (generated types, typecheck, 2 smoke tests, 58 unit tests, 29 worker tests, and dry-run build). `rtk git diff --check` passed.
 
 The same local AI-binding warning and intentional corrupt-journal workerd diagnostic appeared while all tests passed. No remote D1 migration, deployment, or network operation occurred.
+
+## Fix round 2/5 — Complete
+
+### Review findings resolved
+
+- `MembersServiceOptions.waitUntil` is now required at both the type and runtime boundary. `resolveExisting` always registers its internally handled `last_seen` promise with that sink and never awaits it. Task 7 production wiring must pass `ExecutionContext.waitUntil`; direct/unit construction must pass an explicit test lifecycle sink.
+- `MembersRepository.listPage` now distinguishes an omitted cursor (`undefined`) from an explicitly supplied empty string. The latter is decoded and rejected with the existing stable `PAGE_CURSOR_INVALID` error.
+
+### Regression evidence
+
+- RED: the focused suite showed an empty cursor resolving as an absent cursor and a missing lifecycle sink being accepted.
+- GREEN: `rtk npx vitest run test/unit/members-service.test.ts test/worker/members.test.ts` passed: 2 files, 20 tests. This includes a never-settling `last_seen` promise proving resolution returns after registration, plus the exact registered-promise test.
+- `rtk npm run typecheck` passed.
+- `rtk npm run check` passed (generated types, typecheck, 2 smoke tests, 60 unit tests, 29 worker tests, and dry-run build). `rtk git diff --check` passed.

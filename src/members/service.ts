@@ -12,7 +12,7 @@ export interface MembersServiceOptions {
   id?: () => string;
   now?: () => Date;
   lastSeenWindowMs?: number;
-  waitUntil?: (promise: Promise<unknown>) => void;
+  waitUntil: (promise: Promise<unknown>) => void;
 }
 
 const defaultLastSeenWindowMs = 60_000;
@@ -21,13 +21,14 @@ export class MembersService {
   private readonly id: () => string;
   private readonly now: () => Date;
   private readonly lastSeenWindowMs: number;
-  private readonly waitUntil: ((promise: Promise<unknown>) => void) | undefined;
+  private readonly waitUntil: (promise: Promise<unknown>) => void;
 
   constructor(
     private readonly repository: MembersRepositoryPort,
     environment: MembersEnvironment = {},
-    options: MembersServiceOptions = {},
+    options: MembersServiceOptions,
   ) {
+    if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.bootstrapAdminEmail = canonicalizeEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
     this.id = options.id || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
@@ -106,8 +107,7 @@ export class MembersService {
     const update = this.repository.touchLastSeenIfStale(member.id, now.toISOString(), staleBefore)
       .then(() => undefined)
       .catch(() => { console.warn("member last_seen update failed"); });
-    if (this.waitUntil) this.waitUntil(update);
-    else await update;
+    this.waitUntil(update);
     return member;
   }
 }

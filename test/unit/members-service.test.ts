@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AccessIdentity } from "../../src/identity/access-jwt";
-import { MembersService } from "../../src/members/service";
+import { MembersService, type MembersServiceOptions } from "../../src/members/service";
 import type { MembersRepositoryPort } from "../../src/members/repository";
 import type { Member, MemberStatus } from "../../src/members/types";
 
 const identity: AccessIdentity = { sub: "access-subject", email: "member@example.test" };
 
 describe("MembersService", () => {
+  it("requires a lifecycle sink for last_seen work", () => {
+    const repository = new FakeMembersRepository();
+
+    expect(() => new MembersService(repository, {}, {} as MembersServiceOptions)).toThrow("waitUntil is required");
+  });
+
   it("bootstraps the canonical configured address as the first active admin", async () => {
     const repository = new FakeMembersRepository();
     const service = createService(repository, { BOOTSTRAP_ADMIN_EMAIL: "  ADMIN@EXAMPLE.TEST " });
@@ -76,6 +82,18 @@ describe("MembersService", () => {
     await expect(scheduled).resolves.toBeUndefined();
   });
 
+  it("resolves authorization without waiting for a never-settling last_seen write", async () => {
+    const existing = member({ accessSub: identity.sub });
+    const repository = new FakeMembersRepository([existing]);
+    const pending = new Promise<never>(() => undefined);
+    let scheduled: Promise<unknown> | undefined;
+    repository.touchLastSeenIfStale.mockReturnValueOnce(pending);
+    const service = createService(repository, {}, { waitUntil: (promise) => { scheduled = promise; } });
+
+    await expect(service.resolveFirstLogin(identity)).resolves.toMatchObject({ id: existing.id });
+    expect(scheduled).toBeDefined();
+  });
+
   it("returns an authenticated active member when the best-effort last_seen write fails", async () => {
     const existing = member({ accessSub: identity.sub });
     const repository = new FakeMembersRepository([existing]);
@@ -111,7 +129,7 @@ function createService(
   environment: { BOOTSTRAP_ADMIN_EMAIL?: string } = {},
   options: { now?: () => Date; lastSeenWindowMs?: number; waitUntil?: (promise: Promise<unknown>) => void } = {},
 ): MembersService {
-  return new MembersService(repository, environment, { id: () => "new-member", ...options });
+  return new MembersService(repository, environment, { id: () => "new-member", waitUntil: () => undefined, ...options });
 }
 
 function member(overrides: Partial<Member> = {}): Member {

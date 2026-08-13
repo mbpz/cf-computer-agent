@@ -69,7 +69,7 @@ export class MembersRepository implements MembersRepositoryPort {
 
   async listPage(limit: number = 20, cursor?: string): Promise<MemberPage> {
     const pageLimit = validatePageLimit(limit);
-    const cursorId = cursor ? decodeCursor(cursor) : undefined;
+    const cursorId = cursor === undefined ? undefined : decodeCursor(cursor);
     const rows = cursorId
       ? await this.db.prepare(`${memberSelect} WHERE id > ? ORDER BY id ASC LIMIT ?`).bind(cursorId, pageLimit + 1).all<MemberRow>()
       : await this.db.prepare(`${memberSelect} ORDER BY id ASC LIMIT ?`).bind(pageLimit + 1).all<MemberRow>();
