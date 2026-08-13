@@ -7,6 +7,17 @@ export interface RouteGuard {
 }
 
 export function createRouteGuard(): RouteGuard;
+export interface OperationGuard {
+  begin(): number;
+  isCurrent(value: number): boolean;
+}
+export function createOperationGuard(): OperationGuard;
+export function runLatestOperation<T>(
+  guard: OperationGuard,
+  operation: () => Promise<T>,
+  onSuccess: (value: T) => void,
+  onError: (error: unknown) => void,
+): Promise<void>;
 export function drawerState(open: boolean): Readonly<{
   open: boolean;
   ariaExpanded: "true" | "false";

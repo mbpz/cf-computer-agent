@@ -30,7 +30,3 @@ export async function verifyAutomationToken(
     throw new AppError("AUTH_REQUIRED", "Authentication required", 401);
   }
 }
-
-// Compatibility export for the Phase 0 app composition. Task 7 replaces its
-// blanket call site with resolvePrincipal and capability checks.
-export const authorizeRequest = verifyAutomationToken;

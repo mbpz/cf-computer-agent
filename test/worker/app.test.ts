@@ -1,22 +1,54 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF } from "cloudflare:test";
+import { createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createLocalJWKSet } from "jose";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { SEED_NOTES } from "../fixtures/seed-notes";
 import { createApp } from "../../src/app";
 import { APP_CONFIG } from "../../src/config";
 import { type AnswerAi } from "../../src/ai/answer-service";
 import { WorkspaceRepository } from "../../src/knowledge/workspace-repository";
+import { verifyAccessJwt, type AccessEnvironment } from "../../src/identity/access-jwt";
+import { ACCESS_AUDIENCE, ACCESS_TEAM_DOMAIN, createAccessJwtFixture, type AccessJwtFixture } from "../fixtures/access-jwt";
 
-const api = (path: string, init: RequestInit = {}) => SELF.fetch(`https://example.test${path}`, {
-  ...init,
-  headers: {
+let automationAccess: AccessJwtFixture;
+let automationAssertion: string;
+const api = (path: string, init: RequestInit = {}) => workerApi(path, init);
+
+async function workerApi(path: string, init: RequestInit = {}): Promise<Response> {
+  const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
+  const context = createExecutionContext();
+  const response = await app.fetch!(incomingRequest(`https://example.test${path}`, {
+    ...init,
+    headers: automationHeaders(init.headers),
+  }), localEnv(), context);
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+function automationHeaders(headers?: HeadersInit): Headers {
+  return new Headers({
     authorization: "Bearer worker-test-token",
+    "cf-access-jwt-assertion": automationAssertion,
     "content-type": "application/json",
-    ...init.headers,
-  },
-});
+    ...Object.fromEntries(new Headers(headers)),
+  });
+}
+
+function localVerifyAutomationAssertion(request: Request, environment: AccessEnvironment) {
+  return verifyAccessJwt(request, environment, { jwks: createLocalJWKSet({ keys: [automationAccess.publicJwk] }) });
+}
+
+function localEnv(overrides: Partial<Env> = {}): Env {
+  return {
+    ...env,
+    ACCESS_TEAM_DOMAIN,
+    ACCESS_AUD: ACCESS_AUDIENCE,
+    BOOTSTRAP_ADMIN_EMAIL: "bootstrap-only@example.test",
+    ...overrides,
+  } as Env;
+}
 
 function expectProtectedResponse(response: Response): void {
   expect(response.headers.get("x-request-id")).toBeTruthy();
@@ -92,6 +124,11 @@ async function expectJournalCleared(): Promise<void> {
 }
 
 describe("Worker application", () => {
+  beforeAll(async () => {
+    automationAccess = await createAccessJwtFixture();
+    automationAssertion = await automationAccess.signService();
+  });
+
   beforeEach(async () => {
     await reset();
   });
@@ -101,7 +138,7 @@ describe("Worker application", () => {
 
     expect(response.status).toBe(401);
     expectProtectedResponse(response);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "ACCESS_TOKEN_REQUIRED" } });
   });
 
   it("initializes deployed workspace paths then creates, lists and searches a note", async () => {
@@ -395,7 +432,7 @@ describe("Worker application", () => {
   });
 
   it("redacts unexpected repository failures behind a stable request-scoped error", async () => {
-    const app = createApp();
+    const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
     const brokenEnv = {
       ...env,
       KNOWLEDGE: {
@@ -406,8 +443,8 @@ describe("Worker application", () => {
     } as unknown as Env;
 
     const response = await app.fetch!(incomingRequest("https://example.test/api/notes", {
-      headers: { authorization: "Bearer worker-test-token" },
-    }), brokenEnv, createExecutionContext());
+      headers: automationHeaders(),
+    }), localEnv({ KNOWLEDGE: brokenEnv.KNOWLEDGE }), createExecutionContext());
     const body = await expectError(response, 500, "INTERNAL_ERROR");
     expect(JSON.stringify(body)).not.toContain("raw-internal-repository-detail");
   });
@@ -418,22 +455,22 @@ describe("Worker application", () => {
         throw new Error("local AI mock failure");
       },
     };
-    const app = createApp();
-    const localEnv = { ...env, AI: failingAi } as unknown as Env;
-    const headers = { authorization: "Bearer worker-test-token", "content-type": "application/json" };
+    const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
+    const failingEnv = localEnv({ AI: failingAi as unknown as Ai });
+    const headers = automationHeaders();
 
     const create = await app.fetch!(incomingRequest("https://example.test/api/notes", {
       method: "POST",
       headers,
       body: JSON.stringify({ id: "ai-source", title: "AI source", content: "local source" }),
-    }), localEnv, createExecutionContext());
+    }), failingEnv, createExecutionContext());
     expect(create.status).toBe(201);
 
     const response = await app.fetch!(incomingRequest("https://example.test/api/chat", {
       method: "POST",
       headers,
       body: JSON.stringify({ question: "local source" }),
-    }), localEnv, createExecutionContext());
+    }), failingEnv, createExecutionContext());
     await expect(expectError(response, 503, "AI_UNAVAILABLE")).resolves.toMatchObject({ error: { retryable: true } });
   });
 

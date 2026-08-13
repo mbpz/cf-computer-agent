@@ -1,5 +1,5 @@
 import { navigationForSession } from "/navigation.js";
-import { createRouteGuard, drawerState } from "/workspace-ui.js";
+import { createOperationGuard, createRouteGuard, drawerState, runLatestOperation } from "/workspace-ui.js";
 
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
@@ -213,14 +213,14 @@ async function renderSearch(generation) {
   const query = element("input", { type: "search", placeholder: "输入关键词", "aria-label": "搜索关键词" });
   const results = element("div", { className: "stack" });
   const owner = routeGuard.owner(generation, "/search");
+  const operations = createOperationGuard();
   const form = element("form", { className: "actions", onsubmit: async (event) => {
     event.preventDefault();
     results.replaceChildren(empty("正在搜索…"));
-    try {
-      const data = await api(`/api/search?q=${encodeURIComponent(query.value)}`);
+    await runLatestOperation(operations, () => api(`/api/search?q=${encodeURIComponent(query.value)}`), (data) => {
       if (!ownsMutation(owner)) return;
       results.replaceChildren(list(data.hits, (hit) => item(hit.title, hit.excerpt || "没有摘要", (hit.tags || []).map((tag) => element("span", { className: "badge", text: tag }))), "没有匹配的已发布知识。"));
-    } catch (error) { if (ownsMutation(owner)) results.replaceChildren(empty(error.message)); }
+    }, (error) => { if (ownsMutation(owner)) results.replaceChildren(empty(error.message)); });
   } }, [query, element("button", { className: "primary", type: "submit", text: "搜索" })]);
   if (replaceOutlet(page("搜索已发布知识", "此页面检索 Phase 0 的兼容知识库，不包含待审核投稿。", [card("检索", [form, results])]), generation)) outlet.focus({ preventScroll: true });
 }
@@ -229,14 +229,14 @@ async function renderAgent(generation) {
   const question = element("textarea", { required: "", placeholder: "例如：根据已发布的知识，下一步应关注什么？" });
   const answer = element("div", { className: "stack" });
   const owner = routeGuard.owner(generation, "/agent");
+  const operations = createOperationGuard();
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
     answer.replaceChildren(empty("正在阅读已发布知识…"));
-    try {
-      const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ question: question.value }) });
+    await runLatestOperation(operations, () => api("/api/chat", { method: "POST", body: JSON.stringify({ question: question.value }) }), (data) => {
       if (!ownsMutation(owner)) return;
       answer.replaceChildren(element("p", { text: data.answer }), element("h3", { text: "来源" }), list(data.sources || [], (source) => item(source.title, source.excerpt || ""), "没有可引用来源。"));
-    } catch (error) { if (ownsMutation(owner)) answer.replaceChildren(empty(error.message)); }
+    }, (error) => { if (ownsMutation(owner)) answer.replaceChildren(empty(error.message)); });
   } }, [field("问题", question), element("button", { className: "primary", type: "submit", text: "询问 Agent" })]);
   if (replaceOutlet(page("向 Agent 提问", "回答只依据已发布的旧版知识；待审核投稿不会被用于回答。", [card("问题", [form, answer])]), generation)) outlet.focus({ preventScroll: true });
 }

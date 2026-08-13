@@ -23,9 +23,24 @@ describe("pagination", () => {
     "a".repeat(513),
     toBase64Url(JSON.stringify({ v: 2, sort: 1, id: "space-1" })),
     toBase64Url(JSON.stringify({ v: 1, sort: 1.5, id: "space-1" })),
+    toBase64Url(JSON.stringify({ v: 1, sort: Number.MAX_SAFE_INTEGER + 1, id: "space-1" })),
     toBase64Url(JSON.stringify({ v: 1, sort: 1, id: "" })),
   ])("rejects malformed, oversized, or incompatible cursors", (cursor) => {
     expect(() => decodePageCursor(cursor)).toThrow(expect.objectContaining({ code: "PAGE_CURSOR_INVALID", status: 400 }));
+  });
+
+  it.each([-1, 1_000_001])("rejects position cursors outside the application domain", (sort) => {
+    const cursor = encodePageCursor({ sort, id: "space-1" });
+
+    expect(() => decodePageCursor(cursor, { minSort: 0, maxSort: 1_000_000 }))
+      .toThrow(expect.objectContaining({ code: "PAGE_CURSOR_INVALID", status: 400 }));
+  });
+
+  it.each([-1, 8_640_000_000_000_001])("rejects timestamp cursors outside the Date domain", (sort) => {
+    const cursor = encodePageCursor({ sort, id: "event-1" });
+
+    expect(() => decodePageCursor(cursor, { minSort: 0, maxSort: 8_640_000_000_000_000 }))
+      .toThrow(expect.objectContaining({ code: "PAGE_CURSOR_INVALID", status: 400 }));
   });
 
   it("rejects base64url encodings with noncanonical pad bits", () => {

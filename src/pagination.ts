@@ -3,6 +3,7 @@ import { AppError } from "./http";
 export interface PageRequest { limit: number; cursor?: string; }
 export interface Page<T> { items: T[]; nextCursor?: string; }
 export interface PageCursor { sort: number; id: string; }
+export interface PageCursorBounds { minSort?: number; maxSort?: number; }
 
 const defaultPageLimit = 20;
 const maxPageLimit = 50;
@@ -34,11 +35,13 @@ export function decodeOpaqueCursor(cursor: string): unknown {
 
 export function encodePageCursor(cursor: PageCursor): string { return encodeOpaqueCursor({ v: 1, sort: cursor.sort, id: cursor.id }); }
 
-export function decodePageCursor(cursor: string): PageCursor {
+export function decodePageCursor(cursor: string, bounds: PageCursorBounds = {}): PageCursor {
   const decoded = decodeOpaqueCursor(cursor);
   if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw invalidCursor();
   const { v, sort, id } = decoded as Record<string, unknown>;
-  if (v !== 1 || typeof sort !== "number" || !Number.isInteger(sort) || typeof id !== "string" || !id) throw invalidCursor();
+  if (v !== 1 || typeof sort !== "number" || !Number.isSafeInteger(sort) || typeof id !== "string" || !id
+    || (bounds.minSort !== undefined && sort < bounds.minSort)
+    || (bounds.maxSort !== undefined && sort > bounds.maxSort)) throw invalidCursor();
   return { sort, id };
 }
 

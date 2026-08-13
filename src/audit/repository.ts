@@ -2,6 +2,7 @@ import { decodePageCursor, encodePageCursor, type PageRequest } from "../paginat
 import { assertAuditEventInput, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
 
 type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
+const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class AuditRepository {
   constructor(private readonly db: D1Database) {}
@@ -38,7 +39,7 @@ export class AuditRepository {
   }
 
   async listAudit(request: PageRequest, action?: AuditAction): Promise<AuditPage> {
-    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor);
+    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
     const conditions = [
       ...(action === undefined ? [] : ["action = ?"]),
       ...(cursor === undefined ? [] : ["(created_at < ? OR (created_at = ? AND id < ?))"]),

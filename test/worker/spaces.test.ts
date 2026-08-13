@@ -75,6 +75,62 @@ describe("Spaces D1 control plane", () => {
     await expect(env.DB.prepare("SELECT id FROM collections WHERE id = 'child'").first()).resolves.toBeNull();
   });
 
+  it("rejects self-parenting and descendant cycles at the D1 write boundary", async () => {
+    const repository = new SpacesRepository(env.DB);
+    const now = "2026-08-12T01:00:00.000Z";
+    await repository.createCollection(collectionInput({ id: "collection-a", updatedAt: now }));
+    await repository.createCollection(collectionInput({ id: "collection-b", parentId: "collection-a", updatedAt: now }));
+
+    await expect(repository.updateCollection("collection-a", { parentId: "collection-a", updatedAt: "2026-08-12T01:01:00.000Z" }))
+      .rejects.toMatchObject({ kind: "invalid_parent" });
+    await expect(repository.updateCollection("collection-a", { parentId: "collection-b", updatedAt: "2026-08-12T01:02:00.000Z" }))
+      .rejects.toMatchObject({ kind: "invalid_parent" });
+
+    await expect(repository.findCollectionById("collection-a")).resolves.toMatchObject({ parentId: null, updatedAt: now });
+    await expect(repository.findCollectionById("collection-b")).resolves.toMatchObject({ parentId: "collection-a" });
+  });
+
+  it("rejects self-parenting and descendant cycles through the audited service path", async () => {
+    const audit = new AuditRepository(env.DB);
+    const repository = new SpacesRepository(env.DB, audit);
+    let nextAudit = 0;
+    const service = new SpacesService(repository, repository, {
+      id: () => `audited-cycle-${nextAudit}`,
+      auditId: () => `audited-cycle-event-${nextAudit++}`,
+      now: () => new Date(`2026-08-12T01:10:0${nextAudit}.000Z`),
+    });
+    const a = await service.createCollection({ spaceId: "default", name: "A", position: 0 }, "member-admin");
+    const b = await service.createCollection({ spaceId: "default", parentId: a.id, name: "B", position: 1 }, "member-admin");
+
+    await expect(service.updateCollection(a.id, { parentId: a.id }, "member-admin"))
+      .rejects.toMatchObject({ code: "COLLECTION_PARENT_INVALID", status: 400 });
+    await expect(service.updateCollection(a.id, { parentId: b.id }, "member-admin"))
+      .rejects.toMatchObject({ code: "COLLECTION_PARENT_INVALID", status: 400 });
+
+    await expect(repository.findCollectionById(a.id)).resolves.toMatchObject({ parentId: null });
+    const cycleUpdates = await audit.listAudit({ limit: 20 }, "collection.updated");
+    expect(cycleUpdates.items).toEqual([]);
+  });
+
+  it("serializes competing parent updates without creating a two-node cycle", async () => {
+    const repository = new SpacesRepository(env.DB);
+    const now = "2026-08-12T02:00:00.000Z";
+    await repository.createCollection(collectionInput({ id: "race-a", updatedAt: now }));
+    await repository.createCollection(collectionInput({ id: "race-b", updatedAt: now }));
+
+    const updates = await Promise.allSettled([
+      repository.updateCollection("race-a", { parentId: "race-b", updatedAt: "2026-08-12T02:01:00.000Z" }),
+      repository.updateCollection("race-b", { parentId: "race-a", updatedAt: "2026-08-12T02:02:00.000Z" }),
+    ]);
+    expect(updates.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+
+    const [a, b] = await Promise.all([
+      repository.findCollectionById("race-a"),
+      repository.findCollectionById("race-b"),
+    ]);
+    expect(a?.parentId === "race-b" && b?.parentId === "race-a").toBe(false);
+  });
+
   it("preserves the seeded legacy Space as immutable", async () => {
     const repository = new SpacesRepository(env.DB);
     const service = new SpacesService(repository, repository);

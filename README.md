@@ -42,12 +42,7 @@ rtk npm run dev
 
 ## 部署
 
-```bash
-rtk npx wrangler login
-rtk npm run deploy
-```
-
-部署后建议在 Cloudflare Zero Trust 中为该 Worker 自定义域配置 Access 自托管应用，仅允许自己的邮箱。Cloudflare Access 免费层政策与额度可能变化，部署时应以控制台显示为准。
+首次部署前必须完整执行 [Access 设置与部署 runbook](./docs/operations/access-setup.md)：先保护 `memory.crgmhrc.asia` 自定义域，创建 Access 自托管应用、明确邮箱 Allow 策略和独立 Service Auth 策略，再配置 D1 与 Worker secrets，最后才可在明确授权下部署。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。Cloudflare Access 免费层政策与额度可能变化，部署时应以控制台显示为准。
 
 ## API
 
@@ -83,6 +78,3 @@ Smoke 只验证 automation 可用的 health、创建、列表、检索和带来�
 ## 数据与隐私
 
 这是单组织 Phase 1 设计。不要在未配置 Access、D1 成员控制面和 automation APP token 的情况下公开地址。远程 GitHub IdP、D1 migration、Service Token、workers.dev disablement 与 Durable Object 跨激活恢复尚未在此仓库获得远程证据；不要据此宣称生产成熟度。当前版本没有附件、审核发布、批量导出或删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
-
-
-openssl rand -hex 32

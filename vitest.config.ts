@@ -11,6 +11,9 @@ export default defineConfig({
       miniflare: {
         bindings: {
           APP_TOKEN: "worker-test-token",
+          ACCESS_TEAM_DOMAIN: "team.example.test",
+          ACCESS_AUD: "local-access-audience",
+          BOOTSTRAP_ADMIN_EMAIL: "bootstrap-only@example.test",
           ALLOW_INSECURE_LOCAL: "false",
         },
       },

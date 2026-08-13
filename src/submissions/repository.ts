@@ -13,6 +13,7 @@ export interface SubmissionsRepositoryPort {
 }
 
 type SubmissionRow = { id: string; submitter_id: string; requested_space_id: string; requested_collection_id: string | null; kind: Submission["kind"]; status: Submission["status"]; title: string; content: string; created_at: string; updated_at: string };
+const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class SubmissionsRepository implements SubmissionsRepositoryPort {
   constructor(private readonly db: D1Database, private readonly audit: AuditRepository) {}
@@ -38,7 +39,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   private async listPage(where: string, values: unknown[], request: PageRequest): Promise<SubmissionPage> {
-    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor);
+    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
     const rows = cursor
       ? await this.db.prepare(`${submissionSelect} ${where} AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...values, timestamp(cursor.sort), timestamp(cursor.sort), cursor.id, request.limit + 1).all<SubmissionRow>()
       : await this.db.prepare(`${submissionSelect} ${where} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...values, request.limit + 1).all<SubmissionRow>();

@@ -11,6 +11,7 @@ export interface CollectionsRepositoryPort { findCollectionById(id: string): Pro
 
 type SpaceRow = { id: string; slug: string; name: string; description: string; kind: Space["kind"]; status: Space["status"]; position: number; read_only: number; created_at: string; updated_at: string };
 type CollectionRow = { id: string; space_id: string; parent_id: string | null; name: string; description: string; status: Collection["status"]; position: number; created_at: string; updated_at: string };
+const positionCursorBounds = { minSort: 0, maxSort: 1_000_000 } as const;
 
 export class SpacesRepository implements SpacesRepositoryPort, CollectionsRepositoryPort {
   constructor(private readonly db: D1Database, private readonly audit?: AuditRepository) {}
@@ -58,7 +59,7 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     return { ...next, updatedAt: input.updatedAt };
   }
   async listSpaces(request: PageRequest): Promise<SpacePage> {
-    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor);
+    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, positionCursorBounds);
     const rows = cursor ? await this.db.prepare(`${spaceSelect} WHERE (position > ? OR (position = ? AND id > ?)) ORDER BY position ASC, id ASC LIMIT ?`).bind(cursor.sort, cursor.sort, cursor.id, request.limit + 1).all<SpaceRow>() : await this.db.prepare(`${spaceSelect} ORDER BY position ASC, id ASC LIMIT ?`).bind(request.limit + 1).all<SpaceRow>();
     return page(rows.results.map(mapSpaceRow), request.limit);
   }
@@ -83,8 +84,7 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
   async updateCollection(id: string, input: UpdateCollection): Promise<Collection | null> {
     const current = await this.findCollectionById(id); if (!current) return null;
     const next = { ...current, ...defined(input) };
-    const result = await this.db.prepare("UPDATE collections SET parent_id = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM spaces WHERE id = collections.space_id AND kind != 'legacy' AND read_only = 0) AND (? IS NULL OR EXISTS (SELECT 1 FROM collections AS parent WHERE parent.id = ? AND parent.space_id = collections.space_id AND parent.status = 'active'))")
-      .bind(next.parentId, next.name, next.description, next.status, next.position, input.updatedAt, id, next.parentId, next.parentId).run();
+    const result = await this.prepareCycleSafeCollectionUpdate(id, next, input.updatedAt).run();
     if (!result.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
     return { ...next, updatedAt: input.updatedAt };
   }
@@ -102,7 +102,7 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     return { ...next, updatedAt: input.updatedAt };
   }
   async listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage> {
-    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor);
+    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, positionCursorBounds);
     const rows = cursor ? await this.db.prepare(`${collectionSelect} WHERE space_id = ? AND (position > ? OR (position = ? AND id > ?)) ORDER BY position ASC, id ASC LIMIT ?`).bind(spaceId, cursor.sort, cursor.sort, cursor.id, request.limit + 1).all<CollectionRow>() : await this.db.prepare(`${collectionSelect} WHERE space_id = ? ORDER BY position ASC, id ASC LIMIT ?`).bind(spaceId, request.limit + 1).all<CollectionRow>();
     return page(rows.results.map(mapCollectionRow), request.limit);
   }
@@ -125,8 +125,27 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
       .bind(input.id, input.spaceId, input.parentId, input.name, input.description, input.status, input.position, input.createdAt, input.updatedAt, input.spaceId, input.parentId, input.parentId, input.spaceId);
   }
   private prepareUpdateCollection(id: string, current: Collection, next: Collection, updatedAt: string): D1PreparedStatement {
-    return this.db.prepare("UPDATE collections SET parent_id = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND updated_at = ? AND EXISTS (SELECT 1 FROM spaces WHERE id = collections.space_id AND kind != 'legacy' AND read_only = 0) AND (? IS NULL OR EXISTS (SELECT 1 FROM collections AS parent WHERE parent.id = ? AND parent.space_id = collections.space_id AND parent.status = 'active'))")
-      .bind(next.parentId, next.name, next.description, next.status, next.position, updatedAt, id, current.updatedAt, next.parentId, next.parentId);
+    return this.prepareCycleSafeCollectionUpdate(id, next, updatedAt, current.updatedAt);
+  }
+  private prepareCycleSafeCollectionUpdate(id: string, next: Collection, updatedAt: string, expectedUpdatedAt?: string): D1PreparedStatement {
+    return this.db.prepare(`WITH RECURSIVE descendants(id) AS (
+      SELECT id FROM collections WHERE parent_id = ?
+      UNION
+      SELECT child.id FROM collections AS child JOIN descendants ON child.parent_id = descendants.id
+    )
+    UPDATE collections SET parent_id = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ?
+    WHERE id = ?${expectedUpdatedAt === undefined ? "" : " AND updated_at = ?"}
+      AND EXISTS (SELECT 1 FROM spaces WHERE id = collections.space_id AND kind != 'legacy' AND read_only = 0)
+      AND (? IS NULL OR (
+        ? != collections.id
+        AND EXISTS (SELECT 1 FROM collections AS parent WHERE parent.id = ? AND parent.space_id = collections.space_id AND parent.status = 'active')
+        AND NOT EXISTS (SELECT 1 FROM descendants WHERE id = ?)
+      ))`).bind(
+      id,
+      next.parentId, next.name, next.description, next.status, next.position, updatedAt, id,
+      ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt]),
+      next.parentId, next.parentId, next.parentId, next.parentId,
+    );
   }
 }
 

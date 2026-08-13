@@ -210,10 +210,24 @@ describe("Phase 1 API permission matrix", () => {
     }
   });
 
-  it("allows only a signed service assertion plus APP_TOKEN to use automation paths", async () => {
-    await expectOk(execute(request("/api/health", { jwt: serviceJwt, automation: true })));
+  it("requires a signed service assertion and APP_TOKEN while member JWT plus APP_TOKEN stays a member", async () => {
+    await expectOk(execute(request("/api/health", { automation: true })));
+    await expectApiError(execute(request("/api/health", {
+      authorization: "Bearer worker-test-token",
+      headers: {
+        "cf-access-client-id": "untrusted-client-id",
+        "cf-access-client-secret": "untrusted-client-secret",
+      },
+    })), 401, "ACCESS_TOKEN_REQUIRED");
     await expectApiError(execute(request("/api/health", { jwt: serviceJwt })), 401, "AUTH_REQUIRED");
     await expectApiError(execute(request("/api/health", { jwt: serviceJwt, authorization: "Bearer wrong-token" })), 401, "AUTH_REQUIRED");
+
+    const member = await execute(request("/api/session", {
+      jwt: jwtBySubject.get("sub-contributor"),
+      authorization: "Bearer worker-test-token",
+    }));
+    expect(member.status).toBe(200);
+    await expect(member.json()).resolves.toMatchObject({ member: { id: "member-contributor", role: "contributor" } });
   });
 
   it("denies a disabled Access member every business API before dispatch", async () => {
@@ -301,7 +315,23 @@ describe("Phase 1 request boundary", () => {
     expect(JSON.stringify(body)).not.toContain("jwt-secret-marker");
     expect(JSON.stringify(body)).not.toContain(jwtBySubject.get("sub-admin"));
   });
+
+  it.each([
+    ["/api/spaces?cursor=", "empty"],
+    [`/api/spaces?cursor=${encodeURIComponent(pageCursor(-1, "space"))}`, "negative-position"],
+    [`/api/spaces?cursor=${encodeURIComponent(pageCursor(1_000_001, "space"))}`, "oversized-position"],
+    [`/api/submissions/mine?cursor=${encodeURIComponent(pageCursor(-1, "submission"))}`, "negative-submission-time"],
+    [`/api/admin/submissions?cursor=${encodeURIComponent(pageCursor(8_640_000_000_000_001, "submission"))}`, "invalid-submission-date"],
+    [`/api/admin/audit-events?cursor=${encodeURIComponent(pageCursor(-1, "event"))}`, "negative-audit-time"],
+    [`/api/admin/audit-events?cursor=${encodeURIComponent(pageCursor(8_640_000_000_000_001, "event"))}`, "invalid-audit-date"],
+  ])("returns stable 400 for %s (%s)", async (path) => {
+    await expectApiError(memberApi("sub-admin", path), 400, "PAGE_CURSOR_INVALID");
+  });
 });
+
+function pageCursor(sort: number, id: string): string {
+  return btoa(JSON.stringify({ v: 1, sort, id })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
 function phase1Requests(): Array<[string, RequestInit | undefined]> {
   return [
@@ -344,7 +374,10 @@ function request(path: string, options: RequestInit & { jwt?: string; automation
     headers: {
       "content-type": "application/json",
       ...(jwt ? { "cf-access-jwt-assertion": jwt } : {}),
-      ...(automation ? { authorization: "Bearer worker-test-token" } : {}),
+      ...(automation ? {
+        "cf-access-jwt-assertion": serviceJwt,
+        authorization: "Bearer worker-test-token",
+      } : {}),
       ...(authorization ? { authorization } : {}),
       ...init.headers,
     },

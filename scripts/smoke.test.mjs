@@ -9,6 +9,8 @@ import { ACCESS_AUDIENCE, ACCESS_TEAM_DOMAIN, createAccessJwtFixture } from "../
 
 const smokePath = new URL("./smoke.mjs", import.meta.url).pathname;
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
+const readmePath = new URL("../README.md", import.meta.url);
+const accessRunbookPath = new URL("../docs/operations/access-setup.md", import.meta.url);
 
 function runSmoke(environment) {
   return new Promise((resolve, reject) => {
@@ -142,6 +144,24 @@ test("disables production and preview workers.dev URLs", async () => {
 
   assert.equal(configuration.workers_dev, false);
   assert.equal(configuration.preview_urls, false);
+});
+
+test("keeps production deployment guidance Access-first and delegated to the exact runbook", async () => {
+  const [readme, runbook] = await Promise.all([
+    readFile(readmePath, "utf8"),
+    readFile(accessRunbookPath, "utf8"),
+  ]);
+  const deployment = readme.slice(readme.indexOf("## 部署"), readme.indexOf("## API"));
+
+  assert.match(deployment, /docs\/operations\/access-setup\.md/);
+  assert.match(deployment, /Access[^\n]*(?:应用|策略|policy|policies)[^\n]*(?:部署|deploy)/i);
+  assert.doesNotMatch(deployment, /(?:npm run deploy|wrangler deploy)/);
+
+  const accessApplication = runbook.indexOf("Create the self-hosted Access application and policies");
+  const deploy = runbook.indexOf("Deploy only after explicit authorization");
+  assert.ok(accessApplication >= 0 && deploy > accessApplication);
+  assert.match(runbook.slice(accessApplication, deploy), /memory\.crgmhrc\.asia/);
+  assert.match(runbook.slice(accessApplication, deploy), /Allow[\s\S]*Service Auth/);
 });
 
 test("fails before the network when any automation credential is missing", async () => {

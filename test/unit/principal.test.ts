@@ -34,9 +34,13 @@ describe("resolvePrincipal", () => {
       });
   });
 
-  it("resolves a correct APP_TOKEN as the restricted automation principal", async () => {
-    await expect(resolvePrincipal(request({ authorization: "Bearer automation-token" }), env, dependenciesFor(member())))
-      .resolves.toEqual({ kind: "automation", role: "automation" });
+  it("rejects APP_TOKEN and untrusted Access client headers without a signed assertion", async () => {
+    await expect(resolvePrincipal(request({
+      authorization: "Bearer automation-token",
+      "cf-access-client-id": "untrusted-client-id",
+      "cf-access-client-secret": "untrusted-client-secret",
+    }), env, dependenciesFor(member())))
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_REQUIRED", status: 401 });
   });
 
   it("resolves a verified service assertion plus APP_TOKEN as automation", async () => {
@@ -75,9 +79,9 @@ describe("resolvePrincipal", () => {
     }), env, dependencies)).rejects.toMatchObject({ code: "ACCESS_TOKEN_INVALID", status: 401 });
   });
 
-  it("rejects a wrong APP_TOKEN when no Access assertion is present", async () => {
+  it("requires a signed Access assertion before evaluating an incorrect APP_TOKEN", async () => {
     await expect(resolvePrincipal(request({ authorization: "Bearer wrong-token" }), env, dependenciesFor(member())))
-      .rejects.toMatchObject({ code: "AUTH_REQUIRED", status: 401 });
+      .rejects.toMatchObject({ code: "ACCESS_TOKEN_REQUIRED", status: 401 });
   });
 
   it("always selects the member path when an assertion and APP_TOKEN are both supplied", async () => {
@@ -126,7 +130,10 @@ function dependenciesFor(
         return resolvedMember;
       }),
     },
-    verifyAccessJwt: async () => {
+    verifyAccessJwt: async (verifiedRequest) => {
+      if (!verifiedRequest.headers.get("cf-access-jwt-assertion")) {
+        throw new AppError("ACCESS_TOKEN_REQUIRED", "Access authentication required", 401);
+      }
       if (verificationError) throw verificationError;
       return assertion;
     },

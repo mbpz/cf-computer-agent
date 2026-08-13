@@ -1,5 +1,4 @@
 import { verifyAutomationToken, type AuthEnvironment } from "../auth";
-import { APP_CONFIG } from "../config";
 import { verifyAccessJwt, type AccessEnvironment, type AccessIdentity, type VerifiedAccessAssertion } from "./access-jwt";
 import type { Member } from "../members/types";
 
@@ -34,17 +33,12 @@ export async function resolvePrincipal(
   env: PrincipalEnvironment,
   dependencies: ResolvePrincipalDependencies,
 ): Promise<Principal> {
-  if (request.headers.has(APP_CONFIG.accessJwtAssertionHeader)) {
-    const assertion = await (dependencies.verifyAccessJwt || verifyAccessJwt)(request, env);
-    if (assertion.kind === "service") {
-      await verifyAutomationToken(request, env);
-      return { kind: "automation", role: "automation" };
-    }
-    return memberPrincipal(await dependencies.members.resolveFirstLogin(assertion));
+  const assertion = await (dependencies.verifyAccessJwt || verifyAccessJwt)(request, env);
+  if (assertion.kind === "service") {
+    await verifyAutomationToken(request, env);
+    return { kind: "automation", role: "automation" };
   }
-
-  await verifyAutomationToken(request, env);
-  return { kind: "automation", role: "automation" };
+  return memberPrincipal(await dependencies.members.resolveFirstLogin(assertion));
 }
 
 function memberPrincipal(member: Member): MemberPrincipal {

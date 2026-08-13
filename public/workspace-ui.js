@@ -9,6 +9,24 @@ export function createRouteGuard() {
   });
 }
 
+export function createOperationGuard() {
+  let generation = 0;
+  return Object.freeze({
+    begin() { generation += 1; return generation; },
+    isCurrent(value) { return value === generation; },
+  });
+}
+
+export async function runLatestOperation(guard, operation, onSuccess, onError) {
+  const generation = guard.begin();
+  try {
+    const value = await operation();
+    if (guard.isCurrent(generation)) onSuccess(value);
+  } catch (error) {
+    if (guard.isCurrent(generation)) onError(error);
+  }
+}
+
 export function drawerState(open) {
   return Object.freeze({
     open,
