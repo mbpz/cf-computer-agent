@@ -19,6 +19,7 @@ import { MIGRATIONS } from "../fixtures/d1";
 const now = "2026-08-13T00:00:00.000Z";
 const jwtBySubject = new Map<string, string>();
 let access: AccessJwtFixture;
+let serviceJwt: string;
 
 const fakeAi: AnswerAi = {
   async run(): Promise<unknown> {
@@ -28,6 +29,7 @@ const fakeAi: AnswerAi = {
 
 beforeAll(async () => {
   access = await createAccessJwtFixture();
+  serviceJwt = await access.signService();
   for (const [subject, email] of [
     ["sub-contributor", "contributor@example.test"],
     ["sub-admin", "admin@example.test"],
@@ -208,6 +210,12 @@ describe("Phase 1 API permission matrix", () => {
     }
   });
 
+  it("allows only a signed service assertion plus APP_TOKEN to use automation paths", async () => {
+    await expectOk(execute(request("/api/health", { jwt: serviceJwt, automation: true })));
+    await expectApiError(execute(request("/api/health", { jwt: serviceJwt })), 401, "AUTH_REQUIRED");
+    await expectApiError(execute(request("/api/health", { jwt: serviceJwt, authorization: "Bearer wrong-token" })), 401, "AUTH_REQUIRED");
+  });
+
   it("denies a disabled Access member every business API before dispatch", async () => {
     for (const [path, init] of [
       ["/api/health", undefined],
@@ -329,14 +337,15 @@ async function execute(req: Request): Promise<Response> {
   return response;
 }
 
-function request(path: string, options: RequestInit & { jwt?: string; automation?: boolean } = {}): Request {
-  const { jwt, automation, ...init } = options;
+function request(path: string, options: RequestInit & { jwt?: string; automation?: boolean; authorization?: string } = {}): Request {
+  const { jwt, automation, authorization, ...init } = options;
   return new Request(`https://example.test${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
       ...(jwt ? { "cf-access-jwt-assertion": jwt } : {}),
       ...(automation ? { authorization: "Bearer worker-test-token" } : {}),
+      ...(authorization ? { authorization } : {}),
       ...init.headers,
     },
   });

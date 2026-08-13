@@ -10,7 +10,7 @@ Replace angle-bracket placeholders in the dashboard; do not place any real value
 2. In GitHub, create an OAuth App for this Access connection. Set:
    - Application name: `Memory Garden Access`.
    - Homepage URL: `https://memory.crgmhrc.asia`.
-   - Authorization callback URL: `https://<ACCESS_TEAM_DOMAIN>.cloudflareaccess.com/cdn-cgi/access/callback`.
+   - Authorization callback URL: `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/callback`.
 3. Save the GitHub Client ID and generate the client secret only in the approved secret store. The callback is the Zero Trust team callback, not the Worker/custom-domain URL.
 
 ## 2. Configure and test the GitHub IdP
@@ -24,7 +24,7 @@ Replace angle-bracket placeholders in the dashboard; do not place any real value
 1. In Zero Trust, go to **Access controls > Applications > Add an application > Self-hosted**. Add the public hostname `memory.crgmhrc.asia`; select the GitHub IdP; set the intended session duration; save the application.
 2. Add an **Allow** policy for the explicit intended email addresses. Keep the list deliberately small; this policy is for interactive browser members only.
 3. Create a Service Token for smoke automation and store its client ID and client secret in the approved secret manager.
-4. Add a second, separate **Service Auth** policy to the same application: Include the exact Service Token created in step 3. Do not put the Service Token in the email Allow policy and do not use an Allow policy as a substitute for Service Auth.
+4. Add a second, separate **Service Auth** policy to the same application: Include the exact Service Token created in step 3. Do not put the Service Token in the email Allow policy and do not use an Allow policy as a substitute for Service Auth. Access supplies a signed application token to the origin after successful service authentication; the Worker validates its signature, issuer, audience, expiry, and documented service-token claim shape rather than trusting incoming Service Token headers. See Cloudflare’s [Application token documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/).
 5. Copy the application **Audience (AUD) tag**. This exact tag is required by the Worker’s `ACCESS_AUD` secret. Test in a private browser: an allowlisted user can authenticate through GitHub; an unallowlisted user is denied; an unauthenticated visit redirects to Access.
 
 ## 4. Provision D1 and configure Worker secrets
@@ -40,7 +40,7 @@ rtk npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
 rtk npx wrangler secret put APP_TOKEN
 ```
 
-Use the Access team domain without `https://` for `ACCESS_TEAM_DOMAIN`, the copied audience tag for `ACCESS_AUD`, and the one intended bootstrap administrator email for `BOOTSTRAP_ADMIN_EMAIL`. Retain the existing APP token as an approved secret; it remains a second, Worker-side automation check. Do not put any of these values in `wrangler.jsonc`, generated type files, `.dev.vars`, shell history, source code, tests, logs, or audit metadata.
+Use the full Access team host without `https://` for `ACCESS_TEAM_DOMAIN` (for example, `your-team.cloudflareaccess.com`), the copied audience tag for `ACCESS_AUD`, and the one intended bootstrap administrator email for `BOOTSTRAP_ADMIN_EMAIL`. Retain the existing APP token as an approved secret; it remains a second, Worker-side automation check. Do not put any of these values in `wrangler.jsonc`, generated type files, `.dev.vars`, shell history, source code, tests, logs, or audit metadata.
 
 ## 5. Deploy, verify, and preserve rollback safety
 

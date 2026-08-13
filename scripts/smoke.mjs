@@ -12,6 +12,7 @@ let origin;
 function authenticatedRequest(path, init = {}) {
   return fetch(new URL(path, origin), {
     ...init,
+    redirect: "error",
     headers: {
       authorization: `Bearer ${token}`,
       "cf-access-client-id": accessClientId,
@@ -42,7 +43,7 @@ async function check(step, request, assertBody) {
     throw new SmokeFailure(step, "request failed", "network", "missing", elapsed(started));
   }
 
-  const requestId = response.headers.get("x-request-id") || "missing";
+  const requestId = safeRequestId(response.headers.get("x-request-id"));
   const duration = elapsed(started);
   let body;
   try {
@@ -89,6 +90,10 @@ function elapsed(started) {
 
 function formatResult(result, step, status, requestId, elapsedMs) {
   return `[${result}] ${step} status=${status} request_id=${requestId} elapsed_ms=${elapsedMs}`;
+}
+
+function safeRequestId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value) ? value : "invalid";
 }
 
 async function run() {

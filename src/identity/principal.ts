@@ -1,6 +1,6 @@
 import { verifyAutomationToken, type AuthEnvironment } from "../auth";
 import { APP_CONFIG } from "../config";
-import { verifyAccessJwt, type AccessEnvironment, type AccessIdentity } from "./access-jwt";
+import { verifyAccessJwt, type AccessEnvironment, type AccessIdentity, type VerifiedAccessAssertion } from "./access-jwt";
 import type { Member } from "../members/types";
 
 export interface MemberPrincipal {
@@ -22,7 +22,7 @@ export interface PrincipalEnvironment extends AuthEnvironment, AccessEnvironment
 
 export interface ResolvePrincipalDependencies {
   members: Pick<MembersResolver, "resolveFirstLogin">;
-  verifyAccessJwt?: (request: Request, env: AccessEnvironment) => Promise<AccessIdentity>;
+  verifyAccessJwt?: (request: Request, env: AccessEnvironment) => Promise<VerifiedAccessAssertion>;
 }
 
 interface MembersResolver {
@@ -35,8 +35,12 @@ export async function resolvePrincipal(
   dependencies: ResolvePrincipalDependencies,
 ): Promise<Principal> {
   if (request.headers.has(APP_CONFIG.accessJwtAssertionHeader)) {
-    const identity = await (dependencies.verifyAccessJwt || verifyAccessJwt)(request, env);
-    return memberPrincipal(await dependencies.members.resolveFirstLogin(identity));
+    const assertion = await (dependencies.verifyAccessJwt || verifyAccessJwt)(request, env);
+    if (assertion.kind === "service") {
+      await verifyAutomationToken(request, env);
+      return { kind: "automation", role: "automation" };
+    }
+    return memberPrincipal(await dependencies.members.resolveFirstLogin(assertion));
   }
 
   await verifyAutomationToken(request, env);

@@ -22,6 +22,7 @@ describe("verifyAccessJwt", () => {
     mockJwks(fixture.publicJwk);
 
     await expect(verifyAccessJwt(request(await fixture.sign()), env)).resolves.toEqual({
+      kind: "member",
       sub: "user-123",
       email: "admin@example.test",
     });
@@ -98,9 +99,33 @@ describe("verifyAccessJwt", () => {
       sub: "  Mixed-Case Subject  ",
       email: "  ADMIN@Example.Test  ",
     })), env, options)).resolves.toEqual({
+      kind: "member",
       sub: "Mixed-Case Subject",
       email: "admin@example.test",
     });
+  });
+
+  it("returns a verified service assertion only for the documented service-token shape", async () => {
+    const fixture = await createAccessJwtFixture();
+    const options = { jwks: createLocalJWKSet({ keys: [fixture.publicJwk] }) };
+
+    await expect(verifyAccessJwt(request(await fixture.signService()), env, options)).resolves.toEqual({ kind: "service" });
+  });
+
+  it("rejects ambiguous browser and service assertion shapes", async () => {
+    const fixture = await createAccessJwtFixture();
+    const options = { jwks: createLocalJWKSet({ keys: [fixture.publicJwk] }) };
+
+    for (const token of [
+      fixture.sign({ common_name: "service-client" }),
+      fixture.signService({ sub: "nonempty-subject" }),
+      fixture.signService({ email: "member@example.test" }),
+      fixture.sign({ sub: "", email: undefined, common_name: undefined }),
+    ]) {
+      await expect(verifyAccessJwt(request(await token), env, options)).rejects.toMatchObject({
+        code: "ACCESS_TOKEN_INVALID", status: 401,
+      });
+    }
   });
 
   it("fails closed when Access configuration is incomplete", async () => {
@@ -116,9 +141,9 @@ describe("verifyAccessJwt", () => {
     const config = { ACCESS_TEAM_DOMAIN: `https://${teamDomain.toUpperCase()}/`, ACCESS_AUD: ACCESS_AUDIENCE };
     const signingOptions = { issuer: `https://${teamDomain}` };
 
-    await expect(verifyAccessJwt(request(await fixture.sign({}, signingOptions)), config)).resolves.toEqual({ sub: "user-123", email: "admin@example.test" });
+    await expect(verifyAccessJwt(request(await fixture.sign({}, signingOptions)), config)).resolves.toEqual({ kind: "member", sub: "user-123", email: "admin@example.test" });
     await expect(verifyAccessJwt(request(await fixture.sign({ sub: "user-456", email: "member@example.test" }, signingOptions)), config))
-      .resolves.toEqual({ sub: "user-456", email: "member@example.test" });
+      .resolves.toEqual({ kind: "member", sub: "user-456", email: "member@example.test" });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

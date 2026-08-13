@@ -19,8 +19,8 @@ describe("members D1 control plane", () => {
     }, { waitUntil: () => undefined });
 
     const members = await Promise.all([
-      service().resolveFirstLogin({ sub: "first-subject", email: "bootstrap@example.test" }),
-      service().resolveFirstLogin({ sub: "second-subject", email: "bootstrap@example.test" }),
+      service().resolveFirstLogin({ kind: "member", sub: "first-subject", email: "bootstrap@example.test" }),
+      service().resolveFirstLogin({ kind: "member", sub: "second-subject", email: "bootstrap@example.test" }),
     ]);
 
     expect(members.map((member) => member.role).sort()).toEqual(["admin", "contributor"]);
@@ -41,7 +41,7 @@ describe("members D1 control plane", () => {
 
   it("audits only first account creation and not repeat login or last_seen work", async () => {
     const service = new MembersService(new MembersRepository(env.DB, new AuditRepository(env.DB)), {}, { waitUntil: () => undefined });
-    const identity = { sub: "repeat-subject", email: "repeat@example.test" };
+    const identity = { kind: "member" as const, sub: "repeat-subject", email: "repeat@example.test" };
 
     const first = await service.resolveFirstLogin(identity);
     await service.resolveFirstLogin(identity);
@@ -62,7 +62,7 @@ describe("members D1 control plane", () => {
       now: () => new Date("2026-08-13T00:00:00.000Z"), waitUntil: () => undefined,
     });
 
-    await expect(service.resolveFirstLogin({ sub: "failed-subject", email: "failed@example.test" })).rejects.toThrow();
+    await expect(service.resolveFirstLogin({ kind: "member", sub: "failed-subject", email: "failed@example.test" })).rejects.toThrow();
     await expect(env.DB.prepare("SELECT id FROM members WHERE id = 'new-member'").first()).resolves.toBeNull();
   });
 
@@ -86,10 +86,10 @@ describe("members D1 control plane", () => {
 
   it("rejects an Access-approved subject after its member record is disabled", async () => {
     const service = new MembersService(new MembersRepository(env.DB), {}, { waitUntil: () => undefined });
-    const created = await service.resolveFirstLogin({ sub: "disabled-subject", email: "disabled@example.test" });
+    const created = await service.resolveFirstLogin({ kind: "member", sub: "disabled-subject", email: "disabled@example.test" });
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(created.id).run();
 
-    await expect(service.resolveFirstLogin({ sub: "disabled-subject", email: "disabled@example.test" }))
+    await expect(service.resolveFirstLogin({ kind: "member", sub: "disabled-subject", email: "disabled@example.test" }))
       .rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
   });
 

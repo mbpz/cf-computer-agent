@@ -55,7 +55,7 @@ describe("workspace assets", () => {
 
   it("still returns a server-authoritative 403 to an authenticated contributor", async () => {
     const app = createApp({
-      verifyAccessJwt: async () => ({ sub: "asset-contributor", email: "contributor@example.test" }),
+      verifyAccessJwt: async () => ({ kind: "member", sub: "asset-contributor", email: "contributor@example.test" }),
     });
     const context = createExecutionContext();
     const response = await app.fetch!(new Request("https://example.test/api/admin/members", {

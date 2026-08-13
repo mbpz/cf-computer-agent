@@ -39,6 +39,26 @@ describe("resolvePrincipal", () => {
       .resolves.toEqual({ kind: "automation", role: "automation" });
   });
 
+  it("resolves a verified service assertion plus APP_TOKEN as automation", async () => {
+    const dependencies = dependenciesFor(member(), undefined, undefined, { kind: "service" });
+
+    await expect(resolvePrincipal(request({
+      "cf-access-jwt-assertion": "service-assertion",
+      authorization: "Bearer automation-token",
+    }), env, dependencies)).resolves.toEqual({ kind: "automation", role: "automation" });
+    expect(dependencies.members.resolveFirstLogin).not.toHaveBeenCalled();
+  });
+
+  it("rejects a verified service assertion with a missing or incorrect APP_TOKEN", async () => {
+    for (const authorization of [undefined, "Bearer wrong-token"]) {
+      await expect(resolvePrincipal(request({
+        "cf-access-jwt-assertion": "service-assertion",
+        ...(authorization ? { authorization } : {}),
+      }), env, dependenciesFor(member(), undefined, undefined, { kind: "service" })))
+        .rejects.toMatchObject({ code: "AUTH_REQUIRED", status: 401 });
+    }
+  });
+
   it("fails closed when the member lifecycle rejects a disabled Access identity", async () => {
     const dependencies = dependenciesFor(member(), new AppError("MEMBER_DISABLED", "Member access is disabled", 403));
 
@@ -95,6 +115,9 @@ function dependenciesFor(
   resolvedMember: Member,
   memberError?: Error,
   verificationError?: Error,
+  assertion: { kind: "member"; sub: string; email: string } | { kind: "service" } = {
+    kind: "member", sub: "access-subject-1", email: "member@example.test",
+  },
 ): ResolvePrincipalDependencies & { members: { resolveFirstLogin: ReturnType<typeof vi.fn> } } {
   return {
     members: {
@@ -105,7 +128,7 @@ function dependenciesFor(
     },
     verifyAccessJwt: async () => {
       if (verificationError) throw verificationError;
-      return { sub: "access-subject-1", email: "member@example.test" };
+      return assertion;
     },
   };
 }

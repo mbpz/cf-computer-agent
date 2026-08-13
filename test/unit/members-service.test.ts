@@ -4,7 +4,7 @@ import { MembersService, type MembersServiceOptions } from "../../src/members/se
 import type { MembersRepositoryPort } from "../../src/members/repository";
 import type { Member, MemberStatus } from "../../src/members/types";
 
-const identity: AccessIdentity = { sub: "access-subject", email: "member@example.test" };
+const identity: AccessIdentity = { kind: "member", sub: "access-subject", email: "member@example.test" };
 
 describe("MembersService", () => {
   it("requires a lifecycle sink for last_seen work", () => {

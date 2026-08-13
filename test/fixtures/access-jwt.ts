@@ -6,6 +6,7 @@ export const ACCESS_AUDIENCE = "local-access-audience";
 export interface AccessJwtFixture {
   publicJwk: JWK;
   sign(claims?: Record<string, unknown>, overrides?: AccessJwtOverrides): Promise<string>;
+  signService(claims?: Record<string, unknown>, overrides?: AccessJwtOverrides): Promise<string>;
 }
 
 export interface AccessJwtOverrides {
@@ -22,7 +23,16 @@ export async function createAccessJwtFixture(): Promise<AccessJwtFixture> {
   return {
     publicJwk,
     sign: (claims = {}, overrides = {}) => signAccessJwt(privateKey, claims, overrides),
+    signService: (claims = {}, overrides = {}) => signServiceAccessJwt(privateKey, claims, overrides),
   };
+}
+
+async function signServiceAccessJwt(
+  key: CryptoKey,
+  claims: Record<string, unknown>,
+  overrides: AccessJwtOverrides,
+): Promise<string> {
+  return signAccessJwt(key, { sub: "", email: undefined, common_name: "local-service-token", ...claims }, overrides);
 }
 
 async function signAccessJwt(

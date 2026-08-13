@@ -5,9 +5,16 @@ import { AppError } from "../http";
 const jwksByTeamDomain = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 export interface AccessIdentity {
+  kind: "member";
   sub: string;
   email: string;
 }
+
+export interface AccessServiceAssertion {
+  kind: "service";
+}
+
+export type VerifiedAccessAssertion = AccessIdentity | AccessServiceAssertion;
 
 export interface AccessEnvironment {
   ACCESS_TEAM_DOMAIN?: string;
@@ -23,7 +30,7 @@ export async function verifyAccessJwt(
   request: Request,
   env: AccessEnvironment,
   options: VerifyAccessJwtOptions = {},
-): Promise<AccessIdentity> {
+): Promise<VerifiedAccessAssertion> {
   const teamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
   const audience = env.ACCESS_AUD;
   if (!teamDomain || !audience) {
@@ -39,16 +46,21 @@ export async function verifyAccessJwt(
       options.jwks || getJwks(teamDomain),
       verifyOptions(teamDomain, audience),
     );
-    const sub = normalizeSubject(payload.sub);
-    const email = canonicalizeEmail(payload.email);
-    if (!sub || !email) {
-      throw new AppError("ACCESS_TOKEN_INVALID", "Access identity is invalid", 401);
-    }
-    return { sub, email };
+    return classifyAssertion(payload);
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("ACCESS_TOKEN_INVALID", "Access authentication failed", 401);
   }
+}
+
+function classifyAssertion(payload: Record<string, unknown>): VerifiedAccessAssertion {
+  const sub = normalizeSubject(payload.sub);
+  const email = canonicalizeEmail(payload.email);
+  const commonName = normalizeSubject(payload.common_name);
+  const isService = payload.sub === "" && payload.email === undefined && Boolean(commonName);
+  if (isService) return { kind: "service" };
+  if (sub && email && !commonName) return { kind: "member", sub, email };
+  throw new AppError("ACCESS_TOKEN_INVALID", "Access identity is invalid", 401);
 }
 
 function normalizeTeamDomain(value: string | undefined): string | undefined {

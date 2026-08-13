@@ -26,3 +26,16 @@ The workerd suite prints expected corrupt-journal diagnostics from its intention
 ## Evidence boundary
 
 No remote D1 migration, deployment, Access/GitHub configuration, secret write, dashboard change, or remote smoke was performed. The remote D1 database binding already present in `wrangler.jsonc` was preserved. The still-pending remote evidence is explicitly listed in `ROADMAP.md`: D1 migration/seed, GitHub IdP and Access policy behavior, bootstrap/disabled members, service-token smoke, deployed workers.dev/preview disablement, custom-domain routing, and Durable Object cross-activation recovery.
+
+## Fix round 1
+
+- Set `redirect: "error"` on every credential-bearing smoke fetch. A two-origin loopback regression proves the redirect target receives no Authorization or Access client headers and smoke exits safely without secret output.
+- Treat `x-request-id` as untrusted. Smoke now prints it only when it is a 1–128-character ASCII base64url token; malformed, control-character, secret-reflecting, and oversized values become the fixed `invalid` marker. Contract tests assert all three test secrets and reflected request-ID content are absent from stdout/stderr.
+- Corrected `ACCESS_TEAM_DOMAIN` documentation: it is the full Access team host without a scheme, so the GitHub callback is `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/callback`. The runbook now links Cloudflare's Application token documentation.
+- Refactored signed Access assertion verification into discriminated results. After JWK signature, issuer, audience, and expiry validation, only a nonblank `sub` plus normalized email and no `common_name` is a member assertion. Only `sub === ""`, absent email, and nonblank `common_name` is a service assertion; mixed or incomplete shapes fail content-free. No incoming `CF-Access-Client-*` header is used for classification or logged.
+- A verified browser assertion always remains a member even with APP_TOKEN. A verified service assertion requires the same constant-time APP_TOKEN verification before becoming restricted automation. Missing/malformed assertions cannot fall back; no-assertion local/test automation remains unchanged. Local signed fixture, unit, workerd, and smoke-origin-contract regressions cover the service shape and failure cases.
+
+## Fix round 1 verification
+
+- Focused: TypeScript plus 55 access/principal/workerd tests passed; 6 smoke-contract tests passed.
+- Fresh `rtk npm run check` passed on the exact task tree.
