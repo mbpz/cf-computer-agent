@@ -44,3 +44,14 @@ The worker test runner prints expected Durable Object recovery diagnostics from 
 
 - Focused `navigation`, `workspace-ui`, and `assets` regressions: 14 tests passed.
 - Fresh `rtk npm run check` passed: 16 unit files / 121 tests, 7 worker files / 80 tests, smoke tests, generated types, type check, and dry build.
+
+## Fix round 3
+
+- Renderer-created Submit, Members, Spaces, Collections, Search, and Agent handlers now close over an explicit `{ generation, pathname }` owner constructed from their renderer arguments. They no longer derive ownership from global state at event time.
+- Route rendering marks the prior outlet inert before awaiting the next page; a successful replacement clears inert. This prevents outgoing controls from receiving pointer or focus interaction while a new page is loading.
+- Added an old-render regression proving an owner created by the prior renderer is rejected after `begin()` advances to a newer route.
+
+## Fix round 3 verification
+
+- Focused `navigation`, `workspace-ui`, and `assets` regressions: 14 tests passed.
+- Fresh `rtk npm run check` passed: 16 unit files / 121 tests, 7 worker files / 80 tests, smoke tests, generated types, type check, and dry build.

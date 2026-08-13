@@ -58,6 +58,7 @@ function empty(message) { return element("div", { className: "empty-state", text
 function replaceOutlet(node, generation) {
   if (generation !== undefined && !routeGuard.isCurrent(generation)) return false;
   outlet.replaceChildren(node);
+  outlet.inert = false;
   outlet.setAttribute("aria-busy", "false");
   return true;
 }
@@ -83,7 +84,6 @@ async function api(path, options = {}) {
 
 function has(capability) { return session?.capabilities.includes(capability); }
 function isAdminRoute(path) { return path === "/admin" || path.startsWith("/admin/"); }
-function currentMutationOwner() { return routeGuard.capture(window.location.pathname); }
 function ownsMutation(owner) { return routeGuard.owns(owner, window.location.pathname); }
 function setDrawer(open, focusDrawer = false) {
   if (!mobileViewport.matches) {
@@ -136,6 +136,7 @@ async function renderRoute() {
   setStatus(pendingFlash, pendingFlash ? "success" : "");
   pendingFlash = "";
   renderNavigation();
+  outlet.inert = true;
   outlet.setAttribute("aria-busy", "true");
   if (isAdminRoute(path) && !has("submission:read-all")) {
     replaceOutlet(page("403：没有管理权限", "管理路由由服务器独立授权；当前 Access 会话没有该能力。", [empty("请返回工作区，或联系管理员调整成员状态。")]), generation);
@@ -181,9 +182,9 @@ async function renderSubmit(generation) {
   const kind = element("select", { name: "kind" }, ["text", "markdown", "code"].map((value) => element("option", { value, text: value })));
   const space = element("select", { name: "space", required: "" }, activeSpaces.map((value) => element("option", { value: value.id, text: value.name })));
   const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: "输入纯文本、Markdown 或代码…" });
+  const owner = routeGuard.owner(generation, "/submit");
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
-    const owner = currentMutationOwner();
     try {
       const result = await api("/api/submissions", { method: "POST", body: JSON.stringify({ requestedSpaceId: space.value, kind: kind.value, title: title.value, content: content.value }) });
       if (!ownsMutation(owner)) return;
@@ -211,13 +212,15 @@ async function renderKnowledge(generation) {
 async function renderSearch(generation) {
   const query = element("input", { type: "search", placeholder: "输入关键词", "aria-label": "搜索关键词" });
   const results = element("div", { className: "stack" });
+  const owner = routeGuard.owner(generation, "/search");
   const form = element("form", { className: "actions", onsubmit: async (event) => {
     event.preventDefault();
     results.replaceChildren(empty("正在搜索…"));
     try {
       const data = await api(`/api/search?q=${encodeURIComponent(query.value)}`);
+      if (!ownsMutation(owner)) return;
       results.replaceChildren(list(data.hits, (hit) => item(hit.title, hit.excerpt || "没有摘要", (hit.tags || []).map((tag) => element("span", { className: "badge", text: tag }))), "没有匹配的已发布知识。"));
-    } catch (error) { results.replaceChildren(empty(error.message)); }
+    } catch (error) { if (ownsMutation(owner)) results.replaceChildren(empty(error.message)); }
   } }, [query, element("button", { className: "primary", type: "submit", text: "搜索" })]);
   if (replaceOutlet(page("搜索已发布知识", "此页面检索 Phase 0 的兼容知识库，不包含待审核投稿。", [card("检索", [form, results])]), generation)) outlet.focus({ preventScroll: true });
 }
@@ -225,13 +228,15 @@ async function renderSearch(generation) {
 async function renderAgent(generation) {
   const question = element("textarea", { required: "", placeholder: "例如：根据已发布的知识，下一步应关注什么？" });
   const answer = element("div", { className: "stack" });
+  const owner = routeGuard.owner(generation, "/agent");
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
     answer.replaceChildren(empty("正在阅读已发布知识…"));
     try {
       const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ question: question.value }) });
+      if (!ownsMutation(owner)) return;
       answer.replaceChildren(element("p", { text: data.answer }), element("h3", { text: "来源" }), list(data.sources || [], (source) => item(source.title, source.excerpt || ""), "没有可引用来源。"));
-    } catch (error) { answer.replaceChildren(empty(error.message)); }
+    } catch (error) { if (ownsMutation(owner)) answer.replaceChildren(empty(error.message)); }
   } }, [field("问题", question), element("button", { className: "primary", type: "submit", text: "询问 Agent" })]);
   if (replaceOutlet(page("向 Agent 提问", "回答只依据已发布的旧版知识；待审核投稿不会被用于回答。", [card("问题", [form, answer])]), generation)) outlet.focus({ preventScroll: true });
 }
@@ -264,9 +269,9 @@ async function renderPendingSubmissions(generation) {
 
 async function renderMembers(generation) {
   const data = await api("/api/admin/members?limit=50");
+  const owner = routeGuard.owner(generation, "/admin/members");
   const rows = data.items.map((member) => {
     const status = element("button", { className: "secondary", type: "button", text: member.status === "active" ? "禁用 contributor" : "启用 contributor", disabled: member.role === "admin" ? "" : undefined, onclick: async () => {
-      const owner = currentMutationOwner();
       try {
         await api(`/api/admin/members/${encodeURIComponent(member.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: member.status === "active" ? "disabled" : "active" }) });
         if (!ownsMutation(owner)) return;
@@ -288,11 +293,11 @@ async function renderSpaces(generation) {
     collections: (await api(`/api/spaces/${encodeURIComponent(space.id)}/collections?limit=50`)).items,
   })));
   const slug = element("input", { required: "", placeholder: "engineering" });
+  const owner = routeGuard.owner(generation, "/admin/spaces");
   const name = element("input", { required: "", placeholder: "Engineering" });
   const position = element("input", { type: "number", value: String(spaces.length) });
   const form = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
-    const owner = currentMutationOwner();
     try {
       await api("/api/admin/spaces", { method: "POST", body: JSON.stringify({ slug: slug.value, name: name.value, position: Number(position.value) }) });
       if (!ownsMutation(owner)) return;
@@ -305,7 +310,6 @@ async function renderSpaces(generation) {
   const collectionPosition = element("input", { type: "number", value: "0" });
   const collectionForm = element("form", { className: "stack", onsubmit: async (event) => {
     event.preventDefault();
-    const owner = currentMutationOwner();
     try {
       await api("/api/admin/collections", { method: "POST", body: JSON.stringify({ spaceId: collectionSpace.value, name: collectionName.value, position: Number(collectionPosition.value) }) });
       if (!ownsMutation(owner)) return;

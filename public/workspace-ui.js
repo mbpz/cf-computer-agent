@@ -3,6 +3,7 @@ export function createRouteGuard() {
   return Object.freeze({
     begin() { generation += 1; return generation; },
     capture(pathname) { return Object.freeze({ generation, pathname }); },
+    owner(routeGeneration, pathname) { return Object.freeze({ generation: routeGeneration, pathname }); },
     isCurrent(value) { return value === generation; },
     owns(owner, pathname) { return owner.generation === generation && owner.pathname === pathname; },
   });

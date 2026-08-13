@@ -11,13 +11,14 @@ describe("createRouteGuard", () => {
     expect(guard.isCurrent(search)).toBe(true);
   });
 
-  it("rejects a mutation completion when its owning route changed", () => {
+  it("rejects an old-render mutation handler after a newer route begins", () => {
     const guard = createRouteGuard();
-    const submission = guard.capture("/submit");
+    const submitGeneration = guard.begin();
+    const submission = guard.owner(submitGeneration, "/submit");
 
     expect(guard.owns(submission, "/submit")).toBe(true);
     guard.begin();
-    expect(guard.owns(submission, "/knowledge")).toBe(false);
+    expect(guard.owns(submission, "/submit")).toBe(false);
   });
 });
 
