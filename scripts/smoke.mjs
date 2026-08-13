@@ -3,6 +3,8 @@ import { isIP } from "node:net";
 
 const baseUrl = process.env.MEMORY_GARDEN_BASE_URL;
 const token = process.env.MEMORY_GARDEN_TOKEN;
+const accessClientId = process.env.MEMORY_GARDEN_ACCESS_CLIENT_ID;
+const accessClientSecret = process.env.MEMORY_GARDEN_ACCESS_CLIENT_SECRET;
 const timeoutMs = 20_000;
 
 let origin;
@@ -12,17 +14,8 @@ function authenticatedRequest(path, init = {}) {
     ...init,
     headers: {
       authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      ...init.headers,
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-}
-
-function unauthenticatedRequest(path, init = {}) {
-  return fetch(new URL(path, origin), {
-    ...init,
-    headers: {
+      "cf-access-client-id": accessClientId,
+      "cf-access-client-secret": accessClientSecret,
       "content-type": "application/json",
       ...init.headers,
     },
@@ -99,8 +92,8 @@ function formatResult(result, step, status, requestId, elapsedMs) {
 }
 
 async function run() {
-  if (!baseUrl || !token) {
-    throw new Error("MEMORY_GARDEN_BASE_URL and MEMORY_GARDEN_TOKEN are required");
+  if (!baseUrl || !accessClientId || !accessClientSecret || !token) {
+    throw new Error("MEMORY_GARDEN_BASE_URL, MEMORY_GARDEN_ACCESS_CLIENT_ID, MEMORY_GARDEN_ACCESS_CLIENT_SECRET, and MEMORY_GARDEN_TOKEN are required");
   }
 
   try {
@@ -134,10 +127,6 @@ async function runChecks() {
     tags: ["smoke"],
     content: `Remote smoke verification note ${title}.`,
   };
-
-  await check("health-unauthorized", () => unauthenticatedRequest("/api/health"), (response) => {
-    expectStatus(response, 401);
-  });
 
   await check("health-authorized", () => authenticatedRequest("/api/health"), (response, body) => {
     expectStatus(response, 200);

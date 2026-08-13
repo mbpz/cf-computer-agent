@@ -30,7 +30,7 @@
 - [x] 消除 Computer RPC 边界的双重类型断言，封装 `WorkspaceRepository`。（本地 `rtk npm run check`）
 - [x] 引入 `@cloudflare/vitest-pool-workers`，覆盖 Worker 路由与 Durable Object 持久性。（本地 `rtk npm run check`）
 - [x] 增加结构化错误、request_id、安全响应头和日志脱敏。（本地 `rtk npm run check`）
-- [x] 补全生产 smoke 脚本：health、新增、列表、检索、问答和未授权。（本地 mock 验证；尚未调用远程环境）
+- [x] 补全 automation smoke 合同：Access Service Token + APP_TOKEN、health、新增、列表、检索与问答；不调用 admin API。（本地 mock 验证；尚未调用远程环境）
 
 退出标准：
 
@@ -41,12 +41,12 @@
 
 ## Phase 1 — 身份、角色与 D1 控制面
 
-目标：建立一个管理员、少量受邀用户和空间化知识模型。
+目标：建立一个管理员、少量受邀用户和空间化知识模型。D1 仅作 Phase 1 控制面权威，已发布的旧版知识保持在兼容 Durable Object 中。
 
 范围：
 
-- 接入 Cloudflare Access JWT 验证与成员映射。
-- 建立 D1 migrations：members、spaces、collections、submissions、assets、jobs、items、revisions、reviews、audit_events。
+- [x] 接入 Cloudflare Access JWT 验证与成员映射。（本地 JWT fixture、单元与 workerd 验证；未验证远程 GitHub IdP）
+- [x] 建立 D1 migrations：members、spaces、collections、submissions、audit_events。（本地 D1 fixture；远程 migration 未获授权执行）
 - 管理员/用户权限中间件与服务端权限策略。
 - Space、Collection、Tag 的管理 API。
 - 用户首页、管理员外壳和角色化导航。
@@ -55,10 +55,16 @@
 
 退出标准：
 
-- 完整权限矩阵自动测试通过。
-- 普通用户无法调用管理 API。
-- admin_only 内容不能通过列表、直接 ID 或缓存读取泄露。
-- D1 查询使用索引和有界分页，并记录 rows_read/rows_written 证据。
+- [x] 完整权限矩阵自动测试通过。（本地 workerd）
+- [x] 普通用户无法调用管理 API。（本地 workerd）
+- [x] automation 无法调用管理 API，且 smoke 只走 legacy 路径。（本地 contract/workerd）
+- [x] D1 查询使用索引和有界分页。（本地 migration/service 测试；未记录远程 rows_read/rows_written）
+- [ ] 远程 D1 migration 与 seed 已在目标数据库核验。
+- [ ] GitHub IdP、邮件 Allow、Access JWT audience 与 bootstrap admin 在自定义域核验。
+- [ ] Access Service Token + APP_TOKEN smoke 在自定义域通过且不泄露凭证。
+- [ ] disabled contributor 在真实 Access 会话下被应用拒绝。
+- [ ] production 与 preview workers.dev URL 在已部署账户中保持关闭。
+- [ ] 旧版 Durable Object 跨远程激活后仍可读取。
 
 ## Phase 2 — 统一采集与 R2 原件
 

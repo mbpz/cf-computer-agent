@@ -1,33 +1,34 @@
-# Remote smoke verification
+# Access service-token smoke verification
 
-This runbook verifies a deployed Memory Garden API. It is not a substitute for local checks: first run `rtk npm run check`, which verifies generated types, TypeScript, unit tests, workerd integration tests, and a Wrangler dry build only. Local fixtures and workerd do not prove remote Durable Object persistence, Workers AI provider behavior, custom-domain routing, or production maturity.
+Use this runbook only after an authorized Access-first deployment. It is not a substitute for `rtk npm run check`: local tests and workerd do not prove GitHub login, Access policy evaluation, remote D1 state, custom-domain routing, Durable Object recovery, or Workers AI provider behavior.
 
-Only run this after an authorized deployment. The chat check consumes Workers AI quota, so confirm the Cloudflare account plan and current usage first. This repository cannot enforce zero billing, set account budgets, or guarantee that Cloudflare free-tier policies will not change.
+The smoke is an **automation** check. Cloudflare Access must evaluate the Service Auth policy before the request reaches the Worker, and the Worker then validates `APP_TOKEN`. Therefore every request sends all three credentials and only uses the automation-authorized Phase 0 compatibility paths: health, notes, search, and chat. It deliberately makes no `/api/admin/*`, session, member, space, submission, collection, or audit request. A browser-session check is a separate Access validation in [access-setup.md](./access-setup.md).
 
-## Safe invocation
-
-Use an interactive secret input. Do not put the token in a command argument, `.dev.vars`, `wrangler.jsonc`, shell history, CI logs, or an exported terminal transcript.
+Do not add credentials to command arguments, `wrangler.jsonc`, `.dev.vars`, CI logs, shell history, or exported terminal transcripts. Enter each one interactively and erase the shell variables afterwards.
 
 ```bash
-read -s MEMORY_GARDEN_TOKEN
+read -rs MEMORY_GARDEN_ACCESS_CLIENT_ID
+export MEMORY_GARDEN_ACCESS_CLIENT_ID
+read -rs MEMORY_GARDEN_ACCESS_CLIENT_SECRET
+export MEMORY_GARDEN_ACCESS_CLIENT_SECRET
+read -rs MEMORY_GARDEN_TOKEN
 export MEMORY_GARDEN_TOKEN
 export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
 rtk npm run smoke
-unset MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
+unset MEMORY_GARDEN_ACCESS_CLIENT_ID MEMORY_GARDEN_ACCESS_CLIENT_SECRET MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
 ```
 
-The script accepts only `MEMORY_GARDEN_TOKEN` for authentication. Remote smoke URLs must use HTTPS. `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` exists solely for an opted-in local contract mock on `localhost`, `127.0.0.0/8`, or `::1`; it cannot enable general HTTP and must not be used for a deployed domain. The script prints each step's name, HTTP status, request ID, and elapsed time; it never prints the token, request headers, note content, or complete Agent answer.
+Remote URLs must use HTTPS. `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` is solely for an opted-in local contract mock on `localhost`, `127.0.0.0/8`, or `::1`; it cannot enable general HTTP and must never be used for a deployed host. The script fails before opening a connection if any of the base URL, Access client ID, Access client secret, or APP token is absent. It prints only a step name, HTTP status, request ID, and elapsed time; it never prints credentials, request headers, note content, or the complete Agent answer.
 
 ## Expected evidence
 
-The command exits zero only if all of these checks pass:
+The command exits zero only if an Access Service Token plus APP token can perform all of these legacy-path checks:
 
-- unauthenticated `GET /api/health` returns `401`;
-- authenticated `GET /api/health` returns `{ "ok": true }`;
-- authenticated `POST /api/notes` creates a note with `201`;
-- authenticated list and search responses include that note; and
-- authenticated chat returns a non-empty answer and includes the created note in `sources`.
+- `GET /api/health` returns `{ "ok": true }`;
+- `POST /api/notes` creates a note with `201`;
+- `GET /api/notes` and `GET /api/search` include that note; and
+- `POST /api/chat` has a non-empty answer and returns the created note in `sources`.
 
-Every run creates one identifiable `smoke-<uuid>` note. It is intentional that the script does not delete data: Phase 0 exposes no deletion API, and Phase 3 will add deletion and cleanup through the recovery-bin workflow. Record the command output (without secrets), deployment version, domain, date, and any request IDs in the release evidence.
+Every run creates one identifiable `smoke-<uuid>` note. It remains because Phase 1 exposes no deletion API; Phase 3's recovery-bin workflow will provide cleanup. Record redacted output, Worker version, custom domain, date, and request IDs in release evidence.
 
-Run the smoke separately for the workers.dev URL and the custom domain. A passing run is a point-in-time remote API and Provider signal, not proof of later Durable Object activation/restart recovery or the long-term stability of the preview Computer dependency.
+Do not use a workers.dev URL: `wrangler.jsonc` sets `workers_dev` and `preview_urls` to `false`. Confirm that both production and preview workers.dev URLs are disabled in the Cloudflare dashboard after the authorized deployment. This repository’s local configuration test cannot prove the remote deployment or dashboard state.

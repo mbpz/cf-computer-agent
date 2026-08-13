@@ -1,17 +1,18 @@
 # Memory Garden Agent
 
-一个部署在 Cloudflare 免费层上的个人知识库 Agent。笔记以 Markdown 保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中；检索在边缘端完成，回答由 Workers AI 生成并返回可核对的来源。
+一个由 Cloudflare Access 保护、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
 
 ## 架构
 
 ```text
-Browser UI → Worker API → personal Durable Object
-                         ├─ Computer VFS: /workspace/notes/*.md
-                         ├─ Computer VFS: /workspace/.memory/index.json
-                         └─ keyword retrieval → Workers AI → cited answer
+Browser UI → Cloudflare Access → Worker API → D1 control plane
+                                         └─ personal Durable Object
+                                            ├─ Computer VFS: /workspace/notes/*.md
+                                            ├─ Computer VFS: /workspace/.memory/index.json
+                                            └─ keyword retrieval → Workers AI → cited answer
 ```
 
-为什么不使用更多产品：个人规模下，Computer 已把权威文件状态放在 Durable Object SQLite；再引入 D1、R2 或 Vectorize 会制造双写和额外配额。Cloudflare Container 也不是免费层方案，因此本项目仅使用 Computer 的 filesystem surface，不配置 execution backend。
+为什么不在 Phase 1 引入更多产品：D1 只保存成员、空间、投稿和审计控制面；已发布笔记仍由 Durable Object 保存，避免把旧版内容迁移为双写。R2、Vectorize 与执行后端不属于本阶段。
 
 > `@cloudflare/computer` 官方目前标注为 Preview，不适合承诺生产稳定性。本项目是可部署 MVP，并通过适配边界把未来迁移限制在存储层。
 
@@ -21,7 +22,8 @@ Browser UI → Worker API → personal Durable Object
 - 中英文关键词检索，标题/标签加权
 - RAG 问答，只将命中的笔记片段交给 Workers AI
 - `[1]` 形式引用与原始来源卡片
-- 已部署 API 必须配置 `APP_TOKEN`；无令牌仅限显式本地兼容模式，正式使用建议再配置 Cloudflare Access
+- 浏览器身份只来自已验证的 Cloudflare Access JWT；角色、状态和能力由 D1 决定
+- 自动化同时需要 Access Service Token 与 `APP_TOKEN`，且只能访问兼容 smoke 路径，绝不是管理员
 - 单 Worker 静态界面，无 Pages、外部数据库或第三方模型费用
 
 ## 本地运行
@@ -34,13 +36,7 @@ rtk npm run dev
 
 `rtk npm run check` 只验证生成类型、TypeScript、单元测试、workerd 集成测试和 Wrangler dry build。它不会请求远程 Workers AI、不会验证已部署 Durable Object 的持久性，也不构成生产域名或 Provider 成熟度证据。
 
-本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。部署环境必须设置共享令牌：
-
-```bash
-rtk npx wrangler secret put APP_TOKEN
-```
-
-未设置 `APP_TOKEN` 的部署会以 `503 AUTH_MISCONFIGURED` 拒绝 API 请求。只有显式设置 `ALLOW_INSECURE_LOCAL=true` 的本地兼容环境才允许无令牌访问；不要把它部署到远程环境。然后在页面右上角“设置令牌”。不要把令牌写进 `wrangler.jsonc`、`.dev.vars` 或命令行参数。
+本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产设置的确切 GitHub IdP、Access、D1、secret、部署和回滚顺序见 [access-setup.md](./docs/operations/access-setup.md)。不要把 `ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`BOOTSTRAP_ADMIN_EMAIL`、`APP_TOKEN` 或 Service Token 凭证写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
 
 静态浏览器文件位于 `public/`，由 Worker 的 `ASSETS` binding 提供；`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
 
@@ -55,27 +51,30 @@ rtk npm run deploy
 
 ## API
 
-- `GET /api/health`
-- `GET /api/notes`
-- `POST /api/notes` — `{ title, tags, content, id? }`
-- `GET /api/search?q=...`
-- `POST /api/chat` — `{ question }`
+- `GET /api/session`（Access 成员）
+- `GET /api/spaces`、`POST /api/submissions`、`GET /api/submissions/mine`（Access 成员）
+- `/api/admin/*`（仅 active admin）
+- `GET /api/health`、`GET /api/notes`、`POST /api/notes`、`GET /api/search?q=...`、`POST /api/chat`（legacy；自动化只可使用这些路径）
 
-配置了 `APP_TOKEN` 后，所有 API 请求须带 `Authorization: Bearer <token>`。单条笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
+浏览器不提交或保存 APP token。自动化须先用 `CF-Access-Client-Id` / `CF-Access-Client-Secret` 通过 Access Service Auth，随后以 `Authorization: Bearer <APP_TOKEN>` 通过 Worker 验证。单条 legacy 笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
 
 ## 远程 smoke 验证
 
-部署授权后，使用交互式输入设置令牌，再运行 smoke。令牌只从 `MEMORY_GARDEN_TOKEN` 读取，脚本不会打印令牌、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
+仅在 Access-first 部署授权后运行 automation smoke。它交互式读取 Access Service Token client ID/client secret 与 APP token；脚本不会打印三者、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
 
 ```bash
-read -s MEMORY_GARDEN_TOKEN
+read -rs MEMORY_GARDEN_ACCESS_CLIENT_ID
+export MEMORY_GARDEN_ACCESS_CLIENT_ID
+read -rs MEMORY_GARDEN_ACCESS_CLIENT_SECRET
+export MEMORY_GARDEN_ACCESS_CLIENT_SECRET
+read -rs MEMORY_GARDEN_TOKEN
 export MEMORY_GARDEN_TOKEN
-export MEMORY_GARDEN_BASE_URL=https://memory-garden-agent.apples398.workers.dev
+export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
 rtk npm run smoke
-unset MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
+unset MEMORY_GARDEN_ACCESS_CLIENT_ID MEMORY_GARDEN_ACCESS_CLIENT_SECRET MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
 ```
 
-Smoke 依次验证未授权与授权 health、创建、列表、检索和带来源的问答；每次会写入一条 `smoke-<uuid>` 笔记。当前没有删除 API，因此不会自动清理；Phase 3 的回收站/删除能力完成前，这条可识别笔记会保留。仅在 workers.dev 与自定义域都成功执行后，才是远程 API 与 Provider 的一次运行证据；它仍不能单独证明长期 Durable Object 重启恢复或 `@cloudflare/computer` Preview 的生产成熟度。
+Smoke 只验证 automation 可用的 health、创建、列表、检索和带来源的问答；它不发送无认证请求，也不会调用管理员 API。每次会写入一条 `smoke-<uuid>` 笔记；Phase 3 的回收站/删除能力完成前，它会保留。正式入口仅为自定义域：配置意图为 production 与 preview workers.dev URL 都关闭，授权部署后仍需在控制台验证。详见 [smoke-test.md](./docs/operations/smoke-test.md)。
 
 ## 免费层边界
 
@@ -83,7 +82,7 @@ Smoke 依次验证未授权与授权 health、创建、列表、检索和带来�
 
 ## 数据与隐私
 
-这是单租户设计，固定使用名为 `personal` 的 Durable Object。不要在未配置 Access 或 `APP_TOKEN` 时把地址公开。当前版本没有附件、批量导出和删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
+这是单组织 Phase 1 设计。不要在未配置 Access、D1 成员控制面和 automation APP token 的情况下公开地址。远程 GitHub IdP、D1 migration、Service Token、workers.dev disablement 与 Durable Object 跨激活恢复尚未在此仓库获得远程证据；不要据此宣称生产成熟度。当前版本没有附件、审核发布、批量导出或删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
 
 
 openssl rand -hex 32
