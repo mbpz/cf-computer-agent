@@ -23,6 +23,11 @@ The workerd+D1 integration characterizes the observed local behavior: when the d
 - The dependent audit SQL now derives `actor_id`, fixed member action/type, and `resource_id` from the just-inserted submission row rather than binding caller-provided identity fields. If target validation inserts no submission, both statements report zero changes and the repository returns the stable target error; it cannot return a success without an audit row.
 - A real workerd D1 duplicate-audit regression now makes the second statement fail inside `D1Database.batch` and asserts that neither the new submission nor a linked audit event remains. This is the tested rollback boundary used by the paired-write implementation.
 
+## Review fix round 3
+
+- Corrected the duplicate-audit rollback fixture so its audit `resourceId` exactly equals `failed-submission`. It therefore passes the repository's pre-batch identity binding and reaches the real duplicate audit-ID constraint in D1. The test asserts the new submission and linked audit row are absent while the pre-existing duplicate audit row remains unchanged.
+- `rtk npx vitest run test/worker/submissions.test.ts` — passed (1 file, 6 tests).
+
 ## Verification
 
 - `rtk npm run typecheck` — passed.

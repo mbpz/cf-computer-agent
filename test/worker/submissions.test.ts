@@ -55,10 +55,13 @@ describe("submissions D1 control plane", () => {
     const audit = new AuditRepository(env.DB);
     await audit.writeAudit(auditInput("duplicate-audit"));
     const repository = new SubmissionsRepository(env.DB, audit);
+    const submission = submissionInput("failed-submission");
+    const duplicateAudit = { ...auditInput("duplicate-audit"), resourceId: submission.id };
 
-    await expect(repository.createWithAudit(submissionInput("failed-submission"), auditInput("duplicate-audit"))).rejects.toThrow();
+    await expect(repository.createWithAudit(submission, duplicateAudit)).rejects.toThrow();
     await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'failed-submission'").first()).resolves.toBeNull();
     await expect(env.DB.prepare("SELECT id FROM audit_events WHERE resource_id = 'failed-submission'").first()).resolves.toBeNull();
+    await expect(env.DB.prepare("SELECT id, resource_id FROM audit_events WHERE id = 'duplicate-audit'").first()).resolves.toEqual({ id: "duplicate-audit", resource_id: "submission-1" });
   });
 
   it("accepts an active same-space Collection and pages audit events by created_at and id", async () => {
