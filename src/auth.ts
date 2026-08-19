@@ -6,11 +6,16 @@ async function digest(value: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
 }
 
+export function fixedLengthBytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  let difference = 0;
+  for (let index = 0; index < left.byteLength; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
 async function constantTimeEqual(left: string, right: string): Promise<boolean> {
   const [a, b] = await Promise.all([digest(left), digest(right)]);
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) difference |= a[index] ^ b[index];
-  return difference === 0;
+  return fixedLengthBytesEqual(a, b);
 }
 
 export interface AuthEnvironment {

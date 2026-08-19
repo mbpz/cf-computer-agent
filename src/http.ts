@@ -22,12 +22,7 @@ export async function parseJsonRequest(request: Request, maxBytes: number): Prom
     throw new AppError("UNSUPPORTED_MEDIA_TYPE", "Content type must be application/json", 415);
   }
 
-  const contentLength = request.headers.get("content-length");
-  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
-    throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
-  }
-
-  const body = await readBoundedBody(request, maxBytes);
+  const body = new TextDecoder().decode(await readBoundedBodyBytes(request, maxBytes));
   try {
     return JSON.parse(body) as unknown;
   } catch (error) {
@@ -86,8 +81,13 @@ function isJsonContentType(value: string | null): boolean {
   return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
 }
 
-async function readBoundedBody(request: Request, maxBytes: number): Promise<string> {
-  if (!request.body) return "";
+export async function readBoundedBodyBytes(request: Request, maxBytes: number): Promise<Uint8Array> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
+  }
+
+  if (!request.body) return new Uint8Array();
 
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -110,5 +110,5 @@ async function readBoundedBody(request: Request, maxBytes: number): Promise<stri
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  return bytes;
 }
