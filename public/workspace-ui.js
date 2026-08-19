@@ -35,3 +35,21 @@ export function drawerState(open) {
     inert: !open,
   });
 }
+
+export function sessionBootstrapState(status, session) {
+  if (status === 401) return Object.freeze({ kind: "anonymous" });
+  if (status >= 200 && status < 300 && session?.member && Array.isArray(session.capabilities)) {
+    return Object.freeze({ kind: "authenticated", session });
+  }
+  return Object.freeze({ kind: "error" });
+}
+
+export async function postLogout(request) {
+  const response = await request("/auth/logout", { method: "POST", credentials: "same-origin" });
+  if (!response.ok) {
+    const error = new Error(response.statusText || "退出失败，请重试。");
+    error.status = response.status;
+    throw error;
+  }
+  return sessionBootstrapState(401);
+}

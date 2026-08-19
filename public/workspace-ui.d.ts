@@ -24,3 +24,10 @@ export function drawerState(open: boolean): Readonly<{
   ariaHidden: "true" | "false";
   inert: boolean;
 }>;
+export function sessionBootstrapState(
+  status: number,
+  session?: BrowserSession,
+): Readonly<{ kind: "anonymous" } | { kind: "authenticated"; session: BrowserSession } | { kind: "error" }>;
+export function postLogout(
+  request: (path: string, init: RequestInit) => Promise<Response>,
+): Promise<Readonly<{ kind: "anonymous" }>>;

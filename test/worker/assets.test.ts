@@ -21,7 +21,7 @@ describe("workspace assets", () => {
     sessionToken = (await new SessionService(env.DB, repository, { waitUntil: () => undefined }).create(member!)).token;
   });
 
-  it("serves the protected unified shell and its explicit navigation module", async () => {
+  it("serves a public unified shell with no browser credential or Access remnants", async () => {
     const page = await SELF.fetch("https://example.test/");
     const html = await page.text();
 
@@ -31,11 +31,16 @@ describe("workspace assets", () => {
     expect(html).toContain('id="app-shell"');
     expect(html).toContain('id="primary-navigation"');
     expect(html).toContain('src="/app.js"');
-    expect(html).not.toMatch(/localStorage|APP_TOKEN|设置令牌|authorization/i);
+    expect(html).not.toMatch(/localStorage|APP_TOKEN|AUTOMATION_SECRET|设置令牌|authorization|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
 
     const navigation = await SELF.fetch("https://example.test/navigation.js");
     expect(navigation.status).toBe(200);
     await expect(navigation.text()).resolves.toContain("navigationForSession");
+
+    const app = await SELF.fetch("https://example.test/app.js");
+    const appSource = await app.text();
+    expect(app.status).toBe(200);
+    expect(appSource).not.toMatch(/APP_TOKEN|AUTOMATION_SECRET|x-automation-|github[_ -]?token|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
   });
 
   it("leaves authorization authoritative on the server for direct admin API access", async () => {

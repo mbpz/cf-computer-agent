@@ -17,13 +17,13 @@
         </div>
         <nav id="primary-navigation" aria-label="主要导航"></nav>
         <div class="sidebar-footer">
-          <a id="logout-link" href="/cdn-cgi/access/logout">退出工作区</a>
+          <button id="logout-button" class="logout-button" type="button" hidden>退出工作区</button>
         </div>
       </aside>
       <div class="app-frame">
         <header class="topbar">
           <button id="drawer-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="sidebar">打开导航</button>
-          <div id="session-summary" class="session-summary" aria-live="polite">正在验证工作区访问权限…</div>
+          <div id="session-summary" class="session-summary" aria-live="polite">正在确认登录状态…</div>
         </header>
         <main id="main-content" tabindex="-1">
           <div id="status-region" class="status-region" aria-live="polite"></div>
@@ -31,7 +31,7 @@
             <section class="page-state" aria-labelledby="loading-title">
               <p class="eyebrow">MEMORY GARDEN</p>
               <h1 id="loading-title">正在加载工作区</h1>
-              <p>先确认当前 Access 会话，再加载页面内容。</p>
+              <p>正在确认当前登录状态，再加载页面内容。</p>
             </section>
           </div>
         </main>

@@ -1,5 +1,5 @@
 import { navigationForSession } from "/navigation.js";
-import { createOperationGuard, createRouteGuard, drawerState, runLatestOperation } from "/workspace-ui.js";
+import { createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "/workspace-ui.js";
 
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
@@ -7,6 +7,7 @@ const outlet = byId("page-outlet");
 const statusRegion = byId("status-region");
 const drawerToggle = byId("drawer-toggle");
 const sidebar = byId("sidebar");
+const logoutButton = byId("logout-button");
 const routeGuard = createRouteGuard();
 const mobileViewport = window.matchMedia("(max-width: 760px)");
 let session;
@@ -82,6 +83,16 @@ async function api(path, options = {}) {
   return data;
 }
 
+async function loadSession() {
+  const response = await fetch("/api/session", { credentials: "same-origin" });
+  const data = await response.json().catch(() => ({}));
+  const state = sessionBootstrapState(response.status, data);
+  if (state.kind !== "error") return state;
+  const error = new Error(apiError(data, response.statusText));
+  error.status = response.status;
+  throw error;
+}
+
 function has(capability) { return session?.capabilities.includes(capability); }
 function isAdminRoute(path) { return path === "/admin" || path.startsWith("/admin/"); }
 function ownsMutation(owner) { return routeGuard.owns(owner, window.location.pathname); }
@@ -102,6 +113,7 @@ function setDrawer(open, focusDrawer = false) {
   if (!state.open && document.activeElement instanceof HTMLElement && sidebar.contains(document.activeElement)) drawerToggle.focus();
 }
 function navigate(path, replace = false, flash = "") {
+  if (!session) return;
   const next = new URL(path, window.location.origin);
   if (next.origin !== window.location.origin) return;
   if (next.pathname !== window.location.pathname) history[replace ? "replaceState" : "pushState"]({}, "", `${next.pathname}${next.search}`);
@@ -131,6 +143,10 @@ function renderNavigation() {
 }
 
 async function renderRoute() {
+  if (!session) {
+    renderAnonymous();
+    return;
+  }
   const path = window.location.pathname;
   const generation = routeGuard.begin();
   setStatus(pendingFlash, pendingFlash ? "success" : "");
@@ -139,7 +155,7 @@ async function renderRoute() {
   outlet.inert = true;
   outlet.setAttribute("aria-busy", "true");
   if (isAdminRoute(path) && !has("submission:read-all")) {
-    replaceOutlet(page("403：没有管理权限", "管理路由由服务器独立授权；当前 Access 会话没有该能力。", [empty("请返回工作区，或联系管理员调整成员状态。")]), generation);
+    replaceOutlet(page("403：没有管理权限", "管理路由由服务器独立授权；当前登录身份没有该能力。", [empty("请返回工作区，或联系管理员调整成员状态。")]), generation);
     return;
   }
   const renderer = routes[path];
@@ -152,7 +168,7 @@ async function renderRoute() {
   } catch (error) {
     if (!routeGuard.isCurrent(generation)) return;
     const label = error.status === 403 ? "403：访问被拒绝" : "无法加载页面";
-    replaceOutlet(page(label, error.message || "请稍后重试。", [empty("页面数据暂不可用；你的 Access 会话和服务器权限仍是最终依据。")]), generation);
+    replaceOutlet(page(label, error.message || "请稍后重试。", [empty("页面数据暂不可用；服务器权限仍是最终依据。")]), generation);
   }
 }
 
@@ -333,13 +349,50 @@ async function renderAudit(generation) {
 
 async function bootstrap() {
   try {
-    session = await api("/api/session");
+    const state = await loadSession();
+    if (state.kind === "anonymous") {
+      renderAnonymous();
+      return;
+    }
+    session = state.session;
     byId("session-summary").textContent = `${session.member.email} · ${session.member.role}`;
-    byId("logout-link").href = session.logoutUrl;
+    logoutButton.hidden = false;
+    logoutButton.disabled = false;
+    drawerToggle.disabled = false;
+    sidebar.inert = false;
+    sidebar.removeAttribute("aria-hidden");
     shell.dataset.ready = "true";
     await renderRoute();
   } catch (error) {
-    replaceOutlet(page("无法启动工作区", error.status === 401 ? "请先通过 Cloudflare Access 登录，然后重新打开此页面。" : error.message || "无法获取当前会话。", [empty("浏览器不会保存自动化密钥或手动注入身份凭据。")]))
+    replaceOutlet(page("无法启动工作区", error.message || "无法获取当前会话。", [empty("请稍后重试。")]))
+  }
+}
+
+function renderAnonymous() {
+  session = undefined;
+  routeGuard.begin();
+  pendingFlash = "";
+  byId("primary-navigation").replaceChildren();
+  byId("session-summary").textContent = "登录后即可访问你的知识工作区。";
+  logoutButton.hidden = true;
+  logoutButton.disabled = true;
+  drawerToggle.disabled = true;
+  drawerToggle.setAttribute("aria-expanded", "false");
+  sidebar.inert = true;
+  sidebar.setAttribute("aria-hidden", "true");
+  shell.dataset.ready = "false";
+  replaceOutlet(page("欢迎来到 Memory Garden", "使用 GitHub 登录后，即可继续访问你的知识工作区。", [
+    element("div", { className: "actions" }, [element("a", { href: "/auth/github", className: "login-action", text: "使用 GitHub 登录" })]),
+  ]));
+  outlet.focus({ preventScroll: true });
+}
+
+async function logout() {
+  try {
+    await postLogout(fetch);
+    renderAnonymous();
+  } catch (error) {
+    setStatus(error.message || "退出失败，请重试。", "error");
   }
 }
 
@@ -349,9 +402,16 @@ document.addEventListener("click", (event) => {
   event.preventDefault();
   navigate(link.getAttribute("href"));
 });
-window.addEventListener("popstate", () => { setDrawer(false); void renderRoute(); });
+window.addEventListener("popstate", () => {
+  if (!session) return;
+  setDrawer(false);
+  void renderRoute();
+});
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && shell.dataset.drawerOpen === "true") setDrawer(false); });
 drawerToggle.addEventListener("click", () => setDrawer(shell.dataset.drawerOpen !== "true", true));
-mobileViewport.addEventListener("change", () => setDrawer(false));
+logoutButton.addEventListener("click", () => { void logout(); });
+mobileViewport.addEventListener("change", () => { if (session) setDrawer(false); });
 setDrawer(false);
+sidebar.inert = true;
+drawerToggle.disabled = true;
 void bootstrap();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOperationGuard, createRouteGuard, drawerState, runLatestOperation } from "../../public/workspace-ui.js";
+import { createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "../../public/workspace-ui.js";
 
 describe("createRouteGuard", () => {
   it("rejects an older route completion after newer navigation begins", () => {
@@ -94,5 +94,37 @@ describe("drawerState", () => {
 
   it("exposes an open mobile drawer", () => {
     expect(drawerState(true)).toEqual({ open: true, ariaExpanded: "true", ariaHidden: "false", inert: false });
+  });
+});
+
+describe("sessionBootstrapState", () => {
+  it("treats an anonymous session response as an inert login state", () => {
+    expect(sessionBootstrapState(401)).toEqual({ kind: "anonymous" });
+  });
+
+  it("keeps a valid member session available to the capability-driven shell", () => {
+    const session = {
+      member: { id: "member-1", email: "contributor@example.test", role: "contributor" },
+      capabilities: ["legacy:read", "submission:create", "submission:read-own"],
+    };
+
+    expect(sessionBootstrapState(200, session)).toEqual({ kind: "authenticated", session });
+  });
+
+  it("does not mistake a non-session failure for an anonymous login", () => {
+    expect(sessionBootstrapState(500)).toEqual({ kind: "error" });
+  });
+});
+
+describe("postLogout", () => {
+  it("posts logout with browser credentials then returns the login state", async () => {
+    const requests: Array<{ path: string; init: RequestInit }> = [];
+    const request = async (path: string, init: RequestInit) => {
+      requests.push({ path, init });
+      return new Response(null, { status: 204 });
+    };
+
+    await expect(postLogout(request)).resolves.toEqual({ kind: "anonymous" });
+    expect(requests).toEqual([{ path: "/auth/logout", init: { method: "POST", credentials: "same-origin" } }]);
   });
 });
