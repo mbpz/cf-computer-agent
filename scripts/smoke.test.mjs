@@ -143,7 +143,7 @@ test("disables production and preview workers.dev URLs", async () => {
   assert.equal(configuration.assets.run_worker_first, true);
 });
 
-test("documents GitHub OAuth and signed automation without Access credentials", async () => {
+test("documents GitHub OAuth and signed automation as one versioned secret rollout", async () => {
   const [setup, smokeRunbook] = await Promise.all([
     readFile(githubOAuthSetupPath, "utf8"),
     readFile(smokeRunbookPath, "utf8"),
@@ -151,21 +151,23 @@ test("documents GitHub OAuth and signed automation without Access credentials", 
 
   assert.match(setup, /https:\/\/memory\.crgmhrc\.asia\/auth\/github\/callback/u);
   assert.match(setup, /Homepage URL: `https:\/\/memory\.crgmhrc\.asia`/u);
-  for (const setting of [
-    "GITHUB_OAUTH_CLIENT_ID",
-    "GITHUB_OAUTH_CLIENT_SECRET",
-    "BOOTSTRAP_ADMIN_EMAIL",
-    "ALLOWED_MEMBER_EMAILS",
-    "AUTOMATION_CLIENT_ID",
-    "AUTOMATION_SECRET",
-    "APP_TOKEN",
-  ]) {
-    assert.match(setup, new RegExp(`rtk npx wrangler secret put ${setting}`, "u"));
-  }
+  assert.match(setup, /ALLOWED_MEMBER_EMAILS.*nonempty comma-separated.*unique.*valid canonical emails/isu);
+  assert.match(setup, /BOOTSTRAP_ADMIN_EMAIL.*included/isu);
+  assert.match(setup, /AUTOMATION_SECRET.*APP_TOKEN.*at least 32 independently random bytes/isu);
+  assert.match(setup, /mktemp -d -t memory-garden-oauth/u);
+  assert.match(setup, /chmod 600 "\$SECRETS_FILE"/u);
+  assert.match(setup, /rtk npx wrangler versions secret bulk "\$SECRETS_FILE"/u);
+  assert.match(setup, /rtk npx wrangler versions view <VERSION_ID>/u);
+  assert.match(setup, /rtk npx wrangler versions deploy <VERSION_ID>@100% --yes/u);
+  assert.match(setup, /rtk npx wrangler versions secret delete ACCESS_TEAM_DOMAIN/u);
+  assert.match(setup, /rtk npx wrangler versions secret delete ACCESS_AUD/u);
+  assert.match(setup, /CF_ACCESS_CLIENT_ID.*CF_ACCESS_CLIENT_SECRET/isu);
   assert.match(smokeRunbook, /AUTOMATION_CLIENT_ID/u);
   assert.match(smokeRunbook, /AUTOMATION_SECRET/u);
   assert.match(smokeRunbook, /APP_TOKEN/u);
-  assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /CF-Access-Client|ACCESS_TEAM_DOMAIN|ACCESS_AUD|cdn-cgi\/access/u);
+  assert.match(smokeRunbook, /never use `wrangler secret put`/iu);
+  assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /rtk npx wrangler secret put/u);
+  assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /CF-Access-Client|cdn-cgi\/access/u);
 });
 
 test("fails before the network when any automation credential is missing", async () => {

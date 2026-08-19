@@ -6,6 +6,8 @@ The smoke is an **automation** check, not a browser session check. Each request 
 
 Do not add credentials to command arguments, `wrangler.jsonc`, `.dev.vars`, CI logs, shell history, or exported terminal transcripts. Enter each one interactively and erase the shell variables afterwards.
 
+Provision these settings only through the one-version bulk workflow in [github-oauth-setup.md](./github-oauth-setup.md). Never use `wrangler secret put`: it can deploy a partially configured version before the signed smoke is ready.
+
 ## Authorized remote command
 
 ```bash
