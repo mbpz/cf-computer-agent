@@ -5,7 +5,7 @@ import type { Principal } from "../../src/identity/principal";
 const contributor: Principal = {
   kind: "member",
   memberId: "member-contributor",
-  identitySubject: "access-subject-contributor",
+  identitySubject: "github:101",
   email: "contributor@example.test",
   role: "contributor",
 };

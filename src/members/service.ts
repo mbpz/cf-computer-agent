@@ -1,5 +1,4 @@
 import type { GitHubIdentity } from "../identity/github-oauth";
-import { canonicalizeEmail } from "../identity/access-jwt";
 import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
 import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
@@ -34,7 +33,7 @@ export class MembersService {
     options: MembersServiceOptions,
   ) {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
-    this.bootstrapAdminEmail = canonicalizeEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
+    this.bootstrapAdminEmail = canonicalEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
     this.allowedMemberEmails = environment.ALLOWED_MEMBER_EMAILS;
     this.id = options.id || (() => crypto.randomUUID());
     this.auditId = options.auditId || (() => crypto.randomUUID());
@@ -56,16 +55,6 @@ export class MembersService {
     const byEmail = await this.repository.findByCanonicalEmail(identity.email, 2);
     if (byEmail.length > 1) throw identityConflict();
     if (byEmail.length === 1) return this.linkExistingIdentity(byEmail[0]!, identity);
-
-    const hasActiveAdmin = await this.repository.hasActiveAdmin();
-    const role = !hasActiveAdmin && this.bootstrapAdminEmail === identity.email ? "admin" : "contributor";
-    return this.insertWithConflictRecovery(identity, role);
-  }
-
-  // Transitional provider-neutral seam retained until the Access principal is removed.
-  async resolveFirstLogin(identity: MemberIdentity): Promise<Member> {
-    const existing = await this.repository.findByIdentitySubject(identity.identitySubject);
-    if (existing) return this.resolveExisting(existing);
 
     const hasActiveAdmin = await this.repository.hasActiveAdmin();
     const role = !hasActiveAdmin && this.bootstrapAdminEmail === identity.email ? "admin" : "contributor";

@@ -1,8 +1,6 @@
 declare global {
   interface Env {
     APP_TOKEN?: string;
-    ACCESS_TEAM_DOMAIN?: string;
-    ACCESS_AUD?: string;
     BOOTSTRAP_ADMIN_EMAIL?: string;
     GITHUB_OAUTH_CLIENT_ID?: string;
     GITHUB_OAUTH_CLIENT_SECRET?: string;

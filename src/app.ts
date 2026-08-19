@@ -2,13 +2,17 @@ import { AnswerService } from "./ai/answer-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
-import { AppError, createRequestContext, errorResponse, jsonResponse, methodNotAllowed, parseJsonRequest, type RequestContext } from "./http";
-import { resolvePrincipal, type Principal, type ResolvePrincipalDependencies } from "./identity/principal";
+import { AppError, createRequestContext, errorResponse, jsonResponse, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
+import { AutomationAuthenticator } from "./identity/automation";
+import { createGitHubOAuthClient } from "./identity/github-oauth";
+import { resolvePrincipal, type Principal } from "./identity/principal";
+import { SessionService } from "./identity/session";
 import { KnowledgeService } from "./knowledge/service";
 import { WorkspaceRepository } from "./knowledge/workspace-repository";
 import { MembersRepository } from "./members/repository";
 import { MembersService } from "./members/service";
 import { routeAdminApi } from "./routes/admin";
+import { clearOAuthCookies, routeAuth } from "./routes/auth";
 import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
 import { SpacesRepository } from "./spaces/repository";
@@ -17,7 +21,7 @@ import { SubmissionsRepository } from "./submissions/repository";
 import { SubmissionsService } from "./submissions/service";
 
 export interface AppDependencies {
-  verifyAccessJwt?: NonNullable<ResolvePrincipalDependencies["verifyAccessJwt"]>;
+  githubFetch?: typeof fetch;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -27,6 +31,17 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
       const url = new URL(request.url);
 
       try {
+        if (url.pathname.startsWith("/auth/")) {
+          const services = createRequestServices(env, ctx, dependencies);
+          try {
+            const response = await routeAuth(request, url, context, services);
+            if (!response) throw new AppError("NOT_FOUND", "Not found", 404);
+            return response;
+          } finally {
+            services.legacyRepository.dispose();
+          }
+        }
+
         if (!url.pathname.startsWith("/api/")) {
           const assetRequest = knownWorkspaceRoute(url.pathname)
             ? new Request(new URL("/", url), request)
@@ -34,19 +49,24 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           return withAssetSecurityHeaders(await env.ASSETS.fetch(assetRequest), context.requestId);
         }
 
-        const services = createRequestServices(env, ctx);
+        const services = createRequestServices(env, ctx, dependencies);
         try {
-          const principal = await resolvePrincipal(request, env, {
-            members: services.members,
-            ...(dependencies.verifyAccessJwt ? { verifyAccessJwt: dependencies.verifyAccessJwt } : {}),
+          const resolved = await resolvePrincipal(request, {
+            sessions: services.sessions,
+            automation: services.automation,
+            maxBodyBytes: APP_CONFIG.maxJsonRequestBytes,
           });
-          return await dispatchApiRequest(request, url, context, principal, services);
+          if (resolved.principal.kind === "member" && !isSafeMethod(resolved.request.method)) {
+            requireSameOrigin(resolved.request, APP_CONFIG.canonicalOrigin);
+          }
+          return await dispatchApiRequest(resolved.request, url, context, resolved.principal, services);
         } finally {
           services.legacyRepository.dispose();
         }
       } catch (error) {
         logRequestFailure(request, context, error);
-        return errorResponse(error, context.requestId);
+        const response = errorResponse(error, context.requestId);
+        return url.pathname === "/auth/github/callback" ? clearOAuthCookies(response) : response;
       }
     },
   };
@@ -61,7 +81,7 @@ function knownWorkspaceRoute(pathname: string): boolean {
   return workspaceRoutes.has(pathname);
 }
 
-function createRequestServices(env: Env, ctx: ExecutionContext) {
+function createRequestServices(env: Env, ctx: ExecutionContext, dependencies: AppDependencies) {
   const audit = new AuditRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
@@ -69,16 +89,31 @@ function createRequestServices(env: Env, ctx: ExecutionContext) {
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
+  const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(env.AI),
+    automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
     knowledge: new KnowledgeService(legacyRepository),
     legacyRepository,
     memberRecords,
     members,
+    oauth: createGitHubOAuthClient({
+      clientId: env.GITHUB_OAUTH_CLIENT_ID || "",
+      clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET || "",
+    }, {
+      fetch: dependencies.githubFetch || globalThis.fetch,
+      now: () => Date.now(),
+      randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
+    }),
+    sessions: new SessionService(env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
   };
+}
+
+function isSafeMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
 }
 
 async function dispatchApiRequest(

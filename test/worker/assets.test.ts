@@ -3,15 +3,22 @@
 import { applyD1Migrations, createExecutionContext, env, reset, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
+import { SessionService } from "../../src/identity/session";
+import { MembersRepository } from "../../src/members/repository";
 import { MIGRATIONS } from "../fixtures/d1";
+
+let sessionToken: string;
 
 describe("workspace assets", () => {
   beforeEach(async () => {
     await reset();
     await applyD1Migrations(env.DB, MIGRATIONS);
     await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind("member-contributor", "asset-contributor", "contributor@example.test", "contributor", "active", "2026-08-14T00:00:00.000Z", "2026-08-14T00:00:00.000Z")
+      .bind("member-contributor", "github:301", "contributor@example.test", "contributor", "active", "2026-08-14T00:00:00.000Z", "2026-08-14T00:00:00.000Z")
       .run();
+    const repository = new MembersRepository(env.DB);
+    const member = await repository.findById("member-contributor");
+    sessionToken = (await new SessionService(env.DB, repository, { waitUntil: () => undefined }).create(member!)).token;
   });
 
   it("serves the protected unified shell and its explicit navigation module", async () => {
@@ -54,12 +61,10 @@ describe("workspace assets", () => {
   });
 
   it("still returns a server-authoritative 403 to an authenticated contributor", async () => {
-    const app = createApp({
-      verifyAccessJwt: async () => ({ kind: "member", sub: "asset-contributor", email: "contributor@example.test" }),
-    });
+    const app = createApp();
     const context = createExecutionContext();
     const response = await app.fetch!(new Request("https://example.test/api/admin/members", {
-      headers: { "cf-access-jwt-assertion": "fixture" },
+      headers: { cookie: `__Host-memory-session=${sessionToken}` },
     }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
     await waitOnExecutionContext(context);
 

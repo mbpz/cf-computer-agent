@@ -18,7 +18,6 @@ export const APP_CONFIG = {
   githubOAuthEmailsResponseMaxBytes: 64 * 1024,
   oauthTemporaryCookieMaxAgeSeconds: 10 * 60,
   sessionCookieMaxAgeSeconds: 7 * 24 * 60 * 60,
-  accessJwtAssertionHeader: "cf-access-jwt-assertion",
   workspaceName: "personal",
   indexPath: "/workspace/.memory/index.json",
   notesRoot: "/workspace/notes",

@@ -7,19 +7,20 @@ import {
   reset,
   waitOnExecutionContext,
 } from "cloudflare:test";
-import { createLocalJWKSet } from "jose";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { AnswerAi } from "../../src/ai/answer-service";
 import { createApp } from "../../src/app";
-import { verifyAccessJwt } from "../../src/identity/access-jwt";
-import type { AccessEnvironment } from "../../src/identity/access-jwt";
-import { createAccessJwtFixture, ACCESS_AUDIENCE, ACCESS_TEAM_DOMAIN, type AccessJwtFixture } from "../fixtures/access-jwt";
+import { APP_CONFIG } from "../../src/config";
+import { SessionService } from "../../src/identity/session";
+import { MembersRepository } from "../../src/members/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const now = "2026-08-13T00:00:00.000Z";
-const jwtBySubject = new Map<string, string>();
-let access: AccessJwtFixture;
-let serviceJwt: string;
+const sessionBySubject = new Map<string, string>();
+const AUTOMATION_ID = "fake-automation-client-id";
+const AUTOMATION_SECRET = "fake-automation-secret";
+const APP_TOKEN = "worker-test-token";
+let automationNonce = 0;
 
 const fakeAi: AnswerAi = {
   async run(): Promise<unknown> {
@@ -27,23 +28,22 @@ const fakeAi: AnswerAi = {
   },
 };
 
-beforeAll(async () => {
-  access = await createAccessJwtFixture();
-  serviceJwt = await access.signService();
-  for (const [subject, email] of [
-    ["sub-contributor", "contributor@example.test"],
-    ["sub-admin", "admin@example.test"],
-    ["sub-other", "other@example.test"],
-    ["sub-disabled", "disabled@example.test"],
-  ]) {
-    jwtBySubject.set(subject, await access.sign({ sub: subject, email }));
-  }
-});
-
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, MIGRATIONS);
   await seedMembers();
+  automationNonce = 0;
+  sessionBySubject.clear();
+  const repository = new MembersRepository(env.DB);
+  const sessions = new SessionService(env.DB, repository, { waitUntil: () => undefined });
+  for (const subject of ["sub-contributor", "sub-admin", "sub-other"]) {
+    const member = await repository.findByIdentitySubject(identitySubject(subject));
+    sessionBySubject.set(subject, (await sessions.create(member!)).token);
+  }
+  const disabled = await repository.findByIdentitySubject(identitySubject("sub-disabled"));
+  await env.DB.prepare("UPDATE members SET status = 'active' WHERE id = ?").bind(disabled!.id).run();
+  sessionBySubject.set("sub-disabled", (await sessions.create({ ...disabled!, status: "active" })).token);
+  await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(disabled!.id).run();
 });
 
 describe("Phase 1 API permission matrix", () => {
@@ -55,7 +55,7 @@ describe("Phase 1 API permission matrix", () => {
     expect(sessionBody).toEqual({
       member: { id: "member-contributor", email: "contributor@example.test", role: "contributor" },
       capabilities: ["legacy:read", "submission:create", "submission:read-own"],
-      logoutUrl: "https://example.test/cdn-cgi/access/logout",
+      logoutUrl: "/auth/logout",
     });
     expect(JSON.stringify(sessionBody)).not.toMatch(/sub-contributor|jwt|token|bootstrap/i);
 
@@ -181,9 +181,18 @@ describe("Phase 1 API permission matrix", () => {
   });
 
   it("exposes a first-account member.login through the filtered admin audit API", async () => {
-    const firstJwt = await access.sign({ sub: "first-login-sub", email: "first-login@example.test" });
-    const firstLogin = await execute(request("/api/session", { jwt: firstJwt }));
-    expect(firstLogin.status).toBe(200);
+    const oauthApp = createApp({ githubFetch: fakeGitHubFetch("first-login@example.test", 501) });
+    const start = await execute(request("/auth/github"), oauthApp, localEnv({
+      ALLOWED_MEMBER_EMAILS: "bootstrap-only@example.test,first-login@example.test",
+    }));
+    const cookies = setCookies(start);
+    const state = cookieValue(cookies, "__Host-oauth-state");
+    const firstLogin = await execute(request(`/auth/github/callback?code=first-login-code&state=${state}`, {
+      headers: { cookie: cookies.map(cookiePair).join("; ") },
+    }), oauthApp, localEnv({
+      ALLOWED_MEMBER_EMAILS: "bootstrap-only@example.test,first-login@example.test",
+    }));
+    expect(firstLogin.status).toBe(302);
 
     const filtered = await memberApi("sub-admin", "/api/admin/audit-events?action=member.login");
     expect(filtered.status).toBe(200);
@@ -210,27 +219,24 @@ describe("Phase 1 API permission matrix", () => {
     }
   });
 
-  it("requires a signed service assertion and APP_TOKEN while member JWT plus APP_TOKEN stays a member", async () => {
-    await expectOk(execute(request("/api/health", { automation: true })));
+  it("requires the complete automation scheme and rejects member-cookie ambiguity", async () => {
+    await expectOk(automationApi("/api/health"));
     await expectApiError(execute(request("/api/health", {
-      authorization: "Bearer worker-test-token",
-      headers: {
-        "cf-access-client-id": "untrusted-client-id",
-        "cf-access-client-secret": "untrusted-client-secret",
-      },
-    })), 401, "ACCESS_TOKEN_REQUIRED");
-    await expectApiError(execute(request("/api/health", { jwt: serviceJwt })), 401, "AUTH_REQUIRED");
-    await expectApiError(execute(request("/api/health", { jwt: serviceJwt, authorization: "Bearer wrong-token" })), 401, "AUTH_REQUIRED");
+      headers: { authorization: `Bearer ${APP_TOKEN}` },
+    })), 401, "AUTH_REQUIRED");
 
-    const member = await execute(request("/api/session", {
-      jwt: jwtBySubject.get("sub-contributor"),
-      authorization: "Bearer worker-test-token",
-    }));
-    expect(member.status).toBe(200);
-    await expect(member.json()).resolves.toMatchObject({ member: { id: "member-contributor", role: "contributor" } });
+    const wrongToken = await signedAutomationRequest("/api/health");
+    const wrongTokenHeaders = new Headers(wrongToken.headers);
+    wrongTokenHeaders.set("authorization", "Bearer wrong-token");
+    await expectApiError(execute(new Request(wrongToken, { headers: wrongTokenHeaders })), 401, "AUTH_REQUIRED");
+
+    const signed = await signedAutomationRequest("/api/session");
+    const ambiguousHeaders = new Headers(signed.headers);
+    ambiguousHeaders.set("cookie", `__Host-memory-session=${sessionBySubject.get("sub-contributor")}`);
+    await expectApiError(execute(new Request(signed, { headers: ambiguousHeaders })), 401, "AUTH_REQUIRED");
   });
 
-  it("denies a disabled Access member every business API before dispatch", async () => {
+  it("denies a disabled session member every business API before dispatch", async () => {
     for (const [path, init] of [
       ["/api/health", undefined],
       ["/api/session", undefined],
@@ -261,16 +267,54 @@ describe("Phase 1 API permission matrix", () => {
 });
 
 describe("Phase 1 request boundary", () => {
-  it("verifies one member principal exactly once and uses real waitUntil", async () => {
-    const verify = vi.fn(localVerifyAccessJwt);
-    const app = createApp({ verifyAccessJwt: verify });
+  it("resolves a member session and uses real waitUntil for bounded cleanup", async () => {
+    await env.DB.prepare(
+      "INSERT INTO auth_sessions (token_hash, member_id, created_at, expires_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind(
+      "expired-session-hash",
+      "member-contributor",
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-02T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    ).run();
+    const app = createApp();
     const ctx = createExecutionContext();
-    const response = await app.fetch!(incomingRequest("/api/session", { jwt: jwtBySubject.get("sub-contributor") }), localEnv(), ctx);
+    const response = await app.fetch!(incomingRequest("/api/session", {
+      headers: { cookie: `__Host-memory-session=${sessionBySubject.get("sub-contributor")}` },
+    }), localEnv(), ctx);
     expect(response.status).toBe(200);
-    expect(verify).toHaveBeenCalledTimes(1);
     await waitOnExecutionContext(ctx);
-    const member = await env.DB.prepare("SELECT last_seen_at FROM members WHERE id = 'member-contributor'").first<{ last_seen_at: string | null }>();
-    expect(member?.last_seen_at).not.toBeNull();
+    await expect(env.DB.prepare(
+      "SELECT token_hash FROM auth_sessions WHERE token_hash = 'expired-session-hash'",
+    ).first()).resolves.toBeNull();
+  });
+
+  it.each([
+    ["/api/session", "POST"],
+    ["/api/spaces", "POST"],
+    ["/api/spaces/default/collections", "POST"],
+    ["/api/submissions", "POST"],
+    ["/api/submissions/mine", "POST"],
+    ["/api/admin/submissions", "POST"],
+    ["/api/admin/members", "POST"],
+    ["/api/admin/members/member-disabled/status", "PATCH"],
+    ["/api/admin/spaces", "POST"],
+    ["/api/admin/spaces/default", "PATCH"],
+    ["/api/admin/collections", "POST"],
+    ["/api/admin/collections/collection-id", "PATCH"],
+    ["/api/admin/audit-events", "POST"],
+    ["/api/notes", "POST"],
+    ["/api/search", "POST"],
+    ["/api/chat", "POST"],
+  ])("requires exact same-origin for the unsafe member request %s", async (path, method) => {
+    for (const origin of [undefined, "https://foreign.example"]) {
+      const headers = new Headers({
+        cookie: `__Host-memory-session=${sessionBySubject.get("sub-admin")}`,
+        "content-type": "application/json",
+      });
+      if (origin) headers.set("origin", origin);
+      await expectApiError(execute(request(path, { method, headers, body: "{}" })), 403, "FORBIDDEN");
+    }
   });
 
   it.each([
@@ -308,12 +352,12 @@ describe("Phase 1 request boundary", () => {
     }
     const response = await memberApi("sub-admin", "/api/submissions", {
       method: "POST",
-      body: "{jwt-secret-marker",
+      body: "{session-secret-marker",
     });
     const body = await expectApiError(Promise.resolve(response), 400, "INVALID_JSON");
     expect(response.headers.get("x-request-id")).toBe(body.error.requestId);
-    expect(JSON.stringify(body)).not.toContain("jwt-secret-marker");
-    expect(JSON.stringify(body)).not.toContain(jwtBySubject.get("sub-admin"));
+    expect(JSON.stringify(body)).not.toContain("session-secret-marker");
+    expect(JSON.stringify(body)).not.toContain(sessionBySubject.get("sub-admin"));
   });
 
   it.each([
@@ -352,65 +396,152 @@ function phase1Requests(): Array<[string, RequestInit | undefined]> {
 }
 
 async function memberApi(subject: string, path: string, init?: RequestInit): Promise<Response> {
-  return execute(request(path, { ...init, jwt: jwtBySubject.get(subject) }));
+  const headers = new Headers(init?.headers);
+  headers.set("cookie", `__Host-memory-session=${sessionBySubject.get(subject)}`);
+  if (!isSafeMethod(init?.method || "GET") && !headers.has("origin")) {
+    headers.set("origin", APP_CONFIG.canonicalOrigin);
+  }
+  return execute(request(path, { ...init, headers }));
 }
 
 async function automationApi(path: string, init?: RequestInit): Promise<Response> {
-  return execute(request(path, { ...init, automation: true }));
+  return execute(await signedAutomationRequest(path, init));
 }
 
-async function execute(req: Request): Promise<Response> {
-  const app = createApp({ verifyAccessJwt: localVerifyAccessJwt });
+async function execute(req: Request, app = createApp(), environment = localEnv()): Promise<Response> {
   const ctx = createExecutionContext();
-  const response = await app.fetch!(req as Request<unknown, IncomingRequestCfProperties<unknown>>, localEnv(), ctx);
+  const response = await app.fetch!(req as Request<unknown, IncomingRequestCfProperties<unknown>>, environment, ctx);
   await waitOnExecutionContext(ctx);
   return response;
 }
 
-function request(path: string, options: RequestInit & { jwt?: string; automation?: boolean; authorization?: string } = {}): Request {
-  const { jwt, automation, authorization, ...init } = options;
+function request(path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
   return new Request(`https://example.test${path}`, {
     ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(jwt ? { "cf-access-jwt-assertion": jwt } : {}),
-      ...(automation ? {
-        "cf-access-jwt-assertion": serviceJwt,
-        authorization: "Bearer worker-test-token",
-      } : {}),
-      ...(authorization ? { authorization } : {}),
-      ...init.headers,
-    },
+    headers,
   });
 }
 
 function incomingRequest(
   path: string,
-  options: RequestInit & { jwt?: string; automation?: boolean } = {},
+  options: RequestInit = {},
 ): Request<unknown, IncomingRequestCfProperties<unknown>> {
   return request(path, options) as Request<unknown, IncomingRequestCfProperties<unknown>>;
 }
 
-function localEnv(): Env {
+function localEnv(overrides: Partial<Env> = {}): Env {
   return {
     ...env,
     AI: fakeAi,
-    ACCESS_TEAM_DOMAIN,
-    ACCESS_AUD: ACCESS_AUDIENCE,
     BOOTSTRAP_ADMIN_EMAIL: "bootstrap-only@example.test",
+    ALLOWED_MEMBER_EMAILS: "bootstrap-only@example.test",
+    AUTOMATION_CLIENT_ID: AUTOMATION_ID,
+    AUTOMATION_SECRET,
+    APP_TOKEN,
+    ...overrides,
   } as Env;
 }
 
-function localVerifyAccessJwt(req: Request, environment: AccessEnvironment) {
-  return verifyAccessJwt(req, environment, { jwks: createLocalJWKSet({ keys: [access.publicJwk] }) });
+async function signedAutomationRequest(path: string, init: RequestInit = {}): Promise<Request> {
+  const unsigned = request(path, init);
+  const bodyBytes = new Uint8Array(await unsigned.clone().arrayBuffer());
+  const timestamp = String(Math.floor(Date.now() / 1_000));
+  const nonceBytes = new Uint8Array(16);
+  new DataView(nonceBytes.buffer).setUint32(12, automationNonce += 1);
+  const nonce = base64Url(nonceBytes);
+  const parsed = new URL(unsigned.url);
+  const bodyHash = await sha256Hex(bodyBytes);
+  const canonical = [unsigned.method, `${parsed.pathname}${parsed.search}`, timestamp, nonce, bodyHash].join("\n");
+  const headers = new Headers(unsigned.headers);
+  headers.set("authorization", `Bearer ${APP_TOKEN}`);
+  headers.set("x-automation-id", AUTOMATION_ID);
+  headers.set("x-automation-timestamp", timestamp);
+  headers.set("x-automation-nonce", nonce);
+  headers.set("x-automation-signature", await hmacHex(AUTOMATION_SECRET, canonical));
+  return new Request(unsigned, { headers });
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", ownedArrayBuffer(bytes))));
+}
+
+async function hmacHex(secret: string, value: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function isSafeMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
+}
+
+function identitySubject(alias: string): string {
+  return ({
+    "sub-contributor": "github:201",
+    "sub-admin": "github:202",
+    "sub-other": "github:203",
+    "sub-disabled": "github:204",
+  } as Record<string, string>)[alias]!;
+}
+
+function fakeGitHubFetch(email: string, id: number): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const outgoing = new Request(String(input), init);
+    if (outgoing.url === "https://github.com/login/oauth/access_token") {
+      return responseAt(Response.json({ access_token: "local_test_token" }), outgoing.url);
+    }
+    if (outgoing.url === "https://api.github.com/user") return responseAt(Response.json({ id }), outgoing.url);
+    if (outgoing.url === "https://api.github.com/user/emails") {
+      return responseAt(Response.json([{ email, primary: true, verified: true, visibility: "private" }]), outgoing.url);
+    }
+    throw new Error("unexpected local GitHub fake URL");
+  }) as unknown as typeof fetch;
+}
+
+function responseAt(response: Response, url: string): Response {
+  Object.defineProperty(response, "url", { value: url });
+  return response;
+}
+
+function setCookies(response: Response): string[] {
+  const extended = response.headers as unknown as { getSetCookie?: () => string[] };
+  if (typeof extended.getSetCookie === "function") return extended.getSetCookie();
+  const combined = response.headers.get("set-cookie");
+  return combined ? combined.split(/, (?=__Host-)/u) : [];
+}
+
+function cookieValue(cookies: string[], name: string): string {
+  const cookie = cookies.find((candidate) => candidate.startsWith(`${name}=`));
+  if (!cookie) throw new Error(`missing ${name} cookie`);
+  return cookiePair(cookie).slice(name.length + 1);
+}
+
+function cookiePair(cookie: string): string {
+  return cookie.split(";", 1)[0]!;
 }
 
 async function seedMembers(): Promise<void> {
   for (const member of [
-    ["member-contributor", "sub-contributor", "contributor@example.test", "contributor", "active"],
-    ["member-admin", "sub-admin", "admin@example.test", "admin", "active"],
-    ["member-other", "sub-other", "other@example.test", "contributor", "active"],
-    ["member-disabled", "sub-disabled", "disabled@example.test", "contributor", "disabled"],
+    ["member-contributor", identitySubject("sub-contributor"), "contributor@example.test", "contributor", "active"],
+    ["member-admin", identitySubject("sub-admin"), "admin@example.test", "admin", "active"],
+    ["member-other", identitySubject("sub-other"), "other@example.test", "contributor", "active"],
+    ["member-disabled", identitySubject("sub-disabled"), "disabled@example.test", "contributor", "disabled"],
   ] as const) {
     await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(...member, now, now).run();

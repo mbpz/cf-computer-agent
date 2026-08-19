@@ -61,7 +61,7 @@ describe("GitHub OAuth protocol", () => {
     expect(requests).toHaveLength(3);
     expect(requests[0]?.url).toBe("https://github.com/login/oauth/access_token");
     expect(requests[0]?.method).toBe("POST");
-    expect(requests[0]?.redirect).toBe("error");
+    expect(requests[0]?.redirect).toBe("manual");
     expect(requests[0]?.headers.get("accept")).toBe("application/json");
     expect(requests[0]?.headers.get("content-type")).toBe("application/x-www-form-urlencoded;charset=UTF-8");
     expect(Object.fromEntries(new URLSearchParams(requests[0]!.body))).toEqual({
@@ -76,7 +76,7 @@ describe("GitHub OAuth protocol", () => {
     expect(requests[2]?.url).toBe("https://api.github.com/user/emails");
     for (const request of requests.slice(1)) {
       expect(request.method).toBe("GET");
-      expect(request.redirect).toBe("error");
+      expect(request.redirect).toBe("manual");
       expect(request.headers.get("authorization")).toBe("Bearer local-access-token");
       expect(request.headers.get("accept")).toBe(API_HEADERS.accept);
       expect(request.headers.get("x-github-api-version")).toBe(API_HEADERS["x-github-api-version"]);
@@ -132,7 +132,7 @@ describe("GitHub OAuth protocol", () => {
     ["malformed JSON", new Response("token-secret-in-body", { headers: { "content-type": "application/json" } })],
     ["missing token", json({ token: "token-secret-in-body" })],
   ])("maps %s failures to a stable redacted error", async (_label, response) => {
-    const client = oauthClient({ fetch: async () => response });
+    const client = oauthClient({ fetch: async () => responseAt(response, "https://github.com/login/oauth/access_token") });
     const error = await rejected(client.resolveCallback("local-code-secret", verifier()));
 
     expect(error).toMatchObject({
@@ -162,6 +162,27 @@ describe("GitHub OAuth protocol", () => {
     }
   });
 
+  it("rejects an upstream response without an exact final URL before any follow-up request", async () => {
+    let calls = 0;
+    const responses = [
+      json({ access_token: "local-access-token" }),
+      json({ id: 42 }),
+      validEmails(),
+    ];
+    const client = oauthClient({
+      fetch: async () => {
+        calls += 1;
+        return responses.shift()!;
+      },
+    });
+
+    await expect(client.resolveCallback("local-code", verifier())).rejects.toMatchObject({
+      code: "OAUTH_UPSTREAM_UNAVAILABLE",
+      status: 503,
+    });
+    expect(calls).toBe(1);
+  });
+
   it("aborts a slow upstream request and returns a stable timeout error", async () => {
     const client = oauthClient({
       timeoutMs: 5,
@@ -180,7 +201,9 @@ describe("GitHub OAuth protocol", () => {
   it("rejects response bodies over the configured bound without parsing them", async () => {
     const secretTail = "upstream-secret-tail";
     const body = `{"access_token":"${"x".repeat(9_000)}${secretTail}"}`;
-    const client = oauthClient({ fetch: async () => jsonText(body) });
+    const client = oauthClient({
+      fetch: async () => responseAt(jsonText(body), "https://github.com/login/oauth/access_token"),
+    });
 
     const error = await rejected(client.resolveCallback("local-code", verifier()));
     expect(error).toMatchObject({ code: "OAUTH_UPSTREAM_UNAVAILABLE", status: 503 });
@@ -244,8 +267,13 @@ function localFetch(requests: RecordedRequest[], ...responses: Response[]): type
     });
     const response = responses.shift();
     if (!response) throw new Error("unexpected local fetch");
-    return response;
+    return responseAt(response, inputRequest?.url ?? String(input));
   };
+}
+
+function responseAt(response: Response, url: string): Response {
+  if (response.url === "") Object.defineProperty(response, "url", { value: url });
+  return response;
 }
 
 function json(value: unknown, status = 200): Response {

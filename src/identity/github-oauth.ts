@@ -152,13 +152,13 @@ async function fetchJson(
   try {
     const response = await dependencies.fetch(expectedUrl, {
       ...init,
-      redirect: "error",
+      redirect: "manual",
       signal: controller.signal,
     });
     if (dependencies.now() - startedAt > timeoutMs
       || response.redirected
-      || (response.url !== "" && response.url !== expectedUrl)
-      || (response.url !== "" && new URL(response.url).protocol !== "https:")
+      || response.url !== expectedUrl
+      || new URL(response.url).protocol !== "https:"
       || !response.ok
       || !isJsonContentType(response.headers.get("content-type"))) {
       throw oauthUnavailable();

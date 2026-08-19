@@ -3,14 +3,13 @@ import type { CreateAuditEvent } from "../../src/audit/types";
 import type { GitHubIdentity } from "../../src/identity/github-oauth";
 import { MembersConflictError, type MembersRepositoryPort } from "../../src/members/repository";
 import { MembersService, type MembersEnvironment, type MembersServiceOptions } from "../../src/members/service";
-import type { CreateMember, Member, MemberIdentity, MemberStatus } from "../../src/members/types";
+import type { CreateMember, Member, MemberStatus } from "../../src/members/types";
 
 const githubIdentity: GitHubIdentity = {
   subject: "github:123",
   githubUserId: "123",
   email: "member@example.test",
 };
-const accessIdentity: MemberIdentity = { identitySubject: "access-subject", email: "member@example.test" };
 const githubEnvironment: MembersEnvironment = {
   BOOTSTRAP_ADMIN_EMAIL: "admin@example.test",
   ALLOWED_MEMBER_EMAILS: "admin@example.test, member@example.test",
@@ -208,16 +207,6 @@ describe("MembersService member lifecycle", () => {
     expect(() => new MembersService(repository, {}, {} as MembersServiceOptions)).toThrow("waitUntil is required");
   });
 
-  it("keeps the transitional provider-neutral first-login path conflict safe", async () => {
-    const repository = new FakeMembersRepository();
-    const service = createService(repository, { BOOTSTRAP_ADMIN_EMAIL: "member@example.test" });
-
-    await expect(service.resolveFirstLogin(accessIdentity)).resolves.toMatchObject({
-      identitySubject: accessIdentity.identitySubject,
-      role: "admin",
-    });
-  });
-
   it("allows an admin to change a contributor but never an admin", async () => {
     const admin = member({ id: "admin", role: "admin" });
     const contributor = member({ id: "contributor", role: "contributor" });
@@ -234,18 +223,18 @@ describe("MembersService member lifecycle", () => {
 
   it("does not block authorization on the best-effort last_seen write", async () => {
     const now = new Date("2026-08-19T12:00:00.000Z");
-    const existing = member({ identitySubject: accessIdentity.identitySubject, lastSeenAt: "2026-08-19T11:59:30.000Z" });
+    const existing = member({ identitySubject: githubIdentity.subject, lastSeenAt: "2026-08-19T11:59:30.000Z" });
     const repository = new FakeMembersRepository([existing]);
     const pending = new Promise<never>(() => undefined);
     let scheduled: Promise<unknown> | undefined;
     repository.touchLastSeenIfStale.mockReturnValueOnce(pending);
-    const service = createService(repository, {}, {
+    const service = createService(repository, githubEnvironment, {
       now: () => now,
       lastSeenWindowMs: 60_000,
       waitUntil: (promise) => { scheduled = promise; },
     });
 
-    await expect(service.resolveFirstLogin(accessIdentity)).resolves.toMatchObject({ id: existing.id });
+    await expect(service.resolveGitHubLogin(githubIdentity)).resolves.toMatchObject({ id: existing.id });
     expect(repository.touchLastSeenIfStale).toHaveBeenCalledWith(
       existing.id,
       now.toISOString(),
@@ -255,13 +244,13 @@ describe("MembersService member lifecycle", () => {
   });
 
   it("returns an active member when a handled last_seen write rejects", async () => {
-    const existing = member({ identitySubject: accessIdentity.identitySubject });
+    const existing = member({ identitySubject: githubIdentity.subject });
     const repository = new FakeMembersRepository([existing]);
     repository.touchLastSeenIfStale.mockRejectedValueOnce(new Error("D1 write unavailable"));
     let scheduled: Promise<unknown> | undefined;
-    const service = createService(repository, {}, { waitUntil: (promise) => { scheduled = promise; } });
+    const service = createService(repository, githubEnvironment, { waitUntil: (promise) => { scheduled = promise; } });
 
-    await expect(service.resolveFirstLogin(accessIdentity)).resolves.toMatchObject({ id: existing.id });
+    await expect(service.resolveGitHubLogin(githubIdentity)).resolves.toMatchObject({ id: existing.id });
     await expect(scheduled).resolves.toBeUndefined();
   });
 
@@ -269,7 +258,7 @@ describe("MembersService member lifecycle", () => {
     const repository = new FakeMembersRepository();
     repository.insert = async () => { throw new Error("UNIQUE constraint failed: members.id"); };
 
-    await expect(createService(repository).resolveFirstLogin(accessIdentity))
+    await expect(createService(repository, githubEnvironment).resolveGitHubLogin(githubIdentity))
       .rejects.toThrow("UNIQUE constraint failed: members.id");
     expect(repository.members).toEqual([]);
   });

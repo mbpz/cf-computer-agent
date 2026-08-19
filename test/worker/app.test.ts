@@ -1,53 +1,174 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF, waitOnExecutionContext } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, evictDurableObject, reset, runInDurableObject, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
-import { createLocalJWKSet } from "jose";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SEED_NOTES } from "../fixtures/seed-notes";
 import { createApp } from "../../src/app";
 import { APP_CONFIG } from "../../src/config";
 import { type AnswerAi } from "../../src/ai/answer-service";
 import { WorkspaceRepository } from "../../src/knowledge/workspace-repository";
-import { verifyAccessJwt, type AccessEnvironment } from "../../src/identity/access-jwt";
-import { ACCESS_AUDIENCE, ACCESS_TEAM_DOMAIN, createAccessJwtFixture, type AccessJwtFixture } from "../fixtures/access-jwt";
+import { MIGRATIONS } from "../fixtures/d1";
 
-let automationAccess: AccessJwtFixture;
-let automationAssertion: string;
 const api = (path: string, init: RequestInit = {}) => workerApi(path, init);
+const AUTOMATION_ID = "fake-automation-client-id";
+const AUTOMATION_SECRET = "fake-automation-secret";
+const APP_TOKEN = "worker-test-token";
+let automationNonce = 0;
 
 async function workerApi(path: string, init: RequestInit = {}): Promise<Response> {
-  const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
+  return fetchSignedApp(createApp(), path, init, localEnv());
+}
+
+async function fetchSignedApp(
+  app: ExportedHandler<Env>,
+  path: string,
+  init: RequestInit,
+  environment: Env,
+): Promise<Response> {
   const context = createExecutionContext();
-  const response = await app.fetch!(incomingRequest(`https://example.test${path}`, {
-    ...init,
-    headers: automationHeaders(init.headers),
-  }), localEnv(), context);
+  const response = await app.fetch!(await signedAutomationRequest(`https://example.test${path}`, init), environment, context);
   await waitOnExecutionContext(context);
   return response;
-}
-
-function automationHeaders(headers?: HeadersInit): Headers {
-  return new Headers({
-    authorization: "Bearer worker-test-token",
-    "cf-access-jwt-assertion": automationAssertion,
-    "content-type": "application/json",
-    ...Object.fromEntries(new Headers(headers)),
-  });
-}
-
-function localVerifyAutomationAssertion(request: Request, environment: AccessEnvironment) {
-  return verifyAccessJwt(request, environment, { jwks: createLocalJWKSet({ keys: [automationAccess.publicJwk] }) });
 }
 
 function localEnv(overrides: Partial<Env> = {}): Env {
   return {
     ...env,
-    ACCESS_TEAM_DOMAIN,
-    ACCESS_AUD: ACCESS_AUDIENCE,
     BOOTSTRAP_ADMIN_EMAIL: "bootstrap-only@example.test",
+    ALLOWED_MEMBER_EMAILS: "bootstrap-only@example.test",
+    AUTOMATION_CLIENT_ID: AUTOMATION_ID,
+    AUTOMATION_SECRET,
+    APP_TOKEN,
     ...overrides,
   } as Env;
+}
+
+async function signedAutomationRequest(url: string, init: RequestInit = {}): Promise<Request<unknown, IncomingRequestCfProperties<unknown>>> {
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  const unsigned = new Request(url, { ...init, headers });
+  const bodyBytes = new Uint8Array(await unsigned.clone().arrayBuffer());
+  const timestamp = String(Math.floor(Date.now() / 1_000));
+  const nonceBytes = new Uint8Array(16);
+  new DataView(nonceBytes.buffer).setUint32(12, automationNonce += 1);
+  const nonce = base64Url(nonceBytes);
+  const bodyHash = await sha256Hex(bodyBytes);
+  const parsed = new URL(url);
+  const canonical = [unsigned.method, `${parsed.pathname}${parsed.search}`, timestamp, nonce, bodyHash].join("\n");
+  headers.set("authorization", `Bearer ${APP_TOKEN}`);
+  headers.set("x-automation-id", AUTOMATION_ID);
+  headers.set("x-automation-timestamp", timestamp);
+  headers.set("x-automation-nonce", nonce);
+  headers.set("x-automation-signature", await hmacHex(AUTOMATION_SECRET, canonical));
+  return new Request(unsigned, { headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", ownedArrayBuffer(bytes))));
+}
+
+async function hmacHex(secret: string, value: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+async function fetchApp(
+  app: ExportedHandler<Env>,
+  path: string,
+  init: RequestInit = {},
+  environment: Env = localEnv(),
+): Promise<Response> {
+  const context = createExecutionContext();
+  const response = await app.fetch!(incomingRequest(`https://example.test${path}`, init), environment, context);
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+function fakeGitHubFetch(
+  mode: "success" | "redirect",
+  observedRedirectModes: RequestRedirect[] = [],
+): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const outgoing = new Request(String(input), init);
+    observedRedirectModes.push(outgoing.redirect);
+    if (outgoing.url === "https://github.com/login/oauth/access_token") {
+      if (mode === "redirect") {
+        return responseAt(new Response(null, {
+          status: 302,
+          headers: { location: "https://attacker.example/collect" },
+        }), outgoing.url);
+      }
+      return responseAt(Response.json({ access_token: "local_test_token" }), outgoing.url);
+    }
+    if (outgoing.url === "https://api.github.com/user") return responseAt(Response.json({ id: 101 }), outgoing.url);
+    if (outgoing.url === "https://api.github.com/user/emails") {
+      return responseAt(Response.json([{
+        email: "bootstrap-only@example.test",
+        primary: true,
+        verified: true,
+        visibility: "private",
+      }]), outgoing.url);
+    }
+    throw new Error("unexpected local GitHub fake URL");
+  }) as unknown as typeof fetch;
+}
+
+function responseAt(response: Response, url: string): Response {
+  Object.defineProperty(response, "url", { value: url });
+  return response;
+}
+
+function setCookies(response: Response): string[] {
+  const extended = response.headers as unknown as { getSetCookie?: () => string[] };
+  if (typeof extended.getSetCookie === "function") return extended.getSetCookie();
+  const combined = response.headers.get("set-cookie");
+  return combined ? combined.split(/, (?=__Host-)/u) : [];
+}
+
+function cookieValue(cookies: string[], name: string): string {
+  const cookie = cookies.find((candidate) => candidate.startsWith(`${name}=`));
+  if (!cookie) throw new Error(`missing ${name} cookie`);
+  return cookiePair(cookie).slice(name.length + 1);
+}
+
+function cookiePair(cookie: string): string {
+  return cookie.split(";", 1)[0]!;
+}
+
+function cookieHeader(cookies: string[]): string {
+  return cookies.map(cookiePair).join("; ");
+}
+
+function clearedOAuthCookies(): string[] {
+  return [
+    "__Host-oauth-state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    "__Host-oauth-verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+  ];
 }
 
 function expectProtectedResponse(response: Response): void {
@@ -124,13 +245,10 @@ async function expectJournalCleared(): Promise<void> {
 }
 
 describe("Worker application", () => {
-  beforeAll(async () => {
-    automationAccess = await createAccessJwtFixture();
-    automationAssertion = await automationAccess.signService();
-  });
-
   beforeEach(async () => {
     await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    automationNonce = 0;
   });
 
   it("requires authentication for API requests", async () => {
@@ -138,7 +256,149 @@ describe("Worker application", () => {
 
     expect(response.status).toBe(401);
     expectProtectedResponse(response);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "ACCESS_TOKEN_REQUIRED" } });
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+  });
+
+  it("starts GitHub OAuth with a fixed redirect and two exact temporary cookies", async () => {
+    const response = await fetchApp(createApp(), "/auth/github");
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.origin).toBe("https://github.com");
+    expect(location.pathname).toBe("/login/oauth/authorize");
+    const cookies = setCookies(response);
+    expect(cookies).toHaveLength(2);
+    expect(cookies).toContainEqual(expect.stringMatching(
+      /^__Host-oauth-state=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=600$/u,
+    ));
+    expect(cookies).toContainEqual(expect.stringMatching(
+      /^__Host-oauth-verifier=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=600$/u,
+    ));
+    expect(location.searchParams.get("state")).toBe(cookieValue(cookies, "__Host-oauth-state"));
+  });
+
+  it("clears both temporary cookies on callback state mismatch and GitHub denial", async () => {
+    const app = createApp({ githubFetch: fakeGitHubFetch("success") });
+    const start = await fetchApp(app, "/auth/github");
+    const temporaryCookies = setCookies(start);
+    const cookie = cookieHeader(temporaryCookies);
+
+    const mismatch = await fetchApp(app, "/auth/github/callback?code=oauth-code&state=wrong-state", {
+      headers: { cookie },
+    });
+    await expectError(mismatch, 400, "OAUTH_CALLBACK_INVALID");
+    expect(setCookies(mismatch)).toEqual(clearedOAuthCookies());
+
+    const state = cookieValue(temporaryCookies, "__Host-oauth-state");
+    const denied = await fetchApp(app, `/auth/github/callback?error=access_denied&state=${state}`, {
+      headers: { cookie },
+    });
+    await expectError(denied, 401, "OAUTH_CALLBACK_DENIED");
+    expect(setCookies(denied)).toEqual(clearedOAuthCookies());
+  });
+
+  it("uses Workerd-compatible manual redirects and fails closed without following an upstream redirect", async () => {
+    expect(() => new Request("https://github.com/login/oauth/access_token", { redirect: "error" }))
+      .toThrow();
+    const observedRedirectModes: RequestRedirect[] = [];
+    const app = createApp({ githubFetch: fakeGitHubFetch("redirect", observedRedirectModes) });
+    const start = await fetchApp(app, "/auth/github");
+    const temporaryCookies = setCookies(start);
+    const state = cookieValue(temporaryCookies, "__Host-oauth-state");
+    const response = await fetchApp(app, `/auth/github/callback?code=oauth-code&state=${state}`, {
+      headers: { cookie: cookieHeader(temporaryCookies) },
+    });
+
+    await expectError(response, 503, "OAUTH_UPSTREAM_UNAVAILABLE");
+    expect(setCookies(response)).toEqual(clearedOAuthCookies());
+    expect(observedRedirectModes).toEqual(["manual"]);
+  });
+
+  it("creates an allowlisted session, exposes /auth/logout, and clears it only after same-origin logout", async () => {
+    const app = createApp({ githubFetch: fakeGitHubFetch("success") });
+    const anonymous = await fetchApp(app, "/api/session");
+    await expectError(anonymous, 401, "AUTH_REQUIRED");
+
+    const start = await fetchApp(app, "/auth/github");
+    const temporaryCookies = setCookies(start);
+    const state = cookieValue(temporaryCookies, "__Host-oauth-state");
+    const callback = await fetchApp(app, `/auth/github/callback?code=oauth-code&state=${state}`, {
+      headers: { cookie: cookieHeader(temporaryCookies) },
+    });
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe("/");
+    const callbackCookies = setCookies(callback);
+    expect(callbackCookies).toEqual(expect.arrayContaining(clearedOAuthCookies()));
+    expect(callbackCookies).toHaveLength(3);
+    expect(callbackCookies).toContainEqual(expect.stringMatching(
+      /^__Host-memory-session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800$/u,
+    ));
+    const sessionPair = cookiePair(callbackCookies.find((cookie) => cookie.startsWith("__Host-memory-session="))!);
+
+    const session = await fetchApp(app, "/api/session", { headers: { cookie: sessionPair } });
+    expect(session.status).toBe(200);
+    await expect(session.json()).resolves.toEqual({
+      member: { id: expect.any(String), email: "bootstrap-only@example.test", role: "admin" },
+      capabilities: [
+        "legacy:read", "legacy:write", "submission:create", "submission:read-own",
+        "submission:read-all", "member:manage", "space:manage", "audit:read",
+      ],
+      logoutUrl: "/auth/logout",
+    });
+
+    const csrf = await fetchApp(app, "/auth/logout", {
+      method: "POST",
+      headers: { cookie: sessionPair, origin: "https://foreign.example" },
+    });
+    await expectError(csrf, 403, "FORBIDDEN");
+    expect(setCookies(csrf)).toEqual([]);
+
+    const stillAuthenticated = await fetchApp(app, "/api/session", { headers: { cookie: sessionPair } });
+    expect(stillAuthenticated.status).toBe(200);
+
+    const logout = await fetchApp(app, "/auth/logout", {
+      method: "POST",
+      headers: { cookie: sessionPair, origin: APP_CONFIG.canonicalOrigin },
+    });
+    expect(logout.status).toBe(204);
+    expect(setCookies(logout)).toEqual([
+      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    ]);
+
+    const loggedOut = await fetchApp(app, "/api/session", { headers: { cookie: sessionPair } });
+    await expectError(loggedOut, 401, "AUTH_REQUIRED");
+  });
+
+  it("rejects duplicate automation credentials after Workerd coalesces their headers", async () => {
+    for (const name of [
+      "authorization",
+      "x-automation-id",
+      "x-automation-timestamp",
+      "x-automation-nonce",
+      "x-automation-signature",
+    ]) {
+      const signed = await signedAutomationRequest("https://example.test/api/health");
+      const headers = new Headers(signed.headers);
+      headers.append(name, headers.get(name)!);
+      expect(headers.get(name)).toContain(",");
+      const response = await fetchApp(createApp(), "/api/health", { headers });
+      await expectError(response, 401, "AUTH_REQUIRED");
+    }
+  });
+
+  it("reconstructs verified automation body bytes before existing JSON parsing", async () => {
+    const prefix = new TextEncoder().encode('{"id":"exact-body","title":"A');
+    const suffix = new TextEncoder().encode('(B","content":"body"}');
+    const bytes = new Uint8Array(prefix.byteLength + 1 + suffix.byteLength);
+    bytes.set(prefix);
+    bytes[prefix.byteLength] = 0xc3;
+    bytes.set(suffix, prefix.byteLength + 1);
+
+    const response = await api("/api/notes", { method: "POST", body: bytes });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ note: { id: "exact-body", title: "A�(B" } });
   });
 
   it("initializes deployed workspace paths then creates, lists and searches a note", async () => {
@@ -432,7 +692,7 @@ describe("Worker application", () => {
   });
 
   it("redacts unexpected repository failures behind a stable request-scoped error", async () => {
-    const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
+    const app = createApp();
     const brokenEnv = {
       ...env,
       KNOWLEDGE: {
@@ -442,9 +702,12 @@ describe("Worker application", () => {
       },
     } as unknown as Env;
 
-    const response = await app.fetch!(incomingRequest("https://example.test/api/notes", {
-      headers: automationHeaders(),
-    }), localEnv({ KNOWLEDGE: brokenEnv.KNOWLEDGE }), createExecutionContext());
+    const response = await fetchSignedApp(
+      app,
+      "/api/notes",
+      {},
+      localEnv({ KNOWLEDGE: brokenEnv.KNOWLEDGE }),
+    );
     const body = await expectError(response, 500, "INTERNAL_ERROR");
     expect(JSON.stringify(body)).not.toContain("raw-internal-repository-detail");
   });
@@ -455,22 +718,19 @@ describe("Worker application", () => {
         throw new Error("local AI mock failure");
       },
     };
-    const app = createApp({ verifyAccessJwt: localVerifyAutomationAssertion });
+    const app = createApp();
     const failingEnv = localEnv({ AI: failingAi as unknown as Ai });
-    const headers = automationHeaders();
 
-    const create = await app.fetch!(incomingRequest("https://example.test/api/notes", {
+    const create = await fetchSignedApp(app, "/api/notes", {
       method: "POST",
-      headers,
       body: JSON.stringify({ id: "ai-source", title: "AI source", content: "local source" }),
-    }), failingEnv, createExecutionContext());
+    }, failingEnv);
     expect(create.status).toBe(201);
 
-    const response = await app.fetch!(incomingRequest("https://example.test/api/chat", {
+    const response = await fetchSignedApp(app, "/api/chat", {
       method: "POST",
-      headers,
       body: JSON.stringify({ question: "local source" }),
-    }), failingEnv, createExecutionContext());
+    }, failingEnv);
     await expect(expectError(response, 503, "AI_UNAVAILABLE")).resolves.toMatchObject({ error: { retryable: true } });
   });
 

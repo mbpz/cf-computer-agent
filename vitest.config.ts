@@ -11,8 +11,6 @@ export default defineConfig({
       miniflare: {
         bindings: {
           APP_TOKEN: "worker-test-token",
-          ACCESS_TEAM_DOMAIN: "team.example.test",
-          ACCESS_AUD: "local-access-audience",
           BOOTSTRAP_ADMIN_EMAIL: "bootstrap-only@example.test",
           GITHUB_OAUTH_CLIENT_ID: "fake-github-client-id",
           GITHUB_OAUTH_CLIENT_SECRET: "fake-github-client-secret",

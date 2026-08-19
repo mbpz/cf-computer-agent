@@ -247,12 +247,19 @@ describe("members D1 control plane", () => {
       id: "duplicate-audit", actorKind: "member", actorId: "existing", action: "member.login",
       resourceType: "member", resourceId: "existing", metadata: { role: "contributor" }, createdAt: "2026-08-13T00:00:00.000Z",
     });
-    const service = new MembersService(new MembersRepository(env.DB, audit), {}, {
+    const service = new MembersService(new MembersRepository(env.DB, audit), {
+      BOOTSTRAP_ADMIN_EMAIL: "failed@example.test",
+      ALLOWED_MEMBER_EMAILS: "failed@example.test",
+    }, {
       id: () => "new-member", auditId: () => "duplicate-audit",
       now: () => new Date("2026-08-13T00:00:00.000Z"), waitUntil: () => undefined,
     });
 
-    await expect(service.resolveFirstLogin({ identitySubject: "failed-subject", email: "failed@example.test" })).rejects.toThrow();
+    await expect(service.resolveGitHubLogin({
+      subject: "github:901",
+      githubUserId: "901",
+      email: "failed@example.test",
+    })).rejects.toThrow();
     await expect(env.DB.prepare("SELECT id FROM members WHERE id = 'new-member'").first()).resolves.toBeNull();
   });
 
@@ -274,12 +281,16 @@ describe("members D1 control plane", () => {
     await expect(repository.findById(contributor.id)).resolves.toMatchObject({ status: "active" });
   });
 
-  it("rejects an Access-approved subject after its member record is disabled", async () => {
-    const service = new MembersService(new MembersRepository(env.DB), {}, { waitUntil: () => undefined });
-    const created = await service.resolveFirstLogin({ identitySubject: "disabled-subject", email: "disabled@example.test" });
+  it("rejects a GitHub member after its member record is disabled", async () => {
+    const identity = { subject: "github:902" as const, githubUserId: "902", email: "disabled@example.test" };
+    const service = new MembersService(new MembersRepository(env.DB), {
+      BOOTSTRAP_ADMIN_EMAIL: identity.email,
+      ALLOWED_MEMBER_EMAILS: identity.email,
+    }, { waitUntil: () => undefined });
+    const created = await service.resolveGitHubLogin(identity);
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(created.id).run();
 
-    await expect(service.resolveFirstLogin({ identitySubject: "disabled-subject", email: "disabled@example.test" }))
+    await expect(service.resolveGitHubLogin(identity))
       .rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
   });
 

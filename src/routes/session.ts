@@ -15,6 +15,6 @@ export function routeSession(
   return jsonResponse({
     member: { id: principal.memberId, email: principal.email, role: principal.role },
     capabilities: capabilitiesFor(principal),
-    logoutUrl: new URL("/cdn-cgi/access/logout", url).href,
+    logoutUrl: "/auth/logout",
   }, 200, context.requestId);
 }
