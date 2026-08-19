@@ -297,6 +297,34 @@ describe("Worker application", () => {
     expect(setCookies(denied)).toEqual(clearedOAuthCookies());
   });
 
+  it("rejects ambiguous callback outcomes before GitHub or session creation", async () => {
+    const observedRedirectModes: RequestRedirect[] = [];
+    const app = createApp({ githubFetch: fakeGitHubFetch("success", observedRedirectModes) });
+    const cases = [
+      "error=access_denied&error=server_error",
+      "code=first&code=second",
+      "code=oauth-code&error=access_denied",
+      "",
+    ];
+
+    for (const outcome of cases) {
+      const start = await fetchApp(app, "/auth/github");
+      const temporaryCookies = setCookies(start);
+      const state = cookieValue(temporaryCookies, "__Host-oauth-state");
+      const separator = outcome ? "&" : "";
+      const response = await fetchApp(app, `/auth/github/callback?${outcome}${separator}state=${state}`, {
+        headers: { cookie: cookieHeader(temporaryCookies) },
+      });
+
+      await expectError(response, 400, "OAUTH_CALLBACK_INVALID");
+      expect(setCookies(response)).toEqual(clearedOAuthCookies());
+    }
+
+    expect(observedRedirectModes).toEqual([]);
+    const sessions = await env.DB.prepare("SELECT COUNT(*) AS count FROM auth_sessions").first<{ count: number }>();
+    expect(sessions?.count).toBe(0);
+  });
+
   it("uses Workerd-compatible manual redirects and fails closed without following an upstream redirect", async () => {
     expect(() => new Request("https://github.com/login/oauth/access_token", { redirect: "error" }))
       .toThrow();

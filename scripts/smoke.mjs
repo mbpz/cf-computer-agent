@@ -1,22 +1,32 @@
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 
 const baseUrl = process.env.MEMORY_GARDEN_BASE_URL;
-const token = process.env.MEMORY_GARDEN_TOKEN;
-const accessClientId = process.env.MEMORY_GARDEN_ACCESS_CLIENT_ID;
-const accessClientSecret = process.env.MEMORY_GARDEN_ACCESS_CLIENT_SECRET;
+const token = process.env.APP_TOKEN;
+const automationClientId = process.env.AUTOMATION_CLIENT_ID;
+const automationSecret = process.env.AUTOMATION_SECRET;
 const timeoutMs = 20_000;
 
 let origin;
 
 function authenticatedRequest(path, init = {}) {
-  return fetch(new URL(path, origin), {
+  const url = new URL(path, origin);
+  const method = (init.method || "GET").toUpperCase();
+  const body = init.body === undefined ? Buffer.alloc(0) : Buffer.from(init.body);
+  const timestamp = String(Math.floor(Date.now() / 1_000));
+  const nonce = randomBytes(16).toString("base64url");
+  const bodyHash = createHash("sha256").update(body).digest("hex");
+  const canonical = [method, `${url.pathname}${url.search}`, timestamp, nonce, bodyHash].join("\n");
+  const signature = createHmac("sha256", automationSecret).update(canonical).digest("hex");
+  return fetch(url, {
     ...init,
     redirect: "error",
     headers: {
       authorization: `Bearer ${token}`,
-      "cf-access-client-id": accessClientId,
-      "cf-access-client-secret": accessClientSecret,
+      "x-automation-id": automationClientId,
+      "x-automation-timestamp": timestamp,
+      "x-automation-nonce": nonce,
+      "x-automation-signature": signature,
       "content-type": "application/json",
       ...init.headers,
     },
@@ -43,7 +53,7 @@ async function check(step, request, assertBody) {
     throw new SmokeFailure(step, "request failed", "network", "missing", elapsed(started));
   }
 
-  const requestId = safeRequestId(response.headers.get("x-request-id"), [token, accessClientId, accessClientSecret]);
+  const requestId = safeRequestId(response.headers.get("x-request-id"), [token, automationClientId, automationSecret]);
   const duration = elapsed(started);
   let body;
   try {
@@ -101,8 +111,8 @@ function safeRequestId(value, credentials) {
 }
 
 async function run() {
-  if (!baseUrl || !accessClientId || !accessClientSecret || !token) {
-    throw new Error("MEMORY_GARDEN_BASE_URL, MEMORY_GARDEN_ACCESS_CLIENT_ID, MEMORY_GARDEN_ACCESS_CLIENT_SECRET, and MEMORY_GARDEN_TOKEN are required");
+  if (!baseUrl || !automationClientId || !automationSecret || !token) {
+    throw new Error("MEMORY_GARDEN_BASE_URL, AUTOMATION_CLIENT_ID, AUTOMATION_SECRET, and APP_TOKEN are required");
   }
 
   try {

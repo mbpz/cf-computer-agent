@@ -48,11 +48,13 @@ export async function routeAuth(
       throw callbackInvalid();
     }
 
-    const denial = uniqueQueryValue(url, "error");
-    if (denial !== undefined) {
+    const codes = url.searchParams.getAll("code");
+    const errors = url.searchParams.getAll("error");
+    if (codes.length + errors.length !== 1) throw callbackInvalid();
+    if (errors.length === 1) {
       throw new AppError("OAUTH_CALLBACK_DENIED", "GitHub authorization was denied", 401);
     }
-    const code = uniqueQueryValue(url, "code");
+    const code = codes[0];
     if (!code || !CALLBACK_VALUE.test(code)) throw callbackInvalid();
 
     const identity = await services.oauth.resolveCallback(code, verifier);
