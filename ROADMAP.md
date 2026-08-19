@@ -30,7 +30,7 @@
 - [x] 消除 Computer RPC 边界的双重类型断言，封装 `WorkspaceRepository`。（本地 `rtk npm run check`）
 - [x] 引入 `@cloudflare/vitest-pool-workers`，覆盖 Worker 路由与 Durable Object 持久性。（本地 `rtk npm run check`）
 - [x] 增加结构化错误、request_id、安全响应头和日志脱敏。（本地 `rtk npm run check`）
-- [x] 补全 automation smoke 合同：Access Service Token + APP_TOKEN、health、新增、列表、检索与问答；不调用 admin API。（本地 mock 验证；尚未调用远程环境）
+- [x] 补全 automation smoke 合同：HMAC 签名 + APP_TOKEN、health、新增、列表、检索与问答；不调用 admin API。（本地 mock 验证；尚未调用远程环境）
 
 退出标准：
 
@@ -45,7 +45,7 @@
 
 范围：
 
-- [x] 接入 Cloudflare Access JWT 验证与成员映射。（本地 JWT fixture、单元与 workerd 验证；未验证远程 GitHub IdP）
+- [x] 接入 GitHub OAuth、D1 会话与成员映射。（本地 GitHub HTTP fake、单元与 workerd 验证；未验证远程 OAuth registration）
 - [x] 建立 D1 migrations：members、spaces、collections、submissions、audit_events。（本地 D1 fixture；远程 migration 未获授权执行）
 - 管理员/用户权限中间件与服务端权限策略。
 - Space、Collection、Tag 的管理 API。
@@ -60,9 +60,9 @@
 - [x] automation 无法调用管理 API，且 smoke 只走 legacy 路径。（本地 contract/workerd）
 - [x] D1 查询使用索引和有界分页。（本地 migration/service 测试；未记录远程 rows_read/rows_written）
 - [ ] 远程 D1 migration 与 seed 已在目标数据库核验。
-- [ ] GitHub IdP、邮件 Allow、Access JWT audience 与 bootstrap admin 在自定义域核验。
-- [ ] Access Service Token + APP_TOKEN smoke 在自定义域通过且不泄露凭证。
-- [ ] disabled contributor 在真实 Access 会话下被应用拒绝。
+- [ ] GitHub OAuth callback、allowlist 与 bootstrap admin 在自定义域核验。
+- [ ] HMAC + APP_TOKEN signed smoke 在自定义域通过且不泄露凭证。
+- [ ] disabled contributor 在真实 GitHub OAuth 会话下被应用拒绝。
 - [ ] production 与 preview workers.dev URL 在已部署账户中保持关闭。
 - [ ] 旧版 Durable Object 跨远程激活后仍可读取。
 

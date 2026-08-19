@@ -1,23 +1,21 @@
-# Deployment and rollback evidence
+# GitHub OAuth deployment rollback
 
-Use this runbook only with deployment authorization. It changes a remote Worker and can consume Workers AI quota during smoke verification. Confirm the Cloudflare plan, usage, billing safeguards, and that the Access application is already protecting the custom domain. The repository cannot enforce account budgets or zero billing.
+Use this runbook only with deployment authorization. Capture the current Worker versions before deploying, and keep the custom-domain release evidence separate from local test results.
 
-## Deploy and verify
+## Authorized deploy and acceptance
 
-1. Confirm the [Access-first prerequisites](./access-setup.md) are complete: D1 binding points at the intended database, migrations are applied, GitHub IdP works, the custom domain has both email Allow and separate Service Auth policies, and the Access audience/secrets are set.
-2. Capture the current Worker versions:
+1. Confirm the OAuth App uses the fixed homepage and callback in [github-oauth-setup.md](./github-oauth-setup.md), migration `0002` is applied, and all seven Worker settings are present without exposing their values.
+2. Capture the current versions:
 
    ```bash
    rtk npx wrangler versions list
    ```
 
-3. Run local verification:
+3. Run local verification before a remote change:
 
    ```bash
    rtk npm run check
    ```
-
-   This is local evidence only. It does not call Access, GitHub, remote D1, Workers AI, or prove deployed persistence.
 
 4. Deploy the authorized candidate:
 
@@ -25,16 +23,18 @@ Use this runbook only with deployment authorization. It changes a remote Worker 
    rtk npm run deploy
    ```
 
-5. Verify the custom-domain browser redirect/login and use the service-token procedure in [smoke-test.md](./smoke-test.md). Record the version ID, redacted output, domain, and request IDs. Also confirm production and preview workers.dev URLs remain disabled; do not smoke them.
+5. Verify the custom-domain browser flow: anonymous login, bootstrap admin, separate contributor, disabled contributor rejection, and logout. Then use the signed procedure in [smoke-test.md](./smoke-test.md). Record the version ID, redacted output, domain, and request IDs. Confirm production and preview workers.dev URLs remain disabled; do not smoke them.
 
-## Roll back after smoke failure
+## Rollback safety
 
-If browser, automation, or smoke validation fails, stop the rollout and select the version captured in step 2. Before changing the Worker version, confirm that the rollback target can read the currently applied D1 schema and the persisted `KnowledgeBase` Durable Object migration `v1`, VFS, index, and journal data.
+If browser or signed automation validation fails, stop the rollout. Before changing a Worker version, confirm the target can read the currently applied D1 schema and the persisted `KnowledgeBase` Durable Object migration `v1`, VFS, index, and journal data.
 
-Do **not** reverse D1 migrations, delete D1 rows, delete Durable Object storage, reset the object, disable Access, or remove the Access audience/policies as part of a rollback. Worker rollback does not undo D1 migrations or Durable Object data. If the prior Worker is not schema-compatible, stop and make a compatible forward fix instead.
+Never reverse D1 migration `0002`, delete D1 rows, delete Durable Object storage, reset the object, or remove Durable Object data. A Worker rollback does not undo either D1 migration or Durable Object state. If the prior Worker is not schema-compatible, do not roll it back: make a forward-compatible fix instead.
+
+In particular, after a member has been linked to a `github:<id>` subject, the old Access-based Worker cannot authenticate that subject. Use a forward-compatible emergency Worker that reads the current D1 schema and preserves linked identities; do not select the old Access build as a recovery target.
 
 ```bash
 rtk npx wrangler rollback <VERSION_ID>
 ```
 
-After rollback, verify Access still redirects unauthenticated custom-domain browser traffic, log in with the bootstrap admin, and rerun the authorized service-token smoke. Record the rollback version ID and request IDs. These checks do not prove restored remote D1 contents, Durable Object persistence, or Workers AI health; schedule those separately with authorization.
+After an authorized rollback, repeat the GitHub browser checks and the signed smoke procedure, then record the rollback version ID and redacted request IDs. These checks do not prove restored remote D1 contents, Durable Object persistence, or Workers AI health; schedule those separately with authorization.

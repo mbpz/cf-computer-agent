@@ -8,6 +8,8 @@ import test from "node:test";
 
 const smokePath = new URL("./smoke.mjs", import.meta.url).pathname;
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
+const githubOAuthSetupPath = new URL("../docs/operations/github-oauth-setup.md", import.meta.url);
+const smokeRunbookPath = new URL("../docs/operations/smoke-test.md", import.meta.url);
 const credentials = {
   AUTOMATION_CLIENT_ID: "local-automation-client-id",
   AUTOMATION_SECRET: "local-automation-secret",
@@ -129,6 +131,41 @@ test("disables production and preview workers.dev URLs", async () => {
   const configuration = JSON.parse(await readFile(wranglerPath, "utf8"));
   assert.equal(configuration.workers_dev, false);
   assert.equal(configuration.preview_urls, false);
+  assert.deepEqual(configuration.d1_databases, [{
+    binding: "DB",
+    database_name: "memory-garden-control-plane",
+    database_id: "653c9e43-c7ad-45b8-a109-bc144843bee7",
+    migrations_dir: "migrations",
+  }]);
+  assert.deepEqual(configuration.durable_objects.bindings, [{ name: "KNOWLEDGE", class_name: "KnowledgeBase" }]);
+  assert.deepEqual(configuration.migrations, [{ tag: "v1", new_sqlite_classes: ["KnowledgeBase"] }]);
+  assert.equal(configuration.assets.binding, "ASSETS");
+  assert.equal(configuration.assets.run_worker_first, true);
+});
+
+test("documents GitHub OAuth and signed automation without Access credentials", async () => {
+  const [setup, smokeRunbook] = await Promise.all([
+    readFile(githubOAuthSetupPath, "utf8"),
+    readFile(smokeRunbookPath, "utf8"),
+  ]);
+
+  assert.match(setup, /https:\/\/memory\.crgmhrc\.asia\/auth\/github\/callback/u);
+  assert.match(setup, /Homepage URL: `https:\/\/memory\.crgmhrc\.asia`/u);
+  for (const setting of [
+    "GITHUB_OAUTH_CLIENT_ID",
+    "GITHUB_OAUTH_CLIENT_SECRET",
+    "BOOTSTRAP_ADMIN_EMAIL",
+    "ALLOWED_MEMBER_EMAILS",
+    "AUTOMATION_CLIENT_ID",
+    "AUTOMATION_SECRET",
+    "APP_TOKEN",
+  ]) {
+    assert.match(setup, new RegExp(`rtk npx wrangler secret put ${setting}`, "u"));
+  }
+  assert.match(smokeRunbook, /AUTOMATION_CLIENT_ID/u);
+  assert.match(smokeRunbook, /AUTOMATION_SECRET/u);
+  assert.match(smokeRunbook, /APP_TOKEN/u);
+  assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /CF-Access-Client|ACCESS_TEAM_DOMAIN|ACCESS_AUD|cdn-cgi\/access/u);
 });
 
 test("fails before the network when any automation credential is missing", async () => {

@@ -1,15 +1,15 @@
 # Memory Garden Agent
 
-一个由 Cloudflare Access 保护、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
+一个使用 GitHub OAuth 登录、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
 
 ## 架构
 
 ```text
-Browser UI → Cloudflare Access → Worker API → D1 control plane
-                                         └─ personal Durable Object
-                                            ├─ Computer VFS: /workspace/notes/*.md
-                                            ├─ Computer VFS: /workspace/.memory/index.json
-                                            └─ keyword retrieval → Workers AI → cited answer
+Browser UI → GitHub OAuth → Worker API → D1 control plane
+                                      └─ personal Durable Object
+                                         ├─ Computer VFS: /workspace/notes/*.md
+                                         ├─ Computer VFS: /workspace/.memory/index.json
+                                         └─ keyword retrieval → Workers AI → cited answer
 ```
 
 为什么不在 Phase 1 引入更多产品：D1 只保存成员、空间、投稿和审计控制面；已发布笔记仍由 Durable Object 保存，避免把旧版内容迁移为双写。R2、Vectorize 与执行后端不属于本阶段。
@@ -22,8 +22,8 @@ Browser UI → Cloudflare Access → Worker API → D1 control plane
 - 中英文关键词检索，标题/标签加权
 - RAG 问答，只将命中的笔记片段交给 Workers AI
 - `[1]` 形式引用与原始来源卡片
-- 浏览器身份只来自已验证的 Cloudflare Access JWT；角色、状态和能力由 D1 决定
-- 自动化同时需要 Access Service Token 与 `APP_TOKEN`，且只能访问兼容 smoke 路径，绝不是管理员
+- 浏览器身份只来自验证后的 GitHub OAuth 回调与 D1 会话；角色、状态和能力由 D1 决定
+- 自动化同时需要 HMAC 签名和 `APP_TOKEN`，且只能访问兼容 smoke 路径，绝不是管理员
 - 单 Worker 静态界面，无 Pages、外部数据库或第三方模型费用
 
 ## 本地运行
@@ -36,37 +36,37 @@ rtk npm run dev
 
 `rtk npm run check` 只验证生成类型、TypeScript、单元测试、workerd 集成测试和 Wrangler dry build。它不会请求远程 Workers AI、不会验证已部署 Durable Object 的持久性，也不构成生产域名或 Provider 成熟度证据。
 
-本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产设置的确切 GitHub IdP、Access、D1、secret、部署和回滚顺序见 [access-setup.md](./docs/operations/access-setup.md)。不要把 `ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`、`BOOTSTRAP_ADMIN_EMAIL`、`APP_TOKEN` 或 Service Token 凭证写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
+本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、D1、secret、部署和回滚顺序见 [GitHub OAuth runbook](./docs/operations/github-oauth-setup.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
 
 静态浏览器文件位于 `public/`，由 Worker 的 `ASSETS` binding 提供；`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
 
 ## 部署
 
-首次部署前必须完整执行 [Access 设置与部署 runbook](./docs/operations/access-setup.md)：先保护 `memory.crgmhrc.asia` 自定义域，创建 Access 自托管应用、明确邮箱 Allow 策略和独立 Service Auth 策略，再配置 D1 与 Worker secrets，最后才可在明确授权下部署。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。Cloudflare Access 免费层政策与额度可能变化，部署时应以控制台显示为准。
+首次部署前必须完整执行 [GitHub OAuth runbook](./docs/operations/github-oauth-setup.md)：创建 OAuth App，应用 D1 migration `0002`，交互式配置 Worker settings，再在明确授权下部署、做浏览器与 signed-smoke 验证，最后移除旧的 Access secrets。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
 
 ## API
 
-- `GET /api/session`（Access 成员）
-- `GET /api/spaces`、`POST /api/submissions`、`GET /api/submissions/mine`（Access 成员）
+- `GET /api/session`（GitHub OAuth 会话成员）
+- `GET /api/spaces`、`POST /api/submissions`、`GET /api/submissions/mine`（GitHub OAuth 会话成员）
 - `/api/admin/*`（仅 active admin）
 - `GET /api/health`、`GET /api/notes`、`POST /api/notes`、`GET /api/search?q=...`、`POST /api/chat`（legacy；自动化只可使用这些路径）
 
-浏览器不提交或保存 APP token。自动化须先用 `CF-Access-Client-Id` / `CF-Access-Client-Secret` 通过 Access Service Auth，随后以 `Authorization: Bearer <APP_TOKEN>` 通过 Worker 验证。单条 legacy 笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
+浏览器不提交或保存 APP token、OAuth client secret 或自动化 secret。自动化以 `Authorization: Bearer <APP_TOKEN>` 和每请求 HMAC-SHA256 签名通过 Worker 验证。单条 legacy 笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
 
 ## 远程 smoke 验证
 
-仅在 Access-first 部署授权后运行 automation smoke。它交互式读取 Access Service Token client ID/client secret 与 APP token；脚本不会打印三者、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
+仅在 GitHub OAuth 部署授权后运行 automation smoke。它交互式读取 `AUTOMATION_CLIENT_ID`、`AUTOMATION_SECRET` 与 `APP_TOKEN`；脚本不会打印三者、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
 
 ```bash
-read -rs MEMORY_GARDEN_ACCESS_CLIENT_ID
-export MEMORY_GARDEN_ACCESS_CLIENT_ID
-read -rs MEMORY_GARDEN_ACCESS_CLIENT_SECRET
-export MEMORY_GARDEN_ACCESS_CLIENT_SECRET
-read -rs MEMORY_GARDEN_TOKEN
-export MEMORY_GARDEN_TOKEN
+read -rs AUTOMATION_CLIENT_ID
+export AUTOMATION_CLIENT_ID
+read -rs AUTOMATION_SECRET
+export AUTOMATION_SECRET
+read -rs APP_TOKEN
+export APP_TOKEN
 export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
 rtk npm run smoke
-unset MEMORY_GARDEN_ACCESS_CLIENT_ID MEMORY_GARDEN_ACCESS_CLIENT_SECRET MEMORY_GARDEN_TOKEN MEMORY_GARDEN_BASE_URL
+unset AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL
 ```
 
 Smoke 只验证 automation 可用的 health、创建、列表、检索和带来源的问答；它不发送无认证请求，也不会调用管理员 API。每次会写入一条 `smoke-<uuid>` 笔记；Phase 3 的回收站/删除能力完成前，它会保留。正式入口仅为自定义域：配置意图为 production 与 preview workers.dev URL 都关闭，授权部署后仍需在控制台验证。详见 [smoke-test.md](./docs/operations/smoke-test.md)。
@@ -77,4 +77,4 @@ Smoke 只验证 automation 可用的 health、创建、列表、检索和带来�
 
 ## 数据与隐私
 
-这是单组织 Phase 1 设计。不要在未配置 Access、D1 成员控制面和 automation APP token 的情况下公开地址。远程 GitHub IdP、D1 migration、Service Token、workers.dev disablement 与 Durable Object 跨激活恢复尚未在此仓库获得远程证据；不要据此宣称生产成熟度。当前版本没有附件、审核发布、批量导出或删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
+这是单组织 Phase 1 设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。远程 OAuth registration、D1 migration、signed automation、workers.dev disablement 与 Durable Object 跨激活恢复尚未在此仓库获得远程证据；不要据此宣称生产成熟度。当前版本没有附件、审核发布、批量导出或删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
