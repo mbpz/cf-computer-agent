@@ -1,5 +1,5 @@
 import { navigationForSession } from "/navigation.js";
-import { createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "/workspace-ui.js";
+import { anonymousShellState, createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "/workspace-ui.js";
 
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
@@ -96,19 +96,19 @@ async function loadSession() {
 function has(capability) { return session?.capabilities.includes(capability); }
 function isAdminRoute(path) { return path === "/admin" || path.startsWith("/admin/"); }
 function ownsMutation(owner) { return routeGuard.owns(owner, window.location.pathname); }
-function setDrawer(open, focusDrawer = false) {
-  if (!mobileViewport.matches) {
-    shell.dataset.drawerOpen = "false";
-    drawerToggle.setAttribute("aria-expanded", "false");
-    sidebar.removeAttribute("aria-hidden");
-    sidebar.inert = false;
-    return;
-  }
-  const state = drawerState(open);
+function applyDrawerState(state) {
   shell.dataset.drawerOpen = String(state.open);
   drawerToggle.setAttribute("aria-expanded", state.ariaExpanded);
   sidebar.setAttribute("aria-hidden", state.ariaHidden);
   sidebar.inert = state.inert;
+}
+function setDrawer(open, focusDrawer = false) {
+  if (!mobileViewport.matches) {
+    applyDrawerState({ open: false, ariaExpanded: "false", ariaHidden: "false", inert: false });
+    return;
+  }
+  const state = drawerState(open);
+  applyDrawerState(state);
   if (state.open && focusDrawer) sidebar.querySelector("a, button")?.focus();
   if (!state.open && document.activeElement instanceof HTMLElement && sidebar.contains(document.activeElement)) drawerToggle.focus();
 }
@@ -369,17 +369,17 @@ async function bootstrap() {
 }
 
 function renderAnonymous() {
+  const state = anonymousShellState();
   session = undefined;
   routeGuard.begin();
   pendingFlash = "";
+  setStatus(state.statusMessage);
   byId("primary-navigation").replaceChildren();
   byId("session-summary").textContent = "登录后即可访问你的知识工作区。";
   logoutButton.hidden = true;
   logoutButton.disabled = true;
   drawerToggle.disabled = true;
-  drawerToggle.setAttribute("aria-expanded", "false");
-  sidebar.inert = true;
-  sidebar.setAttribute("aria-hidden", "true");
+  applyDrawerState(state.drawer);
   shell.dataset.ready = "false";
   replaceOutlet(page("欢迎来到 Memory Garden", "使用 GitHub 登录后，即可继续访问你的知识工作区。", [
     element("div", { className: "actions" }, [element("a", { href: "/auth/github", className: "login-action", text: "使用 GitHub 登录" })]),
@@ -411,7 +411,6 @@ document.addEventListener("keydown", (event) => { if (event.key === "Escape" && 
 drawerToggle.addEventListener("click", () => setDrawer(shell.dataset.drawerOpen !== "true", true));
 logoutButton.addEventListener("click", () => { void logout(); });
 mobileViewport.addEventListener("change", () => { if (session) setDrawer(false); });
-setDrawer(false);
-sidebar.inert = true;
+applyDrawerState(anonymousShellState().drawer);
 drawerToggle.disabled = true;
 void bootstrap();

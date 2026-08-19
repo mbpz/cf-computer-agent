@@ -24,6 +24,10 @@ export function drawerState(open: boolean): Readonly<{
   ariaHidden: "true" | "false";
   inert: boolean;
 }>;
+export function anonymousShellState(): Readonly<{
+  statusMessage: "";
+  drawer: ReturnType<typeof drawerState>;
+}>;
 export function sessionBootstrapState(
   status: number,
   session?: BrowserSession,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "../../public/workspace-ui.js";
+import { anonymousShellState, createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "../../public/workspace-ui.js";
 
 describe("createRouteGuard", () => {
   it("rejects an older route completion after newer navigation begins", () => {
@@ -126,5 +126,21 @@ describe("postLogout", () => {
 
     await expect(postLogout(request)).resolves.toEqual({ kind: "anonymous" });
     expect(requests).toEqual([{ path: "/auth/logout", init: { method: "POST", credentials: "same-origin" } }]);
+  });
+});
+
+describe("anonymousShellState", () => {
+  it("clears a private status flash when logout returns the shell to login", () => {
+    const privateStatus = "已提交“Private submission”";
+    const state = anonymousShellState();
+
+    expect(state.statusMessage).toBe("");
+    expect(state.statusMessage).not.toContain(privateStatus);
+  });
+
+  it("closes an open mobile drawer before showing the anonymous login", () => {
+    const state = anonymousShellState();
+
+    expect(state.drawer).toEqual({ open: false, ariaExpanded: "false", ariaHidden: "true", inert: true });
   });
 });

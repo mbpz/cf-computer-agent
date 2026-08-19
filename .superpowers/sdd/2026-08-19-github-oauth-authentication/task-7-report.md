@@ -33,3 +33,10 @@ The signed automation smoke migration was already moved earlier to preserve stan
 ## Concerns
 
 No open Task 7 concerns. No remote, deployment, migration, or secret operation was performed.
+
+## Fix round 1: anonymous transition reset
+
+- RED: added anonymous-shell regressions. The focused workspace UI test failed because `anonymousShellState` did not exist.
+- GREEN: anonymous transitions now clear `#status-region` through `setStatus("")` and apply `drawerState(false)` to `data-drawer-open`, `aria-expanded`, `aria-hidden`, and `inert` through one DOM state applier.
+- Verification: focused navigation/workspace UI/assets tests passed 24 tests; signed smoke passed 6 tests; the final `rtk npm test` run passed 6 smoke, 243 unit, and 131 worker tests; `rtk npm run typecheck` and `rtk git diff --check` passed.
+- Scope: intentionally did not address the separate whole-asset-scan or logout-single-flight minor findings.

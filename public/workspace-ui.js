@@ -36,6 +36,13 @@ export function drawerState(open) {
   });
 }
 
+export function anonymousShellState() {
+  return Object.freeze({
+    statusMessage: "",
+    drawer: drawerState(false),
+  });
+}
+
 export function sessionBootstrapState(status, session) {
   if (status === 401) return Object.freeze({ kind: "anonymous" });
   if (status >= 200 && status < 300 && session?.member && Array.isArray(session.capabilities)) {
