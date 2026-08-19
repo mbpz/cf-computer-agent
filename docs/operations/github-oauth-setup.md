@@ -59,7 +59,13 @@ Run this section only after the operator has explicitly authorized each remote a
    read -r AUTOMATION_CLIENT_ID
    IFS= read -r -s AUTOMATION_SECRET < <(openssl rand -base64 48)
    IFS= read -r -s APP_TOKEN < <(openssl rand -base64 48)
-   export GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
+   GITHUB_OAUTH_CLIENT_ID="$GITHUB_OAUTH_CLIENT_ID" \
+   GITHUB_OAUTH_CLIENT_SECRET="$GITHUB_OAUTH_CLIENT_SECRET" \
+   BOOTSTRAP_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
+   ALLOWED_MEMBER_EMAILS="$ALLOWED_MEMBER_EMAILS" \
+   AUTOMATION_CLIENT_ID="$AUTOMATION_CLIENT_ID" \
+   AUTOMATION_SECRET="$AUTOMATION_SECRET" \
+   APP_TOKEN="$APP_TOKEN" \
    node -e '
      const keys = ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET", "BOOTSTRAP_ADMIN_EMAIL", "ALLOWED_MEMBER_EMAILS", "AUTOMATION_CLIENT_ID", "AUTOMATION_SECRET", "APP_TOKEN"];
      const bundle = Object.fromEntries(keys.map((key) => {
@@ -69,6 +75,9 @@ Run this section only after the operator has explicitly authorized each remote a
      }));
      process.stdout.write(`${JSON.stringify(bundle)}\n`);
    ' > "$SECRETS_FILE"
+   SERIALIZE_STATUS=$?
+   unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
+   test "$SERIALIZE_STATUS" -eq 0 || exit "$SERIALIZE_STATUS"
 
    rtk npx wrangler versions secret bulk "$SECRETS_FILE" --message "GitHub OAuth configuration"
    BULK_STATUS=$?

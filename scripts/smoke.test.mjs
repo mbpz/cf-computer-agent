@@ -161,6 +161,9 @@ test("documents GitHub OAuth and signed automation as one versioned secret rollo
   assert.match(setup, /do not use a `\.dev\.vars` or dotenv file for this bundle/iu);
   assert.doesNotMatch(setup, /worker\.secrets/u);
   assert.doesNotMatch(setup, /printf '%s\\n'/u);
+  assert.doesNotMatch(setup, /export GITHUB_OAUTH_CLIENT_ID/u);
+  assert.match(setup, /GITHUB_OAUTH_CLIENT_ID="\$GITHUB_OAUTH_CLIENT_ID"[\s\\]*GITHUB_OAUTH_CLIENT_SECRET="\$GITHUB_OAUTH_CLIENT_SECRET"[\s\\]*BOOTSTRAP_ADMIN_EMAIL="\$BOOTSTRAP_ADMIN_EMAIL"[\s\\]*ALLOWED_MEMBER_EMAILS="\$ALLOWED_MEMBER_EMAILS"[\s\\]*AUTOMATION_CLIENT_ID="\$AUTOMATION_CLIENT_ID"[\s\\]*AUTOMATION_SECRET="\$AUTOMATION_SECRET"[\s\\]*APP_TOKEN="\$APP_TOKEN"[\s\\]*node -e/u);
+  assert.match(setup, /' > "\$SECRETS_FILE"\n\s*SERIALIZE_STATUS=\$\?\n\s*unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN[\s\S]*rtk npx wrangler versions secret bulk/u);
   assert.match(setup, /rtk npx wrangler versions secret bulk "\$SECRETS_FILE"/u);
   assert.match(setup, /rtk npx wrangler versions view <VERSION_ID>/u);
   assert.match(setup, /rtk npx wrangler versions deploy <VERSION_ID>@100% --yes/u);
