@@ -156,6 +156,11 @@ test("documents GitHub OAuth and signed automation as one versioned secret rollo
   assert.match(setup, /AUTOMATION_SECRET.*APP_TOKEN.*at least 32 independently random bytes/isu);
   assert.match(setup, /mktemp -d -t memory-garden-oauth/u);
   assert.match(setup, /chmod 600 "\$SECRETS_FILE"/u);
+  assert.match(setup, /worker-secrets\.json/u);
+  assert.match(setup, /JSON\.stringify/u);
+  assert.match(setup, /do not use a `\.dev\.vars` or dotenv file for this bundle/iu);
+  assert.doesNotMatch(setup, /worker\.secrets/u);
+  assert.doesNotMatch(setup, /printf '%s\\n'/u);
   assert.match(setup, /rtk npx wrangler versions secret bulk "\$SECRETS_FILE"/u);
   assert.match(setup, /rtk npx wrangler versions view <VERSION_ID>/u);
   assert.match(setup, /rtk npx wrangler versions deploy <VERSION_ID>@100% --yes/u);
@@ -168,6 +173,20 @@ test("documents GitHub OAuth and signed automation as one versioned secret rollo
   assert.match(smokeRunbook, /never use `wrangler secret put`/iu);
   assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /rtk npx wrangler secret put/u);
   assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /CF-Access-Client|cdn-cgi\/access/u);
+});
+
+test("JSON secret bundle round trips all settings and dotenv-sensitive characters", () => {
+  const bundle = {
+    GITHUB_OAUTH_CLIENT_ID: "client#id",
+    GITHUB_OAUTH_CLIENT_SECRET: "quote\" slash\\ hash# comma,",
+    BOOTSTRAP_ADMIN_EMAIL: "admin@example.test",
+    ALLOWED_MEMBER_EMAILS: "admin@example.test,member@example.test",
+    AUTOMATION_CLIENT_ID: "automation#id",
+    AUTOMATION_SECRET: "secret\"with\\characters#,",
+    APP_TOKEN: "token\"with\\characters#,",
+  };
+
+  assert.deepEqual(JSON.parse(JSON.stringify(bundle)), bundle);
 });
 
 test("fails before the network when any automation credential is missing", async () => {

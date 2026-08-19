@@ -35,15 +35,22 @@ Run this section only after the operator has explicitly authorized each remote a
    rtk npm run db:migrate:remote
    ```
 
-3. Create one non-deployed secret-bearing Worker version. Do **not** use plain `wrangler secret put`: it immediately deploys each setting and can expose a partially configured production version. Create the temporary directory outside this repository, restrict both directory and file permissions, and keep shell tracing disabled. The random-generation commands feed generated values directly into hidden variables, so they do not print in CI logs or terminal output.
+3. Create one non-deployed secret-bearing Worker version. Do **not** use plain `wrangler secret put`: it immediately deploys each setting and can expose a partially configured production version. Create the temporary directory outside this repository, restrict both directory and file permissions, and keep shell tracing disabled. The random-generation commands feed generated values directly into hidden variables, so they do not print in CI logs or terminal output. Do not use a `.dev.vars` or dotenv file for this bundle: it must be JSON so `#`, quotes, backslashes, and commas round-trip through `JSON.stringify` without dotenv parsing.
 
    ```bash
    set +x
    SECRETS_DIR="$(mktemp -d -t memory-garden-oauth.XXXXXX)"
    chmod 700 "$SECRETS_DIR"
-   SECRETS_FILE="$SECRETS_DIR/worker.secrets"
+   SECRETS_FILE="$SECRETS_DIR/worker-secrets.json"
    : > "$SECRETS_FILE"
    chmod 600 "$SECRETS_FILE"
+
+   cleanup_secret_bundle() {
+     unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
+     rm -f "$SECRETS_FILE"
+     rmdir "$SECRETS_DIR"
+   }
+   trap cleanup_secret_bundle EXIT HUP INT TERM
 
    read -r GITHUB_OAUTH_CLIENT_ID
    read -rs GITHUB_OAUTH_CLIENT_SECRET
@@ -52,19 +59,22 @@ Run this section only after the operator has explicitly authorized each remote a
    read -r AUTOMATION_CLIENT_ID
    IFS= read -r -s AUTOMATION_SECRET < <(openssl rand -base64 48)
    IFS= read -r -s APP_TOKEN < <(openssl rand -base64 48)
-   printf '%s\n' \
-     "GITHUB_OAUTH_CLIENT_ID=$GITHUB_OAUTH_CLIENT_ID" \
-     "GITHUB_OAUTH_CLIENT_SECRET=$GITHUB_OAUTH_CLIENT_SECRET" \
-     "BOOTSTRAP_ADMIN_EMAIL=$BOOTSTRAP_ADMIN_EMAIL" \
-     "ALLOWED_MEMBER_EMAILS=$ALLOWED_MEMBER_EMAILS" \
-     "AUTOMATION_CLIENT_ID=$AUTOMATION_CLIENT_ID" \
-     "AUTOMATION_SECRET=$AUTOMATION_SECRET" \
-     "APP_TOKEN=$APP_TOKEN" > "$SECRETS_FILE"
+   export GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
+   node -e '
+     const keys = ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET", "BOOTSTRAP_ADMIN_EMAIL", "ALLOWED_MEMBER_EMAILS", "AUTOMATION_CLIENT_ID", "AUTOMATION_SECRET", "APP_TOKEN"];
+     const bundle = Object.fromEntries(keys.map((key) => {
+       const value = process.env[key];
+       if (!value) throw new Error(`Missing ${key}`);
+       return [key, value];
+     }));
+     process.stdout.write(`${JSON.stringify(bundle)}\n`);
+   ' > "$SECRETS_FILE"
 
    rtk npx wrangler versions secret bulk "$SECRETS_FILE" --message "GitHub OAuth configuration"
-   unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
-   rm -f "$SECRETS_FILE"
-   rmdir "$SECRETS_DIR"
+   BULK_STATUS=$?
+   cleanup_secret_bundle
+   trap - EXIT HUP INT TERM
+   test "$BULK_STATUS" -eq 0
    ```
 
    Record the version ID returned by `versions secret bulk` as `<VERSION_ID>` in restricted release evidence. The returned version is not serving traffic yet. Before deployment, inspect the exact version and current rollout; do not paste secret values into evidence.
