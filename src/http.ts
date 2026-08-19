@@ -66,6 +66,20 @@ export function methodNotAllowed(allow: string, context: RequestContext): Respon
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+export function requireSameOrigin(request: Request, canonicalOrigin: string): void {
+  let configured: URL;
+  try {
+    configured = new URL(canonicalOrigin);
+  } catch {
+    throw new AppError("FORBIDDEN", "Forbidden", 403);
+  }
+  if (configured.protocol !== "https:"
+    || configured.origin !== canonicalOrigin
+    || request.headers.get("origin") !== canonicalOrigin) {
+    throw new AppError("FORBIDDEN", "Forbidden", 403);
+  }
+}
+
 function isJsonContentType(value: string | null): boolean {
   if (!value) return false;
   const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();
