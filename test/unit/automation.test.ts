@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fixedLengthBytesEqual } from "../../src/auth";
 import {
   AutomationAuthenticator,
@@ -13,10 +13,12 @@ const AUTOMATION_SECRET = "automation-secret-for-fixed-vectors";
 const APP_TOKEN = "app-token-for-fixed-vectors";
 const NONCE = "AAECAwQFBgcICQoLDA0ODw";
 const RAW_NONCE = "EBESExQVFhcYGRobHB0eHw";
+const MAX_NONCE = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw";
 const EMPTY_SIGNATURE = "12e547adcb5c3ae1dd5353c31d7d99488cfc1e50d0583caa822c4002000160fd";
 const MINUS_300_SIGNATURE = "138187ad40ea5946d8b0576023bbd9f44ed625e79f050bfb84f99957f7882f6e";
 const PLUS_300_SIGNATURE = "7399f7ebb9fa4b5b2c66dae1825e07805835e24be205e2deaf511c437784879c";
 const RAW_SIGNATURE = "c14c39912661fbb38c3dab0296c772addc345701bfec44a40aa111997dcfcd85";
+const MAX_NONCE_SIGNATURE = "de39c247fc7f9782f5237ce194c4e17b42d3e71c0c2cdcd74c0d4dc29e5d7dc9";
 const RAW_BODY = new Uint8Array([0, 255, 195, 40, 226, 130, 172]);
 
 describe("AutomationAuthenticator canonicalization and cryptography", () => {
@@ -76,6 +78,21 @@ describe("AutomationAuthenticator canonicalization and cryptography", () => {
     }
   });
 
+  it("retains a future-skew nonce through its final accepted server second", async () => {
+    const fixture = automationFixture();
+
+    await fixture.authenticator.verify(fixedRequest({
+      timestamp: "1787141100",
+      signature: PLUS_300_SIGNATURE,
+    }), 0);
+
+    expect(fixture.db.claims).toEqual([{
+      clientId: CLIENT_ID,
+      nonce: NONCE,
+      expiresAt: "2026-08-19T12:10:01.000Z",
+    }]);
+  });
+
   it("rejects otherwise-valid fixed signatures beyond either timestamp boundary", async () => {
     const late = automationFixture({ now: () => new Date(NOW.getTime() + 1_000) });
     await expect(late.authenticator.verify(fixedRequest({
@@ -91,6 +108,48 @@ describe("AutomationAuthenticator canonicalization and cryptography", () => {
 
     expect(late.db.claims).toEqual([]);
     expect(early.db.claims).toEqual([]);
+  });
+
+  it("revalidates timestamp skew after body hashing and APP token verification before claiming", async () => {
+    let clockReads = 0;
+    const fixture = automationFixture({
+      now: () => new Date(NOW.getTime() + (clockReads++ === 0 ? 0 : 301_000)),
+    });
+
+    await expect(fixture.authenticator.verify(fixedRequest(), 0)).rejects.toMatchObject({
+      code: "AUTH_REQUIRED", status: 401,
+    });
+    expect(clockReads).toBe(2);
+    expect(fixture.db.claims).toEqual([]);
+    expect(fixture.scheduled).toEqual([]);
+  });
+
+  it("accepts canonical nonces at the exact 16-byte and 64-byte boundaries", async () => {
+    for (const vector of [
+      { nonce: NONCE, signature: EMPTY_SIGNATURE },
+      { nonce: MAX_NONCE, signature: MAX_NONCE_SIGNATURE },
+    ]) {
+      const fixture = automationFixture();
+      await expect(fixture.authenticator.verify(fixedRequest(vector), 0)).resolves.toBeDefined();
+      expect(fixture.db.claims.map((claim) => claim.nonce)).toEqual([vector.nonce]);
+    }
+  });
+
+  it.each([
+    { bytes: 15, nonce: "A".repeat(20) },
+    { bytes: 65, nonce: "A".repeat(87) },
+  ])("rejects a canonical $bytes-byte nonce before invoking the base64 decoder", async ({ nonce }) => {
+    const decoder = vi.spyOn(globalThis, "atob");
+    const fixture = automationFixture();
+    try {
+      await expect(fixture.authenticator.verify(fixedRequest({ nonce }), 0)).rejects.toMatchObject({
+        code: "AUTH_REQUIRED", status: 401,
+      });
+      expect(decoder).not.toHaveBeenCalled();
+      expect(fixture.db.claims).toEqual([]);
+    } finally {
+      decoder.mockRestore();
+    }
   });
 
   it.each([

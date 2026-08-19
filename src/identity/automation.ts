@@ -5,6 +5,8 @@ const MAX_TIMESTAMP_SKEW_SECONDS = 300;
 const NONCE_RETENTION_SECONDS = MAX_TIMESTAMP_SKEW_SECONDS + 1;
 const MIN_NONCE_BYTES = 16;
 const MAX_NONCE_BYTES = 64;
+const MIN_NONCE_ENCODED_LENGTH = 22;
+const MAX_NONCE_ENCODED_LENGTH = 86;
 const LOWER_HEX_HMAC = /^[0-9a-f]{64}$/u;
 const CANONICAL_TIMESTAMP = /^(?:0|[1-9]\d{0,15})$/u;
 const BASE64URL = /^[A-Za-z0-9_-]+$/u;
@@ -50,10 +52,9 @@ export class AutomationAuthenticator {
     const headers = readAutomationHeaders(request);
     if (headers.clientId !== configuration.clientId) throw authenticationRequired();
 
-    const now = this.currentTime();
+    const validationNow = this.currentTime();
     const timestamp = parseTimestamp(headers.timestampText);
-    const nowSeconds = Math.floor(now.getTime() / 1_000);
-    if (timestamp === undefined || Math.abs(timestamp - nowSeconds) > MAX_TIMESTAMP_SKEW_SECONDS) {
+    if (timestamp === undefined || !isTimestampAccepted(timestamp, validationNow)) {
       throw authenticationRequired();
     }
     if (!isCanonicalNonce(headers.nonce)) throw authenticationRequired();
@@ -67,7 +68,12 @@ export class AutomationAuthenticator {
     if (!signatureValid) throw authenticationRequired();
     await verifyAutomationToken(request, { APP_TOKEN: configuration.appToken });
 
-    const expiresAt = new Date((timestamp + NONCE_RETENTION_SECONDS) * 1_000).toISOString();
+    const claimNow = this.currentTime();
+    if (!isTimestampAccepted(timestamp, claimNow)) throw authenticationRequired();
+    const claimNowSeconds = Math.floor(claimNow.getTime() / 1_000);
+    const expiresAt = new Date(
+      (Math.max(claimNowSeconds, timestamp) + NONCE_RETENTION_SECONDS) * 1_000,
+    ).toISOString();
     const claim = await this.db.prepare(
       `INSERT INTO automation_nonces (client_id, nonce, expires_at)
        VALUES (?, ?, ?)
@@ -76,7 +82,7 @@ export class AutomationAuthenticator {
     if (claim.meta.changes === 0) throw replayRejected();
     if (claim.meta.changes !== 1) throw new Error("Automation nonce did not persist");
 
-    this.scheduleExpiredCleanup(now.toISOString());
+    this.scheduleExpiredCleanup(claimNow.toISOString());
     return { bodyBytes };
   }
 
@@ -137,7 +143,13 @@ function parseTimestamp(value: string): number | undefined {
   return Number.isSafeInteger(timestamp) ? timestamp : undefined;
 }
 
+function isTimestampAccepted(timestamp: number, now: Date): boolean {
+  const nowSeconds = Math.floor(now.getTime() / 1_000);
+  return Math.abs(timestamp - nowSeconds) <= MAX_TIMESTAMP_SKEW_SECONDS;
+}
+
 function isCanonicalNonce(value: string): boolean {
+  if (value.length < MIN_NONCE_ENCODED_LENGTH || value.length > MAX_NONCE_ENCODED_LENGTH) return false;
   if (!BASE64URL.test(value)) return false;
   try {
     const bytes = decodeBase64Url(value);

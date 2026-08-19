@@ -9,6 +9,8 @@ const NOW = new Date("2026-08-19T12:00:00.000Z");
 const NONCE = "AAECAwQFBgcICQoLDA0ODw";
 const BODY = new TextEncoder().encode('{"title":"雪","content":"🌱"}');
 const SIGNATURE = "ec80117ecbd841e3b168f3b727372ca04ec2963ab77eddd90f3e20db55efde9c";
+const CLEANUP_NONCE = "ICEiIyQlJicoKSorLC0uLw";
+const CLEANUP_SIGNATURE = "9c67714ffb25088b59af4fc83133d044d92349a9a1cddf63f59c49e38bc551eb";
 
 describe("automation nonce claims in D1", () => {
   beforeEach(async () => {
@@ -85,18 +87,76 @@ describe("automation nonce claims in D1", () => {
     expect(fixture.scheduled).toHaveLength(1);
     await Promise.all(fixture.scheduled);
   });
+
+  it("retains a nonce claimed at the past-skew boundary for 301 seconds after claim time", async () => {
+    const claimTime = new Date(NOW.getTime() + 300_000);
+    const fixture = automationFixture({ now: () => new Date(claimTime) });
+
+    await fixture.authenticator.verify(signedRequest(), BODY.byteLength);
+
+    expect(await nonceRows()).toEqual([{
+      client_id: env.AUTOMATION_CLIENT_ID,
+      nonce: NONCE,
+      expires_at: "2026-08-19T12:10:01.000Z",
+    }]);
+    await Promise.all(fixture.scheduled);
+  });
+
+  it("cannot reclaim a cleaned nonce when body processing crosses the replay boundary", async () => {
+    const validationTime = new Date(NOW.getTime() + 300_000);
+    const expiredTime = new Date(NOW.getTime() + 301_000);
+    await env.DB.prepare(
+      "INSERT INTO automation_nonces (client_id, nonce, expires_at) VALUES (?, ?, ?)",
+    ).bind(env.AUTOMATION_CLIENT_ID, NONCE, expiredTime.toISOString()).run();
+
+    const firstClockRead = deferred<void>();
+    const bodyReadStarted = deferred<void>();
+    const releaseBody = deferred<void>();
+    let clockReads = 0;
+    const delayed = automationFixture({
+      now: () => {
+        clockReads += 1;
+        if (clockReads === 1) {
+          firstClockRead.resolve();
+          return new Date(validationTime);
+        }
+        return new Date(expiredTime);
+      },
+    });
+    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+      async pull(controller) {
+        bodyReadStarted.resolve();
+        await releaseBody.promise;
+        controller.enqueue(BODY);
+        controller.close();
+      },
+    });
+    const pending = delayed.authenticator.verify(signedRequest(SIGNATURE, stream), BODY.byteLength);
+    await Promise.all([firstClockRead.promise, bodyReadStarted.promise]);
+
+    const cleanup = automationFixture({ now: () => new Date(expiredTime) });
+    await cleanup.authenticator.verify(cleanupRequest(), 0);
+    await Promise.all(cleanup.scheduled);
+    expect((await nonceRows()).some((row) => row.nonce === NONCE)).toBe(false);
+
+    releaseBody.resolve();
+    await expect(pending).rejects.toMatchObject({ code: "AUTH_REQUIRED", status: 401 });
+    expect(clockReads).toBe(2);
+    expect((await nonceRows()).some((row) => row.nonce === NONCE)).toBe(false);
+    expect(delayed.scheduled).toEqual([]);
+  });
 });
 
-function automationFixture() {
+function automationFixture(options: { now?: () => Date } = {}) {
   const scheduled: Promise<unknown>[] = [];
   const authenticator = new AutomationAuthenticator(env.DB, env, {
-    now: () => new Date(NOW),
+    now: options.now || (() => new Date(NOW)),
     waitUntil: (promise) => { scheduled.push(promise); },
   });
   return { authenticator, scheduled };
 }
 
-function signedRequest(signature = SIGNATURE): Request {
+function signedRequest(signature = SIGNATURE, body: BodyInit = BODY): Request {
   return new Request("https://memory.crgmhrc.asia/api/notes?z=last&a=first", {
     method: "POST",
     headers: {
@@ -107,7 +167,19 @@ function signedRequest(signature = SIGNATURE): Request {
       "x-automation-signature": signature,
       authorization: `Bearer ${env.APP_TOKEN}`,
     },
-    body: BODY,
+    body,
+  });
+}
+
+function cleanupRequest(): Request {
+  return new Request("https://memory.crgmhrc.asia/api/health?cleanup=1", {
+    headers: {
+      "x-automation-id": env.AUTOMATION_CLIENT_ID,
+      "x-automation-timestamp": "1787141101",
+      "x-automation-nonce": CLEANUP_NONCE,
+      "x-automation-signature": CLEANUP_SIGNATURE,
+      authorization: `Bearer ${env.APP_TOKEN}`,
+    },
   });
 }
 
@@ -116,4 +188,10 @@ async function nonceRows() {
     "SELECT client_id, nonce, expires_at FROM automation_nonces ORDER BY client_id, nonce",
   ).all<{ client_id: string; nonce: string; expires_at: string }>();
   return result.results;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
 }
