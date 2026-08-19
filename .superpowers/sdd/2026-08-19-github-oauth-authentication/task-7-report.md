@@ -28,7 +28,7 @@ The signed automation smoke migration was already moved earlier to preserve stan
 
 ## Commit
 
-`39fce70 feat: add GitHub login workspace UI`
+`18a03ad feat: add GitHub login workspace UI`
 
 ## Concerns
 
