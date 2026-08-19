@@ -283,9 +283,9 @@ class FakeD1 {
       }
     } else if (sql.includes("LIMIT -1 OFFSET 5")) {
       const memberId = String(bindings[0]);
-      const keep = new Set(this.rows
-        .filter((row) => row.member_id === memberId)
-        .sort(newestFirst)
+      const memberRows = this.rows.filter((row) => row.member_id === memberId);
+      const ordered = sql.includes("ROWID DESC") ? [...memberRows].reverse() : memberRows.sort(newestFirst);
+      const keep = new Set(ordered
         .slice(0, 5)
         .map((row) => row.token_hash));
       changes = this.remove((row) => row.member_id === memberId && !keep.has(row.token_hash));

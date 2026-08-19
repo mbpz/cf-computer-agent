@@ -67,6 +67,40 @@ describe("browser sessions in D1", () => {
     ]);
   });
 
+  it("retains the newest returned token when six sessions have identical timestamps", async () => {
+    const scheduled: Promise<unknown>[] = [];
+    const sessions = [];
+    for (let randomValue = 1; randomValue <= 6; randomValue += 1) {
+      sessions.push(await serviceWith(START, randomValue, members, (promise) => { scheduled.push(promise); }).create(member));
+    }
+    const resolver = serviceWith(START, 7, members, (promise) => { scheduled.push(promise); });
+
+    await expect(resolver.resolve(cookieRequest(sessions[5]!.token))).resolves.toEqual(member);
+    await expect(resolver.resolve(cookieRequest(sessions[0]!.token))).rejects.toMatchObject({
+      code: "AUTH_REQUIRED", status: 401,
+    });
+    expect(await sessionRows()).toHaveLength(5);
+    await Promise.all(scheduled);
+  });
+
+  it("retains both successful concurrent tokens when all sessions have identical timestamps", async () => {
+    const scheduled: Promise<unknown>[] = [];
+    for (let randomValue = 1; randomValue <= 5; randomValue += 1) {
+      await serviceWith(START, randomValue, members, (promise) => { scheduled.push(promise); }).create(member);
+    }
+
+    const [sixth, seventh] = await Promise.all([
+      serviceWith(START, 6, members, (promise) => { scheduled.push(promise); }).create(member),
+      serviceWith(START, 15, members, (promise) => { scheduled.push(promise); }).create(member),
+    ]);
+    const resolver = serviceWith(START, 7, members, (promise) => { scheduled.push(promise); });
+
+    await expect(resolver.resolve(cookieRequest(sixth.token))).resolves.toEqual(member);
+    await expect(resolver.resolve(cookieRequest(seventh.token))).resolves.toEqual(member);
+    expect(await sessionRows()).toHaveLength(5);
+    await Promise.all(scheduled);
+  });
+
   it("does not insert a session for a member disabled after the login read", async () => {
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind(member.id).run();
 
@@ -107,9 +141,18 @@ function serviceAt(
   members: MembersRepository,
   waitUntil: (promise: Promise<unknown>) => void = () => undefined,
 ): SessionService {
+  return serviceWith(START + offsetSeconds * 1_000, offsetSeconds + 1, members, waitUntil);
+}
+
+function serviceWith(
+  now: number,
+  randomValue: number,
+  members: MembersRepository,
+  waitUntil: (promise: Promise<unknown>) => void,
+): SessionService {
   return new SessionService(env.DB, members, {
-    now: () => new Date(START + offsetSeconds * 1_000),
-    randomBytes: bytesFor(offsetSeconds + 1),
+    now: () => new Date(now),
+    randomBytes: bytesFor(randomValue),
     waitUntil,
   });
 }

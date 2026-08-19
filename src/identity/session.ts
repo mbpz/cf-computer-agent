@@ -61,7 +61,7 @@ export class SessionService {
          WHERE token_hash IN (
            SELECT token_hash FROM auth_sessions
            WHERE member_id = ?
-           ORDER BY expires_at DESC, created_at DESC, token_hash DESC
+           ORDER BY expires_at DESC, created_at DESC, rowid DESC
            LIMIT -1 OFFSET 5
          )`,
       ).bind(member.id),
