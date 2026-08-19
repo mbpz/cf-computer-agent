@@ -1,9 +1,14 @@
 export type MemberRole = "admin" | "contributor";
 export type MemberStatus = "active" | "disabled";
 
+export interface MemberIdentity {
+  identitySubject: string;
+  email: string;
+}
+
 export interface Member {
   id: string;
-  accessSub: string;
+  identitySubject: string;
   email: string;
   role: MemberRole;
   status: MemberStatus;
@@ -14,7 +19,7 @@ export interface Member {
 
 export interface CreateMember {
   id: string;
-  accessSub: string;
+  identitySubject: string;
   email: string;
   role: MemberRole;
   status: MemberStatus;

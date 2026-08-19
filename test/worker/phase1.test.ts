@@ -127,7 +127,7 @@ describe("Phase 1 API permission matrix", () => {
     expect(members.status).toBe(200);
     const memberBody = await members.json<Record<string, unknown>>();
     expect(JSON.stringify(memberBody)).not.toContain("sub-admin");
-    expect(JSON.stringify(memberBody)).not.toContain("accessSub");
+    expect(JSON.stringify(memberBody)).not.toContain("identitySubject");
 
     const space = await memberApi("sub-admin", "/api/admin/spaces", {
       method: "POST",

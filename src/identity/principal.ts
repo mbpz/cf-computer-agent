@@ -1,11 +1,11 @@
 import { verifyAutomationToken, type AuthEnvironment } from "../auth";
-import { verifyAccessJwt, type AccessEnvironment, type AccessIdentity, type VerifiedAccessAssertion } from "./access-jwt";
+import { verifyAccessJwt, type AccessEnvironment, type VerifiedAccessAssertion } from "./access-jwt";
 import type { Member } from "../members/types";
 
 export interface MemberPrincipal {
   kind: "member";
   memberId: string;
-  accessSub: string;
+  identitySubject: string;
   email: string;
   role: "admin" | "contributor";
 }
@@ -25,7 +25,7 @@ export interface ResolvePrincipalDependencies {
 }
 
 interface MembersResolver {
-  resolveFirstLogin(identity: AccessIdentity): Promise<Member>;
+  resolveFirstLogin(identity: { identitySubject: string; email: string }): Promise<Member>;
 }
 
 export async function resolvePrincipal(
@@ -38,14 +38,17 @@ export async function resolvePrincipal(
     await verifyAutomationToken(request, env);
     return { kind: "automation", role: "automation" };
   }
-  return memberPrincipal(await dependencies.members.resolveFirstLogin(assertion));
+  return memberPrincipal(await dependencies.members.resolveFirstLogin({
+    identitySubject: assertion.sub,
+    email: assertion.email,
+  }));
 }
 
 function memberPrincipal(member: Member): MemberPrincipal {
   return {
     kind: "member",
     memberId: member.id,
-    accessSub: member.accessSub,
+    identitySubject: member.identitySubject,
     email: member.email,
     role: member.role,
   };

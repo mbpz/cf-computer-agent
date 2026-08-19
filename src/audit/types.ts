@@ -7,6 +7,7 @@ export type AuditActorKind = "member" | "automation" | "system";
 
 export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
+  "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
@@ -18,6 +19,7 @@ export interface AuditActionMap {
 export type AuditAction = keyof AuditActionMap;
 export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.login",
+  "member.identity_linked",
   "member.status_updated",
   "space.created",
   "space.updated",
@@ -75,6 +77,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["role"]));
       if (!isMemberRole(metadata.role)) throw invalidMetadata();
       return safeMetadata({ role: metadata.role });
+    }
+    case "member.identity_linked": {
+      assertResourceType(resourceType, "member");
+      const metadata = readPlainDataObject(input, new Set(["provider"]));
+      if (metadata.provider !== "github") throw invalidMetadata();
+      return safeMetadata({ provider: "github" });
     }
     case "member.status_updated": {
       assertResourceType(resourceType, "member");

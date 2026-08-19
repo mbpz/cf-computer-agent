@@ -17,6 +17,7 @@ describe("audit input validation", () => {
 
   it.each([
     ["member.login", "member", { role: "contributor" }],
+    ["member.identity_linked", "member", { provider: "github" }],
     ["member.status_updated", "member", { previousStatus: "active", newStatus: "disabled" }],
     ["space.created", "space", { status: "active" }],
     ["space.updated", "space", { previousStatus: "active", newStatus: "disabled" }],
@@ -43,6 +44,9 @@ describe("audit input validation", () => {
 
   it.each([
     ["member.login", "member", { role: "contributor", email: "secret@example.test" }],
+    ["member.identity_linked", "member", { provider: "github", subject: "github:123" }],
+    ["member.identity_linked", "member", { provider: "github", githubUserId: "123" }],
+    ["member.identity_linked", "member", { provider: "github", email: "secret@example.test" }],
     ["member.status_updated", "member", { previousStatus: "active", newStatus: "disabled", sub: "secret-sub" }],
     ["space.created", "space", { status: "active", title: "Secret title" }],
     ["space.updated", "space", { previousStatus: "active", newStatus: "disabled", token: "secret" }],

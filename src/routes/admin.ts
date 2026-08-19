@@ -136,8 +136,8 @@ export async function routeAdminApi(
   return undefined;
 }
 
-function memberDto(member: Member): Omit<Member, "accessSub"> {
-  const { accessSub: _accessSub, ...safe } = member;
+function memberDto(member: Member): Omit<Member, "identitySubject"> {
+  const { identitySubject: _identitySubject, ...safe } = member;
   return safe;
 }
 

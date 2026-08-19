@@ -5,7 +5,7 @@ import type { Member } from "../../src/members/types";
 
 const member = (): Member => ({
   id: "member-1",
-  accessSub: "access-subject-1",
+  identitySubject: "access-subject-1",
   email: "member@example.test",
   role: "contributor",
   status: "active",
@@ -28,7 +28,7 @@ describe("resolvePrincipal", () => {
       .resolves.toEqual({
         kind: "member",
         memberId: "member-1",
-        accessSub: "access-subject-1",
+        identitySubject: "access-subject-1",
         email: "member@example.test",
         role: "contributor",
       });

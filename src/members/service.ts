@@ -1,11 +1,12 @@
-import type { AccessIdentity } from "../identity/access-jwt";
+import type { GitHubIdentity } from "../identity/github-oauth";
 import { canonicalizeEmail } from "../identity/access-jwt";
 import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
-import type { CreateMember, Member, MemberStatus } from "./types";
+import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
 
 export interface MembersEnvironment {
   BOOTSTRAP_ADMIN_EMAIL?: string;
+  ALLOWED_MEMBER_EMAILS?: string;
 }
 
 export interface MembersServiceOptions {
@@ -24,6 +25,8 @@ export class MembersService {
   private readonly auditId: () => string;
   private readonly lastSeenWindowMs: number;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly bootstrapAdminEmail: string | undefined;
+  private readonly allowedMemberEmails: string | undefined;
 
   constructor(
     private readonly repository: MembersRepositoryPort,
@@ -32,6 +35,7 @@ export class MembersService {
   ) {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.bootstrapAdminEmail = canonicalizeEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
+    this.allowedMemberEmails = environment.ALLOWED_MEMBER_EMAILS;
     this.id = options.id || (() => crypto.randomUUID());
     this.auditId = options.auditId || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
@@ -39,10 +43,28 @@ export class MembersService {
     this.waitUntil = options.waitUntil;
   }
 
-  private readonly bootstrapAdminEmail: string | undefined;
+  async resolveGitHubLogin(input: GitHubIdentity): Promise<Member> {
+    const allowedEmails = parseAllowedMemberEmails(this.allowedMemberEmails, this.bootstrapAdminEmail);
+    const identity = githubMemberIdentity(input);
+    if (!allowedEmails.has(identity.email)) {
+      throw new AppError("MEMBER_NOT_ALLOWED", "Member access is not allowed", 403);
+    }
 
-  async resolveFirstLogin(identity: AccessIdentity): Promise<Member> {
-    const existing = await this.repository.findByAccessSub(identity.sub);
+    const bySubject = await this.repository.findByIdentitySubject(identity.identitySubject);
+    if (bySubject) return this.resolveExisting(bySubject);
+
+    const byEmail = await this.repository.findByCanonicalEmail(identity.email, 2);
+    if (byEmail.length > 1) throw identityConflict();
+    if (byEmail.length === 1) return this.linkExistingIdentity(byEmail[0]!, identity);
+
+    const hasActiveAdmin = await this.repository.hasActiveAdmin();
+    const role = !hasActiveAdmin && this.bootstrapAdminEmail === identity.email ? "admin" : "contributor";
+    return this.insertWithConflictRecovery(identity, role);
+  }
+
+  // Transitional provider-neutral seam retained until the Access principal is removed.
+  async resolveFirstLogin(identity: MemberIdentity): Promise<Member> {
+    const existing = await this.repository.findByIdentitySubject(identity.identitySubject);
     if (existing) return this.resolveExisting(existing);
 
     const hasActiveAdmin = await this.repository.hasActiveAdmin();
@@ -69,35 +91,73 @@ export class MembersService {
     return updated;
   }
 
-  private async insertWithConflictRecovery(identity: AccessIdentity, role: "admin" | "contributor"): Promise<Member> {
+  private async linkExistingIdentity(existing: Member, identity: MemberIdentity): Promise<Member> {
+    requireActive(existing);
+    const updatedAt = this.now().toISOString();
+    let linked: Member | null;
+    try {
+      linked = await this.repository.linkIdentityWithAudit(
+        existing.id,
+        existing.identitySubject,
+        identity.identitySubject,
+        updatedAt,
+        {
+          id: this.auditId(),
+          actorKind: "member",
+          actorId: existing.id,
+          action: "member.identity_linked",
+          resourceType: "member",
+          resourceId: existing.id,
+          metadata: { provider: "github" },
+          createdAt: updatedAt,
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof MembersConflictError) || error.kind !== "identity_subject") throw error;
+      return this.resolveConcurrentIdentityLink(existing.id, identity.identitySubject);
+    }
+    if (!linked) return this.resolveConcurrentIdentityLink(existing.id, identity.identitySubject);
+    return this.resolveExisting(linked);
+  }
+
+  private async resolveConcurrentIdentityLink(memberId: string, subject: string): Promise<Member> {
+    const bySubject = await this.repository.findByIdentitySubject(subject);
+    if (!bySubject || bySubject.id !== memberId) throw identityConflict();
+    return this.resolveExisting(bySubject);
+  }
+
+  private async insertWithConflictRecovery(
+    identity: MemberIdentity,
+    role: "admin" | "contributor",
+  ): Promise<Member> {
     try {
       return await this.resolveExisting(await this.insertMember(identity, role));
     } catch (error) {
       if (!(error instanceof MembersConflictError)) throw error;
-      if (error.kind === "access_sub") {
-        const bySubject = await this.repository.findByAccessSub(identity.sub);
+      if (error.kind === "identity_subject") {
+        const bySubject = await this.repository.findByIdentitySubject(identity.identitySubject);
         if (bySubject) return this.resolveExisting(bySubject);
-        throw new AppError("MEMBER_CONFLICT", "Member login conflicted", 409, true);
+        throw identityConflict();
       }
       if (role !== "admin") throw error;
     }
 
-    const bySubject = await this.repository.findByAccessSub(identity.sub);
+    const bySubject = await this.repository.findByIdentitySubject(identity.identitySubject);
     if (bySubject) return this.resolveExisting(bySubject);
-    if (role !== "admin") throw new AppError("MEMBER_CONFLICT", "Member login conflicted", 409, true);
+    if (role !== "admin") throw identityConflict();
 
     try {
       return await this.resolveExisting(await this.insertMember(identity, "contributor"));
     } catch (error) {
       if (!(error instanceof MembersConflictError)) throw error;
-      if (error.kind !== "access_sub") throw error;
-      const retriedSubject = await this.repository.findByAccessSub(identity.sub);
+      if (error.kind !== "identity_subject") throw error;
+      const retriedSubject = await this.repository.findByIdentitySubject(identity.identitySubject);
       if (retriedSubject) return this.resolveExisting(retriedSubject);
-      throw new AppError("MEMBER_CONFLICT", "Member login conflicted", 409, true);
+      throw identityConflict();
     }
   }
 
-  private async insertMember(identity: AccessIdentity, role: "admin" | "contributor"): Promise<Member> {
+  private async insertMember(identity: MemberIdentity, role: "admin" | "contributor"): Promise<Member> {
     const member = this.newMember(identity, role);
     if (!this.repository.insertWithAudit) return this.repository.insert(member);
     return this.repository.insertWithAudit(member, {
@@ -106,11 +166,11 @@ export class MembersService {
     });
   }
 
-  private newMember(identity: AccessIdentity, role: "admin" | "contributor"): CreateMember {
+  private newMember(identity: MemberIdentity, role: "admin" | "contributor"): CreateMember {
     const now = this.now().toISOString();
     return {
       id: this.id(),
-      accessSub: identity.sub,
+      identitySubject: identity.identitySubject,
       email: identity.email,
       role,
       status: "active",
@@ -120,7 +180,7 @@ export class MembersService {
   }
 
   private async resolveExisting(member: Member): Promise<Member> {
-    if (member.status !== "active") throw new AppError("MEMBER_DISABLED", "Member access is disabled", 403);
+    requireActive(member);
     const now = this.now();
     const staleBefore = new Date(now.getTime() - this.lastSeenWindowMs).toISOString();
     const update = this.repository.touchLastSeenIfStale(member.id, now.toISOString(), staleBefore)
@@ -129,4 +189,51 @@ export class MembersService {
     this.waitUntil(update);
     return member;
   }
+}
+
+function parseAllowedMemberEmails(input: string | undefined, bootstrapEmail: string | undefined): ReadonlySet<string> {
+  if (typeof input !== "string") throw oauthConfigurationInvalid();
+  const allowed = new Set<string>();
+  for (const entry of input.split(",")) {
+    const email = canonicalEmail(entry);
+    if (!email || allowed.has(email)) throw oauthConfigurationInvalid();
+    allowed.add(email);
+  }
+  if (allowed.size === 0 || !bootstrapEmail || !allowed.has(bootstrapEmail)) throw oauthConfigurationInvalid();
+  return allowed;
+}
+
+function githubMemberIdentity(identity: GitHubIdentity): MemberIdentity {
+  const email = canonicalEmail(identity.email);
+  if (!email
+    || identity.email !== email
+    || !/^github:[1-9]\d*$/u.test(identity.subject)
+    || !/^[1-9]\d*$/u.test(identity.githubUserId)
+    || identity.subject !== `github:${identity.githubUserId}`) {
+    throw new AppError("OAUTH_IDENTITY_INVALID", "GitHub identity is invalid", 401);
+  }
+  return { identitySubject: identity.subject, email };
+}
+
+function canonicalEmail(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const email = value.trim().toLowerCase();
+  if (email.length === 0 || email.length > 254 || !/^[\x21-\x7e]+$/u.test(email)) return undefined;
+  const at = email.indexOf("@");
+  if (at <= 0 || at !== email.lastIndexOf("@") || at === email.length - 1 || at > 64) return undefined;
+  const domain = email.slice(at + 1);
+  if (!domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) return undefined;
+  return email;
+}
+
+function requireActive(member: Member): void {
+  if (member.status !== "active") throw new AppError("MEMBER_DISABLED", "Member access is disabled", 403);
+}
+
+function oauthConfigurationInvalid(): AppError {
+  return new AppError("OAUTH_CONFIG_INVALID", "GitHub authentication is not configured", 503);
+}
+
+function identityConflict(): AppError {
+  return new AppError("MEMBER_IDENTITY_CONFLICT", "Member identity conflicted", 409);
 }

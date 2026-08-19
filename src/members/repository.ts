@@ -4,7 +4,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pag
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 
-export type MembersConflictKind = "access_sub" | "active_admin";
+export type MembersConflictKind = "identity_subject" | "active_admin";
 
 export class MembersConflictError extends Error {
   constructor(readonly kind: MembersConflictKind) {
@@ -13,11 +13,19 @@ export class MembersConflictError extends Error {
 }
 
 export interface MembersRepositoryPort {
-  findByAccessSub(accessSub: string): Promise<Member | null>;
+  findByIdentitySubject(subject: string): Promise<Member | null>;
+  findByCanonicalEmail(email: string, limit: 2): Promise<Member[]>;
   findById(id: string): Promise<Member | null>;
   hasActiveAdmin(): Promise<boolean>;
   insert(member: CreateMember): Promise<Member>;
   insertWithAudit?(member: CreateMember, audit: CreateAuditEvent): Promise<Member>;
+  linkIdentityWithAudit(
+    memberId: string,
+    expectedSubject: string,
+    newSubject: string,
+    updatedAt: string,
+    audit: CreateAuditEvent,
+  ): Promise<Member | null>;
   touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean>;
   listPage(limit?: number, cursor?: string, status?: MemberStatus): Promise<MemberPage>;
   updateContributorStatus(id: string, status: MemberStatus, updatedAt?: string): Promise<Member | null>;
@@ -38,8 +46,15 @@ type MemberRow = {
 export class MembersRepository implements MembersRepositoryPort {
   constructor(private readonly db: D1Database, private readonly audit?: AuditRepository) {}
 
-  async findByAccessSub(accessSub: string): Promise<Member | null> {
-    return mapMember(await this.db.prepare(`${memberSelect} WHERE access_sub = ?`).bind(accessSub).first<MemberRow>());
+  async findByIdentitySubject(subject: string): Promise<Member | null> {
+    return mapMember(await this.db.prepare(`${memberSelect} WHERE access_sub = ?`).bind(subject).first<MemberRow>());
+  }
+
+  async findByCanonicalEmail(email: string, limit: 2): Promise<Member[]> {
+    const rows = await this.db.prepare(
+      `${memberSelect} WHERE LOWER(TRIM(email)) = ? ORDER BY id ASC LIMIT ?`,
+    ).bind(email, limit).all<MemberRow>();
+    return rows.results.map(mapMemberRow);
   }
 
   async findById(id: string): Promise<Member | null> {
@@ -55,7 +70,7 @@ export class MembersRepository implements MembersRepositoryPort {
       await this.db.prepare(
         "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       ).bind(
-        member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt,
+        member.id, member.identitySubject, member.email, member.role, member.status, member.createdAt, member.updatedAt,
       ).run();
     } catch (error) {
       const conflict = classifyMembersConflict(error);
@@ -80,6 +95,34 @@ export class MembersRepository implements MembersRepositoryPort {
       throw error;
     }
     return { ...member, lastSeenAt: null };
+  }
+
+  async linkIdentityWithAudit(
+    memberId: string,
+    expectedSubject: string,
+    newSubject: string,
+    updatedAt: string,
+    input: CreateAuditEvent,
+  ): Promise<Member | null> {
+    if (!this.audit) throw new TypeError("Audit repository is required for identity linking");
+    assertMemberIdentityAudit(memberId, input);
+    try {
+      const results = await this.db.batch([
+        this.db.prepare(
+          "UPDATE members SET access_sub = ?, updated_at = ? WHERE id = ? AND access_sub = ?",
+        ).bind(newSubject, updatedAt, memberId, expectedSubject),
+        this.audit.prepareResourceWriteAudit(input, { table: "members", id: memberId }),
+      ]);
+      if (results[0]?.meta.changes === 0 && results[1]?.meta.changes === 0) return null;
+      if (results[0]?.meta.changes !== 1 || results[1]?.meta.changes !== 1) {
+        throw new Error("Member identity link audit did not persist");
+      }
+    } catch (error) {
+      const conflict = classifyMembersConflict(error);
+      if (conflict) throw new MembersConflictError(conflict);
+      throw error;
+    }
+    return this.findById(memberId);
   }
 
   async touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean> {
@@ -143,7 +186,7 @@ export class MembersRepository implements MembersRepositoryPort {
   private prepareInsert(member: CreateMember): D1PreparedStatement {
     return this.db.prepare(
       "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).bind(member.id, member.accessSub, member.email, member.role, member.status, member.createdAt, member.updatedAt);
+    ).bind(member.id, member.identitySubject, member.email, member.role, member.status, member.createdAt, member.updatedAt);
   }
 }
 
@@ -152,9 +195,9 @@ const memberSelect = "SELECT id, access_sub, email, role, status, created_at, up
 function classifyMembersConflict(error: unknown): MembersConflictKind | undefined {
   if (!(error instanceof Error)) return undefined;
   const known = new Map<string, MembersConflictKind>([
-    ["UNIQUE constraint failed: members.access_sub", "access_sub"],
-    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT", "access_sub"],
-    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "access_sub"],
+    ["UNIQUE constraint failed: members.access_sub", "identity_subject"],
+    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT", "identity_subject"],
+    ["D1_ERROR: UNIQUE constraint failed: members.access_sub: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "identity_subject"],
     ["UNIQUE constraint failed: members.role", "active_admin"],
     ["D1_ERROR: UNIQUE constraint failed: members.role: SQLITE_CONSTRAINT", "active_admin"],
     ["D1_ERROR: UNIQUE constraint failed: members.role: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "active_admin"],
@@ -181,7 +224,7 @@ function mapMember(row: MemberRow | null): Member | null {
 function mapMemberRow(row: MemberRow): Member {
   return {
     id: row.id,
-    accessSub: row.access_sub,
+    identitySubject: row.access_sub,
     email: row.email,
     role: row.role,
     status: row.status,
@@ -202,5 +245,12 @@ function assertMemberStatusAudit(member: Member, status: MemberStatus, audit: Cr
   if (audit.actorKind !== "member" || audit.action !== "member.status_updated" || audit.resourceType !== "member"
     || audit.resourceId !== member.id || audit.metadata.previousStatus !== member.status || audit.metadata.newStatus !== status) {
     throw new TypeError("Member status audit binding is invalid");
+  }
+}
+
+function assertMemberIdentityAudit(memberId: string, audit: CreateAuditEvent): void {
+  if (audit.actorKind !== "member" || audit.actorId !== memberId || audit.action !== "member.identity_linked"
+    || audit.resourceType !== "member" || audit.resourceId !== memberId || audit.metadata.provider !== "github") {
+    throw new TypeError("Member identity audit binding is invalid");
   }
 }
