@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "../config";
-import { AppError, methodNotAllowed, requireSameOrigin, type RequestContext } from "../http";
+import { AppError, errorResponse, logRequestFailure, methodNotAllowed, requireSameOrigin, type RequestContext } from "../http";
 import type { GitHubOAuthClient } from "../identity/github-oauth";
 import { clearCookie, oauthCookie, readUniqueCookie, sessionCookie } from "../identity/oauth-cookies";
 import type { SessionService } from "../identity/session";
@@ -68,10 +68,15 @@ export async function routeAuth(
   if (url.pathname === "/auth/logout") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
-    await services.sessions.logout(request);
-    const response = authResponse(null, 204, context);
-    response.headers.append("set-cookie", clearCookie(SESSION_COOKIE));
-    return response;
+    let response: Response;
+    try {
+      await services.sessions.logout(request);
+      response = authResponse(null, 204, context);
+    } catch (error) {
+      logRequestFailure(request, context, error);
+      response = errorResponse(error, context.requestId);
+    }
+    return clearSessionCookie(response);
   }
 
   return undefined;
@@ -80,6 +85,11 @@ export async function routeAuth(
 export function clearOAuthCookies(response: Response): Response {
   response.headers.append("set-cookie", clearCookie(OAUTH_STATE_COOKIE));
   response.headers.append("set-cookie", clearCookie(OAUTH_VERIFIER_COOKIE));
+  return response;
+}
+
+export function clearSessionCookie(response: Response): Response {
+  response.headers.append("set-cookie", clearCookie(SESSION_COOKIE));
   return response;
 }
 

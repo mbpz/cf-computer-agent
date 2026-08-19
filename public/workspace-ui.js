@@ -27,6 +27,38 @@ export async function runLatestOperation(guard, operation, onSuccess, onError) {
   }
 }
 
+export function createLogoutController(request, callbacks) {
+  const guard = createOperationGuard();
+  let active;
+  return Object.freeze({
+    run() {
+      if (active) return active;
+      const generation = guard.begin();
+      callbacks.onPendingChange(true);
+      active = postLogout(request).then(
+        () => {
+          if (!guard.isCurrent(generation)) return;
+          active = undefined;
+          callbacks.onPendingChange(false);
+          callbacks.onSuccess();
+        },
+        (error) => {
+          if (!guard.isCurrent(generation)) return;
+          active = undefined;
+          callbacks.onPendingChange(false);
+          callbacks.onError(error);
+        },
+      );
+      return active;
+    },
+    invalidate() {
+      guard.begin();
+      active = undefined;
+      callbacks.onPendingChange(false);
+    },
+  });
+}
+
 export function drawerState(open) {
   return Object.freeze({
     open,

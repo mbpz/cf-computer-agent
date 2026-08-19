@@ -1,5 +1,7 @@
 # Production Release Runbook Design
 
+> **Status: superseded.** The Access-first release design is replaced by [2026-08-19-github-oauth-authentication-design.md](./2026-08-19-github-oauth-authentication-design.md) and its GitHub OAuth runbook. Do not use this document for a current production release.
+
 ## Goal
 
 Create one authoritative, copyable production release checklist for Memory Garden that covers authorized remote D1 migration, Access-first Worker deployment, browser verification, automation smoke, evidence capture, and safe rollback without executing any remote operation while authoring the document.

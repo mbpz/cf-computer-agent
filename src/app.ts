@@ -2,7 +2,7 @@ import { AnswerService } from "./ai/answer-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
-import { AppError, createRequestContext, errorResponse, jsonResponse, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
+import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
 import { createGitHubOAuthClient } from "./identity/github-oauth";
 import { resolvePrincipal, type Principal } from "./identity/principal";
@@ -22,6 +22,7 @@ import { SubmissionsService } from "./submissions/service";
 
 export interface AppDependencies {
   githubFetch?: typeof fetch;
+  sessionDatabase?: D1Database;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -106,7 +107,7 @@ function createRequestServices(env: Env, ctx: ExecutionContext, dependencies: Ap
       now: () => Date.now(),
       randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
     }),
-    sessions: new SessionService(env.DB, memberRecords, { waitUntil }),
+    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
   };
@@ -183,15 +184,4 @@ function withAssetSecurityHeaders(response: Response, requestId: string): Respon
   headers.set("x-frame-options", "DENY");
   headers.set("x-request-id", requestId);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-function logRequestFailure(request: Request, context: RequestContext, error: unknown): void {
-  const appError = error instanceof AppError ? error : undefined;
-  console.error("request failed", {
-    requestId: context.requestId,
-    method: request.method,
-    path: new URL(request.url).pathname,
-    code: appError?.code || "INTERNAL_ERROR",
-    status: appError?.status || 500,
-  });
 }

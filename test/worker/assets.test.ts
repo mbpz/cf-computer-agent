@@ -6,6 +6,7 @@ import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
 import { MIGRATIONS } from "../fixtures/d1";
+import { SHIPPED_PUBLIC_ASSETS } from "../fixtures/public-assets";
 
 let sessionToken: string;
 
@@ -33,14 +34,16 @@ describe("workspace assets", () => {
     expect(html).toContain('src="/app.js"');
     expect(html).not.toMatch(/localStorage|APP_TOKEN|AUTOMATION_SECRET|设置令牌|authorization|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
 
-    const navigation = await SELF.fetch("https://example.test/navigation.js");
-    expect(navigation.status).toBe(200);
-    await expect(navigation.text()).resolves.toContain("navigationForSession");
+  });
 
-    const app = await SELF.fetch("https://example.test/app.js");
-    const appSource = await app.text();
-    expect(app.status).toBe(200);
-    expect(appSource).not.toMatch(/APP_TOKEN|AUTOMATION_SECRET|x-automation-|github[_ -]?token|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
+  it.each(SHIPPED_PUBLIC_ASSETS)("serves and scans every shipped public asset: %s", async (assetPath) => {
+    const response = await SELF.fetch(`https://example.test/${assetPath}`);
+    const source = new TextDecoder().decode(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(source).not.toMatch(
+      /APP_TOKEN|AUTOMATION_SECRET|GITHUB_OAUTH_CLIENT_SECRET|CF_ACCESS_CLIENT|ACCESS_TEAM_DOMAIN|ACCESS_AUD|x-automation-|github[_ -]?(?:access[_ -]?)?token|cdn-cgi\/access|Cf-Access-Jwt-Assertion|Cloudflare Access|Access 会话/iu,
+    );
   });
 
   it("leaves authorization authoritative on the server for direct admin API access", async () => {

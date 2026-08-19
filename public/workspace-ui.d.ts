@@ -18,6 +18,18 @@ export function runLatestOperation<T>(
   onSuccess: (value: T) => void,
   onError: (error: unknown) => void,
 ): Promise<void>;
+export interface LogoutController {
+  run(): Promise<void>;
+  invalidate(): void;
+}
+export function createLogoutController(
+  request: (path: string, init: RequestInit) => Promise<Response>,
+  callbacks: {
+    onPendingChange(pending: boolean): void;
+    onSuccess(): void;
+    onError(error: unknown): void;
+  },
+): LogoutController;
 export function drawerState(open: boolean): Readonly<{
   open: boolean;
   ariaExpanded: "true" | "false";

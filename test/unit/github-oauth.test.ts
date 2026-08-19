@@ -114,6 +114,7 @@ describe("GitHub OAuth protocol", () => {
     [],
     [{ email: "admin@example.test", primary: true, verified: false, visibility: null }],
     [{ email: "not-an-email", primary: true, verified: true, visibility: null }],
+    [{ email: "admin@example..test", primary: true, verified: true, visibility: null }],
     [
       { email: "first@example.test", primary: true, verified: true, visibility: null },
       { email: "second@example.test", primary: true, verified: true, visibility: null },

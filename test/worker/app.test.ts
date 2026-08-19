@@ -244,6 +244,46 @@ async function expectJournalCleared(): Promise<void> {
   expect(rows).toEqual([]);
 }
 
+function failingSessionDeleteDatabase(database: D1Database): {
+  database: D1Database;
+  readonly deleteAttempts: number;
+} {
+  let deleteAttempts = 0;
+  const wrapFailingStatement = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
+    get(target, property) {
+      if (property === "bind") {
+        return (...values: unknown[]) => wrapFailingStatement(target.bind(...values));
+      }
+      if (property === "run") {
+        return async () => {
+          deleteAttempts += 1;
+          throw new Error("injected D1 logout failure");
+        };
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const wrapped = new Proxy(database, {
+    get(target, property) {
+      if (property === "prepare") {
+        return (query: string) => {
+          const statement = target.prepare(query);
+          return /DELETE\s+FROM\s+auth_sessions\s+WHERE\s+token_hash\s*=\s*\?/iu.test(query)
+            ? wrapFailingStatement(statement)
+            : statement;
+        };
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return {
+    database: wrapped,
+    get deleteAttempts() { return deleteAttempts; },
+  };
+}
+
 describe("Worker application", () => {
   beforeEach(async () => {
     await reset();
@@ -396,6 +436,54 @@ describe("Worker application", () => {
 
     const loggedOut = await fetchApp(app, "/api/session", { headers: { cookie: sessionPair } });
     await expectError(loggedOut, 401, "AUTH_REQUIRED");
+  });
+
+  it("clears the browser cookie but preserves a redacted failure when D1 logout revocation fails", async () => {
+    const failure = failingSessionDeleteDatabase(env.DB);
+    const app = createApp({
+      githubFetch: fakeGitHubFetch("success"),
+      sessionDatabase: failure.database,
+    });
+    const start = await fetchApp(app, "/auth/github");
+    const temporaryCookies = setCookies(start);
+    const state = cookieValue(temporaryCookies, "__Host-oauth-state");
+    const callback = await fetchApp(app, `/auth/github/callback?code=oauth-code&state=${state}`, {
+      headers: { cookie: cookieHeader(temporaryCookies) },
+    });
+    const sessionCookie = setCookies(callback)
+      .find((cookie) => cookie.startsWith("__Host-memory-session="));
+    expect(sessionCookie).toBeTruthy();
+    const sessionPair = cookiePair(sessionCookie!);
+
+    for (const origin of [undefined, "https://foreign.example"]) {
+      const csrfHeaders = new Headers({ cookie: sessionPair });
+      if (origin) csrfHeaders.set("origin", origin);
+      const csrf = await fetchApp(app, "/auth/logout", { method: "POST", headers: csrfHeaders });
+      await expectError(csrf, 403, "FORBIDDEN");
+      expect(setCookies(csrf)).toEqual([]);
+    }
+    expect(failure.deleteAttempts).toBe(0);
+
+    const logout = await fetchApp(app, "/auth/logout", {
+      method: "POST",
+      headers: {
+        cookie: sessionPair,
+        origin: APP_CONFIG.canonicalOrigin,
+        "cf-ray": "logout-failure-request",
+      },
+    });
+    expect(await expectError(logout, 500, "INTERNAL_ERROR")).toEqual({
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Internal error",
+        retryable: true,
+        requestId: "logout-failure-request",
+      },
+    });
+    expect(setCookies(logout)).toEqual([
+      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    ]);
+    expect(failure.deleteAttempts).toBe(1);
   });
 
   it("rejects duplicate automation credentials after Workerd coalesces their headers", async () => {

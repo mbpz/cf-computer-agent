@@ -78,6 +78,44 @@ describe("AutomationAuthenticator canonicalization and cryptography", () => {
     }
   });
 
+  it("enforces both timestamp boundaries against exact server milliseconds", async () => {
+    for (const vector of [
+      {
+        now: new Date(NOW.getTime() + 1),
+        timestamp: "1787140500",
+        signature: MINUS_300_SIGNATURE,
+      },
+      {
+        now: new Date(NOW.getTime() - 1),
+        timestamp: "1787141100",
+        signature: PLUS_300_SIGNATURE,
+      },
+    ]) {
+      const fixture = automationFixture({ now: () => vector.now });
+      await expect(fixture.authenticator.verify(fixedRequest(vector), 0)).rejects.toMatchObject({
+        code: "AUTH_REQUIRED", status: 401,
+      });
+      expect(fixture.db.claims).toEqual([]);
+    }
+
+    for (const vector of [
+      {
+        now: new Date(NOW.getTime() - 1),
+        timestamp: "1787140500",
+        signature: MINUS_300_SIGNATURE,
+      },
+      {
+        now: new Date(NOW.getTime() + 1),
+        timestamp: "1787141100",
+        signature: PLUS_300_SIGNATURE,
+      },
+    ]) {
+      const fixture = automationFixture({ now: () => vector.now });
+      await expect(fixture.authenticator.verify(fixedRequest(vector), 0)).resolves.toBeDefined();
+      expect(fixture.db.claims).toHaveLength(1);
+    }
+  });
+
   it("retains a future-skew nonce through its final accepted server second", async () => {
     const fixture = automationFixture();
 
@@ -90,6 +128,19 @@ describe("AutomationAuthenticator canonicalization and cryptography", () => {
       clientId: CLIENT_ID,
       nonce: NONCE,
       expiresAt: "2026-08-19T12:10:01.000Z",
+    }]);
+  });
+
+  it("retains a nonce from the exact fractional claim time without truncating milliseconds", async () => {
+    const claimTime = new Date(NOW.getTime() + 500);
+    const fixture = automationFixture({ now: () => claimTime });
+
+    await fixture.authenticator.verify(fixedRequest(), 0);
+
+    expect(fixture.db.claims).toEqual([{
+      clientId: CLIENT_ID,
+      nonce: NONCE,
+      expiresAt: "2026-08-19T12:05:01.500Z",
     }]);
   });
 

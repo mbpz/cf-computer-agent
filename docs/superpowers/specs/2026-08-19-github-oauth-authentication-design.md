@@ -232,7 +232,7 @@ The rollout order is:
 5. Verify anonymous login, bootstrap admin, contributor, disabled user, logout, and signed automation smoke.
 6. Remove obsolete Access secrets only after the new flow passes.
 
-Rollback changes the Worker version only. Migration `0002` remains in D1 and is harmless to the prior Worker. Existing member subjects rebound to `github:<id>` are not readable by the Access verifier, so rollback after any successful identity link requires a forward-compatible emergency build rather than relying on the old Access login path. Durable Object and legacy note data are never reverted or deleted.
+Rollback changes Worker code/configuration only. Migration `0002` remains in D1. Every persisted `github:<id>` subject—on both newly created GitHub members and rebound existing members—is unreadable by the old Access verifier, so the old Access build is unsafe after the first successful GitHub login. Recovery uploads a locally reviewed, forward-compatible emergency version, inspects its exact returned version ID, and deploys only that ID with separate authorization. Durable Object, D1, and legacy note data are never reverted or deleted.
 
 ## Success criteria
 

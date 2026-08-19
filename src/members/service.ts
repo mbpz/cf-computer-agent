@@ -1,4 +1,5 @@
 import type { GitHubIdentity } from "../identity/github-oauth";
+import { canonicalEmail } from "../identity/email";
 import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
 import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
@@ -207,17 +208,6 @@ function githubMemberIdentity(identity: GitHubIdentity): MemberIdentity {
     throw new AppError("OAUTH_IDENTITY_INVALID", "GitHub identity is invalid", 401);
   }
   return { identitySubject: identity.subject, email };
-}
-
-function canonicalEmail(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const email = value.trim().toLowerCase();
-  if (email.length === 0 || email.length > 254 || !/^[\x21-\x7e]+$/u.test(email)) return undefined;
-  const at = email.indexOf("@");
-  if (at <= 0 || at !== email.lastIndexOf("@") || at === email.length - 1 || at > 64) return undefined;
-  const domain = email.slice(at + 1);
-  if (!domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) return undefined;
-  return email;
 }
 
 function requireActive(member: Member): void {

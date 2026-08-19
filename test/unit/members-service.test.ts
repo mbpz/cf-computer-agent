@@ -21,6 +21,10 @@ describe("MembersService GitHub login", () => {
     ["empty", { BOOTSTRAP_ADMIN_EMAIL: "member@example.test", ALLOWED_MEMBER_EMAILS: "" }],
     ["empty entry", { BOOTSTRAP_ADMIN_EMAIL: "member@example.test", ALLOWED_MEMBER_EMAILS: "member@example.test," }],
     ["invalid entry", { BOOTSTRAP_ADMIN_EMAIL: "member@example.test", ALLOWED_MEMBER_EMAILS: "not-an-email" }],
+    ["empty domain label", {
+      BOOTSTRAP_ADMIN_EMAIL: "admin@example.test",
+      ALLOWED_MEMBER_EMAILS: "admin@example.test,member@example..test",
+    }],
     ["duplicate entry", {
       BOOTSTRAP_ADMIN_EMAIL: "member@example.test",
       ALLOWED_MEMBER_EMAILS: "member@example.test, MEMBER@EXAMPLE.TEST",

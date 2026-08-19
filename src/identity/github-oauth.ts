@@ -1,5 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { canonicalEmail } from "./email";
 
 const OAUTH_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
 const OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token";
@@ -227,16 +228,6 @@ function extractIdentity(userPayload: unknown, emailsPayload: unknown): GitHubId
 
   const githubUserId = String(userPayload.id);
   return { subject: `github:${githubUserId}`, githubUserId, email };
-}
-
-function canonicalEmail(value: string): string | undefined {
-  const email = value.trim().toLowerCase();
-  if (email.length === 0 || email.length > 254 || !/^[\x21-\x7e]+$/.test(email)) return undefined;
-  const at = email.indexOf("@");
-  if (at <= 0 || at !== email.lastIndexOf("@") || at === email.length - 1) return undefined;
-  const [local, domain] = email.split("@") as [string, string];
-  if (local.length > 64 || !domain.includes(".") || domain.startsWith(".") || domain.endsWith(".")) return undefined;
-  return email;
 }
 
 function readAccessToken(payload: unknown): string | undefined {

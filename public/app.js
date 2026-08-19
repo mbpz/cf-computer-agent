@@ -1,5 +1,5 @@
 import { navigationForSession } from "/navigation.js";
-import { anonymousShellState, createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "/workspace-ui.js";
+import { anonymousShellState, createLogoutController, createOperationGuard, createRouteGuard, drawerState, sessionBootstrapState, runLatestOperation } from "/workspace-ui.js";
 
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
@@ -12,6 +12,11 @@ const routeGuard = createRouteGuard();
 const mobileViewport = window.matchMedia("(max-width: 760px)");
 let session;
 let pendingFlash = "";
+const logoutController = createLogoutController(fetch, {
+  onPendingChange(pending) { logoutButton.disabled = pending || !session; },
+  onSuccess() { renderAnonymous(); },
+  onError(error) { setStatus(error.message || "退出失败，请重试。", "error"); },
+});
 
 const routes = Object.freeze({
   "/": renderHome,
@@ -354,6 +359,7 @@ async function bootstrap() {
       renderAnonymous();
       return;
     }
+    logoutController.invalidate();
     session = state.session;
     byId("session-summary").textContent = `${session.member.email} · ${session.member.role}`;
     logoutButton.hidden = false;
@@ -369,6 +375,7 @@ async function bootstrap() {
 }
 
 function renderAnonymous() {
+  logoutController.invalidate();
   const state = anonymousShellState();
   session = undefined;
   routeGuard.begin();
@@ -387,14 +394,7 @@ function renderAnonymous() {
   outlet.focus({ preventScroll: true });
 }
 
-async function logout() {
-  try {
-    await postLogout(fetch);
-    renderAnonymous();
-  } catch (error) {
-    setStatus(error.message || "退出失败，请重试。", "error");
-  }
-}
+function logout() { return logoutController.run(); }
 
 document.addEventListener("click", (event) => {
   const link = event.target.closest("a[data-route]");

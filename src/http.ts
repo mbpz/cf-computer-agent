@@ -54,6 +54,17 @@ export function errorResponse(error: unknown, requestId: string): Response {
   }, app.status, requestId);
 }
 
+export function logRequestFailure(request: Request, context: RequestContext, error: unknown): void {
+  const appError = error instanceof AppError ? error : undefined;
+  console.error("request failed", {
+    requestId: context.requestId,
+    method: request.method,
+    path: new URL(request.url).pathname,
+    code: appError?.code || "INTERNAL_ERROR",
+    status: appError?.status || 500,
+  });
+}
+
 export function methodNotAllowed(allow: string, context: RequestContext): Response {
   const response = errorResponse(new AppError("METHOD_NOT_ALLOWED", "Method not allowed", 405), context.requestId);
   const headers = new Headers(response.headers);

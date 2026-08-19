@@ -9,6 +9,8 @@ import test from "node:test";
 const smokePath = new URL("./smoke.mjs", import.meta.url).pathname;
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
 const githubOAuthSetupPath = new URL("../docs/operations/github-oauth-setup.md", import.meta.url);
+const rollbackRunbookPath = new URL("../docs/operations/rollback.md", import.meta.url);
+const accessFirstReleaseDesignPath = new URL("../docs/superpowers/specs/2026-08-14-production-release-runbook-design.md", import.meta.url);
 const smokeRunbookPath = new URL("../docs/operations/smoke-test.md", import.meta.url);
 const credentials = {
   AUTOMATION_CLIENT_ID: "local-automation-client-id",
@@ -143,9 +145,11 @@ test("disables production and preview workers.dev URLs", async () => {
   assert.equal(configuration.assets.run_worker_first, true);
 });
 
-test("documents GitHub OAuth and signed automation as one versioned secret rollout", async () => {
-  const [setup, smokeRunbook] = await Promise.all([
+test("documents GitHub OAuth and signed automation as one reviewed version rollout", async () => {
+  const [setup, rollback, accessFirstDesign, smokeRunbook] = await Promise.all([
     readFile(githubOAuthSetupPath, "utf8"),
+    readFile(rollbackRunbookPath, "utf8"),
+    readFile(accessFirstReleaseDesignPath, "utf8"),
     readFile(smokeRunbookPath, "utf8"),
   ]);
 
@@ -163,8 +167,11 @@ test("documents GitHub OAuth and signed automation as one versioned secret rollo
   assert.doesNotMatch(setup, /printf '%s\\n'/u);
   assert.doesNotMatch(setup, /export GITHUB_OAUTH_CLIENT_ID/u);
   assert.match(setup, /GITHUB_OAUTH_CLIENT_ID="\$GITHUB_OAUTH_CLIENT_ID"[\s\\]*GITHUB_OAUTH_CLIENT_SECRET="\$GITHUB_OAUTH_CLIENT_SECRET"[\s\\]*BOOTSTRAP_ADMIN_EMAIL="\$BOOTSTRAP_ADMIN_EMAIL"[\s\\]*ALLOWED_MEMBER_EMAILS="\$ALLOWED_MEMBER_EMAILS"[\s\\]*AUTOMATION_CLIENT_ID="\$AUTOMATION_CLIENT_ID"[\s\\]*AUTOMATION_SECRET="\$AUTOMATION_SECRET"[\s\\]*APP_TOKEN="\$APP_TOKEN"[\s\\]*node -e/u);
-  assert.match(setup, /' > "\$SECRETS_FILE"\n\s*SERIALIZE_STATUS=\$\?\n\s*unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN[\s\S]*rtk npx wrangler versions secret bulk/u);
-  assert.match(setup, /rtk npx wrangler versions secret bulk "\$SECRETS_FILE"/u);
+  assert.match(setup, /' > "\$SECRETS_FILE"\n\s*SERIALIZE_STATUS=\$\?\n\s*unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN[\s\S]*rtk npx wrangler versions upload/u);
+  assert.deepEqual(
+    setup.match(/^\s*rtk npx wrangler versions upload.*$/gmu)?.map((command) => command.trim()),
+    ['rtk npx wrangler versions upload --secrets-file "$SECRETS_FILE" --strict --message "GitHub OAuth release candidate"'],
+  );
   assert.match(setup, /rtk npx wrangler versions view <VERSION_ID>/u);
   assert.match(setup, /rtk npx wrangler versions deploy <VERSION_ID>@100% --yes/u);
   assert.match(setup, /rtk npx wrangler versions secret delete ACCESS_TEAM_DOMAIN/u);
@@ -174,6 +181,12 @@ test("documents GitHub OAuth and signed automation as one versioned secret rollo
   assert.match(smokeRunbook, /AUTOMATION_SECRET/u);
   assert.match(smokeRunbook, /APP_TOKEN/u);
   assert.match(smokeRunbook, /never use `wrangler secret put`/iu);
+  assert.match(rollback, /every persisted `github:<id>` subject.*newly created.*identity link/isu);
+  assert.match(rollback, /rtk npx wrangler versions upload --strict --message "Forward-compatible emergency rollback"/u);
+  assert.match(rollback, /rtk npx wrangler versions view <EMERGENCY_VERSION_ID>/u);
+  assert.match(rollback, /rtk npx wrangler versions deploy <EMERGENCY_VERSION_ID>@100% --yes/u);
+  assert.match(accessFirstDesign, /superseded.*2026-08-19-github-oauth-authentication-design\.md/isu);
+  assert.doesNotMatch(`${setup}\n${rollback}\n${smokeRunbook}`, /rtk npx wrangler versions secret bulk|rtk npm run deploy|rtk npx wrangler deploy(?:\s|$)|rtk npx wrangler rollback/u);
   assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /rtk npx wrangler secret put/u);
   assert.doesNotMatch(`${setup}\n${smokeRunbook}`, /CF-Access-Client|cdn-cgi\/access/u);
 });

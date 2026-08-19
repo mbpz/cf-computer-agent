@@ -1,7 +1,20 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { readdir } from "node:fs/promises";
 import { defineConfig } from "vitest/config";
 
 const migrations = await readD1Migrations("migrations");
+const shippedPublicAssets = await publicAssetPaths("public");
+
+async function publicAssetPaths(directory: string, prefix = ""): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const paths = await Promise.all(entries.map(async (entry) => {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory()
+      ? publicAssetPaths(`${directory}/${entry.name}`, relativePath)
+      : [relativePath];
+  }));
+  return paths.flat().sort();
+}
 
 export default defineConfig({
   plugins: [
@@ -26,6 +39,7 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     provide: {
       d1Migrations: migrations,
+      shippedPublicAssets,
     },
   },
 });

@@ -1,8 +1,8 @@
 import { fixedLengthBytesEqual, verifyAutomationToken, type AuthEnvironment } from "../auth";
 import { AppError, readBoundedBodyBytes } from "../http";
 
-const MAX_TIMESTAMP_SKEW_SECONDS = 300;
-const NONCE_RETENTION_SECONDS = MAX_TIMESTAMP_SKEW_SECONDS + 1;
+const MAX_TIMESTAMP_SKEW_MS = 300_000;
+const NONCE_RETENTION_MS = MAX_TIMESTAMP_SKEW_MS + 1_000;
 const MIN_NONCE_BYTES = 16;
 const MAX_NONCE_BYTES = 64;
 const MIN_NONCE_ENCODED_LENGTH = 22;
@@ -70,9 +70,8 @@ export class AutomationAuthenticator {
 
     const claimNow = this.currentTime();
     if (!isTimestampAccepted(timestamp, claimNow)) throw authenticationRequired();
-    const claimNowSeconds = Math.floor(claimNow.getTime() / 1_000);
     const expiresAt = new Date(
-      (Math.max(claimNowSeconds, timestamp) + NONCE_RETENTION_SECONDS) * 1_000,
+      Math.max(claimNow.getTime(), timestamp * 1_000) + NONCE_RETENTION_MS,
     ).toISOString();
     const claim = await this.db.prepare(
       `INSERT INTO automation_nonces (client_id, nonce, expires_at)
@@ -144,8 +143,7 @@ function parseTimestamp(value: string): number | undefined {
 }
 
 function isTimestampAccepted(timestamp: number, now: Date): boolean {
-  const nowSeconds = Math.floor(now.getTime() / 1_000);
-  return Math.abs(timestamp - nowSeconds) <= MAX_TIMESTAMP_SKEW_SECONDS;
+  return Math.abs(timestamp * 1_000 - now.getTime()) <= MAX_TIMESTAMP_SKEW_MS;
 }
 
 function isCanonicalNonce(value: string): boolean {

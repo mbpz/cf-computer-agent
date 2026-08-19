@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { anonymousShellState, createOperationGuard, createRouteGuard, drawerState, postLogout, sessionBootstrapState, runLatestOperation } from "../../public/workspace-ui.js";
+import * as workspaceUi from "../../public/workspace-ui.js";
+
+const {
+  anonymousShellState,
+  createOperationGuard,
+  createRouteGuard,
+  drawerState,
+  postLogout,
+  sessionBootstrapState,
+  runLatestOperation,
+} = workspaceUi;
 
 describe("createRouteGuard", () => {
   it("rejects an older route completion after newer navigation begins", () => {
@@ -126,6 +136,76 @@ describe("postLogout", () => {
 
     await expect(postLogout(request)).resolves.toEqual({ kind: "anonymous" });
     expect(requests).toEqual([{ path: "/auth/logout", init: { method: "POST", credentials: "same-origin" } }]);
+  });
+});
+
+describe("createLogoutController", () => {
+  const factory = (workspaceUi as typeof workspaceUi & {
+    createLogoutController?: (
+      request: typeof fetch,
+      callbacks: {
+        onPendingChange: (pending: boolean) => void;
+        onSuccess: () => void;
+        onError: (error: unknown) => void;
+      },
+    ) => { run: () => Promise<void>; invalidate: () => void };
+  }).createLogoutController;
+
+  it("keeps logout single-flight and exposes pending state for disabling the button", async () => {
+    expect(factory).toBeTypeOf("function");
+    if (!factory) return;
+    const response = deferred<Response>();
+    const pending: boolean[] = [];
+    let requests = 0;
+    let successes = 0;
+    const controller = factory(async () => {
+      requests += 1;
+      return response.promise;
+    }, {
+      onPendingChange: (value) => pending.push(value),
+      onSuccess: () => { successes += 1; },
+      onError: () => undefined,
+    });
+
+    const first = controller.run();
+    const duplicate = controller.run();
+    expect(duplicate).toBe(first);
+    expect(requests).toBe(1);
+    expect(pending).toEqual([true]);
+
+    response.resolve(new Response(null, { status: 204 }));
+    await first;
+    expect(pending).toEqual([true, false]);
+    expect(successes).toBe(1);
+  });
+
+  it.each([
+    ["failure", new Error("stale logout failure"), new Response(null, { status: 204 }), ["new-success"]],
+    ["success", new Response(null, { status: 204 }), new Response(null, { status: 500 }), ["new-error"]],
+  ])("generation-guards a late old %s after a newer completion", async (_label, oldResult, newResult, expected) => {
+    expect(factory).toBeTypeOf("function");
+    if (!factory) return;
+    const oldResponse = deferred<Response>();
+    const newResponse = deferred<Response>();
+    const responses = [oldResponse, newResponse];
+    const rendered: string[] = [];
+    const controller = factory(async () => responses.shift()!.promise, {
+      onPendingChange: () => undefined,
+      onSuccess: () => rendered.push(responses.length === 0 ? "new-success" : "old-success"),
+      onError: () => rendered.push(responses.length === 0 ? "new-error" : "old-error"),
+    });
+
+    const oldRun = controller.run();
+    controller.invalidate();
+    const newRun = controller.run();
+    if (newResult instanceof Error) newResponse.reject(newResult);
+    else newResponse.resolve(newResult);
+    await newRun;
+    if (oldResult instanceof Error) oldResponse.reject(oldResult);
+    else oldResponse.resolve(oldResult);
+    await oldRun;
+
+    expect(rendered).toEqual(expected);
   });
 });
 
