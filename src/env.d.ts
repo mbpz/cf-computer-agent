@@ -4,6 +4,11 @@ declare global {
     ACCESS_TEAM_DOMAIN?: string;
     ACCESS_AUD?: string;
     BOOTSTRAP_ADMIN_EMAIL?: string;
+    GITHUB_OAUTH_CLIENT_ID?: string;
+    GITHUB_OAUTH_CLIENT_SECRET?: string;
+    ALLOWED_MEMBER_EMAILS?: string;
+    AUTOMATION_CLIENT_ID?: string;
+    AUTOMATION_SECRET?: string;
   }
 }
 
