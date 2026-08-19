@@ -13,8 +13,12 @@ export function readUniqueCookie(request: Request, name: string, maxBytes: numbe
 
   let found: string | undefined;
   let occurrences = 0;
-  for (const rawSegment of header.split(";")) {
-    const segment = rawSegment.trim();
+  const segments = header.split(";");
+  for (let index = 0; index < segments.length; index += 1) {
+    const rawSegment = segments[index] ?? "";
+    // A single SP after `;` is the canonical cookie-pair delimiter. Preserve
+    // every other byte so whitespace cannot normalize into a valid credential.
+    const segment = index > 0 && rawSegment.startsWith(" ") ? rawSegment.slice(1) : rawSegment;
     const equals = segment.indexOf("=");
     const rawName = equals === -1 ? segment : segment.slice(0, equals);
     if (rawName.trim() !== name) continue;

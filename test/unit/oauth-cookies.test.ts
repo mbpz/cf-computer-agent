@@ -25,6 +25,17 @@ describe("OAuth cookie primitives", () => {
     expect(readUniqueCookie(cookieRequest("__Host-memory-session=12345678"), "__Host-memory-session", 8)).toBe("12345678");
   });
 
+  it.each([
+    "__Host-oauth-state=Abc_123-xyz ; theme=dark",
+    "__Host-oauth-state= Abc_123-xyz; theme=dark",
+    "__Host-oauth-state=Abc_123-xyz\t; theme=dark",
+    "__Host-oauth-state=\tAbc_123-xyz; theme=dark",
+    "theme=dark;  __Host-oauth-state=Abc_123-xyz",
+    "theme=dark;\t__Host-oauth-state=Abc_123-xyz",
+  ])("rejects noncanonical whitespace adjacent to the target cookie pair or value: %s", (header) => {
+    expect(readUniqueCookie(cookieRequest(header), "__Host-oauth-state", 64)).toBeUndefined();
+  });
+
   it("serializes ten-minute OAuth cookies with exact host-only attributes", () => {
     expect(oauthCookie("__Host-oauth-state", "local_state-123")).toBe(
       "__Host-oauth-state=local_state-123; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600",
