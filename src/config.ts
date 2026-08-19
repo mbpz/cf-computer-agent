@@ -5,8 +5,19 @@ const MAX_NOTE_ID_BYTES = 192;
 const MAX_NOTE_TITLE_BYTES = 480;
 const MAX_NOTE_TAG_BYTES = 1024;
 const MAX_NOTE_TAGS = 20;
+const CANONICAL_ORIGIN = "https://memory.crgmhrc.asia";
 
 export const APP_CONFIG = {
+  canonicalOrigin: CANONICAL_ORIGIN,
+  githubOAuthCallbackUrl: `${CANONICAL_ORIGIN}/auth/github/callback`,
+  githubApiVersion: "2022-11-28",
+  githubOAuthUserAgent: "memory-garden-agent",
+  githubOAuthTimeoutMs: 5_000,
+  githubOAuthTokenResponseMaxBytes: 8 * 1024,
+  githubOAuthUserResponseMaxBytes: 32 * 1024,
+  githubOAuthEmailsResponseMaxBytes: 64 * 1024,
+  oauthTemporaryCookieMaxAgeSeconds: 10 * 60,
+  sessionCookieMaxAgeSeconds: 7 * 24 * 60 * 60,
   accessJwtAssertionHeader: "cf-access-jwt-assertion",
   workspaceName: "personal",
   indexPath: "/workspace/.memory/index.json",
