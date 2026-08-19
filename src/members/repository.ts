@@ -109,7 +109,7 @@ export class MembersRepository implements MembersRepositoryPort {
     try {
       const results = await this.db.batch([
         this.db.prepare(
-          "UPDATE members SET access_sub = ?, updated_at = ? WHERE id = ? AND access_sub = ?",
+          "UPDATE members SET access_sub = ?, updated_at = ? WHERE id = ? AND access_sub = ? AND status = 'active'",
         ).bind(newSubject, updatedAt, memberId, expectedSubject),
         this.audit.prepareResourceWriteAudit(input, { table: "members", id: memberId }),
       ]);

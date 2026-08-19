@@ -153,6 +153,23 @@ describe("MembersService GitHub login", () => {
     expect(repository.members).toEqual([existing]);
   });
 
+  it("preserves the disabled outcome when a member is disabled after lookup but before identity linking", async () => {
+    const existing = member({ identitySubject: "legacy-access-subject" });
+    const repository = new FakeMembersRepository([existing]);
+    repository.linkIdentityWithAudit = async () => {
+      const disabled = { ...existing, status: "disabled" as const };
+      repository.members.splice(0, 1, disabled);
+      return null;
+    };
+
+    await expect(createService(repository, githubEnvironment).resolveGitHubLogin(githubIdentity))
+      .rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
+    expect(repository.members).toEqual([expect.objectContaining({
+      identitySubject: "legacy-access-subject",
+      status: "disabled",
+    })]);
+  });
+
   it("never creates or links a member after an arbitrary repository read error", async () => {
     const repository = new FakeMembersRepository();
     repository.findByIdentitySubject = async () => { throw new Error("D1 unavailable"); };

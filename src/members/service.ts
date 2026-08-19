@@ -122,8 +122,13 @@ export class MembersService {
 
   private async resolveConcurrentIdentityLink(memberId: string, subject: string): Promise<Member> {
     const bySubject = await this.repository.findByIdentitySubject(subject);
-    if (!bySubject || bySubject.id !== memberId) throw identityConflict();
-    return this.resolveExisting(bySubject);
+    if (bySubject) {
+      if (bySubject.id !== memberId) throw identityConflict();
+      return this.resolveExisting(bySubject);
+    }
+    const current = await this.repository.findById(memberId);
+    if (current) requireActive(current);
+    throw identityConflict();
   }
 
   private async insertWithConflictRecovery(

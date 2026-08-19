@@ -2,8 +2,10 @@
 
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { CreateAuditEvent } from "../../src/audit/types";
 import { MembersRepository } from "../../src/members/repository";
 import { MembersService } from "../../src/members/service";
+import type { Member } from "../../src/members/types";
 import { AuditRepository } from "../../src/audit/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -114,6 +116,41 @@ describe("members D1 control plane", () => {
       metadata: '{"provider":"github"}',
     }]);
     expect(JSON.stringify(audits.results)).not.toMatch(/legacy@example|github:104|"104"/i);
+  });
+
+  it("does not link or audit a member disabled after email lookup but before the conditional update", async () => {
+    const repository = new DisableBeforeLinkMembersRepository(env.DB, new AuditRepository(env.DB));
+    const legacy = await repository.insert({
+      id: "disable-race-member",
+      identitySubject: "disable-race-access-subject",
+      email: "disable-race@example.test",
+      role: "contributor",
+      status: "active",
+      createdAt: "2026-08-12T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+    });
+    const service = new MembersService(repository, {
+      BOOTSTRAP_ADMIN_EMAIL: "disable-race@example.test",
+      ALLOWED_MEMBER_EMAILS: "disable-race@example.test",
+    }, {
+      auditId: () => "disable-race-link-audit",
+      now: () => new Date("2026-08-19T12:00:00.000Z"),
+      waitUntil: () => undefined,
+    });
+
+    await expect(service.resolveGitHubLogin({
+      subject: "github:107",
+      githubUserId: "107",
+      email: "disable-race@example.test",
+    })).rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
+    await expect(repository.findById(legacy.id)).resolves.toMatchObject({
+      identitySubject: "disable-race-access-subject",
+      status: "disabled",
+      updatedAt: "2026-08-19T11:59:59.000Z",
+    });
+    await expect(env.DB.prepare(
+      "SELECT id FROM audit_events WHERE id = 'disable-race-link-audit'",
+    ).first()).resolves.toBeNull();
   });
 
   it("rolls back a legacy subject link when its paired identity audit fails", async () => {
@@ -332,4 +369,22 @@ function memberInput(id: string, role: "admin" | "contributor") {
     id, identitySubject: `sub-${id}`, email: `${id}@example.test`, role, status: "active" as const,
     createdAt: "2026-08-13T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
   };
+}
+
+class DisableBeforeLinkMembersRepository extends MembersRepository {
+  private disabled = false;
+
+  override async linkIdentityWithAudit(
+    memberId: string,
+    expectedSubject: string,
+    newSubject: string,
+    updatedAt: string,
+    audit: CreateAuditEvent,
+  ): Promise<Member | null> {
+    if (!this.disabled) {
+      this.disabled = true;
+      await this.updateContributorStatus(memberId, "disabled", "2026-08-19T11:59:59.000Z");
+    }
+    return super.linkIdentityWithAudit(memberId, expectedSubject, newSubject, updatedAt, audit);
+  }
 }
