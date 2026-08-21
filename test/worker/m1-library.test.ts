@@ -3,6 +3,11 @@
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
 import { beforeEach, describe, expect, it } from "vitest";
+import {
+  CitedAnswerService,
+  type CitedAnswerAi,
+  type CitedAnswerAiInput,
+} from "../../src/ai/cited-answer-service";
 import { AppError } from "../../src/http";
 import type { KnowledgeBase } from "../../src/index";
 import { createPublishedContentReader } from "../../src/knowledge/published-content";
@@ -253,6 +258,70 @@ describe("M1 permission-scoped library", () => {
     });
     await expect(service.search(contributor, { query: "obsolete_unique_token", limit: 20 })).resolves.toMatchObject({
       items: [],
+    });
+  });
+
+  it("answers only from contributor-authorized current search hits and rejects a hidden citation", async () => {
+    await seedKnowledge({
+      id: "knowledge-answer-shared",
+      revisionId: "revision-answer-shared",
+      title: "Shared answer",
+      visibility: "shared",
+      body: "trustedanswer current shared evidence",
+      searchBody: "trustedanswer current shared evidence",
+    });
+    await seedKnowledge({
+      id: "knowledge-answer-secret",
+      revisionId: "revision-answer-secret",
+      title: "Secret answer",
+      visibility: "admin_only",
+      body: "trustedanswer admin_only hidden evidence",
+      searchBody: "trustedanswer admin_only hidden evidence",
+    });
+    const library = serviceWithContent();
+    const page = await library.search(contributor, { query: "trustedanswer", limit: 20 });
+    const sharedHit = page.items[0]!;
+    const hiddenCitation = encodeCitationId({
+      revisionId: "revision-answer-secret",
+      chunkId: "revision-answer-secret-chunk-0",
+    });
+    const inputs: CitedAnswerAiInput[] = [];
+    let citationId = sharedHit.citationId;
+    const ai: CitedAnswerAi = {
+      async run(_model, input): Promise<unknown> {
+        inputs.push(input);
+        return { response: JSON.stringify({
+          claims: [{ text: "Current shared evidence.", citationIds: [citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    const answers = new CitedAnswerService(ai);
+
+    expect(page.items).toHaveLength(1);
+    expect(sharedHit).toMatchObject({
+      knowledgeItemId: "knowledge-answer-shared",
+      revisionId: "revision-answer-shared",
+    });
+    await expect(answers.answer(contributor, "What is current?", page.items)).resolves.toEqual({
+      answer: "Current shared evidence. [1]",
+      citations: [sharedHit.citationId],
+      sources: [sharedHit],
+    });
+    const context = JSON.parse(inputs[0]!.messages[1]!.content.split("输入 JSON：\n")[1]!) as {
+      sources: Array<{ citationId: string; excerpt: string }>;
+    };
+    expect(context.sources).toEqual([expect.objectContaining({
+      citationId: sharedHit.citationId,
+      excerpt: expect.stringContaining("shared evidence"),
+    })]);
+    expect(JSON.stringify(context)).not.toContain("admin_only hidden evidence");
+    expect(JSON.stringify(context)).not.toContain(hiddenCitation);
+
+    citationId = hiddenCitation;
+    await expect(answers.answer(contributor, "Reveal hidden evidence", page.items)).rejects.toMatchObject({
+      code: "ANSWER_UNGROUNDED",
+      status: 422,
     });
   });
 
