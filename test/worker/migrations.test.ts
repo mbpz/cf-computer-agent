@@ -1,10 +1,142 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MIGRATIONS } from "../fixtures/d1";
 
+interface TableColumn {
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+  pk: number;
+}
+
+interface IndexListEntry {
+  name: string;
+  unique: number;
+  origin: string;
+  partial: number;
+}
+
+function sqlIdentifier(name: string): string {
+  return name.replaceAll("'", "''");
+}
+
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+async function expectTableSchema(
+  name: string,
+  expectedColumns: string[],
+  expectedSqlFragments: string[] = [],
+): Promise<void> {
+  const object = await env.DB.prepare(
+    "SELECT type, sql FROM sqlite_master WHERE name = ?",
+  )
+    .bind(name)
+    .first<{ type: string; sql: string }>();
+  expect(object?.type, `${name} object type`).toBe("table");
+
+  const columns = await env.DB.prepare(
+    `PRAGMA table_info('${sqlIdentifier(name)}')`,
+  ).all<TableColumn>();
+  expect(
+    columns.results.map(
+      ({ name: columnName, type, notnull, dflt_value, pk }) =>
+        `${columnName}:${type}:${notnull}:${dflt_value ?? "NULL"}:${pk}`,
+    ),
+    `${name} columns`,
+  ).toEqual(expectedColumns);
+
+  const normalizedSql = normalizeSql(object?.sql ?? "");
+  for (const fragment of expectedSqlFragments) {
+    expect(normalizedSql, `${name} SQL`).toContain(normalizeSql(fragment));
+  }
+}
+
+async function expectForeignKeys(
+  table: string,
+  expected: Array<{ from: string; table: string; to: string }>,
+): Promise<void> {
+  const keys = await env.DB.prepare(
+    `PRAGMA foreign_key_list('${sqlIdentifier(table)}')`,
+  ).all<{ from: string; table: string; to: string }>();
+  expect(
+    keys.results
+      .map(({ from, table, to }) => ({ from, table, to }))
+      .sort((left, right) => left.from.localeCompare(right.from)),
+    `${table} foreign keys`,
+  ).toEqual([...expected].sort((left, right) => left.from.localeCompare(right.from)));
+}
+
+async function expectIndex(
+  table: string,
+  name: string,
+  expectedColumns: Array<{ name: string; desc: number }>,
+  options: { unique?: number; partial?: number; sqlFragment?: string } = {},
+): Promise<void> {
+  const indexes = await env.DB.prepare(
+    `PRAGMA index_list('${sqlIdentifier(table)}')`,
+  ).all<IndexListEntry>();
+  const index = indexes.results.find((candidate) => candidate.name === name);
+  expect(index, `${name} index`).toBeTruthy();
+  expect(
+    { unique: index?.unique, partial: index?.partial },
+    `${name} properties`,
+  ).toEqual({
+    unique: options.unique ?? 0,
+    partial: options.partial ?? 0,
+  });
+
+  const columns = await env.DB.prepare(
+    `PRAGMA index_xinfo('${sqlIdentifier(name)}')`,
+  ).all<{ name: string; desc: number; key: number }>();
+  expect(
+    columns.results
+      .filter(({ key }) => key === 1)
+      .map(({ name: columnName, desc }) => ({ name: columnName, desc })),
+    `${name} columns`,
+  ).toEqual(expectedColumns);
+
+  if (options.sqlFragment !== undefined) {
+    const definition = await env.DB.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+    )
+      .bind(name)
+      .first<{ sql: string }>();
+    expect(normalizeSql(definition?.sql ?? ""), `${name} SQL`).toContain(
+      normalizeSql(options.sqlFragment),
+    );
+  }
+}
+
+async function expectUniqueConstraints(
+  table: string,
+  expected: string[],
+): Promise<void> {
+  const indexes = await env.DB.prepare(
+    `PRAGMA index_list('${sqlIdentifier(table)}')`,
+  ).all<IndexListEntry>();
+  const actual = await Promise.all(
+    indexes.results
+      .filter(({ unique, origin }) => unique === 1 && origin !== "pk")
+      .map(async ({ name, partial }) => {
+        const columns = await env.DB.prepare(
+          `PRAGMA index_info('${sqlIdentifier(name)}')`,
+        ).all<{ name: string }>();
+        return `${columns.results.map(({ name: columnName }) => columnName).join(",")}|partial=${partial}`;
+      }),
+  );
+  expect(actual.sort(), `${table} unique constraints`).toEqual([...expected].sort());
+}
+
 describe("Phase 1 control-plane migrations", () => {
+  beforeEach(async () => {
+    await reset();
+  });
+
   it("creates the control-plane tables and deterministic Spaces", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
 
@@ -99,59 +231,262 @@ describe("Phase 1 control-plane migrations", () => {
   it("creates the M1 knowledge schema with enforced relationships and searchable FTS", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
 
-    const requiredTables = [
-      "sources",
-      "source_versions",
-      "tags",
-      "revision_tags",
-      "reviews",
-      "publication_intents",
-      "jobs",
-      "knowledge_items",
-      "revisions",
-      "chunks",
-      "chunks_fts",
-    ];
-    for (const name of requiredTables) {
-      await expect(
-        env.DB.prepare("SELECT name FROM sqlite_master WHERE name = ?")
-          .bind(name)
-          .first(),
-      ).resolves.toBeTruthy();
-    }
+    await expectTableSchema("submissions", [
+      "id:TEXT:0:NULL:1",
+      "submitter_id:TEXT:1:NULL:0",
+      "requested_space_id:TEXT:1:NULL:0",
+      "requested_collection_id:TEXT:0:NULL:0",
+      "kind:TEXT:1:NULL:0",
+      "status:TEXT:1:NULL:0",
+      "title:TEXT:1:NULL:0",
+      "content:TEXT:1:NULL:0",
+      "idempotency_key:TEXT:0:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(kind IN ('text', 'markdown', 'code', 'rich_text'))",
+      "CHECK(status IN ('draft', 'review_pending', 'published', 'rejected', 'revision_requested'))",
+    ]);
+    await expectTableSchema("sources", [
+      "id:TEXT:0:NULL:1",
+      "owner_id:TEXT:1:NULL:0",
+      "space_id:TEXT:1:NULL:0",
+      "collection_id:TEXT:0:NULL:0",
+      "kind:TEXT:1:NULL:0",
+      "title:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], ["CHECK(kind IN ('text', 'markdown', 'code'))"]);
+    await expectTableSchema("source_versions", [
+      "id:TEXT:0:NULL:1",
+      "source_id:TEXT:1:NULL:0",
+      "submission_id:TEXT:1:NULL:0",
+      "ordinal:INTEGER:1:NULL:0",
+      "content:TEXT:1:NULL:0",
+      "content_sha256:TEXT:1:NULL:0",
+      "parser_version:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+    ], ["CHECK(ordinal > 0)"]);
+    await expectTableSchema("tags", [
+      "id:TEXT:0:NULL:1",
+      "space_id:TEXT:1:NULL:0",
+      "slug:TEXT:1:NULL:0",
+      "name:TEXT:1:NULL:0",
+      "status:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], ["CHECK(status IN ('active', 'disabled'))"]);
+    await expectTableSchema("revision_tags", [
+      "revision_id:TEXT:1:NULL:1",
+      "tag_id:TEXT:1:NULL:2",
+    ]);
+    await expectTableSchema("reviews", [
+      "id:TEXT:0:NULL:1",
+      "submission_id:TEXT:1:NULL:0",
+      "reviewer_id:TEXT:1:NULL:0",
+      "decision:TEXT:1:NULL:0",
+      "reason_code:TEXT:1:NULL:0",
+      "reason:TEXT:1:'':0",
+      "title:TEXT:1:NULL:0",
+      "visibility:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(decision IN ('published', 'rejected', 'revision_requested'))",
+      "CHECK(visibility IN ('shared', 'admin_only'))",
+    ]);
+    await expectTableSchema("knowledge_items", [
+      "id:TEXT:0:NULL:1",
+      "space_id:TEXT:1:NULL:0",
+      "collection_id:TEXT:0:NULL:0",
+      "current_revision_id:TEXT:0:NULL:0",
+      "status:TEXT:1:NULL:0",
+      "search_status:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(status IN ('active', 'trashed'))",
+      "CHECK(search_status IN ('pending', 'indexed', 'search_degraded'))",
+    ]);
+    await expectTableSchema("revisions", [
+      "id:TEXT:0:NULL:1",
+      "knowledge_item_id:TEXT:1:NULL:0",
+      "source_version_id:TEXT:1:NULL:0",
+      "normalized_path:TEXT:1:NULL:0",
+      "content_sha256:TEXT:1:NULL:0",
+      "title:TEXT:1:NULL:0",
+      "tags_json:TEXT:1:'[]':0",
+      "visibility:TEXT:1:NULL:0",
+      "published_by:TEXT:1:NULL:0",
+      "published_at:TEXT:1:NULL:0",
+    ], ["CHECK(visibility IN ('shared', 'admin_only'))"]);
+    await expectTableSchema("chunks", [
+      "id:TEXT:0:NULL:1",
+      "revision_id:TEXT:1:NULL:0",
+      "ordinal:INTEGER:1:NULL:0",
+      "heading_path:TEXT:1:NULL:0",
+      "start_line:INTEGER:1:NULL:0",
+      "end_line:INTEGER:1:NULL:0",
+      "body:TEXT:1:NULL:0",
+      "search_title:TEXT:1:NULL:0",
+      "search_tags:TEXT:1:NULL:0",
+      "search_body:TEXT:1:NULL:0",
+    ], [
+      "CHECK(ordinal >= 0)",
+      "CHECK(start_line > 0)",
+      "CHECK(end_line >= start_line)",
+    ]);
+    await expectTableSchema("publication_intents", [
+      "submission_id:TEXT:0:NULL:1",
+      "revision_id:TEXT:1:NULL:0",
+      "knowledge_item_id:TEXT:1:NULL:0",
+      "reviewer_id:TEXT:1:NULL:0",
+      "title:TEXT:1:NULL:0",
+      "visibility:TEXT:1:NULL:0",
+      "tags_json:TEXT:1:NULL:0",
+      "normalized_path:TEXT:1:NULL:0",
+      "content_sha256:TEXT:1:NULL:0",
+      "state:TEXT:1:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(visibility IN ('shared', 'admin_only'))",
+      "CHECK(state IN ('pending_content', 'content_written', 'completed'))",
+    ]);
+    await expectTableSchema("jobs", [
+      "id:TEXT:0:NULL:1",
+      "kind:TEXT:1:NULL:0",
+      "resource_id:TEXT:1:NULL:0",
+      "state:TEXT:1:NULL:0",
+      "attempts:INTEGER:1:0:0",
+      "available_at:TEXT:1:NULL:0",
+      "last_error_code:TEXT:0:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "updated_at:TEXT:1:NULL:0",
+    ], [
+      "CHECK(kind IN ('index_revision'))",
+      "CHECK(state IN ('pending', 'running', 'completed', 'failed_retryable', 'failed_terminal'))",
+      "CHECK(attempts >= 0)",
+    ]);
+    await expectTableSchema("chunks_fts", [
+      "chunk_id::0:NULL:0",
+      "title::0:NULL:0",
+      "tags::0:NULL:0",
+      "body::0:NULL:0",
+    ], [
+      "CREATE VIRTUAL TABLE chunks_fts USING fts5",
+      "chunk_id UNINDEXED",
+      "tokenize='unicode61 remove_diacritics 2'",
+    ]);
 
-    const requiredIndexes = [
-      "knowledge_items_current_page",
-      "sources_owner_page",
-      "chunks_revision",
-      "publication_intents_pending",
-      "submissions_idempotency",
-      "submissions_owner_page",
-      "submissions_admin_page",
-    ];
-    const indexes = await env.DB.prepare(
-      `SELECT name FROM sqlite_master
-       WHERE type = 'index' AND name IN (${requiredIndexes.map(() => "?").join(", ")})
-       ORDER BY name`,
-    )
-      .bind(...requiredIndexes)
-      .all<{ name: string }>();
-    expect(indexes.results.map(({ name }) => name)).toEqual(
-      [...requiredIndexes].sort(),
-    );
+    await expectForeignKeys("submissions", [
+      { from: "submitter_id", table: "members", to: "id" },
+      { from: "requested_space_id", table: "spaces", to: "id" },
+      { from: "requested_collection_id", table: "collections", to: "id" },
+    ]);
+    await expectForeignKeys("sources", [
+      { from: "owner_id", table: "members", to: "id" },
+      { from: "space_id", table: "spaces", to: "id" },
+      { from: "collection_id", table: "collections", to: "id" },
+    ]);
+    await expectForeignKeys("source_versions", [
+      { from: "source_id", table: "sources", to: "id" },
+      { from: "submission_id", table: "submissions", to: "id" },
+    ]);
+    await expectForeignKeys("tags", [
+      { from: "space_id", table: "spaces", to: "id" },
+    ]);
+    await expectForeignKeys("revision_tags", [
+      { from: "revision_id", table: "revisions", to: "id" },
+      { from: "tag_id", table: "tags", to: "id" },
+    ]);
+    await expectForeignKeys("reviews", [
+      { from: "submission_id", table: "submissions", to: "id" },
+      { from: "reviewer_id", table: "members", to: "id" },
+    ]);
+    await expectForeignKeys("knowledge_items", [
+      { from: "space_id", table: "spaces", to: "id" },
+      { from: "collection_id", table: "collections", to: "id" },
+      { from: "current_revision_id", table: "revisions", to: "id" },
+    ]);
+    await expectForeignKeys("revisions", [
+      { from: "knowledge_item_id", table: "knowledge_items", to: "id" },
+      { from: "source_version_id", table: "source_versions", to: "id" },
+      { from: "published_by", table: "members", to: "id" },
+    ]);
+    await expectForeignKeys("chunks", [
+      { from: "revision_id", table: "revisions", to: "id" },
+    ]);
+    await expectForeignKeys("publication_intents", [
+      { from: "submission_id", table: "submissions", to: "id" },
+      { from: "reviewer_id", table: "members", to: "id" },
+    ]);
+    await expectForeignKeys("jobs", []);
 
-    const currentPageColumns = await env.DB.prepare(
-      "PRAGMA index_xinfo('knowledge_items_current_page')",
-    ).all<{ name: string; desc: number; key: number }>();
-    expect(
-      currentPageColumns.results
-        .filter(({ key }) => key === 1)
-        .map(({ name, desc }) => ({ name, desc })),
-    ).toEqual([
+    await expectUniqueConstraints("submissions", [
+      "submitter_id,idempotency_key|partial=1",
+    ]);
+    await expectUniqueConstraints("sources", []);
+    await expectUniqueConstraints("source_versions", [
+      "submission_id|partial=0",
+      "source_id,ordinal|partial=0",
+    ]);
+    await expectUniqueConstraints("tags", ["space_id,slug|partial=0"]);
+    await expectUniqueConstraints("revision_tags", []);
+    await expectUniqueConstraints("reviews", ["submission_id|partial=0"]);
+    await expectUniqueConstraints("knowledge_items", []);
+    await expectUniqueConstraints("revisions", [
+      "source_version_id|partial=0",
+      "normalized_path|partial=0",
+    ]);
+    await expectUniqueConstraints("chunks", ["revision_id,ordinal|partial=0"]);
+    await expectUniqueConstraints("publication_intents", [
+      "revision_id|partial=0",
+      "normalized_path|partial=0",
+    ]);
+    await expectUniqueConstraints("jobs", ["kind,resource_id|partial=0"]);
+
+    await expectIndex("knowledge_items", "knowledge_items_current_page", [
       { name: "status", desc: 0 },
       { name: "updated_at", desc: 1 },
       { name: "id", desc: 1 },
     ]);
+    await expectIndex("sources", "sources_owner_page", [
+      { name: "owner_id", desc: 0 },
+      { name: "updated_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex("chunks", "chunks_revision", [
+      { name: "revision_id", desc: 0 },
+      { name: "ordinal", desc: 0 },
+    ]);
+    await expectIndex("publication_intents", "publication_intents_pending", [
+      { name: "state", desc: 0 },
+      { name: "updated_at", desc: 0 },
+      { name: "submission_id", desc: 0 },
+    ]);
+    await expectIndex("submissions", "submissions_owner_page", [
+      { name: "submitter_id", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex("submissions", "submissions_admin_page", [
+      { name: "status", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex(
+      "submissions",
+      "submissions_idempotency",
+      [
+        { name: "submitter_id", desc: 0 },
+        { name: "idempotency_key", desc: 0 },
+      ],
+      {
+        unique: 1,
+        partial: 1,
+        sqlFragment: "WHERE idempotency_key IS NOT NULL",
+      },
+    );
 
     const now = "2026-08-21T00:00:00.000Z";
     await env.DB.prepare(
@@ -168,9 +503,52 @@ describe("Phase 1 control-plane migrations", () => {
       )
       .run();
 
+    await env.DB.prepare(
+      `INSERT INTO submissions
+        (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at)
+       VALUES ('submission-fk', 'member-admin', 'default', NULL, 'text', 'draft', 'FK seed', 'body', ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO sources
+        (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at)
+       VALUES ('source-fk', 'member-admin', 'default', NULL, 'text', 'FK seed', ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO source_versions
+        (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at)
+       VALUES ('source-version-fk', 'source-fk', 'submission-fk', 1, 'body', 'hash', 'm1-v1', ?)`,
+    )
+      .bind(now)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO knowledge_items
+        (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at)
+       VALUES ('knowledge-item-fk', 'default', NULL, NULL, 'active', 'pending', ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
+
     await expect(
       env.DB.prepare(
-        "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, visibility, published_by, published_at) VALUES ('r', 'missing', 'missing', '/x', 'h', 't', 'shared', 'member-admin', ?)",
+        "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, visibility, published_by, published_at) VALUES ('revision-missing-item', 'missing', 'source-version-fk', '/missing-item', 'h', 't', 'shared', 'member-admin', ?)",
+      )
+        .bind(now)
+        .run(),
+    ).rejects.toThrow();
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, visibility, published_by, published_at) VALUES ('revision-missing-version', 'knowledge-item-fk', 'missing', '/missing-version', 'h', 't', 'shared', 'member-admin', ?)",
+      )
+        .bind(now)
+        .run(),
+    ).rejects.toThrow();
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, visibility, published_by, published_at) VALUES ('revision-missing-publisher', 'knowledge-item-fk', 'source-version-fk', '/missing-publisher', 'h', 't', 'shared', 'missing', ?)",
       )
         .bind(now)
         .run(),
@@ -217,33 +595,81 @@ describe("Phase 1 control-plane migrations", () => {
         now,
       )
       .run();
+    await env.DB.prepare(
+      `INSERT INTO collections
+        (id, space_id, parent_id, name, description, status, position, created_at, updated_at)
+       VALUES ('collection-upgrade', 'default', NULL, 'Upgrade collection', 'preserved relation', 'active', 7, ?, ?)`,
+    )
+      .bind(now, now)
+      .run();
 
     const legacyRows = [
       {
         id: "submission-rich",
+        submitter_id: "member-upgrade",
+        requested_space_id: "default",
+        requested_collection_id: "collection-upgrade",
         kind: "rich_text",
-        status: "review_pending",
+        status: "rejected",
         title: "Rich legacy row",
         content: "<p>Line one</p>\r\n<p>记忆花园 🧠 &amp; exact bytes</p>",
+        created_at: "2026-08-20T23:59:58.001Z",
+        updated_at: "2026-08-21T00:59:58.002Z",
       },
       {
         id: "submission-code",
+        submitter_id: "member-upgrade",
+        requested_space_id: "default",
+        requested_collection_id: null,
         kind: "code",
         status: "draft",
         title: "Code legacy row",
         content: "export const answer = 42;\n",
+        created_at: "2026-08-20T22:58:57.003Z",
+        updated_at: "2026-08-21T00:58:57.004Z",
       },
     ] as const;
     for (const row of legacyRows) {
       await env.DB.prepare(
         `INSERT INTO submissions
           (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at)
-         VALUES (?, 'member-upgrade', 'default', NULL, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-        .bind(row.id, row.kind, row.status, row.title, row.content, now, now)
+        .bind(
+          row.id,
+          row.submitter_id,
+          row.requested_space_id,
+          row.requested_collection_id,
+          row.kind,
+          row.status,
+          row.title,
+          row.content,
+          row.created_at,
+          row.updated_at,
+        )
         .run();
     }
 
+    const legacyColumns = `id, submitter_id, requested_space_id,
+      requested_collection_id, kind, status, title, content, created_at, updated_at`;
+    const rowsBefore = await env.DB.prepare(
+      `SELECT ${legacyColumns} FROM submissions ORDER BY id`,
+    ).all<{
+      id: string;
+      submitter_id: string;
+      requested_space_id: string;
+      requested_collection_id: string | null;
+      kind: string;
+      status: string;
+      title: string;
+      content: string;
+      created_at: string;
+      updated_at: string;
+    }>();
+    const expectedLegacyRows = [...legacyRows].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+    expect(rowsBefore.results).toEqual(expectedLegacyRows);
     const bytesBefore = await env.DB.prepare(
       "SELECT id, hex(content) AS content_hex FROM submissions ORDER BY id",
     ).all<{ id: string; content_hex: string }>();
@@ -251,20 +677,23 @@ describe("Phase 1 control-plane migrations", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
 
     const upgradedRows = await env.DB.prepare(
-      `SELECT id, kind, status, title, content, idempotency_key
+      `SELECT ${legacyColumns}, idempotency_key
        FROM submissions ORDER BY id`,
     ).all<{
       id: string;
+      submitter_id: string;
+      requested_space_id: string;
+      requested_collection_id: string | null;
       kind: string;
       status: string;
       title: string;
       content: string;
+      created_at: string;
+      updated_at: string;
       idempotency_key: string | null;
     }>();
     expect(upgradedRows.results).toEqual(
-      [...legacyRows]
-        .sort((left, right) => left.id.localeCompare(right.id))
-        .map((row) => ({ ...row, idempotency_key: null })),
+      expectedLegacyRows.map((row) => ({ ...row, idempotency_key: null })),
     );
 
     const bytesAfter = await env.DB.prepare(
