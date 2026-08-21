@@ -16,8 +16,12 @@ export interface CreateTagInput {
   name: string;
 }
 
+export type TagPage = Page<Tag>;
+
 export interface TagsRepositoryPort {
   create(tag: Tag): Promise<Tag>;
   listActive(spaceId: string): Promise<Tag[]>;
+  listActivePage?(spaceId: string, request: PageRequest): Promise<TagPage>;
   findActiveByIds(spaceId: string, ids: string[]): Promise<Tag[]>;
 }
+import type { Page, PageRequest } from "../pagination";

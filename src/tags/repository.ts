@@ -1,4 +1,5 @@
-import type { Tag, TagsRepositoryPort } from "./types";
+import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
+import type { Tag, TagPage, TagsRepositoryPort } from "./types";
 
 export type TagsRepositoryConflictKind = "target_invalid" | "slug_conflict";
 
@@ -17,6 +18,8 @@ type TagRow = {
   created_at: string;
   updated_at: string;
 };
+
+const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class TagsRepository implements TagsRepositoryPort {
   constructor(private readonly db: D1Database) {}
@@ -46,10 +49,39 @@ export class TagsRepository implements TagsRepositoryPort {
     const rows = await this.db.prepare(
       `SELECT t.id, t.space_id, t.slug, t.name, t.status, t.created_at, t.updated_at
        FROM tags t JOIN spaces s ON s.id = t.space_id
-       WHERE t.space_id = ? AND t.status = 'active' AND s.status = 'active'
+       WHERE t.space_id = ? AND t.status = 'active'
+         AND s.status = 'active' AND s.kind != 'legacy'
        ORDER BY t.name COLLATE NOCASE ASC, t.id ASC`,
     ).bind(spaceId).all<TagRow>();
     return rows.results.map(mapTag);
+  }
+
+  async listActivePage(spaceId: string, request: PageRequest): Promise<TagPage> {
+    const cursor = request.cursor === undefined
+      ? undefined
+      : decodePageCursor(request.cursor, timestampCursorBounds);
+    const cursorSql = cursor
+      ? "AND (t.created_at < ? OR (t.created_at = ? AND t.id < ?))"
+      : "";
+    const cursorBindings = cursor
+      ? [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id]
+      : [];
+    const rows = await this.db.prepare(
+      `SELECT t.id, t.space_id, t.slug, t.name, t.status, t.created_at, t.updated_at
+       FROM tags t JOIN spaces s ON s.id = t.space_id
+       WHERE t.space_id = ? AND t.status = 'active'
+         AND s.status = 'active' AND s.kind != 'legacy'
+         ${cursorSql}
+       ORDER BY t.created_at DESC, t.id DESC LIMIT ?`,
+    ).bind(spaceId, ...cursorBindings, request.limit + 1).all<TagRow>();
+    const items = rows.results.slice(0, request.limit).map(mapTag);
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? {
+        nextCursor: encodePageCursor({ sort: Date.parse(last.createdAt), id: last.id }),
+      } : {}),
+    };
   }
 
   async findActiveByIds(spaceId: string, ids: string[]): Promise<Tag[]> {
@@ -62,6 +94,10 @@ export class TagsRepository implements TagsRepositoryPort {
     ).bind(spaceId, ...ids).all<TagRow>();
     return rows.results.map(mapTag);
   }
+}
+
+function timestamp(value: number): string {
+  return new Date(value).toISOString();
 }
 
 function mapTag(row: TagRow): Tag {

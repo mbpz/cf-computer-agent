@@ -1,4 +1,5 @@
 import { AnswerService } from "./ai/answer-service";
+import { CitedAnswerService } from "./ai/cited-answer-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
@@ -8,7 +9,10 @@ import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/
 import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
 import { KnowledgeService } from "./knowledge/service";
+import { createRequestPublishedContent } from "./knowledge/published-content";
 import { WorkspaceRepository } from "./knowledge/workspace-repository";
+import { LibraryRepository } from "./library/repository";
+import { LibraryService } from "./library/service";
 import { MembersRepository } from "./members/repository";
 import { MembersService } from "./members/service";
 import { routeAdminApi } from "./routes/admin";
@@ -19,8 +23,12 @@ import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
 import { SpacesRepository } from "./spaces/repository";
 import { SpacesService } from "./spaces/service";
+import { PublicationRepository } from "./publication/repository";
+import { PublicationService } from "./publication/service";
 import { SubmissionsRepository } from "./submissions/repository";
 import { SubmissionsService } from "./submissions/service";
+import { TagsRepository } from "./tags/repository";
+import { TagsService } from "./tags/service";
 
 export interface AppDependencies {
   githubFetch?: typeof fetch;
@@ -43,6 +51,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
             return response;
           } finally {
             services.legacyRepository.dispose();
+            services.publishedContent.dispose();
           }
         }
 
@@ -66,6 +75,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           return await dispatchApiRequest(resolved.request, url, context, resolved.principal, services);
         } finally {
           services.legacyRepository.dispose();
+          services.publishedContent.dispose();
         }
       } catch (error) {
         logRequestFailure(request, context, error);
@@ -98,15 +108,22 @@ function createRequestServices(
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
+  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
+  const publicationRecords = new PublicationRepository(env.DB);
+  const tags = new TagsService(new TagsRepository(env.DB));
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(env.AI),
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
+    citedAnswers: new CitedAnswerService(env.AI),
     knowledge: new KnowledgeService(legacyRepository),
+    library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader),
     legacyRepository,
     memberRecords,
     members,
+    publication: new PublicationService(publicationRecords, publishedContent.committer),
+    publishedContent,
     oauth: createGitHubOAuthClient({
       clientId: env.GITHUB_OAUTH_CLIENT_ID || "",
       clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET || "",
@@ -123,6 +140,7 @@ function createRequestServices(
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
+    tags,
   };
 }
 
@@ -149,9 +167,9 @@ async function dispatchApiRequest(
   if (member) return member;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
-  const library = routeLibraryApi(url, principal);
+  const library = await routeLibraryApi(request, url, context, principal, services);
   if (library) return library;
-  const adminReview = routeAdminReviewApi(url, principal);
+  const adminReview = await routeAdminReviewApi(request, url, context, principal, services);
   if (adminReview) return adminReview;
 
   if (url.pathname === "/api/notes") {

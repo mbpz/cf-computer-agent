@@ -1,6 +1,7 @@
 import { AppError } from "../http";
+import { parsePageRequest, type PageRequest } from "../pagination";
 import { TagsRepositoryConflictError } from "./repository";
-import type { CreateTagInput, Tag, TagsRepositoryPort } from "./types";
+import type { CreateTagInput, Tag, TagPage, TagsRepositoryPort } from "./types";
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
 
@@ -41,9 +42,20 @@ export class TagsService {
   }
 
   listActive(spaceId: string): Promise<Tag[]> {
-    if (typeof spaceId !== "string" || spaceId.length === 0 || CONTROL_CHARACTERS.test(spaceId)) throw invalidTag();
+    validateSpaceId(spaceId);
     return this.repository.listActive(spaceId);
   }
+
+  async listActivePage(spaceId: string, request?: PageRequest): Promise<TagPage> {
+    validateSpaceId(spaceId);
+    const page = parsePageRequest(request?.limit, request?.cursor);
+    if (this.repository.listActivePage) return this.repository.listActivePage(spaceId, page);
+    return { items: (await this.repository.listActive(spaceId)).slice(0, page.limit) };
+  }
+}
+
+function validateSpaceId(spaceId: string): void {
+  if (typeof spaceId !== "string" || spaceId.length === 0 || CONTROL_CHARACTERS.test(spaceId)) throw invalidTag();
 }
 
 function normalizeTag(input: CreateTagInput): CreateTagInput {

@@ -39,7 +39,9 @@ export function jsonResponse(value: unknown, status = 200, requestId?: string): 
     headers: {
       "cache-control": "no-store",
       "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+      "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
       ...(requestId ? { "x-request-id": requestId } : {}),
     },
   });
@@ -83,6 +85,20 @@ export function requireSameOrigin(request: Request, canonicalOrigin: string): vo
     || configured.origin !== canonicalOrigin
     || request.headers.get("origin") !== canonicalOrigin) {
     throw new AppError("FORBIDDEN", "Forbidden", 403);
+  }
+}
+
+export function decodePathId(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    throw new AppError("NOT_FOUND", "Not found", 404);
+  }
+}
+
+export function requireNoQuery(url: URL): void {
+  if ([...url.searchParams.keys()].length !== 0) {
+    throw new AppError("REQUEST_QUERY_INVALID", "Query parameters are not accepted", 400);
   }
 }
 

@@ -1,15 +1,17 @@
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
-import { AppError, jsonResponse, methodNotAllowed, parseJsonRequest, type RequestContext } from "../http";
+import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { SubmissionKind } from "../submissions/types";
+import type { TagsService } from "../tags/service";
 
 export interface MemberRouteServices {
   spaces: SpacesService;
   submissions: SubmissionsService;
+  tags: TagsService;
 }
 
 export async function routeMemberApi(
@@ -36,19 +38,43 @@ export async function routeMemberApi(
     );
   }
 
+  const tags = /^\/api\/spaces\/([^/]+)\/tags$/.exec(url.pathname);
+  if (tags) {
+    requireCapability(principal, "knowledge:read");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireMember(principal);
+    requireExactQuery(url, ["limit", "cursor"]);
+    const page = await services.tags.listActivePage(decodePathId(tags[1]!), pageRequest(url));
+    return jsonResponse(
+      { tags: page.items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) },
+      200,
+      context.requestId,
+    );
+  }
+
   if (url.pathname === "/api/submissions") {
     requireCapability(principal, "submission:create");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const member = requireMember(principal);
-    const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
-    const submission = await services.submissions.create(member.memberId, {
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["requestedSpaceId", "requestedCollectionId", "kind", "title", "content", "language"],
+      "SUBMISSION_REQUEST_INVALID",
+    );
+    const result = await services.submissions.createWithSourceVersion(member.memberId, {
       requestedSpaceId: stringValue(input.requestedSpaceId),
       requestedCollectionId: optionalNullableString(input.requestedCollectionId),
       kind: input.kind as SubmissionKind,
       title: stringValue(input.title),
       content: stringValue(input.content),
+      idempotencyKey: request.headers.get("idempotency-key") || "",
+      ...(input.language === undefined ? {} : { language: stringValue(input.language) }),
     });
-    return jsonResponse({ submission }, 201, context.requestId);
+    return jsonResponse({
+      submission: result.submission,
+      duplicateCandidate: result.duplicateCandidate,
+    }, result.submission ? 201 : 200, context.requestId);
   }
 
   if (url.pathname === "/api/submissions/mine") {
@@ -82,15 +108,30 @@ export function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+export function strictRecord(
+  value: unknown,
+  allowedKeys: readonly string[],
+  code: string,
+): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError(code, "Request body is invalid", 400);
+  }
+  const result = value as Record<string, unknown>;
+  if (Object.keys(result).some((key) => !allowedKeys.includes(key))) {
+    throw new AppError(code, "Request body is invalid", 400);
+  }
+  return result;
+}
+
+function requireExactQuery(url: URL, allowedKeys: readonly string[]): void {
+  for (const key of url.searchParams.keys()) {
+    if (!allowedKeys.includes(key) || url.searchParams.getAll(key).length !== 1) {
+      throw new AppError("PAGE_INVALID", "Pagination parameters are invalid", 400);
+    }
+  }
+}
+
 function optionalNullableString(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return value;
   return stringValue(value);
-}
-
-function decodePathId(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    throw new AppError("NOT_FOUND", "Not found", 404);
-  }
 }

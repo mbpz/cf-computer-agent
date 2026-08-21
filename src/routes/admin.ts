@@ -2,15 +2,16 @@ import type { AuditRepository } from "../audit/repository";
 import { auditActions } from "../audit/types";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
-import { AppError, jsonResponse, methodNotAllowed, parseJsonRequest, type RequestContext } from "../http";
+import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import type { MembersRepository } from "../members/repository";
 import type { MembersService } from "../members/service";
 import type { Member, MemberStatus } from "../members/types";
 import { parsePageRequest } from "../pagination";
-import { pageRequest, record, stringValue } from "./member";
+import { pageRequest, record, strictRecord, stringValue } from "./member";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
+import type { TagsService } from "../tags/service";
 
 export interface AdminRouteServices {
   audit: AuditRepository;
@@ -18,6 +19,7 @@ export interface AdminRouteServices {
   memberRecords: MembersRepository;
   spaces: SpacesService;
   submissions: SubmissionsService;
+  tags: TagsService;
 }
 
 export async function routeAdminApi(
@@ -32,6 +34,24 @@ export async function routeAdminApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireEnumFilter(url, "status", ["review_pending"]);
     return jsonResponse(await services.submissions.listPending(pageRequest(url)), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/admin/tags") {
+    requireCapability(principal, "space:manage");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["spaceId", "slug", "name"],
+      "TAG_REQUEST_INVALID",
+    );
+    const tag = await services.tags.create({
+      spaceId: stringValue(input.spaceId),
+      slug: stringValue(input.slug),
+      name: stringValue(input.name),
+    });
+    return jsonResponse({ tag }, 201, context.requestId);
   }
 
   if (url.pathname === "/api/admin/members") {
@@ -170,12 +190,4 @@ function optionalNullableString(value: unknown): string | null | undefined {
 
 function numberValue(value: unknown): number {
   return typeof value === "number" ? value : Number.NaN;
-}
-
-function decodePathId(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    throw new AppError("NOT_FOUND", "Not found", 404);
-  }
 }

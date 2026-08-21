@@ -1,6 +1,8 @@
 import type { WorkspaceClient } from "@cloudflare/computer";
+import { getWorkspace } from "@cloudflare/computer";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import type { PublishedContentCommitter } from "../publication/types";
 import type {
   CommitPublishedContentInput,
   PublishedContentReader,
@@ -15,6 +17,49 @@ export interface ValidatedPublishedContent extends PublishedContentReceipt {
   markdown: string;
   spaceDirectory: string;
   itemDirectory: string;
+}
+
+export interface RequestPublishedContent {
+  committer: PublishedContentCommitter;
+  reader: PublishedContentReader;
+  dispose(): void;
+}
+
+export function createRequestPublishedContent(
+  namespace: Env["KNOWLEDGE"],
+  workspaceName: string,
+): RequestPublishedContent {
+  const stub = namespace.get(namespace.idFromName(workspaceName));
+  let workspace: WorkspaceClient | undefined;
+  const reader: PublishedContentReader = {
+    async read(path, expectedSha256) {
+      if (!workspace) {
+        workspace = await getWorkspace(
+          stub as unknown as Parameters<typeof getWorkspace>[0],
+        );
+      }
+      return createPublishedContentReader(workspace).read(path, expectedSha256);
+    },
+  };
+  return {
+    committer: {
+      async commit(input) {
+        const result = await stub.commitPublishedContent(input);
+        if (result.ok) return result.value;
+        throw new AppError(
+          result.error.code,
+          result.error.message,
+          result.error.status,
+          result.error.retryable,
+        );
+      },
+    },
+    reader,
+    dispose() {
+      disposeWorkspace(workspace);
+      workspace = undefined;
+    },
+  };
 }
 
 export async function validatePublishedContentInput(
@@ -213,4 +258,12 @@ function hasMalformedSurrogate(content: string): boolean {
     }
   }
   return false;
+}
+
+function disposeWorkspace(workspace: WorkspaceClient | undefined): void {
+  if (!workspace) return;
+  const disposeSymbol = (Symbol as typeof Symbol & { dispose?: symbol }).dispose;
+  const disposable = workspace as unknown as Record<symbol, unknown>;
+  const dispose = disposeSymbol ? disposable[disposeSymbol] : undefined;
+  if (typeof dispose === "function") dispose.call(workspace);
 }

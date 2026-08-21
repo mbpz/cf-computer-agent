@@ -65,13 +65,13 @@ describe("Phase 1 API permission matrix", () => {
     }
   });
 
-  it("allows active contributors through M1 knowledge-read stubs only", async () => {
-    for (const [method, path] of m1Boundaries.slice(0, 3)) {
-      await expectApiError(memberApi("sub-contributor", path, {
-        method,
-        ...(method === "POST" ? { body: "{}" } : {}),
-      }), 501, "NOT_IMPLEMENTED");
-    }
+  it("allows active contributors through final M1 knowledge-read routes only", async () => {
+    await expectOk(memberApi("sub-contributor", "/api/knowledge"));
+    await expectOk(memberApi("sub-contributor", "/api/knowledge/search?q=alpha"));
+    await expectOk(memberApi("sub-contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({ question: "alpha" }),
+    }));
     for (const [method, path] of m1Boundaries.slice(3)) {
       await expectApiError(memberApi("sub-contributor", path, {
         method,
@@ -80,13 +80,26 @@ describe("Phase 1 API permission matrix", () => {
     }
   });
 
-  it("allows active administrators through M1 review stubs", async () => {
-    for (const [method, path] of m1Boundaries.slice(3)) {
-      await expectApiError(memberApi("sub-admin", path, {
-        method,
-        ...(method === "POST" ? { body: "{}" } : {}),
-      }), 501, "NOT_IMPLEMENTED");
-    }
+  it("allows active administrators through final M1 review routes", async () => {
+    await expectApiError(
+      memberApi("sub-admin", "/api/admin/submissions/submission-id"),
+      404,
+      "SUBMISSION_NOT_FOUND",
+    );
+    await expectApiError(memberApi("sub-admin", "/api/admin/submissions/submission-id/publish", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Missing",
+        visibility: "shared",
+        spaceId: "default",
+        collectionId: null,
+        tagIds: [],
+      }),
+    }), 404, "SUBMISSION_NOT_FOUND");
+    await expectApiError(memberApi("sub-admin", "/api/admin/submissions/submission-id/reject", {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "not_relevant", note: "Missing" }),
+    }), 409, "REVIEW_STATE_CONFLICT");
   });
 
   it("allows a contributor session, spaces, owned submissions, and legacy reads but not legacy writes", async () => {
@@ -105,11 +118,13 @@ describe("Phase 1 API permission matrix", () => {
     await expectOk(memberApi("sub-contributor", "/api/spaces/default/collections"));
     const otherSubmission = await memberApi("sub-other", "/api/submissions", {
       method: "POST",
+      headers: { "idempotency-key": "phase1-other-key1" },
       body: JSON.stringify({ requestedSpaceId: "default", kind: "text", title: "Other", content: "Other body" }),
     });
     expect(otherSubmission.status).toBe(201);
     const created = await memberApi("sub-contributor", "/api/submissions", {
       method: "POST",
+      headers: { "idempotency-key": "phase1-owned-key1" },
       body: JSON.stringify({ requestedSpaceId: "default", kind: "text", title: "Owned", content: "Body" }),
     });
     expect(created.status).toBe(201);
@@ -127,6 +142,7 @@ describe("Phase 1 API permission matrix", () => {
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
       },
+      duplicateCandidate: null,
     });
     const own = await memberApi("sub-contributor", "/api/submissions/mine?limit=1");
     const ownBody = await own.json<{ items: Array<{ submitterId: string }>; nextCursor?: string }>();
@@ -173,6 +189,7 @@ describe("Phase 1 API permission matrix", () => {
 
     const submission = await memberApi("sub-admin", "/api/submissions", {
       method: "POST",
+      headers: { "idempotency-key": "phase1-admin-key1" },
       body: JSON.stringify({ requestedSpaceId: "default", kind: "markdown", title: "Admin owned", content: "Body" }),
     });
     expect(submission.status).toBe(201);
