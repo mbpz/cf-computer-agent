@@ -174,11 +174,11 @@ async function fetchJson(
     throw oauthUnavailable();
   };
   try {
-    const response = await dependencies.fetch(expectedUrl, {
+    const response = await Reflect.apply(dependencies.fetch, globalThis, [expectedUrl, {
       ...init,
       redirect: "manual",
       signal: controller.signal,
-    });
+    }]);
     if (dependencies.now() - startedAt > timeoutMs) fail("timeout");
     if (response.redirected) fail("redirect", response.status);
     if (response.url !== ""

@@ -207,6 +207,27 @@ describe("GitHub OAuth protocol", () => {
     });
   });
 
+  it("invokes a Workers-native fetch dependency with the global receiver", async () => {
+    const responses = [
+      responseAt(json({ access_token: "local-access-token" }), "https://github.com/login/oauth/access_token"),
+      responseAt(json({ id: 42 }), "https://api.github.com/user"),
+      responseAt(validEmails(), "https://api.github.com/user/emails"),
+    ];
+    const nativeFetch = function (this: unknown): Promise<Response> {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      const response = responses.shift();
+      if (!response) throw new Error("unexpected local fetch");
+      return Promise.resolve(response);
+    } as typeof fetch;
+    const client = oauthClient({ fetch: nativeFetch });
+
+    await expect(client.resolveCallback("local-code", verifier())).resolves.toEqual({
+      subject: "github:42",
+      githubUserId: "42",
+      email: "admin@example.test",
+    });
+  });
+
   it("aborts a slow upstream request and returns a stable timeout error", async () => {
     const diagnostics: GitHubOAuthDiagnostic[] = [];
     const client = oauthClient({
