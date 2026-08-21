@@ -17,7 +17,14 @@ export function runLatestOperation<T>(
   operation: () => Promise<T>,
   onSuccess: (value: T) => void,
   onError: (error: unknown) => void,
+  owns?: () => boolean,
 ): Promise<void>;
+export interface OwnedActionController {
+  run(): boolean;
+  invalidate(): void;
+  canReturnFocus(): boolean;
+}
+export function createOwnedActionController(owns: () => boolean, action: () => void): OwnedActionController;
 export interface LogoutController {
   run(): Promise<void>;
   invalidate(): void;
@@ -115,10 +122,25 @@ export interface ReviewPreviewViewModel {
   rawInput: string;
   normalizedMarkdown: string;
   parserVersion: string;
-  locations: Array<Readonly<{ heading: string; startLine: number }>>;
+  chunks: Array<Readonly<{
+    heading: string;
+    startLine: number;
+    endLine: number;
+    lineLabel: string;
+    excerpt: string;
+  }>>;
   warnings: string[];
 }
 export function reviewPreviewModel(value: unknown): Readonly<ReviewPreviewViewModel>;
+export interface ReviewTargetViewModel {
+  spaceId: string;
+  spaceLabel: string;
+  collectionId: string | null;
+  collectionLabel: string;
+  tagSpaceId: string;
+  available: boolean;
+}
+export function reviewTargetModel(value: unknown, spaces: unknown, collections: unknown): Readonly<ReviewTargetViewModel>;
 
 export interface KnowledgeReaderViewModel {
   knowledgeItemId: string;
@@ -126,7 +148,9 @@ export interface KnowledgeReaderViewModel {
   visibility: "shared" | "admin_only";
   visibilityLabel: "Shared" | "Admin only";
   revisionId: string;
+  isCurrent: boolean;
   revisionLabel: string;
+  searchStatus?: "pending" | "indexed" | "search_degraded";
   publishedAt: string;
   markdown: string;
   tagIds: string[];
@@ -135,6 +159,10 @@ export interface KnowledgeReaderViewModel {
   sources: Array<Readonly<{ id: string; citationId: string; label: string; href: string }>>;
 }
 export function knowledgeReaderModel(value: unknown, location?: unknown): Readonly<KnowledgeReaderViewModel>;
+export function knowledgeReaderRequest(knowledgeItemId: string, revisionId?: string): Readonly<{
+  path: string;
+  responseKey: "knowledge" | "revision";
+}>;
 
 export interface CitedAnswerViewModel {
   answer: string;

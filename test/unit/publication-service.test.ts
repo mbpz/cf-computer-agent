@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseSource } from "../../src/sources/parser";
+import { chunkDocument } from "../../src/sources/chunker";
 import { PublicationService } from "../../src/publication/service";
 import type {
   PublicationIntent,
@@ -7,7 +8,7 @@ import type {
   PublishSubmissionInput,
   PublishedRevision,
   ReviewDecision,
-  ReviewPreview,
+  ReviewSubmissionSnapshot,
 } from "../../src/publication/types";
 import { TagsService } from "../../src/tags/service";
 import type { Tag, TagsRepositoryPort } from "../../src/tags/types";
@@ -22,6 +23,38 @@ const publishInput: PublishSubmissionInput = {
 };
 
 describe("PublicationService", () => {
+  it.each([
+    ["splitting", "markdown", `# Split\n\n${"x".repeat(1_350)}\n`],
+    ["heading-only", "markdown", "# Only heading\n"],
+    ["fenced-code-heading", "markdown", "# Real heading\n\n```text\n# not a heading\nvalue\n```\n"],
+    ["absolute-lines", "markdown", "# One\n\nfirst\n\n## Two\n\nsecond\n"],
+  ] as const)("returns %s preview locations from the exact publication chunker", async (_case, kind, content) => {
+    const fixture = await publicationFixture();
+    fixture.intent.sourceVersion.kind = kind;
+    fixture.intent.sourceVersion.content = content;
+
+    const preview = await fixture.service.preview(reviewer, "submission-1");
+    const publicationChunks = chunkDocument({ normalizedMarkdown: content, kind });
+
+    expect(preview.chunks).toEqual(publicationChunks.map((chunk) => ({
+      headingPath: chunk.headingPath,
+      startLine: chunk.startLine,
+      endLine: chunk.endLine,
+      excerpt: [...chunk.body].slice(0, 240).join(""),
+    })));
+    expect(preview.chunks.every((chunk) => [...chunk.excerpt].length <= 240)).toBe(true);
+    expect(JSON.stringify(preview.chunks)).not.toMatch(/normalizedPath|contentSha256|sourceVersionId/u);
+    if (_case === "splitting") expect(preview.chunks.length).toBeGreaterThan(1);
+    if (_case === "heading-only") expect(preview.chunks).toEqual([
+      { headingPath: ["Only heading"], startLine: 1, endLine: 1, excerpt: "# Only heading" },
+    ]);
+    if (_case === "fenced-code-heading") {
+      expect(preview.chunks).toEqual([expect.objectContaining({ headingPath: ["Real heading"], startLine: 3, endLine: 6 })]);
+      expect(preview.chunks.flatMap((chunk) => chunk.headingPath)).not.toContain("not a heading");
+    }
+    if (_case === "absolute-lines") expect(preview.chunks.at(-1)).toMatchObject({ startLine: 7, endLine: 7 });
+  });
+
   it("moves a stable intent through content, atomic finalization, and a separate index job", async () => {
     const fixture = await publicationFixture();
     const result = await fixture.service.publish(reviewer, "submission-1", publishInput);
@@ -344,7 +377,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
   let finalizeCount = 0;
   let indexCount = 0;
   let finalizedChunks: unknown[] = [];
-  const preview: ReviewPreview = {
+  const preview: ReviewSubmissionSnapshot = {
     submissionId: "submission-1",
     submitterId: "member-1",
     status: "review_pending",

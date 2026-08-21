@@ -12,6 +12,7 @@ import type {
   RejectionReasonCode,
   ReviewDecision,
   ReviewPreview,
+  ReviewSubmissionSnapshot,
 } from "./types";
 
 const MAX_TITLE_CODE_POINTS = 200;
@@ -30,7 +31,7 @@ export class PublicationService {
     requireActiveAdmin(reviewer);
     const preview = await this.repository.getPreview(requireId(submissionId));
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
-    return preview;
+    return { ...preview, chunks: reviewChunkPreviews(preview) };
   }
 
   async publish(
@@ -130,10 +131,7 @@ export class PublicationService {
 
   private async resumeIntent(intent: PublicationIntent): Promise<PublishedRevision> {
     await assertSourceContent(intent);
-    const chunks = chunkDocument({
-      normalizedMarkdown: intent.sourceVersion.content,
-      kind: intent.sourceVersion.kind,
-    });
+    const chunks = publicationChunks(intent);
     if (chunks.length === 0) {
       throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content is invalid", 409);
     }
@@ -198,7 +196,7 @@ function normalizeReviewNote(value: string): string {
 
 function assertStableIntent(
   intent: PublicationIntent,
-  preview: ReviewPreview,
+  preview: ReviewSubmissionSnapshot,
   reviewerId: string,
   input: PublishSubmissionInput,
 ): void {
@@ -217,6 +215,22 @@ function assertStableIntent(
     || intent.contentSha256 !== intent.sourceVersion.contentSha256) {
     throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content does not match the stable intent", 409);
   }
+}
+
+function publicationChunks(source: Pick<ReviewSubmissionSnapshot, "sourceVersion"> | PublicationIntent) {
+  return chunkDocument({
+    normalizedMarkdown: source.sourceVersion.content,
+    kind: source.sourceVersion.kind,
+  });
+}
+
+function reviewChunkPreviews(preview: ReviewSubmissionSnapshot) {
+  return publicationChunks(preview).map((chunk) => ({
+    headingPath: [...chunk.headingPath],
+    startLine: chunk.startLine,
+    endLine: chunk.endLine,
+    excerpt: [...chunk.body].slice(0, 240).join(""),
+  }));
 }
 
 async function assertSourceContent(intent: PublicationIntent): Promise<void> {

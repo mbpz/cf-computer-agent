@@ -7,6 +7,7 @@ const {
   chatRequest,
   citedAnswerModel,
   createMutationController,
+  createOwnedActionController,
   createOperationGuard,
   createRouteGuard,
   drawerState,
@@ -14,11 +15,13 @@ const {
   knowledgeListModel,
   knowledgeQuery,
   knowledgeReaderModel,
+  knowledgeReaderRequest,
   knowledgeSearchModel,
   publishRequest,
   postLogout,
   renderKnowledgeSearch,
   reviewPreviewModel,
+  reviewTargetModel,
   routeState,
   sessionBootstrapState,
   submissionRequest,
@@ -99,6 +102,21 @@ describe("createOperationGuard", () => {
     await firstRun;
 
     expect(rendered).toEqual(["newer-success"]);
+  });
+
+  it("does not invoke an operation after its renderer loses ownership", async () => {
+    const guard = createOperationGuard();
+    let operations = 0;
+
+    await runLatestOperation(
+      guard,
+      async () => { operations += 1; },
+      () => undefined,
+      () => undefined,
+      () => false,
+    );
+
+    expect(operations).toBe(0);
   });
 });
 
@@ -310,7 +328,7 @@ describe("M1 trusted knowledge view models", () => {
     ]);
   });
 
-  it("derives a safe review preview with normalized headings and warnings", () => {
+  it("uses the server-owned chunk preview without parsing Markdown in the browser", () => {
     const model = reviewPreviewModel({
       submissionId: "submission-1",
       submitterId: "member-1",
@@ -328,6 +346,14 @@ describe("M1 trusted knowledge view models", () => {
         contentSha256: "must-not-leak",
         normalizedPath: "/workspace/private.md",
       },
+      chunks: [{
+        headingPath: ["Launch", "Rollback"],
+        startLine: 4,
+        endLine: 7,
+        excerpt: "Never execute <img onerror=alert(1)>",
+        normalizedPath: "/workspace/chunk-private.md",
+        contentSha256: "chunk-secret",
+      }],
     });
 
     expect(model).toMatchObject({
@@ -335,13 +361,41 @@ describe("M1 trusted knowledge view models", () => {
       title: "<script>Unsafe title</script>",
       rawInput: "# Launch  \r\n\r\n## Rollback   \r\n",
       normalizedMarkdown: expect.stringContaining("## Rollback"),
-      locations: [
-        { heading: "Launch", startLine: 1 },
-        { heading: "Launch › Rollback", startLine: 3 },
+      chunks: [
+        {
+          heading: "Launch › Rollback",
+          startLine: 4,
+          endLine: 7,
+          lineLabel: "lines 4–7",
+          excerpt: "Never execute <img onerror=alert(1)>",
+        },
       ],
     });
     expect(model.warnings).toContain("Preview is inert text; Markdown and HTML are never executed.");
-    expect(JSON.stringify(model)).not.toMatch(/must-not-leak|workspace\/private/);
+    expect(JSON.stringify(model)).not.toMatch(/must-not-leak|chunk-secret|workspace\/private|chunk-private/);
+  });
+
+  it("keeps the requested review target fixed and scopes tags to that Space", () => {
+    const target = reviewTargetModel({
+      requestedSpaceId: "space-requested",
+      requestedCollectionId: "collection-requested",
+    }, [
+      { id: "space-other", name: "Other", status: "active", kind: "shared", readOnly: false },
+      { id: "space-requested", name: "Requested", status: "active", kind: "shared", readOnly: false },
+    ], [
+      { id: "collection-other", spaceId: "space-requested", name: "Other collection", status: "active" },
+      { id: "collection-requested", spaceId: "space-requested", name: "Requested collection", status: "active" },
+    ]);
+
+    expect(target).toEqual({
+      spaceId: "space-requested",
+      spaceLabel: "Requested",
+      collectionId: "collection-requested",
+      collectionLabel: "Requested collection",
+      tagSpaceId: "space-requested",
+      available: true,
+    });
+    expect(JSON.stringify(target)).not.toContain("space-other");
   });
 
   it("models reader history, exact chunk focus, and citation source navigation", () => {
@@ -383,6 +437,30 @@ describe("M1 trusted knowledge view models", () => {
       }],
     });
     expect(JSON.stringify(model)).not.toMatch(/source-secret|member-secret/);
+  });
+
+  it("keeps a server-declared historical Revision citation-navigable even when no current detail was loaded", () => {
+    const model = knowledgeReaderModel({
+      id: "revision-old",
+      knowledgeItemId: "knowledge-1",
+      title: "Old shared runbook",
+      visibility: "shared",
+      isCurrent: false,
+      markdown: "# Old\n\nStill readable.\n",
+      chunks: [{
+        id: "chunk-old",
+        citationId: "citation-old",
+        headingPath: ["Old"],
+        startLine: 3,
+        endLine: 3,
+      }],
+    }, { revision: "revision-old", chunk: "chunk-old" });
+
+    expect(model).toMatchObject({
+      isCurrent: false,
+      revisionLabel: "Revision revision-old · history",
+      sources: [{ href: "/knowledge/knowledge-1?revision=revision-old&chunk=chunk-old" }],
+    });
   });
 
   it("models citation-grounded answers using only server-provided source hits", () => {
@@ -443,15 +521,34 @@ describe("M1 route state and mutation ownership", () => {
     }]);
   });
 
+  it("keeps repeated Agent submit and Enter events to one in-flight request and restores owned controls", async () => {
+    const response = deferred<{ answer: string }>();
+    const pending: boolean[] = [];
+    let requests = 0;
+    const controller = createMutationController(() => true, (value) => pending.push(value));
+    const operation = async () => { requests += 1; return response.promise; };
+
+    const submit = controller.run(operation, () => undefined, () => undefined);
+    const enter = controller.run(operation, () => undefined, () => undefined);
+
+    expect(enter).toBe(submit);
+    expect(requests).toBe(1);
+    expect(pending).toEqual([true]);
+    response.resolve({ answer: "Grounded" });
+    await submit;
+    expect(pending).toEqual([true, false]);
+  });
+
   it("makes a late mutation completion inert after its renderer loses ownership", async () => {
     const guard = createRouteGuard();
     const generation = guard.begin();
     const owner = guard.owner(generation, "/admin/submissions/submission-1");
     const response = deferred<string>();
     const rendered: string[] = [];
+    const pending: boolean[] = [];
     const controller = createMutationController(
       () => guard.owns(owner, "/admin/submissions/submission-1"),
-      () => undefined,
+      (value) => pending.push(value),
     );
 
     const run = controller.run(() => response.promise, (value) => rendered.push(value), () => rendered.push("error"));
@@ -460,6 +557,54 @@ describe("M1 route state and mutation ownership", () => {
     await run;
 
     expect(rendered).toEqual([]);
+    expect(pending).toEqual([true]);
+  });
+
+  it("restores Agent controls after an owned request error", async () => {
+    const pending: boolean[] = [];
+    const errors: string[] = [];
+    const controller = createMutationController(() => true, (value) => pending.push(value));
+
+    await controller.run(
+      async () => { throw new Error("AI unavailable"); },
+      () => undefined,
+      (error) => errors.push(String(error)),
+    );
+
+    expect(errors).toEqual(["Error: AI unavailable"]);
+    expect(pending).toEqual([true, false]);
+  });
+
+  it("does not invoke a mutation after its renderer loses ownership", async () => {
+    let owns = true;
+    let requests = 0;
+    const pending: boolean[] = [];
+    const controller = createMutationController(() => owns, (value) => pending.push(value));
+    owns = false;
+
+    await controller.run(async () => { requests += 1; }, () => undefined, () => undefined);
+
+    expect(requests).toBe(0);
+    expect(pending).toEqual([]);
+  });
+
+  it.each(["publish", "reject", "recovery"])("invalidates an open %s dialog before its old confirm handler can run", (kind) => {
+    const guard = createRouteGuard();
+    const generation = guard.begin();
+    const pathname = kind === "recovery" ? "/admin" : "/admin/submissions/submission-1";
+    const owner = guard.owner(generation, pathname);
+    let operations = 0;
+    const dialog = createOwnedActionController(
+      () => guard.owns(owner, pathname),
+      () => { operations += 1; },
+    );
+
+    guard.begin();
+    dialog.invalidate();
+
+    expect(dialog.run()).toBe(false);
+    expect(dialog.canReturnFocus()).toBe(false);
+    expect(operations).toBe(0);
   });
 });
 
@@ -530,6 +675,17 @@ describe("M1 browser request allowlists", () => {
       role: "admin",
       path: "/workspace/private.md",
     })).toBe("/api/knowledge/search?q=launch+latency&limit=20&cursor=next&spaceId=space-1&collectionId=collection-1&tagId=tag-1");
+  });
+
+  it("loads a requested historical Revision directly without first probing the current detail", () => {
+    expect(knowledgeReaderRequest("knowledge/1", "revision/old")).toEqual({
+      path: "/api/knowledge/knowledge%2F1/revisions/revision%2Fold",
+      responseKey: "revision",
+    });
+    expect(knowledgeReaderRequest("knowledge/1", "")).toEqual({
+      path: "/api/knowledge/knowledge%2F1",
+      responseKey: "knowledge",
+    });
   });
 });
 

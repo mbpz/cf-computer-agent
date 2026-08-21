@@ -17,14 +17,30 @@ export function createOperationGuard() {
   });
 }
 
-export async function runLatestOperation(guard, operation, onSuccess, onError) {
+export async function runLatestOperation(guard, operation, onSuccess, onError, owns = () => true) {
+  if (!owns()) return;
   const generation = guard.begin();
   try {
     const value = await operation();
-    if (guard.isCurrent(generation)) onSuccess(value);
+    if (guard.isCurrent(generation) && owns()) onSuccess(value);
   } catch (error) {
-    if (guard.isCurrent(generation)) onError(error);
+    if (guard.isCurrent(generation) && owns()) onError(error);
   }
+}
+
+export function createOwnedActionController(owns, action) {
+  let invalidated = false;
+  let handled = false;
+  return Object.freeze({
+    run() {
+      if (invalidated || handled || !owns()) return false;
+      handled = true;
+      action();
+      return true;
+    },
+    invalidate() { invalidated = true; },
+    canReturnFocus() { return !invalidated && owns(); },
+  });
 }
 
 export function createLogoutController(request, callbacks) {
@@ -126,6 +142,7 @@ export function createMutationController(owns, onPendingChange) {
   return Object.freeze({
     run(operation, onSuccess, onError) {
       if (active) return active;
+      if (!owns()) return Promise.resolve();
       onPendingChange(true);
       let result;
       try {
@@ -183,9 +200,21 @@ export function reviewPreviewModel(value) {
   const preview = safeRecord(value);
   const sourceVersion = safeRecord(preview.sourceVersion);
   const content = safeString(sourceVersion.content);
-  const locations = markdownLocations(content);
+  const chunks = safeArray(preview.chunks).map((candidate) => {
+    const chunk = safeRecord(candidate);
+    const headingPath = safeArray(chunk.headingPath).map(safeString).filter(Boolean);
+    const startLine = safeLine(chunk.startLine);
+    const endLine = safeLine(chunk.endLine, startLine);
+    return Object.freeze({
+      heading: headingPath.join(" › ") || "Document",
+      startLine,
+      endLine,
+      lineLabel: lineLabel(startLine, endLine),
+      excerpt: safeString(chunk.excerpt),
+    });
+  });
   const warnings = ["Preview is inert text; Markdown and HTML are never executed."];
-  if (locations.length === 0) warnings.push("No Markdown heading was detected; review line locations carefully.");
+  if (chunks.length === 0) warnings.push("No publication Chunk was produced; this submission cannot be published.");
   if (sourceVersion.parserVersion !== "m1-v1") warnings.push("The parser version is not recognized by this workspace.");
   return Object.freeze({
     submissionId: safeString(preview.submissionId),
@@ -197,19 +226,39 @@ export function reviewPreviewModel(value) {
     rawInput: safeString(preview.rawContent),
     normalizedMarkdown: content,
     parserVersion: safeString(sourceVersion.parserVersion),
-    locations,
+    chunks,
     warnings,
+  });
+}
+
+export function reviewTargetModel(value, spacesValue, collectionsValue) {
+  const preview = safeRecord(value);
+  const spaceId = safeString(preview.requestedSpaceId);
+  const collectionId = preview.requestedCollectionId === null ? null : safeString(preview.requestedCollectionId);
+  const space = safeArray(spacesValue).map(safeRecord).find((candidate) => safeString(candidate.id) === spaceId);
+  const collection = collectionId === null ? undefined : safeArray(collectionsValue).map(safeRecord)
+    .find((candidate) => safeString(candidate.id) === collectionId && safeString(candidate.spaceId) === spaceId);
+  const activeSpace = space?.status === "active" && space?.kind === "shared" && space?.readOnly !== true;
+  const activeCollection = collectionId === null || collection?.status === "active";
+  return Object.freeze({
+    spaceId,
+    spaceLabel: activeSpace ? safeString(space.name) : "Requested Space unavailable",
+    collectionId,
+    collectionLabel: collectionId === null ? "No collection" : activeCollection ? safeString(collection?.name) : "Requested Collection unavailable",
+    tagSpaceId: spaceId,
+    available: activeSpace && activeCollection,
   });
 }
 
 export function knowledgeReaderModel(value, location = {}) {
   const input = safeRecord(value);
-  const revision = safeRecord(input.currentRevision || input);
-  const knowledgeItemId = safeString(input.id || revision.knowledgeItemId);
+  const detailRevision = safeRecord(input.currentRevision);
+  const isDetail = safeString(detailRevision.id).length > 0;
+  const revision = isDetail ? detailRevision : input;
+  const knowledgeItemId = safeString(isDetail ? input.id : revision.knowledgeItemId);
   const revisionId = safeString(revision.id);
-  const requestedRevision = safeString(safeRecord(location).revision);
   const focusedChunkId = safeString(safeRecord(location).chunk);
-  const isCurrent = revision.isCurrent === true && (!requestedRevision || requestedRevision === revisionId);
+  const isCurrent = revision.isCurrent === true;
   const chunks = safeArray(revision.chunks).map((candidate) => {
     const chunk = safeRecord(candidate);
     const id = safeString(chunk.id);
@@ -233,7 +282,9 @@ export function knowledgeReaderModel(value, location = {}) {
     visibility: revision.visibility === "admin_only" ? "admin_only" : "shared",
     visibilityLabel: visibilityLabel(revision.visibility),
     revisionId,
+    isCurrent,
     revisionLabel: `Revision ${revisionId} · ${isCurrent ? "current" : "history"}`,
+    ...(typeof input.searchStatus === "string" ? { searchStatus: searchStatus(input.searchStatus) } : {}),
     publishedAt: safeString(revision.publishedAt),
     markdown: safeString(revision.markdown),
     tagIds: safeArray(revision.tagIds).map(safeString),
@@ -348,6 +399,18 @@ export function knowledgeQuery(path, value) {
   return `${path}${serialized ? `?${serialized}` : ""}`;
 }
 
+export function knowledgeReaderRequest(knowledgeItemId, revisionId) {
+  const item = encodeURIComponent(safeString(knowledgeItemId));
+  const revision = safeString(revisionId);
+  return Object.freeze(revision ? {
+    path: `/api/knowledge/${item}/revisions/${encodeURIComponent(revision)}`,
+    responseKey: "revision",
+  } : {
+    path: `/api/knowledge/${item}`,
+    responseKey: "knowledge",
+  });
+}
+
 function searchHitModel(candidate) {
   const hit = safeRecord(candidate);
   const knowledgeItemId = safeString(hit.knowledgeItemId);
@@ -370,20 +433,6 @@ function searchHitModel(candidate) {
     publishedAt: safeString(hit.publishedAt),
     citationHref: readerHref(knowledgeItemId, revisionId, chunkId),
   });
-}
-
-function markdownLocations(markdown) {
-  const headings = [];
-  const stack = [];
-  for (const [index, line] of markdown.split("\n").entries()) {
-    const match = /^(#{1,6})\s+(.+)$/u.exec(line);
-    if (!match) continue;
-    const depth = match[1].length;
-    stack.length = depth - 1;
-    stack[depth - 1] = match[2].trim();
-    headings.push(Object.freeze({ heading: stack.filter(Boolean).join(" › "), startLine: index + 1 }));
-  }
-  return headings;
 }
 
 function readerHref(knowledgeItemId, revisionId, chunkId) {

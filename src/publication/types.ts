@@ -27,7 +27,7 @@ export interface PublicationSourceVersion extends Pick<SourceVersion,
   kind: SubmissionKind;
 }
 
-export interface ReviewPreview {
+export interface ReviewSubmissionSnapshot {
   submissionId: string;
   submitterId: string;
   status: "review_pending" | "published" | "rejected" | "revision_requested";
@@ -37,6 +37,17 @@ export interface ReviewPreview {
   title: string;
   rawContent: string;
   sourceVersion: PublicationSourceVersion;
+}
+
+export interface ReviewChunkPreview {
+  headingPath: string[];
+  startLine: number;
+  endLine: number;
+  excerpt: string;
+}
+
+export interface ReviewPreview extends ReviewSubmissionSnapshot {
+  chunks: ReviewChunkPreview[];
 }
 
 export interface PublicationIntent {
@@ -85,7 +96,7 @@ export interface ReviewDecision {
 }
 
 export interface PublicationRepositoryPort {
-  getPreview(submissionId: string): Promise<ReviewPreview | null>;
+  getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null>;
   validateTarget(input: PublishSubmissionInput): Promise<void>;
   createOrReadIntent(
     submissionId: string,

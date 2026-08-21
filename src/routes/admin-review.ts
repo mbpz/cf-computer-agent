@@ -148,6 +148,12 @@ function reviewPreviewDto(preview: ReviewPreview) {
       content: preview.sourceVersion.content,
       parserVersion: preview.sourceVersion.parserVersion,
     },
+    chunks: preview.chunks.map((chunk) => ({
+      headingPath: [...chunk.headingPath],
+      startLine: chunk.startLine,
+      endLine: chunk.endLine,
+      excerpt: chunk.excerpt,
+    })),
   };
 }
 

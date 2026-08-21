@@ -10,7 +10,7 @@ import type {
   PublishSubmissionInput,
   RejectionReasonCode,
   ReviewDecision,
-  ReviewPreview,
+  ReviewSubmissionSnapshot,
 } from "./types";
 
 export type PublicationRepositoryConflictKind =
@@ -33,10 +33,10 @@ export interface PublicationRepositoryOptions {
 type PreviewRow = {
   submission_id: string;
   submitter_id: string;
-  status: ReviewPreview["status"];
+  status: ReviewSubmissionSnapshot["status"];
   requested_space_id: string;
   requested_collection_id: string | null;
-  kind: ReviewPreview["kind"];
+  kind: ReviewSubmissionSnapshot["kind"];
   title: string;
   raw_content: string;
   source_version_id: string;
@@ -109,7 +109,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
     this.now = options.now || (() => new Date());
   }
 
-  async getPreview(submissionId: string): Promise<ReviewPreview | null> {
+  async getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null> {
     const row = await this.db.prepare(`${previewSelect} WHERE s.id = ? LIMIT 1`)
       .bind(submissionId).first<PreviewRow>();
     return row ? mapPreview(row) : null;
@@ -492,7 +492,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
         `SELECT s.status,
            EXISTS(SELECT 1 FROM publication_intents pi WHERE pi.submission_id = s.id) AS has_intent
          FROM submissions s WHERE s.id = ? LIMIT 1`,
-      ).bind(submissionId).first<{ status: ReviewPreview["status"]; has_intent: number }>();
+      ).bind(submissionId).first<{ status: ReviewSubmissionSnapshot["status"]; has_intent: number }>();
       if (!blocked || blocked.status !== "review_pending" || blocked.has_intent === 1) {
         throw new PublicationRepositoryConflictError("decision_conflict");
       }
@@ -556,7 +556,7 @@ FROM publication_intents pi
 JOIN submissions s ON s.id = pi.submission_id
 JOIN source_versions sv ON sv.submission_id = s.id`;
 
-function mapPreview(row: PreviewRow): ReviewPreview {
+function mapPreview(row: PreviewRow): ReviewSubmissionSnapshot {
   return {
     submissionId: row.submission_id,
     submitterId: row.submitter_id,

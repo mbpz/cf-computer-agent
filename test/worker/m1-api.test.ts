@@ -12,6 +12,7 @@ import { createApp } from "../../src/app";
 import { APP_CONFIG } from "../../src/config";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
+import { chunkDocument } from "../../src/sources/chunker";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const now = "2026-08-22T00:00:00.000Z";
@@ -324,6 +325,15 @@ describe("M1 trusted knowledge HTTP journey", () => {
         submitterId: "member-contributor",
         rawContent: "# Launch  \r\n\r\nLaunch latency is under 50ms.   \r\n",
         sourceVersion: { content: "# Launch\n\nLaunch latency is under 50ms.\n" },
+        chunks: chunkDocument({
+          normalizedMarkdown: "# Launch\n\nLaunch latency is under 50ms.\n",
+          kind: "markdown",
+        }).map((chunk) => ({
+          headingPath: chunk.headingPath,
+          startLine: chunk.startLine,
+          endLine: chunk.endLine,
+          excerpt: [...chunk.body].slice(0, 240).join(""),
+        })),
       },
     });
     expect(JSON.stringify(preview)).not.toMatch(/contentSha256|normalizedPath|identitySubject|idempotency/i);
@@ -404,7 +414,20 @@ describe("M1 trusted knowledge HTTP journey", () => {
       },
     });
 
-    await advanceCurrentRevision(published.revision.knowledgeItemId);
+    await advanceCurrentRevision(published.revision.knowledgeItemId, "admin_only");
+    const historicalRevision = await memberApi(
+      "contributor",
+      `/api/knowledge/${published.revision.knowledgeItemId}/revisions/${published.revision.id}`,
+    );
+    expect(historicalRevision.status).toBe(200);
+    await expect(historicalRevision.json()).resolves.toMatchObject({
+      revision: {
+        id: published.revision.id,
+        isCurrent: false,
+        visibility: "shared",
+        chunks: [expect.objectContaining({ citationId: search.items[0]!.citationId })],
+      },
+    });
     const historicalCitation = await memberApi(
       "contributor",
       `/api/knowledge/citations/${encodeURIComponent(search.items[0]!.citationId)}`,
@@ -413,6 +436,11 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(historicalCitation.json()).resolves.toMatchObject({
       citation: { citationId: search.items[0]!.citationId, revisionId: published.revision.id },
     });
+    await expectApiError(
+      memberApi("contributor", `/api/knowledge/${published.revision.knowledgeItemId}`),
+      404,
+      "KNOWLEDGE_NOT_FOUND",
+    );
 
     const recovery = await memberApi("admin", "/api/admin/publications/recover", {
       method: "POST",
@@ -451,6 +479,38 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(degraded.json()).resolves.toEqual({ items: [], degraded: true });
     const readable = await memberApi("contributor", `/api/knowledge/${shared.knowledgeItemId}`);
     expect(readable.status).toBe(200);
+  });
+
+  it("rejects publication target switching away from the submission's requested Space and Collection", async () => {
+    await env.DB.prepare(
+      `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+       VALUES ('other-space', 'other-space', 'Other Space', '', 'shared', 'active', 2, 0, ?, ?)`,
+    ).bind(now, now).run();
+    await env.DB.prepare(
+      `INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at)
+       VALUES ('other-collection', 'default', NULL, 'Other Collection', '', 'active', 1, ?, ?)`,
+    ).bind(now, now).run();
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default",
+      kind: "markdown",
+      title: "Fixed target",
+      content: "# Fixed target\n",
+    }, "fixed-target-key1");
+
+    for (const target of [
+      { spaceId: "other-space", collectionId: null },
+      { spaceId: "default", collectionId: "other-collection" },
+    ]) {
+      await expectApiError(memberApi("admin", `/api/admin/submissions/${created.body.submission.id}/publish`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Fixed target",
+          visibility: "shared",
+          ...target,
+          tagIds: [],
+        }),
+      }), 400, "PUBLICATION_TARGET_INVALID");
+    }
   });
 
   it("rejects and requests revision through admin-only bounded review APIs", async () => {
@@ -548,7 +608,10 @@ async function publishSubmission(
   return (await response.json<{ revision: { id: string; knowledgeItemId: string } }>()).revision;
 }
 
-async function advanceCurrentRevision(knowledgeItemId: string): Promise<void> {
+async function advanceCurrentRevision(
+  knowledgeItemId: string,
+  visibility: "shared" | "admin_only" = "shared",
+): Promise<void> {
   const suffix = knowledgeItemId.slice(0, 24);
   const submissionId = `history-sub-${suffix}`;
   const sourceId = `history-source-${suffix}`;
@@ -565,13 +628,14 @@ async function advanceCurrentRevision(knowledgeItemId: string): Promise<void> {
     "INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES (?, ?, ?, 1, 'history', ?, 'm1-v1', ?)",
   ).bind(sourceVersionId, sourceId, submissionId, hash, now).run();
   await env.DB.prepare(
-    "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES (?, ?, ?, ?, ?, 'History', '[]', 'shared', 'member-admin', ?)",
+    "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES (?, ?, ?, ?, ?, 'History', '[]', ?, 'member-admin', ?)",
   ).bind(
     revisionId,
     knowledgeItemId,
     sourceVersionId,
     `/workspace/published/default/${knowledgeItemId}/${revisionId}.md`,
     hash,
+    visibility,
     now,
   ).run();
   await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = ?, updated_at = ? WHERE id = ?")

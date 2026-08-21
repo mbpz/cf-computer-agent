@@ -6,15 +6,18 @@ import {
   citedAnswerModel,
   createLogoutController,
   createMutationController,
+  createOwnedActionController,
   createOperationGuard,
   createRouteGuard,
   drawerStateForViewport,
   knowledgeListModel,
   knowledgeQuery,
   knowledgeReaderModel,
+  knowledgeReaderRequest,
   knowledgeSearchModel,
   publishRequest,
   reviewPreviewModel,
+  reviewTargetModel,
   sessionBootstrapState,
   submissionRequest,
   submissionResultModel,
@@ -32,6 +35,7 @@ const routeGuard = createRouteGuard();
 const mobileViewport = window.matchMedia("(max-width: 760px)");
 let session;
 let pendingFlash = "";
+const openDialogs = new Set();
 const logoutController = createLogoutController(fetch, {
   onPendingChange(pending) { logoutButton.disabled = pending || !session; },
   onSuccess() { renderAnonymous(); },
@@ -145,6 +149,7 @@ function setDrawer(open, focusDrawer = false) {
   if (!state.open && document.activeElement instanceof HTMLElement && sidebar.contains(document.activeElement)) drawerToggle.focus();
 }
 function navigate(path, replace = false, flash = "") {
+  closeOpenDialogs();
   if (!session) return;
   const next = new URL(path, window.location.origin);
   if (next.origin !== window.location.origin) return;
@@ -250,8 +255,20 @@ function routeStateNode(kind, message) {
   });
 }
 
-function openReviewDialog({ title, description, confirmLabel, danger = false, onConfirm }) {
+function closeOpenDialogs() {
+  for (const entry of openDialogs) {
+    entry.controller.invalidate();
+    if (entry.dialog.open) entry.dialog.close();
+    else {
+      entry.dialog.remove();
+      openDialogs.delete(entry);
+    }
+  }
+}
+
+function openReviewDialog({ title, description, confirmLabel, danger = false, owns, onConfirm }) {
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+  const controller = createOwnedActionController(owns, onConfirm);
   const cancel = element("button", { className: "secondary", type: "button", text: "Cancel" });
   const confirm = element("button", { className: danger ? "danger" : "primary", type: "button", text: confirmLabel });
   const dialog = element("dialog", { className: "review-dialog", "aria-labelledby": "review-dialog-title" }, [
@@ -263,7 +280,7 @@ function openReviewDialog({ title, description, confirmLabel, danger = false, on
   ]);
   const close = () => { if (dialog.open) dialog.close(); };
   cancel.addEventListener("click", close);
-  confirm.addEventListener("click", () => { close(); onConfirm(); });
+  confirm.addEventListener("click", () => { controller.run(); close(); });
   dialog.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -284,9 +301,12 @@ function openReviewDialog({ title, description, confirmLabel, danger = false, on
     }
   });
   dialog.addEventListener("close", () => {
+    openDialogs.delete(entry);
     dialog.remove();
-    returnFocus?.focus({ preventScroll: true });
+    if (controller.canReturnFocus() && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
   }, { once: true });
+  const entry = { dialog, controller };
+  openDialogs.add(entry);
   document.body.append(dialog);
   dialog.showModal();
   cancel.focus();
@@ -369,6 +389,7 @@ async function renderSubmit(generation) {
     () => loadCollections(space.value),
     (items) => { if (ownsMutation(owner)) replaceOptions(collection, items.map((value) => element("option", { value: value.id, text: value.name })), "No collection"); },
     (error) => { if (ownsMutation(owner)) validationSummary(form, safeErrorMessage(error, "Could not load collections.")); },
+    () => ownsMutation(owner),
   );
   space.addEventListener("change", () => { void updateCollections(); });
   if (activeSpaces.length) await updateCollections();
@@ -397,7 +418,7 @@ async function renderKnowledge(generation) {
         items = appendPage(items, next.items, (entry) => entry.id);
         cursor = next.nextCursor;
         renderItems();
-      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); });
+      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
     region.replaceChildren(rows, more);
   };
@@ -436,7 +457,7 @@ async function renderSearch(generation) {
       currentItems = append ? appendPage(currentItems, model.items, (hit) => hit.citationId) : model.items;
       currentCursor = model.nextCursor;
       renderResults(model);
-    }, (error) => { if (ownsMutation(owner)) results.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))); });
+    }, (error) => { if (ownsMutation(owner)) results.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))); }, () => ownsMutation(owner));
   };
   const form = element("form", { className: "filter-grid", onsubmit: (event) => {
     event.preventDefault();
@@ -455,7 +476,7 @@ async function renderSearch(generation) {
     replaceOptions(tag, tags.map((value) => element("option", { value: value.id, text: value.name })), "All Tags");
     collection.disabled = !space.value;
     tag.disabled = !space.value;
-  }, (error) => { if (ownsMutation(owner)) results.replaceChildren(routeStateNode("error", safeErrorMessage(error, "Could not load filters."))); });
+  }, (error) => { if (ownsMutation(owner)) results.replaceChildren(routeStateNode("error", safeErrorMessage(error, "Could not load filters."))); }, () => ownsMutation(owner));
   space.addEventListener("change", () => { void updateDependentFilters(); });
   replaceOutlet(page("Search", "FTS search is permission-scoped and links every result to its exact Revision and Chunk.", [card("Search filters", [form]), card("Results", [results])]), generation);
 }
@@ -464,13 +485,21 @@ async function renderAgent(generation) {
   const question = element("textarea", { required: "", maxlength: "200", placeholder: "Ask a question grounded in published knowledge…" });
   const answer = element("div", { className: "stack", "aria-live": "polite" });
   const owner = routeGuard.owner(generation, "/agent");
-  const operations = createOperationGuard();
+  const submitButton = element("button", { className: "primary", type: "submit", text: "Ask Agent" });
+  const mutation = createMutationController(
+    () => ownsMutation(owner),
+    (pending) => {
+      question.disabled = pending;
+      setPending(submitButton, pending, "Asking…", "Ask Agent");
+    },
+  );
   const form = element("form", { className: "stack", onsubmit: (event) => {
     event.preventDefault();
-    answer.replaceChildren(routeStateNode("loading", "Reading permission-scoped published knowledge…"));
     const request = chatRequest({ question: question.value });
-    void runLatestOperation(operations, () => api(request.path, request.init), (data) => {
-      if (!ownsMutation(owner)) return;
+    void mutation.run(() => {
+      answer.replaceChildren(routeStateNode("loading", "Reading permission-scoped published knowledge…"));
+      return api(request.path, request.init);
+    }, (data) => {
       const model = citedAnswerModel(data);
       answer.replaceChildren(
         element("p", { className: "answer-text", text: model.answer }),
@@ -480,8 +509,8 @@ async function renderAgent(generation) {
           element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": source.accessibleName, text: "Open exact source location" }),
         ]), "The answer contains no source citations."),
       );
-    }, (error) => { if (ownsMutation(owner)) answer.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))); });
-  } }, [field("Question", question), element("button", { className: "primary", type: "submit", text: "Ask Agent" })]);
+    }, (error) => answer.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))));
+  } }, [field("Question", question), submitButton]);
   replaceOutlet(page("Agent", "Answers use only current permission-scoped search hits; unsupported claims fail closed.", [card("Grounded question", [form, answer])]), generation);
 }
 
@@ -503,7 +532,7 @@ async function renderMySubmissions(generation) {
         items = appendPage(items, next.items, (submission) => submission.id);
         cursor = next.nextCursor;
         renderItems();
-      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); });
+      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
     region.replaceChildren(rows, more);
   };
@@ -521,11 +550,9 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   }
   const requestedRevision = url.searchParams.get("revision") || "";
   const requestedChunk = url.searchParams.get("chunk") || "";
-  const detail = (await api(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}`)).knowledge;
-  let readerValue = detail;
-  if (requestedRevision && requestedRevision !== detail.currentRevision.id) {
-    readerValue = (await api(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/revisions/${encodeURIComponent(requestedRevision)}`)).revision;
-  }
+  const request = knowledgeReaderRequest(knowledgeItemId, requestedRevision);
+  const response = await api(request.path);
+  const readerValue = response[request.responseKey];
   const model = knowledgeReaderModel(readerValue, { revision: requestedRevision, chunk: requestedChunk });
   const outline = element("nav", { className: "reader-outline", "aria-label": "Document outline" }, [
     element("h2", { text: "Outline" }),
@@ -540,10 +567,10 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   ]);
   const body = element("article", { className: "reader-body", "aria-label": "Revision body" }, [
     element("div", { className: "actions" }, [visibilityBadge(model.visibility, model.visibilityLabel), element("span", { className: "badge", text: model.revisionLabel })]),
-    requestedRevision && requestedRevision !== detail.currentRevision.id
+    !model.isCurrent
       ? routeStateNode("degraded", "You are reading an immutable historical Revision. Citations do not silently move to the current text.")
       : undefined,
-    detail.searchStatus === "search_degraded"
+    model.searchStatus === "search_degraded"
       ? routeStateNode("degraded", "This document is readable, but its search index is degraded.")
       : undefined,
     element("pre", { className: "markdown-body", text: model.markdown }),
@@ -580,6 +607,7 @@ async function renderAdminDashboard(generation) {
     title: "Recover pending publications?",
     description: "This bounded operation resumes up to 20 durable publication or indexing intents.",
     confirmLabel: "Run recovery",
+    owns: () => ownsMutation(owner),
     onConfirm: () => { void recovery.run(
       () => api("/api/admin/publications/recover", { method: "POST", body: JSON.stringify({ limit: 20 }) }),
       (result) => setStatus(`Recovery finished: ${result.recovery.recoveredIntents} publications and ${result.recovery.recoveredIndexJobs} indexes recovered; ${result.recovery.failures.length} failures.`, result.recovery.failures.length ? "error" : "success"),
@@ -615,7 +643,7 @@ async function renderPendingSubmissions(generation) {
         items = appendPage(items, next.items, (submission) => submission.id);
         cursor = next.nextCursor;
         renderItems();
-      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); });
+      }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
     region.replaceChildren(rows, more);
   };
@@ -626,43 +654,48 @@ async function renderPendingSubmissions(generation) {
 async function renderReviewSubmission(generation, submissionId) {
   const pathname = `/admin/submissions/${submissionId}`;
   const owner = routeGuard.owner(generation, pathname);
-  const [previewResponse, spacesResponse] = await Promise.all([
-    api(`/api/admin/submissions/${encodeURIComponent(submissionId)}`),
-    loadSpaces(),
-  ]);
+  const previewResponse = await api(`/api/admin/submissions/${encodeURIComponent(submissionId)}`);
   const model = reviewPreviewModel(previewResponse.preview);
-  const spaces = spacesResponse.filter((space) => space.status === "active" && space.kind === "shared" && !space.readOnly);
+  const [spaces, collections, activeTags] = await Promise.all([
+    loadSpaces(),
+    loadCollections(model.requestedSpaceId),
+    loadTags(model.requestedSpaceId),
+  ]);
+  const target = reviewTargetModel(previewResponse.preview, spaces, collections);
   const title = element("input", { required: "", maxlength: "200", value: model.title });
   const visibility = element("select", {}, [
     element("option", { value: "shared", text: "Shared" }),
     element("option", { value: "admin_only", text: "Admin only" }),
   ]);
-  const space = element("select", { required: "" }, spaces.map((value) => element("option", {
-    value: value.id,
-    text: value.name,
-    selected: value.id === model.requestedSpaceId ? "" : undefined,
-  })));
-  const collection = element("select");
-  const tags = element("fieldset", { className: "tag-selector" }, [element("legend", { text: "Tags" })]);
+  const tags = element("fieldset", { className: "tag-selector" }, [
+    element("legend", { text: "Tags in the requested Space" }),
+    ...(activeTags.length ? activeTags.map((tag) => element("label", { className: "check-option", text: tag.name }, [
+      element("input", { type: "checkbox", value: tag.id }),
+    ])) : [element("p", { className: "muted", text: "No active Tags in this Space." })]),
+  ]);
   const reason = element("select", {}, [
     element("option", { value: "not_relevant", text: "Not relevant" }),
     element("option", { value: "duplicate", text: "Duplicate" }),
     element("option", { value: "unsafe", text: "Unsafe content" }),
   ]);
   const note = element("textarea", { maxlength: "4000", placeholder: "Review note or revision request…" });
-  const publishButton = element("button", { className: "primary", type: "button", text: "Publish" });
+  const publishButton = element("button", { className: "primary", type: "button", text: "Publish", disabled: target.available ? undefined : "" });
   const rejectButton = element("button", { className: "danger", type: "button", text: "Reject" });
   const revisionButton = element("button", { className: "secondary", type: "button", text: "Request revision" });
   const actionButtons = [publishButton, rejectButton, revisionButton];
   let form;
   const mutation = createMutationController(
     () => ownsMutation(owner),
-    (pending) => { for (const button of actionButtons) button.disabled = pending; },
+    (pending) => {
+      for (const button of actionButtons) {
+        button.disabled = pending || (button === publishButton && !target.available);
+      }
+    },
   );
   const runDecision = (kind) => {
     form.querySelector(".validation-summary")?.remove();
-    if (kind === "publish" && !form.reportValidity()) {
-      validationSummary(form, "Choose a valid active Space and complete every required publication field.");
+    if (kind === "publish" && (!target.available || !form.reportValidity())) {
+      validationSummary(form, "The originally requested Space and Collection must remain active; complete every required publication field.");
       return;
     }
     let request;
@@ -670,8 +703,8 @@ async function renderReviewSubmission(generation, submissionId) {
       request = publishRequest(submissionId, {
         title: title.value,
         visibility: visibility.value,
-        spaceId: space.value,
-        collectionId: collection.value || null,
+        spaceId: target.spaceId,
+        collectionId: target.collectionId,
         tagIds: [...tags.querySelectorAll('input[type="checkbox"]:checked')].map((checkbox) => checkbox.value),
       });
     } else {
@@ -701,6 +734,7 @@ async function renderReviewSubmission(generation, submissionId) {
     title: "Publish this immutable Revision?",
     description: "The server will validate the active target, write canonical Markdown, create chunks, and index the current Revision.",
     confirmLabel: "Publish Revision",
+    owns: () => ownsMutation(owner),
     onConfirm: () => runDecision("publish"),
   }));
   rejectButton.addEventListener("click", () => openReviewDialog({
@@ -708,40 +742,34 @@ async function renderReviewSubmission(generation, submissionId) {
     description: "The review decision is audited and the submission will leave the pending queue.",
     confirmLabel: "Reject submission",
     danger: true,
+    owns: () => ownsMutation(owner),
     onConfirm: () => runDecision("reject"),
   }));
   revisionButton.addEventListener("click", () => openReviewDialog({
     title: "Request a revision?",
     description: "The contributor will see that this source needs revision; no formal knowledge will be published.",
     confirmLabel: "Request revision",
+    owns: () => ownsMutation(owner),
     onConfirm: () => runDecision("revision"),
   }));
   form = element("form", { className: "stack", onsubmit: (event) => event.preventDefault() }, [
-    field("Publication title", title), field("Visibility", visibility), field("Space", space), field("Collection", collection), tags,
+    field("Publication title", title), field("Visibility", visibility),
+    element("dl", { className: "review-target", "aria-label": "Fixed requested publication target" }, [
+      element("dt", { text: "Requested Space" }), element("dd", { text: target.spaceLabel }),
+      element("dt", { text: "Requested Collection" }), element("dd", { text: target.collectionLabel }),
+    ]),
+    tags,
     field("Rejection reason", reason), field("Review note", note), element("div", { className: "actions" }, actionButtons),
   ]);
-  const targetOperations = createOperationGuard();
-  const updateTargets = () => runLatestOperation(targetOperations, async () => {
-    const [collections, activeTags] = await Promise.all([loadCollections(space.value), loadTags(space.value)]);
-    return { collections, activeTags };
-  }, ({ collections, activeTags }) => {
-    if (!ownsMutation(owner)) return;
-    replaceOptions(collection, collections.map((value) => element("option", { value: value.id, text: value.name })), "No collection");
-    collection.value = model.requestedCollectionId || "";
-    tags.replaceChildren(
-      element("legend", { text: "Tags" }),
-      ...(activeTags.length ? activeTags.map((tag) => element("label", { className: "check-option", text: tag.name }, [element("input", { type: "checkbox", value: tag.id })])) : [element("p", { className: "muted", text: "No active Tags in this Space." })]),
-    );
-  }, (error) => { if (ownsMutation(owner)) validationSummary(form, safeErrorMessage(error, "Could not load publication targets.")); });
-  space.addEventListener("change", () => { void updateTargets(); });
-  if (space.value) await updateTargets();
   replaceOutlet(page(`Review: ${model.title}`, `${model.kind} · ${model.status} · parser ${model.parserVersion}`, [
     element("div", { className: "review-grid" }, [
       card("Raw input (inert text)", [element("pre", { className: "content-preview", text: model.rawInput })]),
       card("Normalized Markdown (inert text)", [element("pre", { className: "content-preview", text: model.normalizedMarkdown })]),
     ]),
     element("div", { className: "page-grid" }, [
-      card("Chunk and location preview", [list(model.locations, (location) => item(location.heading, `starts at line ${location.startLine}`), "No heading locations detected.")]),
+      card("Chunk and location preview", [list(model.chunks, (chunk) => item(chunk.heading, chunk.lineLabel, [
+        element("pre", { className: "content-preview", text: chunk.excerpt }),
+      ]), "No publication Chunks were produced.")]),
       card("Warnings", [list(model.warnings, (warning) => element("li", { className: "item", text: warning }), "No warnings.")]),
     ]),
     card("Review decision", [form]),
@@ -847,6 +875,7 @@ async function bootstrap() {
 }
 
 function renderAnonymous() {
+  closeOpenDialogs();
   logoutController.invalidate();
   const state = anonymousShellState();
   session = undefined;
@@ -874,6 +903,7 @@ document.addEventListener("click", (event) => {
   navigate(link.getAttribute("href"));
 });
 window.addEventListener("popstate", () => {
+  closeOpenDialogs();
   if (!session) return;
   setDrawer(false);
   void renderRoute();

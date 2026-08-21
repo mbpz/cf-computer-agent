@@ -32,6 +32,7 @@ describe("workspace assets", () => {
     expect(html).toContain('id="app-shell"');
     expect(html).toContain('id="primary-navigation"');
     expect(html).toContain('src="/app.js"');
+    expect(html).toContain('<html lang="en">');
     expect(html).not.toMatch(/localStorage|APP_TOKEN|AUTOMATION_SECRET|设置令牌|authorization|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
 
   });
@@ -104,6 +105,10 @@ describe("workspace assets", () => {
     expect(source).toContain("Idempotency-Key");
     expect(source).not.toMatch(/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|\beval\s*\(/u);
     expect(source).not.toMatch(/normalizedPath|contentSha256|sourceVersionId/u);
+    expect(source).not.toMatch(/function markdownLocations|^\s*const locations = markdownLocations/mu);
+    expect(source).toContain("closeOpenDialogs");
+    expect(source.match(/closeOpenDialogs\(\)/gu)?.length).toBeGreaterThanOrEqual(3);
+    expect(source).toContain("createMutationController");
   });
 
   it("ships responsive reader, review-dialog, focus, and reduced-motion styles", async () => {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented the M1 trusted-knowledge workspace locally. Contributor and admin sessions now receive capability-driven Library, Search, Agent, My Submissions, and Review Queue journeys; administrators can preview raw and normalized source text, inspect heading/line locations and warnings, select active publication metadata, publish/reject/request revision, and run bounded recovery. Library/search/reader/Agent paths preserve exact Revision and Chunk citation navigation, historical reads, degraded-search visibility, pagination, and server-authoritative authorization.
+Implemented the M1 trusted-knowledge workspace locally and completed review round 1 fixes. Contributor and admin sessions now receive capability-driven Library, Search, Agent, My Submissions, and Review Queue journeys; administrators can preview raw and normalized source text, inspect server-produced Chunk excerpts and exact line locations, keep the originally requested publication target fixed, select active same-Space Tags, publish/reject/request revision, and run bounded recovery. Library/search/reader/Agent paths preserve exact Revision and Chunk citation navigation, direct historical reads, degraded-search visibility, pagination, single-flight requests, and server-authoritative authorization.
 
 GitHub login/logout/session cookies, automation authentication, legacy APIs, same-origin CSRF, API security headers, Durable Object naming/migration, and production configuration were not changed. No network, remote resource, deployment, database migration, or production action ran; the build command was Wrangler dry-run only.
 
@@ -10,7 +10,7 @@ GitHub login/logout/session cookies, automation authentication, legacy APIs, sam
 
 - Reworked `public/app.js`, `public/styles.css`, `public/index.html`, `public/navigation.js`, and the pure `public/workspace-ui.*` contracts for the M1 journeys, responsive reader/review layouts, accessible focus behavior, and route/mutation ownership.
 - Extended the SPA fallback only for one-segment `/knowledge/:id` and `/admin/submissions/:id` routes; non-UI API/action-shaped paths still return 404.
-- Extended the already admin-authorized review preview DTO with `rawContent`. `sourceVersion.content` remains canonical normalized Markdown. The DTO still removes content hashes and normalized storage paths, and authorization still precedes identifier decoding/resource access.
+- Extended the already admin-authorized review preview DTO with `rawContent` and bounded Chunk preview records (`headingPath`, absolute `startLine`/`endLine`, and a 240-code-point `excerpt`). `sourceVersion.content` remains canonical normalized Markdown. The DTO still removes content hashes and normalized storage paths, and authorization still precedes identifier decoding/resource access.
 - Added pure UI/request tests, navigation tests, static asset/deep-link/security tests, and a real Workerd raw-versus-normalized review/publication regression.
 
 ## RED evidence
@@ -22,6 +22,8 @@ GitHub login/logout/session cookies, automation authentication, legacy APIs, sam
 - Authenticated drawer RED: two focused tests failed because viewport-aware closed/inert state was absent. A later five-test RED proved open/close accessible labels were also absent.
 - Raw/normalized preview RED: the pure preview test and real Workerd journey each failed 1/1 because the admin preview had no raw submitted content and the client incorrectly had to reuse normalized Markdown.
 - Consistent admin navigation label RED: the focused navigation test failed 1/1 while four admin destinations still used the earlier mixed-language labels.
+- Review round 1 ownership/chunk RED: `rtk npx vitest run test/unit/workspace-ui.test.ts test/unit/publication-service.test.ts` failed 12 tests with 58 passing. Stale operation closures still ran, dialog actions had no invalidation controller, historical requests had no direct-path contract, targets were switchable, the browser parsed headings itself, and the preview service returned no real Chunks.
+- The first combined round 1 run failed 1 test with 109 passing and exposed a separate historical navigation defect: the pure reader model used the Revision ID as the Knowledge Item ID for direct historical responses. The corrected model selects `revision.knowledgeItemId` for historical DTOs.
 
 Each RED failed on the named missing behavior rather than an assertion derived from the implementation.
 
@@ -31,8 +33,11 @@ Each RED failed on the named missing behavior rather than an assertion derived f
 - Browser route/static GREEN after responsive work: 3 files, 58/58 tests.
 - Raw-versus-normalized preview GREEN: focused pure UI 1/1 and real Workerd M1 journey 1/1.
 - Required final focused UI/API gate: `rtk npx vitest run test/unit/workspace-ui.test.ts test/unit/navigation.test.ts test/worker/assets.test.ts test/worker/m1-api.test.ts` passed 4 files, 71/71 tests.
+- Review round 1 unit GREEN: ownership, Agent single-flight, historical routing, fixed-target, and exact-chunker preview tests passed 2 files, 70/70 tests.
+- Review round 1 Workerd/static GREEN: asset/security and M1 API tests passed 2 files, 34/34 tests. The API case proves an old `shared` Revision and citation remain contributor-readable after the current Revision becomes `admin_only`, while the current detail remains a 404; target-switch attempts to another active Space or Collection return `PUBLICATION_TARGET_INVALID`.
+- Review round 1 final focused gate: `rtk npx vitest run test/unit/workspace-ui.test.ts test/unit/navigation.test.ts test/unit/publication-service.test.ts test/worker/assets.test.ts test/worker/m1-api.test.ts` passed 5 files, 110/110 tests.
 - `rtk npm run typecheck` passed.
-- `rtk npm run check` passed: generated Worker types current; TypeScript passed; smoke 8/8; unit 425/425 across 25 files; Workerd 213/213 across 12 files; Wrangler dry-run build passed.
+- `rtk npm run check` passed after review round 1: generated Worker types current; TypeScript passed; smoke 8/8; unit 439/439 across 25 files; Workerd 214/214 across 12 files; Wrangler dry-run build passed.
 - `rtk node --check public/app.js`, `rtk node --check public/workspace-ui.js`, and `rtk git diff --check` passed.
 
 The full Workerd gate retains the expected invalid pending-note journal fixture diagnostics and local AI-binding warnings; the command exited zero.
@@ -44,9 +49,12 @@ The full Workerd gate retains the expected invalid pending-note journal fixture 
 - Every excerpt, source body, raw input, normalized Markdown, AI answer, title, warning, citation label, and error reaches the DOM through `textContent`/text nodes. No data is assigned to `innerHTML`, executable Markdown/HTML is never rendered, and static tests reject executable HTML sinks.
 - Search and Agent results use server-returned authorized hits only. Citation cards link to `/knowledge/:id?revision=:revisionId&chunk=:chunkId`; the reader re-fetches the authorized current or historical Revision and moves focus to the exact source location.
 - Library, search results, own submissions, and review queue use bounded cursor pagination with duplicate suppression. Search reports `degraded` independently from document readability.
-- Renderer-created `{generation, pathname}` owners bind every new async mutation. Single-flight controllers suppress double submits and late success/error callbacks after navigation. Existing member/Space/Collection mutations were moved onto the same guard; logout retains its independent single-flight generation guard.
-- Route headings receive focus after navigation; validation summaries receive focus after form/API failures. Native review dialogs add explicit Tab containment, Escape close, and focus return. Closed mobile navigation remains inert and hidden to accessibility APIs; desktop navigation stays exposed. All actions are native keyboard controls, and reduced-motion styling is present.
-- Admin review presents raw submitted input separately from canonical normalized Markdown, plus inert heading/line preview and warnings. Publication selectors contain only active shared Spaces, active Collections, and active Tags; the server remains the final target validator.
+- Renderer-created `{generation, pathname}` owners bind every new async mutation. Operation and mutation controllers now check ownership before invoking their operation closure as well as before callbacks. Agent uses one single-flight mutation controller, disables its question and submit controls while pending, suppresses stale callbacks, and restores controls after success/error only while its renderer still owns the route. Existing member/Space/Collection mutations use the same pre-invocation guard; logout retains its independent single-flight generation guard.
+- Route headings receive focus after navigation; validation summaries receive focus after form/API failures. Native review dialogs add explicit Tab containment and Escape close. Every body-appended review/recovery dialog is registered and invalidated on navigation, popstate, or logout; old confirm handlers cannot start a request, and focus returns only while the dialog's renderer still owns the route. Closed mobile navigation remains inert and hidden to accessibility APIs; desktop navigation stays exposed. All actions are native keyboard controls, and reduced-motion styling is present.
+- Historical reader URLs call `/api/knowledge/:id/revisions/:revisionId` directly and use the returned `isCurrent`; they do not probe a possibly hidden current detail first. Citation links retain the Knowledge Item, Revision, and Chunk IDs from that authorized historical response.
+- Admin review presents raw submitted input separately from canonical normalized Markdown, plus inert server-created Chunk excerpts and exact locations. Both preview and publication call the same `chunkDocument` helper; tests cover long-text splitting, heading-only input, fenced-code `#`, and absolute lines. The client Markdown-heading regex was removed.
+- Review shows the originally requested Space/Collection as fixed text and always posts those preview-owned IDs. Only active Tags loaded from that exact Space are selectable; the server remains the final target validator and rejects target drift.
+- The shipped shell declares `lang="en"`, matching the predominant workspace interface language.
 
 ## Remaining concerns
 
