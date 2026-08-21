@@ -55,17 +55,27 @@ describe("parseSource", () => {
   it.each([
     "[click](javascript:alert(1))",
     "![payload](data:text/plain,active-content)",
+    "[escaped](javascript\\:alert(1))",
+    "[decimal](javascript&#58;alert(1))",
+    "[hex](javascript&#x3A;alert(1))",
+    "[named](javascript&colon;alert(1))",
+    "[case](JaVaScRiPt&#58;alert(1))",
+    "[tab](java&#9;script&#58;alert(1))",
+    "[named-tab](java&Tab;script&colon;alert(1))",
+    "[newline](java&#x0A;script&#x3a;alert(1))",
+    "[control](java&#x0D;script\\:alert(1))",
   ])("rejects executable Markdown link destinations: %s", async (markdown) => {
     await expect(parseSource({ kind: "markdown", content: markdown }))
       .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
   });
 
-  it("preserves legitimate Markdown structure when no raw HTML is present", async () => {
-    await expect(parseSource({
-      kind: "markdown",
-      content: "# Heading\n\n- **bold**\n- [safe](https://example.test)\n",
-    })).resolves.toMatchObject({
-      normalizedMarkdown: "# Heading\n\n- **bold**\n- [safe](https://example.test)\n",
+  it.each([
+    "# Heading\n\n- **bold**\n- [safe](https://example.test/path?q=1#part)\n",
+    "[section](#heading)\n",
+    "[relative](../guide/page.md)\n",
+  ])("preserves legitimate Markdown destination structure: %s", async (markdown) => {
+    await expect(parseSource({ kind: "markdown", content: markdown })).resolves.toMatchObject({
+      normalizedMarkdown: markdown,
     });
   });
 

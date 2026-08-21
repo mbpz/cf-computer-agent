@@ -64,7 +64,20 @@ function containsRawHtml(content: string): boolean {
   return false;
 }
 function containsExecutableMarkdownUrl(content: string): boolean {
-  return /(?:\]\(\s*<?|\]:\s*<?|<)\s*(?:javascript|data|vbscript)\s*:/imu.test(content);
+  const decoded = decodeMarkdownDestinationSyntax(content);
+  const controlFolded = decoded.replace(/[\u0000-\u0020\u007f]/gu, "");
+  return /(?:\]\(<?|\]:<?|<)(?:javascript|data|vbscript):/iu.test(controlFolded);
+}
+function decodeMarkdownDestinationSyntax(content: string): string {
+  return content
+    .replace(/&#(?:[xX]([0-9A-Fa-f]{1,6})|([0-9]{1,7}));/gu, (reference, hex: string | undefined, decimal: string | undefined) => {
+      const codePoint = Number.parseInt(hex ?? decimal!, hex === undefined ? 10 : 16);
+      return codePoint <= 0x10ffff && (codePoint < 0xd800 || codePoint > 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : reference;
+    })
+    .replace(/&(colon|Tab|NewLine);/gu, (_reference, name: string) => ({ colon: ":", Tab: "\t", NewLine: "\n" })[name]!)
+    .replace(/\\([!-/:-@[-`{-~])/gu, "$1");
 }
 function countLines(content: string): number {
   const withoutTerminalNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
