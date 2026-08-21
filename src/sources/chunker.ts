@@ -1,0 +1,263 @@
+import type { ParsedSource } from "./types";
+import type { SubmissionKind } from "../submissions/types";
+
+const defaultMaxCodePoints = 1_200;
+const defaultOverlapCodePoints = 120;
+
+export interface ChunkDraft {
+  ordinal: number;
+  headingPath: string[];
+  startLine: number;
+  endLine: number;
+  body: string;
+  searchBody: string;
+}
+
+export function chunkDocument(
+  document: Pick<ParsedSource, "normalizedMarkdown"> & { kind: SubmissionKind },
+  options?: { maxCodePoints?: number; overlapCodePoints?: number },
+): ChunkDraft[] {
+  const maxCodePoints = options?.maxCodePoints ?? defaultMaxCodePoints;
+  const overlapCodePoints = options?.overlapCodePoints ?? defaultOverlapCodePoints;
+  assertChunkOptions(maxCodePoints, overlapCodePoints);
+
+  if (document.normalizedMarkdown.length === 0) return [];
+
+  const blocks = parseBlocks(document.normalizedMarkdown);
+  const drafts: ChunkDraft[] = [];
+  for (const block of blocks) {
+    const chunks = block.kind === "code"
+      ? splitCodeBlock(block, maxCodePoints, overlapCodePoints)
+      : splitTextBlock(block, maxCodePoints, overlapCodePoints);
+    for (const chunk of chunks) {
+      drafts.push({
+        ordinal: drafts.length,
+        headingPath: [...block.headingPath],
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
+        body: chunk.body,
+        searchBody: makeSearchBody(chunk.body),
+      });
+    }
+  }
+
+  // A document containing only headings still has useful source material. This
+  // fallback also keeps the non-empty-input invariant explicit.
+  if (drafts.length === 0) {
+    const firstLine = document.normalizedMarkdown.split("\n")[0] ?? document.normalizedMarkdown;
+    return [{
+      ordinal: 0,
+      headingPath: [],
+      startLine: 1,
+      endLine: 1,
+      body: firstLine,
+      searchBody: makeSearchBody(firstLine),
+    }];
+  }
+  return drafts;
+}
+
+interface SourceLine {
+  text: string;
+  line: number;
+}
+
+interface Block {
+  kind: "text" | "code";
+  lines: SourceLine[];
+  headingPath: string[];
+}
+
+interface LocatedChunk {
+  body: string;
+  startLine: number;
+  endLine: number;
+}
+
+function parseBlocks(markdown: string): Block[] {
+  const sourceLines = markdown.endsWith("\n") ? markdown.slice(0, -1).split("\n") : markdown.split("\n");
+  const blocks: Block[] = [];
+  const headingStack: Array<{ level: number; title: string }> = [];
+  let pending: SourceLine[] = [];
+
+  const flushPending = (): void => {
+    if (pending.length === 0) return;
+    blocks.push({ kind: "text", lines: pending, headingPath: headingStack.map(({ title }) => title) });
+    pending = [];
+  };
+
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    const line = sourceLines[index]!;
+    const sourceLine: SourceLine = { text: line, line: index + 1 };
+    const heading = parseHeading(line);
+    if (heading !== null) {
+      flushPending();
+      while (headingStack.at(-1)?.level !== undefined && headingStack.at(-1)!.level >= heading.level) {
+        headingStack.pop();
+      }
+      headingStack.push(heading);
+      continue;
+    }
+
+    const fence = parseFenceStart(line);
+    if (fence !== null) {
+      flushPending();
+      const lines = [sourceLine];
+      let closed = false;
+      while (++index < sourceLines.length) {
+        const codeLine = sourceLines[index]!;
+        lines.push({ text: codeLine, line: index + 1 });
+        if (isFenceEnd(codeLine, fence)) {
+          closed = true;
+          break;
+        }
+      }
+      // An unclosed fence is still treated as a code block; preserving all
+      // lines is safer and deterministic for malformed source.
+      void closed;
+      blocks.push({ kind: "code", lines, headingPath: headingStack.map(({ title }) => title) });
+      continue;
+    }
+
+    if (/^\s*$/u.test(line)) {
+      flushPending();
+      continue;
+    }
+    pending.push(sourceLine);
+  }
+  flushPending();
+  return blocks;
+}
+
+function parseHeading(line: string): { level: number; title: string } | null {
+  const match = /^(?: {0,3})(#{1,6})(?:[ \t]+(.*?)\s*|[ \t]*)$/u.exec(line);
+  if (match === null) return null;
+  const title = (match[2] ?? "").replace(/[ \t]+#+[ \t]*$/u, "").trim();
+  return { level: match[1]!.length, title: title || match[1]! };
+}
+
+interface Fence {
+  marker: "`" | "~";
+  length: number;
+}
+
+function parseFenceStart(line: string): Fence | null {
+  const match = /^(?: {0,3})(`{3,}|~{3,})[^`~]*$/u.exec(line);
+  return match === null ? null : { marker: match[1]![0] as Fence["marker"], length: match[1]!.length };
+}
+
+function isFenceEnd(line: string, fence: Fence): boolean {
+  const escapedMarker = fence.marker === "`" ? "`" : "~";
+  return new RegExp(`^ {0,3}${escapedMarker}{${fence.length},}\\s*$`, "u").test(line);
+}
+
+function splitTextBlock(block: Block, max: number, overlap: number): LocatedChunk[] {
+  const lines = block.lines;
+  const body = lines.map(({ text }) => text).join("\n");
+  const codePoints = [...body];
+  if (codePoints.length <= max) {
+    return [{ body, startLine: lines[0]!.line, endLine: lines.at(-1)!.line }];
+  }
+
+  const lineStarts = [0];
+  for (const line of lines.slice(0, -1)) lineStarts.push(lineStarts.at(-1)! + [...line.text].length + 1);
+  const chunks: LocatedChunk[] = [];
+  let start = 0;
+  while (start < codePoints.length) {
+    const end = Math.min(start + max, codePoints.length);
+    const chunkBody = codePoints.slice(start, end).join("");
+    chunks.push({
+      body: chunkBody,
+      startLine: lineAtOffset(start, lineStarts),
+      endLine: lineAtOffset(Math.max(start, end - 1), lineStarts),
+    });
+    if (end === codePoints.length) break;
+    const nextStart = end - overlap;
+    if (nextStart <= start) throw new RangeError("overlapCodePoints must be smaller than maxCodePoints");
+    start = nextStart;
+  }
+  return chunks;
+}
+
+function splitCodeBlock(block: Block, max: number, overlap: number): LocatedChunk[] {
+  const lines = block.lines;
+  const total = countJoinedCodePoints(lines);
+  if (total <= max) {
+    return [{
+      body: lines.map(({ text }) => text).join("\n"),
+      startLine: lines[0]!.line,
+      endLine: lines.at(-1)!.line,
+    }];
+  }
+
+  const chunks: LocatedChunk[] = [];
+  let start = 0;
+  while (start < lines.length) {
+    let end = start;
+    let size = 0;
+    while (end < lines.length) {
+      const nextSize = size + [...lines[end]!.text].length + (end === start ? 0 : 1);
+      if (end > start && nextSize > max) break;
+      size = nextSize;
+      end += 1;
+      if (size >= max) break;
+    }
+    if (end === start) end += 1;
+    chunks.push({
+      body: lines.slice(start, end).map(({ text }) => text).join("\n"),
+      startLine: lines[start]!.line,
+      endLine: lines[end - 1]!.line,
+    });
+    if (end === lines.length) break;
+
+    let nextStart = end;
+    let overlapSize = 0;
+    for (let candidate = end - 1; candidate > start; candidate -= 1) {
+      const lineSize = [...lines[candidate]!.text].length + (candidate === end - 1 ? 0 : 1);
+      if (overlapSize + lineSize > overlap) break;
+      overlapSize += lineSize;
+      nextStart = candidate;
+    }
+    start = nextStart;
+  }
+  return chunks;
+}
+
+function countJoinedCodePoints(lines: SourceLine[]): number {
+  return lines.reduce((sum, line, index) => sum + [...line.text].length + (index === 0 ? 0 : 1), 0);
+}
+
+function lineAtOffset(offset: number, lineStarts: number[]): number {
+  let line = 0;
+  for (let index = 1; index < lineStarts.length; index += 1) {
+    if (lineStarts[index]! > offset) break;
+    line = index;
+  }
+  return line + 1;
+}
+
+function makeSearchBody(body: string): string {
+  const lower = body.toLowerCase();
+  const tokens = lower.match(/[\p{L}\p{N}_]+/gu) ?? [];
+  const bigrams: string[] = [];
+  let hanRun: string[] = [];
+  const flushHanRun = (): void => {
+    for (let index = 0; index + 1 < hanRun.length; index += 1) {
+      bigrams.push(`${hanRun[index]}${hanRun[index + 1]}`);
+    }
+    hanRun = [];
+  };
+  for (const character of [...lower]) {
+    if (/\p{Script=Han}/u.test(character)) hanRun.push(character);
+    else flushHanRun();
+  }
+  flushHanRun();
+  return [...tokens, ...bigrams].join(" ") || lower.trim();
+}
+
+function assertChunkOptions(max: number, overlap: number): void {
+  if (!Number.isInteger(max) || max <= 0) throw new RangeError("maxCodePoints must be a positive integer");
+  if (!Number.isInteger(overlap) || overlap < 0 || overlap >= max) {
+    throw new RangeError("overlapCodePoints must be an integer smaller than maxCodePoints");
+  }
+}
