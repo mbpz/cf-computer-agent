@@ -34,6 +34,15 @@ describe("chunkDocument", () => {
     expect(chunks[0].body.slice(-2)).toBe(chunks[1].body.slice(0, 2));
   });
 
+  it("does not emit a whitespace-only unit at a line boundary", () => {
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: "a\nb",
+    }, { maxCodePoints: 1, overlapCodePoints: 0 });
+
+    expect(chunks.map(({ body }) => body)).toEqual(["a", "b"]);
+  });
+
   it("keeps a short fenced code block intact", () => {
     const input = {
       kind: "markdown" as const,

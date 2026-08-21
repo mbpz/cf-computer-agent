@@ -166,6 +166,13 @@ function splitTextBlock(block: Block, max: number, overlap: number): LocatedChun
   while (start < codePoints.length) {
     const end = Math.min(start + max, codePoints.length);
     const chunkBody = codePoints.slice(start, end).join("");
+    if (chunkBody.trim().length === 0) {
+      // A small budget can land exactly on a line separator. Do not emit a
+      // whitespace-only retrieval unit; the next window owns the separator.
+      if (end === codePoints.length) break;
+      start = end;
+      continue;
+    }
     chunks.push({
       body: chunkBody,
       startLine: lineAtOffset(start, lineStarts),
