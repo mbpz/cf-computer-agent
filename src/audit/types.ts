@@ -14,6 +14,9 @@ export interface AuditActionMap {
   "collection.created": { resourceType: "collection"; metadata: { spaceId: string; status: RecordStatus } };
   "collection.updated": { resourceType: "collection"; metadata: { spaceId: string; previousStatus: RecordStatus; newStatus: RecordStatus } };
   "submission.created": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
+  "submission.rejected": { resourceType: "submission"; metadata: { reasonCode: "not_relevant" | "duplicate" | "unsafe" } };
+  "submission.revision_requested": { resourceType: "submission"; metadata: { reasonCode: "needs_revision" } };
+  "knowledge.published": { resourceType: "knowledge"; metadata: { submissionId: string; revisionId: string; visibility: "shared" | "admin_only" } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -26,6 +29,9 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "collection.created",
   "collection.updated",
   "submission.created",
+  "submission.rejected",
+  "submission.revision_requested",
+  "knowledge.published",
 ]);
 
 export type CreateAuditEvent = {
@@ -125,6 +131,33 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
         kind: metadata.kind,
         requestedSpaceId: metadata.requestedSpaceId,
         ...(metadata.requestedCollectionId === undefined ? {} : { requestedCollectionId: metadata.requestedCollectionId }),
+      });
+    }
+    case "submission.rejected": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set(["reasonCode"]));
+      if (metadata.reasonCode !== "not_relevant" && metadata.reasonCode !== "duplicate" && metadata.reasonCode !== "unsafe") {
+        throw invalidMetadata();
+      }
+      return safeMetadata({ reasonCode: metadata.reasonCode });
+    }
+    case "submission.revision_requested": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set(["reasonCode"]));
+      if (metadata.reasonCode !== "needs_revision") throw invalidMetadata();
+      return safeMetadata({ reasonCode: "needs_revision" });
+    }
+    case "knowledge.published": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["submissionId", "revisionId", "visibility"]));
+      if (!isNonEmptyString(metadata.submissionId) || !isNonEmptyString(metadata.revisionId)
+        || (metadata.visibility !== "shared" && metadata.visibility !== "admin_only")) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({
+        submissionId: metadata.submissionId,
+        revisionId: metadata.revisionId,
+        visibility: metadata.visibility,
       });
     }
     default:

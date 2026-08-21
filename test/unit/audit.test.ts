@@ -23,6 +23,9 @@ describe("audit input validation", () => {
     ["space.updated", "space", { previousStatus: "active", newStatus: "disabled" }],
     ["collection.created", "collection", { spaceId: "space-1", status: "active" }],
     ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled" }],
+    ["submission.rejected", "submission", { reasonCode: "unsafe" }],
+    ["submission.revision_requested", "submission", { reasonCode: "needs_revision" }],
+    ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "admin_only" }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
       id: `audit-${action}`,
@@ -52,6 +55,10 @@ describe("audit input validation", () => {
     ["space.updated", "space", { previousStatus: "active", newStatus: "disabled", token: "secret" }],
     ["collection.created", "collection", { spaceId: "space-1", status: "active", content: "secret" }],
     ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled", jwt: "secret" }],
+    ["submission.rejected", "submission", { reasonCode: "unsafe", note: "private review note" }],
+    ["submission.revision_requested", "submission", { reasonCode: "needs_revision", title: "private title" }],
+    ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", tags: ["private"] }],
+    ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", content: "private markdown" }],
   ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
     expect(() => assertAuditEventInput({
       id: "audit-sensitive",

@@ -1,0 +1,276 @@
+import { AppError } from "../http";
+import { chunkDocument } from "../sources/chunker";
+import type {
+  KnowledgeVisibility,
+  PublicationIntent,
+  PublicationRecoveryResult,
+  PublicationRepositoryPort,
+  PublicationReviewer,
+  PublishedContentCommitter,
+  PublishedRevision,
+  PublishSubmissionInput,
+  RejectionReasonCode,
+  ReviewDecision,
+  ReviewPreview,
+} from "./types";
+
+const MAX_TITLE_CODE_POINTS = 200;
+const MAX_TITLE_BYTES = 512;
+const MAX_REVIEW_NOTE_BYTES = 4_000;
+const MAX_TAGS = 20;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
+
+export class PublicationService {
+  constructor(
+    private readonly repository: PublicationRepositoryPort,
+    private readonly content: PublishedContentCommitter,
+  ) {}
+
+  async preview(reviewer: PublicationReviewer, submissionId: string): Promise<ReviewPreview> {
+    requireActiveAdmin(reviewer);
+    const preview = await this.repository.getPreview(requireId(submissionId));
+    if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    return preview;
+  }
+
+  async publish(
+    reviewer: PublicationReviewer,
+    submissionId: string,
+    input: PublishSubmissionInput,
+  ): Promise<PublishedRevision> {
+    requireActiveAdmin(reviewer);
+    const stableSubmissionId = requireId(submissionId);
+    const normalized = normalizePublishInput(input);
+    try {
+      await this.repository.validateTarget(normalized);
+    } catch (error) {
+      throwTargetError(error);
+    }
+    const preview = await this.repository.getPreview(stableSubmissionId);
+    if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    let intent: PublicationIntent;
+    try {
+      intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized);
+    } catch (error) {
+      throwTargetError(error);
+    }
+    assertStableIntent(intent, preview, reviewer.id, normalized);
+    return this.resumeIntent(intent);
+  }
+
+  async reject(
+    reviewer: PublicationReviewer,
+    submissionId: string,
+    input: { reasonCode: RejectionReasonCode; note: string },
+  ): Promise<ReviewDecision> {
+    requireActiveAdmin(reviewer);
+    if (!isRejectionReason(input?.reasonCode)) throw invalidDecision();
+    try {
+      return await this.repository.reject(requireId(submissionId), reviewer.id, {
+        reasonCode: input.reasonCode,
+        note: normalizeReviewNote(input.note),
+      });
+    } catch (error) {
+      throwDecisionError(error);
+    }
+  }
+
+  async requestRevision(
+    reviewer: PublicationReviewer,
+    submissionId: string,
+    input: { reasonCode: "needs_revision"; note: string },
+  ): Promise<ReviewDecision> {
+    requireActiveAdmin(reviewer);
+    if (input?.reasonCode !== "needs_revision") throw invalidDecision();
+    try {
+      return await this.repository.requestRevision(requireId(submissionId), reviewer.id, {
+        reasonCode: "needs_revision",
+        note: normalizeReviewNote(input.note),
+      });
+    } catch (error) {
+      throwDecisionError(error);
+    }
+  }
+
+  async recoverPending(limit: number): Promise<PublicationRecoveryResult> {
+    const boundedLimit = normalizeRecoveryLimit(limit);
+    const result: PublicationRecoveryResult = {
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [],
+    };
+    const intents = await this.repository.listPendingIntents(boundedLimit);
+    for (const intent of intents) {
+      try {
+        await this.resumeIntent(intent);
+        result.recoveredIntents += 1;
+      } catch {
+        result.failures.push({ resourceId: intent.submissionId, code: "PUBLICATION_RECOVERY_FAILED" });
+      }
+    }
+
+    const remaining = Math.max(0, boundedLimit - intents.length);
+    if (remaining === 0) return result;
+    const revisionIds = await this.repository.listRecoverableIndexRevisionIds(remaining);
+    for (const revisionId of revisionIds) {
+      try {
+        const status = await this.repository.processIndexJob(revisionId);
+        if (status === "indexed") result.recoveredIndexJobs += 1;
+        else result.failures.push({ resourceId: revisionId, code: "INDEX_RECOVERY_FAILED" });
+      } catch {
+        result.failures.push({ resourceId: revisionId, code: "INDEX_RECOVERY_FAILED" });
+      }
+    }
+    return result;
+  }
+
+  private async resumeIntent(intent: PublicationIntent): Promise<PublishedRevision> {
+    await assertSourceContent(intent);
+    const chunks = chunkDocument({
+      normalizedMarkdown: intent.sourceVersion.content,
+      kind: intent.sourceVersion.kind,
+    });
+    if (chunks.length === 0) {
+      throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content is invalid", 409);
+    }
+
+    if (intent.state === "pending_content") {
+      const receipt = await this.content.commit({
+        spaceId: intent.spaceId,
+        knowledgeItemId: intent.knowledgeItemId,
+        revisionId: intent.revisionId,
+        contentSha256: intent.contentSha256,
+        markdown: intent.sourceVersion.content,
+      });
+      assertReceipt(intent, receipt);
+      await this.repository.markContentWritten(intent.submissionId, receipt);
+      intent.state = "content_written";
+    }
+
+    const revision = await this.repository.finalize(intent, chunks);
+    const searchStatus = await this.repository.processIndexJob(revision.id);
+    return { ...revision, searchStatus };
+  }
+}
+
+function requireActiveAdmin(reviewer: PublicationReviewer): void {
+  if (!reviewer || typeof reviewer.id !== "string" || reviewer.id.length === 0
+    || reviewer.role !== "admin" || reviewer.status !== "active") {
+    throw new AppError("FORBIDDEN", "Active administrator access required", 403);
+  }
+}
+
+function requireId(value: string): string {
+  if (typeof value !== "string" || value.length === 0 || CONTROL_CHARACTERS.test(value)) {
+    throw new AppError("PUBLICATION_INPUT_INVALID", "Publication input is invalid", 400);
+  }
+  return value;
+}
+
+function normalizePublishInput(input: PublishSubmissionInput): PublishSubmissionInput {
+  if (!input || typeof input !== "object") throw invalidPublicationInput();
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  if (!title || [...title].length > MAX_TITLE_CODE_POINTS
+    || new TextEncoder().encode(title).byteLength > MAX_TITLE_BYTES
+    || CONTROL_CHARACTERS.test(title) || hasMalformedSurrogate(title)
+    || !isVisibility(input.visibility)
+    || typeof input.spaceId !== "string" || input.spaceId.length === 0 || CONTROL_CHARACTERS.test(input.spaceId)
+    || (input.collectionId !== null && (typeof input.collectionId !== "string" || input.collectionId.length === 0 || CONTROL_CHARACTERS.test(input.collectionId)))
+    || !Array.isArray(input.tagIds) || input.tagIds.length > MAX_TAGS
+    || input.tagIds.some((tagId) => typeof tagId !== "string" || tagId.length === 0 || CONTROL_CHARACTERS.test(tagId))
+    || new Set(input.tagIds).size !== input.tagIds.length) {
+    throw invalidPublicationInput();
+  }
+  return { title, visibility: input.visibility, spaceId: input.spaceId, collectionId: input.collectionId, tagIds: [...input.tagIds].sort() };
+}
+
+function normalizeReviewNote(value: string): string {
+  if (typeof value !== "string" || CONTROL_CHARACTERS.test(value) || hasMalformedSurrogate(value)
+    || new TextEncoder().encode(value).byteLength > MAX_REVIEW_NOTE_BYTES) {
+    throw invalidDecision();
+  }
+  return value.trim();
+}
+
+function assertStableIntent(
+  intent: PublicationIntent,
+  preview: ReviewPreview,
+  reviewerId: string,
+  input: PublishSubmissionInput,
+): void {
+  if (intent.submissionId !== preview.submissionId
+    || intent.reviewerId !== reviewerId
+    || intent.title !== input.title
+    || intent.visibility !== input.visibility
+    || intent.spaceId !== input.spaceId
+    || intent.collectionId !== input.collectionId
+    || !sameStrings(intent.tagIds, input.tagIds)) {
+    throw new AppError("PUBLICATION_REPLAY_CONFLICT", "Publication intent does not match the original review", 409);
+  }
+  if (intent.sourceVersion.id !== preview.sourceVersion.id
+    || intent.sourceVersion.contentSha256 !== preview.sourceVersion.contentSha256
+    || intent.sourceVersion.content !== preview.sourceVersion.content
+    || intent.contentSha256 !== intent.sourceVersion.contentSha256) {
+    throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content does not match the stable intent", 409);
+  }
+}
+
+async function assertSourceContent(intent: PublicationIntent): Promise<void> {
+  if (intent.sourceVersion.parserVersion !== "m1-v1"
+    || intent.contentSha256 !== intent.sourceVersion.contentSha256
+    || await sha256Hex(intent.sourceVersion.content) !== intent.contentSha256) {
+    throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content does not match the stable intent", 409);
+  }
+}
+
+function assertReceipt(intent: PublicationIntent, receipt: { path: string; contentSha256: string; bytes: number }): void {
+  if (receipt.path !== intent.normalizedPath || receipt.contentSha256 !== intent.contentSha256
+    || receipt.bytes !== new TextEncoder().encode(intent.sourceVersion.content).byteLength) {
+    throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Published content receipt does not match the stable intent", 409);
+  }
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
+}
+function normalizeRecoveryLimit(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > 100) throw invalidPublicationInput();
+  return value;
+}
+function isVisibility(value: unknown): value is KnowledgeVisibility { return value === "shared" || value === "admin_only"; }
+function isRejectionReason(value: unknown): value is RejectionReasonCode { return value === "not_relevant" || value === "duplicate" || value === "unsafe"; }
+function isRepositoryConflict(error: unknown, kind: string): boolean { return (error as { kind?: unknown })?.kind === kind; }
+function throwTargetError(error: unknown): never {
+  if (isRepositoryConflict(error, "target_invalid")) {
+    throw new AppError(
+      "PUBLICATION_TARGET_INVALID",
+      "Publication target must be active, writable, and in one Space",
+      400,
+    );
+  }
+  throw error;
+}
+function throwDecisionError(error: unknown): never {
+  if (isRepositoryConflict(error, "decision_conflict") || isRepositoryConflict(error, "submission_not_pending")) {
+    throw new AppError("REVIEW_STATE_CONFLICT", "Submission is no longer pending review", 409);
+  }
+  throw error;
+}
+function invalidPublicationInput(): AppError { return new AppError("PUBLICATION_INPUT_INVALID", "Publication input is invalid", 400); }
+function invalidDecision(): AppError { return new AppError("REVIEW_DECISION_INVALID", "Review decision is invalid", 400); }
+function hasMalformedSurrogate(content: string): boolean {
+  for (let index = 0; index < content.length; index += 1) {
+    const unit = content.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = content.charCodeAt(index + 1);
+      if (next < 0xdc00 || next > 0xdfff) return true;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) return true;
+  }
+  return false;
+}
