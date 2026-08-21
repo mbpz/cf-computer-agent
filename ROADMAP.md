@@ -1,227 +1,228 @@
 # Memory Garden Roadmap
 
-更新时间：2026-08-10
+更新时间：2026-08-21
 
-产品规格：[Memory Garden 产品设计规格](./docs/superpowers/specs/2026-08-10-memory-garden-product-design.md)
+产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
-## 目标
+权威文档：
 
-把已上线的单用户知识问答 MVP 演进为双角色、多格式录入、审核发布、混合检索和可信 Agent 的个人知识操作系统。所有正式能力必须使用 Cloudflare 服务，并在 Workers Free 已知额度内设置硬性降级路径。
+- [AI 知识操作系统设计规格](./docs/superpowers/specs/2026-08-21-ai-knowledge-system-design.md)
+- [国外 AI 知识库标杆矩阵](./docs/product/ai-knowledge-base-benchmark.md)
+- [原子级交付 Checklist](./docs/product/ai-knowledge-base-checklist.md)
+- [生产核心运维手册](./docs/operations/production-environment-handbook.md)
 
-## 交付规则
+## 不可突破的边界
 
-- 每个 Phase 都必须产生可部署、可回滚的软件，不允许长期功能分支。
-- 先写失败测试，再实现最小能力，再运行完整验证。
-- 本地 fixture 只证明确定性逻辑；Cloudflare 托管能力必须单独记录远程证据。
-- 数据迁移只追加 migration，不修改已部署 migration。
-- AI、Vectorize 和 Queue 都是可降级能力；录入、审核、浏览和 FTS5 搜索是生存底座。
-- README、roadmap 勾选或页面截图不构成生产稳定性证据。
+- 不做公开注册、多租户 SaaS、计费、套餐或企业目录同步。
+- 不替换现有 GitHub OAuth：继续使用 state、PKCE S256、primary+verified email、邮箱 allowlist、D1 哈希 Session、admin/contributor 角色。
+- Automation 继续要求 HMAC + `APP_TOKEN`，只允许 legacy API，不获得管理员权限。
+- 不恢复 Cloudflare Access/Zero Trust 依赖。
+- 保留 `KnowledgeBase` Durable Object 类名和 migration tag `v1`，任何数据迁移必须追加且可恢复。
+- 核心链路必须在 Workers Free 已知额度内运行；AI、Vectorize、Queue 失效时仍能录入、审核、阅读和 FTS5 搜索。
+- Agent 只读正式知识并生成草稿；不得直接发布、删除、改权限或执行任意网络、Shell、代码、浏览器工具。
 
-## Phase 0 — MVP 基线加固
+## 交付与证据规则
 
-目标：在扩展产品前建立可测试、可维护、可验证的 Worker 基线。
+- 每个 Milestone 必须交付一条可部署、可回滚的纵向用户旅程，不建立长期“大爆炸”分支。
+- 原子状态以 [Checklist](./docs/product/ai-knowledge-base-checklist.md) 为准；Roadmap 不重复伪造完成度。
+- 先写失败测试，再实现最小能力，再运行完整 gate。
+- 本地 fixture 只证明确定性逻辑；workerd 只证明 Cloudflare 本地运行时合同；远程能力必须单独记录日期、version ID 和脱敏 request ID。
+- README、勾选框、页面截图和“操作成功”口述都不能替代可复核证据。
+- D1 migration 只追加，不修改已部署 migration；所有权威数据必须可导出、恢复并重建派生索引。
 
-范围：
+## M0 — 固化当前安全基线
 
-- [x] 将 `src/index.ts` 拆分为认证、路由、知识服务、Computer 存储、检索和 AI provider。（本地 `rtk npm run check`）
-- [x] 将内嵌 HTML 拆为独立前端构建入口。（本地 `rtk npm run check`）
-- [x] 使用 `wrangler types` 生成 Env，消除手写 Env 漂移。（本地 `rtk npm run check`）
-- [x] APP_TOKEN 改为恒定时间比较，并降级为运维兼容鉴权。（本地 `rtk npm run check`）
-- [x] 消除 Computer RPC 边界的双重类型断言，封装 `WorkspaceRepository`。（本地 `rtk npm run check`）
-- [x] 引入 `@cloudflare/vitest-pool-workers`，覆盖 Worker 路由与 Durable Object 持久性。（本地 `rtk npm run check`）
-- [x] 增加结构化错误、request_id、安全响应头和日志脱敏。（本地 `rtk npm run check`）
-- [x] 补全 automation smoke 合同：HMAC 签名 + APP_TOKEN、health、新增、列表、检索与问答；不调用 admin API。（本地 mock 验证；尚未调用远程环境）
+目标：把当前身份、权限、控制面、兼容知识 API 和生产运维作为后续迭代的不可回归基线。
 
-退出标准：
+已具备：
 
-- [x] `rtk npm run check` 覆盖类型、单元、Worker 集成和构建。（2026-08-11：38 个单元测试、19 个 Worker 测试与 dry build 通过）
-- [ ] 远程新增、检索、问答成功；错误 Token 返回 401。
-- [ ] Durable Object 重启后能读回笔记。
-- [ ] 当前生产域名验证完成且不记录密钥。
-
-## Phase 1 — 身份、角色与 D1 控制面
-
-目标：建立一个管理员、少量受邀用户和空间化知识模型。D1 仅作 Phase 1 控制面权威，已发布的旧版知识保持在兼容 Durable Object 中。
-
-范围：
-
-- [x] 接入 GitHub OAuth、D1 会话与成员映射。（本地 GitHub HTTP fake、单元与 workerd 验证；未验证远程 OAuth registration）
-- [x] 建立 D1 migrations：members、spaces、collections、submissions、audit_events。（本地 D1 fixture；远程 migration 未获授权执行）
-- 管理员/用户权限中间件与服务端权限策略。
-- Space、Collection、Tag 的管理 API。
-- 用户首页、管理员外壳和角色化导航。
-- 成员启用、封禁和管理员保护规则。
-- 审计登录、成员变更和管理操作。
+- GitHub OAuth、D1 Session、成员 allowlist、bootstrap admin、禁用成员、角色能力矩阵。
+- HMAC + APP_TOKEN automation；automation 不能调用 admin API。
+- D1 members/spaces/collections/submissions/audit_events 控制面。
+- Computer VFS legacy 笔记、关键词检索、Workers AI 引用问答。
+- 安全错误、request ID、日志脱敏、版本化 Secret 上传与部署手册。
+- 操作者已在 2026-08-21 确认生产 GitHub OAuth 登录成功；正式证据归档仍需补齐成功 callback 的 version ID/request ID。
 
 退出标准：
 
-- [x] 完整权限矩阵自动测试通过。（本地 workerd）
-- [x] 普通用户无法调用管理 API。（本地 workerd）
-- [x] automation 无法调用管理 API，且 smoke 只走 legacy 路径。（本地 contract/workerd）
-- [x] D1 查询使用索引和有界分页。（本地 migration/service 测试；未记录远程 rows_read/rows_written）
-- [ ] 远程 D1 migration 与 seed 已在目标数据库核验。
-- [ ] GitHub OAuth callback、allowlist 与 bootstrap admin 在自定义域核验。
-- [ ] HMAC + APP_TOKEN signed smoke 在自定义域通过且不泄露凭证。
-- [ ] disabled contributor 在真实 GitHub OAuth 会话下被应用拒绝。
-- [ ] production 与 preview workers.dev URL 在已部署账户中保持关闭。
-- [ ] 旧版 Durable Object 跨远程激活后仍可读取。
+- [ ] 在生产自定义域归档一次成功 GitHub OAuth callback 的脱敏证据。
+- [ ] signed automation smoke 在生产自定义域通过，错误签名/Token 稳定拒绝。
+- [ ] disabled contributor 的真实会话被应用拒绝。
+- [ ] Durable Object 跨远程激活后仍能读回笔记。
+- [ ] production/preview workers.dev URL 在账户中保持关闭。
+- [ ] 当前完整 `rtk npm run check`、D1 migration 状态和回滚点被记录。
 
-## Phase 2 — 统一采集与 R2 原件
+## M1 — 单来源可信知识闭环
 
-目标：稳定录入图片、PDF、Office、文本、富文本和代码。
+目标：一条文本/Markdown/代码来源完成“提交 → 解析 → 分块 → 审核 → 发布 → FTS 搜索 → 阅读 → 引用问答”。
 
 范围：
 
-- R2 Standard 私有 Bucket、暂存区、正式区和回收区。
-- 浏览器直传协议、上传完成校验和中断清理。
-- SHA-256 幂等、完全重复检测和相似候选入口。
-- 文本、Markdown、代码与富文本清洗解析器。
-- Workers AI `toMarkdown`：PDF、图片、Word、Excel、HTML/XML 和 OpenDocument。
-- PPTX 浏览器 OOXML 文本/结构解析与人工补充文本降级。
-- ParseJob 状态机、Queue 唤醒、D1 权威任务和重投扫描。
-- 8 GB 预警、9 GB 文件写入硬断路器。
-- “我的提交”页面与逐文件状态、错误和重试信息。
+- Source、SourceVersion、KnowledgeItem、Revision、Chunk、Citation 的最小权威模型。
+- 纯文本、Markdown、代码输入；SHA-256 幂等和大小/metadata 边界。
+- 确定性解析、heading-aware/line-aware chunk、稳定来源定位。
+- 管理员审核、shared/admin_only、驳回、不可变 Revision 和并发发布恢复。
+- D1 FTS5、BM25、过滤、高亮、权限二次校验。
+- 阅读器定位与严格引用问答；无来源/低相关时拒答。
 
 退出标准：
 
-- 支持矩阵每种格式包含成功、损坏、空内容和超限 fixture。
-- 中断上传不会产生可见知识，孤儿对象可被回收。
-- 解析失败仍可下载原件并提交替代文本。
-- 9 GB 保护能拒绝文件但允许纯文本录入。
+- [ ] 一条来源的完整纵向旅程在 workerd 和生产环境通过。
+- [ ] contributor 无法读取 admin_only、他人草稿或历史不可见版本。
+- [ ] 每个答案引用能回读到当前用户可见的精确 Chunk/位置。
+- [ ] Workers AI 不可用时录入、审核、阅读和 FTS 搜索仍可用。
 
-## Phase 3 — 审核、发布、版本与回收站
+## M2 — 多格式与可观测摄取
 
-目标：建立从用户提交到正式知识的可信治理流程。
+目标：安全接收常见文件并让每一步处理状态可见、可重试、可降级。
 
 范围：
 
-- 管理员审核队列、筛选、排序和批量操作。
-- 原件预览与规范 Markdown 对照。
-- 摘要、标签、Space/Collection 和敏感信息建议。
-- 发布共享、发布仅管理员、驳回、重复关联和重新解析。
-- 每 Space 一个 SpaceCoordinator Durable Object。
-- Computer VFS 的 Space 工作区、Revision manifest 和内容路径规范。
-- 不可变 Revision、并发控制、当前版本切换和回滚。
-- 30 天回收站、恢复和最终清理顺序。
-- 发布与下载审计。
+- 私有 R2 Standard 原件、staging/final/quarantine、浏览器直传和孤儿回收。
+- PDF、图片、DOCX、Excel、CSV、HTML/XML、ODT/ODS/Numbers 的 Workers AI `toMarkdown` 适配。
+- PPTX 浏览器/Worker OOXML 文本结构解析及替代文本降级。
+- ParseJob/IndexJob D1 状态机、Queue 唤醒、扫描重投和幂等。
+- 页码、sheet/cell、slide/element、代码行位置。
+- 用户“我的提交”和管理员解析预览、warnings、重试。
 
 退出标准：
 
-- 并发审核只产生一个当前 Revision。
-- 重复 Queue 消息不会产生重复 Revision。
-- 索引失败只产生 `search_degraded`，不产生半发布内容。
-- 删除、恢复、回滚和最终清理演练通过。
+- [ ] 支持矩阵每种格式有成功、损坏、空内容、伪造 MIME 和超限 fixture。
+- [ ] 中断上传不会产生可见知识；失败原件可下载并可补替代文本。
+- [ ] Queue/AI 不可用时任务保留在 D1，恢复后可幂等重投。
+- [ ] R2 8 GB 预警、9 GB 文件写入断路器通过降级测试。
 
-## Phase 4 — 知识阅读器与混合检索
+## M3 — 治理、版本与回收
 
-目标：实现可过滤、可定位、可评测的知识检索。
+目标：正式知识可审核、修订、回滚、恢复和审计，不依赖人工修数据库。
 
 范围：
 
-- D1 FTS5 chunk 表、触发器/同步策略和 BM25 查询。
-- Markdown 分块、标题路径与页码/工作表/幻灯片/行号位置。
-- Vectorize 384 维索引、namespace 和 visibility metadata index。
-- 文档摘要向量和选择性高价值段落向量。
-- RRF 融合、revision 去重、权限二次校验和稳定 citation_id。
-- 搜索筛选器、保存视图、命中高亮和结果内问答入口。
-- 三栏知识阅读器、原件定位、反向链接和相关知识。
-- 人工标注查询集、Recall@5 和排序回归测试。
+- 重复关联、敏感信息建议、批量审核和逐项结果。
+- 新 Revision、current 原子切换、diff、回滚。
+- 30 天回收站、恢复、最终清理和墓碑审计。
+- 发布/下载/回滚审计；所有 metadata allowlist 且不含正文/凭据。
+- 发布 journal、索引 `search_degraded` 和恢复器。
 
 退出标准：
 
-- Recall@5 ≥ 85%。
-- 所有返回引用都能定位并回读到当前用户可见内容。
-- 权限过滤和引用回读泄露测试为 0。
-- 禁用 Vectorize 后 FTS5 搜索完整可用。
+- [ ] 并发审核、重复 Queue 和任意持久化边界失败不产生半发布状态。
+- [ ] 历史 Revision 不可变，回滚只切换 current 并保留审计。
+- [ ] 删除、恢复、到期清理和索引重建演练通过。
 
-## Phase 5 — 持久化可信 Agent
+## M4 — 成熟搜索、阅读器与评测
 
-目标：提供多轮、可恢复、严格引用的知识问答。
+目标：达到 Onyx/RAGFlow 风格的可过滤、可解释、可评测混合检索体验。
 
 范围：
 
-- Cloudflare Agents SDK 会话路由、消息持久化和恢复流。
-- `searchKnowledge`、`readSource`、`compareSources`、`createDraft` 工具。
-- 工具级角色校验和成员状态重新加载。
-- 引用生成、引用支持性验证和权限回读。
-- Prompt injection 防护与不可信文档边界。
-- 答案保存为用户草稿并进入正常审核流程。
-- AI 日预算优先级、`deferred_quota` 和无 AI 模式。
-- Agent 固定问答集、错误引用评测和断线恢复测试。
+- Vectorize 摘要优先、选择性高价值 Chunk 向量和 visibility metadata。
+- FTS + Vectorize + RRF；可选 query rewrite/rerank，失败时回退。
+- Space/Collection/Tag/type/author/time 过滤、Saved View、Add context。
+- 三栏阅读器、来源面板、反向链接、相关知识和原件定位。
+- 标注 query set、Recall@5、MRR、citation precision/support、权限泄露回归。
 
 退出标准：
 
-- 固定评测集错误引用率为 0。
-- 无来源或来源不足时可靠拒答。
-- Agent 不能读取 admin_only 内容或直接发布知识。
-- 断线重连能恢复回答；显式停止能终止本次生成。
+- [ ] Recall@5 ≥ 85%，citation precision/support = 100%，权限泄露 = 0。
+- [ ] 禁用 Vectorize 后 FTS5-only 仍满足核心搜索旅程。
+- [ ] 查询和引用回读均重新校验 active member、visibility 和 current Revision。
 
-## Phase 6 — 知识网络、治理与复盘
+## M5 — NotebookLM 式来源工作台与产物
 
-目标：让知识库长期保持可发现、可维护和可迁移。
+目标：围绕选中来源进行多轮问答，并生成可追溯、可再次审核的知识产物。
 
 范围：
 
-- 双向链接、未链接提及和知识关系图。
-- 重复、无分类、孤立、过期、失效链接和低质量解析候选。
-- 标签合并和分类调整的待审核变更。
-- 收藏、待读、最近访问和保存视图。
-- 确定性每日/每周回顾；额度允许时附加 AI 摘要。
-- Markdown + manifest + 原件的全量/增量导出。
-- 导入 dry-run、冲突报告和新环境恢复工具。
-- 定期恢复演练和索引重建。
+- Source selector、来源增删、冲突展示、多轮会话和反馈。
+- 私人 Note、来源摘要、FAQ、时间线、Brief、思维导图、学习卡和测验。
+- 每个产物保存模型、Prompt、来源 Revision、生成时间和状态。
+- 产物可转 Submission，但不能直接成为正式知识。
 
 退出标准：
 
-- 治理任务不静默修改正式知识。
-- 全量导出可在新 Cloudflare 环境恢复条目、版本、原件和引用映射。
-- 从权威数据重建 FTS5 与 Vectorize 后结果一致。
-- 恢复演练步骤和真实输出被记录。
+- [ ] 所有来源性断言均有可回读引用；错误引用率为 0。
+- [ ] 权限变化后旧会话和旧产物不能继续读取被撤销来源。
+- [ ] AI 额度耗尽时产物明确 deferred，不影响知识阅读。
 
-## Phase 7 — 成熟体验与运营
+## M6 — 有界 Deep Research Agent
 
-目标：完善移动体验、可访问性、观测和故障处理。
+目标：提供可暂停、恢复、审计的多步研究，而不是开放式自动执行器。
 
 范围：
 
-- PWA、移动快速录入、相机图片和系统分享入口。
-- 桌面快捷键、⌘K、审核快捷操作和批量选择。
-- WCAG 目标、键盘导航、焦点管理和屏幕阅读器验证。
-- 结构化日志、任务积压、失败率、索引漂移和配额仪表盘。
-- R2、D1、DO、Workers AI、Vectorize 和 Queue 故障手册。
-- 配额耗尽、解析服务异常、索引漂移和上游 Computer Preview 变更演练。
-- Computer 适配器契约测试、版本升级策略和迁移器。
-- 发布 checklist、变更日志和回滚说明。
+- Research Workspace、计划确认、子问题、步骤/时间/AI 配额。
+- `searchKnowledge`、`readSource`、`compareSources`、`createDraft` 四类受限工具。
+- 查询轨迹、来源选择理由、冲突、证据缺口、checkpoint 和取消。
+- 研究报告与 Draft；Prompt injection 和工具越权回归。
 
 退出标准：
 
-- 上传 → 审核 → 发布 → 搜索 → Agent → 修订的端到端旅程通过。
-- 移动端核心旅程和管理员桌面旅程通过无障碍检查。
-- 所有配额与主要依赖故障均有可重复演练。
-- 托管 CI、真实 Provider 和生产域验证证据齐全后才声明 1.0。
+- [ ] Agent 不能执行任意网络、Shell、代码、浏览器、发布、删除或改权限操作。
+- [ ] 每个研究断言映射到允许范围内的来源；证据不足明确标注。
+- [ ] 断线、取消、额度耗尽和次日恢复均不重复副作用。
 
-## 全局免费额度保护
+## M7 — 导出、恢复与长期治理
 
-| 产品 | 保护策略 |
-| --- | --- |
-| R2 | 8 GB 预警；9 GB 停止文件写入；只用 Standard |
-| Workers AI | 在线问答优先；低优先级任务延迟；耗尽后关闭 AI 能力 |
-| Vectorize | 80% 停止普通段落向量；超限切换 FTS5-only |
-| D1 | 索引、有界分页、配额错误只读降级，不循环重试 |
-| Durable Objects | 按 Space/会话分片；超限返回明确平台限制 |
-| Queues | 小消息、批处理、有限重试；权威任务可从 D1 重投 |
-| Workflows | 核心流程不依赖；引入前单独验证免费额度和保留需求 |
+目标：让知识可迁移、可重建、可维护，避免被单个索引或预览组件锁定。
 
-## 里程碑依赖
+范围：
+
+- Markdown + manifest + 原件 + Revision/Citation 映射的全量/增量导出。
+- 导入 dry-run、冲突报告、新环境恢复和权限核验。
+- FTS5/Vectorize 全量重建与漂移对账。
+- 重复、孤立、过期、失效链接、低质量解析和标签治理候选。
+- 治理建议只进入审核，不静默修改正式知识。
+
+退出标准：
+
+- [ ] 新 Cloudflare 环境可恢复权威数据并重建所有派生索引。
+- [ ] 抽样原件 hash、Revision、引用和权限映射一致。
+- [ ] 至少一次真实备份/恢复演练有脱敏证据和回滚说明。
+
+## M8 — 1.0 成熟度
+
+目标：完成可访问性、移动体验、性能、观测、配额和故障演练后再声明 1.0。
+
+范围：
+
+- 移动快速录入、PWA、键盘导航、焦点管理、WCAG 验证。
+- 配额、任务积压、失败率、索引漂移和依赖状态面板。
+- R2、D1、DO、Workers AI、Vectorize、Queue 和 Computer Preview 故障手册。
+- 托管 CI、发布 checklist、变更日志、版本升级和回滚演练。
+- 音频/视频/自动幻灯片只作默认关闭实验，不阻断 1.0。
+
+退出标准：
+
+- [ ] 上传 → 审核 → 发布 → 搜索 → 问答 → 修订 → 导出/恢复端到端通过。
+- [ ] 移动 contributor 与桌面 admin 核心旅程通过可访问性检查。
+- [ ] 所有免费额度断路器和主要依赖故障均有可重复演练。
+- [ ] 本地、workerd、托管 CI、真实 provider 和生产域证据齐全。
+
+## 免费层保护
+
+| Cloudflare 能力 | 核心用途 | 硬保护与降级 |
+| --- | --- | --- |
+| Workers | API、页面、调度 | 有界请求体/CPU/分页；超限明确失败 |
+| D1 | 控制面、权威 metadata、FTS5、任务 | 索引/keyset；只读降级；禁止无界扫描/重试 |
+| R2 Standard | 私有原件 | 8 GB 预警，9 GB 停止文件写入，文本继续 |
+| Durable Objects | legacy VFS、发布/会话协调 | 保留 `KnowledgeBase` v1；按工作区/会话分片 |
+| Workers AI | 解析、回答、可选增强 | 在线回答优先；无额度时 deferred/关闭 AI |
+| Vectorize | 选择性语义召回 | 80% 容量断路器；FTS5-only 完整可用 |
+| Queues | 唤醒异步任务 | 小消息、有限重试；D1 状态可扫描重投 |
+
+平台额度和产品可能变化；实施每个相关 Milestone 前必须重新核对 Cloudflare 官方免费层限制。产品不会主动购买超额用量，但账户级计划、支付方式和预算仍由部署者负责。
+
+## 依赖关系
 
 ```text
-Phase 0
-  └─ Phase 1
-       └─ Phase 2
-            └─ Phase 3
-                 ├─ Phase 4 ── Phase 5
-                 └─ Phase 6
-                      └─ Phase 7
+M0 基线
+  └─ M1 单来源闭环
+       ├─ M2 多格式摄取 ── M3 治理版本
+       └─ M4 搜索评测 ─── M5 来源产物 ── M6 Deep Research
+                                  └──────────────┐
+M3 + M4 ─────────────────────────────── M7 导出恢复
+M0–M7 全部满足 ───────────────────────── M8 / 1.0
 ```
 
-Phase 4 依赖正式 Revision 和来源定位；Phase 5 依赖稳定检索与引用；Phase 6 的导出恢复可在 Phase 4 后并行推进，但必须在 1.0 前完成。
+执行时按 Checklist 中 `P0/<Milestone>` 原子项生成独立实现计划；任何 Milestone 的完成声明都必须同时满足其退出标准与对应 Gate。

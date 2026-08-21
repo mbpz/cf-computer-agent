@@ -2,6 +2,13 @@
 
 一个使用 GitHub OAuth 登录、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
 
+## 产品演进文档
+
+- [AI 知识操作系统设计规格](./docs/superpowers/specs/2026-08-21-ai-knowledge-system-design.md)：当前产品、权限、架构、免费层和里程碑权威定义。
+- [国外 AI 知识库标杆矩阵](./docs/product/ai-knowledge-base-benchmark.md)：NotebookLM、Glean、Notion、Perplexity、Onyx、RAGFlow、Dify、AnythingLLM、Khoj 的取舍证据。
+- [原子级交付 Checklist](./docs/product/ai-knowledge-base-checklist.md)：按来源、解析、治理、检索、引用、Agent、评测和运维拆解的实现与验收项。
+- [Roadmap](./ROADMAP.md)：M0–M8 纵向交付顺序和退出标准。
+
 ## 架构
 
 ```text
@@ -77,4 +84,4 @@ Smoke 只验证 automation 可用的 health、创建、列表、检索和带来�
 
 ## 数据与隐私
 
-这是单组织 Phase 1 设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。远程 OAuth registration、D1 migration、signed automation、workers.dev disablement 与 Durable Object 跨激活恢复尚未在此仓库获得远程证据；不要据此宣称生产成熟度。当前版本没有附件、审核发布、批量导出或删除 API；正式导入重要资料前应等待 roadmap 中的备份/恢复里程碑。
+这是单组织、5–20 人私有知识库设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。操作者已于 2026-08-21 确认自定义域 GitHub OAuth 登录成功，但成功 callback 的正式脱敏证据、signed automation、disabled contributor、workers.dev 关闭状态与 Durable Object 跨激活恢复仍需归档；不要据此宣称生产成熟度。当前版本没有完整附件管线、正式知识审核发布、批量导出或恢复能力；正式导入不可替代的重要资料前应等待 Roadmap M7。

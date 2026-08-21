@@ -1,0 +1,403 @@
+# Memory Garden AI 知识库原子 Checklist
+
+更新时间：2026-08-21
+
+权威规格：[AI 知识操作系统设计](../superpowers/specs/2026-08-21-ai-knowledge-system-design.md)
+
+标杆证据：[国外 AI 知识库标杆矩阵](./ai-knowledge-base-benchmark.md)
+
+## 使用规则
+
+- `[x]` 只表示该原子项指定的当前证据已经满足；不能从父功能推断子项完成。
+- 每项必须记录状态：`planned / implemented / local_verified / workerd_verified / remote_verified / degraded_verified / deferred / rejected`。
+- P0 是对应 Milestone 发布阻断项；P1 是成熟产品核心；P2 是效率增强；P3 是实验。
+- 每项实现计划必须补齐：输入、输出、状态、权限、权威位置、Cloudflare 组件、错误码、依赖和测试 fixture。
+- 所有读路径默认重新校验 active member 和 visibility；所有写路径默认记录安全审计。
+- 所有 AI/Vectorize/Queue 项默认要求无 AI、FTS5-only 或 D1 重投降级。
+- 远程证据必须包含日期、版本 ID 和脱敏 request ID，不能包含正文、Cookie、OAuth code 或 Secret。
+
+状态缩写：`P=planned`、`I=implemented`、`L=local_verified`、`W=workerd_verified`、`R=remote_verified`、`D=degraded_verified`。
+
+## SRC — 来源采集
+
+- [ ] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
+- [ ] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；验收：保留标题层级和代码块。
+- [ ] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；验收：记录语言、文件标签和行号基准。
+- [ ] `SRC-004` P0/M1 输入大小边界；验收：精确上限接受、超一字节稳定拒绝。
+- [ ] `SRC-005` P0/M1 标题规范化；验收：trim、UTF-8 上限和控制字符拒绝。
+- [ ] `SRC-006` P0/M1 Space/Collection 目标选择；验收：只接受 active 且同 Space 集合。
+- [ ] `SRC-007` P0/M1 Submission 幂等键；验收：重放不创建第二条提交。
+- [ ] `SRC-008` P1/M1 草稿保存；验收：仅创建者可读取和继续编辑。
+- [ ] `SRC-009` P1/M1 粘贴富文本；验收：严格清洗后转规范 Markdown，无脚本/事件属性。
+- [ ] `SRC-010` P1/M2 文件选择器；验收：支持矩阵、大小和数量前置提示。
+- [ ] `SRC-011` P1/M2 拖放上传；验收：键盘替代入口和相同服务端校验。
+- [ ] `SRC-012` P1/M2 批量文件队列；验收：逐文件状态、失败隔离和有限并发。
+- [ ] `SRC-013` P1/M2 剪贴板图片；验收：类型检查后进入普通 Asset 流程。
+- [ ] `SRC-014` P2/M2 文件夹导入；验收：相对路径只作显示 metadata，不进入对象键。
+- [ ] `SRC-015` P2/M2 受限 URL 快照；验收：HTTPS、SSRF 防护、大小/类型上限、固定重定向策略。
+- [ ] `SRC-016` P2/M2 替代文本；验收：解析失败时用户可提交可审核替代 Markdown。
+- [ ] `SRC-017` P2/M2 上传取消；验收：取消后不可见且暂存对象可回收。
+- [ ] `SRC-018` P2/M2 上传恢复；验收：刷新后恢复未完成状态而非重复提交。
+
+## ING — 摄取与原件
+
+- [ ] `ING-001` P0/M1 SHA-256 内容哈希；验收：服务端重新验证，不信任客户端声明。
+- [ ] `ING-002` P0/M1 完全重复检测；验收：同 hash 返回既有候选，不静默发布。
+- [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；验收：无公开对象 URL。
+- [ ] `ING-004` P0/M2 暂存对象键；验收：内部随机 ID，不含邮箱和原文件名。
+- [ ] `ING-005` P0/M2 原件对象键；验收：SourceVersion 不可变映射。
+- [ ] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；验收：不一致进入拒绝或人工处理。
+- [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；验收：越权和过期拒绝。
+- [ ] `ING-008` P0/M2 完成接口 HEAD 校验；验收：对象大小、类型和存在性一致后才建 Asset。
+- [ ] `ING-009` P0/M2 9 GB R2 写入断路器；验收：文件拒绝但文本录入继续。
+- [ ] `ING-010` P0/M2 8 GB 预警；验收：admin 可见且不向 contributor 暴露账户细节。
+- [ ] `ING-011` P0/M2 单文件大小限制；验收：前端提示和服务端强制一致。
+- [ ] `ING-012` P0/M2 上传中断回收；验收：超时 staging 不进入可见列表。
+- [ ] `ING-013` P0/M2 Asset/Submission 配对写入；验收：任一失败不留下可见孤儿记录。
+- [ ] `ING-014` P1/M2 完全重复关联建议；验收：admin 决定关联、保留或拒绝。
+- [ ] `ING-015` P2/M3 相似重复候选；验收：只作建议，不自动合并。
+- [ ] `ING-016` P1/M2 原件下载授权；验收：每次下载重新检查 visibility/status。
+- [ ] `ING-017` P1/M2 Content-Disposition 安全文件名；验收：无 CRLF、路径或脚本注入。
+- [ ] `ING-018` P1/M7 原件校验任务；验收：定期抽检 hash 并报告损坏，不自动删除。
+
+## PAR — 文档解析
+
+- [ ] `PAR-001` P0/M1 确定性纯文本解析；验收：UTF-8 fatal decode 和换行规范化。
+- [ ] `PAR-002` P0/M1 Markdown 解析；验收：标题、段落、列表、表格和 fenced code 结构化。
+- [ ] `PAR-003` P0/M1 代码解析；验收：语言、行号和代码块不被自然语言清洗破坏。
+- [ ] `PAR-004` P0/M2 Parser 接口和版本；验收：同输入/版本可重放且输出 schema 固定。
+- [ ] `PAR-005` P0/M2 Workers AI toMarkdown 适配器；验收：有界输入/输出和稳定错误映射。
+- [ ] `PAR-006` P0/M2 PDF 页码恢复；验收：每个段落关联页码或明确 unknown。
+- [ ] `PAR-007` P0/M2 图片 OCR/描述；验收：原图保留，低置信结果标 warning。
+- [ ] `PAR-008` P0/M2 DOCX 标题/段落/表格；验收：结构顺序可回读。
+- [ ] `PAR-009` P0/M2 Excel sheet/cell range；验收：每个表块关联 sheet 和范围。
+- [ ] `PAR-010` P0/M2 CSV 表头/行范围；验收：编码、分隔符和超宽表格有界。
+- [ ] `PAR-011` P1/M2 HTML 严格清洗；验收：脚本、样式、事件、危险 URL 删除。
+- [ ] `PAR-012` P1/M2 XML 有界解析；验收：禁外部实体和实体扩张。
+- [ ] `PAR-013` P1/M2 ODT/ODS/Numbers；验收：官方支持格式逐一 fixture。
+- [ ] `PAR-014` P1/M2 PPTX OOXML 文本结构；验收：slide number、元素顺序和警告。
+- [ ] `PAR-015` P1/M2 空文档检测；验收：无有效正文进入 failed_terminal/替代文本。
+- [ ] `PAR-016` P0/M2 损坏文件错误；验收：稳定错误码，不记录正文或 provider body。
+- [ ] `PAR-017` P0/M2 解析超时；验收：failed_retryable、有限重试、无重复产物。
+- [ ] `PAR-018` P0/M2 解析输出大小限制；验收：超限停止并保留原件。
+- [ ] `PAR-019` P1/M2 解析预览；验收：admin/owner 看规范 Markdown、位置和 warnings。
+- [ ] `PAR-020` P1/M2 重新解析；验收：新 parser version，不覆盖已发布 Revision。
+
+## CHK — Chunk 与来源定位
+
+- [ ] `CHK-001` P0/M1 Markdown heading-aware chunk；验收：不跨无关一级章节。
+- [ ] `CHK-002` P0/M1 代码行 chunk；验收：行范围稳定且不截断单个短函数。
+- [ ] `CHK-003` P0/M1 token/字符预算；验收：精确上限、超长段落安全切分。
+- [ ] `CHK-004` P0/M1 chunk ordinal 稳定；验收：相同 SourceVersion/parser 得到相同顺序。
+- [ ] `CHK-005` P0/M1 Markdown heading path；验收：引用可打开对应标题。
+- [ ] `CHK-006` P0/M1 Markdown line range；验收：引用回读包含目标文本。
+- [ ] `CHK-007` P0/M2 PDF page location；验收：页码在阅读器可定位。
+- [ ] `CHK-008` P0/M2 spreadsheet location；验收：sheet/cell range 可显示。
+- [ ] `CHK-009` P0/M2 slide location；验收：slide/element order 可显示。
+- [ ] `CHK-010` P1/M2 parent-child chunk；验收：召回 child、上下文读取 parent。
+- [ ] `CHK-011` P1/M2 overlap 策略；验收：避免断句且重复受预算约束。
+- [ ] `CHK-012` P1/M2 table-aware chunk；验收：表头随数据块保留。
+- [ ] `CHK-013` P1/M2 Chunk 预览；验收：admin 可分页查看正文、位置和 token 估算。
+- [ ] `CHK-014` P1/M2 Chunk 人工修正；验收：生成新 parse version 并重新审核。
+- [ ] `CHK-015` P1/M2 Chunk 启用/禁用；验收：不改原件，索引可重建。
+- [ ] `CHK-016` P1/M2 Chunk 关键词/问题建议；验收：只影响可解释 metadata 权重。
+- [ ] `CHK-017` P0/M4 current Revision 去重；验收：检索不混入同 Item 多版本。
+- [ ] `CHK-018` P0/M7 Chunk 重建；验收：从 Revision/SourceVersion 重建 ID 映射报告。
+
+## GOV — 审核、发布与版本
+
+- [ ] `GOV-001` P0/M1 review_pending 状态；验收：提交完成后仅 owner/admin 可见。
+- [ ] `GOV-002` P0/M1 管理员审核队列；验收：有界 keyset pagination 和状态过滤。
+- [ ] `GOV-003` P0/M1 原文/规范 Markdown 对照；验收：显示解析 warning 和位置。
+- [ ] `GOV-004` P0/M1 修改标题；验收：修改作为 Review metadata patch 审计。
+- [ ] `GOV-005` P0/M1 修改 Space/Collection；验收：active、同 Space 和权限校验。
+- [ ] `GOV-006` P0/M1 修改 Tag；验收：规范化、数量/大小上限和存在性校验。
+- [ ] `GOV-007` P0/M1 选择 shared/admin_only；验收：默认不扩大用户请求的可见性。
+- [ ] `GOV-008` P0/M1 发布；验收：产生 immutable Revision 和唯一 current 指针。
+- [ ] `GOV-009` P0/M1 驳回；验收：owner 看见安全理由，正文不进正式索引。
+- [ ] `GOV-010` P0/M1 revision_requested；验收：用户可基于理由创建新提交。
+- [ ] `GOV-011` P0/M1 并发发布串行化；验收：同 Item 只产生一个 current Revision。
+- [ ] `GOV-012` P0/M1 发布 journal/恢复；验收：任一写入边界失败后可幂等恢复。
+- [ ] `GOV-013` P0/M1 索引失败降级；验收：Revision 仍可读且标 search_degraded。
+- [ ] `GOV-014` P0/M3 重复关联；验收：不创建重复 Item，保留 Submission 审计。
+- [ ] `GOV-015` P1/M3 新 Revision；验收：旧 Revision 不变，current 原子切换。
+- [ ] `GOV-016` P1/M3 Revision 回滚；验收：创建新 current 切换事件，不改历史。
+- [ ] `GOV-017` P0/M3 回收站；验收：默认 30 天、所有读路径隐藏或标记。
+- [ ] `GOV-018` P0/M3 恢复；验收：恢复权限、current Revision 和索引任务一致。
+- [ ] `GOV-019` P0/M3 最终清理顺序；验收：派生数据先删、权威数据最后、保留墓碑审计。
+- [ ] `GOV-020` P1/M3 敏感信息提示；验收：只给 admin 建议，不自动改变可见性。
+- [ ] `GOV-021` P1/M3 批量审核；验收：逐项权限/状态校验，部分失败清晰报告。
+- [ ] `GOV-022` P0/M3 发布/下载/回滚审计；验收：allowlisted metadata、无正文和凭据。
+
+## IDX — 索引
+
+- [ ] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
+- [ ] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
+- [ ] `IDX-003` P0/M1 FTS tokenizer 配置；验收：中英文 fixture 和代码 token 有基线。
+- [ ] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。
+- [ ] `IDX-005` P0/M1 索引 Job 幂等；验收：重复消息不重复写或改变 current。
+- [ ] `IDX-006` P0/M1 索引状态；验收：pending/indexed/search_degraded/failed 可见。
+- [ ] `IDX-007` P0/M4 Vectorize 384 维 index；验收：维度、metric、namespace 固定并生成类型。
+- [ ] `IDX-008` P0/M4 Embedding 输入规范化；验收：标题路径+正文，有界且版本化。
+- [ ] `IDX-009` P0/M4 摘要向量优先；验收：每 Revision 至多一个摘要向量。
+- [ ] `IDX-010` P1/M4 高价值 Chunk 选择；验收：容量策略确定性、可解释。
+- [ ] `IDX-011` P0/M4 visibility metadata；验收：Vectorize 前置过滤后仍执行 D1 二次授权。
+- [ ] `IDX-012` P0/M4 向量删除传播；验收：回收/current 切换后旧向量不可召回。
+- [ ] `IDX-013` P0/M4 Vectorize 80% 断路器；验收：停止普通 Chunk，摘要/FTS 继续。
+- [ ] `IDX-014` P0/M4 FTS5-only 模式；验收：无 AI/Vectorize 完整搜索可用。
+- [ ] `IDX-015` P1/M7 全量索引重建；验收：从权威 Revision 重建且有差异报告。
+- [ ] `IDX-016` P1/M7 索引漂移检测；验收：current Revision、FTS 和向量 ID 定期对账。
+
+## SRCH — 搜索
+
+- [ ] `SRCH-001` P0/M1 关键词查询；验收：空/超长/控制字符有稳定响应。
+- [ ] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。
+- [ ] `SRCH-003` P0/M1 title/tag/body 命中说明；验收：结果显示匹配字段。
+- [ ] `SRCH-004` P0/M1 安全高亮；验收：不产生 HTML/XSS，保留命中上下文。
+- [ ] `SRCH-005` P0/M1 Space 过滤；验收：无权限 Space 不进入候选。
+- [ ] `SRCH-006` P0/M1 Collection 过滤；验收：父子范围规则明确。
+- [ ] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。
+- [ ] `SRCH-008` P1/M4 类型、作者和时间过滤；验收：使用索引、无全表扫描。
+- [ ] `SRCH-009` P0/M1 visibility 过滤；验收：contributor 永不返回 admin_only。
+- [ ] `SRCH-010` P0/M1 keyset pagination；验收：重复排序值无漏项/重复。
+- [ ] `SRCH-011` P1/M4 自然语言 query rewrite；验收：失败或无额度回退原始 query。
+- [ ] `SRCH-012` P1/M4 语义召回；验收：Vectorize topK 有界并记录降级。
+- [ ] `SRCH-013` P0/M4 RRF 融合；验收：确定性常数、current Revision 去重。
+- [ ] `SRCH-014` P1/M4 可选 rerank；验收：超时/额度失败保持融合结果。
+- [ ] `SRCH-015` P0/M4 D1 Chunk 回读；验收：向量 metadata 不作为正文权威。
+- [ ] `SRCH-016` P0/M4 查询时二次授权；验收：成员禁用/权限变化立即生效。
+- [ ] `SRCH-017` P1/M4 Search/Chat 模式切换；验收：搜索不强制生成答案。
+- [ ] `SRCH-018` P1/M4 Add context；验收：来源/Space/Collection 范围清晰展示。
+- [ ] `SRCH-019` P2/M4 Saved View；验收：owner 私有、过滤 schema 版本化。
+- [ ] `SRCH-020` P1/M4 结果内提问；验收：选中结果转为显式来源集合。
+
+## READ — 知识阅读器
+
+- [ ] `READ-001` P0/M1 Knowledge 列表；验收：current published、权限、有界分页。
+- [ ] `READ-002` P0/M1 Knowledge detail；验收：D1 metadata 与规范 Markdown 一致。
+- [ ] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。
+- [ ] `READ-004` P0/M1 目录；验收：heading path 与正文锚点一致。
+- [ ] `READ-005` P0/M1 heading/line 定位；验收：citation 打开目标并高亮。
+- [ ] `READ-006` P0/M2 PDF 页定位；验收：无页预览时显示页码和下载入口。
+- [ ] `READ-007` P0/M2 表格定位；验收：sheet/cell range 可理解。
+- [ ] `READ-008` P0/M2 幻灯片定位；验收：slide number 和元素顺序可理解。
+- [ ] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。
+- [ ] `READ-010` P0/M1 历史 Revision；验收：旧引用可读但明确非 current。
+- [ ] `READ-011` P1/M3 Revision diff；验收：正文和 metadata 差异有界展示。
+- [ ] `READ-012` P1/M4 Sources panel；验收：原件、解析状态、位置和选中状态。
+- [ ] `READ-013` P1/M4 反向链接；验收：只列当前用户可见 current Revision。
+- [ ] `READ-014` P1/M4 相关知识；验收：理由可解释，FTS-only 可用。
+- [ ] `READ-015` P1/M4 从此处提问；验收：自动加入当前来源/位置上下文。
+- [ ] `READ-016` P1/M5 Note 侧栏；验收：私有默认，显式保存，不改正文。
+- [ ] `READ-017` P1/M4 响应式三栏；验收：移动端转换为可访问抽屉/标签页。
+- [ ] `READ-018` P0/M4 阅读权限回归；验收：URL 猜测、历史 ID、下载均不泄露。
+
+## CHAT — 引用问答
+
+- [ ] `CHAT-001` P0/M1 问题边界；验收：非空、字符/字节上限和稳定错误。
+- [ ] `CHAT-002` P0/M1 显式来源集合；验收：全库/Space/Collection/选中来源可区分。
+- [ ] `CHAT-003` P0/M1 检索计划；验收：先授权再召回，不把权限交给模型。
+- [ ] `CHAT-004` P0/M1 上下文预算；验收：per-chunk/total code-point 安全截断。
+- [ ] `CHAT-005` P0/M1 不可信来源序列化；验收：JSON/结构分隔，文档指令不执行。
+- [ ] `CHAT-006` P0/M1 系统提示边界；验收：来源是 inert data、禁止越权工具。
+- [ ] `CHAT-007` P0/M1 无来源拒答；验收：不调用或不采信模型常识回答私有问题。
+- [ ] `CHAT-008` P0/M1 低相关拒答；验收：低于阈值提示改问或扩大范围。
+- [ ] `CHAT-009` P0/M1 稳定 citation ID；验收：绑定 revision/chunk/location。
+- [ ] `CHAT-010` P0/M1 句级引用格式；验收：每个来源性断言附 citation ID。
+- [ ] `CHAT-011` P0/M1 引用只来自上下文；验收：模型伪造 ID 被删除或失败。
+- [ ] `CHAT-012` P0/M1 引用回读；验收：重新授权并读取绑定 Chunk。
+- [ ] `CHAT-013` P0/M1 引用跳转；验收：阅读器定位并标历史/current。
+- [ ] `CHAT-014` P0/M1 答案归一化；验收：provider string/object/empty 有稳定合同。
+- [ ] `CHAT-015` P0/M1 AI 上游失败；验收：稳定 retryable 错误、无 provider body。
+- [ ] `CHAT-016` P1/M5 多轮追问；验收：历史有界、引用权限每轮重查。
+- [ ] `CHAT-017` P1/M5 来源增删；验收：会话中显示变更且下一轮生效。
+- [ ] `CHAT-018` P1/M5 冲突来源；验收：并列展示，不强行合并为单一事实。
+- [ ] `CHAT-019` P1/M5 引用支持性验证；验收：不支持断言删除、改写或拒答。
+- [ ] `CHAT-020` P1/M5 回答停止；验收：客户端停止流、服务端终止本次生成。
+- [ ] `CHAT-021` P1/M5 回答反馈；验收：有用/无用/引用错误，禁止保存正文 Secret。
+- [ ] `CHAT-022` P0/M5 权限变化；验收：禁用成员或降权后旧会话不能继续回读。
+
+## RES — Deep Research
+
+- [ ] `RES-001` P1/M6 Research Workspace；验收：绑定 Space、来源集合、owner 和状态。
+- [ ] `RES-002` P1/M6 研究目标；验收：长度、范围和完成条件显式。
+- [ ] `RES-003` P1/M6 研究计划草稿；验收：用户确认后才执行多步检索。
+- [ ] `RES-004` P1/M6 有限步骤预算；验收：工具步数、AI 用量和 wall time 硬限制。
+- [ ] `RES-005` P1/M6 子问题拆解；验收：每个子问题有来源范围和状态。
+- [ ] `RES-006` P1/M6 多次检索；验收：查询、结果 ID 和选择理由可追踪。
+- [ ] `RES-007` P1/M6 来源比较；验收：共同点、差异和各自引用。
+- [ ] `RES-008` P1/M6 冲突识别；验收：时间/版本/事实冲突不被静默覆盖。
+- [ ] `RES-009` P1/M6 证据缺口；验收：标明无来源问题而非模型补全。
+- [ ] `RES-010` P1/M6 研究暂停；验收：保存已完成步骤和剩余计划。
+- [ ] `RES-011` P1/M6 研究恢复；验收：重新加载成员权限和 current Revision。
+- [ ] `RES-012` P1/M6 研究取消；验收：终止后续工具，保留可审计草稿。
+- [ ] `RES-013` P1/M6 研究报告；验收：章节、断言和引用完整映射。
+- [ ] `RES-014` P1/M6 保存为 Draft；验收：不能直接成为正式 KnowledgeItem。
+- [ ] `RES-015` P0/M6 文档 Prompt injection；验收：恶意来源不能改计划/工具/权限。
+- [ ] `RES-016` P0/M6 额度耗尽恢复；验收：deferred_quota，次日从 checkpoint 继续。
+
+## ART — 研究产物
+
+- [ ] `ART-001` P1/M5 私人 Note；验收：owner-only 默认和显式来源引用。
+- [ ] `ART-002` P1/M5 来源摘要；验收：只总结选中来源并附引用。
+- [ ] `ART-003` P1/M5 FAQ；验收：每个回答有来源，无答案问题标缺口。
+- [ ] `ART-004` P1/M5 时间线；验收：日期事件逐项引用，无法排序时提示。
+- [ ] `ART-005` P1/M5 Brief；验收：目标、要点、风险、开放问题和引用。
+- [ ] `ART-006` P1/M6 来源比较表；验收：每格可追溯引用。
+- [ ] `ART-007` P1/M6 研究报告；验收：绑定 ResearchRun 和来源版本快照。
+- [ ] `ART-008` P2/M5 思维导图；验收：节点来自来源概念，链接可回读。
+- [ ] `ART-009` P2/M5 学习卡；验收：问题/答案/引用，不生成无依据事实。
+- [ ] `ART-010` P2/M5 测验；验收：答案与解释有来源，题目可跳过。
+- [ ] `ART-011` P2/M5 产物重新生成；验收：新版本不覆盖旧产物。
+- [ ] `ART-012` P1/M5 产物转 Submission；验收：进入正常审核，不能直接发布。
+- [ ] `ART-013` P0/M5 生成 provenance；验收：模型、Prompt、来源 Revision、时间和状态。
+- [ ] `ART-014` P3/M8 音频/视频/幻灯片实验；验收：默认关闭、额度隔离、非 1.0 阻断。
+
+## AGT — Agent 工具与会话
+
+- [ ] `AGT-001` P1/M6 AgentSession DO 路由；验收：会话 ID 随机且成员绑定。
+- [ ] `AGT-002` P1/M6 消息持久化；验收：有界列表、角色固定、正文权限保护。
+- [ ] `AGT-003` P1/M6 流式回答；验收：断线不导致重复工具写入。
+- [ ] `AGT-004` P1/M6 断线恢复；验收：从 checkpoint 恢复或明确终止。
+- [ ] `AGT-005` P0/M6 每工具调用重载 member；验收：disabled 立即停止。
+- [ ] `AGT-006` P0/M6 `searchKnowledge`；验收：只返回授权 current Chunk。
+- [ ] `AGT-007` P0/M6 `readSource`；验收：稳定 ID、权限和来源位置。
+- [ ] `AGT-008` P0/M6 `compareSources`；验收：输入来源显式、有界。
+- [ ] `AGT-009` P1/M6 `listSourceConflicts`；验收：只基于已有证据。
+- [ ] `AGT-010` P1/M6 `createNoteDraft`；验收：owner 私有、无发布副作用。
+- [ ] `AGT-011` P1/M6 `createArtifactDraft`；验收：产物 provenance 完整。
+- [ ] `AGT-012` P1/M6 `saveResearchDraft`；验收：进入 Submission/草稿流程。
+- [ ] `AGT-013` P0/M6 禁止直接发布工具；验收：工具注册和路由都不存在。
+- [ ] `AGT-014` P0/M6 禁止任意 MCP/Shell/浏览器；验收：Prompt 不能动态添加工具。
+- [ ] `AGT-015` P0/M6 工具参数 schema；验收：unknown/超限/跨 Space 输入拒绝。
+- [ ] `AGT-016` P0/M6 工具步数限制；验收：达到上限停止并保存草稿。
+- [ ] `AGT-017` P0/M6 工具输出内容边界；验收：进入模型前有界且序列化为不可信数据。
+- [ ] `AGT-018` P1/M6 Agent 运行审计；验收：记录动作和资源 ID，不记录正文/凭据。
+
+## COL — 协作与个人工作区
+
+- [ ] `COL-001` P0/M1 我的 Submission；验收：只看本人、有界分页和状态过滤。
+- [ ] `COL-002` P1/M1 驳回理由；验收：安全文本、历史可见、无 admin 内部 metadata。
+- [ ] `COL-003` P1/M3 审核评论；验收：admin 与 owner 可见，编辑留历史。
+- [ ] `COL-004` P1/M4 收藏；验收：成员私有、删除 Knowledge 后安全清理。
+- [ ] `COL-005` P1/M4 最近访问；验收：有界、隐私私有、禁用成员不可读取。
+- [ ] `COL-006` P1/M4 Saved View；验收：成员私有、过滤 schema 安全。
+- [ ] `COL-007` P1/M5 最近 Research；验收：恢复来源集合和未完成状态。
+- [ ] `COL-008` P1/M5 Note 列表；验收：私有默认，分享必须显式。
+- [ ] `COL-009` P2/M5 共享 Note；验收：只能共享给 active members，随时撤销。
+- [ ] `COL-010` P1/M4 活动流；验收：只显示用户可见资源和 allowlisted event。
+- [ ] `COL-011` P2/M7 每日/每周回顾；验收：确定性列表始终可用，AI 摘要可延期。
+- [ ] `COL-012` P2/M7 待读；验收：成员私有、排序和完成状态。
+- [ ] `COL-013` P2/M8 PWA 快速录入；验收：离线草稿不含 Secret，恢复后正常提交。
+- [ ] `COL-014` P2/M8 系统分享入口；验收：只接收允许类型并要求已登录确认。
+
+## AUTH — 身份、角色和授权
+
+- [x] `AUTH-001` P0/M0 GitHub OAuth start；状态：R；证据：2026-08-21，生产 `/auth/github` 302，version `3bd2985e-487c-4fc0-bcb8-31c1f00967ca`，request ID `a9d1e5602fd999e4c48a314167a77a5e`。
+- [x] `AUTH-002` P0/M0 state + PKCE S256 callback；状态：L/W；生产成功由操作员确认，但缺少完整 R 证据记录。
+- [x] `AUTH-003` P0/M0 GitHub primary+verified 邮箱；状态：L/W；生产管理员已登录，但缺少完整 R 证据记录。
+- [x] `AUTH-004` P0/M0 allowlist；状态：L/W；远程非 allowlist 拒绝仍需单独证据。
+- [x] `AUTH-005` P0/M0 bootstrap admin；状态：L/W；生产管理员已建立，但缺少完整 R 证据记录。
+- [x] `AUTH-006` P0/M0 D1 哈希 Session；状态：L/W；生产存储细节不导出。
+- [x] `AUTH-007` P0/M0 `__Host-memory-session` Cookie；状态：L/W；生产登录成功但 Cookie 安全属性未单独归档。
+- [x] `AUTH-008` P0/M0 admin/contributor capability matrix；状态：L/W。
+- [x] `AUTH-009` P0/M0 disabled member fail-closed；状态：L/W；远程待证据。
+- [x] `AUTH-010` P0/M0 automation HMAC + APP_TOKEN；状态：L/W；远程 signed smoke 待证据。
+- [x] `AUTH-011` P0/M0 浏览器会话与 automation credential 分流；状态：L/W；会话有效、无效或过期时都不回退为 automation。
+- [x] `AUTH-012` P0/M0 automation 非管理员；状态：L/W。
+- [ ] `AUTH-013` P0/M1 新 Source/Submission capability；验收：admin/contributor 可创建、automation 不可。
+- [ ] `AUTH-014` P0/M1 Review/Publish capability；验收：仅 active admin。
+- [ ] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。
+- [ ] `AUTH-016` P0/M5 Note/Research owner scope；验收：ID 猜测和跨用户读取为 404/403 稳定合同。
+- [ ] `AUTH-017` P0/M6 Agent 工具授权；验收：每次工具调用重新校验。
+- [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。
+
+## EVAL — 质量评测
+
+- [ ] `EVAL-001` P0/M1 解析 fixture 规范；验收：输入、期望结构、位置和 warning 独立定义。
+- [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；验收：正常/空/超限/恶意。
+- [ ] `EVAL-003` P0/M2 每种文件格式解析集；验收：正常/损坏/空/超限。
+- [ ] `EVAL-004` P0/M2 Chunk golden set；验收：heading/table/code/location 期望手工给定。
+- [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。
+- [ ] `EVAL-006` P0/M4 Recall@5 计算；验收：固定 corpus、确定性报告、目标 ≥85%。
+- [ ] `EVAL-007` P1/M4 排名回归；验收：NDCG/MRR 或人工 top-k 基线可比较。
+- [ ] `EVAL-008` P0/M4 权限泄露集；验收：shared/admin_only/disabled/history/deleted 泄露为 0。
+- [ ] `EVAL-009` P0/M5 引用正确性集；验收：支持/部分支持/冲突/无来源。
+- [ ] `EVAL-010` P0/M5 错误引用率；验收：错误断言引用为 0，否则拒答。
+- [ ] `EVAL-011` P0/M5 引用定位率；验收：所有返回 citation 可回读位置。
+- [ ] `EVAL-012` P0/M5 Prompt injection 集；验收：伪系统、工具诱导、泄露、引用伪造。
+- [ ] `EVAL-013` P1/M5 用户反馈采样；验收：按 query/citation 聚合且不保存 Secret。
+- [ ] `EVAL-014` P1/M6 Research 计划集；验收：步骤有界、证据缺口可见。
+- [ ] `EVAL-015` P1/M6 Agent 工具轨迹集；验收：无越权、无未注册工具、步数受控。
+- [ ] `EVAL-016` P0/M4 FTS5-only 降级集；验收：核心检索和阅读通过。
+- [ ] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。
+- [ ] `EVAL-018` P1/M8 生产合成探针；验收：只用无敏感 fixture、限频、可清理。
+
+## OPS — 运维、额度、备份和恢复
+
+- [x] `OPS-001` P0/M0 本地完整门禁；状态：L/W；证据：types、TS、smoke、unit、workerd、dry build。
+- [x] `OPS-002` P0/M0 GitHub OAuth 生产部署手册；状态：I/L；证据：`docs/operations/production-environment-handbook.md`。
+- [x] `OPS-003` P0/M0 Secret bundle 单版本发布；状态：L；远程流程已由操作员执行。
+- [x] `OPS-004` P0/M0 append-only D1 migrations；状态：L/R；0001/0002 已由操作员应用。
+- [ ] `OPS-005` P0/M0 signed automation 远程 smoke 证据；验收：自定义域、脱敏 request ID。
+- [ ] `OPS-006` P0/M0 disabled contributor 远程证据；验收：真实 GitHub session 被拒绝。
+- [ ] `OPS-007` P0/M0 DO 跨远程激活证据；验收：激活前后读取一致。
+- [ ] `OPS-008` P0/M2 R2 Bucket 配置；验收：Standard/private/CORS/生命周期和 binding。
+- [ ] `OPS-009` P0/M2 R2 用量账本；验收：8/9 GB 阈值和 Dashboard 对账。
+- [ ] `OPS-010` P0/M2 Queue 配置；验收：consumer、重试、DLQ/替代扫描和 24h 约束。
+- [ ] `OPS-011` P0/M2 Job 重投扫描；验收：Queue 丢失/过期后从 D1 恢复。
+- [ ] `OPS-012` P0/M4 Vectorize index 配置；验收：384 维、metadata indexes、binding 和 rebuild。
+- [ ] `OPS-013` P0/M4 Vectorize 用量断路器；验收：80% 后停止普通向量。
+- [ ] `OPS-014` P0/M2 Workers AI 日额度策略；验收：优先级、deferred_quota 和次日恢复。
+- [ ] `OPS-015` P0/M1 D1 query 成本证据；验收：关键列表/搜索记录 rows_read/written。
+- [ ] `OPS-016` P0/M1 keyset pagination 全局门禁；验收：所有列表 default/max 有界。
+- [ ] `OPS-017` P0/M7 全量导出；验收：manifest、metadata、Revision、原件和引用映射。
+- [ ] `OPS-018` P0/M7 增量导出；验收：基于稳定 cursor/checkpoint，无漏项。
+- [ ] `OPS-019` P0/M7 导入 dry-run；验收：schema、容量、冲突和权限报告，不写数据。
+- [ ] `OPS-020` P0/M7 新环境恢复；验收：身份映射、内容、Revision、原件和引用一致。
+- [ ] `OPS-021` P0/M7 FTS/Vectorize 重建；验收：权威数据不改、结果与导出一致。
+- [ ] `OPS-022` P0/M7 定期恢复演练；验收：真实命令、时间、差异和失败处理记录。
+- [ ] `OPS-023` P1/M8 结构化日志；验收：request ID、stage/reason、无正文/Secret/OAuth code。
+- [ ] `OPS-024` P1/M8 任务仪表盘；验收：backlog、age、failure、retry、quota。
+- [ ] `OPS-025` P1/M8 索引漂移仪表盘；验收：current/FTS/vector mismatch 可定位。
+- [ ] `OPS-026` P0/M8 配额故障演练；验收：D1/R2/DO/AI/Vectorize/Queue 分别验证降级。
+- [ ] `OPS-027` P0/M8 发布 checklist；验收：backup→migration→upload→inspect→deploy→smoke→evidence。
+- [ ] `OPS-028` P0/M8 前向兼容回滚；验收：不逆向 migration、不部署旧 Access build。
+
+## Milestone Gate
+
+### M0
+
+- [ ] `GATE-M0` 补齐成功 OAuth callback、signed smoke、disabled contributor、workers.dev 关闭状态和 DO 跨激活远程证据。
+
+### M1
+
+- [ ] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。
+
+### M2
+
+- [ ] `GATE-M2` 支持矩阵所有格式的正常/损坏/空/超限 fixture 通过；R2/Queue/AI 降级可见且可恢复。
+
+### M3
+
+- [ ] `GATE-M3` 并发发布、重试、回收、恢复、回滚和审计无半成品或越权。
+
+### M4
+
+- [ ] `GATE-M4` Recall@5 ≥85%、权限泄露 0、FTS5-only 完整可用、引用可定位。
+
+### M5
+
+- [ ] `GATE-M5` Sources panel、Add context、Notes 和 P1 研究产物通过错误引用率 0 的固定评测。
+
+### M6
+
+- [ ] `GATE-M6` Research 可暂停恢复，Agent 无越权/直接发布/任意工具，额度耗尽可延期。
+
+### M7
+
+- [ ] `GATE-M7` 导出可在新环境恢复权威数据并重建全部派生索引。
+
+### M8
+
+- [ ] `GATE-M8` 完整端到端、移动/无障碍、托管 CI、故障演练和生产证据满足 1.0。
