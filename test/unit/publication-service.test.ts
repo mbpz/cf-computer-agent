@@ -154,6 +154,13 @@ describe("PublicationService", () => {
     expect(fixture.commits).toHaveLength(0);
   });
 
+  it("maps a submission terminalized before intent creation to a stable publication-state conflict", async () => {
+    const fixture = await publicationFixture({ createIntentStateFailure: true });
+    await expect(fixture.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_STATE_CONFLICT", status: 409 });
+    expect(fixture.commits).toHaveLength(0);
+  });
+
   it("bounds recovery by resources scanned even when an intent recovery fails", async () => {
     const fixture = await publicationFixture({ vfsFailure: true });
     let indexCalls = 0;
@@ -179,6 +186,20 @@ describe("PublicationService", () => {
       recoveredIndexJobs: 0,
       failures: [{ resourceId: "revision-1", code: "INDEX_RECOVERY_FAILED" }],
     });
+  });
+
+  it("reports one index failure when a content-written recovery publishes but remains search-degraded", async () => {
+    const fixture = await publicationFixture();
+    fixture.intent.state = "content_written";
+    fixture.repository.processIndexJob = async () => "search_degraded";
+    fixture.repository.listRecoverableIndexRevisionIds = async () => [fixture.intent.revisionId];
+
+    await expect(fixture.service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [{ resourceId: "revision-1", code: "INDEX_RECOVERY_FAILED" }],
+    });
+    expect(fixture.finalizeCount).toBe(1);
   });
 
   it("stores reject and revision-request notes in review records but passes only allowlisted reason codes", async () => {
@@ -252,6 +273,7 @@ interface PublicationFixtureOptions {
   finalizeResponseLoss?: boolean;
   targetFailure?: boolean;
   createIntentTargetFailure?: boolean;
+  createIntentStateFailure?: boolean;
   decisionConflict?: boolean;
 }
 
@@ -337,6 +359,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     async createOrReadIntent() {
       events.push("create-intent");
       if (options.createIntentTargetFailure) throw Object.assign(new Error("invalidated target"), { kind: "target_invalid" });
+      if (options.createIntentStateFailure) throw Object.assign(new Error("submission terminalized"), { kind: "submission_not_pending" });
       return intent;
     },
     async markContentWritten(_submissionId, receipt) {

@@ -316,6 +316,102 @@ describe("M1 publication control plane", () => {
     });
   });
 
+  it("lets an in-flight publication finish while atomically rejecting a concurrent reject decision", async () => {
+    await seedReviewPendingSubmission("submission-publish-reject-race");
+    const enteredContent = deferred<void>();
+    const releaseContent = deferred<void>();
+    const durable = durableContentCommitter();
+    const publication = new PublicationService(
+      repositoryWithIds("knowledge-publish-reject-race", "revision-publish-reject-race"),
+      {
+        async commit(input) {
+          enteredContent.resolve();
+          await releaseContent.promise;
+          return durable.commit(input);
+        },
+      },
+    );
+    const decisions = new PublicationService(new PublicationRepository(env.DB), durable);
+
+    const publishPromise = publication.publish(adminReviewer, "submission-publish-reject-race", publicationInput);
+    await enteredContent.promise;
+    const rejectResult = await settle(decisions.reject(
+      adminReviewer,
+      "submission-publish-reject-race",
+      { reasonCode: "duplicate", note: "Concurrent decision" },
+    ));
+    releaseContent.resolve();
+    const publishResult = await settle(publishPromise);
+
+    expect(rejectResult).toMatchObject({
+      status: "rejected",
+      reason: { code: "REVIEW_STATE_CONFLICT", status: 409 },
+    });
+    expect(publishResult).toMatchObject({ status: "fulfilled", value: { id: "revision-publish-reject-race" } });
+    await expect(publicationState("submission-publish-reject-race")).resolves.toMatchObject({
+      submissionStatus: "published",
+      intentState: "completed",
+      currentRevisionId: "revision-publish-reject-race",
+      revisionCount: 1,
+      reviewCount: 1,
+      auditCount: 1,
+    });
+  });
+
+  it.each([
+    ["reject", "submission-intent-reject"],
+    ["revision", "submission-intent-revision"],
+  ] as const)("prevents an ordered %s decision from orphaning an active publication intent", async (decision, submissionId) => {
+    await seedReviewPendingSubmission(submissionId);
+    const repository = repositoryWithIds(`knowledge-${decision}`, `revision-${decision}`);
+    await repository.createOrReadIntent(submissionId, adminReviewer.id, { ...publicationInput, tagIds: ["tag-a", "tag-b"] });
+    const service = new PublicationService(repository, durableContentCommitter());
+
+    const result = decision === "reject"
+      ? service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Must not win" })
+      : service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Must not win" });
+    await expect(result).rejects.toMatchObject({ code: "REVIEW_STATE_CONFLICT", status: 409 });
+
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "review_pending",
+      intentState: "pending_content",
+      currentRevisionId: null,
+      revisionCount: 0,
+      reviewCount: 0,
+      auditCount: 0,
+    });
+  });
+
+  it("maps a real post-preview decision race to publication state conflict instead of target invalid", async () => {
+    await seedReviewPendingSubmission("submission-post-preview-race");
+    const decisions = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const racingDb = interceptIntentInsert(env.DB, async () => {
+      await decisions.reject(
+        adminReviewer,
+        "submission-post-preview-race",
+        { reasonCode: "duplicate", note: "Decision won before intent insert" },
+      );
+    });
+    const ids = ["knowledge-post-preview-race", "revision-post-preview-race"];
+    const publication = new PublicationService(new PublicationRepository(racingDb, {
+      id: () => ids.shift() || crypto.randomUUID(),
+      now: () => new Date(now),
+    }), durableContentCommitter());
+
+    await expect(publication.publish(adminReviewer, "submission-post-preview-race", publicationInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_STATE_CONFLICT", status: 409 });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM publication_intents WHERE submission_id = 'submission-post-preview-race'",
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(publicationState("submission-post-preview-race")).resolves.toMatchObject({
+      submissionStatus: "rejected",
+      intentState: null,
+      revisionCount: 0,
+      reviewCount: 1,
+      auditCount: 0,
+    });
+  });
+
   it("rolls back every finalization row on a dependent audit failure and recovers the content-written intent", async () => {
     await seedReviewPendingSubmission("submission-rollback");
     const repository = repositoryWithIds("knowledge-rollback", "revision-rollback");
@@ -356,14 +452,26 @@ describe("M1 publication control plane", () => {
 
   it("keeps the revision readable when FTS fails, records only a safe code, and later replays the same job", async () => {
     const source = await seedReviewPendingSubmission("submission-degraded");
-    const service = new PublicationService(
-      repositoryWithIds("knowledge-degraded", "revision-degraded"),
-      durableContentCommitter(),
+    const repository = repositoryWithIds("knowledge-degraded", "revision-degraded");
+    const intent = await repository.createOrReadIntent(
+      "submission-degraded", adminReviewer.id, { ...publicationInput, tagIds: ["tag-a", "tag-b"] },
     );
+    const receipt = await durableContentCommitter().commit({
+      spaceId: intent.spaceId,
+      knowledgeItemId: intent.knowledgeItemId,
+      revisionId: intent.revisionId,
+      contentSha256: intent.contentSha256,
+      markdown: intent.sourceVersion.content,
+    });
+    await repository.markContentWritten(intent.submissionId, receipt);
     await env.DB.prepare("DROP TABLE chunks_fts").run();
 
-    const degraded = await service.publish(adminReviewer, "submission-degraded", publicationInput);
-    expect(degraded.searchStatus).toBe("search_degraded");
+    const degradedRecovery = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    await expect(degradedRecovery.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [{ resourceId: "revision-degraded", code: "INDEX_RECOVERY_FAILED" }],
+    });
     await expect(env.DB.prepare(
       "SELECT k.search_status, j.state, j.last_error_code FROM knowledge_items k JOIN jobs j ON j.resource_id = k.current_revision_id WHERE k.id = ?",
     ).bind("knowledge-degraded").first()).resolves.toEqual({
@@ -374,7 +482,16 @@ describe("M1 publication control plane", () => {
     const revision = await env.DB.prepare(
       "SELECT normalized_path, content_sha256 FROM revisions WHERE id = ?",
     ).bind("revision-degraded").first<{ normalized_path: string; content_sha256: string }>();
-    expect(revision).toEqual({ normalized_path: degraded.normalizedPath, content_sha256: source.contentSha256 });
+    expect(revision).toEqual({ normalized_path: intent.normalizedPath, content_sha256: source.contentSha256 });
+
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
+    const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+    try {
+      await expect(createPublishedContentReader(workspace).read(intent.normalizedPath, intent.contentSha256))
+        .resolves.toBe(source.normalizedMarkdown);
+    } finally {
+      disposeWorkspace(workspace);
+    }
 
     await env.DB.prepare("CREATE VIRTUAL TABLE chunks_fts USING fts5(chunk_id UNINDEXED, title, tags, body, tokenize='unicode61 remove_diacritics 2')").run();
     const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
@@ -438,7 +555,56 @@ describe("M1 publication control plane", () => {
     }
   });
 
-  it("fails the finalize batch in D1 when a target changes after content persistence", async () => {
+  it("recovers an actual DO write whose response was lost before D1 left pending_content", async () => {
+    const source = await seedReviewPendingSubmission("submission-do-response-loss");
+    const repository = repositoryWithIds("knowledge-do-response-loss", "revision-do-response-loss");
+    const intent = await repository.createOrReadIntent(
+      "submission-do-response-loss", adminReviewer.id, { ...publicationInput, tagIds: ["tag-a", "tag-b"] },
+    );
+    const committed = await durableContentCommitter().commit({
+      spaceId: intent.spaceId,
+      knowledgeItemId: intent.knowledgeItemId,
+      revisionId: intent.revisionId,
+      contentSha256: intent.contentSha256,
+      markdown: intent.sourceVersion.content,
+    });
+    expect(committed.path).toBe(intent.normalizedPath);
+    await expect(publicationState("submission-do-response-loss")).resolves.toMatchObject({
+      submissionStatus: "review_pending",
+      intentState: "pending_content",
+      currentRevisionId: null,
+      revisionCount: 0,
+    });
+
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
+    await evictDurableObject(stub);
+    const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    await expect(recreated.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 1,
+      recoveredIndexJobs: 0,
+      failures: [],
+    });
+    await expect(publicationState("submission-do-response-loss")).resolves.toMatchObject({
+      submissionStatus: "published",
+      intentState: "completed",
+      currentRevisionId: "revision-do-response-loss",
+      searchStatus: "indexed",
+      revisionCount: 1,
+      reviewCount: 1,
+      chunkCount: 2,
+      ftsCount: 2,
+      auditCount: 1,
+    });
+    const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+    try {
+      await expect(createPublishedContentReader(workspace).read(intent.normalizedPath, intent.contentSha256))
+        .resolves.toBe(source.normalizedMarkdown);
+    } finally {
+      disposeWorkspace(workspace);
+    }
+  });
+
+  it("enters the finalize batch and rolls every row back when its conditional collection guard changes zero rows", async () => {
     await seedReviewPendingSubmission("submission-target-race");
     const repository = repositoryWithIds("knowledge-target-race", "revision-target-race");
     const intent = await repository.createOrReadIntent(
@@ -452,9 +618,9 @@ describe("M1 publication control plane", () => {
       markdown: intent.sourceVersion.content,
     });
     await repository.markContentWritten(intent.submissionId, receipt);
-    await env.DB.prepare("UPDATE tags SET status = 'disabled' WHERE id = 'tag-a'").run();
+    await env.DB.prepare("UPDATE collections SET status = 'disabled' WHERE id = 'collection-1'").run();
 
-    await expect(repository.finalize(intent, chunksFor(intent))).rejects.toThrow();
+    await expect(repository.finalize(intent, chunksFor(intent))).rejects.toThrow(/malformed JSON/i);
     await expect(publicationState("submission-target-race")).resolves.toMatchObject({
       submissionStatus: "review_pending",
       intentState: "content_written",
@@ -465,7 +631,7 @@ describe("M1 publication control plane", () => {
       auditCount: 0,
     });
 
-    await env.DB.prepare("UPDATE tags SET status = 'active' WHERE id = 'tag-a'").run();
+    await env.DB.prepare("UPDATE collections SET status = 'active' WHERE id = 'collection-1'").run();
     const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
     await expect(recreated.recoverPending(20)).resolves.toMatchObject({ recoveredIntents: 1, failures: [] });
   });
@@ -697,4 +863,56 @@ function chunksFor(intent: Awaited<ReturnType<PublicationRepository["createOrRea
 async function scalarCount(table: "revisions" | "reviews" | "chunks", where: string, value: string): Promise<number> {
   const row = await env.DB.prepare(`SELECT count(*) AS count FROM ${table} WHERE ${where}`).bind(value).first<{ count: number }>();
   return row?.count ?? 0;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {
+  try {
+    return { status: "fulfilled", value: await promise };
+  } catch (reason) {
+    return { status: "rejected", reason };
+  }
+}
+
+function interceptIntentInsert(db: D1Database, beforeRun: () => Promise<void>): D1Database {
+  let injected = false;
+  return proxyWith(db, {
+    prepare(query: string) {
+      const statement = db.prepare(query);
+      if (!query.includes("INSERT INTO publication_intents")) return statement;
+      return proxyWith(statement, {
+        bind(...values: unknown[]) {
+          const bound = statement.bind(...values);
+          return proxyWith(bound, {
+            async run() {
+              if (!injected) {
+                injected = true;
+                await beforeRun();
+              }
+              return bound.run();
+            },
+          });
+        },
+      });
+    },
+  });
+}
+
+function proxyWith<T extends object>(target: T, overrides: Record<PropertyKey, unknown>): T {
+  return new Proxy(target, {
+    get(original, property) {
+      if (Object.prototype.hasOwnProperty.call(overrides, property)) return overrides[property];
+      const value = Reflect.get(original, property, original) as unknown;
+      return typeof value === "function" ? value.bind(original) : value;
+    },
+  });
 }

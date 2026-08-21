@@ -185,7 +185,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
     }
     const created = await this.findIntent(submissionId);
     if (created) return created;
-    if (!await this.getPreview(submissionId)) throw new PublicationRepositoryConflictError("submission_not_pending");
+    const afterInsert = await this.getPreview(submissionId);
+    if (!afterInsert || afterInsert.status !== "review_pending") {
+      throw new PublicationRepositoryConflictError("submission_not_pending");
+    }
     throw new PublicationRepositoryConflictError("target_invalid");
   }
 
@@ -466,7 +469,12 @@ export class PublicationRepository implements PublicationRepositoryPort {
     try {
       await this.db.batch([
         this.db.prepare(
-          "UPDATE submissions SET status = ?, updated_at = ? WHERE id = ? AND status = 'review_pending'",
+          `UPDATE submissions SET status = ?, updated_at = ?
+           WHERE id = ? AND status = 'review_pending'
+             AND NOT EXISTS (
+               SELECT 1 FROM publication_intents active_intent
+               WHERE active_intent.submission_id = submissions.id
+             )`,
         ).bind(decision, timestamp, submissionId),
         this.changeGuard(),
         this.db.prepare(
@@ -479,6 +487,14 @@ export class PublicationRepository implements PublicationRepositoryPort {
     } catch (error) {
       const concurrent = await this.findReview(submissionId);
       if (concurrent) return exactDecisionOrThrow(concurrent, reviewerId, decision, reasonCode, note);
+      const blocked = await this.db.prepare(
+        `SELECT s.status,
+           EXISTS(SELECT 1 FROM publication_intents pi WHERE pi.submission_id = s.id) AS has_intent
+         FROM submissions s WHERE s.id = ? LIMIT 1`,
+      ).bind(submissionId).first<{ status: ReviewPreview["status"]; has_intent: number }>();
+      if (!blocked || blocked.status !== "review_pending" || blocked.has_intent === 1) {
+        throw new PublicationRepositoryConflictError("decision_conflict");
+      }
       throw error;
     }
     return review;

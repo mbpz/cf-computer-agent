@@ -44,7 +44,7 @@ export class PublicationService {
     try {
       await this.repository.validateTarget(normalized);
     } catch (error) {
-      throwTargetError(error);
+      throwPublicationError(error);
     }
     const preview = await this.repository.getPreview(stableSubmissionId);
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
@@ -52,7 +52,7 @@ export class PublicationService {
     try {
       intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized);
     } catch (error) {
-      throwTargetError(error);
+      throwPublicationError(error);
     }
     assertStableIntent(intent, preview, reviewer.id, normalized);
     return this.resumeIntent(intent);
@@ -100,10 +100,13 @@ export class PublicationService {
       failures: [],
     };
     const intents = await this.repository.listPendingIntents(boundedLimit);
+    const attemptedRevisionIds = new Set<string>();
     for (const intent of intents) {
       try {
-        await this.resumeIntent(intent);
-        result.recoveredIntents += 1;
+        const revision = await this.resumeIntent(intent);
+        attemptedRevisionIds.add(revision.id);
+        if (revision.searchStatus === "indexed") result.recoveredIntents += 1;
+        else result.failures.push({ resourceId: revision.id, code: "INDEX_RECOVERY_FAILED" });
       } catch {
         result.failures.push({ resourceId: intent.submissionId, code: "PUBLICATION_RECOVERY_FAILED" });
       }
@@ -111,7 +114,8 @@ export class PublicationService {
 
     const remaining = Math.max(0, boundedLimit - intents.length);
     if (remaining === 0) return result;
-    const revisionIds = await this.repository.listRecoverableIndexRevisionIds(remaining);
+    const revisionIds = (await this.repository.listRecoverableIndexRevisionIds(remaining))
+      .filter((revisionId) => !attemptedRevisionIds.has(revisionId));
     for (const revisionId of revisionIds) {
       try {
         const status = await this.repository.processIndexJob(revisionId);
@@ -245,13 +249,16 @@ function normalizeRecoveryLimit(value: number): number {
 function isVisibility(value: unknown): value is KnowledgeVisibility { return value === "shared" || value === "admin_only"; }
 function isRejectionReason(value: unknown): value is RejectionReasonCode { return value === "not_relevant" || value === "duplicate" || value === "unsafe"; }
 function isRepositoryConflict(error: unknown, kind: string): boolean { return (error as { kind?: unknown })?.kind === kind; }
-function throwTargetError(error: unknown): never {
+function throwPublicationError(error: unknown): never {
   if (isRepositoryConflict(error, "target_invalid")) {
     throw new AppError(
       "PUBLICATION_TARGET_INVALID",
       "Publication target must be active, writable, and in one Space",
       400,
     );
+  }
+  if (isRepositoryConflict(error, "submission_not_pending")) {
+    throw new AppError("PUBLICATION_STATE_CONFLICT", "Submission is no longer pending review", 409);
   }
   throw error;
 }
