@@ -124,6 +124,17 @@ describe("chunkDocument", () => {
     expect(chunks[0].searchBody).toBe(chunks[0].searchBody.toLowerCase());
   });
 
+  it("indexes I/i/İ once while retaining dotless ı as a distinct FTS token", () => {
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: "I i İ ı",
+    });
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.searchBody).toBe("i ı");
+    expect(chunks[0]!.searchBody.split(" ")).toHaveLength(2);
+  });
+
   it("is repeatable and emits ordered, non-empty chunks within source lines", () => {
     const input = {
       kind: "markdown" as const,

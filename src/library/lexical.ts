@@ -10,7 +10,8 @@ const HAN = /\p{Script=Han}/u;
 
 export interface SearchToken {
   value: string;
-  key: string;
+  ftsKey: string;
+  comparisonKey: string;
   start: number;
   end: number;
 }
@@ -42,12 +43,14 @@ export function normalizeSearchQuery(query: string): NormalizedSearchQuery {
     throw invalidSearchQuery();
   }
 
-  const uniqueTokens = uniqueComparisonTokens(normalizedQuery);
+  const uniqueTokens = uniqueFtsTokens(normalizedQuery);
   const terms = uniqueTokens.map((token) => token.value);
-  const termKeys = uniqueTokens.map((token) => token.key);
+  const ftsKeys = uniqueTokens.map((token) => token.ftsKey);
+  const termKeys = uniqueTokens.map((token) => token.comparisonKey);
   if (terms.length === 0
     || terms.length > MAX_QUERY_TERMS
     || terms.some((term) => !isBoundedSearchToken(term))
+    || ftsKeys.some((key) => !isBoundedSearchToken(key))
     || termKeys.some((key) => !isBoundedSearchToken(key))) {
     throw invalidSearchQuery();
   }
@@ -86,7 +89,7 @@ export function tokenizeSearchText(value: string): TokenizedSearchText {
 }
 
 export function uniqueSearchTerms(value: string): string[] {
-  return uniqueComparisonTokens(value).map((token) => token.value);
+  return uniqueFtsTokens(value).map((token) => token.value);
 }
 
 export function isCanonicalSearchTerm(value: unknown): value is string {
@@ -96,6 +99,7 @@ export function isCanonicalSearchTerm(value: unknown): value is string {
     && foldUnicode61(value) === value
     && [...value].every((point) => UNICODE61_BASE.test(point))
     && isBoundedSearchToken(value)
+    && isBoundedSearchToken(searchFtsEquivalenceKey(value))
     && isBoundedSearchToken(searchComparisonKey(value));
 }
 
@@ -104,8 +108,17 @@ export function buildSearchMatchQuery(terms: string[]): string {
 }
 
 export function searchComparisonKey(value: string): string {
+  return unicode61SimpleCaseKey(value);
+}
+
+export function searchFtsEquivalenceKey(value: string): string {
+  return unicode61SimpleCaseKey(value);
+}
+
+function unicode61SimpleCaseKey(value: string): string {
   const folded = foldUnicode61(value);
   return [...folded].map((point) => {
+    if (point === "ı") return point;
     const upper = point.toUpperCase();
     return [...upper].length === 1 ? upper : point;
   }).join("");
@@ -140,14 +153,20 @@ function foldUnicode61(value: string): string {
 
 function makeToken(value: string, start: number, end: number): SearchToken {
   const folded = foldUnicode61(value);
-  return { value: folded, key: searchComparisonKey(folded), start, end };
+  return {
+    value: folded,
+    ftsKey: searchFtsEquivalenceKey(folded),
+    comparisonKey: searchComparisonKey(folded),
+    start,
+    end,
+  };
 }
 
-function uniqueComparisonTokens(value: string): SearchToken[] {
+function uniqueFtsTokens(value: string): SearchToken[] {
   const seen = new Set<string>();
   return tokenizeSearchText(value).tokens.filter((token) => {
-    if (seen.has(token.key)) return false;
-    seen.add(token.key);
+    if (seen.has(token.ftsKey)) return false;
+    seen.add(token.ftsKey);
     return true;
   });
 }

@@ -5,6 +5,7 @@ import {
   buildSearchMatchQuery,
   isCanonicalSearchTerm,
   searchComparisonKey,
+  searchFtsEquivalenceKey,
   tokenizeSearchText,
 } from "./lexical";
 import type {
@@ -463,8 +464,15 @@ function safeExcerpt(body: string, termKeys: string[]): string {
   const tokenized = tokenizeSearchText(inert);
   const points = [...tokenized.normalizedText];
   if (points.length <= MAX_EXCERPT_CODE_POINTS) return inert;
-  const queryKeys = new Set(termKeys);
-  const match = tokenized.tokens.find((token) => queryKeys.has(token.key))?.start ?? 0;
+  let match = 0;
+  for (let index = termKeys.length - 1; index >= 0; index -= 1) {
+    const token = tokenized.tokens.find((candidate) => (
+      candidate.comparisonKey === termKeys[index]
+    ));
+    if (!token) continue;
+    match = token.start;
+    break;
+  }
   let start = Math.max(0, match - 60);
   let prefix = start > 0 ? "…" : "";
   const suffix = start + MAX_EXCERPT_CODE_POINTS < points.length ? "…" : "";
@@ -505,10 +513,16 @@ function decodeSearchCursor(cursor: string, key: string): SearchCursor {
 
 function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   assertRepositoryPageRequest(request);
-  if (!Array.isArray(request.terms) || request.terms.length < 1 || request.terms.length > 32
-    || request.terms.some((term) => !isCanonicalSearchTerm(term))
+  if (!Array.isArray(request.terms)
     || !Array.isArray(request.termKeys)
+    || request.terms.length < 1
+    || request.terms.length > 32
     || request.termKeys.length !== request.terms.length
+    || request.terms.some((term) => !isCanonicalSearchTerm(term))) {
+    throw new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);
+  }
+  const ftsKeys = request.terms.map(searchFtsEquivalenceKey);
+  if (new Set(ftsKeys).size !== request.terms.length
     || request.termKeys.some((key, index) => key !== searchComparisonKey(request.terms[index]!))
     || request.matchQuery !== buildSearchMatchQuery(request.terms)) {
     throw new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);

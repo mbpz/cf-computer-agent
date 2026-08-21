@@ -161,6 +161,18 @@ describe("LibraryService", () => {
     }));
   });
 
+  it("deduplicates unicode61-equivalent I variants without dropping dotless ı", () => {
+    const normalized = normalizeSearchQuery("I i İ ı");
+
+    expect(normalized).toMatchObject({
+      matchQuery: "\"i\" AND \"ı\"",
+      terms: ["i", "ı"],
+      termKeys: ["I", "ı"],
+    });
+    expect(new Set(normalized.terms)).toHaveLength(2);
+    expect(new Set(normalized.termKeys)).toHaveLength(2);
+  });
+
   it("passes a bounded canonical FTS query and scope-bound cursor key to the repository", async () => {
     const requests: RepositorySearchRequest[] = [];
     const page: SearchPage = { items: [], degraded: true };

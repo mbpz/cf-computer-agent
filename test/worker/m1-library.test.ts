@@ -424,6 +424,88 @@ describe("M1 permission-scoped library", () => {
     expect(ai.calls).toBe(1);
   });
 
+  it("keeps dotless ı distinct from D1 I/i/İ equivalence in excerpts and answers", async () => {
+    await seedKnowledge({
+      id: "knowledge-i-only",
+      revisionId: "revision-i-only",
+      title: "ASCII case handbook",
+      visibility: "shared",
+      body: "I verified alone",
+      searchBody: "i verified alone",
+    });
+    await seedKnowledge({
+      id: "knowledge-dotless-only",
+      revisionId: "revision-dotless-only",
+      title: "Dotless case handbook",
+      visibility: "shared",
+      body: "ı verified alone",
+      searchBody: "ı verified alone",
+    });
+    await seedKnowledge({
+      id: "knowledge-i-and-dotless",
+      revisionId: "revision-i-and-dotless",
+      title: "Combined case handbook",
+      visibility: "shared",
+      body: `I ${"unrelated filler ".repeat(40)}ı verified control`,
+      searchBody: `i ${"unrelated filler ".repeat(40)}ı verified control`,
+    });
+    const library = serviceWithContent();
+
+    const ascii = await library.search(contributor, { query: "I", limit: 20 });
+    const lower = await library.search(contributor, { query: "i", limit: 20 });
+    const dotted = await library.search(contributor, { query: "İ", limit: 20 });
+    const dotless = await library.search(contributor, { query: "ı", limit: 20 });
+    const combined = await library.search(contributor, { query: "I ı", limit: 20 });
+    const ids = (page: typeof ascii): string[] => page.items
+      .map((hit) => hit.knowledgeItemId).sort();
+
+    expect(ids(ascii)).toEqual(["knowledge-i-and-dotless", "knowledge-i-only"]);
+    expect(ids(lower)).toEqual(ids(ascii));
+    expect(ids(dotted)).toEqual(ids(ascii));
+    expect(ids(dotless)).toEqual(["knowledge-dotless-only", "knowledge-i-and-dotless"]);
+    expect(ids(combined)).toEqual(["knowledge-i-and-dotless"]);
+
+    const combinedHit = combined.items[0]!;
+    expect(combinedHit.excerpt).toContain("ı verified control");
+    expect(combinedHit.excerpt).not.toMatch(/(?:^|\s)I(?:\s|$)/u);
+
+    const dotlessHit = dotless.items.find((hit) => (
+      hit.knowledgeItemId === "knowledge-i-and-dotless"
+    ))!;
+    const inputs: CitedAnswerAiInput[] = [];
+    const dotlessAi: CitedAnswerAi = {
+      async run(_model, input): Promise<unknown> {
+        inputs.push(input);
+        return { response: JSON.stringify({
+          claims: [{ text: "The dotless control is verified.", citationIds: [dotlessHit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    await expect(new CitedAnswerService(dotlessAi).answer(contributor, "ı", [dotlessHit]))
+      .resolves.toMatchObject({
+        answer: "The dotless control is verified. [1]",
+        citations: [dotlessHit.citationId],
+      });
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]!.messages[1]!.content).toContain("ı verified control");
+
+    const combinedAi: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<never> {
+        this.calls += 1;
+        throw new Error("early ASCII I must not satisfy the dotless constraint");
+      },
+    };
+    await expect(new CitedAnswerService(combinedAi).answer(contributor, "I ı", [combinedHit]))
+      .resolves.toEqual({
+        answer: "知识库中没有足够依据回答这个问题。",
+        citations: [],
+        sources: [],
+      });
+    expect(combinedAi.calls).toBe(0);
+  });
+
   it("answers only from contributor-authorized current search hits and rejects a hidden citation", async () => {
     for (let index = 0; index < 6; index += 1) {
       await seedKnowledge({

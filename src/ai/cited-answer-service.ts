@@ -224,7 +224,7 @@ function hasQueryTermCoverage(
   queryKeys: string[],
 ): boolean {
   const visibleKeys = new Set(tokenizeSearchText(`${source.title}\n${source.excerpt}`)
-    .tokens.map((token) => token.key));
+    .tokens.map((token) => token.comparisonKey));
   return queryKeys.every((key) => visibleKeys.has(key));
 }
 
