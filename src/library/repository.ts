@@ -4,6 +4,7 @@ import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import {
   buildSearchMatchQuery,
   isCanonicalSearchTerm,
+  searchComparisonKey,
   tokenizeSearchText,
 } from "./lexical";
 import type {
@@ -28,6 +29,7 @@ export interface RepositorySearchRequest extends RepositoryKnowledgePageRequest 
   normalizedQuery: string;
   matchQuery: string;
   terms: string[];
+  termKeys: string[];
 }
 
 export interface AuthorizedRevisionChunk {
@@ -257,7 +259,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       ...cursorBindings,
       request.limit + 1,
     ).all<SearchRow>();
-    const items = rows.results.slice(0, request.limit).map((row) => mapSearchHit(row, request.terms));
+    const items = rows.results.slice(0, request.limit).map((row) => mapSearchHit(row, request.termKeys));
     const last = rows.results.slice(0, request.limit).at(-1);
     const degraded = await this.hasDegraded(scope, request);
     return {
@@ -438,7 +440,7 @@ function mapKnowledge(row: KnowledgeRow): KnowledgeListItem {
   };
 }
 
-function mapSearchHit(row: SearchRow, terms: string[]): SearchHit {
+function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
   return {
     citationId: encodeCitationKey(row.revision_id, row.chunk_id),
     knowledgeItemId: row.knowledge_item_id,
@@ -450,19 +452,19 @@ function mapSearchHit(row: SearchRow, terms: string[]): SearchHit {
     headingPath: parseStringArray(row.heading_path),
     startLine: row.start_line,
     endLine: row.end_line,
-    excerpt: safeExcerpt(row.body, terms),
+    excerpt: safeExcerpt(row.body, termKeys),
     score: row.score,
     publishedAt: row.published_at,
   };
 }
 
-function safeExcerpt(body: string, terms: string[]): string {
+function safeExcerpt(body: string, termKeys: string[]): string {
   const inert = body.normalize("NFKC").replace(/\p{Cc}/gu, " ").replace(/\s+/gu, " ").trim();
   const tokenized = tokenizeSearchText(inert);
   const points = [...tokenized.normalizedText];
   if (points.length <= MAX_EXCERPT_CODE_POINTS) return inert;
-  const queryTerms = new Set(terms);
-  const match = tokenized.tokens.find((token) => queryTerms.has(token.value))?.start ?? 0;
+  const queryKeys = new Set(termKeys);
+  const match = tokenized.tokens.find((token) => queryKeys.has(token.key))?.start ?? 0;
   let start = Math.max(0, match - 60);
   let prefix = start > 0 ? "…" : "";
   const suffix = start + MAX_EXCERPT_CODE_POINTS < points.length ? "…" : "";
@@ -505,6 +507,9 @@ function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   assertRepositoryPageRequest(request);
   if (!Array.isArray(request.terms) || request.terms.length < 1 || request.terms.length > 32
     || request.terms.some((term) => !isCanonicalSearchTerm(term))
+    || !Array.isArray(request.termKeys)
+    || request.termKeys.length !== request.terms.length
+    || request.termKeys.some((key, index) => key !== searchComparisonKey(request.terms[index]!))
     || request.matchQuery !== buildSearchMatchQuery(request.terms)) {
     throw new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);
   }

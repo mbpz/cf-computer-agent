@@ -117,10 +117,12 @@ describe("LibraryService", () => {
       normalizedQuery: "GetUser_ID 权限治理",
       matchQuery: "\"getuser\" AND \"id\" AND \"权限治理\" AND \"权限\" AND \"限治\" AND \"治理\"",
       terms: ["getuser", "id", "权限治理", "权限", "限治", "治理"],
+      termKeys: ["GETUSER", "ID", "权限治理", "权限", "限治", "治理"],
     });
     expect(normalizeSearchQuery("foo_bar")).toMatchObject({
       matchQuery: "\"foo\" AND \"bar\"",
       terms: ["foo", "bar"],
+      termKeys: ["FOO", "BAR"],
     });
     expect(normalizeSearchQuery('foo" OR admin*')).toMatchObject({
       matchQuery: "\"foo\" AND \"or\" AND \"admin\"",
@@ -148,6 +150,17 @@ describe("LibraryService", () => {
     }));
   });
 
+  it("rechecks token comparison-key byte bounds after case folding", () => {
+    const rawWithinBounds = "ƛ".repeat(200);
+    expect([...rawWithinBounds]).toHaveLength(200);
+    expect(new TextEncoder().encode(rawWithinBounds)).toHaveLength(400);
+
+    expect(() => normalizeSearchQuery(rawWithinBounds)).toThrow(expect.objectContaining({
+      code: "SEARCH_QUERY_INVALID",
+      status: 400,
+    }));
+  });
+
   it("passes a bounded canonical FTS query and scope-bound cursor key to the repository", async () => {
     const requests: RepositorySearchRequest[] = [];
     const page: SearchPage = { items: [], degraded: true };
@@ -168,6 +181,7 @@ describe("LibraryService", () => {
       normalizedQuery: "Cloud 权限",
       matchQuery: "\"cloud\" AND \"权限\"",
       terms: ["cloud", "权限"],
+      termKeys: ["CLOUD", "权限"],
       spaceId: "default",
       collectionId: "collection-1",
       tagId: "tag-1",

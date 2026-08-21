@@ -10,6 +10,7 @@ const HAN = /\p{Script=Han}/u;
 
 export interface SearchToken {
   value: string;
+  key: string;
   start: number;
   end: number;
 }
@@ -23,6 +24,7 @@ export interface NormalizedSearchQuery {
   normalizedQuery: string;
   matchQuery: string;
   terms: string[];
+  termKeys: string[];
 }
 
 export function normalizeSearchQuery(query: string): NormalizedSearchQuery {
@@ -40,11 +42,19 @@ export function normalizeSearchQuery(query: string): NormalizedSearchQuery {
     throw invalidSearchQuery();
   }
 
-  const terms = uniqueSearchTerms(normalizedQuery);
-  if (terms.length === 0 || terms.length > MAX_QUERY_TERMS) throw invalidSearchQuery();
+  const uniqueTokens = uniqueComparisonTokens(normalizedQuery);
+  const terms = uniqueTokens.map((token) => token.value);
+  const termKeys = uniqueTokens.map((token) => token.key);
+  if (terms.length === 0
+    || terms.length > MAX_QUERY_TERMS
+    || terms.some((term) => !isBoundedSearchToken(term))
+    || termKeys.some((key) => !isBoundedSearchToken(key))) {
+    throw invalidSearchQuery();
+  }
   return {
     normalizedQuery,
     terms,
+    termKeys,
     matchQuery: buildSearchMatchQuery(terms),
   };
 }
@@ -58,7 +68,7 @@ export function tokenizeSearchText(value: string): TokenizedSearchText {
   const flush = (end: number): void => {
     if (start < 0) return;
     const run = points.slice(start, end);
-    tokens.push({ value: foldUnicode61(run.join("")), start, end });
+    tokens.push(makeToken(run.join(""), start, end));
     appendHanBigrams(run, start, tokens);
     start = -1;
   };
@@ -76,7 +86,7 @@ export function tokenizeSearchText(value: string): TokenizedSearchText {
 }
 
 export function uniqueSearchTerms(value: string): string[] {
-  return [...new Set(tokenizeSearchText(value).tokens.map((token) => token.value))];
+  return uniqueComparisonTokens(value).map((token) => token.value);
 }
 
 export function isCanonicalSearchTerm(value: unknown): value is string {
@@ -84,11 +94,21 @@ export function isCanonicalSearchTerm(value: unknown): value is string {
     && value.length > 0
     && value.normalize("NFKC") === value
     && foldUnicode61(value) === value
-    && [...value].every((point) => UNICODE61_BASE.test(point));
+    && [...value].every((point) => UNICODE61_BASE.test(point))
+    && isBoundedSearchToken(value)
+    && isBoundedSearchToken(searchComparisonKey(value));
 }
 
 export function buildSearchMatchQuery(terms: string[]): string {
   return terms.map(quoteFtsTerm).join(" AND ");
+}
+
+export function searchComparisonKey(value: string): string {
+  const folded = foldUnicode61(value);
+  return [...folded].map((point) => {
+    const upper = point.toUpperCase();
+    return [...upper].length === 1 ? upper : point;
+  }).join("");
 }
 
 function appendHanBigrams(run: string[], offset: number, tokens: SearchToken[]): void {
@@ -96,11 +116,11 @@ function appendHanBigrams(run: string[], offset: number, tokens: SearchToken[]):
   const flush = (end: number): void => {
     if (hanStart < 0) return;
     for (let index = hanStart; index + 1 < end; index += 1) {
-      tokens.push({
-        value: foldUnicode61(`${run[index]}${run[index + 1]}`),
-        start: offset + index,
-        end: offset + index + 2,
-      });
+      tokens.push(makeToken(
+        `${run[index]}${run[index + 1]}`,
+        offset + index,
+        offset + index + 2,
+      ));
     }
     hanStart = -1;
   };
@@ -118,8 +138,27 @@ function foldUnicode61(value: string): string {
   return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC");
 }
 
+function makeToken(value: string, start: number, end: number): SearchToken {
+  const folded = foldUnicode61(value);
+  return { value: folded, key: searchComparisonKey(folded), start, end };
+}
+
+function uniqueComparisonTokens(value: string): SearchToken[] {
+  const seen = new Set<string>();
+  return tokenizeSearchText(value).tokens.filter((token) => {
+    if (seen.has(token.key)) return false;
+    seen.add(token.key);
+    return true;
+  });
+}
+
 function quoteFtsTerm(term: string): string {
   return `"${term.replace(/"/g, '""')}"`;
+}
+
+function isBoundedSearchToken(value: string): boolean {
+  return [...value].length <= MAX_QUERY_CODE_POINTS
+    && encoder.encode(value).byteLength <= MAX_QUERY_BYTES;
 }
 
 function hasMalformedSurrogate(value: string): boolean {

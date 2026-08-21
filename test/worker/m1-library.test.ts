@@ -346,6 +346,84 @@ describe("M1 permission-scoped library", () => {
     expect(ai.calls).toBe(1);
   });
 
+  it("matches Greek final-sigma variants consistently across D1 excerpts and cited answers", async () => {
+    await seedKnowledge({
+      id: "knowledge-greek-sigma",
+      revisionId: "revision-greek-sigma",
+      title: "Greek case-folding handbook",
+      visibility: "shared",
+      body: `${"unrelated preface ".repeat(40)}ΟΣ verified control`,
+      searchBody: `${"unrelated preface ".repeat(40)}ΟΣ verified control`,
+    });
+    const library = serviceWithContent();
+
+    const pages = await Promise.all(["ΟΣ", "ος", "οσ"].map((query) => (
+      library.search(contributor, { query, limit: 20 })
+    )));
+
+    for (const page of pages) {
+      expect(page.items).toHaveLength(1);
+      expect(page.items[0]!.excerpt).toContain("ΟΣ verified control");
+    }
+    const hit = pages[2]!.items[0]!;
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "The sigma control is verified.", citationIds: [hit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+
+    await expect(new CitedAnswerService(ai).answer(contributor, "οσ", [hit]))
+      .resolves.toMatchObject({
+        answer: "The sigma control is verified. [1]",
+        citations: [hit.citationId],
+      });
+    expect(ai.calls).toBe(1);
+  });
+
+  it("preserves D1 sharp-s case equivalence without inventing an SS expansion match", async () => {
+    await seedKnowledge({
+      id: "knowledge-sharp-s",
+      revisionId: "revision-sharp-s",
+      title: "German case-folding handbook",
+      visibility: "shared",
+      body: `${"unrelated preface ".repeat(40)}Straße verified control`,
+      searchBody: `${"unrelated preface ".repeat(40)}Straße verified control`,
+    });
+    const library = serviceWithContent();
+
+    const lower = await library.search(contributor, { query: "straße", limit: 20 });
+    const capitalSharp = await library.search(contributor, { query: "STRAẞE", limit: 20 });
+    const expanded = await library.search(contributor, { query: "STRASSE", limit: 20 });
+
+    expect(lower.items).toHaveLength(1);
+    expect(capitalSharp.items).toEqual(lower.items);
+    expect(lower.items[0]!.excerpt).toContain("Straße verified control");
+    expect(expanded.items).toEqual([]);
+
+    const hit = capitalSharp.items[0]!;
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "The Straße control is verified.", citationIds: [hit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    await expect(new CitedAnswerService(ai).answer(contributor, "STRAẞE", [hit]))
+      .resolves.toMatchObject({
+        answer: "The Straße control is verified. [1]",
+        citations: [hit.citationId],
+      });
+    expect(ai.calls).toBe(1);
+  });
+
   it("answers only from contributor-authorized current search hits and rejects a hidden citation", async () => {
     for (let index = 0; index < 6; index += 1) {
       await seedKnowledge({
@@ -835,6 +913,7 @@ describe("M1 permission-scoped library", () => {
         normalizedQuery: "secret",
         matchQuery: "\"secret\"",
         terms: ["secret"],
+        termKeys: ["SECRET"],
         limit: 20,
         cursorKey: "a".repeat(64),
       })).resolves.toEqual({ items: [], degraded: false });

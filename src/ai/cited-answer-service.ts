@@ -181,7 +181,7 @@ function prepareSources(query: NormalizedSearchQuery, hits: SearchHit[]): Prepar
     if (prepared.length >= MAX_SOURCES) break;
     if (!isSearchHit(hit) || seen.has(hit.citationId)) continue;
     const context = toContextSource(hit);
-    if (!context || !hasQueryTermCoverage(context, query.terms)) continue;
+    if (!context || !hasQueryTermCoverage(context, query.termKeys)) continue;
 
     if (fitsContext(query.normalizedQuery, [...prepared.map((source) => source.context), context])) {
       seen.add(hit.citationId);
@@ -192,7 +192,7 @@ function prepareSources(query: NormalizedSearchQuery, hits: SearchHit[]): Prepar
     const excerpt = fitExcerpt(query.normalizedQuery, prepared, context);
     if (excerpt === null) continue;
     const fittedContext = { ...context, excerpt };
-    if (!hasQueryTermCoverage(fittedContext, query.terms)) continue;
+    if (!hasQueryTermCoverage(fittedContext, query.termKeys)) continue;
     seen.add(hit.citationId);
     prepared.push({ hit, context: fittedContext });
   }
@@ -221,11 +221,11 @@ function isSearchHit(value: unknown): value is SearchHit {
 
 function hasQueryTermCoverage(
   source: Pick<ContextSource, "title" | "excerpt">,
-  queryTerms: string[],
+  queryKeys: string[],
 ): boolean {
-  const visibleTerms = new Set(tokenizeSearchText(`${source.title}\n${source.excerpt}`)
-    .tokens.map((token) => token.value));
-  return queryTerms.every((term) => visibleTerms.has(term));
+  const visibleKeys = new Set(tokenizeSearchText(`${source.title}\n${source.excerpt}`)
+    .tokens.map((token) => token.key));
+  return queryKeys.every((key) => visibleKeys.has(key));
 }
 
 function toContextSource(hit: SearchHit): ContextSource | null {
