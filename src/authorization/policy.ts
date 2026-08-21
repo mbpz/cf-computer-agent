@@ -9,12 +9,15 @@ export type Capability =
   | "submission:read-all"
   | "member:manage"
   | "space:manage"
-  | "audit:read";
+  | "audit:read"
+  | "knowledge:read"
+  | "knowledge:review";
 
 const contributorCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
   "submission:create",
   "submission:read-own",
+  "knowledge:read",
 ]);
 
 const adminCapabilities = Object.freeze<readonly Capability[]>([
@@ -26,6 +29,8 @@ const adminCapabilities = Object.freeze<readonly Capability[]>([
   "member:manage",
   "space:manage",
   "audit:read",
+  "knowledge:read",
+  "knowledge:review",
 ]);
 
 const automationCapabilities = Object.freeze<readonly Capability[]>(["legacy:read", "legacy:write"]);

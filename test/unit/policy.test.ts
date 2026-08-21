@@ -15,7 +15,7 @@ const automation: Principal = { kind: "automation", role: "automation" };
 
 describe("capabilitiesFor", () => {
   it.each<[Principal, Capability[]]>([
-    [contributor, ["legacy:read", "submission:create", "submission:read-own"]],
+    [contributor, ["legacy:read", "submission:create", "submission:read-own", "knowledge:read"]],
     [admin, [
       "legacy:read",
       "legacy:write",
@@ -25,6 +25,8 @@ describe("capabilitiesFor", () => {
       "member:manage",
       "space:manage",
       "audit:read",
+      "knowledge:read",
+      "knowledge:review",
     ]],
     [automation, ["legacy:read", "legacy:write"]],
   ])("returns the least-privilege capability set for %#", (principal, expected) => {
@@ -51,5 +53,16 @@ describe("requireCapability", () => {
 
   it("returns when the principal has the requested capability", () => {
     expect(() => requireCapability(admin, "audit:read")).not.toThrow();
+  });
+
+  it("allows members to read knowledge while reserving review for administrators", () => {
+    expect(() => requireCapability(contributor, "knowledge:read")).not.toThrow();
+    try {
+      requireCapability(contributor, "knowledge:review");
+      throw new Error("expected review capability check to reject a contributor");
+    } catch (error) {
+      expect(error).toMatchObject({ code: "FORBIDDEN", status: 403 });
+    }
+    expect(() => requireCapability(admin, "knowledge:review")).not.toThrow();
   });
 });

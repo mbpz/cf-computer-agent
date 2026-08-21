@@ -28,6 +28,15 @@ const fakeAi: AnswerAi = {
   },
 };
 
+const m1Boundaries = [
+  ["GET", "/api/knowledge"],
+  ["GET", "/api/knowledge/search?q=alpha"],
+  ["POST", "/api/knowledge/chat"],
+  ["GET", "/api/admin/submissions/submission-id"],
+  ["POST", "/api/admin/submissions/submission-id/publish"],
+  ["POST", "/api/admin/submissions/submission-id/reject"],
+] as const;
+
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, MIGRATIONS);
@@ -47,6 +56,39 @@ beforeEach(async () => {
 });
 
 describe("Phase 1 API permission matrix", () => {
+  it("never grants M1 routes to signed automation", async () => {
+    for (const [method, path] of m1Boundaries) {
+      await expectApiError(automationApi(path, {
+        method,
+        ...(method === "POST" ? { body: "{}" } : {}),
+      }), 403, "FORBIDDEN");
+    }
+  });
+
+  it("allows active contributors through M1 knowledge-read stubs only", async () => {
+    for (const [method, path] of m1Boundaries.slice(0, 3)) {
+      await expectApiError(memberApi("sub-contributor", path, {
+        method,
+        ...(method === "POST" ? { body: "{}" } : {}),
+      }), 501, "NOT_IMPLEMENTED");
+    }
+    for (const [method, path] of m1Boundaries.slice(3)) {
+      await expectApiError(memberApi("sub-contributor", path, {
+        method,
+        ...(method === "POST" ? { body: "{}" } : {}),
+      }), 403, "FORBIDDEN");
+    }
+  });
+
+  it("allows active administrators through M1 review stubs", async () => {
+    for (const [method, path] of m1Boundaries.slice(3)) {
+      await expectApiError(memberApi("sub-admin", path, {
+        method,
+        ...(method === "POST" ? { body: "{}" } : {}),
+      }), 501, "NOT_IMPLEMENTED");
+    }
+  });
+
   it("allows a contributor session, spaces, owned submissions, and legacy reads but not legacy writes", async () => {
     await expectApiError(memberApi("sub-contributor", "/api/health"), 403, "FORBIDDEN");
     const session = await memberApi("sub-contributor", "/api/session");
@@ -54,7 +96,7 @@ describe("Phase 1 API permission matrix", () => {
     const sessionBody = await session.json<Record<string, unknown>>();
     expect(sessionBody).toEqual({
       member: { id: "member-contributor", email: "contributor@example.test", role: "contributor" },
-      capabilities: ["legacy:read", "submission:create", "submission:read-own"],
+      capabilities: ["legacy:read", "submission:create", "submission:read-own", "knowledge:read"],
       logoutUrl: "/auth/logout",
     });
     expect(JSON.stringify(sessionBody)).not.toMatch(/sub-contributor|jwt|token|bootstrap/i);

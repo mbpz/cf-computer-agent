@@ -368,7 +368,7 @@
 
 ### M0
 
-- [ ] `GATE-M0` 补齐成功 OAuth callback、signed smoke、disabled contributor、workers.dev 关闭状态和 DO 跨激活远程证据。
+- [ ] `GATE-M0` 补齐成功 OAuth callback、signed smoke、disabled contributor、workers.dev 关闭状态和 DO 跨激活远程证据；M1 预检记录见 `docs/operations/evidence/m1-preflight.md`（远程项均 pending）。
 
 ### M1
 

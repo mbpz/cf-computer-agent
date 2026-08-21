@@ -12,7 +12,9 @@ import { WorkspaceRepository } from "./knowledge/workspace-repository";
 import { MembersRepository } from "./members/repository";
 import { MembersService } from "./members/service";
 import { routeAdminApi } from "./routes/admin";
+import { routeAdminReviewApi } from "./routes/admin-review";
 import { clearOAuthCookies, routeAuth } from "./routes/auth";
+import { routeLibraryApi } from "./routes/library";
 import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
 import { SpacesRepository } from "./spaces/repository";
@@ -147,6 +149,10 @@ async function dispatchApiRequest(
   if (member) return member;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
+  const library = routeLibraryApi(url, principal);
+  if (library) return library;
+  const adminReview = routeAdminReviewApi(url, principal);
+  if (adminReview) return adminReview;
 
   if (url.pathname === "/api/notes") {
     if (request.method === "GET") {

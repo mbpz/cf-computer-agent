@@ -421,6 +421,7 @@ describe("Worker application", () => {
       capabilities: [
         "legacy:read", "legacy:write", "submission:create", "submission:read-own",
         "submission:read-all", "member:manage", "space:manage", "audit:read",
+        "knowledge:read", "knowledge:review",
       ],
       logoutUrl: "/auth/logout",
     });
