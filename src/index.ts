@@ -69,16 +69,9 @@ export class KnowledgeBase extends withWorkspace(
   async commitPublishedContent(
     input: CommitPublishedContentInput,
   ): Promise<RpcResult<PublishedContentReceipt>> {
-    let content: Awaited<ReturnType<typeof validatePublishedContentInput>>;
-    try {
-      content = await validatePublishedContentInput(input);
-    } catch (error) {
-      if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
-      throw error;
-    }
-
     return this.ctx.blockConcurrencyWhile(async () => {
       try {
+        const content = await validatePublishedContentInput(input);
         const workspace = await getWorkspace(this);
         try {
           return { ok: true, value: await persistPublishedContent(workspace, content) };

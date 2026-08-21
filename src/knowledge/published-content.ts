@@ -65,15 +65,15 @@ export async function persistPublishedContent(
   const entry = await findEntry(workspace, content.itemDirectory, fileName(content.path));
   if (entry) {
     if (!entry.isFile || entry.isSymbolicLink) throw publishedContentConflict();
-    const existing = await workspace.fs.readFile(content.path, "utf8");
-    const existingHash = await sha256Hex(new TextEncoder().encode(existing));
-    if (existing !== content.markdown || existingHash !== content.contentSha256) {
-      throw publishedContentConflict();
-    }
-    return receipt(content);
+    return reconcilePublishedContent(workspace, content);
   }
 
-  await workspace.fs.writeFile(content.path, content.markdown);
+  try {
+    await workspace.fs.writeFile(content.path, content.markdown, { exclusive: true });
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error;
+    return reconcilePublishedContent(workspace, content);
+  }
   return receipt(content);
 }
 
@@ -144,6 +144,23 @@ function receipt(content: ValidatedPublishedContent): PublishedContentReceipt {
     contentSha256: content.contentSha256,
     bytes: content.bytes,
   };
+}
+
+async function reconcilePublishedContent(
+  workspace: WorkspaceClient,
+  content: ValidatedPublishedContent,
+): Promise<PublishedContentReceipt> {
+  let existing: string;
+  try {
+    existing = await workspace.fs.readFile(content.path, "utf8");
+  } catch {
+    throw publishedContentConflict();
+  }
+  const existingHash = await sha256Hex(new TextEncoder().encode(existing));
+  if (existing !== content.markdown || existingHash !== content.contentSha256) {
+    throw publishedContentConflict();
+  }
+  return receipt(content);
 }
 
 function publishedContentConflict(): AppError {

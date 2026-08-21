@@ -56,6 +56,74 @@ describe("M1 published content Durable Object", () => {
     }
   });
 
+  it("returns the same receipt for simultaneous same-byte commits", async () => {
+    const markdown = `${"same concurrent bytes ".repeat(4_000)}\n`;
+    const contentSha256 = await sha256Hex(markdown);
+    const input = {
+      spaceId: "default",
+      knowledgeItemId: "knowledge-concurrent-same",
+      revisionId: "revision-1",
+      contentSha256,
+      markdown,
+    };
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("published-concurrent-same"));
+
+    const [first, second] = await Promise.all([
+      stub.commitPublishedContent(input),
+      stub.commitPublishedContent(input),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({ ok: true, value: { contentSha256 } });
+  });
+
+  it("allows only one winner for simultaneous different-byte commits to one revision path", async () => {
+    const firstMarkdown = `${"first concurrent bytes ".repeat(4_000)}\n`;
+    const secondMarkdown = `${"second concurrent bytes ".repeat(4_000)}\n`;
+    const path = "/workspace/published/default/knowledge-concurrent-different/revision-1.md";
+    const firstInput = {
+      spaceId: "default",
+      knowledgeItemId: "knowledge-concurrent-different",
+      revisionId: "revision-1",
+      contentSha256: await sha256Hex(firstMarkdown),
+      markdown: firstMarkdown,
+    };
+    const secondInput = {
+      ...firstInput,
+      contentSha256: await sha256Hex(secondMarkdown),
+      markdown: secondMarkdown,
+    };
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("published-concurrent-different"));
+
+    const results = await Promise.all([
+      stub.commitPublishedContent(firstInput),
+      stub.commitPublishedContent(secondInput),
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([
+      {
+        ok: false,
+        error: {
+          code: "PUBLISHED_CONTENT_CONFLICT",
+          message: "Published content already exists with different bytes",
+          status: 409,
+          retryable: false,
+        },
+      },
+    ]);
+    const winner = results.find((result) => result.ok);
+    expect(winner?.value.path).toBe(path);
+
+    const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+    try {
+      const stored = await workspace.fs.readFile(path, "utf8");
+      expect(await sha256Hex(stored)).toBe(winner?.value.contentSha256);
+    } finally {
+      disposeWorkspace(workspace);
+    }
+  });
+
   it("returns serializable validation and immutable-content conflicts without replacing first bytes", async () => {
     const firstMarkdown = "first published bytes\n";
     const firstHash = await sha256Hex(firstMarkdown);

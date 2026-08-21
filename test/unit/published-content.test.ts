@@ -77,6 +77,33 @@ describe("published content", () => {
     expect(fake.files.get(first.path)).toBe("first revision bytes\n");
   });
 
+  it("re-reads and accepts matching bytes after an ambiguous exclusive-create EEXIST", async () => {
+    const validated = await validatePublishedContentInput(await publishedInput("winner bytes\n"));
+    const fake = fakeWorkspace({}, async (path, content, files) => {
+      files.set(path, content);
+      throw Object.assign(new Error(`EEXIST: ${path}`), { code: "EEXIST" });
+    });
+
+    await expect(persistPublishedContent(fake.workspace, validated)).resolves.toEqual({
+      path: validated.path,
+      contentSha256: validated.contentSha256,
+      bytes: validated.bytes,
+    });
+    expect(fake.writeOptions).toEqual([{ exclusive: true }]);
+  });
+
+  it("re-reads and rejects different bytes after a competing exclusive-create EEXIST", async () => {
+    const validated = await validatePublishedContentInput(await publishedInput("loser bytes\n"));
+    const fake = fakeWorkspace({}, async (path, _content, files) => {
+      files.set(path, "competing winner bytes\n");
+      throw Object.assign(new Error(`EEXIST: ${path}`), { code: "EEXIST" });
+    });
+
+    await expect(persistPublishedContent(fake.workspace, validated))
+      .rejects.toMatchObject({ code: "PUBLISHED_CONTENT_CONFLICT", status: 409, retryable: false });
+    expect(fake.writeOptions).toEqual([{ exclusive: true }]);
+  });
+
   it("reads only canonical stored paths and verifies their hash before returning content", async () => {
     const input = await publishedInput("authorized bytes\n");
     const path = "/workspace/published/default/knowledge-1/revision-1.md";
@@ -108,16 +135,21 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function fakeWorkspace(initialFiles: Record<string, string> = {}): {
+function fakeWorkspace(
+  initialFiles: Record<string, string> = {},
+  writeFile?: (path: string, content: string, files: Map<string, string>) => Promise<void>,
+): {
   workspace: WorkspaceClient;
   files: Map<string, string>;
   mkdirPaths: string[];
   writePaths: string[];
+  writeOptions: Array<{ exclusive?: boolean } | undefined>;
 } {
   const directories = new Set(["/"]);
   const files = new Map(Object.entries(initialFiles));
   const mkdirPaths: string[] = [];
   const writePaths: string[] = [];
+  const writeOptions: Array<{ exclusive?: boolean } | undefined> = [];
   const workspace = {
     fs: {
       async readdir(path: string) {
@@ -145,8 +177,10 @@ function fakeWorkspace(initialFiles: Record<string, string> = {}): {
         mkdirPaths.push(path);
         directories.add(path);
       },
-      async writeFile(path: string, content: string) {
+      async writeFile(path: string, content: string, options?: { exclusive?: boolean }) {
         writePaths.push(path);
+        writeOptions.push(options);
+        if (writeFile) return writeFile(path, content, files);
         files.set(path, content);
       },
       async readFile(path: string, encoding: "utf8") {
@@ -157,5 +191,5 @@ function fakeWorkspace(initialFiles: Record<string, string> = {}): {
       },
     },
   } as unknown as WorkspaceClient;
-  return { workspace, files, mkdirPaths, writePaths };
+  return { workspace, files, mkdirPaths, writePaths, writeOptions };
 }
