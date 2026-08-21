@@ -6,6 +6,7 @@ import { AuditRepository } from "../../src/audit/repository";
 import type { CreateAuditEvent } from "../../src/audit/types";
 import { SubmissionsRepository } from "../../src/submissions/repository";
 import { SubmissionsService } from "../../src/submissions/service";
+import type { CreateSubmissionWithSourceVersion } from "../../src/submissions/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("submissions D1 control plane", () => {
@@ -122,6 +123,81 @@ describe("submissions D1 control plane", () => {
     await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'resource-mismatch'").first()).resolves.toBeNull();
   });
 
+  it("returns an exact replay and rejects changed content or target for the same member key", async () => {
+    const service = createService();
+    const input = {
+      requestedSpaceId: "default", kind: "text" as const, title: "Replay", content: "A\r\nB", idempotencyKey: "replay-key-00001",
+    };
+
+    const created = await service.createWithSourceVersion("member-a", input);
+    const replayed = await service.createWithSourceVersion("member-a", input);
+    expect(replayed).toEqual(created);
+
+    await expect(service.createWithSourceVersion("member-a", { ...input, content: "Changed" }))
+      .rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
+    await expect(service.createWithSourceVersion("member-a", { ...input, requestedSpaceId: "other-space" }))
+      .rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
+
+    await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
+  });
+
+  it("returns a duplicate candidate for a different key and creates no second source version", async () => {
+    const service = createService();
+    const first = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "First", content: "# Same  \r\n", idempotencyKey: "duplicate-key-001",
+    });
+    const duplicate = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Second", content: "# Same\n", idempotencyKey: "duplicate-key-002",
+    });
+
+    expect(duplicate).toEqual({
+      submission: null,
+      source: null,
+      sourceVersion: null,
+      duplicateCandidate: {
+        submissionId: first.submission!.id,
+        sourceId: first.source!.id,
+        sourceVersionId: first.sourceVersion!.id,
+      },
+    });
+    await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
+    await expect(env.DB.prepare("SELECT status FROM submissions").first()).resolves.toEqual({ status: "review_pending" });
+  });
+
+  it("keeps null-key legacy submissions readable and outside replay matching", async () => {
+    const legacy = submissionInput("legacy-null-key");
+    await new SubmissionsRepository(env.DB, new AuditRepository(env.DB)).createWithAudit(legacy, {
+      ...auditInput("legacy-null-key-audit"), resourceId: legacy.id,
+    });
+
+    const created = await createService().createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "text", title: "Legacy body", content: "Body", idempotencyKey: "legacy-key-00001",
+    });
+    expect(created.submission?.id).not.toBe(legacy.id);
+    await expect(createService().listOwn("member-a", { limit: 10 })).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({ id: legacy.id })]),
+    });
+  });
+
+  it.each(["source", "source_version", "audit"] as const)(
+    "rolls back all new rows when the dependent %s insert fails",
+    async (failure) => {
+      const repository = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
+      const input = await sourceCreationInput(failure);
+
+      await expect(repository.createWithSourceVersion(input)).rejects.toThrow();
+      await expect(env.DB.prepare("SELECT id FROM submissions WHERE id = 'rollback-submission'").first()).resolves.toBeNull();
+      if (failure === "source") {
+        await expect(env.DB.prepare("SELECT id, title FROM sources WHERE id = 'rollback-source'").first())
+          .resolves.toEqual({ id: "rollback-source", title: "Existing" });
+      } else {
+        await expect(env.DB.prepare("SELECT id FROM sources WHERE id = 'rollback-source'").first()).resolves.toBeNull();
+      }
+      await expect(env.DB.prepare("SELECT id FROM source_versions WHERE submission_id = 'rollback-submission'").first()).resolves.toBeNull();
+      await expect(env.DB.prepare("SELECT id FROM audit_events WHERE resource_id = 'rollback-submission'").first()).resolves.toBeNull();
+    },
+  );
+
 });
 
 const now = "2026-08-13T00:00:00.000Z";
@@ -147,4 +223,50 @@ function submissionInput(id: string) {
 
 function auditInput(id: string): CreateAuditEvent {
   return { id, actorKind: "member" as const, actorId: "member-a", action: "submission.created" as const, resourceType: "submission", resourceId: "submission-1", metadata: { kind: "text" as const, requestedSpaceId: "default" }, createdAt: now };
+}
+
+async function counts(): Promise<{ submissions: number; sources: number; sourceVersions: number; audits: number }> {
+  const [submissions, sources, sourceVersions, audits] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) AS count FROM submissions").first<{ count: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM sources").first<{ count: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM source_versions").first<{ count: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM audit_events").first<{ count: number }>(),
+  ]);
+  return {
+    submissions: submissions!.count,
+    sources: sources!.count,
+    sourceVersions: sourceVersions!.count,
+    audits: audits!.count,
+  };
+}
+
+async function sourceCreationInput(failure: "source" | "source_version" | "audit"): Promise<CreateSubmissionWithSourceVersion> {
+  const existingSubmissionId = "existing-dependency-submission";
+  const existingSourceId = failure === "source" ? "rollback-source" : "existing-dependency-source";
+  const existingVersionId = failure === "source_version" ? "rollback-source-version" : "existing-dependency-version";
+  const existingAuditId = failure === "audit" ? "rollback-audit" : "existing-dependency-audit";
+  const legacy = submissionInput(existingSubmissionId);
+  await new SubmissionsRepository(env.DB, new AuditRepository(env.DB)).createWithAudit(legacy, {
+    ...auditInput(existingAuditId), resourceId: legacy.id,
+  });
+  await env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, 'member-a', 'default', NULL, 'text', 'Existing', ?, ?)")
+    .bind(existingSourceId, now, now).run();
+  await env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES (?, ?, ?, 1, 'Existing unique body', ?, 'm1-v1', ?)")
+    .bind(existingVersionId, existingSourceId, existingSubmissionId, `existing-hash-${failure}`, now).run();
+
+  const submission = {
+    ...submissionInput("rollback-submission"), idempotencyKey: `rollback-${failure}-key`, content: "Rollback unique body",
+  };
+  return {
+    submission,
+    source: {
+      id: "rollback-source", ownerId: "member-a", spaceId: "default", collectionId: null,
+      kind: "text", title: "Rollback", createdAt: now, updatedAt: now,
+    },
+    sourceVersion: {
+      id: "rollback-source-version", sourceId: "rollback-source", submissionId: submission.id, ordinal: 1,
+      content: "Rollback unique body", contentSha256: `rollback-hash-${failure}`, parserVersion: "m1-v1", createdAt: now,
+    },
+    audit: { ...auditInput("rollback-audit"), resourceId: submission.id },
+  };
 }

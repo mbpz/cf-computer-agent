@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { SubmissionsService } from "../../src/submissions/service";
-import type { SubmissionsRepositoryPort } from "../../src/submissions/repository";
-import type { CreateSubmission, Submission, SubmissionPage } from "../../src/submissions/types";
+import {
+  SubmissionsRepositoryConflictError,
+  type CreateSubmissionWithSourceVersion,
+  type SubmissionsRepositoryPort,
+} from "../../src/submissions/repository";
+import type { CreateSubmission, Submission, SubmissionCreateResult, SubmissionPage } from "../../src/submissions/types";
 import type { CreateAuditEvent } from "../../src/audit/types";
 
 describe("SubmissionsService", () => {
@@ -34,22 +38,75 @@ describe("SubmissionsService", () => {
     await expect(service.create("member-a", { ...base, content: "界".repeat(43_690) })).resolves.toMatchObject({ kind: "markdown" });
     await expect(service.create("member-a", { ...base, content: "界".repeat(43_691) })).rejects.toMatchObject({ code: "SUBMISSION_INVALID", status: 400 });
   });
+
+  it.each([
+    "short",
+    "contains+punctuation",
+    "a".repeat(129),
+  ])("rejects invalid idempotency key %j before persistence", async (idempotencyKey) => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+
+    await expect(service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "text", title: "Title", content: "Body", idempotencyKey,
+    })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_INVALID", status: 400 });
+    expect(repository.sourceCreation).toBeUndefined();
+  });
+
+  it("persists a server-parsed source version with a validated key", async () => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+
+    await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: " Title ", content: "# A  \r\n", idempotencyKey: "abcdefghijklmnop",
+    });
+
+    expect(repository.sourceCreation).toMatchObject({
+      submission: { id: "submission-1", title: "Title", idempotencyKey: "abcdefghijklmnop" },
+      source: { id: "source-1", title: "Title" },
+      sourceVersion: {
+        id: "source-version-1",
+        content: "# A\n",
+        contentSha256: "aa1237b773c38dbddef583c4868aaea7a44c5237ea7923aecca5513764b42d80",
+        parserVersion: "m1-v1",
+      },
+    });
+  });
+
+  it("maps an exact-key payload or target mismatch to a typed 409", async () => {
+    const repository = new FakeSubmissionsRepository();
+    repository.conflict = new SubmissionsRepositoryConflictError("idempotency_conflict");
+    const service = serviceFor(repository);
+
+    await expect(service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "text", title: "Title", content: "Changed", idempotencyKey: "abcdefghijklmnop",
+    })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
+  });
 });
 
 function serviceFor(repository: FakeSubmissionsRepository): SubmissionsService {
   let nextId = 0;
+  const ids = ["submission-1", "source-1", "source-version-1", "audit-1"];
   return new SubmissionsService(repository, {
-    id: () => `${nextId++ === 0 ? "submission" : "audit"}-1`,
+    id: () => ids[nextId++]!,
     now: () => new Date("2026-08-13T00:00:00.000Z"),
   });
 }
 
 class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   audit: CreateAuditEvent | undefined;
+  sourceCreation: CreateSubmissionWithSourceVersion | undefined;
+  conflict: SubmissionsRepositoryConflictError | undefined;
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     this.audit = audit;
-    return submission;
+    return { ...submission, idempotencyKey: submission.idempotencyKey ?? null };
+  }
+
+  async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
+    this.sourceCreation = input;
+    if (this.conflict) throw this.conflict;
+    return { submission: input.submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
   }
 
   async listOwned(): Promise<SubmissionPage> { return { items: [] }; }
