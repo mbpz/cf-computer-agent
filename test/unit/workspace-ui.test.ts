@@ -3,12 +3,27 @@ import * as workspaceUi from "../../public/workspace-ui.js";
 
 const {
   anonymousShellState,
+  appendPage,
+  chatRequest,
+  citedAnswerModel,
+  createMutationController,
   createOperationGuard,
   createRouteGuard,
   drawerState,
+  drawerStateForViewport,
+  knowledgeListModel,
+  knowledgeQuery,
+  knowledgeReaderModel,
+  knowledgeSearchModel,
+  publishRequest,
   postLogout,
+  renderKnowledgeSearch,
+  reviewPreviewModel,
+  routeState,
   sessionBootstrapState,
+  submissionRequest,
   runLatestOperation,
+  submissionResultModel,
 } = workspaceUi;
 
 describe("createRouteGuard", () => {
@@ -99,11 +114,23 @@ function deferred<T>() {
 
 describe("drawerState", () => {
   it("removes a closed mobile drawer from focus and accessibility navigation", () => {
-    expect(drawerState(false)).toEqual({ open: false, ariaExpanded: "false", ariaHidden: "true", inert: true });
+    expect(drawerState(false)).toEqual({ open: false, ariaExpanded: "false", ariaHidden: "true", inert: true, label: "Open navigation" });
   });
 
   it("exposes an open mobile drawer", () => {
-    expect(drawerState(true)).toEqual({ open: true, ariaExpanded: "true", ariaHidden: "false", inert: false });
+    expect(drawerState(true)).toEqual({ open: true, ariaExpanded: "true", ariaHidden: "false", inert: false, label: "Close navigation" });
+  });
+
+  it("keeps authenticated mobile navigation inert until its drawer opens", () => {
+    expect(drawerStateForViewport(true, false)).toEqual({
+      open: false, ariaExpanded: "false", ariaHidden: "true", inert: true, label: "Open navigation",
+    });
+  });
+
+  it("keeps authenticated desktop navigation exposed without claiming an open drawer", () => {
+    expect(drawerStateForViewport(false, false)).toEqual({
+      open: false, ariaExpanded: "false", ariaHidden: "false", inert: false, label: "Open navigation",
+    });
   });
 });
 
@@ -221,6 +248,320 @@ describe("anonymousShellState", () => {
   it("closes an open mobile drawer before showing the anonymous login", () => {
     const state = anonymousShellState();
 
-    expect(state.drawer).toEqual({ open: false, ariaExpanded: "false", ariaHidden: "true", inert: true });
+    expect(state.drawer).toEqual({ open: false, ariaExpanded: "false", ariaHidden: "true", inert: true, label: "Open navigation" });
   });
 });
+
+describe("M1 trusted knowledge view models", () => {
+  it("maps search hits to exact reader locations without retaining internal fields", () => {
+    const model = knowledgeSearchModel({
+      items: [{
+        citationId: "citation-1",
+        knowledgeItemId: "knowledge-1",
+        spaceId: "space-1",
+        collectionId: "collection-1",
+        revisionId: "revision-1",
+        chunkId: "chunk-1",
+        title: "Runbook",
+        headingPath: ["Launch", "Rollback"],
+        startLine: 7,
+        endLine: 11,
+        excerpt: "<img src=x onerror=alert(1)><script>alert(2)</script>",
+        score: -1,
+        publishedAt: "2026-08-22T00:00:00.000Z",
+        normalizedPath: "/workspace/published/private.md",
+        contentSha256: "secret-hash",
+        sourceVersionId: "source-secret",
+      }],
+      degraded: true,
+      nextCursor: "next-page",
+    });
+
+    expect(model).toMatchObject({
+      degraded: true,
+      nextCursor: "next-page",
+      items: [{
+        title: "Runbook",
+        location: "Launch › Rollback · lines 7–11",
+        citationHref: "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
+      }],
+    });
+    expect(JSON.stringify(model)).not.toMatch(/workspace\/published|secret-hash|source-secret/);
+    expect(renderKnowledgeSearch(model)).toContain("&lt;script&gt;");
+    expect(renderKnowledgeSearch(model)).not.toMatch(/<script|onerror=/i);
+  });
+
+  it("models shared and admin-only library badges and preserves bounded pagination", () => {
+    const first = knowledgeListModel({
+      items: [libraryItem("knowledge-1", "Shared runbook", "shared")],
+      nextCursor: "cursor-2",
+    });
+    const second = knowledgeListModel({
+      items: [
+        libraryItem("knowledge-1", "Shared runbook", "shared"),
+        libraryItem("knowledge-2", "Private policy", "admin_only"),
+      ],
+    });
+
+    expect(first.items[0]).toMatchObject({ visibilityLabel: "Shared", href: "/knowledge/knowledge-1" });
+    expect(second.items[1]).toMatchObject({ visibilityLabel: "Admin only", href: "/knowledge/knowledge-2" });
+    expect(appendPage(first.items, second.items, (item) => item.id).map((item) => item.id)).toEqual([
+      "knowledge-1", "knowledge-2",
+    ]);
+  });
+
+  it("derives a safe review preview with normalized headings and warnings", () => {
+    const model = reviewPreviewModel({
+      submissionId: "submission-1",
+      submitterId: "member-1",
+      status: "review_pending",
+      requestedSpaceId: "space-1",
+      requestedCollectionId: null,
+      kind: "markdown",
+      title: "<script>Unsafe title</script>",
+      rawContent: "# Launch  \r\n\r\n## Rollback   \r\n",
+      sourceVersion: {
+        id: "source-version-1",
+        kind: "markdown",
+        content: "# Launch\n\n## Rollback\nNever execute <img onerror=alert(1)>\n",
+        parserVersion: "m1-v1",
+        contentSha256: "must-not-leak",
+        normalizedPath: "/workspace/private.md",
+      },
+    });
+
+    expect(model).toMatchObject({
+      submissionId: "submission-1",
+      title: "<script>Unsafe title</script>",
+      rawInput: "# Launch  \r\n\r\n## Rollback   \r\n",
+      normalizedMarkdown: expect.stringContaining("## Rollback"),
+      locations: [
+        { heading: "Launch", startLine: 1 },
+        { heading: "Launch › Rollback", startLine: 3 },
+      ],
+    });
+    expect(model.warnings).toContain("Preview is inert text; Markdown and HTML are never executed.");
+    expect(JSON.stringify(model)).not.toMatch(/must-not-leak|workspace\/private/);
+  });
+
+  it("models reader history, exact chunk focus, and citation source navigation", () => {
+    const model = knowledgeReaderModel({
+      id: "knowledge-1",
+      title: "Launch runbook",
+      visibility: "admin_only",
+      searchStatus: "indexed",
+      currentRevision: {
+        id: "revision-current",
+        knowledgeItemId: "knowledge-1",
+        sourceVersionId: "source-secret",
+        title: "Launch runbook",
+        tagIds: ["tag-1"],
+        visibility: "admin_only",
+        publishedBy: "member-secret",
+        publishedAt: "2026-08-22T00:00:00.000Z",
+        isCurrent: true,
+        markdown: "# Launch\n\nLatency is bounded.\n",
+        chunks: [{
+          id: "chunk-1",
+          citationId: "citation-1",
+          ordinal: 0,
+          headingPath: ["Launch"],
+          startLine: 1,
+          endLine: 3,
+        }],
+      },
+    }, { revision: "revision-current", chunk: "chunk-1" });
+
+    expect(model).toMatchObject({
+      revisionLabel: "Revision revision-current · current",
+      visibilityLabel: "Admin only",
+      focusedChunkId: "chunk-1",
+      outline: [{ label: "Launch", lineLabel: "lines 1–3", focused: true }],
+      sources: [{
+        label: "Launch · lines 1–3",
+        href: "/knowledge/knowledge-1?revision=revision-current&chunk=chunk-1",
+      }],
+    });
+    expect(JSON.stringify(model)).not.toMatch(/source-secret|member-secret/);
+  });
+
+  it("models citation-grounded answers using only server-provided source hits", () => {
+    const model = citedAnswerModel({
+      answer: "Launch latency is documented. [1] <script>alert(1)</script>",
+      citations: ["citation-1"],
+      sources: [{
+        ...searchHit("citation-1", "knowledge-1", "revision-1", "chunk-1"),
+        normalizedPath: "/workspace/secret.md",
+        contentSha256: "secret-hash",
+      }],
+    });
+
+    expect(model.sources).toEqual([expect.objectContaining({
+      accessibleName: "Open citation 1: Runbook, Launch, lines 2–4",
+      href: "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
+    })]);
+    expect(JSON.stringify(model)).not.toMatch(/workspace\/secret|secret-hash/);
+  });
+});
+
+describe("M1 route state and mutation ownership", () => {
+  it.each([
+    ["loading", "Loading knowledge", { kind: "loading", message: "Loading knowledge" }],
+    ["empty", "No knowledge yet", { kind: "empty", message: "No knowledge yet" }],
+    ["error", new Error("Unsafe <script>"), { kind: "error", message: "Unsafe <script>" }],
+    ["forbidden", "Not permitted", { kind: "forbidden", message: "Not permitted" }],
+    ["degraded", "FTS index degraded", { kind: "degraded", message: "FTS index degraded" }],
+  ])("keeps the %s state as inert text", (kind, value, expected) => {
+    expect(routeState(kind, value)).toEqual(expected);
+  });
+
+  it("keeps duplicate submit clicks single-flight and reports the duplicate result", async () => {
+    const response = deferred<{ duplicateCandidate: { submissionId: string; title: string } }>();
+    const pending: boolean[] = [];
+    const rendered: unknown[] = [];
+    let requests = 0;
+    const controller = createMutationController(() => true, (value) => pending.push(value));
+
+    const first = controller.run(async () => {
+      requests += 1;
+      return response.promise;
+    }, (value) => rendered.push(submissionResultModel(value)), () => undefined);
+    const duplicate = controller.run(async () => {
+      requests += 1;
+      return response.promise;
+    }, (value) => rendered.push(value), () => undefined);
+
+    expect(duplicate).toBe(first);
+    expect(requests).toBe(1);
+    response.resolve({ duplicateCandidate: { submissionId: "submission-existing", title: "Existing" } });
+    await first;
+    expect(pending).toEqual([true, false]);
+    expect(rendered).toEqual([{
+      kind: "duplicate",
+      message: "A matching submission already exists: Existing.",
+      submissionId: "submission-existing",
+    }]);
+  });
+
+  it("makes a late mutation completion inert after its renderer loses ownership", async () => {
+    const guard = createRouteGuard();
+    const generation = guard.begin();
+    const owner = guard.owner(generation, "/admin/submissions/submission-1");
+    const response = deferred<string>();
+    const rendered: string[] = [];
+    const controller = createMutationController(
+      () => guard.owns(owner, "/admin/submissions/submission-1"),
+      () => undefined,
+    );
+
+    const run = controller.run(() => response.promise, (value) => rendered.push(value), () => rendered.push("error"));
+    guard.begin();
+    response.resolve("stale publish success");
+    await run;
+
+    expect(rendered).toEqual([]);
+  });
+});
+
+describe("M1 browser request allowlists", () => {
+  it("puts idempotency only in the header and strips identity and internal fields", () => {
+    const request = submissionRequest({
+      requestedSpaceId: "space-1",
+      requestedCollectionId: "collection-1",
+      kind: "markdown",
+      title: "Runbook",
+      content: "# Runbook",
+      language: "markdown",
+      memberId: "forged-member",
+      role: "admin",
+      idempotencyKey: "body-key",
+      sources: ["forged"],
+      citations: ["forged"],
+      normalizedPath: "/workspace/private.md",
+      contentSha256: "secret-hash",
+    }, "header-key-00001");
+
+    expect(request).toMatchObject({
+      path: "/api/submissions",
+      init: { method: "POST", headers: { "Idempotency-Key": "header-key-00001" } },
+    });
+    expect(JSON.parse(request.init.body)).toEqual({
+      requestedSpaceId: "space-1",
+      requestedCollectionId: "collection-1",
+      kind: "markdown",
+      title: "Runbook",
+      content: "# Runbook",
+      language: "markdown",
+    });
+  });
+
+  it("builds exact publish and chat bodies from allowlisted fields", () => {
+    const publish = publishRequest("submission/1", {
+      title: "Runbook",
+      visibility: "shared",
+      spaceId: "space-1",
+      collectionId: null,
+      tagIds: ["tag-1"],
+      reviewerId: "forged",
+      memberId: "forged",
+      contentSha256: "secret",
+    });
+    const chat = chatRequest({ question: "launch latency", sources: ["forged"], role: "admin" });
+
+    expect(publish.path).toBe("/api/admin/submissions/submission%2F1/publish");
+    expect(JSON.parse(publish.init.body)).toEqual({
+      title: "Runbook",
+      visibility: "shared",
+      spaceId: "space-1",
+      collectionId: null,
+      tagIds: ["tag-1"],
+    });
+    expect(JSON.parse(chat.init.body)).toEqual({ question: "launch latency" });
+  });
+
+  it("builds bounded library and search queries without accepting arbitrary parameters", () => {
+    expect(knowledgeQuery("/api/knowledge/search", {
+      q: "launch latency",
+      limit: 20,
+      cursor: "next",
+      spaceId: "space-1",
+      collectionId: "collection-1",
+      tagId: "tag-1",
+      role: "admin",
+      path: "/workspace/private.md",
+    })).toBe("/api/knowledge/search?q=launch+latency&limit=20&cursor=next&spaceId=space-1&collectionId=collection-1&tagId=tag-1");
+  });
+});
+
+function libraryItem(id: string, title: string, visibility: "shared" | "admin_only") {
+  return {
+    id,
+    spaceId: "space-1",
+    collectionId: null,
+    revisionId: `revision-${id}`,
+    title,
+    tagIds: [],
+    visibility,
+    searchStatus: "indexed",
+    publishedAt: "2026-08-22T00:00:00.000Z",
+    updatedAt: "2026-08-22T00:00:00.000Z",
+  };
+}
+
+function searchHit(citationId: string, knowledgeItemId: string, revisionId: string, chunkId: string) {
+  return {
+    citationId,
+    knowledgeItemId,
+    spaceId: "space-1",
+    collectionId: null,
+    revisionId,
+    chunkId,
+    title: "Runbook",
+    headingPath: ["Launch"],
+    startLine: 2,
+    endLine: 4,
+    excerpt: "Launch latency is documented.",
+    score: -1,
+    publishedAt: "2026-08-22T00:00:00.000Z",
+  };
+}

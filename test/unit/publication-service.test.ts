@@ -352,6 +352,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     requestedCollectionId: "collection-1",
     kind: "markdown",
     title: "Submitted title",
+    rawContent: "# Submitted title\n\nBody\n",
     sourceVersion: intent.sourceVersion,
   };
   const revision: PublishedRevision = {

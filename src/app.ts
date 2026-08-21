@@ -92,7 +92,9 @@ const workspaceRoutes = new Set([
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
-  return workspaceRoutes.has(pathname);
+  return workspaceRoutes.has(pathname)
+    || /^\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
+    || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname);
 }
 
 function createRequestServices(

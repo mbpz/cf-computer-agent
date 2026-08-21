@@ -62,6 +62,63 @@ describe("workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
+  it.each([
+    "/knowledge/knowledge-1",
+    "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
+    "/admin/submissions/submission-1",
+  ])("serves the shell with security headers for the M1 deep link %s", async (path) => {
+    const response = await SELF.fetch(`https://example.test${path}`);
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('id="app-shell"');
+    expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
+    expect(response.headers.get("x-frame-options")).toBe("DENY");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+  });
+
+  it.each([
+    "/knowledge/knowledge-1/revisions/revision-1",
+    "/admin/submissions/submission-1/publish",
+    "/admin/publications/recover",
+  ])("does not broaden the SPA allowlist to the non-UI path %s", async (path) => {
+    const response = await SELF.fetch(`https://example.test${path}`);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("ships the M1 browser contract without executable data sinks or internal request fields", async () => {
+    const [response, uiResponse] = await Promise.all([
+      SELF.fetch("https://example.test/app.js"),
+      SELF.fetch("https://example.test/workspace-ui.js"),
+    ]);
+    const source = `${await response.text()}\n${await uiResponse.text()}`;
+
+    expect(response.status).toBe(200);
+    expect(uiResponse.status).toBe(200);
+    expect(source).toContain("/api/knowledge");
+    expect(source).toContain("/api/knowledge/search");
+    expect(source).toContain("/api/knowledge/chat");
+    expect(source).toContain("/api/admin/publications/recover");
+    expect(source).toContain("Idempotency-Key");
+    expect(source).not.toMatch(/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|\beval\s*\(/u);
+    expect(source).not.toMatch(/normalizedPath|contentSha256|sourceVersionId/u);
+  });
+
+  it("ships responsive reader, review-dialog, focus, and reduced-motion styles", async () => {
+    const response = await SELF.fetch("https://example.test/styles.css");
+    const source = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(source).toContain(".reader-grid");
+    expect(source).toContain(".review-dialog");
+    expect(source).toContain(".validation-summary");
+    expect(source).toContain("button.danger");
+    expect(source).toContain("@media (max-width: 760px)");
+    expect(source).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
   it("does not turn an unknown non-API path into a shell route", async () => {
     const response = await SELF.fetch("https://example.test/not-a-workspace-route");
 

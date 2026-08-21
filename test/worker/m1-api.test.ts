@@ -298,7 +298,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
       requestedSpaceId: "default",
       kind: "markdown",
       title: "Launch runbook",
-      content: "# Launch\n\nLaunch latency is under 50ms.\n",
+      content: "# Launch  \r\n\r\nLaunch latency is under 50ms.   \r\n",
     }, "launch-submit-key1");
     expect(created.response.status).toBe(201);
     expect(created.body).toEqual({
@@ -322,6 +322,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
       preview: {
         submissionId: created.body.submission.id,
         submitterId: "member-contributor",
+        rawContent: "# Launch  \r\n\r\nLaunch latency is under 50ms.   \r\n",
         sourceVersion: { content: "# Launch\n\nLaunch latency is under 50ms.\n" },
       },
     });

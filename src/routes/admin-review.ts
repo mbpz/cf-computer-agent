@@ -141,6 +141,7 @@ function reviewPreviewDto(preview: ReviewPreview) {
     requestedCollectionId: preview.requestedCollectionId,
     kind: preview.kind,
     title: preview.title,
+    rawContent: preview.rawContent,
     sourceVersion: {
       id: preview.sourceVersion.id,
       kind: preview.sourceVersion.kind,

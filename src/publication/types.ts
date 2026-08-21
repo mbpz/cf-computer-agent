@@ -35,6 +35,7 @@ export interface ReviewPreview {
   requestedCollectionId: string | null;
   kind: SubmissionKind;
   title: string;
+  rawContent: string;
   sourceVersion: PublicationSourceVersion;
 }
 

@@ -1,18 +1,18 @@
 const memberItems = Object.freeze([
-  { href: "/", label: "首页", group: "workspace", capability: null },
-  { href: "/submit", label: "提交知识", group: "workspace", capability: "submission:create" },
-  { href: "/knowledge", label: "知识库", group: "workspace", capability: "legacy:read" },
-  { href: "/search", label: "搜索", group: "workspace", capability: "legacy:read" },
-  { href: "/agent", label: "Agent", group: "workspace", capability: "legacy:read" },
-  { href: "/my-submissions", label: "我的投稿", group: "workspace", capability: "submission:read-own" },
+  { href: "/", label: "Home", group: "workspace", capability: null },
+  { href: "/submit", label: "Submit", group: "workspace", capability: "submission:create" },
+  { href: "/knowledge", label: "Library", group: "workspace", capability: "knowledge:read" },
+  { href: "/search", label: "Search", group: "workspace", capability: "knowledge:read" },
+  { href: "/agent", label: "Agent", group: "workspace", capability: "knowledge:read" },
+  { href: "/my-submissions", label: "My Submissions", group: "workspace", capability: "submission:read-own" },
 ]);
 
 const adminItems = Object.freeze([
-  { href: "/admin", label: "管理概览", group: "admin", capability: "submission:read-all" },
-  { href: "/admin/submissions", label: "待审核", group: "admin", capability: "submission:read-all" },
-  { href: "/admin/members", label: "成员", group: "admin", capability: "member:manage" },
-  { href: "/admin/spaces", label: "空间", group: "admin", capability: "space:manage" },
-  { href: "/admin/audit", label: "审计", group: "admin", capability: "audit:read" },
+  { href: "/admin", label: "Administration", group: "admin", capability: "submission:read-all" },
+  { href: "/admin/submissions", label: "Review Queue", group: "admin", capability: "knowledge:review" },
+  { href: "/admin/members", label: "Members", group: "admin", capability: "member:manage" },
+  { href: "/admin/spaces", label: "Spaces", group: "admin", capability: "space:manage" },
+  { href: "/admin/audit", label: "Audit", group: "admin", capability: "audit:read" },
 ]);
 
 /**

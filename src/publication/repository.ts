@@ -38,6 +38,7 @@ type PreviewRow = {
   requested_collection_id: string | null;
   kind: ReviewPreview["kind"];
   title: string;
+  raw_content: string;
   source_version_id: string;
   source_content: string;
   content_sha256: string;
@@ -540,13 +541,13 @@ export class PublicationRepository implements PublicationRepositoryPort {
 
 const previewSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
-  s.kind, s.title, sv.id AS source_version_id, sv.content AS source_content,
+  s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version
 FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id`;
 
 const intentSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
-  s.kind, s.title, sv.id AS source_version_id, sv.content AS source_content,
+  s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version,
   pi.revision_id, pi.knowledge_item_id, pi.reviewer_id, pi.title AS intent_title,
   pi.visibility, pi.tags_json, pi.normalized_path, pi.content_sha256 AS intent_content_sha256,
@@ -564,6 +565,7 @@ function mapPreview(row: PreviewRow): ReviewPreview {
     requestedCollectionId: row.requested_collection_id,
     kind: row.kind,
     title: row.title,
+    rawContent: row.raw_content,
     sourceVersion: {
       id: row.source_version_id,
       kind: row.kind,
