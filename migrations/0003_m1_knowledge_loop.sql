@@ -178,6 +178,12 @@ CREATE TABLE jobs (
 CREATE INDEX knowledge_items_current_page
 ON knowledge_items(status, updated_at DESC, id DESC);
 
+CREATE INDEX knowledge_items_space_page
+ON knowledge_items(status, space_id, updated_at DESC, id DESC);
+
+CREATE INDEX knowledge_items_degraded_scope
+ON knowledge_items(status, search_status, space_id, id);
+
 CREATE INDEX sources_owner_page
 ON sources(owner_id, updated_at DESC, id DESC);
 

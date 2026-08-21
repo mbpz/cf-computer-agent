@@ -450,6 +450,18 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "updated_at", desc: 1 },
       { name: "id", desc: 1 },
     ]);
+    await expectIndex("knowledge_items", "knowledge_items_space_page", [
+      { name: "status", desc: 0 },
+      { name: "space_id", desc: 0 },
+      { name: "updated_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex("knowledge_items", "knowledge_items_degraded_scope", [
+      { name: "status", desc: 0 },
+      { name: "search_status", desc: 0 },
+      { name: "space_id", desc: 0 },
+      { name: "id", desc: 0 },
+    ]);
     await expectIndex("sources", "sources_owner_page", [
       { name: "owner_id", desc: 0 },
       { name: "updated_at", desc: 1 },

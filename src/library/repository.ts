@@ -282,11 +282,12 @@ export class LibraryRepository implements LibraryRepositoryPort {
        SELECT k.id AS knowledge_item_id, r.id AS revision_id, c.id AS chunk_id,
          r.title, c.heading_path, c.start_line, c.end_line, c.body, r.published_at
        FROM authorized_member am
-       JOIN knowledge_items k
-       JOIN revisions r ON r.id = k.current_revision_id
-       JOIN chunks c ON c.revision_id = r.id
+       JOIN revisions r ON r.id = ?
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       JOIN revisions current_revision ON current_revision.id = k.current_revision_id
+       JOIN chunks c ON c.revision_id = r.id AND c.id = ?
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
-       WHERE r.id = ? AND c.id = ? AND k.status = 'active'
+       WHERE k.status = 'active'
          AND (r.visibility = 'shared' OR am.role = 'admin')
        LIMIT 1`,
     ).bind(scope.memberId, scope.role, revisionId, chunkId).first<CitationRow>();
