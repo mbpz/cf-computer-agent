@@ -1,5 +1,6 @@
-import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
-import type { Tag, TagPage, TagsRepositoryPort } from "./types";
+import { AppError } from "../http";
+import { decodeOpaqueCursor, encodeOpaqueCursor } from "../pagination";
+import type { Tag, TagPage, TagPageRepositoryRequest, TagsRepositoryPort } from "./types";
 
 export type TagsRepositoryConflictKind = "target_invalid" | "slug_conflict";
 
@@ -56,10 +57,11 @@ export class TagsRepository implements TagsRepositoryPort {
     return rows.results.map(mapTag);
   }
 
-  async listActivePage(spaceId: string, request: PageRequest): Promise<TagPage> {
+  async listActivePage(spaceId: string, request: TagPageRepositoryRequest): Promise<TagPage> {
+    assertCursorKey(request.cursorKey);
     const cursor = request.cursor === undefined
       ? undefined
-      : decodePageCursor(request.cursor, timestampCursorBounds);
+      : decodeTagPageCursor(request.cursor, request.cursorKey);
     const cursorSql = cursor
       ? "AND (t.created_at < ? OR (t.created_at = ? AND t.id < ?))"
       : "";
@@ -79,7 +81,12 @@ export class TagsRepository implements TagsRepositoryPort {
     return {
       items,
       ...(rows.results.length > request.limit && last ? {
-        nextCursor: encodePageCursor({ sort: Date.parse(last.createdAt), id: last.id }),
+        nextCursor: encodeOpaqueCursor({
+          v: 2,
+          sort: Date.parse(last.createdAt),
+          id: last.id,
+          key: request.cursorKey,
+        }),
       } : {}),
     };
   }
@@ -93,6 +100,32 @@ export class TagsRepository implements TagsRepositoryPort {
        ORDER BY id ASC`,
     ).bind(spaceId, ...ids).all<TagRow>();
     return rows.results.map(mapTag);
+  }
+}
+
+function decodeTagPageCursor(cursor: string, cursorKey: string): { sort: number; id: string } {
+  let record: Record<string, unknown>;
+  try {
+    const decoded = decodeOpaqueCursor(cursor);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    record = decoded as Record<string, unknown>;
+    if (Object.keys(record).length !== 4 || record.v !== 2
+      || typeof record.sort !== "number" || !Number.isSafeInteger(record.sort)
+      || record.sort < timestampCursorBounds.minSort || record.sort > timestampCursorBounds.maxSort
+      || typeof record.id !== "string" || record.id.length === 0
+      || typeof record.key !== "string" || !/^[a-f0-9]{64}$/u.test(record.key)) throw new Error();
+  } catch {
+    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  }
+  if (record.key !== cursorKey) {
+    throw new AppError("PAGE_INVALID", "Page cursor does not match the requested scope", 400);
+  }
+  return { sort: record.sort as number, id: record.id as string };
+}
+
+function assertCursorKey(cursorKey: string): void {
+  if (!/^[a-f0-9]{64}$/u.test(cursorKey)) {
+    throw new AppError("PAGE_INVALID", "Page request is invalid", 400);
   }
 }
 

@@ -1,5 +1,5 @@
 import { AppError } from "../http";
-import { parsePageRequest, type PageRequest } from "../pagination";
+import { deriveCursorScopeKey, parsePageRequest, type PageRequest } from "../pagination";
 import { TagsRepositoryConflictError } from "./repository";
 import type { CreateTagInput, Tag, TagPage, TagsRepositoryPort } from "./types";
 
@@ -49,8 +49,10 @@ export class TagsService {
   async listActivePage(spaceId: string, request?: PageRequest): Promise<TagPage> {
     validateSpaceId(spaceId);
     const page = parsePageRequest(request?.limit, request?.cursor);
-    if (this.repository.listActivePage) return this.repository.listActivePage(spaceId, page);
-    return { items: (await this.repository.listActive(spaceId)).slice(0, page.limit) };
+    return this.repository.listActivePage(spaceId, {
+      ...page,
+      cursorKey: await deriveCursorScopeKey("active-tags", { spaceId }),
+    });
   }
 }
 

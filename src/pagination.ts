@@ -4,6 +4,7 @@ export interface PageRequest { limit: number; cursor?: string; }
 export interface Page<T> { items: T[]; nextCursor?: string; }
 export interface PageCursor { sort: number; id: string; }
 export interface PageCursorBounds { minSort?: number; maxSort?: number; }
+export type CursorScope = Readonly<Record<string, string | number | boolean | null>>;
 
 const defaultPageLimit = 20;
 const maxPageLimit = 50;
@@ -33,6 +34,15 @@ export function decodeOpaqueCursor(cursor: string): unknown {
   }
 }
 
+export async function deriveCursorScopeKey(kind: string, scope: CursorScope): Promise<string> {
+  const canonicalScope = Object.fromEntries(
+    Object.entries(scope).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+  );
+  const bytes = encoder.encode(JSON.stringify({ v: 1, kind, scope: canonicalScope }));
+  const digest = await crypto.subtle.digest("SHA-256", ownedArrayBuffer(bytes));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function encodePageCursor(cursor: PageCursor): string { return encodeOpaqueCursor({ v: 1, sort: cursor.sort, id: cursor.id }); }
 
 export function decodePageCursor(cursor: string, bounds: PageCursorBounds = {}): PageCursor {
@@ -55,6 +65,12 @@ function base64UrlToBytes(value: string): Uint8Array {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }
 
 function invalidCursor(): AppError { return new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400); }

@@ -229,11 +229,38 @@ describe("PublicationService", () => {
 });
 
 describe("TagsService", () => {
+  it("binds paginated tag requests to a stable non-reversible Space scope key", async () => {
+    const requests: Array<{ spaceId: string; cursorKey?: string }> = [];
+    const repository: TagsRepositoryPort = {
+      async create(tag) { return tag; },
+      async listActive() { return []; },
+      async listActivePage(spaceId, request) {
+        requests.push({ spaceId, cursorKey: request.cursorKey });
+        return { items: [] };
+      },
+      async findActiveByIds() { return []; },
+    };
+    const service = new TagsService(repository);
+
+    await service.listActivePage("space-a", { limit: 2 });
+    await service.listActivePage("space-a", { limit: 2 });
+    await service.listActivePage("space-b", { limit: 2 });
+
+    expect(requests.map(({ cursorKey }) => cursorKey)).toEqual([
+      expect.stringMatching(/^[a-f0-9]{64}$/u),
+      requests[0]?.cursorKey,
+      expect.stringMatching(/^[a-f0-9]{64}$/u),
+    ]);
+    expect(requests[2]?.cursorKey).not.toBe(requests[0]?.cursorKey);
+    expect(requests.map(({ cursorKey }) => cursorKey)).not.toContain("space-a");
+  });
+
   it("normalizes a tag and delegates active-space persistence", async () => {
     const created: Tag[] = [];
     const repository: TagsRepositoryPort = {
       async create(tag) { created.push(tag); return tag; },
       async listActive() { return created.filter((tag) => tag.status === "active"); },
+      async listActivePage() { return { items: [] }; },
       async findActiveByIds(_spaceId, ids) { return created.filter((tag) => ids.includes(tag.id)); },
     };
     const service = new TagsService(repository, {
@@ -258,6 +285,7 @@ describe("TagsService", () => {
     const repository: TagsRepositoryPort = {
       async create(tag) { writes += 1; return tag; },
       async listActive() { return []; },
+      async listActivePage() { return { items: [] }; },
       async findActiveByIds() { return []; },
     };
     await expect(new TagsService(repository).create(input)).rejects.toMatchObject({ code: "TAG_INVALID", status: 400 });

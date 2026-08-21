@@ -8,6 +8,7 @@ import { AppError } from "../../src/http";
 import type { KnowledgeBase } from "../../src/index";
 import { createPublishedContentReader } from "../../src/knowledge/published-content";
 import type { PublishedContentReceipt, RpcResult } from "../../src/knowledge/types";
+import { decodeOpaqueCursor, encodeOpaqueCursor } from "../../src/pagination";
 import { PublicationRepository } from "../../src/publication/repository";
 import { PublicationService } from "../../src/publication/service";
 import type { PublicationReviewer, PublishSubmissionInput } from "../../src/publication/types";
@@ -709,6 +710,51 @@ describe("M1 publication control plane", () => {
     await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
     await expect(service.create({ spaceId: "default", slug: "blocked", name: "Blocked" }))
       .rejects.toMatchObject({ code: "TAG_TARGET_INVALID", status: 400 });
+  });
+
+  it("rejects a tag page cursor replayed into a different Space and paginates its original Space without gaps", async () => {
+    await env.DB.prepare(
+      `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+       VALUES ('space-b', 'space-b', 'Space B', '', 'shared', 'active', 2, 0, ?, ?)`,
+    ).bind(now, now).run();
+    for (const [spaceId, prefix] of [["default", "page-a"], ["space-b", "page-b"]] as const) {
+      for (let index = 0; index < 5; index += 1) {
+        const createdAt = new Date(Date.parse(now) + index * 1_000).toISOString();
+        await env.DB.prepare(
+          "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+        ).bind(`${prefix}-${index}`, spaceId, `${prefix}-${index}`, `${prefix} ${index}`, createdAt, createdAt).run();
+      }
+    }
+    const service = new TagsService(new TagsRepository(env.DB));
+    const first = await service.listActivePage("default", { limit: 2 });
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(first.nextCursor).toMatch(/^[A-Za-z0-9_-]{1,512}$/u);
+    expect(decodeOpaqueCursor(first.nextCursor!)).toEqual({
+      v: 2,
+      sort: Date.parse("2026-08-22T00:00:03.000Z"),
+      id: "page-a-3",
+      key: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+
+    await expect(service.listActivePage("space-b", { limit: 2, cursor: first.nextCursor }))
+      .rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    await expect(service.listActivePage("default", {
+      limit: 2,
+      cursor: encodeOpaqueCursor({ v: 1, sort: Date.parse(now), id: "page-a-0" }),
+    })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+
+    const seen = [...first.items];
+    let cursor = first.nextCursor;
+    for (let pageNumber = 1; cursor && pageNumber < 10; pageNumber += 1) {
+      const page = await service.listActivePage("default", { limit: 2, cursor });
+      seen.push(...page.items);
+      cursor = page.nextCursor;
+    }
+    expect(cursor).toBeUndefined();
+    expect(seen.map((tag) => tag.id)).toEqual([
+      "page-a-4", "page-a-3", "page-a-2", "page-a-1", "tag-b", "tag-a", "page-a-0",
+    ]);
+    expect(new Set(seen.map((tag) => tag.id)).size).toBe(seen.length);
   });
 });
 

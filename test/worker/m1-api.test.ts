@@ -160,10 +160,17 @@ describe("M1 API authorization and request boundaries", () => {
   });
 
   it("bounds tag listing with an opaque keyset cursor", async () => {
+    await env.DB.prepare(
+      `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+       VALUES ('tag-space-b', 'tag-space-b', 'Tag Space B', '', 'shared', 'active', 2, 0, ?, ?)`,
+    ).bind(now, now).run();
     for (let index = 0; index < 7; index += 1) {
       await env.DB.prepare(
         "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, 'default', ?, ?, 'active', ?, ?)",
       ).bind(`tag-${index}`, `tag-${index}`, `Tag ${index}`, now, now).run();
+      await env.DB.prepare(
+        "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, 'tag-space-b', ?, ?, 'active', ?, ?)",
+      ).bind(`tag-b-${index}`, `tag-b-${index}`, `Tag B ${index}`, now, now).run();
     }
     const first = await memberApi("contributor", "/api/spaces/default/tags?limit=3");
     expect(first.status).toBe(200);
@@ -179,6 +186,10 @@ describe("M1 API authorization and request boundaries", () => {
     const secondBody = await second.json<{ tags: Array<{ id: string }> }>();
     expect(secondBody.tags).toHaveLength(3);
     expect(new Set([...firstBody.tags, ...secondBody.tags].map((tag) => tag.id)).size).toBe(6);
+    await expectApiError(memberApi(
+      "contributor",
+      `/api/spaces/tag-space-b/tags?limit=3&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
+    ), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/spaces/default/tags?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
   });
 

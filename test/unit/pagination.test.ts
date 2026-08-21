@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { decodeOpaqueCursor, decodePageCursor, encodeOpaqueCursor, encodePageCursor, parsePageRequest } from "../../src/pagination";
+import {
+  decodeOpaqueCursor,
+  decodePageCursor,
+  deriveCursorScopeKey,
+  encodeOpaqueCursor,
+  encodePageCursor,
+  parsePageRequest,
+} from "../../src/pagination";
 
 describe("pagination", () => {
   it("encodes an opaque base64url versioned position cursor", () => {
@@ -56,6 +63,16 @@ describe("pagination", () => {
     for (const limit of [NaN, 1.5, 0, 51]) {
       expect(() => parsePageRequest(limit)).toThrow(expect.objectContaining({ code: "PAGE_INVALID", status: 400 }));
     }
+  });
+
+  it("derives a canonical cryptographic key for cursor scope fields", async () => {
+    const first = await deriveCursorScopeKey("active-tags", { spaceId: "space-a", status: "active" });
+    const reordered = await deriveCursorScopeKey("active-tags", { status: "active", spaceId: "space-a" });
+    const otherSpace = await deriveCursorScopeKey("active-tags", { spaceId: "space-b", status: "active" });
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/u);
+    expect(reordered).toBe(first);
+    expect(otherSpace).not.toBe(first);
   });
 });
 
