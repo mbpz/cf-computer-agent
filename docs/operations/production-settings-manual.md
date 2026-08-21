@@ -1,5 +1,7 @@
 # Memory Garden 生产环境变量手动配置手册
 
+> 当前中文核心流程以 [生产核心运维手册](./production-environment-handbook.md) 为准。本文件只保留 Dashboard 手工录入和字段校验的扩展说明。
+
 > 生产域名：`https://memory.crgmhrc.asia`  
 > Worker：`memory-garden-agent`  
 > 适用 shell：macOS `zsh`  

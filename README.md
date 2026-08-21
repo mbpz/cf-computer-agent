@@ -36,13 +36,13 @@ rtk npm run dev
 
 `rtk npm run check` 只验证生成类型、TypeScript、单元测试、workerd 集成测试和 Wrangler dry build。它不会请求远程 Workers AI、不会验证已部署 Durable Object 的持久性，也不构成生产域名或 Provider 成熟度证据。
 
-本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、D1、secret、部署和回滚顺序见 [GitHub OAuth runbook](./docs/operations/github-oauth-setup.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
+本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、七项配置、密钥生成、D1、版本上传、部署和故障复盘统一见 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
 
 静态浏览器文件位于 `public/`，由 Worker 的 `ASSETS` binding 提供；`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
 
 ## 部署
 
-首次部署前必须完整执行 [GitHub OAuth runbook](./docs/operations/github-oauth-setup.md)：创建 OAuth App，应用 D1 migration `0002`，交互式配置 Worker settings，再在明确授权下部署、做浏览器与 signed-smoke 验证，最后移除旧的 Access secrets。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
+首次部署前必须完整执行 [生产核心运维手册](./docs/operations/production-environment-handbook.md)：创建 OAuth App，应用 D1 migration，上传包含完整七项 Secret 的候选版本，检查精确版本后再部署并完成浏览器与 signed-smoke 验证。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
 
 ## API
 

@@ -1,5 +1,7 @@
 # GitHub OAuth deployment runbook
 
+> 当前中文核心流程以 [生产核心运维手册](./production-environment-handbook.md) 为准。本文件保留为经过自动化契约测试的详细发布参考。
+
 This runbook separates local evidence from actions that change GitHub or Cloudflare. Do not create the OAuth App, write a secret, apply a remote migration, deploy, or run a remote smoke test without explicit authorization.
 
 ## Fixed production values
@@ -10,7 +12,7 @@ Create a GitHub OAuth App with these exact values:
 - Homepage URL: `https://memory.crgmhrc.asia`
 - Authorization callback URL: `https://memory.crgmhrc.asia/auth/github/callback`
 
-The GitHub Client ID and automation client ID are identifiers, not credentials. The GitHub client secret, bootstrap and allowlist email configuration, automation secret, and APP token are sensitive. `ALLOWED_MEMBER_EMAILS` is a nonempty comma-separated list of unique valid canonical emails: trim and lowercase every entry; reject empty entries and duplicates after that canonicalization; each address is at most 254 visible-ASCII characters with exactly one `@`, a 1–64-character local part, and a domain containing at least two nonempty dot-separated labels. `BOOTSTRAP_ADMIN_EMAIL` must itself be a valid canonical email and must be included in that list. `AUTOMATION_SECRET` and `APP_TOKEN` each need at least 32 independently random bytes. Generate and store all three automation values using [the production environment handbook](./production-environment-handbook.md#66-生成保存并在发布时读取), then enter those stored values below; the upload and later smoke must use the same credentials. Do not commit any production value to `wrangler.jsonc`, `config/types.env`, `.dev.vars`, shell arguments, transcripts, logs, browser code, or audit metadata. The checked-in values in `config/types.env` are fake type-generation inputs only.
+The GitHub Client ID and automation client ID are identifiers, not credentials. The GitHub client secret, bootstrap and allowlist email configuration, automation secret, and APP token are sensitive. `ALLOWED_MEMBER_EMAILS` is a nonempty comma-separated list of unique valid canonical emails: trim and lowercase every entry; reject empty entries and duplicates after that canonicalization; each address is at most 254 visible-ASCII characters with exactly one `@`, a 1–64-character local part, and a domain containing at least two nonempty dot-separated labels. `BOOTSTRAP_ADMIN_EMAIL` must itself be a valid canonical email and must be included in that list. `AUTOMATION_SECRET` and `APP_TOKEN` each need at least 32 independently random bytes. Generate and store all three automation values using [the production environment handbook](./production-environment-handbook.md#4-生成自动化密钥), then enter those stored values below; the upload and later smoke must use the same credentials. Do not commit any production value to `wrangler.jsonc`, `config/types.env`, `.dev.vars`, shell arguments, transcripts, logs, browser code, or audit metadata. The checked-in values in `config/types.env` are fake type-generation inputs only.
 
 The existing D1 binding ID is a non-secret identifier for the intended `memory-garden-control-plane` database. Do not create another database. Keep `workers_dev: false`, `preview_urls: false`, the `KnowledgeBase` Durable Object migration `v1`, and the asset Worker-first configuration unchanged.
 
