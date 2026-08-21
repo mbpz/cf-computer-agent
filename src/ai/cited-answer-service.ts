@@ -1,5 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { normalizeSearchQuery } from "../library/service";
 import type { LibraryScope, SearchHit } from "../library/types";
 
 const SYSTEM_PROMPT = [
@@ -29,6 +30,7 @@ const MAX_CITATIONS_PER_CLAIM = 8;
 const MAX_ANSWER_CODE_POINTS = 4_000;
 const MAX_MEMBER_ID_CODE_POINTS = 128;
 const MAX_MEMBER_ID_BYTES = 512;
+const MIN_BM25_MAGNITUDE_PER_TERM = 1;
 const encoder = new TextEncoder();
 
 const RESPONSE_SCHEMA = {
@@ -161,8 +163,9 @@ export class CitedAnswerService {
     }
 
     const providerAnswer = parseProviderAnswer(providerResult);
+    const normalizedClaims = validateGrounding(providerAnswer, preparedSources);
     if (providerAnswer.insufficientEvidence) return noEvidence();
-    return normalizeGroundedAnswer(providerAnswer, preparedSources);
+    return renderGroundedAnswer(normalizedClaims, preparedSources);
   }
 }
 
@@ -170,10 +173,11 @@ function prepareSources(question: string, hits: SearchHit[]): PreparedSource[] {
   if (!Array.isArray(hits)) return [];
   const prepared: PreparedSource[] = [];
   const seen = new Set<string>();
+  const queryTermCount = countSearchTerms(question);
 
   for (const hit of hits) {
     if (prepared.length >= MAX_SOURCES) break;
-    if (!isRelevantHit(hit) || seen.has(hit.citationId)) continue;
+    if (!isRelevantHit(hit, queryTermCount) || seen.has(hit.citationId)) continue;
     const context = toContextSource(hit);
     if (!context) continue;
 
@@ -191,11 +195,12 @@ function prepareSources(question: string, hits: SearchHit[]): PreparedSource[] {
   return prepared;
 }
 
-function isRelevantHit(value: unknown): value is SearchHit {
+function isRelevantHit(value: unknown, queryTermCount: number): value is SearchHit {
   return isPlainRecord(value)
     && typeof value.score === "number"
     && Number.isFinite(value.score)
     && value.score < 0
+    && (-value.score / queryTermCount) >= MIN_BM25_MAGNITUDE_PER_TERM
     && validCitationId(value.citationId)
     && typeof value.title === "string"
     && !hasMalformedSurrogate(value.title)
@@ -263,53 +268,54 @@ function parseProviderAnswer(result: unknown): ProviderAnswer {
   }
   if (codePointLength(result.response) > MAX_PROVIDER_RESPONSE_CODE_POINTS
     || encoder.encode(result.response).byteLength > MAX_PROVIDER_RESPONSE_BYTES) {
-    throw answerUngrounded();
+    throw aiUnavailable();
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(result.response) as unknown;
   } catch {
-    throw answerUngrounded();
+    throw aiUnavailable();
   }
   if (!isPlainRecord(parsed)
     || !hasExactKeys(parsed, ["claims", "insufficientEvidence"])
     || !Array.isArray(parsed.claims)
     || parsed.claims.length > MAX_CLAIMS
     || typeof parsed.insufficientEvidence !== "boolean") {
-    throw answerUngrounded();
+    throw aiUnavailable();
+  }
+  for (const claim of parsed.claims) {
+    if (!isPlainRecord(claim)
+      || !hasExactKeys(claim, ["text", "citationIds"])
+      || typeof claim.text !== "string"
+      || hasMalformedSurrogate(claim.text)
+      || codePointLength(claim.text) > MAX_CLAIM_CODE_POINTS
+      || !Array.isArray(claim.citationIds)
+      || claim.citationIds.length > MAX_CITATIONS_PER_CLAIM
+      || !claim.citationIds.every(validCitationId)) {
+      throw aiUnavailable();
+    }
   }
   return parsed as unknown as ProviderAnswer;
 }
 
-function normalizeGroundedAnswer(
+function validateGrounding(
   answer: ProviderAnswer,
   sources: PreparedSource[],
-): CitedAnswerResult {
+): NormalizedClaim[] {
   const sourceOrder = sources.map((source) => source.context.citationId);
   const allowedIds = new Set(sourceOrder);
   const claims: NormalizedClaim[] = [];
 
   for (const candidate of answer.claims) {
-    if (!isPlainRecord(candidate)
-      || !hasExactKeys(candidate, ["text", "citationIds"])
-      || typeof candidate.text !== "string"
-      || hasMalformedSurrogate(candidate.text)
-      || !Array.isArray(candidate.citationIds)
-      || candidate.citationIds.length > MAX_CITATIONS_PER_CLAIM
-      || !candidate.citationIds.every((id) => typeof id === "string")) {
-      throw answerUngrounded();
-    }
-
     const text = candidate.text.trim().replace(/\s+/gu, " ");
-    if (text === "") continue;
-    if (codePointLength(text) > MAX_CLAIM_CODE_POINTS
-      || /\[\d+\]/u.test(text)
+    if (containsCitationLikeMarker(text)
       || /[\p{Cc}\p{Cf}]/u.test(text)
-      || candidate.citationIds.length === 0
       || candidate.citationIds.some((id) => !allowedIds.has(id))) {
       throw answerUngrounded();
     }
+    if (text === "") continue;
+    if (candidate.citationIds.length === 0) throw answerUngrounded();
 
     const requestedIds = new Set(candidate.citationIds);
     claims.push({
@@ -317,8 +323,15 @@ function normalizeGroundedAnswer(
       citationIds: sourceOrder.filter((citationId) => requestedIds.has(citationId)),
     });
   }
+  return claims;
+}
 
+function renderGroundedAnswer(
+  claims: NormalizedClaim[],
+  sources: PreparedSource[],
+): CitedAnswerResult {
   if (claims.length === 0) throw answerUngrounded();
+  const sourceOrder = sources.map((source) => source.context.citationId);
   const usedSet = new Set(claims.flatMap((claim) => claim.citationIds));
   const citations = sourceOrder.filter((citationId) => usedSet.has(citationId));
   const markers = new Map(citations.map((citationId, index) => [citationId, `[${index + 1}]`]));
@@ -334,6 +347,20 @@ function normalizeGroundedAnswer(
     citations,
     sources: citedSources.map((source) => source.hit),
   };
+}
+
+function countSearchTerms(question: string): number {
+  try {
+    return Math.max(1, normalizeSearchQuery(question).terms.length);
+  } catch {
+    return 1;
+  }
+}
+
+function containsCitationLikeMarker(value: string): boolean {
+  const normalized = value.normalize("NFKC");
+  return /[\[【〔〖〘〚⟦❲](?=[\s\p{Nd},、;:.\-‐‑‒–—−~\/]*\p{Nd})[\s\p{Nd},、;:.\-‐‑‒–—−~\/]+[\]】〕〗〙〛⟧❳]/u
+    .test(normalized);
 }
 
 function validateQuestion(question: unknown): string {

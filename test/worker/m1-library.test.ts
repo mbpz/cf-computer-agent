@@ -262,6 +262,16 @@ describe("M1 permission-scoped library", () => {
   });
 
   it("answers only from contributor-authorized current search hits and rejects a hidden citation", async () => {
+    for (let index = 0; index < 6; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-answer-decoy-${index}`,
+        revisionId: `revision-answer-decoy-${index}`,
+        title: `Unrelated answer decoy ${index}`,
+        visibility: "shared",
+        body: "vacation policy directory contact details",
+        searchBody: "vacation policy directory contact details",
+      });
+    }
     await seedKnowledge({
       id: "knowledge-answer-shared",
       revisionId: "revision-answer-shared",
@@ -303,7 +313,7 @@ describe("M1 permission-scoped library", () => {
       knowledgeItemId: "knowledge-answer-shared",
       revisionId: "revision-answer-shared",
     });
-    await expect(answers.answer(contributor, "What is current?", page.items)).resolves.toEqual({
+    await expect(answers.answer(contributor, "trustedanswer", page.items)).resolves.toEqual({
       answer: "Current shared evidence. [1]",
       citations: [sharedHit.citationId],
       sources: [sharedHit],
@@ -319,10 +329,77 @@ describe("M1 permission-scoped library", () => {
     expect(JSON.stringify(context)).not.toContain(hiddenCitation);
 
     citationId = hiddenCitation;
-    await expect(answers.answer(contributor, "Reveal hidden evidence", page.items)).rejects.toMatchObject({
+    await expect(answers.answer(contributor, "trustedanswer", page.items)).rejects.toMatchObject({
       code: "ANSWER_UNGROUNDED",
       status: 422,
     });
+  });
+
+  it("calibrates answer relevance against real strong and boilerplate D1 FTS5 scores", async () => {
+    for (let index = 0; index < 12; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-score-decoy-${index}`,
+        revisionId: `revision-score-decoy-${index}`,
+        title: `Unrelated handbook ${index}`,
+        visibility: "shared",
+        body: "vacation policy directory contact details",
+        searchBody: "vacation policy directory contact details",
+      });
+    }
+    await seedKnowledge({
+      id: "knowledge-score-strong",
+      revisionId: "revision-score-strong",
+      title: "Launch latency launch latency runbook",
+      visibility: "shared",
+      body: "Launch latency root cause and launch latency mitigation.",
+      searchBody: "launch latency root cause launch latency mitigation",
+    });
+    await seedKnowledge({
+      id: "knowledge-score-weak",
+      revisionId: "revision-score-weak",
+      title: "General employee handbook",
+      visibility: "shared",
+      body: `${"generic boilerplate policy ".repeat(400)}launch latency`,
+      searchBody: `${"generic boilerplate policy ".repeat(400)}launch latency`,
+    });
+    const library = serviceWithContent();
+    const page = await library.search(contributor, { query: "launch latency", limit: 20 });
+    const strong = page.items.find((hit) => hit.knowledgeItemId === "knowledge-score-strong")!;
+    const weak = page.items.find((hit) => hit.knowledgeItemId === "knowledge-score-weak")!;
+    expect(strong.score).toBeCloseTo(-6.921879008683414, 10);
+    expect(weak.score).toBeCloseTo(-0.5505091627371557, 10);
+
+    const strongAi: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "Launch latency has a documented mitigation.", citationIds: [strong.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    const strongAnswers = new CitedAnswerService(strongAi);
+    await expect(strongAnswers.answer(contributor, "launch latency", [strong])).resolves.toMatchObject({
+      answer: "Launch latency has a documented mitigation. [1]",
+      citations: [strong.citationId],
+    });
+    expect(strongAi.calls).toBe(1);
+
+    const weakAi: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<never> {
+        this.calls += 1;
+        throw new Error("weak evidence must not reach AI");
+      },
+    };
+    const weakAnswers = new CitedAnswerService(weakAi);
+    await expect(weakAnswers.answer(contributor, "launch latency", [weak])).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+    });
+    expect(weakAi.calls).toBe(0);
   });
 
   it("uses stable rank/time/chunk keysets with no gaps or duplicates", async () => {

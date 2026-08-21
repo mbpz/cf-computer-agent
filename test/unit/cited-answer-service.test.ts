@@ -20,7 +20,7 @@ const firstHit: SearchHit = {
   startLine: 3,
   endLine: 5,
   excerpt: "需求确认不足，测试窗口被压缩。",
-  score: -2,
+  score: -6.921879008683414,
   publishedAt: "2026-01-01T00:00:00.000Z",
 };
 
@@ -35,7 +35,7 @@ const secondHit: SearchHit = {
   startLine: 8,
   endLine: 9,
   excerpt: "评审前增加需求确认和独立测试窗口。",
-  score: -1,
+  score: -6.921879008683414,
 };
 
 class FakeAi implements CitedAnswerAi {
@@ -66,15 +66,32 @@ describe("CitedAnswerService.answer", () => {
     expect(ai.calls).toHaveLength(0);
   });
 
-  it("treats non-negative and non-finite FTS scores as no relevant evidence", async () => {
+  it("treats a calibrated weak-boilerplate score and non-finite scores as no relevant evidence", async () => {
     const ai = new FakeAi();
     const service = new CitedAnswerService(ai);
     const lowScoreHits = [
-      { ...firstHit, score: 0 },
+      { ...firstHit, score: -0.5505091627371557 },
       { ...secondHit, score: Number.NaN },
     ];
 
-    await expect(service.answer(scope, "发生了什么？", lowScoreHits)).resolves.toEqual({
+    await expect(service.answer(scope, "launch latency", lowScoreHits)).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+    });
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it("normalizes accumulated BM25 magnitude by the actual search-term count", async () => {
+    const ai = new FakeAi();
+    const service = new CitedAnswerService(ai);
+    const eightTermWeakScore = -0.5505091627371557 * 8;
+
+    await expect(service.answer(
+      scope,
+      "alpha beta gamma delta epsilon zeta eta theta",
+      [{ ...firstHit, score: eightTermWeakScore }],
+    )).resolves.toEqual({
       answer: "知识库中没有足够依据回答这个问题。",
       citations: [],
       sources: [],
@@ -148,7 +165,7 @@ describe("CitedAnswerService.answer", () => {
     });
     const service = new CitedAnswerService(ai);
 
-    await expect(service.answer(scope, "管理员资料怎么说？", [firstHit])).rejects.toMatchObject({
+    await expect(service.answer(scope, "launch latency", [firstHit])).rejects.toMatchObject({
       code: "ANSWER_UNGROUNDED",
       message: "AI answer could not be grounded in authorized sources",
       status: 422,
@@ -189,6 +206,42 @@ describe("CitedAnswerService.answer", () => {
   });
 
   it.each([
+    "[1,2]",
+    "[1 ]",
+    "[1-2]",
+    "［2］",
+    "[１]",
+    "［１， 2］",
+    "【1–２]",
+  ])("rejects provider-supplied citation-like marker %s before rendering canonical markers", async (marker) => {
+    const ai = new FakeAi();
+    ai.result = providerResponse({
+      claims: [{ text: `模型文本 ${marker} 不得冒充引用。`, citationIds: [firstHit.citationId] }],
+      insufficientEvidence: false,
+    });
+    const service = new CitedAnswerService(ai);
+
+    await expect(service.answer(scope, "问题", [firstHit])).rejects.toMatchObject({
+      code: "ANSWER_UNGROUNDED",
+      status: 422,
+      retryable: false,
+    });
+  });
+
+  it("preserves safe prose brackets while appending only canonical citation markers", async () => {
+    const ai = new FakeAi();
+    ai.result = providerResponse({
+      claims: [{ text: "数组 [alpha] 是来源中的名称。", citationIds: [firstHit.citationId] }],
+      insufficientEvidence: false,
+    });
+    const service = new CitedAnswerService(ai);
+
+    await expect(service.answer(scope, "问题", [firstHit])).resolves.toMatchObject({
+      answer: "数组 [alpha] 是来源中的名称。 [1]",
+    });
+  });
+
+  it.each([
     ["a direct provider string", JSON.stringify({ claims: [], insufficientEvidence: true })],
     ["an empty response object", { response: "" }],
     ["a missing response object", {}],
@@ -206,22 +259,44 @@ describe("CitedAnswerService.answer", () => {
   });
 
   it.each([
-    ["malformed JSON", { response: "not-json" }],
-    ["a parsed array", providerResponse([])],
-    ["an unexpected schema", providerResponse({ claims: "invalid", insufficientEvidence: false })],
-    ["embedded citation markers", providerResponse({
-      claims: [{ text: "模型伪造 [999] 标记。", citationIds: [firstHit.citationId] }],
+    ["malformed JSON", { response: "not-json provider-secret" }],
+    ["a parsed array", providerResponse(["provider-secret"])],
+    ["root schema drift", providerResponse({ claims: "provider-secret", insufficientEvidence: false })],
+    ["nested claim drift", providerResponse({
+      claims: [{ text: "provider-secret", citationIds: firstHit.citationId }],
       insufficientEvidence: false,
     })],
-  ])("fails closed on %s without returning provider content", async (_name, result) => {
+    ["nested citation drift hidden behind insufficient evidence", providerResponse({
+      claims: [{ text: "provider-secret", citationIds: [1] }],
+      insufficientEvidence: true,
+    })],
+  ])("maps upstream contract failure %s to a redacted retryable availability error", async (_name, result) => {
     const ai = new FakeAi();
     ai.result = result;
     const service = new CitedAnswerService(ai);
 
+    const error = await rejectedError(service.answer(scope, "问题", [firstHit]));
+    expect(error).toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI service is temporarily unavailable",
+      status: 503,
+      retryable: true,
+    });
+    expect(error.message).not.toContain("provider-secret");
+  });
+
+  it("validates semantic citations before an insufficient-evidence refusal", async () => {
+    const ai = new FakeAi();
+    ai.result = providerResponse({
+      claims: [{ text: "隐藏的伪造断言。", citationIds: ["citation-admin-only"] }],
+      insufficientEvidence: true,
+    });
+    const service = new CitedAnswerService(ai);
+
     await expect(service.answer(scope, "问题", [firstHit])).rejects.toMatchObject({
       code: "ANSWER_UNGROUNDED",
-      message: "AI answer could not be grounded in authorized sources",
       status: 422,
+      retryable: false,
     });
   });
 
@@ -276,7 +351,7 @@ describe("CitedAnswerService.answer", () => {
     expect(contextText).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u);
   });
 
-  it("rejects oversized provider claims instead of truncating unsupported output", async () => {
+  it("maps oversized nested provider output to a retryable contract failure", async () => {
     const ai = new FakeAi();
     ai.result = providerResponse({
       claims: [{ text: "😀".repeat(4_001), citationIds: [firstHit.citationId] }],
@@ -285,9 +360,25 @@ describe("CitedAnswerService.answer", () => {
     const service = new CitedAnswerService(ai);
 
     await expect(service.answer(scope, "问题", [firstHit])).rejects.toMatchObject({
-      code: "ANSWER_UNGROUNDED",
-      status: 422,
+      code: "AI_UNAVAILABLE",
+      status: 503,
+      retryable: true,
     });
+  });
+
+  it("maps an oversized raw provider response to a redacted retryable contract failure", async () => {
+    const ai = new FakeAi();
+    ai.result = { response: `provider-secret-${"x".repeat(65 * 1024)}` };
+    const service = new CitedAnswerService(ai);
+
+    const error = await rejectedError(service.answer(scope, "问题", [firstHit]));
+    expect(error).toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI service is temporarily unavailable",
+      status: 503,
+      retryable: true,
+    });
+    expect(error.message).not.toContain("provider-secret");
   });
 
   it("rejects malformed scopes and questions before sending authorized source content", async () => {
@@ -329,4 +420,18 @@ function modelContext(input: CitedAnswerAiInput): ModelContext {
 
 function modelContextText(input: CitedAnswerAiInput): string {
   return input.messages[1]!.content.split("输入 JSON：\n")[1]!;
+}
+
+async function rejectedError(promise: Promise<unknown>): Promise<Error & {
+  code?: string;
+  status?: number;
+  retryable?: boolean;
+}> {
+  try {
+    await promise;
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw new Error("expected an Error rejection");
+  }
+  throw new Error("expected promise to reject");
 }
