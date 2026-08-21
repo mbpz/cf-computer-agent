@@ -3,8 +3,16 @@ import { getWorkspace, type DurableObjectStorageLike, withWorkspace } from "@clo
 import { createApp } from "./app";
 import { APP_CONFIG } from "./config";
 import { AppError } from "./http";
+import { persistPublishedContent, validatePublishedContentInput } from "./knowledge/published-content";
 import { KnowledgeService } from "./knowledge/service";
-import type { CreateNoteResult, NoteRecord, RpcResult, SerializableAppError } from "./knowledge/types";
+import type {
+  CommitPublishedContentInput,
+  CreateNoteResult,
+  NoteRecord,
+  PublishedContentReceipt,
+  RpcResult,
+  SerializableAppError,
+} from "./knowledge/types";
 import { type KnowledgeRepository, WorkspaceRepository } from "./knowledge/workspace-repository";
 
 const JOURNAL_TABLE = "memory_garden_note_journal";
@@ -51,6 +59,32 @@ export class KnowledgeBase extends withWorkspace(
       try {
         await this.withLocalWorkspace((repository) => this.recoverPendingCommit(repository));
         return { ok: true, value: null };
+      } catch (error) {
+        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
+        throw error;
+      }
+    });
+  }
+
+  async commitPublishedContent(
+    input: CommitPublishedContentInput,
+  ): Promise<RpcResult<PublishedContentReceipt>> {
+    let content: Awaited<ReturnType<typeof validatePublishedContentInput>>;
+    try {
+      content = await validatePublishedContentInput(input);
+    } catch (error) {
+      if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
+      throw error;
+    }
+
+    return this.ctx.blockConcurrencyWhile(async () => {
+      try {
+        const workspace = await getWorkspace(this);
+        try {
+          return { ok: true, value: await persistPublishedContent(workspace, content) };
+        } finally {
+          disposeWorkspace(workspace);
+        }
       } catch (error) {
         if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
         throw error;
@@ -147,6 +181,13 @@ function isNoteRecord(value: unknown): value is NoteRecord {
     && typeof note.createdAt === "string"
     && typeof note.updatedAt === "string"
     && typeof note.path === "string";
+}
+
+function disposeWorkspace(workspace: Awaited<ReturnType<typeof getWorkspace>>): void {
+  const disposeSymbol = (Symbol as typeof Symbol & { dispose?: symbol }).dispose;
+  const disposable = workspace as unknown as Record<symbol, unknown>;
+  const dispose = disposeSymbol ? disposable[disposeSymbol] : undefined;
+  if (typeof dispose === "function") dispose.call(workspace);
 }
 
 export default createApp();

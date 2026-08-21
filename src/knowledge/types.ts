@@ -23,6 +23,24 @@ export type RpcResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: SerializableAppError };
 
+export interface CommitPublishedContentInput {
+  spaceId: string;
+  knowledgeItemId: string;
+  revisionId: string;
+  contentSha256: string;
+  markdown: string;
+}
+
+export interface PublishedContentReceipt {
+  path: string;
+  contentSha256: string;
+  bytes: number;
+}
+
+export interface PublishedContentReader {
+  read(path: string, expectedSha256: string): Promise<string>;
+}
+
 export interface SearchDocument extends NoteRecord {
   content: string;
 }
