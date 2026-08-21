@@ -43,6 +43,34 @@ describe("chunkDocument", () => {
     expect(chunks.map(({ body }) => body)).toEqual(["a", "b"]);
   });
 
+  it("reports absolute document lines when splitting after headings and blanks", () => {
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: "# Context\n\nabcdefghij\nklmnopqrst\n",
+    }, { maxCodePoints: 8, overlapCodePoints: 2 });
+
+    expect(chunks.map(({ startLine, endLine }) => [startLine, endLine])).toEqual([
+      [3, 3], [3, 4], [4, 4], [4, 4],
+    ]);
+  });
+
+  it("does not create chunks for whitespace-only normalized input", () => {
+    expect(chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: " \n\t\n",
+    })).toEqual([]);
+  });
+
+  it("keeps heading-only Markdown meaningful and searchable", () => {
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: "\n# A\n\n## B\n",
+    });
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toMatchObject({ startLine: 2, endLine: 2, body: "# A", searchBody: "a" });
+  });
+
   it("keeps a short fenced code block intact", () => {
     const input = {
       kind: "markdown" as const,

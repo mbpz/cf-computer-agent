@@ -21,7 +21,7 @@ export function chunkDocument(
   const overlapCodePoints = options?.overlapCodePoints ?? defaultOverlapCodePoints;
   assertChunkOptions(maxCodePoints, overlapCodePoints);
 
-  if (document.normalizedMarkdown.length === 0) return [];
+  if (document.normalizedMarkdown.trim().length === 0) return [];
 
   const blocks = parseBlocks(document.normalizedMarkdown);
   const drafts: ChunkDraft[] = [];
@@ -44,14 +44,19 @@ export function chunkDocument(
   // A document containing only headings still has useful source material. This
   // fallback also keeps the non-empty-input invariant explicit.
   if (drafts.length === 0) {
-    const firstLine = document.normalizedMarkdown.split("\n")[0] ?? document.normalizedMarkdown;
+    const firstLine = document.normalizedMarkdown
+      .split("\n")
+      .map((text, index) => ({ text, line: index + 1 }))
+      .find(({ text }) => text.trim().length > 0);
+    if (firstLine === undefined) return [];
+    const heading = parseHeading(firstLine.text);
     return [{
       ordinal: 0,
-      headingPath: [],
-      startLine: 1,
-      endLine: 1,
-      body: firstLine,
-      searchBody: makeSearchBody(firstLine),
+      headingPath: heading === null ? [] : [heading.title],
+      startLine: firstLine.line,
+      endLine: firstLine.line,
+      body: firstLine.text,
+      searchBody: makeSearchBody(firstLine.text),
     }];
   }
   return drafts;
@@ -175,8 +180,8 @@ function splitTextBlock(block: Block, max: number, overlap: number): LocatedChun
     }
     chunks.push({
       body: chunkBody,
-      startLine: lineAtOffset(start, lineStarts),
-      endLine: lineAtOffset(Math.max(start, end - 1), lineStarts),
+      startLine: lineAtOffset(start, lineStarts, lines[0]!.line),
+      endLine: lineAtOffset(Math.max(start, end - 1), lineStarts, lines[0]!.line),
     });
     if (end === codePoints.length) break;
     const nextStart = end - overlap;
@@ -234,13 +239,13 @@ function countJoinedCodePoints(lines: SourceLine[]): number {
   return lines.reduce((sum, line, index) => sum + [...line.text].length + (index === 0 ? 0 : 1), 0);
 }
 
-function lineAtOffset(offset: number, lineStarts: number[]): number {
+function lineAtOffset(offset: number, lineStarts: number[], firstLine: number): number {
   let line = 0;
   for (let index = 1; index < lineStarts.length; index += 1) {
     if (lineStarts[index]! > offset) break;
     line = index;
   }
-  return line + 1;
+  return firstLine + line;
 }
 
 function makeSearchBody(body: string): string {

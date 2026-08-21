@@ -101,4 +101,11 @@ describe("parseSource", () => {
     await expect(parseSource({ kind: "text", content }))
       .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
   });
+
+  it("rejects whitespace-only text and Markdown before chunking", async () => {
+    await expect(parseSource({ kind: "text", content: " \t\r\n" }))
+      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    await expect(parseSource({ kind: "markdown", content: " \t\r\n" }))
+      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+  });
 });
