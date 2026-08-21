@@ -56,6 +56,8 @@
 
 目标：一条文本/Markdown/代码来源完成“提交 → 解析 → 分块 → 审核 → 发布 → FTS 搜索 → 阅读 → 引用问答”。
 
+实施计划：[M1 单来源可信知识闭环实施计划](./docs/superpowers/plans/2026-08-21-m1-single-source-knowledge-loop.md)
+
 范围：
 
 - Source、SourceVersion、KnowledgeItem、Revision、Chunk、Citation 的最小权威模型。
