@@ -181,7 +181,10 @@ async function fetchJson(
     });
     if (dependencies.now() - startedAt > timeoutMs) fail("timeout");
     if (response.redirected) fail("redirect", response.status);
-    if (response.url !== expectedUrl || new URL(response.url).protocol !== "https:") fail("url", response.status);
+    if (response.url !== ""
+      && (response.url !== expectedUrl || new URL(response.url).protocol !== "https:")) {
+      fail("url", response.status);
+    }
     if (!response.ok) fail("status", response.status);
     if (!isJsonContentType(response.headers.get("content-type"))) fail("content_type", response.status);
     try {

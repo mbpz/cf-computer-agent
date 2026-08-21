@@ -186,8 +186,7 @@ describe("GitHub OAuth protocol", () => {
     }
   });
 
-  it("rejects an upstream response without an exact final URL before any follow-up request", async () => {
-    let calls = 0;
+  it("accepts successful non-redirected Workers responses when the runtime omits Response.url", async () => {
     const responses = [
       json({ access_token: "local-access-token" }),
       json({ id: 42 }),
@@ -195,16 +194,17 @@ describe("GitHub OAuth protocol", () => {
     ];
     const client = oauthClient({
       fetch: async () => {
-        calls += 1;
-        return responses.shift()!;
+        const response = responses.shift();
+        if (!response) throw new Error("unexpected local fetch");
+        return response;
       },
     });
 
-    await expect(client.resolveCallback("local-code", verifier())).rejects.toMatchObject({
-      code: "OAUTH_UPSTREAM_UNAVAILABLE",
-      status: 503,
+    await expect(client.resolveCallback("local-code", verifier())).resolves.toEqual({
+      subject: "github:42",
+      githubUserId: "42",
+      email: "admin@example.test",
     });
-    expect(calls).toBe(1);
   });
 
   it("aborts a slow upstream request and returns a stable timeout error", async () => {
