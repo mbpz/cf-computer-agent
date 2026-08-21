@@ -1,6 +1,11 @@
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
+import {
+  buildSearchMatchQuery,
+  isCanonicalSearchTerm,
+  tokenizeSearchText,
+} from "./lexical";
 import type {
   CitationSource,
   KnowledgeListItem,
@@ -453,14 +458,11 @@ function mapSearchHit(row: SearchRow, terms: string[]): SearchHit {
 
 function safeExcerpt(body: string, terms: string[]): string {
   const inert = body.normalize("NFKC").replace(/\p{Cc}/gu, " ").replace(/\s+/gu, " ").trim();
-  const points = [...inert];
+  const tokenized = tokenizeSearchText(inert);
+  const points = [...tokenized.normalizedText];
   if (points.length <= MAX_EXCERPT_CODE_POINTS) return inert;
-  const lower = [...inert.toLowerCase()];
-  let match = 0;
-  for (const term of terms) {
-    const found = findSubsequence(lower, [...term]);
-    if (found >= 0 && (match === 0 || found < match)) match = found;
-  }
+  const queryTerms = new Set(terms);
+  const match = tokenized.tokens.find((token) => queryTerms.has(token.value))?.start ?? 0;
   let start = Math.max(0, match - 60);
   let prefix = start > 0 ? "…" : "";
   const suffix = start + MAX_EXCERPT_CODE_POINTS < points.length ? "…" : "";
@@ -468,17 +470,6 @@ function safeExcerpt(body: string, terms: string[]): string {
   if (start + budget > points.length) start = Math.max(0, points.length - budget);
   prefix = start > 0 ? "…" : "";
   return `${prefix}${points.slice(start, start + budget).join("")}${suffix}`;
-}
-
-function findSubsequence(haystack: string[], needle: string[]): number {
-  if (needle.length === 0 || needle.length > haystack.length) return -1;
-  outer: for (let index = 0; index + needle.length <= haystack.length; index += 1) {
-    for (let offset = 0; offset < needle.length; offset += 1) {
-      if (haystack[index + offset] !== needle[offset]) continue outer;
-    }
-    return index;
-  }
-  return -1;
 }
 
 function decodeListCursor(cursor: string, key: string): ListCursor {
@@ -513,8 +504,8 @@ function decodeSearchCursor(cursor: string, key: string): SearchCursor {
 function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   assertRepositoryPageRequest(request);
   if (!Array.isArray(request.terms) || request.terms.length < 1 || request.terms.length > 32
-    || request.terms.some((term) => typeof term !== "string" || !/^[\p{L}\p{N}_]+$/u.test(term))
-    || request.matchQuery !== request.terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(" AND ")) {
+    || request.terms.some((term) => !isCanonicalSearchTerm(term))
+    || request.matchQuery !== buildSearchMatchQuery(request.terms)) {
     throw new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);
   }
 }

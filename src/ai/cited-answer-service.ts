@@ -1,6 +1,10 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
-import { normalizeSearchQuery, type NormalizedSearchQuery } from "../library/service";
+import {
+  normalizeSearchQuery,
+  tokenizeSearchText,
+  type NormalizedSearchQuery,
+} from "../library/lexical";
 import type { LibraryScope, SearchHit } from "../library/types";
 
 const SYSTEM_PROMPT = [
@@ -129,7 +133,7 @@ export class CitedAnswerService {
     authorizedHits: SearchHit[],
   ): Promise<CitedAnswerResult> {
     assertScope(scope);
-    const normalizedQuestion = normalizeSearchQuery(validateQuestion(question));
+    const normalizedQuestion = normalizeSearchQuery(question);
     const preparedSources = prepareSources(normalizedQuestion, authorizedHits);
     if (preparedSources.length === 0) return noEvidence();
 
@@ -219,8 +223,9 @@ function hasQueryTermCoverage(
   source: Pick<ContextSource, "title" | "excerpt">,
   queryTerms: string[],
 ): boolean {
-  const visibleEvidence = `${source.title}\n${source.excerpt}`.normalize("NFKC").toLowerCase();
-  return queryTerms.every((term) => visibleEvidence.includes(term));
+  const visibleTerms = new Set(tokenizeSearchText(`${source.title}\n${source.excerpt}`)
+    .tokens.map((token) => token.value));
+  return queryTerms.every((term) => visibleTerms.has(term));
 }
 
 function toContextSource(hit: SearchHit): ContextSource | null {
@@ -364,18 +369,6 @@ function sanitizeClaimText(value: string): string {
   }).join("");
   if (/[\[\]\p{Ps}\p{Pe}]/u.test(sanitized.normalize("NFKC"))) throw answerUngrounded();
   return sanitized;
-}
-
-function validateQuestion(question: unknown): string {
-  if (typeof question !== "string" || hasMalformedSurrogate(question) || question.trim() === "") {
-    throw new AppError("QUESTION_INVALID", "Question is required", 400);
-  }
-  const normalized = question.normalize("NFKC").trim();
-  if (codePointLength(normalized) > APP_CONFIG.maxQuestionChars
-    || encoder.encode(normalized).byteLength > APP_CONFIG.maxQuestionChars * 4) {
-    throw new AppError("QUESTION_TOO_LONG", "Question exceeds 4,000 characters", 413);
-  }
-  return normalized;
 }
 
 function assertScope(scope: LibraryScope): void {

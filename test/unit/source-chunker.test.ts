@@ -106,15 +106,17 @@ describe("chunkDocument", () => {
     expect(chunks.map((chunk) => chunk.endLine)).toEqual([2, 3, 5]);
   });
 
-  it("indexes lower-case tokens and deterministic adjacent Han bigrams", () => {
+  it("indexes shared unicode61 tokens, underscore separators, and adjacent Han bigrams", () => {
     const chunks = chunkDocument({
       kind: "markdown",
-      normalizedMarkdown: "Cloud COMPUTE 第一段知识。",
+      normalizedMarkdown: "Cloud COMPUTE foo_bar 第一段知识。",
     });
 
     expect(chunks).toHaveLength(1);
     expect(chunks[0].searchBody).toContain("cloud");
     expect(chunks[0].searchBody).toContain("compute");
+    expect(chunks[0].searchBody).toContain("foo bar");
+    expect(chunks[0].searchBody).not.toContain("foo_bar");
     expect(chunks[0].searchBody).toContain("第一");
     expect(chunks[0].searchBody).toContain("一段");
     expect(chunks[0].searchBody).toContain("段知");

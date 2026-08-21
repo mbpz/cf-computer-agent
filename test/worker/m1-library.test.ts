@@ -261,6 +261,91 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
+  it("centers excerpts on exact lexical tokens instead of prefixed substrings", async () => {
+    await seedKnowledge({
+      id: "knowledge-substring-only",
+      revisionId: "revision-substring-only",
+      title: "Substring-only handbook",
+      visibility: "shared",
+      body: "prelaunch postlatency cannot satisfy exact search tokens",
+      searchBody: "prelaunch postlatency cannot satisfy exact search tokens",
+    });
+    await seedKnowledge({
+      id: "knowledge-excerpt-token-boundary",
+      revisionId: "revision-excerpt-token-boundary",
+      title: "Token boundary handbook",
+      visibility: "shared",
+      body: `prelaunch postlatency ${"unrelated filler ".repeat(40)}launch latency resolved`,
+      searchBody: `prelaunch postlatency ${"unrelated filler ".repeat(40)}launch latency resolved`,
+    });
+    const service = serviceWithContent();
+
+    const page = await service.search(contributor, { query: "launch latency", limit: 20 });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]!.knowledgeItemId).toBe("knowledge-excerpt-token-boundary");
+    expect(page.items[0]!.excerpt).toContain("launch latency resolved");
+    expect(page.items[0]!.excerpt).not.toContain("prelaunch postlatency");
+
+    const stuffed = await service.search(contributor, {
+      query: "prelaunch postlatency launch latency",
+      limit: 20,
+    });
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<never> {
+        this.calls += 1;
+        throw new Error("query stuffing must not elevate partial bounded evidence");
+      },
+    };
+    await expect(new CitedAnswerService(ai).answer(
+      contributor,
+      "prelaunch postlatency launch latency",
+      stuffed.items,
+    )).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+    });
+    expect(ai.calls).toBe(0);
+  });
+
+  it("shares underscore, case, and NFKC token semantics from D1 search through cited answers", async () => {
+    await seedKnowledge({
+      id: "knowledge-foo-bar",
+      revisionId: "revision-foo-bar",
+      title: "Foo bar guide",
+      visibility: "shared",
+      body: "foo bar rollout requires review",
+      searchBody: "foo bar rollout requires review",
+    });
+    const library = serviceWithContent();
+
+    const ascii = await library.search(contributor, { query: "foo_bar", limit: 20 });
+    const compatibility = await library.search(contributor, { query: "ＦＯＯ_ＢＡＲ", limit: 20 });
+
+    expect(ascii.items).toHaveLength(1);
+    expect(compatibility.items).toEqual(ascii.items);
+    const hit = compatibility.items[0]!;
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "The foo bar rollout requires review.", citationIds: [hit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+
+    await expect(new CitedAnswerService(ai).answer(contributor, "ＦＯＯ_ＢＡＲ", compatibility.items))
+      .resolves.toMatchObject({
+        answer: "The foo bar rollout requires review. [1]",
+        citations: [hit.citationId],
+      });
+    expect(ai.calls).toBe(1);
+  });
+
   it("answers only from contributor-authorized current search hits and rejects a hidden citation", async () => {
     for (let index = 0; index < 6; index += 1) {
       await seedKnowledge({

@@ -1,5 +1,6 @@
-import type { ParsedSource } from "./types";
+import { uniqueSearchTerms } from "../library/lexical";
 import type { SubmissionKind } from "../submissions/types";
+import type { ParsedSource } from "./types";
 
 const defaultMaxCodePoints = 1_200;
 const defaultOverlapCodePoints = 120;
@@ -249,22 +250,8 @@ function lineAtOffset(offset: number, lineStarts: number[], firstLine: number): 
 }
 
 function makeSearchBody(body: string): string {
-  const lower = body.toLowerCase();
-  const tokens = lower.match(/[\p{L}\p{N}_]+/gu) ?? [];
-  const bigrams: string[] = [];
-  let hanRun: string[] = [];
-  const flushHanRun = (): void => {
-    for (let index = 0; index + 1 < hanRun.length; index += 1) {
-      bigrams.push(`${hanRun[index]}${hanRun[index + 1]}`);
-    }
-    hanRun = [];
-  };
-  for (const character of [...lower]) {
-    if (/\p{Script=Han}/u.test(character)) hanRun.push(character);
-    else flushHanRun();
-  }
-  flushHanRun();
-  return [...tokens, ...bigrams].join(" ") || lower.trim();
+  const normalized = body.normalize("NFKC");
+  return uniqueSearchTerms(normalized).join(" ") || normalized.toLowerCase().trim();
 }
 
 function assertChunkOptions(max: number, overlap: number): void {

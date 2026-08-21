@@ -115,8 +115,12 @@ describe("LibraryService", () => {
   it("quotes normalized Unicode/code terms so FTS operators remain inert", () => {
     expect(normalizeSearchQuery("  ＧｅｔUser_ID  权限治理  ")).toEqual({
       normalizedQuery: "GetUser_ID 权限治理",
-      matchQuery: "\"getuser_id\" AND \"权限治理\" AND \"权限\" AND \"限治\" AND \"治理\"",
-      terms: ["getuser_id", "权限治理", "权限", "限治", "治理"],
+      matchQuery: "\"getuser\" AND \"id\" AND \"权限治理\" AND \"权限\" AND \"限治\" AND \"治理\"",
+      terms: ["getuser", "id", "权限治理", "权限", "限治", "治理"],
+    });
+    expect(normalizeSearchQuery("foo_bar")).toMatchObject({
+      matchQuery: "\"foo\" AND \"bar\"",
+      terms: ["foo", "bar"],
     });
     expect(normalizeSearchQuery('foo" OR admin*')).toMatchObject({
       matchQuery: "\"foo\" AND \"or\" AND \"admin\"",
@@ -127,9 +131,15 @@ describe("LibraryService", () => {
     "",
     "   ",
     "😀😀",
+    "\nquery",
+    "query\n",
+    "\tquery",
+    "query\t",
     "bad\u0000query",
     "bad\ud800query",
     "a".repeat(201),
+    "  " + "a".repeat(199),
+    "界".repeat(171),
     Array.from({ length: 33 }, (_, index) => `term${index}`).join(" "),
   ])("rejects an empty, unsafe, or unbounded search query", async (query) => {
     expect(() => normalizeSearchQuery(query)).toThrow(expect.objectContaining({

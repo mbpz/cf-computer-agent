@@ -1,6 +1,7 @@
 import { AppError } from "../http";
 import type { PublishedContentReader } from "../knowledge/types";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
+import { normalizeSearchQuery } from "./lexical";
 import type {
   AuthorizedRevisionRecord,
   LibraryRepositoryPort,
@@ -19,19 +20,13 @@ import type {
   SearchRequest,
 } from "./types";
 
-const MAX_QUERY_CODE_POINTS = 200;
-const MAX_QUERY_BYTES = 512;
-const MAX_QUERY_TERMS = 32;
+export { normalizeSearchQuery } from "./lexical";
+export type { NormalizedSearchQuery } from "./lexical";
+
 const MAX_LOOKUP_ID_CODE_POINTS = 128;
 const MAX_LOOKUP_ID_BYTES = 512;
 const FILTER_ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
 const encoder = new TextEncoder();
-
-export interface NormalizedSearchQuery {
-  normalizedQuery: string;
-  matchQuery: string;
-  terms: string[];
-}
 
 export interface CitationLookup {
   revisionId: string;
@@ -148,28 +143,6 @@ export class LibraryService {
   }
 }
 
-export function normalizeSearchQuery(query: string): NormalizedSearchQuery {
-  if (typeof query !== "string" || hasMalformedSurrogate(query) || hasControlCharacter(query)) {
-    throw invalidSearchQuery();
-  }
-  const normalizedQuery = query.normalize("NFKC").trim().replace(/\s+/gu, " ");
-  if (normalizedQuery.length === 0
-    || [...normalizedQuery].length > MAX_QUERY_CODE_POINTS
-    || encoder.encode(normalizedQuery).byteLength > MAX_QUERY_BYTES) {
-    throw invalidSearchQuery();
-  }
-
-  const lower = normalizedQuery.toLowerCase();
-  const lexical = lower.match(/[\p{L}\p{N}_]+/gu) ?? [];
-  const terms = unique([...lexical, ...hanBigrams(lower)]);
-  if (terms.length === 0 || terms.length > MAX_QUERY_TERMS) throw invalidSearchQuery();
-  return {
-    normalizedQuery,
-    terms,
-    matchQuery: terms.map(quoteFtsTerm).join(" AND "),
-  };
-}
-
 export function encodeCitationId(lookup: CitationLookup): string {
   if (!isLookupId(lookup.revisionId) || !isLookupId(lookup.chunkId)) throw invalidCitation();
   return encodeOpaqueCursor({ v: 1, revisionId: lookup.revisionId, chunkId: lookup.chunkId });
@@ -218,31 +191,6 @@ async function cursorKey(
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function quoteFtsTerm(term: string): string {
-  return `"${term.replace(/"/g, '""')}"`;
-}
-
-function hanBigrams(value: string): string[] {
-  const bigrams: string[] = [];
-  let run: string[] = [];
-  const flush = (): void => {
-    for (let index = 0; index + 1 < run.length; index += 1) {
-      bigrams.push(`${run[index]}${run[index + 1]}`);
-    }
-    run = [];
-  };
-  for (const character of [...value]) {
-    if (/\p{Script=Han}/u.test(character)) run.push(character);
-    else flush();
-  }
-  flush();
-  return bigrams;
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
 function isLibraryScope(value: LibraryScope): boolean {
   return Boolean(value && typeof value === "object"
     && isLookupId(value.memberId)
@@ -285,10 +233,6 @@ function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 function knowledgeNotFound(): AppError {
   return new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge was not found", 404);
-}
-
-function invalidSearchQuery(): AppError {
-  return new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);
 }
 
 function invalidCitation(): AppError {

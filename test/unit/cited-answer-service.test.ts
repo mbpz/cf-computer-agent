@@ -84,6 +84,24 @@ describe("CitedAnswerService.answer", () => {
     expect(ai.calls).toHaveLength(0);
   });
 
+  it("refuses prefixed substrings that are not exact lexical query tokens", async () => {
+    const ai = new FakeAi();
+    const service = new CitedAnswerService(ai);
+    const substringHit = {
+      ...firstHit,
+      title: "Prelaunch handbook",
+      excerpt: "Postlatency notes contain no exact query tokens.",
+      score: -100,
+    };
+
+    await expect(service.answer(scope, "launch latency", [substringHit])).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+    });
+    expect(ai.calls).toHaveLength(0);
+  });
+
   it("uses Task 7 query validation without a fallback for newlines, padding-only, or over-200 input", async () => {
     const ai = new FakeAi();
     const service = new CitedAnswerService(ai);
@@ -97,6 +115,25 @@ describe("CitedAnswerService.answer", () => {
       status: 400,
     });
     await expect(service.answer(scope, "x".repeat(201), [firstHit])).rejects.toMatchObject({
+      code: "SEARCH_QUERY_INVALID",
+      status: 400,
+    });
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it.each([
+    "\nlaunch latency",
+    "launch latency\n",
+    "\tlaunch latency",
+    "launch latency\t",
+    "launch\u0000latency",
+    " ".repeat(2) + "x".repeat(199),
+    "   ",
+  ])("validates the original raw question before trimming or normalization: %j", async (question) => {
+    const ai = new FakeAi();
+    const service = new CitedAnswerService(ai);
+
+    await expect(service.answer(scope, question, [firstHit])).rejects.toMatchObject({
       code: "SEARCH_QUERY_INVALID",
       status: 400,
     });
@@ -437,7 +474,7 @@ describe("CitedAnswerService.answer", () => {
       [firstHit],
     )).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
     await expect(service.answer(scope, "   ", [firstHit])).rejects.toMatchObject({
-      code: "QUESTION_INVALID",
+      code: "SEARCH_QUERY_INVALID",
       status: 400,
     });
     expect(ai.calls).toHaveLength(0);
