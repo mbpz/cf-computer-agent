@@ -10,7 +10,7 @@ Create a GitHub OAuth App with these exact values:
 - Homepage URL: `https://memory.crgmhrc.asia`
 - Authorization callback URL: `https://memory.crgmhrc.asia/auth/github/callback`
 
-The GitHub Client ID and automation client ID are identifiers, not credentials. The GitHub client secret, bootstrap and allowlist email configuration, automation secret, and APP token are sensitive. `ALLOWED_MEMBER_EMAILS` is a nonempty comma-separated list of unique valid canonical emails: trim and lowercase every entry; reject empty entries and duplicates after that canonicalization; each address is at most 254 visible-ASCII characters with exactly one `@`, a 1–64-character local part, and a domain containing at least two nonempty dot-separated labels. `BOOTSTRAP_ADMIN_EMAIL` must itself be a valid canonical email and must be included in that list. `AUTOMATION_SECRET` and `APP_TOKEN` each need at least 32 independently random bytes; the commands below generate 48 bytes for each. Do not commit any production value to `wrangler.jsonc`, `config/types.env`, `.dev.vars`, shell arguments, transcripts, logs, browser code, or audit metadata. The checked-in values in `config/types.env` are fake type-generation inputs only.
+The GitHub Client ID and automation client ID are identifiers, not credentials. The GitHub client secret, bootstrap and allowlist email configuration, automation secret, and APP token are sensitive. `ALLOWED_MEMBER_EMAILS` is a nonempty comma-separated list of unique valid canonical emails: trim and lowercase every entry; reject empty entries and duplicates after that canonicalization; each address is at most 254 visible-ASCII characters with exactly one `@`, a 1–64-character local part, and a domain containing at least two nonempty dot-separated labels. `BOOTSTRAP_ADMIN_EMAIL` must itself be a valid canonical email and must be included in that list. `AUTOMATION_SECRET` and `APP_TOKEN` each need at least 32 independently random bytes. Generate and store all three automation values using [the production environment handbook](./production-environment-handbook.md#66-生成保存并在发布时读取), then enter those stored values below; the upload and later smoke must use the same credentials. Do not commit any production value to `wrangler.jsonc`, `config/types.env`, `.dev.vars`, shell arguments, transcripts, logs, browser code, or audit metadata. The checked-in values in `config/types.env` are fake type-generation inputs only.
 
 The existing D1 binding ID is a non-secret identifier for the intended `memory-garden-control-plane` database. Do not create another database. Keep `workers_dev: false`, `preview_urls: false`, the `KnowledgeBase` Durable Object migration `v1`, and the asset Worker-first configuration unchanged.
 
@@ -35,7 +35,7 @@ Run this section only after the operator has explicitly authorized each remote a
    rtk npm run db:migrate:remote
    ```
 
-3. Upload one non-deployed Worker version containing the locally reviewed code, configuration, assets, and complete secret bundle. Do **not** use plain `wrangler secret put` or `wrangler versions secret bulk`: those commands do not establish that the secret-bearing version contains the reviewed local release candidate. Create the temporary directory outside this repository, restrict both directory and file permissions, and keep shell tracing disabled. The random-generation commands feed generated values directly into hidden variables, so they do not print in CI logs or terminal output. Do not use a `.dev.vars` or dotenv file for this bundle: it must be JSON so `#`, quotes, backslashes, and commas round-trip through `JSON.stringify` without dotenv parsing.
+3. Upload one non-deployed Worker version containing the locally reviewed code, configuration, assets, and complete secret bundle. Do **not** use plain `wrangler secret put` or `wrangler versions secret bulk`: those commands do not establish that the secret-bearing version contains the reviewed local release candidate. Create the temporary directory outside this repository, restrict both directory and file permissions, and keep shell tracing disabled. Hidden reads load the previously generated and stored values without printing them in CI logs or terminal output. Do not generate a different automation secret or APP token during upload: the stored values must also be available to the signed smoke client. Do not use a `.dev.vars` or dotenv file for this bundle: it must be JSON so `#`, quotes, backslashes, and commas round-trip through `JSON.stringify` without dotenv parsing.
 
    ```bash
    set +x
@@ -57,8 +57,8 @@ Run this section only after the operator has explicitly authorized each remote a
    read -rs BOOTSTRAP_ADMIN_EMAIL
    read -rs ALLOWED_MEMBER_EMAILS
    read -r AUTOMATION_CLIENT_ID
-   IFS= read -r -s AUTOMATION_SECRET < <(openssl rand -base64 48)
-   IFS= read -r -s APP_TOKEN < <(openssl rand -base64 48)
+   read -rs AUTOMATION_SECRET
+   read -rs APP_TOKEN
    GITHUB_OAUTH_CLIENT_ID="$GITHUB_OAUTH_CLIENT_ID" \
    GITHUB_OAUTH_CLIENT_SECRET="$GITHUB_OAUTH_CLIENT_SECRET" \
    BOOTSTRAP_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
