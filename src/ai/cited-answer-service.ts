@@ -1,6 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
-import { normalizeSearchQuery } from "../library/service";
+import { normalizeSearchQuery, type NormalizedSearchQuery } from "../library/service";
 import type { LibraryScope, SearchHit } from "../library/types";
 
 const SYSTEM_PROMPT = [
@@ -30,7 +30,6 @@ const MAX_CITATIONS_PER_CLAIM = 8;
 const MAX_ANSWER_CODE_POINTS = 4_000;
 const MAX_MEMBER_ID_CODE_POINTS = 128;
 const MAX_MEMBER_ID_BYTES = 512;
-const MIN_BM25_MAGNITUDE_PER_TERM = 1;
 const encoder = new TextEncoder();
 
 const RESPONSE_SCHEMA = {
@@ -130,7 +129,7 @@ export class CitedAnswerService {
     authorizedHits: SearchHit[],
   ): Promise<CitedAnswerResult> {
     assertScope(scope);
-    const normalizedQuestion = validateQuestion(question);
+    const normalizedQuestion = normalizeSearchQuery(validateQuestion(question));
     const preparedSources = prepareSources(normalizedQuestion, authorizedHits);
     if (preparedSources.length === 0) return noEvidence();
 
@@ -142,7 +141,7 @@ export class CitedAnswerService {
           {
             role: "user",
             content: `请回答输入 JSON 中的问题。输入 JSON：\n${serializeContext(
-              normalizedQuestion,
+              normalizedQuestion.normalizedQuery,
               preparedSources.map((source) => source.context),
             )}`,
           },
@@ -169,38 +168,38 @@ export class CitedAnswerService {
   }
 }
 
-function prepareSources(question: string, hits: SearchHit[]): PreparedSource[] {
+function prepareSources(query: NormalizedSearchQuery, hits: SearchHit[]): PreparedSource[] {
   if (!Array.isArray(hits)) return [];
   const prepared: PreparedSource[] = [];
   const seen = new Set<string>();
-  const queryTermCount = countSearchTerms(question);
 
   for (const hit of hits) {
     if (prepared.length >= MAX_SOURCES) break;
-    if (!isRelevantHit(hit, queryTermCount) || seen.has(hit.citationId)) continue;
+    if (!isSearchHit(hit) || seen.has(hit.citationId)) continue;
     const context = toContextSource(hit);
-    if (!context) continue;
+    if (!context || !hasQueryTermCoverage(context, query.terms)) continue;
 
-    if (fitsContext(question, [...prepared.map((source) => source.context), context])) {
+    if (fitsContext(query.normalizedQuery, [...prepared.map((source) => source.context), context])) {
       seen.add(hit.citationId);
       prepared.push({ hit, context });
       continue;
     }
 
-    const excerpt = fitExcerpt(question, prepared, context);
+    const excerpt = fitExcerpt(query.normalizedQuery, prepared, context);
     if (excerpt === null) continue;
+    const fittedContext = { ...context, excerpt };
+    if (!hasQueryTermCoverage(fittedContext, query.terms)) continue;
     seen.add(hit.citationId);
-    prepared.push({ hit, context: { ...context, excerpt } });
+    prepared.push({ hit, context: fittedContext });
   }
   return prepared;
 }
 
-function isRelevantHit(value: unknown, queryTermCount: number): value is SearchHit {
+function isSearchHit(value: unknown): value is SearchHit {
   return isPlainRecord(value)
     && typeof value.score === "number"
     && Number.isFinite(value.score)
     && value.score < 0
-    && (-value.score / queryTermCount) >= MIN_BM25_MAGNITUDE_PER_TERM
     && validCitationId(value.citationId)
     && typeof value.title === "string"
     && !hasMalformedSurrogate(value.title)
@@ -214,6 +213,14 @@ function isRelevantHit(value: unknown, queryTermCount: number): value is SearchH
     && value.endLine >= value.startLine
     && typeof value.excerpt === "string"
     && !hasMalformedSurrogate(value.excerpt);
+}
+
+function hasQueryTermCoverage(
+  source: Pick<ContextSource, "title" | "excerpt">,
+  queryTerms: string[],
+): boolean {
+  const visibleEvidence = `${source.title}\n${source.excerpt}`.normalize("NFKC").toLowerCase();
+  return queryTerms.every((term) => visibleEvidence.includes(term));
 }
 
 function toContextSource(hit: SearchHit): ContextSource | null {
@@ -308,9 +315,8 @@ function validateGrounding(
   const claims: NormalizedClaim[] = [];
 
   for (const candidate of answer.claims) {
-    const text = candidate.text.trim().replace(/\s+/gu, " ");
-    if (containsCitationLikeMarker(text)
-      || /[\p{Cc}\p{Cf}]/u.test(text)
+    const text = sanitizeClaimText(candidate.text);
+    if (/[\p{Cc}\p{Cf}]/u.test(text)
       || candidate.citationIds.some((id) => !allowedIds.has(id))) {
       throw answerUngrounded();
     }
@@ -349,18 +355,15 @@ function renderGroundedAnswer(
   };
 }
 
-function countSearchTerms(question: string): number {
-  try {
-    return Math.max(1, normalizeSearchQuery(question).terms.length);
-  } catch {
-    return 1;
-  }
-}
-
-function containsCitationLikeMarker(value: string): boolean {
-  const normalized = value.normalize("NFKC");
-  return /[\[【〔〖〘〚⟦❲](?=[\s\p{Nd},、;:.\-‐‑‒–—−~\/]*\p{Nd})[\s\p{Nd},、;:.\-‐‑‒–—−~\/]+[\]】〕〗〙〛⟧❳]/u
-    .test(normalized);
+function sanitizeClaimText(value: string): string {
+  const normalized = value.normalize("NFKC").trim().replace(/\s+/gu, " ");
+  const sanitized = [...normalized].map((point) => {
+    if (/\p{Ps}/u.test(point)) return "‹";
+    if (/\p{Pe}/u.test(point)) return "›";
+    return point;
+  }).join("");
+  if (/[\[\]\p{Ps}\p{Pe}]/u.test(sanitized.normalize("NFKC"))) throw answerUngrounded();
+  return sanitized;
 }
 
 function validateQuestion(question: unknown): string {

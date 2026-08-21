@@ -335,55 +335,120 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
-  it("calibrates answer relevance against real strong and boilerplate D1 FTS5 scores", async () => {
-    for (let index = 0; index < 12; index += 1) {
-      await seedKnowledge({
-        id: `knowledge-score-decoy-${index}`,
-        revisionId: `revision-score-decoy-${index}`,
-        title: `Unrelated handbook ${index}`,
-        visibility: "shared",
-        body: "vacation policy directory contact details",
-        searchBody: "vacation policy directory contact details",
-      });
-    }
+  it("accepts strong English evidence with real tiny-corpus FTS5 scores", async () => {
     await seedKnowledge({
-      id: "knowledge-score-strong",
-      revisionId: "revision-score-strong",
-      title: "Launch latency launch latency runbook",
+      id: "knowledge-tiny-english",
+      revisionId: "revision-tiny-english",
+      title: "Launch latency review",
       visibility: "shared",
-      body: "Launch latency root cause and launch latency mitigation.",
-      searchBody: "launch latency root cause launch latency mitigation",
-    });
-    await seedKnowledge({
-      id: "knowledge-score-weak",
-      revisionId: "revision-score-weak",
-      title: "General employee handbook",
-      visibility: "shared",
-      body: `${"generic boilerplate policy ".repeat(400)}launch latency`,
-      searchBody: `${"generic boilerplate policy ".repeat(400)}launch latency`,
+      body: "Launch latency was caused by a compressed test window.",
+      searchBody: "launch latency compressed test window",
     });
     const library = serviceWithContent();
     const page = await library.search(contributor, { query: "launch latency", limit: 20 });
-    const strong = page.items.find((hit) => hit.knowledgeItemId === "knowledge-score-strong")!;
-    const weak = page.items.find((hit) => hit.knowledgeItemId === "knowledge-score-weak")!;
-    expect(strong.score).toBeCloseTo(-6.921879008683414, 10);
-    expect(weak.score).toBeCloseTo(-0.5505091627371557, 10);
+    const hit = page.items[0]!;
+
+    expect(page.items).toHaveLength(1);
+    expect(hit.score).toBeLessThan(0);
+    expect(Math.abs(hit.score)).toBeLessThan(0.001);
+
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "The compressed test window caused launch latency.", citationIds: [hit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    await expect(new CitedAnswerService(ai).answer(contributor, "launch latency", [hit]))
+      .resolves.toMatchObject({
+        answer: "The compressed test window caused launch latency. [1]",
+        citations: [hit.citationId],
+      });
+    expect(ai.calls).toBe(1);
+  });
+
+  it("accepts strong Han evidence with real tiny-corpus FTS5 scores", async () => {
+    await seedKnowledge({
+      id: "knowledge-tiny-han",
+      revisionId: "revision-tiny-han",
+      title: "权限治理手册",
+      visibility: "shared",
+      body: "权限治理 权限 限治 治理需要双人复核。",
+      searchBody: "权限治理 权限 限治 治理 双人复核",
+    });
+    const library = serviceWithContent();
+    const page = await library.search(contributor, { query: "权限治理", limit: 20 });
+    const hit = page.items[0]!;
+
+    expect(page.items).toHaveLength(1);
+    expect(hit.score).toBeLessThan(0);
+    expect(Math.abs(hit.score)).toBeLessThan(0.001);
+
+    const ai: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "权限治理需要双人复核。", citationIds: [hit.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    await expect(new CitedAnswerService(ai).answer(contributor, "权限治理", [hit]))
+      .resolves.toMatchObject({
+        answer: "权限治理需要双人复核。 [1]",
+        citations: [hit.citationId],
+      });
+    expect(ai.calls).toBe(1);
+  });
+
+  it("keeps visible-evidence relevance invariant under unrelated corpus growth and padded input", async () => {
+    await seedKnowledge({
+      id: "knowledge-growth-strong",
+      revisionId: "revision-growth-strong",
+      title: "Launch latency review",
+      visibility: "shared",
+      body: "Launch latency was caused by a compressed test window.",
+      searchBody: "launch latency compressed test window",
+    });
+    await seedKnowledge({
+      id: "knowledge-growth-weak",
+      revisionId: "revision-growth-weak",
+      title: "General employee handbook",
+      visibility: "shared",
+      body: `launch ${"generic boilerplate policy ".repeat(400)}latency`,
+      searchBody: `launch ${"generic boilerplate policy ".repeat(400)}latency`,
+    });
+    const library = serviceWithContent();
+    const before = await library.search(contributor, { query: "   launch latency   ", limit: 20 });
+    const strongBefore = before.items.find((hit) => hit.knowledgeItemId === "knowledge-growth-strong")!;
+    const weakBefore = before.items.find((hit) => hit.knowledgeItemId === "knowledge-growth-weak")!;
+
+    expect(strongBefore.score).toBeLessThan(0);
+    expect(weakBefore.score).toBeLessThan(0);
+    expect(weakBefore.excerpt).toMatch(/^…|…$/u);
+    expect(["launch", "latency"].every((term) => (
+      `${weakBefore.title}\n${weakBefore.excerpt}`.toLowerCase().includes(term)
+    ))).toBe(false);
 
     const strongAi: CitedAnswerAi & { calls: number } = {
       calls: 0,
       async run(): Promise<unknown> {
         this.calls += 1;
         return { response: JSON.stringify({
-          claims: [{ text: "Launch latency has a documented mitigation.", citationIds: [strong.citationId] }],
+          claims: [{ text: "The compressed test window caused launch latency.", citationIds: [strongBefore.citationId] }],
           insufficientEvidence: false,
         }) };
       },
     };
-    const strongAnswers = new CitedAnswerService(strongAi);
-    await expect(strongAnswers.answer(contributor, "launch latency", [strong])).resolves.toMatchObject({
-      answer: "Launch latency has a documented mitigation. [1]",
-      citations: [strong.citationId],
-    });
+    await expect(new CitedAnswerService(strongAi).answer(
+      contributor,
+      "   launch latency   ",
+      [strongBefore],
+    )).resolves.toMatchObject({ citations: [strongBefore.citationId] });
     expect(strongAi.calls).toBe(1);
 
     const weakAi: CitedAnswerAi & { calls: number } = {
@@ -394,7 +459,47 @@ describe("M1 permission-scoped library", () => {
       },
     };
     const weakAnswers = new CitedAnswerService(weakAi);
-    await expect(weakAnswers.answer(contributor, "launch latency", [weak])).resolves.toEqual({
+    await expect(weakAnswers.answer(contributor, "   launch latency   ", [weakBefore])).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+    });
+    expect(weakAi.calls).toBe(0);
+
+    for (let index = 0; index < 24; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-growth-decoy-${index}`,
+        revisionId: `revision-growth-decoy-${index}`,
+        title: `Unrelated handbook ${index}`,
+        visibility: "shared",
+        body: "vacation policy directory contact details",
+        searchBody: "vacation policy directory contact details",
+      });
+    }
+    const after = await library.search(contributor, { query: "launch latency", limit: 20 });
+    const strongAfter = after.items.find((hit) => hit.knowledgeItemId === "knowledge-growth-strong")!;
+    const weakAfter = after.items.find((hit) => hit.knowledgeItemId === "knowledge-growth-weak")!;
+    expect(strongAfter.score).not.toBe(strongBefore.score);
+    expect(weakAfter.score).not.toBe(weakBefore.score);
+
+    const grownStrongAi: CitedAnswerAi & { calls: number } = {
+      calls: 0,
+      async run(): Promise<unknown> {
+        this.calls += 1;
+        return { response: JSON.stringify({
+          claims: [{ text: "The compressed test window caused launch latency.", citationIds: [strongAfter.citationId] }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    await expect(new CitedAnswerService(grownStrongAi).answer(
+      contributor,
+      "launch latency",
+      [strongAfter],
+    )).resolves.toMatchObject({ citations: [strongAfter.citationId] });
+    expect(grownStrongAi.calls).toBe(1);
+
+    await expect(weakAnswers.answer(contributor, "launch latency", [weakAfter])).resolves.toEqual({
       answer: "知识库中没有足够依据回答这个问题。",
       citations: [],
       sources: [],
