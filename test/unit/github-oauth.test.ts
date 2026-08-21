@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "../../src/http";
-import { createGitHubOAuthClient, type GitHubOAuthDependencies } from "../../src/identity/github-oauth";
+import {
+  createGitHubOAuthClient,
+  type GitHubOAuthDependencies,
+  type GitHubOAuthDiagnostic,
+} from "../../src/identity/github-oauth";
 
 const CLIENT_ID = "local-client-id";
 const CLIENT_SECRET = "local-client-secret";
@@ -147,6 +151,25 @@ describe("GitHub OAuth protocol", () => {
     expect((error as Error & { cause?: unknown }).cause).toBeUndefined();
   });
 
+  it("reports a fixed token-exchange diagnostic without upstream or credential content", async () => {
+    const diagnostics: GitHubOAuthDiagnostic[] = [];
+    const client = oauthClient({
+      fetch: async () => responseAt(
+        new Response("never-log-upstream-body", { status: 401, headers: { "content-type": "application/json" } }),
+        "https://github.com/login/oauth/access_token",
+      ),
+      onUpstreamFailure: (diagnostic) => diagnostics.push(diagnostic),
+    });
+
+    await expect(client.resolveCallback("never-log-code", verifier())).rejects.toMatchObject({
+      code: "OAUTH_UPSTREAM_UNAVAILABLE",
+      status: 503,
+    });
+    expect(diagnostics).toEqual([{ stage: "token_exchange", reason: "status", httpStatus: 401 }]);
+    expect(JSON.stringify(diagnostics)).not.toContain("never-log");
+    expect(JSON.stringify(diagnostics)).not.toContain(CLIENT_SECRET);
+  });
+
   it("rejects redirected and non-HTTPS upstream responses", async () => {
     for (const [responseUrl, redirected] of [
       ["https://github.com/login/oauth/access_token", true],
@@ -185,8 +208,10 @@ describe("GitHub OAuth protocol", () => {
   });
 
   it("aborts a slow upstream request and returns a stable timeout error", async () => {
+    const diagnostics: GitHubOAuthDiagnostic[] = [];
     const client = oauthClient({
       timeoutMs: 5,
+      onUpstreamFailure: (diagnostic) => diagnostics.push(diagnostic),
       fetch: async (_input, init) => {
         return await new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () => reject(new DOMException("local timeout detail", "AbortError")), { once: true });
@@ -197,6 +222,7 @@ describe("GitHub OAuth protocol", () => {
     const error = await rejected(client.resolveCallback("local-code", verifier()));
     expect(error).toMatchObject({ code: "OAUTH_UPSTREAM_UNAVAILABLE", status: 503 });
     expect(String(error)).not.toContain("local timeout detail");
+    expect(diagnostics).toEqual([{ stage: "token_exchange", reason: "timeout" }]);
   });
 
   it("rejects response bodies over the configured bound without parsing them", async () => {
@@ -213,17 +239,26 @@ describe("GitHub OAuth protocol", () => {
 
   it("rejects failures from user and email endpoints without exposing token or upstream data", async () => {
     for (const failedResponseIndex of [1, 2]) {
+      const diagnostics: GitHubOAuthDiagnostic[] = [];
       const responses = [
         json({ access_token: "never-expose-token" }),
         json({ id: 42 }),
         validEmails(),
       ];
       responses[failedResponseIndex] = json({ detail: "never-expose-upstream-body" }, 500);
-      const client = oauthClient({ fetch: localFetch([], ...responses) });
+      const client = oauthClient({
+        fetch: localFetch([], ...responses),
+        onUpstreamFailure: (diagnostic) => diagnostics.push(diagnostic),
+      });
       const error = await rejected(client.resolveCallback("local-code", verifier()));
       expect(error).toMatchObject({ code: "OAUTH_UPSTREAM_UNAVAILABLE", status: 503 });
       expect(String(error)).not.toContain("never-expose-token");
       expect(String(error)).not.toContain("never-expose-upstream-body");
+      expect(diagnostics).toEqual([{
+        stage: failedResponseIndex === 1 ? "user_fetch" : "email_fetch",
+        reason: "status",
+        httpStatus: 500,
+      }]);
     }
   });
 });

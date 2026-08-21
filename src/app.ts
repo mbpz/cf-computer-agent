@@ -4,7 +4,7 @@ import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
-import { createGitHubOAuthClient } from "./identity/github-oauth";
+import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/github-oauth";
 import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
 import { KnowledgeService } from "./knowledge/service";
@@ -23,6 +23,7 @@ import { SubmissionsService } from "./submissions/service";
 export interface AppDependencies {
   githubFetch?: typeof fetch;
   sessionDatabase?: D1Database;
+  oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -33,7 +34,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
       try {
         if (url.pathname.startsWith("/auth/")) {
-          const services = createRequestServices(env, ctx, dependencies);
+          const services = createRequestServices(env, ctx, context, dependencies);
           try {
             const response = await routeAuth(request, url, context, services);
             if (!response) throw new AppError("NOT_FOUND", "Not found", 404);
@@ -50,7 +51,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           return withAssetSecurityHeaders(await env.ASSETS.fetch(assetRequest), context.requestId);
         }
 
-        const services = createRequestServices(env, ctx, dependencies);
+        const services = createRequestServices(env, ctx, context, dependencies);
         try {
           const resolved = await resolvePrincipal(request, {
             sessions: services.sessions,
@@ -82,7 +83,12 @@ function knownWorkspaceRoute(pathname: string): boolean {
   return workspaceRoutes.has(pathname);
 }
 
-function createRequestServices(env: Env, ctx: ExecutionContext, dependencies: AppDependencies) {
+function createRequestServices(
+  env: Env,
+  ctx: ExecutionContext,
+  context: RequestContext,
+  dependencies: AppDependencies,
+) {
   const audit = new AuditRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
@@ -106,6 +112,11 @@ function createRequestServices(env: Env, ctx: ExecutionContext, dependencies: Ap
       fetch: dependencies.githubFetch || globalThis.fetch,
       now: () => Date.now(),
       randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
+      onUpstreamFailure: (diagnostic) => {
+        const correlated = { requestId: context.requestId, ...diagnostic };
+        if (dependencies.oauthDiagnostic) dependencies.oauthDiagnostic(correlated);
+        else console.warn("github oauth upstream failed", correlated);
+      },
     }),
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),

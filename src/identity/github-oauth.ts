@@ -32,11 +32,21 @@ export interface GitHubOAuthCredentials {
   clientSecret: string;
 }
 
+export type GitHubOAuthStage = "token_exchange" | "user_fetch" | "email_fetch";
+export type GitHubOAuthFailureReason = "status" | "redirect" | "url" | "content_type" | "timeout" | "payload" | "network";
+
+export interface GitHubOAuthDiagnostic {
+  stage: GitHubOAuthStage;
+  reason: GitHubOAuthFailureReason;
+  httpStatus?: number;
+}
+
 export interface GitHubOAuthDependencies {
   fetch: typeof fetch;
   now: () => number;
   randomBytes: (length: number) => Uint8Array;
   timeoutMs?: number;
+  onUpstreamFailure?: (diagnostic: GitHubOAuthDiagnostic) => void;
 }
 
 export function createGitHubOAuthClient(
@@ -76,6 +86,7 @@ export function createGitHubOAuthClient(
       }
 
       const tokenPayload = await fetchJson(
+        "token_exchange",
         OAUTH_TOKEN_URL,
         {
           method: "POST",
@@ -96,7 +107,10 @@ export function createGitHubOAuthClient(
         timeoutMs,
       );
       const accessToken = readAccessToken(tokenPayload);
-      if (!accessToken) throw oauthUnavailable();
+      if (!accessToken) {
+        reportUpstreamFailure(dependencies, { stage: "token_exchange", reason: "payload" });
+        throw oauthUnavailable();
+      }
 
       const apiHeaders = {
         accept: "application/vnd.github+json",
@@ -105,6 +119,7 @@ export function createGitHubOAuthClient(
         "x-github-api-version": APP_CONFIG.githubApiVersion,
       };
       const userPayload = await fetchJson(
+        "user_fetch",
         GITHUB_USER_URL,
         { method: "GET", headers: apiHeaders },
         APP_CONFIG.githubOAuthUserResponseMaxBytes,
@@ -112,6 +127,7 @@ export function createGitHubOAuthClient(
         timeoutMs,
       );
       const emailsPayload = await fetchJson(
+        "email_fetch",
         GITHUB_EMAILS_URL,
         { method: "GET", headers: apiHeaders },
         APP_CONFIG.githubOAuthEmailsResponseMaxBytes,
@@ -141,6 +157,7 @@ function requireConfiguration(credentials: GitHubOAuthCredentials, timeoutMs: nu
 }
 
 async function fetchJson(
+  stage: GitHubOAuthStage,
   expectedUrl: string,
   init: RequestInit,
   maxBytes: number,
@@ -150,26 +167,42 @@ async function fetchJson(
   const controller = new AbortController();
   const startedAt = dependencies.now();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let reported = false;
+  const fail = (reason: GitHubOAuthFailureReason, httpStatus?: number): never => {
+    reportUpstreamFailure(dependencies, { stage, reason, ...(httpStatus === undefined ? {} : { httpStatus }) });
+    reported = true;
+    throw oauthUnavailable();
+  };
   try {
     const response = await dependencies.fetch(expectedUrl, {
       ...init,
       redirect: "manual",
       signal: controller.signal,
     });
-    if (dependencies.now() - startedAt > timeoutMs
-      || response.redirected
-      || response.url !== expectedUrl
-      || new URL(response.url).protocol !== "https:"
-      || !response.ok
-      || !isJsonContentType(response.headers.get("content-type"))) {
-      throw oauthUnavailable();
+    if (dependencies.now() - startedAt > timeoutMs) fail("timeout");
+    if (response.redirected) fail("redirect", response.status);
+    if (response.url !== expectedUrl || new URL(response.url).protocol !== "https:") fail("url", response.status);
+    if (!response.ok) fail("status", response.status);
+    if (!isJsonContentType(response.headers.get("content-type"))) fail("content_type", response.status);
+    try {
+      const text = await readBoundedText(response, maxBytes);
+      return JSON.parse(text) as unknown;
+    } catch {
+      return fail(controller.signal.aborted ? "timeout" : "payload", response.status);
     }
-    const text = await readBoundedText(response, maxBytes);
-    return JSON.parse(text) as unknown;
   } catch {
+    if (!reported) fail(controller.signal.aborted ? "timeout" : "network");
     throw oauthUnavailable();
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function reportUpstreamFailure(dependencies: GitHubOAuthDependencies, diagnostic: GitHubOAuthDiagnostic): void {
+  try {
+    dependencies.onUpstreamFailure?.(diagnostic);
+  } catch {
+    // Diagnostics must never change the stable OAuth failure response.
   }
 }
 

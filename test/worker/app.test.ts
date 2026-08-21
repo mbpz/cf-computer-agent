@@ -369,7 +369,11 @@ describe("Worker application", () => {
     expect(() => new Request("https://github.com/login/oauth/access_token", { redirect: "error" }))
       .toThrow();
     const observedRedirectModes: RequestRedirect[] = [];
-    const app = createApp({ githubFetch: fakeGitHubFetch("redirect", observedRedirectModes) });
+    const diagnostics: unknown[] = [];
+    const app = createApp({
+      githubFetch: fakeGitHubFetch("redirect", observedRedirectModes),
+      oauthDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
     const start = await fetchApp(app, "/auth/github");
     const temporaryCookies = setCookies(start);
     const state = cookieValue(temporaryCookies, "__Host-oauth-state");
@@ -380,6 +384,12 @@ describe("Worker application", () => {
     await expectError(response, 503, "OAUTH_UPSTREAM_UNAVAILABLE");
     expect(setCookies(response)).toEqual(clearedOAuthCookies());
     expect(observedRedirectModes).toEqual(["manual"]);
+    expect(diagnostics).toEqual([{
+      requestId: response.headers.get("x-request-id"),
+      stage: "token_exchange",
+      reason: "status",
+      httpStatus: 302,
+    }]);
   });
 
   it("creates an allowlisted session, exposes /auth/logout, and clears it only after same-origin logout", async () => {
