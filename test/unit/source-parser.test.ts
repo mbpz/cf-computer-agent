@@ -33,6 +33,42 @@ describe("parseSource", () => {
     });
   });
 
+  it("escapes plain-text Markdown metacharacters so the source renders literally", async () => {
+    await expect(parseSource({
+      kind: "text",
+      content: "# heading\n*em* [click](javascript:alert(1)) <img src=x onerror=alert(1)>",
+    })).resolves.toMatchObject({
+      normalizedMarkdown: "\\# heading\n\\*em\\* \\[click\\]\\(javascript\\:alert\\(1\\)\\) \\<img src\\=x onerror\\=alert\\(1\\)\\>",
+    });
+  });
+
+  it.each([
+    "<img src=x onerror=alert(1)>",
+    "<svg/onload=alert(1)>",
+  ])("rejects Markdown raw HTML with executable event attributes: %s", async (html) => {
+    await expect(parseSource({
+      kind: "markdown",
+      content: `# Safe heading\n\n${html}`,
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+  });
+
+  it.each([
+    "[click](javascript:alert(1))",
+    "![payload](data:text/plain,active-content)",
+  ])("rejects executable Markdown link destinations: %s", async (markdown) => {
+    await expect(parseSource({ kind: "markdown", content: markdown }))
+      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+  });
+
+  it("preserves legitimate Markdown structure when no raw HTML is present", async () => {
+    await expect(parseSource({
+      kind: "markdown",
+      content: "# Heading\n\n- **bold**\n- [safe](https://example.test)\n",
+    })).resolves.toMatchObject({
+      normalizedMarkdown: "# Heading\n\n- **bold**\n- [safe](https://example.test)\n",
+    });
+  });
+
   it("hashes the normalized UTF-8 bytes with a 32-byte lowercase SHA-256", async () => {
     await expect(parseSource({ kind: "text", content: "abc" })).resolves.toMatchObject({
       contentSha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",

@@ -31,7 +31,7 @@ function assertParseInput(input: ParseSourceInput): void {
 
 function normalizeSource(input: ParseSourceInput): string {
   const content = normalizeNewlines(input.content);
-  if (input.kind === "text") return content;
+  if (input.kind === "text") return escapeLiteralMarkdown(content);
   if (input.kind === "markdown") return normalizeMarkdown(content);
 
   const body = content.endsWith("\n") ? content : `${content}\n`;
@@ -44,12 +44,28 @@ function normalizeSource(input: ParseSourceInput): string {
 }
 
 function normalizeMarkdown(content: string): string {
+  if (containsRawHtml(content) || containsExecutableMarkdownUrl(content)) {
+    throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
+  }
   const lines = content.split("\n").map((line) => line.replace(/[\t ]+$/u, ""));
   while (lines.at(-1) === "") lines.pop();
   return `${lines.join("\n")}\n`;
 }
 
 function normalizeNewlines(content: string): string { return content.replace(/\r\n?/gu, "\n"); }
+function escapeLiteralMarkdown(content: string): string { return content.replace(/[!-/:-@[-`{-~]/gu, "\\$&"); }
+function containsRawHtml(content: string): boolean {
+  if (/<(?:!--|!\[CDATA\[|![A-Za-z]|\?)/iu.test(content)) return true;
+  for (const match of content.matchAll(/<\/?[A-Za-z][^>]*>/gu)) {
+    const token = match[0];
+    if (/^<(?:https?|mailto):[^<>\s]+>$/iu.test(token) || /^<[^<>\s@]+@[^<>\s@]+>$/u.test(token)) continue;
+    return true;
+  }
+  return false;
+}
+function containsExecutableMarkdownUrl(content: string): boolean {
+  return /(?:\]\(\s*<?|\]:\s*<?|<)\s*(?:javascript|data|vbscript)\s*:/imu.test(content);
+}
 function countLines(content: string): number {
   const withoutTerminalNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
   return withoutTerminalNewline.split("\n").length;

@@ -8,8 +8,10 @@ import type { CreateSubmission, Submission, SubmissionCreateResult, SubmissionPa
 export type SubmissionsRepositoryConflictKind = "target_invalid" | "idempotency_conflict";
 export class SubmissionsRepositoryConflictError extends Error { constructor(readonly kind: SubmissionsRepositoryConflictKind) { super(`Submission conflict: ${kind}`); } }
 
+export interface PersistedSubmission extends Submission { idempotencyKey: string; }
+
 export interface CreateSubmissionWithSourceVersion {
-  submission: Submission;
+  submission: PersistedSubmission;
   source: Source;
   sourceVersion: SourceVersion;
   audit: CreateAuditEvent;
@@ -22,7 +24,7 @@ export interface SubmissionsRepositoryPort {
   listPending(request: PageRequest): Promise<SubmissionPage>;
 }
 
-type SubmissionRow = { id: string; submitter_id: string; requested_space_id: string; requested_collection_id: string | null; kind: Submission["kind"]; status: Submission["status"]; title: string; content: string; idempotency_key: string | null; created_at: string; updated_at: string };
+type SubmissionRow = { id: string; submitter_id: string; requested_space_id: string; requested_collection_id: string | null; kind: Submission["kind"]; status: Submission["status"]; title: string; content: string; created_at: string; updated_at: string };
 type CreationRow = SubmissionRow & {
   source_id: string;
   source_owner_id: string;
@@ -57,7 +59,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     ]);
     if (!results[0]?.meta.changes) throw new SubmissionsRepositoryConflictError("target_invalid");
     if (results[1]?.meta.changes !== 1) throw new Error("Submission audit write did not persist");
-    return { ...submission, idempotencyKey: submission.idempotencyKey ?? null, status: "review_pending" };
+    return { ...submission, status: "review_pending" };
   }
 
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
@@ -66,39 +68,52 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     const replay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
     if (replay) return exactReplayOrThrow(replay, input);
 
-    const results = await this.db.batch([
-      this.db.prepare(
-        `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at)
-         SELECT ?, ?, ?, ?, ?, 'review_pending', ?, ?, ?, ?, ?
-         WHERE EXISTS (SELECT 1 FROM spaces WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND status = 'active')
-           AND (? IS NULL OR EXISTS (SELECT 1 FROM collections WHERE id = ? AND space_id = ? AND status = 'active'))
-           AND NOT EXISTS (SELECT 1 FROM source_versions WHERE content_sha256 = ?)`,
-      ).bind(
-        submission.id, submission.submitterId, submission.requestedSpaceId, submission.requestedCollectionId,
-        submission.kind, submission.title, submission.content, submission.idempotencyKey,
-        submission.createdAt, submission.updatedAt, submission.requestedSpaceId,
-        submission.requestedCollectionId, submission.requestedCollectionId, submission.requestedSpaceId,
-        sourceVersion.contentSha256,
-      ),
-      this.sources.prepareCreate(source, submission.id),
-      this.sources.prepareCreateVersion(sourceVersion),
-      this.audit.prepareWriteAudit(audit, submission.id),
-    ]);
+    let results: D1Result[];
+    try {
+      results = await this.db.batch([
+        this.db.prepare(
+          `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, 'review_pending', ?, ?, ?, ?, ?
+           WHERE EXISTS (SELECT 1 FROM spaces WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND status = 'active')
+             AND (? IS NULL OR EXISTS (SELECT 1 FROM collections WHERE id = ? AND space_id = ? AND status = 'active'))
+             AND NOT EXISTS (
+               SELECT 1 FROM source_versions existing_version
+               JOIN sources existing_source ON existing_source.id = existing_version.source_id
+               WHERE existing_version.content_sha256 = ? AND existing_source.owner_id = ? AND existing_source.space_id = ?
+             )`,
+        ).bind(
+          submission.id, submission.submitterId, submission.requestedSpaceId, submission.requestedCollectionId,
+          submission.kind, submission.title, submission.content, submission.idempotencyKey,
+          submission.createdAt, submission.updatedAt, submission.requestedSpaceId,
+          submission.requestedCollectionId, submission.requestedCollectionId, submission.requestedSpaceId,
+          sourceVersion.contentSha256, submission.submitterId, submission.requestedSpaceId,
+        ),
+        this.sources.prepareCreate(source, submission.id),
+        this.sources.prepareCreateVersion(sourceVersion),
+        this.audit.prepareWriteAudit(audit, submission.id),
+      ]);
+    } catch (error) {
+      const concurrentReplay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey);
+      if (concurrentReplay) return exactReplayOrThrow(concurrentReplay, input);
+      throw error;
+    }
 
     if (!results[0]?.meta.changes) {
-      const concurrentReplay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
+      const concurrentReplay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey);
       if (concurrentReplay) return exactReplayOrThrow(concurrentReplay, input);
       if (!await this.isTargetValid(submission.requestedSpaceId, submission.requestedCollectionId)) {
         throw new SubmissionsRepositoryConflictError("target_invalid");
       }
-      const duplicateCandidate = await this.sources.findDuplicateCandidate(sourceVersion.contentSha256);
+      const duplicateCandidate = await this.sources.findDuplicateCandidate(
+        sourceVersion.contentSha256, submission.submitterId, submission.requestedSpaceId,
+      );
       if (duplicateCandidate) return { submission: null, source: null, sourceVersion: null, duplicateCandidate };
       throw new Error("Submission creation did not persist");
     }
     if (results[1]?.meta.changes !== 1 || results[2]?.meta.changes !== 1 || results[3]?.meta.changes !== 1) {
       throw new Error("Submission source creation did not fully persist");
     }
-    return { submission, source, sourceVersion, duplicateCandidate: null };
+    return { submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null };
   }
 
   async listOwned(submitterId: string, request: PageRequest): Promise<SubmissionPage> {
@@ -134,9 +149,9 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 }
 
-const submissionSelect = "SELECT id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at FROM submissions";
+const submissionSelect = "SELECT id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at FROM submissions";
 const creationSelect = `SELECT
-  s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.kind, s.status, s.title, s.content, s.idempotency_key, s.created_at, s.updated_at,
+  s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.kind, s.status, s.title, s.content, s.created_at, s.updated_at,
   src.id AS source_id, src.owner_id AS source_owner_id, src.space_id AS source_space_id, src.collection_id AS source_collection_id,
   src.kind AS source_kind, src.title AS source_title, src.created_at AS source_created_at, src.updated_at AS source_updated_at,
   sv.id AS source_version_id, sv.ordinal AS source_version_ordinal, sv.content AS source_version_content,
@@ -146,7 +161,7 @@ JOIN source_versions sv ON sv.submission_id = s.id
 JOIN sources src ON src.id = sv.source_id`;
 function timestamp(sort: number): string { return new Date(sort).toISOString(); }
 function page(items: Submission[], limit: number): SubmissionPage { const result = items.slice(0, limit); return { items: result, ...(items.length > limit ? { nextCursor: encodePageCursor({ sort: Date.parse(result.at(-1)!.createdAt), id: result.at(-1)!.id }) } : {}) }; }
-function mapSubmissionRow(row: SubmissionRow): Submission { return { id: row.id, submitterId: row.submitter_id, requestedSpaceId: row.requested_space_id, requestedCollectionId: row.requested_collection_id, kind: row.kind, status: row.status, title: row.title, content: row.content, idempotencyKey: row.idempotency_key, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function mapSubmissionRow(row: SubmissionRow): Submission { return { id: row.id, submitterId: row.submitter_id, requestedSpaceId: row.requested_space_id, requestedCollectionId: row.requested_collection_id, kind: row.kind, status: row.status, title: row.title, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function mapCreationRow(row: CreationRow): SubmissionCreateResult {
   const submission = mapSubmissionRow(row);
   const source: Source = {
@@ -160,6 +175,10 @@ function mapCreationRow(row: CreationRow): SubmissionCreateResult {
     contentSha256: row.content_sha256, parserVersion: row.parser_version, createdAt: row.source_version_created_at,
   };
   return { submission, source, sourceVersion, duplicateCandidate: null };
+}
+function publicSubmission(submission: PersistedSubmission): Submission {
+  const { idempotencyKey: _idempotencyKey, ...result } = submission;
+  return result;
 }
 function exactReplayOrThrow(existing: SubmissionCreateResult, input: CreateSubmissionWithSourceVersion): SubmissionCreateResult {
   if (!existing.submission || !existing.sourceVersion

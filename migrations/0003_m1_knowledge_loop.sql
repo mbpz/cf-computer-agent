@@ -77,6 +77,9 @@ CREATE TABLE source_versions (
   UNIQUE(source_id, ordinal)
 );
 
+CREATE INDEX source_versions_content_sha256
+ON source_versions(content_sha256, created_at, id);
+
 CREATE TABLE tags (
   id TEXT PRIMARY KEY,
   space_id TEXT NOT NULL REFERENCES spaces(id),

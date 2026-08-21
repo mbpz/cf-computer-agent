@@ -113,10 +113,24 @@ describe("Phase 1 API permission matrix", () => {
       body: JSON.stringify({ requestedSpaceId: "default", kind: "text", title: "Owned", content: "Body" }),
     });
     expect(created.status).toBe(201);
-    await expect(created.json()).resolves.toMatchObject({ submission: { submitterId: "member-contributor", status: "review_pending" } });
+    const createdBody = await created.json<{ submission: Record<string, unknown> }>();
+    expect(createdBody).toEqual({
+      submission: {
+        id: expect.any(String),
+        submitterId: "member-contributor",
+        requestedSpaceId: "default",
+        requestedCollectionId: null,
+        kind: "text",
+        status: "review_pending",
+        title: "Owned",
+        content: "Body",
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      },
+    });
     const own = await memberApi("sub-contributor", "/api/submissions/mine?limit=1");
     const ownBody = await own.json<{ items: Array<{ submitterId: string }>; nextCursor?: string }>();
-    expect(ownBody.items).toEqual([expect.objectContaining({ submitterId: "member-contributor" })]);
+    expect(ownBody.items).toEqual([createdBody.submission]);
     expect(ownBody.nextCursor).toBeUndefined();
     expect(JSON.stringify(ownBody)).not.toContain("member-other");
     const copiedAdminCursor = (await (await memberApi("sub-admin", "/api/admin/submissions?limit=1")).json<{

@@ -31,14 +31,15 @@ export class SourcesRepository {
     );
   }
 
-  async findDuplicateCandidate(contentSha256: string): Promise<DuplicateSourceCandidate | null> {
+  async findDuplicateCandidate(contentSha256: string, ownerId: string, spaceId: string): Promise<DuplicateSourceCandidate | null> {
     const row = await this.db.prepare(
       `SELECT sv.submission_id, sv.source_id, sv.id AS source_version_id
        FROM source_versions sv
-       WHERE sv.content_sha256 = ?
+       JOIN sources s ON s.id = sv.source_id
+       WHERE sv.content_sha256 = ? AND s.owner_id = ? AND s.space_id = ?
        ORDER BY sv.created_at ASC, sv.id ASC
        LIMIT 1`,
-    ).bind(contentSha256).first<DuplicateCandidateRow>();
+    ).bind(contentSha256, ownerId, spaceId).first<DuplicateCandidateRow>();
     return row ? {
       submissionId: row.submission_id,
       sourceId: row.source_id,

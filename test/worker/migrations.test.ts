@@ -455,6 +455,11 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "updated_at", desc: 1 },
       { name: "id", desc: 1 },
     ]);
+    await expectIndex("source_versions", "source_versions_content_sha256", [
+      { name: "content_sha256", desc: 0 },
+      { name: "created_at", desc: 0 },
+      { name: "id", desc: 0 },
+    ]);
     await expectIndex("chunks", "chunks_revision", [
       { name: "revision_id", desc: 0 },
       { name: "ordinal", desc: 0 },

@@ -1,7 +1,11 @@
 import { AppError } from "../http";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
-import { SubmissionsRepositoryConflictError, type SubmissionsRepositoryPort } from "./repository";
+import {
+  SubmissionsRepositoryConflictError,
+  type PersistedSubmission,
+  type SubmissionsRepositoryPort,
+} from "./repository";
 import type { Submission, SubmissionCreateResult, SubmissionKind, SubmissionPage } from "./types";
 
 export interface CreateSubmissionInput { requestedSpaceId: string; requestedCollectionId?: string | null; kind: SubmissionKind; title: string; content: string; }
@@ -22,7 +26,7 @@ export class SubmissionsService {
   async create(submitterId: string, input: CreateSubmissionInput): Promise<Submission> {
     const normalized = normalize(input);
     const now = this.now().toISOString();
-    const submission: Submission = { id: this.id(), submitterId, ...normalized, idempotencyKey: null, status: "review_pending", createdAt: now, updatedAt: now };
+    const submission: Submission = { id: this.id(), submitterId, ...normalized, status: "review_pending", createdAt: now, updatedAt: now };
     const audit = submissionAudit(this.id(), submission, now);
     try { return await this.repository.createWithAudit(submission, audit); }
     catch (error) { if (error instanceof SubmissionsRepositoryConflictError) throw new AppError("SUBMISSION_TARGET_INVALID", "Submission target must be active and in the selected Space", 400); throw error; }
@@ -35,7 +39,7 @@ export class SubmissionsService {
     const normalized = normalize(input);
     const parsed = await parseSource({ kind: normalized.kind, content: normalized.content, language: input.language });
     const now = this.now().toISOString();
-    const submission: Submission = {
+    const submission: PersistedSubmission = {
       id: this.id(), submitterId, ...normalized, idempotencyKey: input.idempotencyKey,
       status: "review_pending", createdAt: now, updatedAt: now,
     };

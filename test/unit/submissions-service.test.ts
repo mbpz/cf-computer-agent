@@ -100,13 +100,14 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     this.audit = audit;
-    return { ...submission, idempotencyKey: submission.idempotencyKey ?? null };
+    return submission;
   }
 
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
     this.sourceCreation = input;
     if (this.conflict) throw this.conflict;
-    return { submission: input.submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
+    const { idempotencyKey: _idempotencyKey, ...submission } = input.submission;
+    return { submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
   }
 
   async listOwned(): Promise<SubmissionPage> { return { items: [] }; }

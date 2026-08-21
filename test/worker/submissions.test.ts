@@ -132,12 +132,28 @@ describe("submissions D1 control plane", () => {
     const created = await service.createWithSourceVersion("member-a", input);
     const replayed = await service.createWithSourceVersion("member-a", input);
     expect(replayed).toEqual(created);
+    expect(created.submission).not.toHaveProperty("idempotencyKey");
 
     await expect(service.createWithSourceVersion("member-a", { ...input, content: "Changed" }))
       .rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
     await expect(service.createWithSourceVersion("member-a", { ...input, requestedSpaceId: "other-space" }))
       .rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
 
+    await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
+  });
+
+  it("maps a concurrent same-member/key loser with different content to a stable 409", async () => {
+    const common = {
+      requestedSpaceId: "default", kind: "text" as const, title: "Concurrent", idempotencyKey: "concurrent-key-01",
+    };
+    const results = await Promise.allSettled([
+      createService("first").createWithSourceVersion("member-a", { ...common, content: "First body" }),
+      createService("second").createWithSourceVersion("member-a", { ...common, content: "Second body" }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    expect(rejected?.reason).toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
     await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
   });
 
@@ -162,6 +178,36 @@ describe("submissions D1 control plane", () => {
     });
     await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
     await expect(env.DB.prepare("SELECT status FROM submissions").first()).resolves.toEqual({ status: "review_pending" });
+  });
+
+  it("does not expose or block on a different member's same-hash source", async () => {
+    const first = await createService("member-a-first").createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Member A", content: "# Shared hash\n", idempotencyKey: "member-a-hash-001",
+    });
+    const second = await createService("member-b-second").createWithSourceVersion("member-b", {
+      requestedSpaceId: "default", kind: "markdown", title: "Member B", content: "# Shared hash\n", idempotencyKey: "member-b-hash-001",
+    });
+
+    expect(second.duplicateCandidate).toBeNull();
+    expect(second.submission?.submitterId).toBe("member-b");
+    expect(second.sourceVersion?.id).not.toBe(first.sourceVersion?.id);
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 2, sourceVersions: 2, audits: 2 });
+  });
+
+  it("does not expose or block on the same member's same-hash source in another Space", async () => {
+    await env.DB.prepare("INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at) VALUES ('other-space', 'other', 'Other', '', 'shared', 'active', 1, 0, ?, ?)")
+      .bind(now, now).run();
+    const first = await createService("default-first").createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "text", title: "Default", content: "Scoped hash", idempotencyKey: "default-hash-key1",
+    });
+    const second = await createService("other-second").createWithSourceVersion("member-a", {
+      requestedSpaceId: "other-space", kind: "text", title: "Other", content: "Scoped hash", idempotencyKey: "other-hash-key-01",
+    });
+
+    expect(second.duplicateCandidate).toBeNull();
+    expect(second.submission?.requestedSpaceId).toBe("other-space");
+    expect(second.sourceVersion?.id).not.toBe(first.sourceVersion?.id);
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 2, sourceVersions: 2, audits: 2 });
   });
 
   it("keeps null-key legacy submissions readable and outside replay matching", async () => {
@@ -202,10 +248,10 @@ describe("submissions D1 control plane", () => {
 
 const now = "2026-08-13T00:00:00.000Z";
 
-function createService(): SubmissionsService {
+function createService(prefix = "id"): SubmissionsService {
   let next = 0;
   return new SubmissionsService(new SubmissionsRepository(env.DB, new AuditRepository(env.DB)), {
-    id: () => `id-${next++}`,
+    id: () => `${prefix}-${next++}`,
     now: () => new Date(now),
   });
 }

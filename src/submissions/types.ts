@@ -13,12 +13,11 @@ export interface Submission {
   status: SubmissionStatus;
   title: string;
   content: string;
-  idempotencyKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export type CreateSubmission = Omit<Submission, "idempotencyKey"> & { idempotencyKey?: string | null };
+export type CreateSubmission = Submission;
 export type SubmissionCreateResult =
   | { submission: Submission; source: Source; sourceVersion: SourceVersion; duplicateCandidate: null }
   | { submission: null; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate };
