@@ -2,7 +2,7 @@
 
 This runbook is the exact release sequence for the M1 text/Markdown/code knowledge loop. It extends, and does not replace, the [production environment handbook](./production-environment-handbook.md), [GitHub OAuth setup](./github-oauth-setup.md), [signed automation smoke](./smoke-test.md), and [rollback rules](./rollback.md).
 
-Writing or testing this runbook is local evidence only. Every command containing `--remote`, `versions upload`, `versions deploy`, or the production domain requires separate operator authorization. No such command was run while Task 11 was implemented.
+Writing or testing this runbook is local evidence only. Every command containing `--remote`, `versions upload`, `versions deploy`, or the production domain requires separate operator authorization. No such command was run while Task 9 was implemented.
 
 ## Evidence boundary and release invariant
 
@@ -11,29 +11,13 @@ Writing or testing this runbook is local evidence only. Every command containing
 - Production evidence requires a date, commit, exact Worker version ID, and redacted request IDs in [the M1 release evidence template](./evidence/m1-release-template.md).
 - Preserve GitHub OAuth, D1 hashed sessions, `__Host-memory-session`, HMAC plus `APP_TOKEN` automation, the `KnowledgeBase` class, and Durable Object migration tag `v1`.
 - Migrations `0001` through `0004_m1_gate_completion.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
-- `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. While any current P0/M1 checklist atom remains unchecked, report **M1 local acceptance pending; remote verification pending.** Only after every local/workerd atom is satisfied, but before production evidence is complete, report **M1 implementation complete; remote verification pending.**
+- `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. The only unchecked product atom is production-only `OPS-015`, so the current status is **M1 implementation complete; remote verification pending.**
 
 Use a fresh copy of [the evidence template](./evidence/m1-release-template.md) for one candidate. Do not place source text, response bodies, cookies, OAuth codes, authorization headers, secret values, or full callback URLs in it.
 
 ### Current checklist reconciliation
 
-Task 11 compared the plan ranges to the current atomic checklist. The core vertical journey is locally verified, but the following current P0/M1 atoms remain unchecked and therefore block an M1 production release claim:
-
-| Atom | Missing acceptance evidence |
-| --- | --- |
-| `SRC-003` | persisted code language, file tag, and line-baseline contract as specified |
-| `GOV-004`, `GOV-005`, `GOV-007`, `GOV-010` | audited title patch; target change versus the intentionally fixed requested target; requested-visibility non-expansion; contributor revision-resubmission journey |
-| `IDX-001`, `IDX-002`, `IDX-004`, `IDX-006` | full title/summary/tag/body/code schema acceptance; revision/trash FTS synchronization; production D1 fixed-set weight/ranking evidence; visible failed index state |
-| `SRCH-002`, `SRCH-003`, `SRCH-004`, `SRCH-007` | production D1 ranking set; matched-field explanation; actual safe highlight; bounded multi-Tag AND/OR semantics |
-| `READ-003`, `READ-009` | semantic safe Markdown rendering rather than inert raw display; visible reviewer/source-version Revision information |
-| `PAR-001` | independent fatal UTF-8 parser contract is not implemented; current inputs are already-decoded strings |
-| `CHAT-002`, `CHAT-008` | explicit all/Space/Collection/selected-source scope contract; calibrated semantic low-relevance threshold/refusal evidence |
-| `COL-001` | My Submissions status filter in addition to owner-only bounded pagination |
-| `AUTH-015` | original-download visibility path in addition to list/search/citation |
-| `EVAL-001`, `EVAL-002` | independent expected-parser fixture matrix, including fatal UTF-8 and the exact Markdown/text/code malicious/empty/oversize corpus |
-| `OPS-015` | remote synthetic D1 `rows_read`/`rows_written` evidence |
-
-Do not silently reinterpret these acceptance statements or check them from adjacent tests. Resolve them in separately planned product slices, then rerun this release sequence.
+The fixed provider-free gate now proves all 23 local/Workerd M1 atoms, including bilingual UI, exact byte parsing, audited review/resubmission, complete FTS fields, deterministic ranking/highlights/Tag modes, safe Markdown, original download authorization, explicit chat scopes, and confidence refusal. Only `OPS-015` remains unchecked because it requires reviewed production `rows_read`/`rows_written` values. `GATE-M1` also remains unchecked. This is **M1 implementation complete; remote verification pending**, never a production claim.
 
 ## 1. Authorize and capture the candidate
 
@@ -93,7 +77,7 @@ rtk npm audit --omit=dev
 rtk git diff --check
 ```
 
-Record exact counts and command exit status. `test:m1` includes the release/probe contract tests, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report 20 expected retrieval citations, 16 required/returned answer citations, 16 answer cases, 7 refusals, one denial, Recall@5 at least 0.85, citation precision 1, citation recall 1, citation location rate 1, exact per-case answer/refusal outcomes, zero wrong citations, and zero permission leaks. Four Tag-exclusive cases must also make the gate fail when Tag indexing is disabled. The partial-match refusal case follows the same production AND/token-coverage contract; it is not evidence of a semantic low-relevance threshold.
+Record exact counts and command exit status. `test:m1` includes migration/docs/i18n truth gates, release/probe contracts, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. It reports 28 parser cases; 20 expected retrieval citations; 16 required/returned citations; 16 answers, seven refusals, and one denial; eight language cases; eight download-authorization cases; four ranking cases; and five highlight-safety cases. Recall@5 is at least 0.85; citation precision, recall, and location are 1; per-case outcomes are exact; wrong citations and permission leaks are zero. Four Tag-exclusive cases and every named local acceptance feature have independent fail-closed mutations. The confidence corpus independently calibrates strong and weak evidence in Latin and Han text; weak evidence refuses before provider invocation.
 
 ## 4. Inspect migration `0004` and preservation evidence
 

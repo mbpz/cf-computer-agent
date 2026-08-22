@@ -17,6 +17,7 @@ import type { PublishedContentReader, PublishedContentReceipt, RpcResult } from 
 import { LibraryRepository } from "../../src/library/repository";
 import { encodeCitationId, LibraryService } from "../../src/library/service";
 import type { LibraryScope } from "../../src/library/types";
+import { decodeOpaqueCursor, encodeOpaqueCursor } from "../../src/pagination";
 import { PublicationRepository } from "../../src/publication/repository";
 import { SpacesRepository } from "../../src/spaces/repository";
 import { TagsRepository } from "../../src/tags/repository";
@@ -1576,6 +1577,19 @@ describe("M1 permission-scoped library", () => {
       .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
     await expect(service.search(contributor, { query: "cursor", limit: 1, cursor: `${searchCursor}x` }))
       .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+
+    const invalidIds = ["x".repeat(129), "x\u0000y", "\ud800"];
+    for (const id of invalidIds) {
+      const listPayload = decodeOpaqueCursor(listCursor) as Record<string, unknown>;
+      const searchPayload = decodeOpaqueCursor(searchCursor) as Record<string, unknown>;
+      await expect(service.list(contributor, {
+        spaceId: "default", limit: 1, cursor: encodeOpaqueCursor({ ...listPayload, id }),
+      })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+      await expect(service.search(contributor, {
+        query: "cursor", limit: 1,
+        cursor: encodeOpaqueCursor({ ...searchPayload, knowledgeItemId: id }),
+      })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+    }
   });
 
   it("uses both selective active corpora without relational scans at a 10,000-Revision production shape", async () => {

@@ -13,7 +13,7 @@ const runbookPath = new URL("../docs/operations/m1-release.md", import.meta.url)
 const packagePath = new URL("../package.json", import.meta.url);
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
 const checklistPath = new URL("../docs/product/ai-knowledge-base-checklist.md", import.meta.url);
-const reportPath = new URL("../.superpowers/sdd/2026-08-21-m1-single-source-knowledge-loop/task-11-report.md", import.meta.url);
+const reportPath = new URL("../.superpowers/sdd/2026-08-22-m1-gate-completion/task-9-report.md", import.meta.url);
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
@@ -553,14 +553,14 @@ test("runbook contract rejects a probe moved before migration verification", asy
 test("derives exact M1 atom and gate truth and verifies report list cardinality", async () => {
   const baseline = await runDocsVerifier(["--truth", checklistPath.pathname, reportPath.pathname]);
   assert.equal(baseline.code, 0, baseline.output);
-  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=53 unchecked=23 gates=1 unchecked_items=24$/mu);
+  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=75 unchecked=1 gates=1 unchecked_items=2$/mu);
 
   const [checklist, report] = await Promise.all([
     readFile(checklistPath, "utf8"),
     readFile(reportPath, "utf8"),
   ]);
   const reportMutations = [
-    report.replace("53 checked + 23 unchecked", "53 checked + 24 unchecked"),
+    report.replace("75 checked + 1 unchecked", "75 checked + 2 unchecked"),
     report.replace("- `OPS-015`.", ""),
   ];
   for (const mutatedReport of reportMutations) {

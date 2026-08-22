@@ -20,6 +20,11 @@ export class SourcesRepository {
   }
 
   prepareCreateVersion(version: SourceVersion): D1PreparedStatement {
+    if (version.parserSchemaVersion === "m1-v2"
+      && (typeof version.sourceIdentitySha256 !== "string"
+        || !/^[a-f0-9]{64}$/u.test(version.sourceIdentitySha256))) {
+      throw new TypeError("M1-v2 source identity must be a canonical SHA-256 digest");
+    }
     return this.db.prepare(
       `INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline, created_at)
        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?

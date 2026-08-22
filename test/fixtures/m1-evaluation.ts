@@ -24,6 +24,46 @@ import type {
 export { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "./m1-search-ranking";
 export { M1_EVIDENCE_CONFIDENCE_CASES, M1_CORPUS_GROWTH_FIXTURE } from "./m1-evidence-confidence";
 
+export const M1_LOCAL_ATOM_IDS = Object.freeze([
+  "SRC-003", "PAR-001", "GOV-004", "GOV-005", "GOV-007", "GOV-010",
+  "IDX-001", "IDX-002", "IDX-004", "IDX-006", "SRCH-002", "SRCH-003",
+  "SRCH-004", "SRCH-007", "READ-003", "READ-009", "CHAT-002", "CHAT-008",
+  "COL-001", "AUTH-015", "I18N-001", "EVAL-001", "EVAL-002",
+] as const);
+export const M1_REMOTE_ATOM_IDS = Object.freeze(["OPS-015"] as const);
+
+export const M1_ACCEPTANCE_FEATURES = Object.freeze([
+  "fatal-decode", "code-metadata", "metadata-audit", "target-validation",
+  "visibility-expansion", "resubmission", "fts-title", "fts-summary", "fts-tags",
+  "fts-body", "fts-code", "current-switch", "index-status", "ranking",
+  "matched-fields", "highlights", "tag-and", "tag-or", "markdown-sanitization",
+  "revision-metadata", "download-visibility", "chat-all", "chat-space",
+  "chat-collection", "chat-items", "chat-confidence", "submission-status-filter",
+  "translation-keys",
+] as const);
+
+export const M1_ACCEPTANCE_DENOMINATORS = Object.freeze({
+  parserCases: 28,
+  retrievalCases: 24,
+  answerCases: 16,
+  refusalCases: 7,
+  denialCases: 1,
+  languageCases: 8,
+  requiredCitations: 16,
+  returnedCitations: 16,
+  downloadAuthorizationCases: 8,
+  rankingCases: 4,
+  highlightSafetyCases: 5,
+  localAtoms: M1_LOCAL_ATOM_IDS.length,
+  remoteAtoms: M1_REMOTE_ATOM_IDS.length,
+});
+
+export function assertM1AcceptanceFeatures(outcomes: Readonly<Record<string, boolean>>): void {
+  for (const feature of M1_ACCEPTANCE_FEATURES) {
+    if (outcomes[feature] !== true) throw new Error(`M1 acceptance feature failed: ${feature}`);
+  }
+}
+
 export const M1_FENCE_FIELD_EXPECTATIONS = Object.freeze([
   Object.freeze({
     id: "markdown-prose-before-fence",

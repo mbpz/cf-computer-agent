@@ -763,7 +763,7 @@ function decodeListCursor(cursor: string, key: string): ListCursor {
     const record = decoded as Record<string, unknown>;
     if (Object.keys(record).length !== 4 || record.v !== 1 || record.key !== key
       || typeof record.updatedAt !== "string" || !isCanonicalTimestamp(record.updatedAt)
-      || typeof record.id !== "string" || record.id.length === 0) throw new Error();
+      || typeof record.id !== "string" || !FILTER_RESOURCE_ID.test(record.id)) throw new Error();
     return { updatedAt: record.updatedAt, id: record.id };
   } catch {
     throw invalidPageCursor();
@@ -782,9 +782,9 @@ function decodeSearchCursor(
     if (stable) {
       if (Object.keys(record).length !== 6 || record.v !== 3
         || record.policyVersion !== SEARCH_POLICY.version || record.key !== key
-        || typeof record.knowledgeItemId !== "string" || record.knowledgeItemId.length === 0
-        || typeof record.revisionId !== "string" || record.revisionId.length === 0
-        || typeof record.chunkId !== "string" || record.chunkId.length === 0) throw new Error();
+        || typeof record.knowledgeItemId !== "string" || !FILTER_RESOURCE_ID.test(record.knowledgeItemId)
+        || typeof record.revisionId !== "string" || !FILTER_RESOURCE_ID.test(record.revisionId)
+        || typeof record.chunkId !== "string" || !FILTER_RESOURCE_ID.test(record.chunkId)) throw new Error();
       return {
         knowledgeItemId: record.knowledgeItemId,
         revisionId: record.revisionId,
@@ -795,9 +795,9 @@ function decodeSearchCursor(
       || record.key !== key
       || typeof record.score !== "number" || !Number.isFinite(record.score)
       || typeof record.publishedAt !== "string" || !isCanonicalTimestamp(record.publishedAt)
-      || typeof record.knowledgeItemId !== "string" || record.knowledgeItemId.length === 0
-      || typeof record.revisionId !== "string" || record.revisionId.length === 0
-      || typeof record.chunkId !== "string" || record.chunkId.length === 0) throw new Error();
+      || typeof record.knowledgeItemId !== "string" || !FILTER_RESOURCE_ID.test(record.knowledgeItemId)
+      || typeof record.revisionId !== "string" || !FILTER_RESOURCE_ID.test(record.revisionId)
+      || typeof record.chunkId !== "string" || !FILTER_RESOURCE_ID.test(record.chunkId)) throw new Error();
     return {
       score: record.score,
       publishedAt: record.publishedAt,

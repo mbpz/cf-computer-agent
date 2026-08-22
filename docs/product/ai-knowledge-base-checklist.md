@@ -22,7 +22,7 @@
 
 - [x] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；状态：L/W；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
 - [x] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；状态：L/W；验收：保留标题层级和代码块。
-- [ ] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；状态：L/W；验收：记录 allowlisted language、无路径/控制符的 fileLabel 和 1..1,000,000 行号基准，并将原始行号写入 Chunk location。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-parser.test.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
+- [x] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；状态：L/W；验收：记录 allowlisted language、无路径/控制符的 fileLabel 和 1..1,000,000 行号基准，并将原始行号写入 Chunk location。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-parser.test.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `SRC-004` P0/M1 输入大小边界；状态：L/W；验收：规范化 Markdown 的 UTF-8 精确上限接受，任何规范化扩张超限都在 Source/Version/Submission/发布 intent 持久化前稳定拒绝。
 - [x] `SRC-005` P0/M1 标题规范化；状态：L/W；验收：trim、UTF-8 上限和控制字符拒绝。
 - [x] `SRC-006` P0/M1 Space/Collection 目标选择；状态：L/W；验收：只接受 active 且同 Space 集合。
@@ -62,7 +62,7 @@
 
 ## PAR — 文档解析
 
-- [ ] `PAR-001` P0/M1 确定性纯文本解析；状态：L/W；验收：canonical base64 字节先经 UTF-8 fatal decode，再确定性规范化为 LF；无效字节拒绝且不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
+- [x] `PAR-001` P0/M1 确定性纯文本解析；状态：L/W；验收：canonical base64 字节先经 UTF-8 fatal decode，再确定性规范化为 LF；无效字节拒绝且不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
 - [x] `PAR-003` P0/M1 代码解析；状态：L；验收：语言、行号和代码块不被自然语言清洗破坏。
 - [ ] `PAR-004` P0/M2 Parser 接口和版本；验收：同输入/版本可重放且输出 schema 固定。
@@ -109,13 +109,13 @@
 - [x] `GOV-001` P0/M1 review_pending 状态；状态：L/W；验收：提交完成后仅 owner/admin 可见。
 - [x] `GOV-002` P0/M1 管理员审核队列；状态：L/W；验收：有界 keyset pagination 和状态过滤。
 - [x] `GOV-003` P0/M1 原文/规范 Markdown 对照；状态：L/W；验收：显示解析 warning 和位置。
-- [ ] `GOV-004` P0/M1 修改标题；验收：修改作为 Review metadata patch 审计。
-- [ ] `GOV-005` P0/M1 修改 Space/Collection；验收：active、同 Space 和权限校验。
+- [x] `GOV-004` P0/M1 修改标题；验收：修改作为 Review metadata patch 审计。
+- [x] `GOV-005` P0/M1 修改 Space/Collection；验收：active、同 Space 和权限校验。
 - [x] `GOV-006` P0/M1 修改 Tag；状态：L/W；验收：规范化、数量/大小上限和存在性校验。
-- [ ] `GOV-007` P0/M1 选择 shared/admin_only；验收：默认不扩大用户请求的可见性。
+- [x] `GOV-007` P0/M1 选择 shared/admin_only；验收：默认不扩大用户请求的可见性。
 - [x] `GOV-008` P0/M1 发布；状态：L/W；验收：产生 immutable Revision 和唯一 current 指针。
 - [x] `GOV-009` P0/M1 驳回；状态：L/W；验收：owner 看见安全理由，正文不进正式索引。
-- [ ] `GOV-010` P0/M1 revision_requested；验收：用户可基于理由创建新提交。
+- [x] `GOV-010` P0/M1 revision_requested；验收：用户可基于理由创建新提交。
 - [x] `GOV-011` P0/M1 并发发布串行化；状态：L/W；验收：同 Item 只产生一个 current Revision。
 - [x] `GOV-012` P0/M1 发布 journal/恢复；状态：L/W/D；验收：任一写入边界失败后可幂等恢复。
 - [x] `GOV-013` P0/M1 索引失败降级；状态：L/W/D；验收：Revision 仍可读且标 search_degraded。
@@ -131,12 +131,12 @@
 
 ## IDX — 索引
 
-- [ ] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
-- [ ] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
+- [x] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
+- [x] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
 - [x] `IDX-003` P0/M1 FTS tokenizer 配置；状态：L/W；验收：中英文 fixture 和代码 token 有基线。
-- [ ] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。证据：`src/library/search-policy.ts`、`test/fixtures/m1-search-ranking.ts`、`test/worker/m1-library.test.ts`；30 Revision 独立语料的 3 个 query/15 个 top-five 位置与命中字段精确通过。
+- [x] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。证据：`src/library/search-policy.ts`、`test/fixtures/m1-search-ranking.ts`、`test/worker/m1-library.test.ts`；30 Revision 独立语料的 3 个 query/15 个 top-five 位置与命中字段精确通过。
 - [x] `IDX-005` P0/M1 索引 Job 幂等；状态：L/W/D；验收：重复消息不重复写或改变 current。
-- [ ] `IDX-006` P0/M1 索引状态；验收：pending/indexed/search_degraded/failed 可见。
+- [x] `IDX-006` P0/M1 索引状态；验收：pending/indexed/search_degraded/failed 可见。
 - [ ] `IDX-007` P0/M4 Vectorize 384 维 index；验收：维度、metric、namespace 固定并生成类型。
 - [ ] `IDX-008` P0/M4 Embedding 输入规范化；验收：标题路径+正文，有界且版本化。
 - [ ] `IDX-009` P0/M4 摘要向量优先；验收：每 Revision 至多一个摘要向量。
@@ -151,12 +151,12 @@
 ## SRCH — 搜索
 
 - [x] `SRCH-001` P0/M1 关键词查询；状态：L/W；验收：空/超长/控制字符有稳定响应。
-- [ ] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。证据：policy v2 固定 title=8/summary=4/tags=6/body=1/code=3，真实 D1 重分数 keyset 无漏项/重复测试见 `test/worker/m1-library.test.ts`。
-- [ ] `SRCH-003` P0/M1 title/tag/body 命中说明；验收：结果显示匹配字段。证据：服务端 allowlist 顺序和 UI 文本标签见 `src/library/repository.ts`、`public/workspace-ui.js`。
-- [ ] `SRCH-004` P0/M1 安全高亮；验收：不产生 HTML/XSS，保留命中上下文。证据：NFKC、emoji、组合字符、代码点 range 和 XSS-shaped 文本测试见 `test/unit/search-policy.test.ts`、`test/unit/workspace-ui.test.ts`。
+- [x] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。证据：policy v2 固定 title=8/summary=4/tags=6/body=1/code=3，真实 D1 重分数 keyset 无漏项/重复测试见 `test/worker/m1-library.test.ts`。
+- [x] `SRCH-003` P0/M1 title/tag/body 命中说明；验收：结果显示匹配字段。证据：服务端 allowlist 顺序和 UI 文本标签见 `src/library/repository.ts`、`public/workspace-ui.js`。
+- [x] `SRCH-004` P0/M1 安全高亮；验收：不产生 HTML/XSS，保留命中上下文。证据：NFKC、emoji、组合字符、代码点 range 和 XSS-shaped 文本测试见 `test/unit/search-policy.test.ts`、`test/unit/workspace-ui.test.ts`。
 - [x] `SRCH-005` P0/M1 Space 过滤；状态：L/W；验收：无权限 Space 不进入候选。
 - [x] `SRCH-006` P0/M1 Collection 过滤；状态：L/W；验收：父子范围规则明确。
-- [ ] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。证据：1..8 Tag、显式 AND/OR、active same-Space fail-closed、cursor drift 和真实 D1 plan 测试见 `test/unit/library-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`。
+- [x] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。证据：1..8 Tag、显式 AND/OR、active same-Space fail-closed、cursor drift 和真实 D1 plan 测试见 `test/unit/library-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`。
 - [ ] `SRCH-008` P1/M4 类型、作者和时间过滤；验收：使用索引、无全表扫描。
 - [x] `SRCH-009` P0/M1 visibility 过滤；状态：L/W；验收：contributor 永不返回 admin_only。
 - [x] `SRCH-010` P0/M1 keyset pagination；状态：L/W；验收：重复排序值无漏项/重复。
@@ -175,13 +175,13 @@
 
 - [x] `READ-001` P0/M1 Knowledge 列表；状态：L/W；验收：current published、权限、有界分页。
 - [x] `READ-002` P0/M1 Knowledge detail；状态：L/W；验收：D1 metadata 与规范 Markdown 一致。
-- [ ] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。证据：本地固定 `markdown-it@15.0.0` + `dompurify@3.4.14` 双边界，`happy-dom` 覆盖 raw HTML、混淆协议、表格、代码围栏、嵌套列表和链接目标；应用仅插入 `DocumentFragment`。
+- [x] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。证据：本地固定 `markdown-it@15.0.0` + `dompurify@3.4.14` 双边界，`happy-dom` 覆盖 raw HTML、混淆协议、表格、代码围栏、嵌套列表和链接目标；应用仅插入 `DocumentFragment`。
 - [x] `READ-004` P0/M1 目录；状态：L/W；验收：heading path 与正文锚点一致。
 - [x] `READ-005` P0/M1 heading/line 定位；状态：L/W；验收：citation 打开目标并高亮。
 - [ ] `READ-006` P0/M2 PDF 页定位；验收：无页预览时显示页码和下载入口。
 - [ ] `READ-007` P0/M2 表格定位；验收：sheet/cell range 可理解。
 - [ ] `READ-008` P0/M2 幻灯片定位；验收：slide number 和元素顺序可理解。
-- [ ] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。证据：可见性授权 CTE 后联结 Review/SourceVersion，Reader 以文本节点显示稳定 ID、ordinal、parser schema、code metadata 和 index status；不导出 email/path/hash/provider 字段。
+- [x] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。证据：可见性授权 CTE 后联结 Review/SourceVersion，Reader 以文本节点显示稳定 ID、ordinal、parser schema、code metadata 和 index status；不导出 email/path/hash/provider 字段。
 - [x] `READ-010` P0/M1 历史 Revision；状态：L/W；验收：旧引用可读但明确非 current。
 - [ ] `READ-011` P1/M3 Revision diff；验收：正文和 metadata 差异有界展示。
 - [ ] `READ-012` P1/M4 Sources panel；验收：原件、解析状态、位置和选中状态。
@@ -195,13 +195,13 @@
 ## CHAT — 引用问答
 
 - [x] `CHAT-001` P0/M1 问题边界；状态：L/W；验收：非空、字符/字节上限和稳定错误。
-- [ ] `CHAT-002` P0/M1 显式来源集合；验收：全库/Space/Collection/选中来源可区分。
+- [x] `CHAT-002` P0/M1 显式来源集合；验收：全库/Space/Collection/选中来源可区分。
 - [x] `CHAT-003` P0/M1 检索计划；状态：L/W；验收：先授权再召回，不把权限交给模型。
 - [x] `CHAT-004` P0/M1 上下文预算；状态：L/W；验收：per-chunk/total code-point 安全截断。
 - [x] `CHAT-005` P0/M1 不可信来源序列化；状态：L/W；验收：JSON/结构分隔，文档指令不执行。
 - [x] `CHAT-006` P0/M1 系统提示边界；状态：L/W；验收：来源是 inert data、禁止越权工具。
 - [x] `CHAT-007` P0/M1 无来源拒答；状态：L/W；验收：不调用或不采信模型常识回答私有问题。
-- [ ] `CHAT-008` P0/M1 低相关拒答；状态：L/W/D；验收：低于阈值提示改问或扩大范围。当前固定评测覆盖真实 AND/token coverage 下的部分匹配无结果拒答，尚无校准后的语义低分阈值证据。
+- [x] `CHAT-008` P0/M1 低相关拒答；状态：L/W/D；验收：低于阈值提示改问或扩大范围。证据：独立中英文强/弱语料校准固定 0.60 证据阈值，弱证据与部分匹配均在 Provider 调用前拒答；命令：`rtk npm run test:m1`。
 - [x] `CHAT-009` P0/M1 稳定 citation ID；状态：L/W；验收：绑定 revision/chunk/location。
 - [x] `CHAT-010` P0/M1 句级引用格式；状态：L/W；验收：每个来源性断言附 citation ID。
 - [x] `CHAT-011` P0/M1 引用只来自上下文；状态：L/W；验收：模型伪造 ID 被删除或失败。
@@ -276,7 +276,7 @@
 
 ## COL — 协作与个人工作区
 
-- [ ] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
+- [x] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
 - [ ] `COL-002` P1/M1 驳回理由；验收：安全文本、历史可见、无 admin 内部 metadata。
 - [ ] `COL-003` P1/M3 审核评论；验收：admin 与 owner 可见，编辑留历史。
 - [ ] `COL-004` P1/M4 收藏；验收：成员私有、删除 Knowledge 后安全清理。
@@ -307,21 +307,21 @@
 - [x] `AUTH-012` P0/M0 automation 非管理员；状态：L/W。
 - [x] `AUTH-013` P0/M1 新 Source/Submission capability；状态：L/W；验收：admin/contributor 可创建、automation 不可。
 - [x] `AUTH-014` P0/M1 Review/Publish capability；状态：L/W；验收：仅 active admin。
-- [ ] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。证据：真实 D1+DO 覆盖 list/search/current detail/history/citation/download 的 admin/contributor/disabled/伪造角色，hidden/absent/cross-item download 统一 404，客户端 path/hash query 被拒绝。
+- [x] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。证据：真实 D1+DO 覆盖 list/search/current detail/history/citation/download 的 admin/contributor/disabled/伪造角色，hidden/absent/cross-item download 统一 404，客户端 path/hash query 被拒绝。
 - [ ] `AUTH-016` P0/M5 Note/Research owner scope；验收：ID 猜测和跨用户读取为 404/403 稳定合同。
 - [ ] `AUTH-017` P0/M6 Agent 工具授权；验收：每次工具调用重新校验。
 - [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。
 
 ## I18N — 国际化
 
-- [ ] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 349 键及 45 个插值占位符完全对齐；切换只原位刷新已绑定文本、安全属性/ARIA 与标题，不重新渲染/抓取当前路由，不重启认证或重放 GET、mutation/AI，且保持已加载分页/游标、表单值/选择、抽屉/对话框状态、语言控件焦点和当前 mutation ownership；常规导航与前进/后退仍按原合同抓取，既有 route guard 继续拒绝陈旧路由完成。静态门禁使用固定 TypeScript AST API 与 DOM HTML 解析，mutation 测试覆盖缺键/占位符、动态键 map、直接/变量间接/setAttribute/createTextNode/DOM helper/HTML 文本和属性、转义中英文、base64、模板/拼接及可显示 Markdown 异常；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
+- [x] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 349 键及 45 个插值占位符完全对齐；切换只原位刷新已绑定文本、安全属性/ARIA 与标题，不重新渲染/抓取当前路由，不重启认证或重放 GET、mutation/AI，且保持已加载分页/游标、表单值/选择、抽屉/对话框状态、语言控件焦点和当前 mutation ownership；常规导航与前进/后退仍按原合同抓取，既有 route guard 继续拒绝陈旧路由完成。静态门禁使用固定 TypeScript AST API 与 DOM HTML 解析，mutation 测试覆盖缺键/占位符、动态键 map、直接/变量间接/setAttribute/createTextNode/DOM helper/HTML 文本和属性、转义中英文、base64、模板/拼接及可显示 Markdown 异常；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
 
 ## EVAL — 质量评测
 
-M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。4 条 Tag 用例仅靠 Tag 命中；关闭 Tag 索引会同时击穿 Recall@5 与逐例门禁。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
+M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、28 条独立 parser 用例和中英文强/弱证据信心语料，并报告非零精确分母。评测计算 Recall@5、citation precision/recall/location、逐例答案/拒答/拒绝契约、错误引用和权限泄露；Tag 索引及 28 个完成功能见证均有独立 mutation 使其精确断言失败。这不替代 M4/M5 的语义、同义词、表格、冲突和生产评测验收。
 
-- [ ] `EVAL-001` P0/M1 解析 fixture 规范；状态：L/W；验收：输入字节、期望 Markdown、行数、warning、错误码和 metadata 由独立 fixture 定义，不调用生产 helper。证据：`test/fixtures/m1-parser-cases.ts`；命令：`rtk npm run test:m1`。
-- [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
+- [x] `EVAL-001` P0/M1 解析 fixture 规范；状态：L/W；验收：输入字节、期望 Markdown、行数、warning、错误码和 metadata 由独立 fixture 定义，不调用生产 helper。证据：`test/fixtures/m1-parser-cases.ts`；命令：`rtk npm run test:m1`。
+- [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
 - [ ] `EVAL-003` P0/M2 每种文件格式解析集；验收：正常/损坏/空/超限。
 - [ ] `EVAL-004` P0/M2 Chunk golden set；验收：heading/table/code/location 期望手工给定。
 - [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。

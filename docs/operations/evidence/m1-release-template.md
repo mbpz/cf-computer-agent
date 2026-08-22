@@ -9,7 +9,7 @@ Copy this file for one authorized candidate. Do not overwrite this template. Sto
 - [ ] `GATE-M0` remote prerequisites are archived.
 - [ ] `GATE-M1` is eligible to be checked.
 
-Current default decision: **M1 local acceptance pending; remote verification pending.**
+Current default decision: **M1 implementation complete; remote verification pending.**
 
 ## Candidate identity
 
@@ -42,12 +42,12 @@ Current default decision: **M1 local acceptance pending; remote verification pen
 | --- | --- | --- |
 | Pre-release remote export completed | [ ] pending | date `<pending>`; bytes `<pending>`; SHA-256 `<pending>` |
 | Export stored outside repository with restricted access | [ ] pending | restricted reference `<pending>` |
-| Reviewed `0001`/`0002`/`0003` SHA-256 verifier | [ ] pending | `rtk npm run verify:m1:migrations -- --files`; exact pass output `<pending>` |
+| Reviewed `0001`/`0002`/`0003`/`0004` SHA-256 verifier | [ ] pending | `rtk npm run verify:m1:migrations -- --files`; exact pass output `<pending>` |
 | Pre-apply `d1_migrations` ledger exact | [ ] pending | `rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"`; exact names/pass `<pending>` |
 | Legacy `review_pending` guard clear | [ ] pending | `rtk npm run verify:m1:migrations -- --legacy-pending "$M1_PENDING_FILE"`; exact zero-count pass `<pending>` |
-| `0003_m1_knowledge_loop.sql` reviewed in full | [ ] pending | reviewer `<pending>` |
+| `0004_m1_gate_completion.sql` reviewed in full; SHA-256 `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb` | [ ] pending | reviewer `<pending>` |
 | Local upgrade preservation and FK checks passed | [ ] pending | command/count `<pending>` |
-| Remote `0003` applied once | [ ] pending | date/result `<pending>` |
+| Remote `0004` applied once | [ ] pending | date/result `<pending>` |
 | Post-apply `d1_migrations` ledger exact | [ ] pending | `rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"`; exact names/pass `<pending>` |
 | `KnowledgeBase` class and DO migration tag `v1` preserved | [ ] pending | inspected version reference `<pending>` |
 
@@ -62,7 +62,7 @@ Never attach the export or row contents. Never mark a reverse migration, table d
 | Local automation probe contracts | [ ] pending | `rtk npm run test:ops:m1`; tests/count `<pending>` |
 | `rtk npm run typecheck` | [ ] pending | exit/result `<pending>` |
 | `rtk npm run check` | [ ] pending | smoke/unit/Workerd counts and dry-run bindings `<pending>` |
-| `rtk npm audit --omit=dev` | [ ] pending | vulnerabilities `<pending>` |
+| `rtk npm audit --omit=dev --offline` | [ ] pending | runtime vulnerabilities `<pending>` |
 | `rtk git diff --check` | [ ] pending | exit/result `<pending>` |
 
 The fixed evaluator is provider-free. Do not enter a Workers AI key, account token, or production source into it.
@@ -89,14 +89,20 @@ No secret value, JSON bundle path, or terminal transcript containing hidden inpu
 | Journey | Status | HTTP outcome | Redacted request ID(s) | Notes without body/content |
 | --- | --- | --- | --- | --- |
 | OAuth start/callback/session | [ ] pending | `<pending>` | `<pending>` | `<pending>` |
+| Browser-language selection and in-page `zh-CN`/`en` switch | [ ] pending | `<pending>` | `<pending>` | no duplicate fetch/mutation; form/focus preserved `<pending>` |
 | Contributor source submit | [ ] pending | `<pending>` | `<pending>` | synthetic fixture ID only `<pending>` |
 | Idempotency replay | [ ] pending | `<pending>` | `<pending>` | same Submission confirmed `<pending>` |
 | Admin raw/normalized/Chunk preview | [ ] pending | `<pending>` | `<pending>` | `<pending>` |
 | Admin publish | [ ] pending | `<pending>` | `<pending>` | visibility `<pending>` |
+| Audited title/target/Tag patch and visibility expansion confirmation | [ ] pending | `<pending>` | `<pending>` | reason code and audit IDs only `<pending>` |
+| Contributor revision request and linked resubmission | [ ] pending | `<pending>` | `<pending>` | old/new Submission IDs only `<pending>` |
 | Contributor list/search | [ ] pending | `<pending>` | `<pending>` | `<pending>` |
 | Current Revision reader | [ ] pending | `<pending>` | `<pending>` | `<pending>` |
+| Original download visibility and safe filename | [ ] pending | `<pending>` | `<pending>` | byte count only `<pending>` |
 | Citation exact location readback | [ ] pending | `<pending>` | `<pending>` | heading/line numbers only `<pending>` |
 | Grounded chat | [ ] pending | `<pending>` | `<pending>` | citation count only `<pending>` |
+| Chat scopes: all/Space/Collection/selected items | [ ] pending | `<pending>` | `<pending>` | exact scope kinds only `<pending>` |
+| Ranking, matched fields, safe highlights, Tag AND/OR | [ ] pending | `<pending>` | `<pending>` | IDs/ranks/ranges only `<pending>` |
 | `admin_only` list/search/detail hidden | [ ] pending | `<pending>` | `<pending>` | no metadata/body captured |
 | `admin_only` citation/chat hidden | [ ] pending | `<pending>` | `<pending>` | no metadata/body captured |
 | Disabled existing session rejected | [ ] pending | `<pending>` | `<pending>` | `<pending>` |
@@ -167,7 +173,7 @@ Reference `test/unit/publication-service.test.ts`, `test/worker/m1-publication.t
 
 | Check | Status | Evidence |
 | --- | --- | --- |
-| Target reads current D1 schema including `0003` | [ ] pending | `<pending>` |
+| Target reads current D1 schema including `0004` | [ ] pending | `<pending>` |
 | Target preserves GitHub OAuth/session and automation | [ ] pending | `<pending>` |
 | Target preserves `KnowledgeBase` class, `v1`, VFS, index, journal | [ ] pending | `<pending>` |
 | Target was locally gated, uploaded with `--strict`, and inspected | [ ] pending | emergency version `<pending>` |
@@ -179,7 +185,7 @@ If rollback is executed, add the exact emergency version ID plus new OAuth/sessi
 
 - [ ] All local, Workerd, remote provider, custom-domain, cost, and recovery evidence required by M1 is present.
 - [ ] No permission leak or wrong citation occurred.
-- [ ] The independent Task 11 correctness/security review distinguishes local/Workerd facts from production facts.
+- [ ] The independent Task 9/10 correctness/security reviews distinguish local/Workerd facts from production facts.
 - [ ] `GATE-M1` may be checked.
 
 Decision: `<M1 local acceptance pending; remote verification pending | M1 implementation complete; remote verification pending | M1 production gate accepted>`

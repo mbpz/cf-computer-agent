@@ -47,6 +47,19 @@ describe("submissions D1 control plane", () => {
     ] });
   });
 
+  it("rejects incomplete M1-v2 source identity at the repository boundary", () => {
+    const repository = new SourcesRepository(env.DB);
+    const base = {
+      id: "invalid-m1-version", sourceId: "missing-source", submissionId: "missing-submission", ordinal: 1,
+      content: "body", contentSha256: "a".repeat(64), parserVersion: "m1-v1" as const,
+      parserSchemaVersion: "m1-v2" as const, codeMetadata: null, createdAt: now,
+    };
+    for (const sourceIdentitySha256 of [null, "", "f".repeat(63), "G".repeat(64)]) {
+      expect(() => repository.prepareCreateVersion({ ...base, sourceIdentitySha256 }))
+        .toThrow(/source identity/u);
+    }
+  });
+
   it("keeps contributor pages ownership-scoped across cursor-shaped inputs while admin pending pages see both users", async () => {
     const service = createService();
     await service.create("member-a", { requestedSpaceId: "default", kind: "text", title: "A one", content: "a" });

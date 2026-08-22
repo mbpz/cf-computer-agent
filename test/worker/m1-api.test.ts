@@ -174,15 +174,25 @@ describe("M1 API authorization and request boundaries", () => {
     }), 400, "SOURCE_ENCODING_INVALID");
     await expectApiError(automationApi("/api/submissions", { method: "POST", body: "{not-json" }), 403, "FORBIDDEN");
 
+    const exactUtf8 = `${"界".repeat(43_690)}a`;
+    expect(new TextEncoder().encode(`${exactUtf8}\n`)).toHaveLength(128 * 1024);
     const exactSource = await memberApi("contributor", "/api/submissions", {
       method: "POST",
       headers: { "idempotency-key": "exact-base64-key01" },
       body: JSON.stringify({
         requestedSpaceId: "default", kind: "markdown", title: "Exact bound",
-        contentBase64: btoa("a".repeat(128 * 1024 - 1)),
+        contentBase64: standardBase64(new TextEncoder().encode(exactUtf8)),
       }),
     });
     expect(exactSource.status).toBe(201);
+    await expectApiError(memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "over-base64-key01" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", kind: "markdown", title: "Over bound",
+        contentBase64: standardBase64(new TextEncoder().encode(`${exactUtf8}a`)),
+      }),
+    }), 400, "SOURCE_TOO_LARGE");
   });
   it("authorizes capabilities before malformed or oversized bodies, query values, and resource identifiers", async () => {
     const oversized = JSON.stringify({ question: "x".repeat(APP_CONFIG.maxJsonRequestBytes + 1) });
@@ -1309,4 +1319,12 @@ function hex(bytes: Uint8Array): string {
 
 function base64Url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function standardBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8_192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8_192));
+  }
+  return btoa(binary);
 }

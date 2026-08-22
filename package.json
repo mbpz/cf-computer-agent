@@ -13,7 +13,7 @@
     "test:i18n": "node --test scripts/i18n-contract.test.mjs",
     "verify:i18n": "node scripts/verify-i18n.mjs",
     "test:ops:m1": "node --test scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs",
-    "test:m1": "npm run test:ops:m1 && vitest run test/unit/source-decoder.test.ts test/unit/source-parser.test.ts test/unit/source-chunker.test.ts test/unit/submissions-service.test.ts test/unit/publication-service.test.ts test/unit/library-service.test.ts test/unit/cited-answer-service.test.ts test/unit/workspace-ui.test.ts test/unit/navigation.test.ts test/unit/m1-evaluation.test.ts test/worker/submissions.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts test/worker/assets.test.ts",
+    "test:m1": "npm run verify:m1:migrations -- --files && npm run verify:m1:docs && npm run verify:i18n && npm run test:ops:m1 && npm run test:i18n && vitest run test/unit/source-decoder.test.ts test/unit/source-parser.test.ts test/unit/source-chunker.test.ts test/unit/submissions-service.test.ts test/unit/publication-service.test.ts test/unit/library-service.test.ts test/unit/cited-answer-service.test.ts test/unit/workspace-ui.test.ts test/unit/navigation.test.ts test/unit/m1-evaluation.test.ts test/worker/submissions.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts test/worker/assets.test.ts",
     "test:unit": "vitest run test/unit",
     "test:worker": "vitest run test/worker",
     "typecheck": "tsc --noEmit",

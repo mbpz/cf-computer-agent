@@ -58,7 +58,7 @@
 
 实施计划：[M1 单来源可信知识闭环实施计划](./docs/superpowers/plans/2026-08-21-m1-single-source-knowledge-loop.md)
 
-当前状态：M1 核心闭环代码、固定评测和 Workerd 纵向旅程已在本地实现；[生产发布手册](./docs/operations/m1-release.md) 与[证据模板](./docs/operations/evidence/m1-release-template.md)已就绪。Checklist 仍有未满足的 P0/M1 细项；远程 `0003` migration、精确版本部署、浏览器 OAuth/M1 旅程、D1 成本和跨激活证据也均未执行，`GATE-M1` 保持未勾选。
+当前状态：23 个本地/Workerd M1 产品原子已通过固定验收；只有需要生产 `rows_read`/`rows_written` 的 `OPS-015` 未勾选。远程 `0004` migration、精确版本部署、双语 OAuth/M1 旅程和跨激活证据均未执行，`GATE-M1` 保持未勾选。
 
 范围：
 

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 const repositoryRoot = new URL("../", import.meta.url);
 const runbookPath = new URL("docs/operations/m1-release.md", repositoryRoot);
 const checklistPath = new URL("docs/product/ai-knowledge-base-checklist.md", repositoryRoot);
-const reportPath = new URL(".superpowers/sdd/2026-08-21-m1-single-source-knowledge-loop/task-11-report.md", repositoryRoot);
+const reportPath = new URL(".superpowers/sdd/2026-08-22-m1-gate-completion/task-9-report.md", repositoryRoot);
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
   ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
@@ -173,16 +173,16 @@ async function verifyTruth(checklist, report) {
   const gates = [...checklistText.matchAll(/^- \[([ x])\] `GATE-M1`(?:\s|$)/gmu)];
   if (atoms.length !== 76
     || atomIds.size !== atoms.length
-    || checked.length !== 53
-    || unchecked.length !== 23
+    || checked.length !== 75
+    || unchecked.length !== 1
     || gates.length !== 1
     || gates[0][1] !== " ") {
     throw new Error("M1 checklist counts do not match the reviewed truth");
   }
 
-  const summary = "Checklist totals: **76 P0/M1 atoms = 53 checked + 23 unchecked**. `GATE-M1` is one additional unchecked gate, so **24 items are unchecked including the gate**.";
+  const summary = "Checklist totals: **76 P0/M1 atoms = 75 checked + 1 unchecked**. `GATE-M1` is one additional unchecked gate, so **2 items are unchecked including the gate**.";
   if (!reportText.includes(summary)
-    || !reportText.includes("Twenty-three current P0/M1 atoms remain unchecked")) {
+    || !reportText.includes("One current P0/M1 atom remains unchecked")) {
     throw new Error("M1 report count wording is stale");
   }
   const sectionStart = reportText.indexOf("## Checklist reconciliation");

@@ -2,7 +2,7 @@
 
 一个使用 GitHub OAuth 登录、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
 
-M1 的文本/Markdown/代码可信知识核心闭环已完成本地与 Workerd 实现验证：Submission 经确定性解析、分块、管理员审核后形成不可变 Revision，D1 FTS5 提供权限内检索，阅读器与引用问答重新授权并定位到精确 Chunk。当前 Checklist 中仍有超出该核心纵向切片的 P0/M1 细项未勾选；生产 `0003` migration、版本部署、浏览器旅程和 D1 成本证据也尚未执行或归档，因此 `GATE-M1` 仍未完成。
+M1 的 23 个本地/Workerd 产品原子已全部通过固定、无 Provider 的验收门禁。生产 `0004` migration、精确版本部署、双语浏览器旅程和 D1 成本证据尚未执行；`OPS-015` 与 `GATE-M1` 保持未勾选。当前精确状态是 **M1 实现完成；远程验证待完成**，不是生产验收。
 
 ## 产品演进文档
 
