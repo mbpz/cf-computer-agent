@@ -57,6 +57,56 @@ beforeEach(async () => {
 });
 
 describe("M1 API authorization and request boundaries", () => {
+  it("accepts only canonical base64 source bytes and persists M1-v2 code metadata", async () => {
+    const contentBase64 = btoa("const x = 1;\\r\\n");
+    const created = await memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "base64-source-key1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, kind: "code", title: "Example",
+        contentBase64, language: "javascript", fileLabel: "example.js", lineBaseline: 7,
+      }),
+    });
+    expect(created.status).toBe(201);
+    await expect(env.DB.prepare(
+      "SELECT parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions",
+    ).first()).resolves.toEqual({
+      parser_schema_version: "m1-v2", source_identity_sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      code_language: "javascript", file_label: "example.js", line_baseline: 7,
+    });
+    const createdBody = await created.json<{ submission: { id: string } }>();
+    const published = await memberApi("admin", `/api/admin/submissions/${createdBody.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({ title: "Example", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [] }),
+    });
+    expect(published.status).toBe(200);
+    await expect(env.DB.prepare("SELECT start_line, end_line FROM chunks").first())
+      .resolves.toEqual({ start_line: 7, end_line: 7 });
+
+    await expectApiError(memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "mixed-source-key01" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", kind: "text", title: "Mixed", content: "text", contentBase64: "dGV4dA==",
+      }),
+    }), 400, "SUBMISSION_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "bad-base64-key001" },
+      body: JSON.stringify({ requestedSpaceId: "default", kind: "text", title: "Bad", contentBase64: "YQ" }),
+    }), 400, "SOURCE_ENCODING_INVALID");
+    await expectApiError(automationApi("/api/submissions", { method: "POST", body: "{not-json" }), 403, "FORBIDDEN");
+
+    const exactSource = await memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "exact-base64-key01" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", kind: "markdown", title: "Exact bound",
+        contentBase64: btoa("a".repeat(128 * 1024 - 1)),
+      }),
+    });
+    expect(exactSource.status).toBe(201);
+  });
   it("authorizes capabilities before malformed or oversized bodies, query values, and resource identifiers", async () => {
     const oversized = JSON.stringify({ question: "x".repeat(APP_CONFIG.maxJsonRequestBytes + 1) });
 

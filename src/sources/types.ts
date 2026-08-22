@@ -12,12 +12,18 @@ export interface ParseSourceInput {
   kind: SubmissionKind;
   content: string;
   language?: string;
+  fileLabel?: string;
+  lineBaseline?: number;
 }
 
 export interface ParsedSource {
   normalizedMarkdown: string;
   contentSha256: string;
   parserVersion: "m1-v1";
+  parserSchemaVersion: "m1-v2";
+  sourceIdentitySha256: string;
+  warnings: string[];
+  codeMetadata: CodeSourceMetadata | null;
   lineCount: number;
 }
 

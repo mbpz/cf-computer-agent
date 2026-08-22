@@ -7,8 +7,26 @@ import {
 } from "../../src/submissions/repository";
 import type { CreateSubmission, Submission, SubmissionCreateResult, SubmissionPage } from "../../src/submissions/types";
 import type { CreateAuditEvent } from "../../src/audit/types";
+import { m1ParserCases } from "../fixtures/m1-parser-cases";
 
 describe("SubmissionsService", () => {
+  it.each(m1ParserCases.filter((fixture) => !fixture.expected.ok))(
+    "does not persist invalid independent fixture $id",
+    async (fixture) => {
+      const expected = fixture.expected;
+      if (expected.ok) throw new Error("Expected an invalid parser fixture");
+      const repository = new FakeSubmissionsRepository();
+      const service = serviceFor(repository);
+      const contentBase64 = base64Of(fixture.bytes);
+
+      await expect(service.createWithSourceVersion("member-a", {
+        requestedSpaceId: "default", kind: fixture.kind, title: "Fixture", contentBase64,
+        idempotencyKey: "abcdefghijklmnop", ...fixture.metadata,
+      })).rejects.toMatchObject({ code: expected.code, status: 400 });
+      expect(repository.sourceCreation).toBeUndefined();
+    },
+  );
+
   it("normalizes a title and creates only review-pending text submissions", async () => {
     const repository = new FakeSubmissionsRepository();
     const service = serviceFor(repository);
@@ -69,6 +87,8 @@ describe("SubmissionsService", () => {
         content: "# A\n",
         contentSha256: "aa1237b773c38dbddef583c4868aaea7a44c5237ea7923aecca5513764b42d80",
         parserVersion: "m1-v1",
+        parserSchemaVersion: "m1-v2",
+        sourceIdentitySha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
       },
     });
   });
@@ -87,7 +107,7 @@ describe("SubmissionsService", () => {
       title: "Title",
       content,
       idempotencyKey: "abcdefghijklmnop",
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_TOO_LARGE", status: 400 });
     expect(repository.sourceCreation).toBeUndefined();
   });
 
@@ -104,7 +124,7 @@ describe("SubmissionsService", () => {
       title: "Title",
       content,
       idempotencyKey: "abcdefghijklmnop",
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_EMPTY", status: 400 });
     expect(repository.sourceCreation).toBeUndefined();
   });
 
@@ -118,6 +138,12 @@ describe("SubmissionsService", () => {
     })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
   });
 });
+
+function base64Of(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary);
+}
 
 function serviceFor(repository: FakeSubmissionsRepository): SubmissionsService {
   let nextId = 0;

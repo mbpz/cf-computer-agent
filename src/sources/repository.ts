@@ -21,13 +21,16 @@ export class SourcesRepository {
 
   prepareCreateVersion(version: SourceVersion): D1PreparedStatement {
     return this.db.prepare(
-      `INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+      `INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?)
          AND EXISTS (SELECT 1 FROM submissions WHERE id = ?)`,
     ).bind(
       version.id, version.sourceId, version.submissionId, version.ordinal, version.content,
-      version.contentSha256, version.parserVersion, version.createdAt, version.sourceId, version.submissionId,
+      version.contentSha256, version.parserVersion, version.parserSchemaVersion ?? "m1-v1",
+      version.sourceIdentitySha256 ?? null, version.codeMetadata?.language ?? null,
+      version.codeMetadata?.fileLabel ?? null, version.codeMetadata?.lineBaseline ?? 1,
+      version.createdAt, version.sourceId, version.submissionId,
     );
   }
 

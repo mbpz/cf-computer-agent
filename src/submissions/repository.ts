@@ -39,6 +39,11 @@ type CreationRow = SubmissionRow & {
   source_version_content: string;
   content_sha256: string;
   parser_version: SourceVersion["parserVersion"];
+  parser_schema_version: NonNullable<SourceVersion["parserSchemaVersion"]>;
+  source_identity_sha256: string | null;
+  code_language: string | null;
+  file_label: string | null;
+  line_baseline: number;
   source_version_created_at: string;
 };
 const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
@@ -155,7 +160,8 @@ const creationSelect = `SELECT
   src.id AS source_id, src.owner_id AS source_owner_id, src.space_id AS source_space_id, src.collection_id AS source_collection_id,
   src.kind AS source_kind, src.title AS source_title, src.created_at AS source_created_at, src.updated_at AS source_updated_at,
   sv.id AS source_version_id, sv.ordinal AS source_version_ordinal, sv.content AS source_version_content,
-  sv.content_sha256, sv.parser_version, sv.created_at AS source_version_created_at
+  sv.content_sha256, sv.parser_version, sv.parser_schema_version, sv.source_identity_sha256,
+  sv.code_language, sv.file_label, sv.line_baseline, sv.created_at AS source_version_created_at
 FROM submissions s
 JOIN source_versions sv ON sv.submission_id = s.id
 JOIN sources src ON src.id = sv.source_id`;
@@ -172,7 +178,13 @@ function mapCreationRow(row: CreationRow): SubmissionCreateResult {
   const sourceVersion: SourceVersion = {
     id: row.source_version_id, sourceId: row.source_id, submissionId: row.id,
     ordinal: row.source_version_ordinal, content: row.source_version_content,
-    contentSha256: row.content_sha256, parserVersion: row.parser_version, createdAt: row.source_version_created_at,
+    contentSha256: row.content_sha256, parserVersion: row.parser_version,
+    parserSchemaVersion: row.parser_schema_version,
+    sourceIdentitySha256: row.source_identity_sha256,
+    codeMetadata: row.code_language === null || row.file_label === null
+      ? null
+      : { language: row.code_language, fileLabel: row.file_label, lineBaseline: row.line_baseline },
+    createdAt: row.source_version_created_at,
   };
   return { submission, source, sourceVersion, duplicateCandidate: null };
 }
@@ -183,6 +195,7 @@ function publicSubmission(submission: PersistedSubmission): Submission {
 function exactReplayOrThrow(existing: SubmissionCreateResult, input: CreateSubmissionWithSourceVersion): SubmissionCreateResult {
   if (!existing.submission || !existing.sourceVersion
     || existing.sourceVersion.contentSha256 !== input.sourceVersion.contentSha256
+    || existing.sourceVersion.sourceIdentitySha256 !== input.sourceVersion.sourceIdentitySha256
     || existing.submission.requestedSpaceId !== input.submission.requestedSpaceId
     || existing.submission.requestedCollectionId !== input.submission.requestedCollectionId) {
     throw new SubmissionsRepositoryConflictError("idempotency_conflict");
@@ -196,7 +209,11 @@ function assertSourceCreationBinding(input: CreateSubmissionWithSourceVersion): 
     || source.spaceId !== submission.requestedSpaceId || source.collectionId !== submission.requestedCollectionId
     || source.kind !== submission.kind || source.title !== submission.title
     || sourceVersion.sourceId !== source.id || sourceVersion.submissionId !== submission.id
-    || sourceVersion.ordinal !== 1 || sourceVersion.parserVersion !== "m1-v1") {
+    || sourceVersion.ordinal !== 1 || sourceVersion.parserVersion !== "m1-v1"
+    || sourceVersion.parserSchemaVersion !== "m1-v2"
+    || !/^[a-f0-9]{64}$/u.test(sourceVersion.sourceIdentitySha256 ?? "")
+    || (source.kind === "code" && !sourceVersion.codeMetadata)
+    || (source.kind !== "code" && sourceVersion.codeMetadata !== null)) {
     throw new TypeError("Submission source binding is invalid");
   }
 }

@@ -27,7 +27,7 @@ export interface ReviewMetadataPatch {
 export type PublishSubmissionInput = ReviewMetadataPatch;
 
 export interface PublicationSourceVersion extends Pick<SourceVersion,
-  "id" | "content" | "contentSha256" | "parserVersion"> {
+  "id" | "content" | "contentSha256" | "parserVersion" | "parserSchemaVersion" | "codeMetadata"> {
   kind: SubmissionKind;
 }
 

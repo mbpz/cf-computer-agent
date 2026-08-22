@@ -22,7 +22,7 @@
 
 - [x] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；状态：L/W；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
 - [x] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；状态：L/W；验收：保留标题层级和代码块。
-- [ ] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；验收：记录语言、文件标签和行号基准。
+- [ ] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；状态：L/W；验收：记录 allowlisted language、无路径/控制符的 fileLabel 和 1..1,000,000 行号基准，并将原始行号写入 Chunk location。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-parser.test.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `SRC-004` P0/M1 输入大小边界；状态：L/W；验收：规范化 Markdown 的 UTF-8 精确上限接受，任何规范化扩张超限都在 Source/Version/Submission/发布 intent 持久化前稳定拒绝。
 - [x] `SRC-005` P0/M1 标题规范化；状态：L/W；验收：trim、UTF-8 上限和控制字符拒绝。
 - [x] `SRC-006` P0/M1 Space/Collection 目标选择；状态：L/W；验收：只接受 active 且同 Space 集合。
@@ -62,7 +62,7 @@
 
 ## PAR — 文档解析
 
-- [ ] `PAR-001` P0/M1 确定性纯文本解析；状态：L；验收：UTF-8 fatal decode 和换行规范化。当前仅覆盖已解码字符串和换行规范化，尚无独立 fatal UTF-8 输入契约。
+- [ ] `PAR-001` P0/M1 确定性纯文本解析；状态：L/W；验收：canonical base64 字节先经 UTF-8 fatal decode，再确定性规范化为 LF；无效字节拒绝且不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
 - [x] `PAR-003` P0/M1 代码解析；状态：L；验收：语言、行号和代码块不被自然语言清洗破坏。
 - [ ] `PAR-004` P0/M2 Parser 接口和版本；验收：同输入/版本可重放且输出 schema 固定。
@@ -320,8 +320,8 @@
 
 M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。4 条 Tag 用例仅靠 Tag 命中；关闭 Tag 索引会同时击穿 Recall@5 与逐例门禁。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
 
-- [ ] `EVAL-001` P0/M1 解析 fixture 规范；状态：L；验收：输入、期望结构、位置和 warning 独立定义。当前解析测试未形成独立的期望矩阵。
-- [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L；验收：正常/空/超限/恶意。当前缺少包含 fatal UTF-8 的精确独立语料契约。
+- [ ] `EVAL-001` P0/M1 解析 fixture 规范；状态：L/W；验收：输入字节、期望 Markdown、行数、warning、错误码和 metadata 由独立 fixture 定义，不调用生产 helper。证据：`test/fixtures/m1-parser-cases.ts`；命令：`rtk npm run test:m1`。
+- [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
 - [ ] `EVAL-003` P0/M2 每种文件格式解析集；验收：正常/损坏/空/超限。
 - [ ] `EVAL-004` P0/M2 Chunk golden set；验收：heading/table/code/location 期望手工给定。
 - [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。

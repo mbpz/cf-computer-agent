@@ -6,6 +6,7 @@ import { AuditRepository } from "../../src/audit/repository";
 import type { CreateAuditEvent } from "../../src/audit/types";
 import { SubmissionsRepository } from "../../src/submissions/repository";
 import { SubmissionsService } from "../../src/submissions/service";
+import { SourcesRepository } from "../../src/sources/repository";
 import type { CreateSubmissionWithSourceVersion } from "../../src/submissions/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -14,6 +15,35 @@ describe("submissions D1 control plane", () => {
     await reset();
     await applyD1Migrations(env.DB, MIGRATIONS);
     await seedMembers();
+  });
+
+  it("persists the complete M1-v2 SourceVersion contract while legacy rows retain null metadata", async () => {
+    const submissions = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
+    const sourceVersions = new SourcesRepository(env.DB);
+    const fresh = submissionInput("fresh-source-submission");
+    const legacy = submissionInput("legacy-source-submission");
+    await submissions.createWithAudit(fresh, { ...auditInput("fresh-source-audit"), resourceId: fresh.id });
+    await submissions.createWithAudit(legacy, { ...auditInput("legacy-source-audit"), resourceId: legacy.id });
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('fresh-source', 'member-a', 'default', NULL, 'code', 'Fresh', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('legacy-source', 'member-a', 'default', NULL, 'text', 'Legacy', ?, ?)").bind(now, now),
+      sourceVersions.prepareCreateVersion({
+        id: "fresh-version", sourceId: "fresh-source", submissionId: fresh.id, ordinal: 1,
+        content: "```javascript\\nconst x = 1;\\n```\\n", contentSha256: "a".repeat(64), parserVersion: "m1-v1",
+        parserSchemaVersion: "m1-v2", sourceIdentitySha256: "b".repeat(64),
+        codeMetadata: { language: "javascript", fileLabel: "main.js", lineBaseline: 7 }, createdAt: now,
+      }),
+      sourceVersions.prepareCreateVersion({
+        id: "legacy-version", sourceId: "legacy-source", submissionId: legacy.id, ordinal: 1,
+        content: "legacy", contentSha256: "c".repeat(64), parserVersion: "m1-v1", createdAt: now,
+      }),
+    ]);
+    await expect(env.DB.prepare(
+      "SELECT id, parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions ORDER BY id",
+    ).all()).resolves.toMatchObject({ results: [
+      { id: "fresh-version", parser_schema_version: "m1-v2", source_identity_sha256: "b".repeat(64), code_language: "javascript", file_label: "main.js", line_baseline: 7 },
+      { id: "legacy-version", parser_schema_version: "m1-v1", source_identity_sha256: null, code_language: null, file_label: null, line_baseline: 1 },
+    ] });
   });
 
   it("keeps contributor pages ownership-scoped across cursor-shaped inputs while admin pending pages see both users", async () => {
@@ -311,7 +341,8 @@ async function sourceCreationInput(failure: "source" | "source_version" | "audit
     },
     sourceVersion: {
       id: "rollback-source-version", sourceId: "rollback-source", submissionId: submission.id, ordinal: 1,
-      content: "Rollback unique body", contentSha256: `rollback-hash-${failure}`, parserVersion: "m1-v1", createdAt: now,
+      content: "Rollback unique body", contentSha256: `rollback-hash-${failure}`, parserVersion: "m1-v1",
+      parserSchemaVersion: "m1-v2", sourceIdentitySha256: "d".repeat(64), codeMetadata: null, createdAt: now,
     },
     audit: { ...auditInput("rollback-audit"), resourceId: submission.id },
   };

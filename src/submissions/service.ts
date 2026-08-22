@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { decodeSourceBytes } from "../sources/decoder";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
@@ -9,7 +10,14 @@ import {
 import type { Submission, SubmissionCreateResult, SubmissionKind, SubmissionPage } from "./types";
 
 export interface CreateSubmissionInput { requestedSpaceId: string; requestedCollectionId?: string | null; kind: SubmissionKind; title: string; content: string; }
-export interface CreateSourceSubmissionInput extends CreateSubmissionInput { idempotencyKey: string; language?: string; }
+export interface CreateSourceSubmissionInput extends Omit<CreateSubmissionInput, "content"> {
+  content?: string;
+  contentBase64?: string;
+  idempotencyKey: string;
+  language?: string;
+  fileLabel?: string;
+  lineBaseline?: number;
+}
 export interface SubmissionsServiceOptions { id?: () => string; now?: () => Date; }
 
 const maxContentBytes = 128 * 1024;
@@ -36,8 +44,15 @@ export class SubmissionsService {
     if (typeof input.idempotencyKey !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(input.idempotencyKey)) {
       throw new AppError("IDEMPOTENCY_KEY_INVALID", "Idempotency key is invalid", 400);
     }
-    const normalized = normalize(input);
-    const parsed = await parseSource({ kind: normalized.kind, content: normalized.content, language: input.language });
+    const content = resolveSourceContent(input);
+    const normalized = normalize({ ...input, content }, false);
+    const parsed = await parseSource({
+      kind: normalized.kind,
+      content: normalized.content,
+      language: input.language,
+      fileLabel: input.fileLabel,
+      lineBaseline: input.lineBaseline,
+    });
     const now = this.now().toISOString();
     const submission: PersistedSubmission = {
       id: this.id(), submitterId, ...normalized, idempotencyKey: input.idempotencyKey,
@@ -51,7 +66,8 @@ export class SubmissionsService {
     const sourceVersion = {
       id: this.id(), sourceId: source.id, submissionId: submission.id, ordinal: 1,
       content: parsed.normalizedMarkdown, contentSha256: parsed.contentSha256,
-      parserVersion: parsed.parserVersion, createdAt: now,
+      parserVersion: parsed.parserVersion, parserSchemaVersion: parsed.parserSchemaVersion,
+      sourceIdentitySha256: parsed.sourceIdentitySha256, codeMetadata: parsed.codeMetadata, createdAt: now,
     };
     const audit = submissionAudit(this.id(), submission, now);
     try {
@@ -71,9 +87,35 @@ export class SubmissionsService {
   listPending(request?: PageRequest): Promise<SubmissionPage> { return this.repository.listPending(parsePageRequest(request?.limit, request?.cursor)); }
 }
 
-function normalize(input: CreateSubmissionInput): Pick<Submission, "requestedSpaceId" | "requestedCollectionId" | "kind" | "title" | "content"> {
+function resolveSourceContent(input: CreateSourceSubmissionInput): string {
+  if (input.content !== undefined && input.contentBase64 !== undefined) {
+    throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
+  }
+  if (typeof input.content === "string") return input.content;
+  if (typeof input.contentBase64 !== "string" || !isCanonicalBase64(input.contentBase64)) {
+    throw new AppError("SOURCE_ENCODING_INVALID", "Source encoding is invalid", 400);
+  }
+  try {
+    const binary = atob(input.contentBase64);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return decodeSourceBytes(bytes.buffer);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("SOURCE_ENCODING_INVALID", "Source encoding is invalid", 400);
+  }
+}
+
+function isCanonicalBase64(value: string): boolean {
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) return false;
+  try { return btoa(atob(value)) === value; } catch { return false; }
+}
+
+function normalize(
+  input: CreateSubmissionInput,
+  enforceContentBounds = true,
+): Pick<Submission, "requestedSpaceId" | "requestedCollectionId" | "kind" | "title" | "content"> {
   const title = typeof input.title === "string" ? input.title.trim() : "";
-  if (!title || title.length > 200 || !isSubmissionKind(input.kind) || typeof input.requestedSpaceId !== "string" || !input.requestedSpaceId || (input.requestedCollectionId !== undefined && input.requestedCollectionId !== null && (typeof input.requestedCollectionId !== "string" || !input.requestedCollectionId)) || typeof input.content !== "string" || !input.content || new TextEncoder().encode(input.content).byteLength > maxContentBytes) {
+  if (!title || title.length > 200 || !isSubmissionKind(input.kind) || typeof input.requestedSpaceId !== "string" || !input.requestedSpaceId || (input.requestedCollectionId !== undefined && input.requestedCollectionId !== null && (typeof input.requestedCollectionId !== "string" || !input.requestedCollectionId)) || typeof input.content !== "string" || (enforceContentBounds && (!input.content || new TextEncoder().encode(input.content).byteLength > maxContentBytes))) {
     throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
   }
   return { requestedSpaceId: input.requestedSpaceId, requestedCollectionId: input.requestedCollectionId ?? null, kind: input.kind, title, content: input.content };

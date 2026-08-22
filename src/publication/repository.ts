@@ -45,6 +45,10 @@ type PreviewRow = {
   source_content: string;
   content_sha256: string;
   parser_version: "m1-v1";
+  parser_schema_version: "m1-v1" | "m1-v2";
+  code_language: string | null;
+  file_label: string | null;
+  line_baseline: number;
 };
 
 type TargetRow = {
@@ -602,13 +606,15 @@ export class PublicationRepository implements PublicationRepositoryPort {
 const previewSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
-  sv.content_sha256, sv.parser_version
+  sv.content_sha256, sv.parser_version, sv.parser_schema_version,
+  sv.code_language, sv.file_label, sv.line_baseline
 FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id`;
 
 const intentSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
-  sv.content_sha256, sv.parser_version,
+  sv.content_sha256, sv.parser_version, sv.parser_schema_version,
+  sv.code_language, sv.file_label, sv.line_baseline,
   pi.revision_id, pi.knowledge_item_id, pi.reviewer_id, pi.title AS intent_title,
   pi.visibility, pi.tags_json, pi.normalized_path, pi.content_sha256 AS intent_content_sha256,
   pi.state, pi.created_at AS intent_created_at, pi.updated_at AS intent_updated_at
@@ -636,6 +642,10 @@ function mapPreview(
       content: row.source_content,
       contentSha256: row.content_sha256,
       parserVersion: row.parser_version,
+      parserSchemaVersion: row.parser_schema_version,
+      codeMetadata: row.code_language === null || row.file_label === null
+        ? null
+        : { language: row.code_language, fileLabel: row.file_label, lineBaseline: row.line_baseline },
     },
   };
 }

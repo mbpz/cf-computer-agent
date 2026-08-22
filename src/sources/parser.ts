@@ -4,37 +4,49 @@ import type { ParsedSource, ParseSourceInput } from "./types";
 
 const maxSourceBytes = 128 * 1024;
 const parserVersion = "m1-v1" as const;
+const parserSchemaVersion = "m1-v2" as const;
 const allowedLanguages = new Set([
-  "bash", "c", "cpp", "csharp", "css", "go", "html", "java", "javascript", "js", "json",
-  "markdown", "python", "rust", "shell", "sql", "text", "ts", "typescript", "yaml",
+  "plaintext", "javascript", "typescript", "python", "go", "rust", "java", "sql", "json", "yaml", "shell",
 ]);
 
 export async function parseSource(input: ParseSourceInput): Promise<ParsedSource> {
   assertParseInput(input);
-  const normalizedMarkdown = normalizeSource(input);
+  const codeMetadata = normalizeCodeMetadata(input);
+  const normalizedMarkdown = normalizeSource(input, codeMetadata);
   const normalizedBytes = new TextEncoder().encode(normalizedMarkdown);
-  if (!hasSemanticSourceContent(input.kind, normalizedMarkdown) || normalizedBytes.byteLength > maxSourceBytes) {
-    throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
+  if (!hasSemanticSourceContent(input.kind, normalizedMarkdown)) {
+    throw new AppError("SOURCE_EMPTY", "Source content is empty", 400);
   }
-  const digest = await crypto.subtle.digest("SHA-256", normalizedBytes);
+  if (normalizedBytes.byteLength > maxSourceBytes) {
+    throw new AppError("SOURCE_TOO_LARGE", "Source content exceeds the limit", 400);
+  }
+  const [digest, sourceIdentityDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", normalizedBytes),
+    crypto.subtle.digest("SHA-256", canonicalSourceIdentityBytes(input.kind, normalizedMarkdown, codeMetadata)),
+  ]);
   return {
     normalizedMarkdown,
-    contentSha256: [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+    contentSha256: hex(digest),
     parserVersion,
+    parserSchemaVersion,
+    sourceIdentitySha256: hex(sourceIdentityDigest),
+    warnings: [],
+    codeMetadata,
     lineCount: countLines(normalizedMarkdown),
   };
 }
 
 function assertParseInput(input: ParseSourceInput): void {
-  if (!input || !isSourceKind(input.kind) || typeof input.content !== "string" || input.content.length === 0
-    || input.content.includes("\0") || hasMalformedSurrogate(input.content)
-    || new TextEncoder().encode(input.content).byteLength > maxSourceBytes
-    || (input.language !== undefined && typeof input.language !== "string")) {
-    throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
+  if (!input || !isSourceKind(input.kind) || typeof input.content !== "string"
+    || input.content.includes("\0") || hasMalformedSurrogate(input.content)) {
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+  }
+  if (new TextEncoder().encode(input.content).byteLength > maxSourceBytes) {
+    throw new AppError("SOURCE_TOO_LARGE", "Source content exceeds the limit", 400);
   }
 }
 
-function normalizeSource(input: ParseSourceInput): string {
+function normalizeSource(input: ParseSourceInput, codeMetadata: import("./types").CodeSourceMetadata | null): string {
   const content = normalizeNewlines(input.content);
   if (input.kind === "text") return escapeLiteralMarkdown(content);
   if (input.kind === "markdown") return normalizeMarkdown(content);
@@ -42,15 +54,35 @@ function normalizeSource(input: ParseSourceInput): string {
   const body = content.endsWith("\n") ? content : `${content}\n`;
   const longestBacktickRun = Math.max(0, ...[...body.matchAll(/`+/g)].map((match) => match[0].length));
   const fence = "`".repeat(Math.max(3, longestBacktickRun + 1));
-  const language = input.language && allowedLanguages.has(input.language.toLowerCase())
-    ? input.language.toLowerCase()
-    : "";
-  return `${fence}${language}\n${body}${fence}\n`;
+  return `${fence}${codeMetadata!.language}\n${body}${fence}\n`;
+}
+
+function normalizeCodeMetadata(input: ParseSourceInput): import("./types").CodeSourceMetadata | null {
+  if (input.kind !== "code") {
+    if (input.language !== undefined || input.fileLabel !== undefined || input.lineBaseline !== undefined) {
+      throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+    }
+    return null;
+  }
+  if (input.language !== undefined && typeof input.language !== "string"
+    || input.fileLabel !== undefined && typeof input.fileLabel !== "string"
+    || input.lineBaseline !== undefined && (!Number.isSafeInteger(input.lineBaseline)
+      || input.lineBaseline < 1 || input.lineBaseline > 1_000_000)) {
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+  }
+  const language = (input.language ?? "plaintext").trim().toLowerCase();
+  const fileLabel = (input.fileLabel ?? "untitled").trim();
+  if (!allowedLanguages.has(language) || !fileLabel
+    || new TextEncoder().encode(fileLabel).byteLength > 128
+    || /[\\/\p{Cc}]/u.test(fileLabel)) {
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+  }
+  return { language, fileLabel, lineBaseline: input.lineBaseline ?? 1 };
 }
 
 function normalizeMarkdown(content: string): string {
   if (containsRawHtml(content) || containsExecutableMarkdownUrl(content)) {
-    throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
   }
   const lines = content.split("\n").map((line) => line.replace(/[\t ]+$/u, ""));
   while (lines.at(-1) === "") lines.pop();
@@ -87,6 +119,19 @@ function decodeMarkdownDestinationSyntax(content: string): string {
 function countLines(content: string): number {
   const withoutTerminalNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
   return withoutTerminalNewline.split("\n").length;
+}
+function canonicalSourceIdentityBytes(
+  kind: ParseSourceInput["kind"],
+  normalizedMarkdown: string,
+  codeMetadata: import("./types").CodeSourceMetadata | null,
+): ArrayBuffer {
+  return new TextEncoder().encode(JSON.stringify([
+    "m1-source-identity-v1", parserSchemaVersion, kind, normalizedMarkdown,
+    codeMetadata?.language ?? null, codeMetadata?.fileLabel ?? null, codeMetadata?.lineBaseline ?? null,
+  ])).buffer as ArrayBuffer;
+}
+function hex(digest: ArrayBuffer): string {
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 function isSourceKind(value: unknown): value is ParseSourceInput["kind"] {
   return value === "text" || value === "markdown" || value === "code";

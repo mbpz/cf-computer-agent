@@ -3,6 +3,16 @@ import { chunkDocument } from "../../src/sources/chunker";
 import { MAX_REVISION_CHUNKS } from "../../src/sources/limits";
 
 describe("chunkDocument", () => {
+  it("maps fenced code locations to the one-based original line baseline", () => {
+    const chunks = chunkDocument({
+      kind: "code",
+      normalizedMarkdown: "```typescript\nconst x = 1;\nconst y = 2;\n```\n",
+      lineBaseline: 40,
+    });
+
+    expect(chunks).toEqual([expect.objectContaining({ startLine: 40, endLine: 41 })]);
+  });
+
   it("tracks heading paths and 1-based source lines", () => {
     const input = {
       kind: "markdown" as const,

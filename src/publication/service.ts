@@ -268,6 +268,7 @@ async function validatedPublicationChunks(
     chunks = chunkDocument({
       normalizedMarkdown: source.sourceVersion.content,
       kind: source.sourceVersion.kind,
+      ...(source.sourceVersion.codeMetadata ? { lineBaseline: source.sourceVersion.codeMetadata.lineBaseline } : {}),
     });
   } catch {
     throw publicationContentMismatch();

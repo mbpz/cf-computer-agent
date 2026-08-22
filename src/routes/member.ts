@@ -59,17 +59,24 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["requestedSpaceId", "requestedCollectionId", "kind", "title", "content", "language"],
+      ["requestedSpaceId", "requestedCollectionId", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
       "SUBMISSION_REQUEST_INVALID",
     );
+    const hasContent = Object.hasOwn(input, "content");
+    const hasContentBase64 = Object.hasOwn(input, "contentBase64");
+    if (hasContent === hasContentBase64) {
+      throw new AppError("SUBMISSION_REQUEST_INVALID", "Request body is invalid", 400);
+    }
     const result = await services.submissions.createWithSourceVersion(member.memberId, {
       requestedSpaceId: stringValue(input.requestedSpaceId),
       requestedCollectionId: optionalNullableString(input.requestedCollectionId),
       kind: input.kind as SubmissionKind,
       title: stringValue(input.title),
-      content: stringValue(input.content),
+      ...(hasContent ? { content: stringValue(input.content) } : { contentBase64: stringValue(input.contentBase64) }),
       idempotencyKey: request.headers.get("idempotency-key") || "",
       ...(input.language === undefined ? {} : { language: stringValue(input.language) }),
+      ...(input.fileLabel === undefined ? {} : { fileLabel: stringValue(input.fileLabel) }),
+      ...(input.lineBaseline === undefined ? {} : { lineBaseline: input.lineBaseline as number }),
     });
     return jsonResponse({
       submission: result.submission,

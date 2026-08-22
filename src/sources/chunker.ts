@@ -16,7 +16,7 @@ export interface ChunkDraft {
 }
 
 export function chunkDocument(
-  document: Pick<ParsedSource, "normalizedMarkdown"> & { kind: SubmissionKind },
+  document: Pick<ParsedSource, "normalizedMarkdown"> & { kind: SubmissionKind; lineBaseline?: number },
   options?: { maxCodePoints?: number; overlapCodePoints?: number },
 ): ChunkDraft[] {
   const maxCodePoints = options?.maxCodePoints ?? defaultMaxCodePoints;
@@ -37,8 +37,7 @@ export function chunkDocument(
       drafts.push({
         ordinal: drafts.length,
         headingPath: [...block.headingPath],
-        startLine: chunk.startLine,
-        endLine: chunk.endLine,
+        ...sourceLocation(document, chunk.startLine, chunk.endLine),
         body: chunk.body,
         searchBody,
       });
@@ -60,13 +59,30 @@ export function chunkDocument(
     return [{
       ordinal: 0,
       headingPath: heading === null ? [] : [heading.title],
-      startLine: firstLine.line,
-      endLine: firstLine.line,
+      ...sourceLocation(document, firstLine.line, firstLine.line),
       body: firstLine.text,
       searchBody: makeSearchBody(firstLine.text),
     }];
   }
   return drafts;
+}
+
+function sourceLocation(
+  document: Pick<ParsedSource, "normalizedMarkdown"> & { kind: SubmissionKind; lineBaseline?: number },
+  startLine: number,
+  endLine: number,
+): Pick<ChunkDraft, "startLine" | "endLine"> {
+  if (document.kind !== "code" || document.lineBaseline === undefined) return { startLine, endLine };
+  const lines = document.normalizedMarkdown.endsWith("\n")
+    ? document.normalizedMarkdown.slice(0, -1).split("\n")
+    : document.normalizedMarkdown.split("\n");
+  const firstSourceLine = 2;
+  const lastSourceLine = Math.max(firstSourceLine, lines.length - 1);
+  const translate = (line: number) => document.lineBaseline! + Math.min(
+    Math.max(line, firstSourceLine),
+    lastSourceLine,
+  ) - firstSourceLine;
+  return { startLine: translate(startLine), endLine: translate(endLine) };
 }
 
 interface SourceLine {

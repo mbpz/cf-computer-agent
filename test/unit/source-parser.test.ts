@@ -1,7 +1,58 @@
 import { describe, expect, it } from "vitest";
 import { parseSource } from "../../src/sources/parser";
+import { decodeSourceBytes } from "../../src/sources/decoder";
+import { m1ParserCases } from "../fixtures/m1-parser-cases";
 
 describe("parseSource", () => {
+  it.each(m1ParserCases.filter((fixture) => fixture.expected.ok))(
+    "normalizes independent byte fixture $id with M1-v2 metadata",
+    async (fixture) => {
+      const expected = fixture.expected;
+      if (!expected.ok) throw new Error("Expected a valid parser fixture");
+      const content = decodeSourceBytes(fixture.bytes.slice().buffer as ArrayBuffer);
+      const parsed = await parseSource({ kind: fixture.kind, content, ...fixture.metadata });
+
+      expect(parsed).toMatchObject({
+        normalizedMarkdown: expected.markdown,
+        lineCount: expected.lineCount,
+        warnings: expected.warnings,
+        parserSchemaVersion: "m1-v2",
+      });
+      if (fixture.kind === "code") {
+        expect(parsed.codeMetadata).toEqual({
+          language: fixture.metadata?.language,
+          fileLabel: fixture.metadata?.fileLabel,
+          lineBaseline: fixture.metadata?.lineBaseline,
+        });
+      } else {
+        expect(parsed.codeMetadata).toBeNull();
+      }
+    },
+  );
+
+  it.each(m1ParserCases.filter((fixture) => !fixture.expected.ok && fixture.expected.code !== "SOURCE_ENCODING_INVALID"))(
+    "rejects invalid independent fixture $id before persistence",
+    async (fixture) => {
+      const expected = fixture.expected;
+      if (expected.ok) throw new Error("Expected an invalid parser fixture");
+      const content = new TextDecoder().decode(fixture.bytes);
+      await expect(parseSource({ kind: fixture.kind, content, ...fixture.metadata }))
+        .rejects.toMatchObject({ code: expected.code, status: 400 });
+    },
+  );
+
+  it.each([
+    ["unknown language", { language: "bash", fileLabel: "main.sh", lineBaseline: 1 }],
+    ["path file label", { language: "shell", fileLabel: "dir/main.sh", lineBaseline: 1 }],
+    ["CRLF file label", { language: "shell", fileLabel: "main\r\n.sh", lineBaseline: 1 }],
+    ["C1 control file label", { language: "shell", fileLabel: "main\u0085.sh", lineBaseline: 1 }],
+    ["oversized file label", { language: "shell", fileLabel: "a".repeat(129), lineBaseline: 1 }],
+    ["zero baseline", { language: "shell", fileLabel: "main.sh", lineBaseline: 0 }],
+    ["over-limit baseline", { language: "shell", fileLabel: "main.sh", lineBaseline: 1_000_001 }],
+  ])("rejects code %s with a stable metadata error", async (_label, metadata) => {
+    await expect(parseSource({ kind: "code", content: "echo safe", ...metadata }))
+      .rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
+  });
   it.each([
     ["text", "A\r\nB\rC", "A\nB\nC"],
     ["markdown", "# Title  \r\n\r\nBody", "# Title\n\nBody\n"],
@@ -28,9 +79,7 @@ describe("parseSource", () => {
       kind: "code",
       content: "alert(1)",
       language: "js onload=alert(1)",
-    })).resolves.toMatchObject({
-      normalizedMarkdown: "```\nalert(1)\n```\n",
-    });
+    })).rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
   });
 
   it("escapes plain-text Markdown metacharacters so the source renders literally", async () => {
@@ -49,7 +98,7 @@ describe("parseSource", () => {
     await expect(parseSource({
       kind: "markdown",
       content: `# Safe heading\n\n${html}`,
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
   });
 
   it.each([
@@ -66,7 +115,7 @@ describe("parseSource", () => {
     "[control](java&#x0D;script\\:alert(1))",
   ])("rejects executable Markdown link destinations: %s", async (markdown) => {
     await expect(parseSource({ kind: "markdown", content: markdown }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+      .rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
   });
 
   it.each([
@@ -85,12 +134,21 @@ describe("parseSource", () => {
     });
   });
 
+  it("binds normalized code metadata into a distinct canonical source identity", async () => {
+    const first = await parseSource({ kind: "code", content: "const x = 1;", language: "TypeScript", fileLabel: "main.ts", lineBaseline: 1 });
+    const second = await parseSource({ kind: "code", content: "const x = 1;", language: "typescript", fileLabel: "main.ts", lineBaseline: 2 });
+
+    expect(first.contentSha256).toBe(second.contentSha256);
+    expect(first.sourceIdentitySha256).not.toBe(second.sourceIdentitySha256);
+    expect(first.codeMetadata?.language).toBe("typescript");
+  });
+
   it("accepts exactly 128 KiB and rejects one additional UTF-8 byte", async () => {
     await expect(parseSource({ kind: "text", content: "a".repeat(128 * 1024) })).resolves.toMatchObject({
       parserVersion: "m1-v1",
     });
     await expect(parseSource({ kind: "text", content: "a".repeat(128 * 1024 + 1) }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+      .rejects.toMatchObject({ code: "SOURCE_TOO_LARGE", status: 400 });
   });
 
   it("applies the 128 KiB limit to normalized Markdown bytes for every M1 source kind", async () => {
@@ -99,15 +157,15 @@ describe("parseSource", () => {
     await expect(parseSource({
       kind: "text",
       content: `!${"a".repeat(limit - 1)}`,
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_TOO_LARGE", status: 400 });
     await expect(parseSource({
       kind: "markdown",
       content: "a".repeat(limit),
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_TOO_LARGE", status: 400 });
     await expect(parseSource({
       kind: "code",
       content: "a".repeat(limit),
-    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    })).rejects.toMatchObject({ code: "SOURCE_TOO_LARGE", status: 400 });
 
     await expect(parseSource({
       kind: "markdown",
@@ -115,7 +173,7 @@ describe("parseSource", () => {
     })).resolves.toMatchObject({ normalizedMarkdown: `${"a".repeat(limit - 1)}\n` });
     await expect(parseSource({
       kind: "code",
-      content: `${"a".repeat(limit - 9)}\n`,
+      content: `${"a".repeat(limit - 18)}\n`,
     })).resolves.toMatchObject({ parserVersion: "m1-v1" });
   });
 
@@ -125,21 +183,21 @@ describe("parseSource", () => {
     ["unpaired low surrogate", "before\udc00after"],
   ])("rejects %s instead of hashing replacement text", async (_label, content) => {
     await expect(parseSource({ kind: "text", content }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+      .rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
   });
 
   it("rejects whitespace-only text and Markdown before chunking", async () => {
     await expect(parseSource({ kind: "text", content: " \t\r\n" }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+      .rejects.toMatchObject({ code: "SOURCE_EMPTY", status: 400 });
     await expect(parseSource({ kind: "markdown", content: " \t\r\n" }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+      .rejects.toMatchObject({ code: "SOURCE_EMPTY", status: 400 });
   });
 
   it.each([
     ["ordinary whitespace", " \t\r\n"],
     ["oversized-line whitespace", " ".repeat(1_201)],
   ])("rejects %s code before source persistence", async (_label, content) => {
-    await expect(parseSource({ kind: "code", content, language: "text" }))
-      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    await expect(parseSource({ kind: "code", content, language: "plaintext" }))
+      .rejects.toMatchObject({ code: "SOURCE_EMPTY", status: 400 });
   });
 });
