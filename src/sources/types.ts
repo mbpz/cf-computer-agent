@@ -1,5 +1,13 @@
 import type { SubmissionKind } from "../submissions/types";
 
+export type ParserSchemaVersion = "m1-v1" | "m1-v2";
+
+export interface CodeSourceMetadata {
+  language: string;
+  fileLabel: string;
+  lineBaseline: number;
+}
+
 export interface ParseSourceInput {
   kind: SubmissionKind;
   content: string;
@@ -32,6 +40,10 @@ export interface SourceVersion {
   content: string;
   contentSha256: string;
   parserVersion: "m1-v1";
+  /** Present for M1-v2 source creation; NULL is retained for pre-0004 rows. */
+  sourceIdentitySha256?: string | null;
+  parserSchemaVersion?: ParserSchemaVersion;
+  codeMetadata?: CodeSourceMetadata | null;
   createdAt: string;
 }
 

@@ -10,7 +10,7 @@ Writing or testing this runbook is local evidence only. Every command containing
 - Local Workerd proves the checked-in D1 schema and `KnowledgeBase` Durable Object integration, not production state.
 - Production evidence requires a date, commit, exact Worker version ID, and redacted request IDs in [the M1 release evidence template](./evidence/m1-release-template.md).
 - Preserve GitHub OAuth, D1 hashed sessions, `__Host-memory-session`, HMAC plus `APP_TOKEN` automation, the `KnowledgeBase` class, and Durable Object migration tag `v1`.
-- Migration `0003_m1_knowledge_loop.sql` is forward-only. Once applied remotely, do not edit, reverse, or delete it. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
+- Migrations `0001` through `0004_m1_gate_completion.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
 - `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. While any current P0/M1 checklist atom remains unchecked, report **M1 local acceptance pending; remote verification pending.** Only after every local/workerd atom is satisfied, but before production evidence is complete, report **M1 implementation complete; remote verification pending.**
 
 Use a fresh copy of [the evidence template](./evidence/m1-release-template.md) for one candidate. Do not place source text, response bodies, cookies, OAuth codes, authorization headers, secret values, or full callback URLs in it.
@@ -59,8 +59,9 @@ The reviewed migration provenance is immutable for this candidate:
 | `0001_phase1_control_plane.sql` | `3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929` |
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
 | `0003_m1_knowledge_loop.sql` | `cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3` |
+| `0004_m1_gate_completion.sql` | `83f6c536cbe02683d046bf44166e394832a0beab133b1985efdeb860daf8f691` |
 
-`verify:m1:migrations` hard-codes the three reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
+`verify:m1:migrations` hard-codes the four reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
 Publication recovery treats a legacy intent whose normalized source is semantically empty or produces more than 256 chunks as terminally invalid. The recovery job records no content, revision, review, audit, or indexing job for a pending-content invalid intent and excludes its `failed_terminal` intent from later retries; investigate the underlying submission instead of changing the intent state by hand.
 
@@ -94,18 +95,18 @@ rtk git diff --check
 
 Record exact counts and command exit status. `test:m1` includes the release/probe contract tests, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report 20 expected retrieval citations, 16 required/returned answer citations, 16 answer cases, 7 refusals, one denial, Recall@5 at least 0.85, citation precision 1, citation recall 1, citation location rate 1, exact per-case answer/refusal outcomes, zero wrong citations, and zero permission leaks. Four Tag-exclusive cases must also make the gate fail when Tag indexing is disabled. The partial-match refusal case follows the same production AND/token-coverage contract; it is not evidence of a semantic low-relevance threshold.
 
-## 4. Inspect migration `0003` and preservation evidence
+## 4. Inspect migration `0004` and preservation evidence
 
 Read the entire migration and its upgrade tests before any remote apply:
 
 ```bash
-rtk sed -n '1,260p' migrations/0003_m1_knowledge_loop.sql
+rtk sed -n '1,260p' migrations/0004_m1_gate_completion.sql
 rtk npx vitest run test/worker/migrations.test.ts
-rtk git log -1 -- migrations/0003_m1_knowledge_loop.sql
+rtk git log -1 -- migrations/0004_m1_gate_completion.sql
 set +x
 M1_LEDGER_DIR="$(rtk mktemp -d -t memory-garden-m1-ledger.XXXXXX)"
 rtk chmod 700 "$M1_LEDGER_DIR"
-M1_LEDGER_FILE="$M1_LEDGER_DIR/before-0003.json"
+M1_LEDGER_FILE="$M1_LEDGER_DIR/before-0004.json"
 : > "$M1_LEDGER_FILE"
 rtk chmod 600 "$M1_LEDGER_FILE"
 M1_PENDING_FILE="$M1_LEDGER_DIR/legacy-pending.json"
@@ -151,11 +152,11 @@ Confirm all of the following in review:
 
 - the fail-closed legacy-pending guard reports zero before any schema change, and the submissions table copy preserves all remaining draft/rejected legacy rows before the legacy table is dropped;
 - `PRAGMA foreign_key_check` and the upgrade-preservation Workerd cases pass;
-- the actual Wrangler `d1_migrations` ledger contains exactly `0001_phase1_control_plane.sql`, then `0002_github_auth.sql`, with no missing, renamed, reordered, or extra row;
-- the local reviewed set contains exactly those two files plus pending `0003_m1_knowledge_loop.sql`;
+- the actual Wrangler `d1_migrations` ledger contains exactly `0001_phase1_control_plane.sql`, then `0002_github_auth.sql`, then `0003_m1_knowledge_loop.sql`, with no missing, renamed, reordered, or extra row;
+- the local reviewed set contains those three applied files plus pending `0004_m1_gate_completion.sql`;
 - `KnowledgeBase`, Durable Object migration tag `v1`, existing VFS paths, note journal, GitHub identities, sessions, and automation credentials are not migrated or reset.
 
-The verifier fails closed if `0003` is already applied or if any unexpected ledger state exists. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
+The verifier requires exactly the reviewed `0001`–`0003` pre-`0004` state and fails closed if `0004` is already applied or if any unexpected ledger state exists. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
 
 ## 5. Apply the remote migration
 
@@ -167,7 +168,7 @@ rtk npm run db:migrate:remote
 ```
 
 ```bash
-M1_LEDGER_FILE="$M1_LEDGER_DIR/after-0003.json"
+M1_LEDGER_FILE="$M1_LEDGER_DIR/after-0004.json"
 : > "$M1_LEDGER_FILE"
 rtk chmod 600 "$M1_LEDGER_FILE"
 ```
@@ -188,12 +189,12 @@ rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"
 ```
 
 ```bash
-rtk rm -f "$M1_LEDGER_DIR/before-0003.json" "$M1_LEDGER_DIR/after-0003.json" "$M1_LEDGER_DIR/legacy-pending.json"
+rtk rm -f "$M1_LEDGER_DIR/before-0004.json" "$M1_LEDGER_DIR/after-0004.json" "$M1_LEDGER_DIR/legacy-pending.json"
 rtk rmdir "$M1_LEDGER_DIR"
 unset M1_LEDGER_FILE M1_PENDING_FILE M1_LEDGER_DIR M1_LEDGER_STATUS M1_PENDING_STATUS
 ```
 
-The post-apply verifier requires exactly `0001_phase1_control_plane.sql`, `0002_github_auth.sql`, and `0003_m1_knowledge_loop.sql`, in that order, with no missing or extra row. Record only the date and verifier pass line; the commands then remove only the three explicitly named temporary JSON files and their dedicated temporary directory. A failed apply or unexpected ledger blocks upload/deploy investigation; never repair it by deleting schema or data.
+The post-apply verifier requires exactly `0001_phase1_control_plane.sql`, `0002_github_auth.sql`, `0003_m1_knowledge_loop.sql`, and `0004_m1_gate_completion.sql`, in that order, with no missing or extra row. Record only the date and verifier pass line; the commands then remove only the three explicitly named temporary JSON files and their dedicated temporary directory. A failed apply or unexpected ledger blocks upload/deploy investigation; never repair it by deleting schema or data.
 
 ## 6. Upload one reviewed version with the complete secret bundle
 
@@ -400,7 +401,7 @@ Before accepting the cost rows, recheck the current Workers, D1, Durable Objects
 Complete the template without replacing unchecked facts with prose. `GATE-M1` is eligible only when the same evidence record contains:
 
 - date, candidate commit, exact deployed version ID, custom domain, and operator;
-- D1 export digest/size and applied `0003` status;
+- D1 export digest/size and applied `0004` status;
 - local `test:m1`, full `check`, audit, and diff evidence;
 - redacted request IDs for OAuth/session, submit/idempotency, preview/publish, search, reader, citation, chat, forbidden visibility, disabled member, bad/valid automation, and cross-activation read;
 - remote D1 query-cost rows read/written; and
@@ -410,7 +411,7 @@ If any local atom above remains incomplete, leave `GATE-M1` unchecked and publis
 
 ## 14. Forward-compatible rollback
 
-Rollback changes Worker code only. It never reverses `0003`, edits applied migration files, deletes D1 rows/tables, deletes/reset Durable Objects, removes VFS content, changes `KnowledgeBase`/`v1`, or redeploys an old Access-era build.
+Rollback changes Worker code only. It never reverses `0004`, edits applied migration files, deletes D1 rows/tables, deletes/reset Durable Objects, removes VFS content, changes `KnowledgeBase`/`v1`, or redeploys an old Access-era build.
 
 Before selecting a target, prove it reads the current D1 schema and current Durable Object/VFS/journal state. If no already-reviewed version is compatible, make a forward-compatible emergency fix and run the full local gate. Then upload and inspect it without traffic:
 

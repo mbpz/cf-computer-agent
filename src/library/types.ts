@@ -1,5 +1,18 @@
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 
+export type SearchMatchedField = "title" | "summary" | "tags" | "body" | "code";
+
+export interface SearchHighlightRange {
+  start: number;
+  end: number;
+}
+
+export type ChatScope =
+  | { kind: "all" }
+  | { kind: "space"; spaceId: string }
+  | { kind: "collection"; collectionId: string }
+  | { kind: "items"; knowledgeItemIds: string[] };
+
 export interface LibraryScope {
   memberId: string;
   role: "admin" | "contributor";

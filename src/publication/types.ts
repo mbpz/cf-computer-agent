@@ -6,7 +6,7 @@ import type { SubmissionKind } from "../submissions/types";
 
 export type KnowledgeVisibility = "shared" | "admin_only";
 export type PublicationIntentState = "pending_content" | "content_written" | "completed" | "failed_terminal";
-export type SearchStatus = "pending" | "indexed" | "search_degraded";
+export type SearchStatus = "pending" | "indexed" | "search_degraded" | "failed";
 
 export interface PublicationReviewer {
   id: string;
@@ -14,13 +14,17 @@ export interface PublicationReviewer {
   status: MemberStatus;
 }
 
-export interface PublishSubmissionInput {
+export interface ReviewMetadataPatch {
   title: string;
-  visibility: KnowledgeVisibility;
   spaceId: string;
   collectionId: string | null;
+  visibility: KnowledgeVisibility;
   tagIds: string[];
+  visibilityReasonCode?: "admin_visibility_expansion";
 }
+
+/** Compatibility name for callers that have not yet adopted review terminology. */
+export type PublishSubmissionInput = ReviewMetadataPatch;
 
 export interface PublicationSourceVersion extends Pick<SourceVersion,
   "id" | "content" | "contentSha256" | "parserVersion"> {

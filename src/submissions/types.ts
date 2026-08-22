@@ -2,7 +2,8 @@ import type { Page, PageRequest } from "../pagination";
 import type { DuplicateSourceCandidate, Source, SourceVersion } from "../sources/types";
 
 export type SubmissionKind = "text" | "markdown" | "code";
-export type SubmissionStatus = "review_pending";
+export type SubmissionStatusFilter = "review_pending" | "published" | "rejected" | "revision_requested";
+export type SubmissionStatus = "draft" | SubmissionStatusFilter;
 
 export interface Submission {
   id: string;
@@ -13,6 +14,8 @@ export interface Submission {
   status: SubmissionStatus;
   title: string;
   content: string;
+  /** Set only for an immutable resubmission of a prior terminal Submission. */
+  supersedesSubmissionId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

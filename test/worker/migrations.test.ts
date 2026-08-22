@@ -250,6 +250,7 @@ describe("Phase 1 control-plane migrations", () => {
       "idempotency_key:TEXT:0:NULL:0",
       "created_at:TEXT:1:NULL:0",
       "updated_at:TEXT:1:NULL:0",
+      "supersedes_submission_id:TEXT:0:NULL:0",
     ], [
       "CHECK(kind IN ('text', 'markdown', 'code', 'rich_text'))",
       "CHECK(status IN ('draft', 'review_pending', 'published', 'rejected', 'revision_requested'))",
@@ -273,6 +274,11 @@ describe("Phase 1 control-plane migrations", () => {
       "content_sha256:TEXT:1:NULL:0",
       "parser_version:TEXT:1:NULL:0",
       "created_at:TEXT:1:NULL:0",
+      "parser_schema_version:TEXT:1:'m1-v1':0",
+      "source_identity_sha256:TEXT:0:NULL:0",
+      "code_language:TEXT:0:NULL:0",
+      "file_label:TEXT:0:NULL:0",
+      "line_baseline:INTEGER:1:1:0",
     ], ["CHECK(ordinal > 0)"]);
     await expectTableSchema("tags", [
       "id:TEXT:0:NULL:1",
@@ -297,6 +303,14 @@ describe("Phase 1 control-plane migrations", () => {
       "title:TEXT:1:NULL:0",
       "visibility:TEXT:1:NULL:0",
       "created_at:TEXT:1:NULL:0",
+      "requested_title:TEXT:1:'':0",
+      "requested_space_id:TEXT:0:NULL:0",
+      "requested_collection_id:TEXT:0:NULL:0",
+      "requested_visibility:TEXT:1:'shared':0",
+      "final_space_id:TEXT:0:NULL:0",
+      "final_collection_id:TEXT:0:NULL:0",
+      "final_visibility:TEXT:0:NULL:0",
+      "visibility_reason_code:TEXT:0:NULL:0",
     ], [
       "CHECK(decision IN ('published', 'rejected', 'revision_requested'))",
       "CHECK(visibility IN ('shared', 'admin_only'))",
@@ -325,6 +339,7 @@ describe("Phase 1 control-plane migrations", () => {
       "visibility:TEXT:1:NULL:0",
       "published_by:TEXT:1:NULL:0",
       "published_at:TEXT:1:NULL:0",
+      "summary:TEXT:1:'':0",
     ], ["CHECK(visibility IN ('shared', 'admin_only'))"]);
     await expectTableSchema("chunks", [
       "id:TEXT:0:NULL:1",
@@ -377,8 +392,10 @@ describe("Phase 1 control-plane migrations", () => {
     await expectTableSchema("chunks_fts", [
       "chunk_id::0:NULL:0",
       "title::0:NULL:0",
+      "summary::0:NULL:0",
       "tags::0:NULL:0",
       "body::0:NULL:0",
+      "code::0:NULL:0",
     ], [
       "CREATE VIRTUAL TABLE chunks_fts USING fts5",
       "chunk_id UNINDEXED",
@@ -389,6 +406,7 @@ describe("Phase 1 control-plane migrations", () => {
       { from: "submitter_id", table: "members", to: "id" },
       { from: "requested_space_id", table: "spaces", to: "id" },
       { from: "requested_collection_id", table: "collections", to: "id" },
+      { from: "supersedes_submission_id", table: "submissions", to: "id" },
     ]);
     await expectForeignKeys("sources", [
       { from: "owner_id", table: "members", to: "id" },
@@ -409,6 +427,10 @@ describe("Phase 1 control-plane migrations", () => {
     await expectForeignKeys("reviews", [
       { from: "submission_id", table: "submissions", to: "id" },
       { from: "reviewer_id", table: "members", to: "id" },
+      { from: "requested_space_id", table: "spaces", to: "id" },
+      { from: "requested_collection_id", table: "collections", to: "id" },
+      { from: "final_space_id", table: "spaces", to: "id" },
+      { from: "final_collection_id", table: "collections", to: "id" },
     ]);
     await expectForeignKeys("knowledge_items", [
       { from: "space_id", table: "spaces", to: "id" },
@@ -478,6 +500,28 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "content_sha256", desc: 0 },
       { name: "created_at", desc: 0 },
       { name: "id", desc: 0 },
+    ]);
+    await expectIndex("submissions", "submissions_owner_status_page", [
+      { name: "submitter_id", desc: 0 },
+      { name: "status", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex("reviews", "reviews_final_target_lookup", [
+      { name: "final_space_id", desc: 0 },
+      { name: "final_collection_id", desc: 0 },
+      { name: "final_visibility", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ]);
+    await expectIndex("revision_tags", "revision_tags_tag_revision", [
+      { name: "tag_id", desc: 0 },
+      { name: "revision_id", desc: 0 },
+    ]);
+    await expectIndex("knowledge_items", "knowledge_items_current_revision_index_status", [
+      { name: "current_revision_id", desc: 0 },
+      { name: "search_status", desc: 0 },
+      { name: "status", desc: 0 },
     ]);
     await expectIndex("chunks", "chunks_revision", [
       { name: "revision_id", desc: 0 },
@@ -595,9 +639,9 @@ describe("Phase 1 control-plane migrations", () => {
     ).rejects.toThrow();
 
     await env.DB.prepare(
-      "INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES (?, ?, ?, ?)",
+      "INSERT INTO chunks_fts (chunk_id, title, summary, tags, body, code) VALUES (?, ?, ?, ?, ?, ?)",
     )
-      .bind("chunk-1", "Migration Garden", "m1 schema", "searchable knowledge")
+      .bind("chunk-1", "Migration Garden", "schema summary", "m1 schema", "searchable knowledge", "")
       .run();
     const match = await env.DB.prepare(
       "SELECT chunk_id FROM chunks_fts WHERE chunks_fts MATCH ?",
@@ -792,6 +836,35 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(
       env.DB.prepare("SELECT count(*) AS count FROM submissions").first(),
     ).resolves.toEqual({ count: 3 });
+  });
+
+  it("upgrades the complete M1 record graph without fabricating review metadata", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, 3));
+    const now = "2026-08-22T00:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-0004', 'github:0004', 'member-0004@example.test', 'admin', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO auth_sessions (token_hash, member_id, created_at, expires_at, last_seen_at) VALUES ('session-0004', 'member-0004', ?, ?, ?)").bind(now, "2026-08-23T00:00:00.000Z", now),
+      env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-0004', 'default', NULL, 'Collection', '', 'active', 1, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at) VALUES ('submission-0004', 'member-0004', 'default', 'collection-0004', 'code', 'published', 'Requested title', 'const visible = true;', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('source-0004', 'member-0004', 'default', 'collection-0004', 'code', 'Requested title', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('source-version-0004', 'source-0004', 'submission-0004', 1, '```ts\\nconst visible = true;\\n```\\n', 'content-hash-0004', 'm1-v1', ?)").bind(now),
+      env.DB.prepare("INSERT INTO reviews (id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at) VALUES ('review-0004', 'submission-0004', 'member-0004', 'published', 'approved', '', 'Final title', 'admin_only', ?)").bind(now),
+      env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('item-0004', 'default', 'collection-0004', NULL, 'active', 'indexed', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('revision-0004', 'item-0004', 'source-version-0004', '/0004.md', 'content-hash-0004', 'Final title', '[\"tag-0004\"]', 'admin_only', 'member-0004', ?)").bind(now),
+      env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'revision-0004' WHERE id = 'item-0004'"),
+      env.DB.prepare("INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-0004', 'default', 'schema', 'Schema', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO revision_tags (revision_id, tag_id) VALUES ('revision-0004', 'tag-0004')"),
+      env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body) VALUES ('chunk-0004', 'revision-0004', 0, '[]', 1, 1, 'visible body', 'Final title', 'Schema', 'visible body')"),
+      env.DB.prepare("INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES ('chunk-0004', 'Final title', 'Schema', 'visible body')"),
+      env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at) VALUES ('job-0004', 'index_revision', 'revision-0004', 'completed', 1, ?, NULL, ?, ?)").bind(now, now, now),
+    ]);
+
+    await applyD1Migrations(env.DB, MIGRATIONS);
+
+    await expect(env.DB.prepare("SELECT parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions WHERE id = 'source-version-0004'").first()).resolves.toEqual({ parser_schema_version: "m1-v1", source_identity_sha256: null, code_language: null, file_label: null, line_baseline: 1 });
+    await expect(env.DB.prepare("SELECT requested_title, requested_space_id, requested_collection_id, requested_visibility, final_space_id, final_collection_id, final_visibility FROM reviews WHERE id = 'review-0004'").first()).resolves.toEqual({ requested_title: "Requested title", requested_space_id: "default", requested_collection_id: "collection-0004", requested_visibility: "admin_only", final_space_id: "default", final_collection_id: "collection-0004", final_visibility: "admin_only" });
+    await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "Schema", body: "visible body", code: "" });
+    await expect(env.DB.prepare("SELECT m.id AS member_id, a.token_hash, s.id AS space_id, c.id AS collection_id, sub.id AS submission_id, sv.id AS source_version_id, r.id AS review_id, k.id AS item_id, rev.id AS revision_id, t.id AS tag_id, ch.id AS chunk_id, j.id AS job_id FROM members m JOIN auth_sessions a ON a.member_id = m.id JOIN spaces s ON s.id = 'default' JOIN collections c ON c.id = 'collection-0004' JOIN submissions sub ON sub.id = 'submission-0004' JOIN source_versions sv ON sv.submission_id = sub.id JOIN reviews r ON r.submission_id = sub.id JOIN knowledge_items k ON k.id = 'item-0004' JOIN revisions rev ON rev.id = k.current_revision_id JOIN revision_tags rt ON rt.revision_id = rev.id JOIN tags t ON t.id = rt.tag_id JOIN chunks ch ON ch.revision_id = rev.id JOIN jobs j ON j.resource_id = rev.id").first()).resolves.toEqual({ member_id: "member-0004", token_hash: "session-0004", space_id: "default", collection_id: "collection-0004", submission_id: "submission-0004", source_version_id: "source-version-0004", review_id: "review-0004", item_id: "item-0004", revision_id: "revision-0004", tag_id: "tag-0004", chunk_id: "chunk-0004", job_id: "job-0004" });
   });
 
   it("uses selective no-sort indexes for recovery jobs and active Tag keyset pages at scale shape", async () => {

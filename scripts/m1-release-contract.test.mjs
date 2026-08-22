@@ -18,6 +18,7 @@ const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
+  ["0004_m1_gate_completion.sql", "83f6c536cbe02683d046bf44166e394832a0beab133b1985efdeb860daf8f691"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -159,27 +160,27 @@ ${postUpload}
   }
 }
 
-test("pins the reviewed bytes of all three forward migrations", async () => {
+test("pins the reviewed bytes of all four forward migrations", async () => {
   for (const [name, expectedHash] of expectedMigrations) {
     const bytes = await readFile(new URL(`../migrations/${name}`, import.meta.url));
     assert.equal(createHash("sha256").update(bytes).digest("hex"), expectedHash, name);
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=3$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=4$/mu);
 });
 
-test("accepts only the exact pre-0003 and post-0003 Wrangler ledger states", async () => {
+test("accepts only the exact pre-0004 and post-0004 Wrangler ledger states", async () => {
   const names = expectedMigrations.map(([name]) => name);
-  await withLedger(ledger(names.slice(0, 2)), async (path) => {
+  await withLedger(ledger(names.slice(0, 3)), async (path) => {
     const result = await runVerifier(["--ledger-before", path]);
     assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-ledger phase=before names=0001_phase1_control_plane.sql,0002_github_auth.sql$/mu);
+    assert.match(result.output, /^\[pass\] migration-ledger phase=before names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql$/mu);
   });
   await withLedger(ledger(names), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);
     assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-ledger phase=after names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql$/mu);
+    assert.match(result.output, /^\[pass\] migration-ledger phase=after names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql,0004_m1_gate_completion.sql$/mu);
   });
 });
 
@@ -230,6 +231,13 @@ test("fails closed on missing, renamed, extra, reordered, or malformed ledger ro
       assert.doesNotMatch(`${before.output}\n${after.output}`, /applied_at|rows_read|rows_written/u);
     });
   }
+  await withLedger(ledger(names), async (path) => {
+    const before = await runVerifier(["--ledger-before", path]);
+    const after = await runVerifier(["--ledger-after", path]);
+    assert.equal(before.code, 1, before.output);
+    assert.equal(after.code, 0, after.output);
+    assert.match(before.output, /^\[fail\] migration-ledger$/mu);
+  });
 });
 
 test("runbook executable contract proves provenance, ledger, and probe commands", async () => {
