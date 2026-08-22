@@ -8,6 +8,7 @@ const parserSchemaVersion = "m1-v2" as const;
 const allowedLanguages = new Set([
   "plaintext", "javascript", "typescript", "python", "go", "rust", "java", "sql", "json", "yaml", "shell",
 ]);
+const unsafeFileLabel = /[\\/\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 export async function parseSource(input: ParseSourceInput): Promise<ParsedSource> {
   assertParseInput(input);
@@ -71,10 +72,13 @@ function normalizeCodeMetadata(input: ParseSourceInput): import("./types").CodeS
     throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
   }
   const language = (input.language ?? "plaintext").trim().toLowerCase();
-  const fileLabel = (input.fileLabel ?? "untitled").trim();
+  const rawFileLabel = input.fileLabel ?? "untitled";
+  if (hasMalformedSurrogate(rawFileLabel) || unsafeFileLabel.test(rawFileLabel)) {
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+  }
+  const fileLabel = rawFileLabel.trim();
   if (!allowedLanguages.has(language) || !fileLabel
-    || new TextEncoder().encode(fileLabel).byteLength > 128
-    || /[\\/\p{Cc}]/u.test(fileLabel)) {
+    || new TextEncoder().encode(fileLabel).byteLength > 128) {
     throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
   }
   return { language, fileLabel, lineBaseline: input.lineBaseline ?? 1 };

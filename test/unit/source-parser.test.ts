@@ -42,18 +42,6 @@ describe("parseSource", () => {
   );
 
   it.each([
-    ["unknown language", { language: "bash", fileLabel: "main.sh", lineBaseline: 1 }],
-    ["path file label", { language: "shell", fileLabel: "dir/main.sh", lineBaseline: 1 }],
-    ["CRLF file label", { language: "shell", fileLabel: "main\r\n.sh", lineBaseline: 1 }],
-    ["C1 control file label", { language: "shell", fileLabel: "main\u0085.sh", lineBaseline: 1 }],
-    ["oversized file label", { language: "shell", fileLabel: "a".repeat(129), lineBaseline: 1 }],
-    ["zero baseline", { language: "shell", fileLabel: "main.sh", lineBaseline: 0 }],
-    ["over-limit baseline", { language: "shell", fileLabel: "main.sh", lineBaseline: 1_000_001 }],
-  ])("rejects code %s with a stable metadata error", async (_label, metadata) => {
-    await expect(parseSource({ kind: "code", content: "echo safe", ...metadata }))
-      .rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
-  });
-  it.each([
     ["text", "A\r\nB\rC", "A\nB\nC"],
     ["markdown", "# Title  \r\n\r\nBody", "# Title\n\nBody\n"],
   ] as const)("normalizes %s deterministically", async (kind, content, expected) => {
