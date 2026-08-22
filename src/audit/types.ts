@@ -16,6 +16,20 @@ export interface AuditActionMap {
   "submission.created": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
   "submission.rejected": { resourceType: "submission"; metadata: { reasonCode: "not_relevant" | "duplicate" | "unsafe" } };
   "submission.revision_requested": { resourceType: "submission"; metadata: { reasonCode: "needs_revision" } };
+  "review.metadata_changed": { resourceType: "submission"; metadata: {
+    requestedTitle: string; finalTitle: string;
+    requestedSpaceId: string; finalSpaceId: string;
+    requestedCollectionId?: string; finalCollectionId?: string;
+    requestedVisibility: "shared" | "admin_only"; finalVisibility: "shared" | "admin_only";
+  } };
+  "review.visibility_expanded": { resourceType: "submission"; metadata: {
+    requestedVisibility: "admin_only"; finalVisibility: "shared";
+    reasonCode: "admin_visibility_expansion";
+  } };
+  "submission.resubmitted": { resourceType: "submission"; metadata: {
+    supersedesSubmissionId: string; requestedSpaceId: string;
+    requestedCollectionId?: string; requestedVisibility: "shared" | "admin_only";
+  } };
   "knowledge.published": { resourceType: "knowledge"; metadata: { submissionId: string; revisionId: string; visibility: "shared" | "admin_only" } };
 }
 
@@ -31,6 +45,9 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "submission.created",
   "submission.rejected",
   "submission.revision_requested",
+  "review.metadata_changed",
+  "review.visibility_expanded",
+  "submission.resubmitted",
   "knowledge.published",
 ]);
 
@@ -147,6 +164,54 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       if (metadata.reasonCode !== "needs_revision") throw invalidMetadata();
       return safeMetadata({ reasonCode: "needs_revision" });
     }
+    case "review.metadata_changed": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set([
+        "requestedTitle", "finalTitle", "requestedSpaceId", "finalSpaceId",
+        "requestedCollectionId", "finalCollectionId", "requestedVisibility", "finalVisibility",
+      ]));
+      if (!isBoundedTitle(metadata.requestedTitle) || !isBoundedTitle(metadata.finalTitle)
+        || !isBoundedId(metadata.requestedSpaceId) || !isBoundedId(metadata.finalSpaceId)
+        || (metadata.requestedCollectionId !== undefined && !isBoundedId(metadata.requestedCollectionId))
+        || (metadata.finalCollectionId !== undefined && !isBoundedId(metadata.finalCollectionId))
+        || !isVisibility(metadata.requestedVisibility) || !isVisibility(metadata.finalVisibility)) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({
+        requestedTitle: metadata.requestedTitle, finalTitle: metadata.finalTitle,
+        requestedSpaceId: metadata.requestedSpaceId, finalSpaceId: metadata.finalSpaceId,
+        ...(metadata.requestedCollectionId === undefined ? {} : { requestedCollectionId: metadata.requestedCollectionId }),
+        ...(metadata.finalCollectionId === undefined ? {} : { finalCollectionId: metadata.finalCollectionId }),
+        requestedVisibility: metadata.requestedVisibility, finalVisibility: metadata.finalVisibility,
+      });
+    }
+    case "review.visibility_expanded": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set([
+        "requestedVisibility", "finalVisibility", "reasonCode",
+      ]));
+      if (metadata.requestedVisibility !== "admin_only" || metadata.finalVisibility !== "shared"
+        || metadata.reasonCode !== "admin_visibility_expansion") throw invalidMetadata();
+      return safeMetadata({
+        requestedVisibility: "admin_only", finalVisibility: "shared",
+        reasonCode: "admin_visibility_expansion",
+      });
+    }
+    case "submission.resubmitted": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set([
+        "supersedesSubmissionId", "requestedSpaceId", "requestedCollectionId", "requestedVisibility",
+      ]));
+      if (!isBoundedId(metadata.supersedesSubmissionId) || !isBoundedId(metadata.requestedSpaceId)
+        || (metadata.requestedCollectionId !== undefined && !isBoundedId(metadata.requestedCollectionId))
+        || !isVisibility(metadata.requestedVisibility)) throw invalidMetadata();
+      return safeMetadata({
+        supersedesSubmissionId: metadata.supersedesSubmissionId,
+        requestedSpaceId: metadata.requestedSpaceId,
+        ...(metadata.requestedCollectionId === undefined ? {} : { requestedCollectionId: metadata.requestedCollectionId }),
+        requestedVisibility: metadata.requestedVisibility,
+      });
+    }
     case "knowledge.published": {
       assertResourceType(resourceType, "knowledge");
       const metadata = readPlainDataObject(input, new Set(["submissionId", "revisionId", "visibility"]));
@@ -178,6 +243,18 @@ function isSubmissionKind(value: unknown): value is SubmissionKind { return valu
 function isMemberRole(value: unknown): value is MemberRole { return value === "admin" || value === "contributor"; }
 function isRecordStatus(value: unknown): value is RecordStatus { return value === "active" || value === "disabled"; }
 function isNonEmptyString(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
+function isBoundedId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 128
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
+function isBoundedTitle(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && [...value].length <= 200
+    && new TextEncoder().encode(value).byteLength <= 512
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
+function isVisibility(value: unknown): value is "shared" | "admin_only" {
+  return value === "shared" || value === "admin_only";
+}
 function isActorKind(value: unknown): value is AuditActorKind { return value === "member" || value === "automation" || value === "system"; }
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

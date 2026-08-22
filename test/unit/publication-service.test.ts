@@ -151,6 +151,7 @@ describe("PublicationService", () => {
     [{ ...publishInput, title: "line\nbreak" }, "PUBLICATION_INPUT_INVALID"],
     [{ ...publishInput, title: "x".repeat(201) }, "PUBLICATION_INPUT_INVALID"],
     [{ ...publishInput, visibility: "public" }, "PUBLICATION_INPUT_INVALID"],
+    [{ ...publishInput, visibilityReasonCode: "unbounded-reason" }, "PUBLICATION_INPUT_INVALID"],
     [{ ...publishInput, tagIds: ["tag-1", "tag-1"] }, "PUBLICATION_INPUT_INVALID"],
     [{ ...publishInput, tagIds: Array.from({ length: 21 }, (_, index) => `tag-${index}`) }, "PUBLICATION_INPUT_INVALID"],
   ])("rejects malformed publish input before creating an intent", async (input, code) => {
@@ -169,7 +170,7 @@ describe("PublicationService", () => {
     const visibility = await publicationFixture();
     visibility.intent.visibility = "admin_only";
     await expect(visibility.service.publish(reviewer, "submission-1", publishInput))
-      .rejects.toMatchObject({ code: "PUBLICATION_REPLAY_CONFLICT", status: 409 });
+      .rejects.toMatchObject({ code: "PUBLICATION_STATE_CONFLICT", status: 409 });
     expect(visibility.commits).toHaveLength(0);
 
     const content = await publicationFixture();
@@ -177,6 +178,42 @@ describe("PublicationService", () => {
     await expect(content.service.publish(reviewer, "submission-1", publishInput))
       .rejects.toMatchObject({ code: "PUBLICATION_CONTENT_MISMATCH", status: 409 });
     expect(content.commits).toHaveLength(0);
+  });
+
+  it("permits narrowing but requires the exact second-confirmation reason to expand requested visibility", async () => {
+    const narrowing = await publicationFixture();
+    narrowing.preview.requestedVisibility = "shared";
+    narrowing.intent.visibility = "admin_only";
+    await expect(narrowing.service.publish(reviewer, "submission-1", {
+      ...publishInput, visibility: "admin_only",
+    })).resolves.toMatchObject({ visibility: "admin_only" });
+
+    const expansion = await publicationFixture();
+    expansion.preview.requestedVisibility = "admin_only";
+    await expect(expansion.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_VISIBILITY_EXPANSION_CONFIRMATION_REQUIRED", status: 400 });
+    expect(expansion.events).toEqual([]);
+
+    const confirmed = await publicationFixture();
+    confirmed.preview.requestedVisibility = "admin_only";
+    confirmed.intent.visibilityReasonCode = "admin_visibility_expansion";
+    await expect(confirmed.service.publish(reviewer, "submission-1", {
+      ...publishInput, visibilityReasonCode: "admin_visibility_expansion",
+    })).resolves.toMatchObject({ visibility: "shared" });
+  });
+
+  it("treats any normalized patch retry drift, including target and expansion reason, as a stable state conflict", async () => {
+    const fixture = await publicationFixture();
+    fixture.intent.spaceId = "other-space";
+    fixture.intent.collectionId = null;
+    await expect(fixture.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_STATE_CONFLICT", status: 409 });
+    expect(fixture.commits).toHaveLength(0);
+
+    const reason = await publicationFixture();
+    reason.intent.visibilityReasonCode = "admin_visibility_expansion";
+    await expect(reason.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_STATE_CONFLICT", status: 409 });
   });
 
   it("rejects a legacy normalized-oversize SourceVersion before creating a publication intent", async () => {
@@ -402,6 +439,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     spaceId: publishInput.spaceId,
     collectionId: publishInput.collectionId,
     tagIds: [...publishInput.tagIds],
+    visibilityReasonCode: undefined,
     normalizedPath: "/workspace/published/default/knowledge-1/revision-1.md",
     contentSha256: parsed.contentSha256,
     state: "pending_content",
@@ -432,6 +470,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     status: "review_pending",
     requestedSpaceId: "default",
     requestedCollectionId: "collection-1",
+    requestedVisibility: "shared",
     kind: "markdown",
     title: "Submitted title",
     rawContent: "# Submitted title\n\nBody\n",
@@ -496,7 +535,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
       if (intent.state !== "completed") finalizeCount += 1;
       intent.state = "completed";
       if (options.finalizeResponseLoss && !finalizeResponseLost) { finalizeResponseLost = true; throw new Error("finalize response lost"); }
-      return revision;
+      return { ...revision, visibility: intent.visibility };
     },
     async processIndexJob() { events.push("process-index"); indexCount += 1; revision.searchStatus = "indexed"; return "indexed"; },
     async reject(_submissionId, _reviewerId, input) {
@@ -527,7 +566,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
   };
   const service = new PublicationService(repository, content);
   return {
-    service, repository, intent, events, commits, rejectionInputs, revisionInputs,
+    service, repository, intent, preview, events, commits, rejectionInputs, revisionInputs,
     get finalizedChunks() { return finalizedChunks; },
     get finalizeCount() { return finalizeCount; },
     get indexCount() { return indexCount; },

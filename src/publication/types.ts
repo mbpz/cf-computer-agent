@@ -52,6 +52,7 @@ export interface ReviewSubmissionSnapshot {
   status: "review_pending" | "published" | "rejected" | "revision_requested";
   requestedSpaceId: string;
   requestedCollectionId: string | null;
+  requestedVisibility: KnowledgeVisibility;
   kind: SubmissionKind;
   title: string;
   rawContent: string;
@@ -80,6 +81,7 @@ export interface PublicationIntent {
   spaceId: string;
   collectionId: string | null;
   tagIds: string[];
+  visibilityReasonCode?: "admin_visibility_expansion";
   normalizedPath: string;
   contentSha256: string;
   state: PublicationIntentState;

@@ -46,13 +46,22 @@ export class PublicationService {
     requireActiveAdmin(reviewer);
     const stableSubmissionId = requireId(submissionId);
     const normalized = normalizePublishInput(input);
+    const preview = await this.repository.getPreview(stableSubmissionId);
+    if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    const expandsVisibility = preview.requestedVisibility === "admin_only" && normalized.visibility === "shared";
+    if (expandsVisibility && normalized.visibilityReasonCode !== "admin_visibility_expansion") {
+      throw new AppError(
+        "PUBLICATION_VISIBILITY_EXPANSION_CONFIRMATION_REQUIRED",
+        "Expanding requested visibility requires explicit administrator confirmation",
+        400,
+      );
+    }
+    if (!expandsVisibility && normalized.visibilityReasonCode !== undefined) throw invalidPublicationInput();
     try {
       await this.repository.validateTarget(normalized);
     } catch (error) {
       throwPublicationError(error);
     }
-    const preview = await this.repository.getPreview(stableSubmissionId);
-    if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
     const chunks = await validatedPublicationChunks(preview);
     let intent: PublicationIntent;
     try {
@@ -191,14 +200,20 @@ function normalizePublishInput(input: PublishSubmissionInput): PublishSubmission
     || new TextEncoder().encode(title).byteLength > MAX_TITLE_BYTES
     || CONTROL_CHARACTERS.test(title) || hasMalformedSurrogate(title)
     || !isVisibility(input.visibility)
-    || typeof input.spaceId !== "string" || input.spaceId.length === 0 || CONTROL_CHARACTERS.test(input.spaceId)
-    || (input.collectionId !== null && (typeof input.collectionId !== "string" || input.collectionId.length === 0 || CONTROL_CHARACTERS.test(input.collectionId)))
+    || !isBoundedId(input.spaceId)
+    || (input.collectionId !== null && !isBoundedId(input.collectionId))
     || !Array.isArray(input.tagIds) || input.tagIds.length > MAX_TAGS
-    || input.tagIds.some((tagId) => typeof tagId !== "string" || tagId.length === 0 || CONTROL_CHARACTERS.test(tagId))
-    || new Set(input.tagIds).size !== input.tagIds.length) {
+    || input.tagIds.some((tagId) => !isBoundedId(tagId))
+    || new Set(input.tagIds).size !== input.tagIds.length
+    || (input.visibilityReasonCode !== undefined
+      && input.visibilityReasonCode !== "admin_visibility_expansion")) {
     throw invalidPublicationInput();
   }
-  return { title, visibility: input.visibility, spaceId: input.spaceId, collectionId: input.collectionId, tagIds: [...input.tagIds].sort() };
+  return {
+    title, visibility: input.visibility, spaceId: input.spaceId, collectionId: input.collectionId,
+    tagIds: [...input.tagIds].sort(),
+    ...(input.visibilityReasonCode === undefined ? {} : { visibilityReasonCode: input.visibilityReasonCode }),
+  };
 }
 
 function normalizeReviewNote(value: string): string {
@@ -221,8 +236,9 @@ function assertStableIntent(
     || intent.visibility !== input.visibility
     || intent.spaceId !== input.spaceId
     || intent.collectionId !== input.collectionId
+    || intent.visibilityReasonCode !== input.visibilityReasonCode
     || !sameStrings(intent.tagIds, input.tagIds)) {
-    throw new AppError("PUBLICATION_REPLAY_CONFLICT", "Publication intent does not match the original review", 409);
+    throw new AppError("PUBLICATION_STATE_CONFLICT", "Publication intent does not match the original review", 409);
   }
   if (intent.sourceVersion.id !== preview.sourceVersion.id
     || intent.sourceVersion.contentSha256 !== preview.sourceVersion.contentSha256
@@ -308,6 +324,10 @@ function normalizeRecoveryLimit(value: number): number {
   return value;
 }
 function isVisibility(value: unknown): value is KnowledgeVisibility { return value === "shared" || value === "admin_only"; }
+function isBoundedId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && [...value].length <= 128
+    && new TextEncoder().encode(value).byteLength <= 512 && !CONTROL_CHARACTERS.test(value);
+}
 function isRejectionReason(value: unknown): value is RejectionReasonCode { return value === "not_relevant" || value === "duplicate" || value === "unsafe"; }
 function isRepositoryConflict(error: unknown, kind: string): boolean { return (error as { kind?: unknown })?.kind === kind; }
 function throwPublicationError(error: unknown): never {
@@ -320,6 +340,9 @@ function throwPublicationError(error: unknown): never {
   }
   if (isRepositoryConflict(error, "submission_not_pending")) {
     throw new AppError("PUBLICATION_STATE_CONFLICT", "Submission is no longer pending review", 409);
+  }
+  if (isRepositoryConflict(error, "intent_mismatch")) {
+    throw new AppError("PUBLICATION_STATE_CONFLICT", "Publication intent does not match the original review", 409);
   }
   throw error;
 }

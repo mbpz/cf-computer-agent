@@ -10,6 +10,7 @@ export interface Submission {
   submitterId: string;
   requestedSpaceId: string;
   requestedCollectionId: string | null;
+  requestedVisibility: "shared" | "admin_only";
   kind: SubmissionKind;
   status: SubmissionStatus;
   title: string;

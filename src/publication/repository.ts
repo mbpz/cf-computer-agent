@@ -18,6 +18,7 @@ import type {
 export type PublicationRepositoryConflictKind =
   | "target_invalid"
   | "submission_not_pending"
+  | "intent_mismatch"
   | "receipt_mismatch"
   | "decision_conflict";
 
@@ -38,6 +39,7 @@ type PreviewRow = {
   status: ReviewSubmissionSnapshot["status"];
   requested_space_id: string;
   requested_collection_id: string | null;
+  requested_visibility: PublicationIntent["visibility"];
   kind: ReviewSubmissionSnapshot["kind"];
   title: string;
   raw_content: string;
@@ -68,7 +70,10 @@ type IntentRow = PreviewRow & {
   knowledge_item_id: string;
   reviewer_id: string;
   intent_title: string;
+  intent_space_id: string | null;
+  intent_collection_id: string | null;
   visibility: PublicationIntent["visibility"];
+  visibility_reason_code: string | null;
   tags_json: string;
   normalized_path: string;
   intent_content_sha256: string;
@@ -189,13 +194,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
     input: PublishSubmissionInput,
   ): Promise<PublicationIntent> {
     const existing = await this.findIntent(submissionId);
-    if (existing) return existing;
+    if (existing) return exactIntentOrThrow(existing, reviewerId, input);
     const preview = await this.getPreview(submissionId);
     if (!preview) throw new PublicationRepositoryConflictError("submission_not_pending");
     if (preview.status !== "review_pending") throw new PublicationRepositoryConflictError("submission_not_pending");
-    if (preview.requestedSpaceId !== input.spaceId || preview.requestedCollectionId !== input.collectionId) {
-      throw new PublicationRepositoryConflictError("target_invalid");
-    }
     await this.validateTarget(input);
 
     const knowledgeItemId = this.id();
@@ -210,13 +212,20 @@ export class PublicationRepository implements PublicationRepositoryPort {
       await this.db.prepare(
         `INSERT INTO publication_intents (
           submission_id, revision_id, knowledge_item_id, reviewer_id, title, visibility,
-          tags_json, normalized_path, content_sha256, state, created_at, updated_at
+          tags_json, normalized_path, content_sha256, state, created_at, updated_at,
+          space_id, collection_id, visibility_reason_code
         )
-        SELECT s.id, ?, ?, ?, ?, ?, ?, ?, sv.content_sha256, 'pending_content', ?, ?
+        SELECT s.id, ?, ?, ?, ?, ?, ?, ?, sv.content_sha256, 'pending_content', ?, ?, ?, ?, ?
         FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id
         WHERE s.id = ? AND s.status = 'review_pending'
-          AND s.requested_space_id = ?
-          AND ((s.requested_collection_id IS NULL AND ? IS NULL) OR s.requested_collection_id = ?)
+          AND EXISTS (
+            SELECT 1 FROM members reviewer
+            WHERE reviewer.id = ? AND reviewer.role = 'admin' AND reviewer.status = 'active'
+          )
+          AND ((s.requested_visibility = 'shared' AND ? IS NULL)
+            OR (s.requested_visibility = 'admin_only' AND ? = 'admin_only' AND ? IS NULL)
+            OR (s.requested_visibility = 'admin_only' AND ? = 'shared'
+              AND ? = 'admin_visibility_expansion'))
           AND EXISTS (
             SELECT 1 FROM spaces target
             WHERE target.id = ? AND target.status = 'active' AND target.kind != 'legacy' AND target.read_only = 0
@@ -228,17 +237,20 @@ export class PublicationRepository implements PublicationRepositoryPort {
           AND ${activeTagsCondition(input.tagIds.length)}`,
       ).bind(
         revisionId, knowledgeItemId, reviewerId, input.title, input.visibility, tagsJson, normalizedPath,
-        timestamp, timestamp, submissionId, input.spaceId, input.collectionId, input.collectionId,
+        timestamp, timestamp, input.spaceId, input.collectionId, input.visibilityReasonCode ?? null,
+        submissionId, reviewerId, input.visibilityReasonCode ?? null,
+        input.visibility, input.visibilityReasonCode ?? null,
+        input.visibility, input.visibilityReasonCode ?? null,
         input.spaceId, input.collectionId, input.collectionId, input.spaceId,
         ...activeTagBindings(input.tagIds, input.spaceId),
       ).run();
     } catch (error) {
       const concurrent = await this.findIntent(submissionId);
-      if (concurrent) return concurrent;
+      if (concurrent) return exactIntentOrThrow(concurrent, reviewerId, input);
       throw error;
     }
     const created = await this.findIntent(submissionId);
-    if (created) return created;
+    if (created) return exactIntentOrThrow(created, reviewerId, input);
     const afterInsert = await this.getPreview(submissionId);
     if (!afterInsert || afterInsert.status !== "review_pending") {
       throw new PublicationRepositoryConflictError("submission_not_pending");
@@ -278,15 +290,18 @@ export class PublicationRepository implements PublicationRepositoryPort {
       throw new PublicationRepositoryConflictError("receipt_mismatch");
     }
     assertChunks(chunks);
+    const requested = await this.getPreview(current.submissionId);
+    if (!requested) throw new PublicationRepositoryConflictError("submission_not_pending");
     const searchTags = await this.activeTagSearchText(current.spaceId, current.tagIds);
     const timestamp = this.now().toISOString();
     const reviewId = `review-${current.submissionId}`;
     const jobId = `index-${current.revisionId}`;
     const audit = publicationAudit(current, timestamp);
+    const metadataAudit = reviewMetadataAudit(current, requested, timestamp);
+    const visibilityAudit = visibilityExpansionAudit(current, requested, timestamp);
     const statements: D1PreparedStatement[] = [
       this.db.prepare(
-        `UPDATE submissions SET status = 'published', title = ?, requested_space_id = ?,
-           requested_collection_id = ?, updated_at = ?
+        `UPDATE submissions SET status = 'published', updated_at = ?
          WHERE id = ? AND status = 'review_pending'
            AND EXISTS (
              SELECT 1 FROM publication_intents pi
@@ -302,19 +317,40 @@ export class PublicationRepository implements PublicationRepositoryPort {
              SELECT 1 FROM collections target_collection
              WHERE target_collection.id = ? AND target_collection.space_id = ? AND target_collection.status = 'active'
            ))
+           AND EXISTS (
+             SELECT 1 FROM members reviewer
+             WHERE reviewer.id = ? AND reviewer.role = 'admin' AND reviewer.status = 'active'
+           )
+           AND ((requested_visibility = 'shared' AND ? IS NULL)
+             OR (requested_visibility = 'admin_only' AND ? = 'admin_only' AND ? IS NULL)
+             OR (requested_visibility = 'admin_only' AND ? = 'shared'
+               AND ? = 'admin_visibility_expansion'))
            AND ${activeTagsCondition(current.tagIds.length)}`,
       ).bind(
-        current.title, current.spaceId, current.collectionId, timestamp, current.submissionId,
+        timestamp, current.submissionId,
         current.revisionId, current.knowledgeItemId, current.normalizedPath, current.contentSha256,
         current.spaceId, current.collectionId, current.collectionId, current.spaceId,
+        current.reviewerId, current.visibilityReasonCode ?? null,
+        current.visibility, current.visibilityReasonCode ?? null,
+        current.visibility, current.visibilityReasonCode ?? null,
         ...activeTagBindings(current.tagIds, current.spaceId),
       ),
       this.changeGuard(),
       this.db.prepare(
         `INSERT INTO reviews (
-          id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at
-        ) VALUES (?, ?, ?, 'published', 'approved', '', ?, ?, ?)`,
-      ).bind(reviewId, current.submissionId, current.reviewerId, current.title, current.visibility, timestamp),
+          id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at,
+          requested_title, requested_space_id, requested_collection_id, requested_visibility,
+          final_space_id, final_collection_id, final_visibility, visibility_reason_code
+        )
+        SELECT ?, s.id, ?, 'published', 'approved', '', ?, ?, ?,
+          s.title, s.requested_space_id, s.requested_collection_id, s.requested_visibility,
+          ?, ?, ?, ?
+        FROM submissions s WHERE s.id = ? AND s.status = 'published'`,
+      ).bind(
+        reviewId, current.reviewerId, current.title, current.visibility, timestamp,
+        current.spaceId, current.collectionId, current.visibility,
+        current.visibilityReasonCode ?? null, current.submissionId,
+      ),
       this.db.prepare(
         `INSERT INTO knowledge_items (
           id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at
@@ -350,6 +386,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
         ) VALUES (?, 'index_revision', ?, 'pending', 0, ?, NULL, ?, ?)`,
       ).bind(jobId, current.revisionId, timestamp, timestamp, timestamp),
       this.audit.prepareWriteAudit(audit),
+      ...(metadataAudit ? [this.audit.prepareWriteAudit(metadataAudit)] : []),
+      ...(visibilityAudit ? [this.audit.prepareWriteAudit(visibilityAudit)] : []),
     ];
     try {
       await this.db.batch(statements);
@@ -544,9 +582,15 @@ export class PublicationRepository implements PublicationRepositoryPort {
         this.changeGuard(),
         this.db.prepare(
           `INSERT INTO reviews (
-            id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admin_only', ?)`,
-        ).bind(`review-${submissionId}`, submissionId, reviewerId, decision, reasonCode, note, preview.title, timestamp),
+            id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at,
+            requested_title, requested_space_id, requested_collection_id, requested_visibility,
+            final_space_id, final_collection_id, final_visibility, visibility_reason_code
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
+        ).bind(
+          `review-${submissionId}`, submissionId, reviewerId, decision, reasonCode, note,
+          preview.title, preview.requestedVisibility, timestamp, preview.title,
+          preview.requestedSpaceId, preview.requestedCollectionId, preview.requestedVisibility,
+        ),
         this.audit.prepareWriteAudit(audit),
       ]);
     } catch (error) {
@@ -605,6 +649,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
 
 const previewSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
+  s.requested_visibility,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version, sv.parser_schema_version,
   sv.code_language, sv.file_label, sv.line_baseline
@@ -612,11 +657,14 @@ FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id`;
 
 const intentSelect = `SELECT
   s.id AS submission_id, s.submitter_id, s.status, s.requested_space_id, s.requested_collection_id,
+  s.requested_visibility,
   s.kind, s.title, s.content AS raw_content, sv.id AS source_version_id, sv.content AS source_content,
   sv.content_sha256, sv.parser_version, sv.parser_schema_version,
   sv.code_language, sv.file_label, sv.line_baseline,
   pi.revision_id, pi.knowledge_item_id, pi.reviewer_id, pi.title AS intent_title,
-  pi.visibility, pi.tags_json, pi.normalized_path, pi.content_sha256 AS intent_content_sha256,
+  pi.space_id AS intent_space_id, pi.collection_id AS intent_collection_id,
+  pi.visibility, pi.visibility_reason_code, pi.tags_json, pi.normalized_path,
+  pi.content_sha256 AS intent_content_sha256,
   pi.state, pi.created_at AS intent_created_at, pi.updated_at AS intent_updated_at
 FROM publication_intents pi
 JOIN submissions s ON s.id = pi.submission_id
@@ -632,6 +680,7 @@ function mapPreview(
     status: row.status,
     requestedSpaceId: row.requested_space_id,
     requestedCollectionId: row.requested_collection_id,
+    requestedVisibility: row.requested_visibility,
     kind: row.kind,
     title: row.title,
     rawContent: row.raw_content,
@@ -659,9 +708,12 @@ function mapIntent(row: IntentRow): PublicationIntent {
     reviewerId: row.reviewer_id,
     title: row.intent_title,
     visibility: row.visibility,
-    spaceId: row.requested_space_id,
-    collectionId: row.requested_collection_id,
+    spaceId: row.intent_space_id || row.requested_space_id,
+    collectionId: row.intent_space_id === null ? row.requested_collection_id : row.intent_collection_id,
     tagIds: parseStringArray(row.tags_json),
+    ...(row.visibility_reason_code === null ? {} : {
+      visibilityReasonCode: row.visibility_reason_code as "admin_visibility_expansion",
+    }),
     normalizedPath: row.normalized_path,
     contentSha256: row.intent_content_sha256,
     state: row.state,
@@ -736,6 +788,60 @@ function publicationAudit(intent: PublicationIntent, createdAt: string): CreateA
   };
 }
 
+function reviewMetadataAudit(
+  intent: PublicationIntent,
+  requested: ReviewSubmissionSnapshot,
+  createdAt: string,
+): CreateAuditEvent | null {
+  if (intent.title === requested.title && intent.spaceId === requested.requestedSpaceId
+    && intent.collectionId === requested.requestedCollectionId
+    && intent.visibility === requested.requestedVisibility) return null;
+  return {
+    id: `metadata-${intent.revisionId}`,
+    actorKind: "member",
+    actorId: intent.reviewerId,
+    action: "review.metadata_changed",
+    resourceType: "submission",
+    resourceId: intent.submissionId,
+    metadata: {
+      requestedTitle: requested.title,
+      finalTitle: intent.title,
+      requestedSpaceId: requested.requestedSpaceId,
+      finalSpaceId: intent.spaceId,
+      ...(requested.requestedCollectionId === null ? {} : {
+        requestedCollectionId: requested.requestedCollectionId,
+      }),
+      ...(intent.collectionId === null ? {} : { finalCollectionId: intent.collectionId }),
+      requestedVisibility: requested.requestedVisibility,
+      finalVisibility: intent.visibility,
+    },
+    createdAt,
+  };
+}
+
+function visibilityExpansionAudit(
+  intent: PublicationIntent,
+  requested: ReviewSubmissionSnapshot,
+  createdAt: string,
+): CreateAuditEvent | null {
+  if (requested.requestedVisibility !== "admin_only" || intent.visibility !== "shared"
+    || intent.visibilityReasonCode !== "admin_visibility_expansion") return null;
+  return {
+    id: `visibility-${intent.revisionId}`,
+    actorKind: "member",
+    actorId: intent.reviewerId,
+    action: "review.visibility_expanded",
+    resourceType: "submission",
+    resourceId: intent.submissionId,
+    metadata: {
+      requestedVisibility: "admin_only",
+      finalVisibility: "shared",
+      reasonCode: "admin_visibility_expansion",
+    },
+    createdAt,
+  };
+}
+
 function decisionAudit(review: ReviewDecision): CreateAuditEvent {
   if (review.decision === "rejected") {
     return {
@@ -775,6 +881,22 @@ function exactDecisionOrThrow(
   return existing;
 }
 
+function exactIntentOrThrow(
+  existing: PublicationIntent,
+  reviewerId: string,
+  input: PublishSubmissionInput,
+): PublicationIntent {
+  if (existing.reviewerId !== reviewerId || existing.title !== input.title
+    || existing.spaceId !== input.spaceId || existing.collectionId !== input.collectionId
+    || existing.visibility !== input.visibility
+    || existing.visibilityReasonCode !== input.visibilityReasonCode
+    || existing.tagIds.length !== input.tagIds.length
+    || ![...existing.tagIds].sort().every((tagId, index) => tagId === [...input.tagIds].sort()[index])) {
+    throw new PublicationRepositoryConflictError("intent_mismatch");
+  }
+  return existing;
+}
+
 function sameIntent(left: PublicationIntent, right: PublicationIntent): boolean {
   return left.submissionId === right.submissionId
     && left.revisionId === right.revisionId
@@ -782,6 +904,7 @@ function sameIntent(left: PublicationIntent, right: PublicationIntent): boolean 
     && left.reviewerId === right.reviewerId
     && left.title === right.title
     && left.visibility === right.visibility
+    && left.visibilityReasonCode === right.visibilityReasonCode
     && left.spaceId === right.spaceId
     && left.collectionId === right.collectionId
     && left.normalizedPath === right.normalizedPath

@@ -274,6 +274,32 @@ describe("submissions D1 control plane", () => {
     },
   );
 
+  it("rolls back a resubmission, Source, SourceVersion, and conditional audit on an audit-ID collision", async () => {
+    const prior = await createService("prior").createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", requestedVisibility: "admin_only", kind: "text",
+      title: "Prior", content: "Prior body", idempotencyKey: "prior-resubmit-key",
+    });
+    const priorId = prior.submission!.id;
+    await env.DB.prepare("UPDATE submissions SET status = 'revision_requested' WHERE id = ?").bind(priorId).run();
+    await new AuditRepository(env.DB).writeAudit({ ...auditInput("resubmit-3"), resourceId: priorId });
+
+    await expect(createService("resubmit").resubmit("member-a", priorId, {
+      kind: "text", title: "Revised", content: "Revised body",
+    }, "new-resubmit-key1")).rejects.toThrow();
+
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM submissions WHERE supersedes_submission_id = ?",
+    ).bind(priorId).first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM sources WHERE id = 'resubmit-1'",
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM source_versions WHERE id = 'resubmit-2'",
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(priorId).first())
+      .resolves.toEqual({ status: "revision_requested" });
+  });
+
 });
 
 const now = "2026-08-13T00:00:00.000Z";
@@ -294,7 +320,7 @@ async function seedMembers(): Promise<void> {
 }
 
 function submissionInput(id: string) {
-  return { id, submitterId: "member-a", requestedSpaceId: "default", requestedCollectionId: null, kind: "text" as const, status: "review_pending" as const, title: "Title", content: "Body", createdAt: now, updatedAt: now };
+  return { id, submitterId: "member-a", requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" as const, kind: "text" as const, status: "review_pending" as const, title: "Title", content: "Body", createdAt: now, updatedAt: now };
 }
 
 function auditInput(id: string): CreateAuditEvent {

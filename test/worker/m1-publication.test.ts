@@ -286,6 +286,106 @@ describe("M1 publication control plane", () => {
     }
   });
 
+  it("publishes an audited final metadata patch to another active Space without mutating requested metadata", async () => {
+    await seedReviewPendingSubmission("submission-metadata-patch");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+         VALUES ('final-space', 'final-space', 'Final Space', '', 'shared', 'active', 2, 0, ?, ?)`,
+      ).bind(now, now),
+      env.DB.prepare(
+        "INSERT INTO collections (id, space_id, name, status, position, created_at, updated_at) VALUES ('final-collection', 'final-space', 'Final Collection', 'active', 0, ?, ?)",
+      ).bind(now, now),
+      env.DB.prepare(
+        "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('final-tag', 'final-space', 'final-tag', 'Final Tag', 'active', ?, ?)",
+      ).bind(now, now),
+    ]);
+    const service = new PublicationService(
+      repositoryWithIds("knowledge-metadata-patch", "revision-metadata-patch"),
+      durableContentCommitter(),
+    );
+
+    await expect(service.publish(adminReviewer, "submission-metadata-patch", {
+      title: "Final governed title", spaceId: "final-space", collectionId: "final-collection",
+      visibility: "admin_only", tagIds: ["final-tag"],
+    })).resolves.toMatchObject({
+      title: "Final governed title", visibility: "admin_only", tagIds: ["final-tag"],
+    });
+
+    await expect(env.DB.prepare(
+      `SELECT s.title AS requested_title, s.requested_space_id, s.requested_collection_id,
+         r.requested_title AS review_requested_title, r.requested_space_id AS review_requested_space_id,
+         r.requested_collection_id AS review_requested_collection_id, r.requested_visibility,
+         r.title AS final_title, r.final_space_id, r.final_collection_id, r.final_visibility
+       FROM submissions s JOIN reviews r ON r.submission_id = s.id
+       WHERE s.id = 'submission-metadata-patch'`,
+    ).first()).resolves.toEqual({
+      requested_title: "Submitted title", requested_space_id: "default", requested_collection_id: "collection-1",
+      review_requested_title: "Submitted title", review_requested_space_id: "default",
+      review_requested_collection_id: "collection-1", requested_visibility: "shared",
+      final_title: "Final governed title", final_space_id: "final-space",
+      final_collection_id: "final-collection", final_visibility: "admin_only",
+    });
+    await expect(env.DB.prepare(
+      "SELECT action, metadata FROM audit_events WHERE action = 'review.metadata_changed'",
+    ).first()).resolves.toEqual({
+      action: "review.metadata_changed",
+      metadata: JSON.stringify({
+        requestedTitle: "Submitted title", finalTitle: "Final governed title",
+        requestedSpaceId: "default", finalSpaceId: "final-space",
+        requestedCollectionId: "collection-1", finalCollectionId: "final-collection",
+        requestedVisibility: "shared", finalVisibility: "admin_only",
+      }),
+    });
+  });
+
+  it("requires a paired expansion audit and rolls back every finalization row if that audit collides", async () => {
+    await seedReviewPendingSubmission("submission-expansion-rollback", "admin_only");
+    const repository = repositoryWithIds("knowledge-expansion-rollback", "revision-expansion-rollback");
+    const service = new PublicationService(repository, durableContentCommitter());
+    await env.DB.prepare(
+      "INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at) VALUES (?, 'system', NULL, 'member.login', 'member', NULL, '{}', ?)",
+    ).bind("visibility-revision-expansion-rollback", now).run();
+
+    await expect(service.publish(adminReviewer, "submission-expansion-rollback", {
+      ...publicationInput, visibilityReasonCode: "admin_visibility_expansion",
+    })).rejects.toThrow();
+
+    await expect(publicationState("submission-expansion-rollback")).resolves.toMatchObject({
+      submissionStatus: "review_pending", intentState: "content_written", currentRevisionId: null,
+      revisionCount: 0, reviewCount: 0, chunkCount: 0, auditCount: 0, jobState: null,
+    });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM audit_events WHERE action IN ('review.metadata_changed', 'review.visibility_expanded') AND resource_id = 'submission-expansion-rollback'",
+    ).first()).resolves.toEqual({ count: 0 });
+  });
+
+  it("stores the exact normalized patch in the intent and rejects retry drift without a second content write", async () => {
+    await seedReviewPendingSubmission("submission-intent-snapshot", "admin_only");
+    const repository = repositoryWithIds("knowledge-intent-snapshot", "revision-intent-snapshot");
+    await expect(repository.createOrReadIntent(
+      "submission-intent-snapshot", adminReviewer.id, publicationInput,
+    )).rejects.toMatchObject({ kind: "target_invalid" });
+    await expect(repository.createOrReadIntent(
+      "submission-intent-snapshot", "member-1", {
+        ...publicationInput, visibilityReasonCode: "admin_visibility_expansion",
+      },
+    )).rejects.toMatchObject({ kind: "target_invalid" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM publication_intents WHERE submission_id = 'submission-intent-snapshot'",
+    ).first()).resolves.toEqual({ count: 0 });
+    const intent = await repository.createOrReadIntent("submission-intent-snapshot", adminReviewer.id, {
+      ...publicationInput, visibilityReasonCode: "admin_visibility_expansion",
+    });
+    expect(intent).toMatchObject({
+      spaceId: "default", collectionId: "collection-1", visibility: "shared",
+      visibilityReasonCode: "admin_visibility_expansion",
+    });
+    await expect(repository.createOrReadIntent("submission-intent-snapshot", adminReviewer.id, {
+      ...publicationInput, collectionId: null, visibilityReasonCode: "admin_visibility_expansion",
+    })).rejects.toMatchObject({ kind: "intent_mismatch" });
+  });
+
   it("publishes and reads exactly 256 paragraph chunks through real D1 and Durable Object boundaries", async () => {
     const markdown = paragraphDocument(256);
     const source = await seedNormalizedReviewPendingSubmission("submission-256", "markdown", markdown);
@@ -944,12 +1044,17 @@ async function seedPublicationTargets(): Promise<void> {
   ]);
 }
 
-async function seedReviewPendingSubmission(submissionId: string) {
+async function seedReviewPendingSubmission(
+  submissionId: string,
+  requestedVisibility: "shared" | "admin_only" = "shared",
+) {
   const parsed = await parseSource({
     kind: "markdown",
     content: "# Trusted\n\nFirst paragraph.\n\nSecond paragraph.\n",
   });
-  return seedNormalizedReviewPendingSubmission(submissionId, "markdown", parsed.normalizedMarkdown, parsed.contentSha256);
+  return seedNormalizedReviewPendingSubmission(
+    submissionId, "markdown", parsed.normalizedMarkdown, parsed.contentSha256, requestedVisibility,
+  );
 }
 
 async function seedNormalizedReviewPendingSubmission(
@@ -957,15 +1062,16 @@ async function seedNormalizedReviewPendingSubmission(
   kind: "markdown" | "code",
   normalizedMarkdown: string,
   knownSha256?: string,
+  requestedVisibility: "shared" | "admin_only" = "shared",
 ) {
   const contentSha256 = knownSha256 ?? await sha256Hex(normalizedMarkdown);
   const sourceId = `source-${submissionId}`;
   const sourceVersionId = `source-version-${submissionId}`;
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at)
-       VALUES (?, 'member-1', 'default', 'collection-1', ?, 'review_pending', 'Submitted title', ?, NULL, ?, ?)`,
-    ).bind(submissionId, kind, normalizedMarkdown, now, now),
+      `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at, requested_visibility)
+       VALUES (?, 'member-1', 'default', 'collection-1', ?, 'review_pending', 'Submitted title', ?, NULL, ?, ?, ?)`,
+    ).bind(submissionId, kind, normalizedMarkdown, now, now, requestedVisibility),
     env.DB.prepare(
       "INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, 'member-1', 'default', 'collection-1', ?, 'Submitted title', ?, ?)",
     ).bind(sourceId, kind, now, now),

@@ -57,7 +57,7 @@ export async function routeAdminReviewApi(
     const submissionId = decodePathId(publish[1]!);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["title", "visibility", "spaceId", "collectionId", "tagIds"],
+      ["title", "visibility", "spaceId", "collectionId", "tagIds", "visibilityReasonCode"],
       "PUBLICATION_REQUEST_INVALID",
     );
     const revision = await services.publication.publish(reviewerDto(reviewer), submissionId, {
@@ -66,6 +66,9 @@ export async function routeAdminReviewApi(
       spaceId: stringValue(input.spaceId),
       collectionId: nullableString(input.collectionId),
       tagIds: stringArray(input.tagIds),
+      ...(input.visibilityReasonCode === undefined ? {} : {
+        visibilityReasonCode: stringValue(input.visibilityReasonCode) as "admin_visibility_expansion",
+      }),
     });
     return jsonResponse({ revision: publishedRevisionDto(revision) }, 200, context.requestId);
   }
@@ -139,6 +142,7 @@ function reviewPreviewDto(preview: ReviewPreview) {
     status: preview.status,
     requestedSpaceId: preview.requestedSpaceId,
     requestedCollectionId: preview.requestedCollectionId,
+    requestedVisibility: preview.requestedVisibility,
     requestedTarget: preview.requestedTarget === null ? null : {
       space: {
         id: preview.requestedTarget.space.id,

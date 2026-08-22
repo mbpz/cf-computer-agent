@@ -325,6 +325,91 @@ describe("M1 API authorization and request boundaries", () => {
 });
 
 describe("M1 trusted knowledge HTTP journey", () => {
+  it("keeps requested admin-only visibility authoritative and requires expansion confirmation", async () => {
+    const created = await memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "admin-only-source1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedVisibility: "admin_only", kind: "text",
+        title: "Private request", content: "Private requested source",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const body = await created.json<{ submission: { id: string; requestedVisibility: string } }>();
+    expect(body.submission.requestedVisibility).toBe("admin_only");
+    const preview = await memberApi("admin", `/api/admin/submissions/${body.submission.id}`);
+    await expect(preview.json()).resolves.toMatchObject({ preview: { requestedVisibility: "admin_only" } });
+
+    await expectApiError(memberApi("admin", `/api/admin/submissions/${body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Private request", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [],
+      }),
+    }), 400, "PUBLICATION_VISIBILITY_EXPANSION_CONFIRMATION_REQUIRED");
+    const published = await memberApi("admin", `/api/admin/submissions/${body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Private request", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [],
+        visibilityReasonCode: "admin_visibility_expansion",
+      }),
+    });
+    expect(published.status).toBe(200);
+    await expect(env.DB.prepare(
+      "SELECT action, metadata FROM audit_events WHERE action = 'review.visibility_expanded'",
+    ).first()).resolves.toEqual({
+      action: "review.visibility_expanded",
+      metadata: JSON.stringify({
+        requestedVisibility: "admin_only", finalVisibility: "shared", reasonCode: "admin_visibility_expansion",
+      }),
+    });
+  });
+
+  it("lets only the active owner revise and resubmit a terminal revision request", async () => {
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default", requestedVisibility: "admin_only", kind: "markdown",
+      title: "Needs work", content: "# Original\n",
+    }, "revision-source-key1");
+    const priorId = created.body.submission.id;
+    const requested = await memberApi("admin", `/api/admin/submissions/${priorId}/request-revision`, {
+      method: "POST", body: JSON.stringify({ reasonCode: "needs_revision", note: "Add evidence" }),
+    });
+    expect(requested.status).toBe(200);
+
+    await expectApiError(memberApi("other", `/api/submissions/${priorId}/resubmit`, {
+      method: "POST", headers: { "idempotency-key": "other-resubmit-key" }, body: "{not-json",
+    }), 404, "SUBMISSION_NOT_FOUND");
+    const resubmitInit = {
+      method: "POST",
+      headers: { "idempotency-key": "owner-resubmit-key" },
+      body: JSON.stringify({ kind: "markdown", title: "Revised", content: "# Revised\n\nEvidence.\n" }),
+    };
+    const [resubmitted, replay] = await Promise.all([
+      memberApi("contributor", `/api/submissions/${priorId}/resubmit`, resubmitInit),
+      memberApi("contributor", `/api/submissions/${priorId}/resubmit`, resubmitInit),
+    ]);
+    expect(resubmitted.status).toBe(201);
+    expect(replay.status).toBe(201);
+    const result = await resubmitted.json<{ submission: { id: string; supersedesSubmissionId: string; requestedVisibility: string } }>();
+    expect(result.submission).toMatchObject({
+      supersedesSubmissionId: priorId, requestedVisibility: "admin_only",
+    });
+    expect(result.submission.id).not.toBe(priorId);
+
+    await expect(replay.json()).resolves.toMatchObject({ submission: { id: result.submission.id } });
+    await expectApiError(memberApi("admin", `/api/admin/submissions/${priorId}/publish`, {
+      method: "POST",
+      body: JSON.stringify({ title: "Old", visibility: "admin_only", spaceId: "default", collectionId: null, tagIds: [] }),
+    }), 409, "PUBLICATION_STATE_CONFLICT");
+    await expect(env.DB.prepare(
+      `SELECT old.status AS old_status, newer.status AS new_status, newer.supersedes_submission_id,
+         (SELECT count(*) FROM source_versions WHERE submission_id IN (old.id, newer.id)) AS versions
+       FROM submissions old JOIN submissions newer ON newer.supersedes_submission_id = old.id
+       WHERE old.id = ?`,
+    ).bind(priorId).first()).resolves.toEqual({
+      old_status: "revision_requested", new_status: "review_pending",
+      supersedes_submission_id: priorId, versions: 2,
+    });
+  });
   it("uses only the Idempotency-Key header and replays without duplicate writes", async () => {
     const input = {
       requestedSpaceId: "default" as const,
@@ -533,7 +618,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(readable.status).toBe(200);
   });
 
-  it("rejects publication target switching away from the submission's requested Space and Collection", async () => {
+  it("allows an active target patch and rejects a cross-Space Collection", async () => {
     await env.DB.prepare(
       `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
        VALUES ('other-space', 'other-space', 'Other Space', '', 'shared', 'active', 2, 0, ?, ?)`,
@@ -549,20 +634,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
       content: "# Fixed target\n",
     }, "fixed-target-key1");
 
-    for (const target of [
-      { spaceId: "other-space", collectionId: null },
-      { spaceId: "default", collectionId: "other-collection" },
-    ]) {
-      await expectApiError(memberApi("admin", `/api/admin/submissions/${created.body.submission.id}/publish`, {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Fixed target",
-          visibility: "shared",
-          ...target,
-          tagIds: [],
-        }),
-      }), 400, "PUBLICATION_TARGET_INVALID");
-    }
+    const patched = await memberApi("admin", `/api/admin/submissions/${created.body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Fixed target", visibility: "shared", spaceId: "other-space", collectionId: null, tagIds: [],
+      }),
+    });
+    expect(patched.status).toBe(200);
+
+    const invalid = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Cross-space", content: "# Cross-space\n",
+    }, "cross-space-key01");
+    await expectApiError(memberApi("admin", `/api/admin/submissions/${invalid.body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Cross-space", visibility: "shared", spaceId: "other-space",
+        collectionId: "other-collection", tagIds: [],
+      }),
+    }), 400, "PUBLICATION_TARGET_INVALID");
   });
 
   it("previews and publishes the exact requested target even when generic Space and Collection page one omit it", async () => {
@@ -688,7 +777,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
 
 async function createSubmission(
   subject: string,
-  input: { requestedSpaceId: string; requestedCollectionId?: string | null; kind: "text" | "markdown" | "code"; title: string; content: string },
+  input: { requestedSpaceId: string; requestedCollectionId?: string | null; requestedVisibility?: "shared" | "admin_only"; kind: "text" | "markdown" | "code"; title: string; content: string },
   idempotencyKey: string,
 ): Promise<{
   response: Response;

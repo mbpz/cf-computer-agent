@@ -20,6 +20,7 @@ import {
   knowledgeSearchModel,
   optionLoadMoreModel,
   publishRequest,
+  resubmissionRequest,
   reviewPreviewModel,
   reviewTagLoadMoreModel,
   reviewTargetModel,
@@ -382,6 +383,10 @@ async function renderSubmit(generation) {
   await spaceControl.controller.loadInitial();
   const title = element("input", { name: "title", required: "", maxlength: "200", autocomplete: "off" });
   const kind = element("select", { name: "kind" }, ["text", "markdown", "code"].map((value) => element("option", { value, text: value })));
+  const requestedVisibility = element("select", { name: "visibility" }, [
+    element("option", { value: "shared", text: "Shared" }),
+    element("option", { value: "admin_only", text: "Admin only" }),
+  ]);
   const space = spaceControl.select;
   space.name = "space";
   const collectionSlot = element("div", { className: "stack" });
@@ -402,6 +407,7 @@ async function renderSubmit(generation) {
     const request = submissionRequest({
       requestedSpaceId: space.value,
       requestedCollectionId: collection.value || null,
+      requestedVisibility: requestedVisibility.value,
       kind: kind.value,
       title: title.value,
       content: content.value,
@@ -420,7 +426,7 @@ async function renderSubmit(generation) {
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
   } }, [
-    field("Title", title), field("Content type", kind), spaceControl.root, collectionSlot,
+    field("Title", title), field("Content type", kind), field("Requested visibility", requestedVisibility), spaceControl.root, collectionSlot,
     field("Code language (optional)", language), field("Content", content), submitButton,
   ]);
   let collectionGeneration = 0;
@@ -589,9 +595,39 @@ async function renderMySubmissions(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (submission) => item(submission.title, `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`, [
-      element("pre", { className: "content-preview", text: submission.content }),
-    ]), "You have no submissions.");
+    const rows = list(items, (submission) => {
+      const children = [element("pre", { className: "content-preview", text: submission.content })];
+      if (submission.status === "revision_requested") {
+        const revisedTitle = element("input", { required: "", maxlength: "200", value: submission.title });
+        const revisedContent = element("textarea", { required: "", maxlength: String(128 * 1024), text: submission.content });
+        const button = element("button", { className: "primary", type: "submit", text: "Revise and resubmit" });
+        const key = idempotencyKey();
+        let form;
+        const mutation = createMutationController(
+          () => ownsMutation(owner),
+          (pending) => setPending(button, pending, "Resubmitting…", "Revise and resubmit"),
+        );
+        form = element("form", { className: "stack", onsubmit: (event) => {
+          event.preventDefault();
+          const request = resubmissionRequest(submission.id, {
+            kind: submission.kind,
+            title: revisedTitle.value,
+            content: revisedContent.value,
+          }, key);
+          void mutation.run(
+            () => api(request.path, request.init),
+            () => navigate("/my-submissions", true, "Revision resubmitted for review."),
+            (error) => validationSummary(form, safeErrorMessage(error)),
+          );
+        } }, [field("Revised title", revisedTitle), field("Revised content", revisedContent), button]);
+        children.push(form);
+      }
+      return item(
+        submission.title,
+        `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`,
+        children,
+      );
+    }, "You have no submissions.");
     const more = cursor ? element("button", { className: "secondary", type: "button", text: "Load more", onclick: () => {
       more.disabled = true;
       void runLatestOperation(operations, () => api(`/api/submissions/mine?limit=20&cursor=${encodeURIComponent(cursor)}`), (next) => {
@@ -729,6 +765,9 @@ async function renderReviewSubmission(generation, submissionId) {
     element("option", { value: "shared", text: "Shared" }),
     element("option", { value: "admin_only", text: "Admin only" }),
   ]);
+  visibility.value = model.requestedVisibility;
+  const finalSpace = element("input", { required: "", maxlength: "128", value: target.spaceId });
+  const finalCollection = element("input", { maxlength: "128", value: target.collectionId || "" });
   const tags = element("fieldset", { className: "tag-selector", "aria-live": "polite" });
   let tagController;
   const renderTags = (state) => {
@@ -755,20 +794,28 @@ async function renderReviewSubmission(generation, submissionId) {
     }));
     tags.replaceChildren(...nodes);
   };
-  tagController = createReviewTagController({
-    spaceId: target.tagSpaceId,
-    owns: () => ownsMutation(owner),
-    request: (path) => api(path),
-    onChange: renderTags,
+  const resetTagController = () => {
+    tagController = createReviewTagController({
+      spaceId: finalSpace.value,
+      owns: () => ownsMutation(owner),
+      request: (path) => api(path),
+      onChange: renderTags,
+    });
+    renderTags(tagController.snapshot());
+    if (finalSpace.value) void tagController.loadInitial();
+  };
+  finalSpace.addEventListener("change", () => {
+    finalCollection.value = "";
+    resetTagController();
   });
-  renderTags(tagController.snapshot());
+  resetTagController();
   const reason = element("select", {}, [
     element("option", { value: "not_relevant", text: "Not relevant" }),
     element("option", { value: "duplicate", text: "Duplicate" }),
     element("option", { value: "unsafe", text: "Unsafe content" }),
   ]);
   const note = element("textarea", { maxlength: "4000", placeholder: "Review note or revision request…" });
-  const publishButton = element("button", { className: "primary", type: "button", text: "Publish", disabled: target.available ? undefined : "" });
+  const publishButton = element("button", { className: "primary", type: "button", text: "Publish" });
   const rejectButton = element("button", { className: "danger", type: "button", text: "Reject" });
   const revisionButton = element("button", { className: "secondary", type: "button", text: "Request revision" });
   const actionButtons = [publishButton, rejectButton, revisionButton];
@@ -777,14 +824,14 @@ async function renderReviewSubmission(generation, submissionId) {
     () => ownsMutation(owner),
     (pending) => {
       for (const button of actionButtons) {
-        button.disabled = pending || (button === publishButton && !target.available);
+        button.disabled = pending;
       }
     },
   );
-  const runDecision = (kind) => {
+  const runDecision = (kind, visibilityReasonCode) => {
     form.querySelector(".validation-summary")?.remove();
-    if (kind === "publish" && (!target.available || !form.reportValidity())) {
-      validationSummary(form, "The originally requested Space and Collection must remain active; complete every required publication field.");
+    if (kind === "publish" && !form.reportValidity()) {
+      validationSummary(form, "Select an active writable final Space and complete every required publication field.");
       return;
     }
     let request;
@@ -792,9 +839,10 @@ async function renderReviewSubmission(generation, submissionId) {
       request = publishRequest(submissionId, {
         title: title.value,
         visibility: visibility.value,
-        spaceId: target.spaceId,
-        collectionId: target.collectionId,
+        spaceId: finalSpace.value,
+        collectionId: finalCollection.value || null,
         tagIds: tagController.snapshot().items.filter((tag) => tag.selected).map((tag) => tag.id),
+        ...(visibilityReasonCode ? { visibilityReasonCode } : {}),
       });
     } else {
       request = {
@@ -819,12 +867,25 @@ async function renderReviewSubmission(generation, submissionId) {
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
   };
+  const confirmPublication = () => {
+    if (model.requestedVisibility === "admin_only" && visibility.value === "shared") {
+      openReviewDialog({
+        title: "Expand visibility to Shared?",
+        description: "This expands an Admin-only request. Confirm the bounded administrator visibility-expansion reason.",
+        confirmLabel: "Confirm visibility expansion",
+        owns: () => ownsMutation(owner),
+        onConfirm: () => runDecision("publish", "admin_visibility_expansion"),
+      });
+      return;
+    }
+    runDecision("publish");
+  };
   publishButton.addEventListener("click", () => openReviewDialog({
     title: "Publish this immutable Revision?",
     description: "The server will validate the active target, write canonical Markdown, create chunks, and index the current Revision.",
     confirmLabel: "Publish Revision",
     owns: () => ownsMutation(owner),
-    onConfirm: () => runDecision("publish"),
+    onConfirm: confirmPublication,
   }));
   rejectButton.addEventListener("click", () => openReviewDialog({
     title: "Reject this submission?",
@@ -842,10 +903,15 @@ async function renderReviewSubmission(generation, submissionId) {
     onConfirm: () => runDecision("revision"),
   }));
   form = element("form", { className: "stack", onsubmit: (event) => event.preventDefault() }, [
-    field("Publication title", title), field("Visibility", visibility),
-    element("dl", { className: "review-target", "aria-label": "Fixed requested publication target" }, [
+    field("Final visibility", visibility),
+    element("dl", { className: "review-target", "aria-label": "Requested and final review metadata" }, [
+      element("dt", { text: "Requested title" }), element("dd", { text: model.title }),
+      element("dt", { text: "Final title" }), element("dd", {}, [title]),
       element("dt", { text: "Requested Space" }), element("dd", { text: target.spaceLabel }),
       element("dt", { text: "Requested Collection" }), element("dd", { text: target.collectionLabel }),
+      element("dt", { text: "Requested visibility" }), element("dd", { text: model.requestedVisibility }),
+      element("dt", { text: "Final Space ID" }), element("dd", {}, [finalSpace]),
+      element("dt", { text: "Final Collection ID" }), element("dd", {}, [finalCollection]),
     ]),
     tags,
     field("Rejection reason", reason), field("Review note", note), element("div", { className: "actions" }, actionButtons),

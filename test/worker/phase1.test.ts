@@ -135,6 +135,7 @@ describe("Phase 1 API permission matrix", () => {
         submitterId: "member-contributor",
         requestedSpaceId: "default",
         requestedCollectionId: null,
+        requestedVisibility: "shared",
         kind: "text",
         status: "review_pending",
         title: "Owned",

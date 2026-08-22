@@ -419,6 +419,7 @@ export function reviewPreviewModel(value) {
     status: safeString(preview.status),
     requestedSpaceId: safeString(preview.requestedSpaceId),
     requestedCollectionId: preview.requestedCollectionId === null ? null : safeString(preview.requestedCollectionId),
+    requestedVisibility: preview.requestedVisibility === "admin_only" ? "admin_only" : "shared",
     kind: safeString(preview.kind),
     title: safeString(preview.title),
     rawInput: safeString(preview.rawContent),
@@ -545,6 +546,7 @@ export function submissionRequest(value, idempotencyKey) {
     ...(input.requestedCollectionId === undefined ? {} : {
       requestedCollectionId: input.requestedCollectionId === null ? null : safeString(input.requestedCollectionId),
     }),
+    ...(input.requestedVisibility === "admin_only" ? { requestedVisibility: "admin_only" } : {}),
     kind: safeString(input.kind),
     title: safeString(input.title),
     content: safeString(input.content),
@@ -572,7 +574,36 @@ export function publishRequest(submissionId, value) {
         spaceId: safeString(input.spaceId),
         collectionId: input.collectionId === null ? null : safeString(input.collectionId),
         tagIds: safeArray(input.tagIds).map(safeString).filter(Boolean),
+        ...(input.visibilityReasonCode === "admin_visibility_expansion"
+          ? { visibilityReasonCode: "admin_visibility_expansion" }
+          : {}),
       }),
+    }),
+  });
+}
+
+export function resubmissionRequest(priorSubmissionId, value, idempotencyKey) {
+  const input = safeRecord(value);
+  const body = {
+    ...(safeString(input.requestedSpaceId) ? { requestedSpaceId: safeString(input.requestedSpaceId) } : {}),
+    ...(input.requestedCollectionId === null ? { requestedCollectionId: null }
+      : safeString(input.requestedCollectionId)
+        ? { requestedCollectionId: safeString(input.requestedCollectionId) }
+        : {}),
+    ...(input.requestedVisibility === "admin_only" || input.requestedVisibility === "shared"
+      ? { requestedVisibility: input.requestedVisibility }
+      : {}),
+    kind: safeString(input.kind),
+    title: safeString(input.title),
+    content: safeString(input.content),
+    ...(safeString(input.language) ? { language: safeString(input.language) } : {}),
+  };
+  return Object.freeze({
+    path: `/api/submissions/${encodeURIComponent(safeString(priorSubmissionId))}/resubmit`,
+    init: Object.freeze({
+      method: "POST",
+      headers: Object.freeze({ "Idempotency-Key": safeString(idempotencyKey) }),
+      body: JSON.stringify(body),
     }),
   });
 }

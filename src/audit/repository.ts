@@ -23,6 +23,34 @@ export class AuditRepository {
       .bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, requireSubmissionId);
   }
 
+  prepareResubmissionAudit(
+    input: CreateAuditEvent,
+    submissionId: string,
+    supersedesSubmissionId: string,
+  ): D1PreparedStatement {
+    const audit = assertAuditEventInput(input);
+    if (audit.action !== "submission.resubmitted" || audit.resourceId !== submissionId
+      || audit.metadata.supersedesSubmissionId !== supersedesSubmissionId) {
+      throw new TypeError("Resubmission audit binding is invalid");
+    }
+    return this.db.prepare(
+      `INSERT INTO audit_events (
+         id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at
+       )
+       SELECT ?, 'member', submitted.submitter_id, 'submission.resubmitted', 'submission', submitted.id, ?, ?
+       FROM submissions submitted
+       WHERE submitted.id = ? AND submitted.supersedes_submission_id = ?
+         AND submitted.requested_space_id = ?
+         AND ((submitted.requested_collection_id IS NULL AND ? IS NULL)
+           OR submitted.requested_collection_id = ?)
+         AND submitted.requested_visibility = ?`,
+    ).bind(
+      audit.id, JSON.stringify(audit.metadata), audit.createdAt, submissionId, supersedesSubmissionId,
+      audit.metadata.requestedSpaceId, audit.metadata.requestedCollectionId ?? null,
+      audit.metadata.requestedCollectionId ?? null, audit.metadata.requestedVisibility,
+    );
+  }
+
   prepareResourceWriteAudit(
     input: CreateAuditEvent,
     resource: { table: "members" | "spaces" | "collections"; id: string },

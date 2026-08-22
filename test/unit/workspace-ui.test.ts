@@ -22,6 +22,7 @@ const {
   knowledgeSearchModel,
   optionLoadMoreModel,
   publishRequest,
+  resubmissionRequest,
   postLogout,
   renderKnowledgeSearch,
   reviewPreviewModel,
@@ -406,6 +407,7 @@ describe("M1 trusted knowledge view models", () => {
       status: "review_pending",
       requestedSpaceId: "space-1",
       requestedCollectionId: null,
+      requestedVisibility: "admin_only",
       kind: "markdown",
       title: "<script>Unsafe title</script>",
       rawContent: "# Launch  \r\n\r\n## Rollback   \r\n",
@@ -957,6 +959,29 @@ describe("M1 browser request allowlists", () => {
       tagIds: ["tag-1"],
     });
     expect(JSON.parse(chat.init.body)).toEqual({ question: "launch latency" });
+  });
+
+  it("includes only the exact expansion reason and builds an owner resubmission request", () => {
+    const publish = publishRequest("submission-1", {
+      title: "Expanded", visibility: "shared", spaceId: "space-1", collectionId: null,
+      tagIds: [], visibilityReasonCode: "admin_visibility_expansion", note: "must not leak",
+    });
+    expect(JSON.parse(publish.init.body)).toEqual({
+      title: "Expanded", visibility: "shared", spaceId: "space-1", collectionId: null,
+      tagIds: [], visibilityReasonCode: "admin_visibility_expansion",
+    });
+
+    const resubmit = resubmissionRequest("submission/old", {
+      kind: "markdown", title: "Revised", content: "# Revised", requestedVisibility: "admin_only",
+      memberId: "forged", supersedesSubmissionId: "forged", reviewNote: "private",
+    }, "owner-resubmit-key");
+    expect(resubmit).toMatchObject({
+      path: "/api/submissions/submission%2Fold/resubmit",
+      init: { method: "POST", headers: { "Idempotency-Key": "owner-resubmit-key" } },
+    });
+    expect(JSON.parse(resubmit.init.body)).toEqual({
+      requestedVisibility: "admin_only", kind: "markdown", title: "Revised", content: "# Revised",
+    });
   });
 
   it("builds bounded library and search queries without accepting arbitrary parameters", () => {

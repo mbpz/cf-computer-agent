@@ -137,6 +137,58 @@ describe("SubmissionsService", () => {
       requestedSpaceId: "default", kind: "text", title: "Title", content: "Changed", idempotencyKey: "abcdefghijklmnop",
     })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT", status: 409 });
   });
+
+  it("creates an immutable owner resubmission with a new source/version and allowlisted audit", async () => {
+    const repository = new FakeSubmissionsRepository();
+    repository.prior = {
+      id: "submission-old", submitterId: "member-a", requestedSpaceId: "default",
+      requestedCollectionId: null, requestedVisibility: "admin_only", kind: "markdown",
+      status: "revision_requested", title: "Old title", content: "Old body",
+      createdAt: "2026-08-12T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+    } as Submission;
+    const service = serviceFor(repository);
+
+    const result = await service.resubmit("member-a", "submission-old", {
+      kind: "markdown", title: "Revised title", content: "# Revised\n",
+    }, "new-resubmit-key1");
+
+    expect(result.submission).toMatchObject({
+      id: "submission-1", submitterId: "member-a", status: "review_pending",
+      supersedesSubmissionId: "submission-old", requestedSpaceId: "default",
+      requestedVisibility: "admin_only",
+    });
+    expect(repository.resubmission?.sourceVersion.submissionId).toBe("submission-1");
+    expect(repository.resubmission?.audit).toMatchObject({
+      action: "submission.resubmitted", actorId: "member-a", resourceId: "submission-1",
+      metadata: { supersedesSubmissionId: "submission-old", requestedSpaceId: "default", requestedVisibility: "admin_only" },
+    });
+  });
+
+  it("authorizes the prior owner/state before parsing resubmission input", async () => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+
+    await expect(service.resubmit("forged-owner", "submission-old", {
+      kind: "markdown", title: "", contentBase64: "not base64",
+    }, "new-resubmit-key1")).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+    expect(repository.resubmission).toBeUndefined();
+  });
+
+  it("maps resubmission idempotency and state races without exposing another owner", async () => {
+    const repository = new FakeSubmissionsRepository();
+    repository.prior = {
+      id: "submission-old", submitterId: "member-a", requestedSpaceId: "default",
+      requestedCollectionId: null, requestedVisibility: "shared", kind: "text",
+      status: "revision_requested", title: "Old", content: "Old",
+      createdAt: "2026-08-12T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+    } as Submission;
+    repository.conflict = new SubmissionsRepositoryConflictError("resubmission_conflict" as never);
+    const service = serviceFor(repository);
+
+    await expect(service.resubmit("member-a", "submission-old", {
+      kind: "text", title: "Revised", content: "Revised",
+    }, "new-resubmit-key1")).rejects.toMatchObject({ code: "RESUBMISSION_STATE_CONFLICT", status: 409 });
+  });
 });
 
 function base64Of(bytes: Uint8Array): string {
@@ -158,6 +210,8 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   audit: CreateAuditEvent | undefined;
   sourceCreation: CreateSubmissionWithSourceVersion | undefined;
   conflict: SubmissionsRepositoryConflictError | undefined;
+  prior: Submission | null = null;
+  resubmission: CreateSubmissionWithSourceVersion | undefined;
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     this.audit = audit;
@@ -166,6 +220,18 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
 
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
     this.sourceCreation = input;
+    if (this.conflict) throw this.conflict;
+    const { idempotencyKey: _idempotencyKey, ...submission } = input.submission;
+    return { submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
+  }
+
+  async findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null> {
+    return this.prior?.submitterId === memberId && this.prior.id === priorSubmissionId
+      && this.prior.status === "revision_requested" ? this.prior : null;
+  }
+
+  async createResubmissionWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
+    this.resubmission = input;
     if (this.conflict) throw this.conflict;
     const { idempotencyKey: _idempotencyKey, ...submission } = input.submission;
     return { submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };

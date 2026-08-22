@@ -59,7 +59,7 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["requestedSpaceId", "requestedCollectionId", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
       "SUBMISSION_REQUEST_INVALID",
     );
     const hasContent = Object.hasOwn(input, "content");
@@ -70,6 +70,9 @@ export async function routeMemberApi(
     const result = await services.submissions.createWithSourceVersion(member.memberId, {
       requestedSpaceId: stringValue(input.requestedSpaceId),
       requestedCollectionId: optionalNullableString(input.requestedCollectionId),
+      ...(input.requestedVisibility === undefined ? {} : {
+        requestedVisibility: input.requestedVisibility as "shared" | "admin_only",
+      }),
       kind: input.kind as SubmissionKind,
       title: stringValue(input.title),
       ...(hasContent ? { content: stringValue(input.content) } : { contentBase64: stringValue(input.contentBase64) }),
@@ -82,6 +85,43 @@ export async function routeMemberApi(
       submission: result.submission,
       duplicateCandidate: result.duplicateCandidate,
     }, result.submission ? 201 : 200, context.requestId);
+  }
+
+  const resubmit = /^\/api\/submissions\/([^/]+)\/resubmit$/.exec(url.pathname);
+  if (resubmit) {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    const priorSubmissionId = decodePathId(resubmit[1]!);
+    await services.submissions.assertResubmittable(member.memberId, priorSubmissionId);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
+      "SUBMISSION_REQUEST_INVALID",
+    );
+    const hasContent = Object.hasOwn(input, "content");
+    const hasContentBase64 = Object.hasOwn(input, "contentBase64");
+    if (hasContent === hasContentBase64) {
+      throw new AppError("SUBMISSION_REQUEST_INVALID", "Request body is invalid", 400);
+    }
+    const result = await services.submissions.resubmit(member.memberId, priorSubmissionId, {
+      ...(input.requestedSpaceId === undefined ? {} : { requestedSpaceId: stringValue(input.requestedSpaceId) }),
+      ...(input.requestedCollectionId === undefined ? {} : { requestedCollectionId: optionalNullableString(input.requestedCollectionId) }),
+      ...(input.requestedVisibility === undefined ? {} : {
+        requestedVisibility: input.requestedVisibility as "shared" | "admin_only",
+      }),
+      kind: input.kind as SubmissionKind,
+      title: stringValue(input.title),
+      ...(hasContent ? { content: stringValue(input.content) } : { contentBase64: stringValue(input.contentBase64) }),
+      ...(input.language === undefined ? {} : { language: stringValue(input.language) }),
+      ...(input.fileLabel === undefined ? {} : { fileLabel: stringValue(input.fileLabel) }),
+      ...(input.lineBaseline === undefined ? {} : { lineBaseline: input.lineBaseline as number }),
+    }, request.headers.get("idempotency-key") || "");
+    return jsonResponse({
+      submission: result.submission,
+      duplicateCandidate: result.duplicateCandidate,
+    }, 201, context.requestId);
   }
 
   if (url.pathname === "/api/submissions/mine") {

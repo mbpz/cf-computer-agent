@@ -8,8 +8,20 @@ ALTER TABLE source_versions ADD COLUMN file_label TEXT;
 ALTER TABLE source_versions ADD COLUMN line_baseline INTEGER NOT NULL DEFAULT 1 CHECK(line_baseline > 0);
 
 ALTER TABLE submissions ADD COLUMN supersedes_submission_id TEXT REFERENCES submissions(id);
+ALTER TABLE submissions ADD COLUMN requested_visibility TEXT NOT NULL DEFAULT 'shared'
+  CHECK(requested_visibility IN ('shared', 'admin_only'));
 CREATE INDEX submissions_owner_status_page
 ON submissions(submitter_id, status, created_at DESC, id DESC);
+
+-- Publication intents are the immutable normalized final-metadata snapshot used
+-- for exact retry equality. Nullable legacy rows are backfilled from Submission.
+ALTER TABLE publication_intents ADD COLUMN space_id TEXT REFERENCES spaces(id);
+ALTER TABLE publication_intents ADD COLUMN collection_id TEXT REFERENCES collections(id);
+ALTER TABLE publication_intents ADD COLUMN visibility_reason_code TEXT
+  CHECK(visibility_reason_code IS NULL OR visibility_reason_code = 'admin_visibility_expansion');
+UPDATE publication_intents
+SET space_id = (SELECT requested_space_id FROM submissions WHERE submissions.id = publication_intents.submission_id),
+    collection_id = (SELECT requested_collection_id FROM submissions WHERE submissions.id = publication_intents.submission_id);
 
 ALTER TABLE reviews ADD COLUMN requested_title TEXT NOT NULL DEFAULT '';
 ALTER TABLE reviews ADD COLUMN requested_space_id TEXT REFERENCES spaces(id);

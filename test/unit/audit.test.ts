@@ -25,6 +25,20 @@ describe("audit input validation", () => {
     ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled" }],
     ["submission.rejected", "submission", { reasonCode: "unsafe" }],
     ["submission.revision_requested", "submission", { reasonCode: "needs_revision" }],
+    ["review.metadata_changed", "submission", {
+      requestedTitle: "Requested title", finalTitle: "Final title",
+      requestedSpaceId: "space-1", finalSpaceId: "space-2",
+      requestedCollectionId: "collection-1", finalCollectionId: "collection-2",
+      requestedVisibility: "shared", finalVisibility: "admin_only",
+    }],
+    ["review.visibility_expanded", "submission", {
+      requestedVisibility: "admin_only", finalVisibility: "shared",
+      reasonCode: "admin_visibility_expansion",
+    }],
+    ["submission.resubmitted", "submission", {
+      supersedesSubmissionId: "submission-old", requestedSpaceId: "space-1",
+      requestedVisibility: "admin_only",
+    }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "admin_only" }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
@@ -57,6 +71,19 @@ describe("audit input validation", () => {
     ["collection.updated", "collection", { spaceId: "space-1", previousStatus: "active", newStatus: "disabled", jwt: "secret" }],
     ["submission.rejected", "submission", { reasonCode: "unsafe", note: "private review note" }],
     ["submission.revision_requested", "submission", { reasonCode: "needs_revision", title: "private title" }],
+    ["review.metadata_changed", "submission", {
+      requestedTitle: "Requested title", finalTitle: "Final title", requestedSpaceId: "space-1",
+      finalSpaceId: "space-2", requestedVisibility: "shared", finalVisibility: "admin_only",
+      note: "private review note",
+    }],
+    ["review.visibility_expanded", "submission", {
+      requestedVisibility: "admin_only", finalVisibility: "shared",
+      reasonCode: "admin_visibility_expansion", provider: "secret",
+    }],
+    ["submission.resubmitted", "submission", {
+      supersedesSubmissionId: "submission-old", requestedSpaceId: "space-1",
+      requestedVisibility: "shared", contentSha256: "secret-hash",
+    }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", tags: ["private"] }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", content: "private markdown" }],
   ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
@@ -101,5 +128,25 @@ describe("audit input validation", () => {
       ...base, metadata: { kind: "code", requestedSpaceId: { content: marker } },
     })); }).toThrow(/audit metadata/i);
     expect(serialized).not.toContain(marker);
+  });
+
+  it.each([
+    ["review.metadata_changed", {
+      requestedTitle: "x".repeat(513), finalTitle: "Final", requestedSpaceId: "space-1",
+      finalSpaceId: "space-2", requestedVisibility: "shared", finalVisibility: "shared",
+    }],
+    ["review.visibility_expanded", {
+      requestedVisibility: "admin_only", finalVisibility: "shared", reasonCode: "because_admin_said_so",
+    }],
+    ["submission.resubmitted", {
+      supersedesSubmissionId: "submission-old", requestedSpaceId: "space-1",
+      requestedVisibility: "public",
+    }],
+  ])("rejects out-of-contract bounded metadata for %s", (action, metadata) => {
+    expect(() => assertAuditEventInput({
+      id: "audit-bounds", actorKind: "member", actorId: "member-1", action,
+      resourceType: "submission", resourceId: "submission-1", metadata,
+      createdAt: "2026-08-13T00:00:00.000Z",
+    })).toThrow(/audit metadata/i);
   });
 });

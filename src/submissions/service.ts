@@ -9,11 +9,23 @@ import {
 } from "./repository";
 import type { Submission, SubmissionCreateResult, SubmissionKind, SubmissionPage } from "./types";
 
-export interface CreateSubmissionInput { requestedSpaceId: string; requestedCollectionId?: string | null; kind: SubmissionKind; title: string; content: string; }
+export interface CreateSubmissionInput { requestedSpaceId: string; requestedCollectionId?: string | null; requestedVisibility?: "shared" | "admin_only"; kind: SubmissionKind; title: string; content: string; }
 export interface CreateSourceSubmissionInput extends Omit<CreateSubmissionInput, "content"> {
   content?: string;
   contentBase64?: string;
   idempotencyKey: string;
+  language?: string;
+  fileLabel?: string;
+  lineBaseline?: number;
+}
+export interface ResubmitSourceSubmissionInput {
+  requestedSpaceId?: string;
+  requestedCollectionId?: string | null;
+  requestedVisibility?: "shared" | "admin_only";
+  kind: SubmissionKind;
+  title: string;
+  content?: string;
+  contentBase64?: string;
   language?: string;
   fileLabel?: string;
   lineBaseline?: number;
@@ -41,9 +53,7 @@ export class SubmissionsService {
   }
 
   async createWithSourceVersion(submitterId: string, input: CreateSourceSubmissionInput): Promise<SubmissionCreateResult> {
-    if (typeof input.idempotencyKey !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(input.idempotencyKey)) {
-      throw new AppError("IDEMPOTENCY_KEY_INVALID", "Idempotency key is invalid", 400);
-    }
+    requireIdempotencyKey(input.idempotencyKey);
     const content = resolveSourceContent(input);
     const normalized = normalize({ ...input, content }, false);
     const parsed = await parseSource({
@@ -83,6 +93,85 @@ export class SubmissionsService {
     }
   }
 
+  async assertResubmittable(memberId: string, priorSubmissionId: string): Promise<void> {
+    if (!await this.repository.findResubmittable(memberId, requireResourceId(priorSubmissionId))) {
+      throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    }
+  }
+
+  async resubmit(
+    memberId: string,
+    priorSubmissionId: string,
+    input: ResubmitSourceSubmissionInput,
+    idempotencyKey: string,
+  ): Promise<SubmissionCreateResult> {
+    const stablePriorId = requireResourceId(priorSubmissionId);
+    const prior = await this.repository.findResubmittable(memberId, stablePriorId);
+    if (!prior) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    requireIdempotencyKey(idempotencyKey);
+    const content = resolveSourceContent({
+      requestedSpaceId: input.requestedSpaceId ?? prior.requestedSpaceId,
+      requestedCollectionId: input.requestedCollectionId,
+      requestedVisibility: input.requestedVisibility,
+      kind: input.kind,
+      title: input.title,
+      ...(input.content === undefined ? {} : { content: input.content }),
+      ...(input.contentBase64 === undefined ? {} : { contentBase64: input.contentBase64 }),
+      idempotencyKey,
+      language: input.language,
+      fileLabel: input.fileLabel,
+      lineBaseline: input.lineBaseline,
+    });
+    const normalized = normalize({
+      requestedSpaceId: input.requestedSpaceId ?? prior.requestedSpaceId,
+      requestedCollectionId: input.requestedCollectionId === undefined
+        ? prior.requestedCollectionId
+        : input.requestedCollectionId,
+      requestedVisibility: input.requestedVisibility ?? prior.requestedVisibility,
+      kind: input.kind,
+      title: input.title,
+      content,
+    }, false);
+    const parsed = await parseSource({
+      kind: normalized.kind,
+      content: normalized.content,
+      language: input.language,
+      fileLabel: input.fileLabel,
+      lineBaseline: input.lineBaseline,
+    });
+    const now = this.now().toISOString();
+    const submission: PersistedSubmission = {
+      id: this.id(), submitterId: memberId, ...normalized, idempotencyKey,
+      supersedesSubmissionId: stablePriorId, status: "review_pending", createdAt: now, updatedAt: now,
+    };
+    const source = {
+      id: this.id(), ownerId: memberId, spaceId: normalized.requestedSpaceId,
+      collectionId: normalized.requestedCollectionId, kind: normalized.kind, title: normalized.title,
+      createdAt: now, updatedAt: now,
+    };
+    const sourceVersion = {
+      id: this.id(), sourceId: source.id, submissionId: submission.id, ordinal: 1,
+      content: parsed.normalizedMarkdown, contentSha256: parsed.contentSha256,
+      parserVersion: parsed.parserVersion, parserSchemaVersion: parsed.parserSchemaVersion,
+      sourceIdentitySha256: parsed.sourceIdentitySha256, codeMetadata: parsed.codeMetadata, createdAt: now,
+    };
+    const audit = submissionAudit(this.id(), submission, now);
+    try {
+      return await this.repository.createResubmissionWithSourceVersion({ submission, source, sourceVersion, audit });
+    } catch (error) {
+      if (error instanceof SubmissionsRepositoryConflictError) {
+        if (error.kind === "target_invalid") {
+          throw new AppError("SUBMISSION_TARGET_INVALID", "Submission target must be active and in the selected Space", 400);
+        }
+        if (error.kind === "resubmission_conflict") {
+          throw new AppError("RESUBMISSION_STATE_CONFLICT", "Submission is no longer available for resubmission", 409);
+        }
+        throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key was already used for another submission", 409);
+      }
+      throw error;
+    }
+  }
+
   listOwn(submitterId: string, request?: PageRequest): Promise<SubmissionPage> { return this.repository.listOwned(submitterId, parsePageRequest(request?.limit, request?.cursor)); }
   listPending(request?: PageRequest): Promise<SubmissionPage> { return this.repository.listPending(parsePageRequest(request?.limit, request?.cursor)); }
 }
@@ -113,17 +202,52 @@ function isCanonicalBase64(value: string): boolean {
 function normalize(
   input: CreateSubmissionInput,
   enforceContentBounds = true,
-): Pick<Submission, "requestedSpaceId" | "requestedCollectionId" | "kind" | "title" | "content"> {
+): Pick<Submission, "requestedSpaceId" | "requestedCollectionId" | "requestedVisibility" | "kind" | "title" | "content"> {
   const title = typeof input.title === "string" ? input.title.trim() : "";
-  if (!title || title.length > 200 || !isSubmissionKind(input.kind) || typeof input.requestedSpaceId !== "string" || !input.requestedSpaceId || (input.requestedCollectionId !== undefined && input.requestedCollectionId !== null && (typeof input.requestedCollectionId !== "string" || !input.requestedCollectionId)) || typeof input.content !== "string" || (enforceContentBounds && (!input.content || new TextEncoder().encode(input.content).byteLength > maxContentBytes))) {
+  if (!title || title.length > 200 || !isSubmissionKind(input.kind)
+    || !isBoundedId(input.requestedSpaceId)
+    || (input.requestedCollectionId !== undefined && input.requestedCollectionId !== null
+      && !isBoundedId(input.requestedCollectionId))
+    || typeof input.content !== "string"
+    || (enforceContentBounds && (!input.content || new TextEncoder().encode(input.content).byteLength > maxContentBytes))) {
     throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
   }
-  return { requestedSpaceId: input.requestedSpaceId, requestedCollectionId: input.requestedCollectionId ?? null, kind: input.kind, title, content: input.content };
+  if (input.requestedVisibility !== undefined
+    && input.requestedVisibility !== "shared" && input.requestedVisibility !== "admin_only") {
+    throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
+  }
+  return {
+    requestedSpaceId: input.requestedSpaceId,
+    requestedCollectionId: input.requestedCollectionId ?? null,
+    requestedVisibility: input.requestedVisibility ?? "shared",
+    kind: input.kind,
+    title,
+    content: input.content,
+  };
 }
 
 function isSubmissionKind(value: unknown): value is SubmissionKind { return value === "text" || value === "markdown" || value === "code"; }
+function isBoundedId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && [...value].length <= 128
+    && new TextEncoder().encode(value).byteLength <= 512
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
 
 function submissionAudit(id: string, submission: Submission, createdAt: string) {
+  if (submission.supersedesSubmissionId) {
+    return {
+      id, actorKind: "member" as const, actorId: submission.submitterId,
+      action: "submission.resubmitted" as const,
+      resourceType: "submission" as const, resourceId: submission.id,
+      metadata: {
+        supersedesSubmissionId: submission.supersedesSubmissionId,
+        requestedSpaceId: submission.requestedSpaceId,
+        ...(submission.requestedCollectionId ? { requestedCollectionId: submission.requestedCollectionId } : {}),
+        requestedVisibility: submission.requestedVisibility,
+      },
+      createdAt,
+    };
+  }
   return {
     id, actorKind: "member" as const, actorId: submission.submitterId, action: "submission.created" as const,
     resourceType: "submission" as const, resourceId: submission.id,
@@ -134,4 +258,18 @@ function submissionAudit(id: string, submission: Submission, createdAt: string) 
     },
     createdAt,
   };
+}
+
+function requireIdempotencyKey(value: string): void {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(value)) {
+    throw new AppError("IDEMPOTENCY_KEY_INVALID", "Idempotency key is invalid", 400);
+  }
+}
+
+function requireResourceId(value: string): string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128
+    || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+  }
+  return value;
 }

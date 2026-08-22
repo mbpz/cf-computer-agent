@@ -207,6 +207,7 @@ export interface ReviewPreviewViewModel {
   status: string;
   requestedSpaceId: string;
   requestedCollectionId: string | null;
+  requestedVisibility: "shared" | "admin_only";
   kind: string;
   title: string;
   rawInput: string;
@@ -270,6 +271,7 @@ export interface BrowserApiRequest {
   init: Readonly<{ method: "POST"; headers?: Readonly<Record<string, string>>; body: string }>;
 }
 export function submissionRequest(value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
+export function resubmissionRequest(priorSubmissionId: string, value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
 export function publishRequest(submissionId: string, value: unknown): Readonly<BrowserApiRequest>;
 export function chatRequest(value: unknown): Readonly<BrowserApiRequest>;
 export function knowledgeQuery(path: "/api/knowledge" | "/api/knowledge/search" | string, value: unknown): string;

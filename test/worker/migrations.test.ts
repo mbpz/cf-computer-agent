@@ -251,9 +251,11 @@ describe("Phase 1 control-plane migrations", () => {
       "created_at:TEXT:1:NULL:0",
       "updated_at:TEXT:1:NULL:0",
       "supersedes_submission_id:TEXT:0:NULL:0",
+      "requested_visibility:TEXT:1:'shared':0",
     ], [
       "CHECK(kind IN ('text', 'markdown', 'code', 'rich_text'))",
       "CHECK(status IN ('draft', 'review_pending', 'published', 'rejected', 'revision_requested'))",
+      "CHECK(requested_visibility IN ('shared', 'admin_only'))",
     ]);
     await expectTableSchema("sources", [
       "id:TEXT:0:NULL:1",
@@ -370,9 +372,13 @@ describe("Phase 1 control-plane migrations", () => {
       "state:TEXT:1:NULL:0",
       "created_at:TEXT:1:NULL:0",
       "updated_at:TEXT:1:NULL:0",
+      "space_id:TEXT:0:NULL:0",
+      "collection_id:TEXT:0:NULL:0",
+      "visibility_reason_code:TEXT:0:NULL:0",
     ], [
       "CHECK(visibility IN ('shared', 'admin_only'))",
       "CHECK(state IN ('pending_content', 'content_written', 'completed', 'failed_terminal'))",
+      "CHECK(visibility_reason_code IS NULL OR visibility_reason_code = 'admin_visibility_expansion')",
     ]);
     await expectTableSchema("jobs", [
       "id:TEXT:0:NULL:1",
@@ -448,6 +454,8 @@ describe("Phase 1 control-plane migrations", () => {
     await expectForeignKeys("publication_intents", [
       { from: "submission_id", table: "submissions", to: "id" },
       { from: "reviewer_id", table: "members", to: "id" },
+      { from: "space_id", table: "spaces", to: "id" },
+      { from: "collection_id", table: "collections", to: "id" },
     ]);
     await expectForeignKeys("jobs", []);
 
@@ -862,6 +870,7 @@ describe("Phase 1 control-plane migrations", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
 
     await expect(env.DB.prepare("SELECT parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions WHERE id = 'source-version-0004'").first()).resolves.toEqual({ parser_schema_version: "m1-v1", source_identity_sha256: null, code_language: null, file_label: null, line_baseline: 1 });
+    await expect(env.DB.prepare("SELECT requested_visibility FROM submissions WHERE id = 'submission-0004'").first()).resolves.toEqual({ requested_visibility: "shared" });
     await expect(env.DB.prepare("SELECT requested_title, requested_space_id, requested_collection_id, requested_visibility, final_space_id, final_collection_id, final_visibility FROM reviews WHERE id = 'review-0004'").first()).resolves.toEqual({ requested_title: "Requested title", requested_space_id: "default", requested_collection_id: "collection-0004", requested_visibility: "admin_only", final_space_id: "default", final_collection_id: "collection-0004", final_visibility: "admin_only" });
     await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "Schema", body: "visible body", code: "" });
     await expect(env.DB.prepare("SELECT m.id AS member_id, a.token_hash, s.id AS space_id, c.id AS collection_id, sub.id AS submission_id, sv.id AS source_version_id, r.id AS review_id, k.id AS item_id, rev.id AS revision_id, t.id AS tag_id, ch.id AS chunk_id, j.id AS job_id FROM members m JOIN auth_sessions a ON a.member_id = m.id JOIN spaces s ON s.id = 'default' JOIN collections c ON c.id = 'collection-0004' JOIN submissions sub ON sub.id = 'submission-0004' JOIN source_versions sv ON sv.submission_id = sub.id JOIN reviews r ON r.submission_id = sub.id JOIN knowledge_items k ON k.id = 'item-0004' JOIN revisions rev ON rev.id = k.current_revision_id JOIN revision_tags rt ON rt.revision_id = rev.id JOIN tags t ON t.id = rt.tag_id JOIN chunks ch ON ch.revision_id = rev.id JOIN jobs j ON j.resource_id = rev.id").first()).resolves.toEqual({ member_id: "member-0004", token_hash: "session-0004", space_id: "default", collection_id: "collection-0004", submission_id: "submission-0004", source_version_id: "source-version-0004", review_id: "review-0004", item_id: "item-0004", revision_id: "revision-0004", tag_id: "tag-0004", chunk_id: "chunk-0004", job_id: "job-0004" });
