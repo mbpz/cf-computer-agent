@@ -137,7 +137,9 @@ type IndexRevisionRow = {
   id: string;
   title: string;
   summary: string;
+  visibility: PublishedRevision["visibility"];
 };
+type IndexCorpus = "chunks_fts" | "chunks_fts_shared";
 
 const SAFE_PATH_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const MAX_INDEX_ATTEMPTS = 3;
@@ -456,7 +458,28 @@ export class PublicationRepository implements PublicationRepositoryPort {
        WHERE kind = 'index_revision' AND resource_id = ?
          AND available_at <= ?
          AND (state IN ('pending', 'failed_retryable')
-           OR (state = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= ?)))`,
+           OR (state = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= ?)))
+         AND EXISTS (
+           SELECT 1 FROM revisions active_revision
+           JOIN knowledge_items active_item
+             ON active_item.id = active_revision.knowledge_item_id
+           LEFT JOIN spaces active_space
+             ON active_space.id = active_item.space_id
+               AND active_space.status = 'active' AND active_space.kind != 'legacy'
+           LEFT JOIN collections active_collection
+             ON active_collection.id = active_item.collection_id
+               AND active_collection.space_id = active_item.space_id
+               AND active_collection.status = 'active'
+           WHERE active_revision.id = jobs.resource_id
+             AND (
+               active_item.status = 'trashed'
+               OR active_item.current_revision_id != active_revision.id
+               OR (
+                 active_item.status = 'active' AND active_space.id IS NOT NULL
+                 AND (active_item.collection_id IS NULL OR active_collection.id IS NOT NULL)
+               )
+             )
+         )`,
     ).bind(
       leaseToken, leaseExpiresAt, leaseExpiresAt, timestamp, revisionId, timestamp, timestamp,
     ).run();
@@ -483,7 +506,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
         return current ? visibleIndexStatus(current) : "pending";
       }
       const revision = await this.db.prepare(
-        `SELECT r.id, r.title, r.summary
+        `SELECT r.id, r.title, r.summary, r.visibility
          FROM revisions r
          WHERE r.id = ? AND r.knowledge_item_id = ? LIMIT 1`,
       ).bind(revisionId, job.knowledge_item_id).first<IndexRevisionRow>();
@@ -512,8 +535,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
       const fields = buildIndexChunkFields(normalizedChunks);
       const staleRowids = await this.indexedRowidsForKnowledgeItem(job.knowledge_item_id, revisionId);
       await this.db.batch([
-        ...staleRowids.map((rowid) => this.prepareDeleteIndexRow(rowid)),
-        ...normalizedChunks.map((chunk) => this.prepareDeleteIndexRow(chunk.ftsRowid)),
+        this.activeIndexTargetGuard(revisionId, leaseToken),
+        ...staleRowids.flatMap((rowid) => this.prepareDeleteIndexRows(rowid)),
+        ...normalizedChunks.flatMap((chunk) => this.prepareDeleteIndexRows(chunk.ftsRowid)),
         ...fields.map((field, index) => this.db.prepare(
           `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -526,6 +550,18 @@ export class PublicationRepository implements PublicationRepositoryPort {
           field.body,
           field.code,
         )),
+        ...(revision.visibility === "shared" ? fields.map((field, index) => this.db.prepare(
+          `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          normalizedChunks[index]!.ftsRowid,
+          field.chunkId,
+          document.title,
+          document.summary,
+          document.tags,
+          field.body,
+          field.code,
+        )) : []),
         this.db.prepare(
           `UPDATE knowledge_items SET search_status = 'indexed', updated_at = ?
            WHERE id = ? AND current_revision_id = ? AND status = 'active'`,
@@ -753,19 +789,13 @@ export class PublicationRepository implements PublicationRepositoryPort {
     leaseToken: string,
   ): Promise<boolean> {
     const rowids = await this.chunkRowidsForRevision(revisionId);
+    const corpora = await this.availableIndexCorpora();
     try {
-      await this.commitIndexFailure(revisionId, timestamp, leaseToken, rowids);
+      await this.commitIndexFailure(revisionId, timestamp, leaseToken, rowids, corpora);
       return true;
     } catch (error) {
       const current = await this.findIndexJob(revisionId);
       if (!current || current.state !== "running" || current.lease_token !== leaseToken) return false;
-      try {
-        await this.db.prepare("SELECT rowid FROM chunks_fts WHERE rowid = ? LIMIT 1")
-          .bind(rowids[0] ?? 0).first();
-      } catch {
-        await this.commitIndexFailure(revisionId, timestamp, leaseToken, []);
-        return true;
-      }
       throw error;
     }
   }
@@ -775,10 +805,13 @@ export class PublicationRepository implements PublicationRepositoryPort {
     timestamp: string,
     leaseToken: string,
     rowids: readonly number[],
+    corpora: readonly IndexCorpus[],
   ): Promise<void> {
     await this.db.batch([
       this.indexLeaseGuard(revisionId, leaseToken),
-      ...rowids.map((rowid) => this.prepareDeleteIndexRowForLease(rowid, revisionId, leaseToken)),
+      ...rowids.flatMap((rowid) => this.prepareDeleteIndexRowsForLease(
+        rowid, revisionId, leaseToken, corpora,
+      )),
       this.db.prepare(
         `UPDATE knowledge_items SET search_status = 'search_degraded', updated_at = ?
          WHERE current_revision_id = ? AND status = 'active'
@@ -810,7 +843,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
       ? await this.indexedRowidsForKnowledgeItem(knowledgeItemId)
       : await this.indexedRowidsForRevision(revisionId);
     await this.db.batch([
-      ...rowids.map((rowid) => this.prepareDeleteIndexRow(rowid)),
+      ...rowids.flatMap((rowid) => this.prepareDeleteIndexRows(rowid)),
       this.db.prepare(
         `UPDATE jobs SET state = 'completed', last_error_code = NULL,
            lease_token = NULL, lease_expires_at = NULL, updated_at = ?
@@ -856,23 +889,36 @@ export class PublicationRepository implements PublicationRepositoryPort {
     return boundedIndexRowids(rows.results);
   }
 
-  private prepareDeleteIndexRow(rowid: number): D1PreparedStatement {
-    return this.db.prepare("DELETE FROM chunks_fts WHERE rowid = ?").bind(rowid);
+  private prepareDeleteIndexRows(rowid: number): D1PreparedStatement[] {
+    return [
+      this.db.prepare("DELETE FROM chunks_fts WHERE rowid = ?").bind(rowid),
+      this.db.prepare("DELETE FROM chunks_fts_shared WHERE rowid = ?").bind(rowid),
+    ];
   }
 
-  private prepareDeleteIndexRowForLease(
+  private prepareDeleteIndexRowsForLease(
     rowid: number,
     revisionId: string,
     leaseToken: string,
-  ): D1PreparedStatement {
-    return this.db.prepare(
-      `DELETE FROM chunks_fts WHERE rowid = ?
+    corpora: readonly IndexCorpus[] = ["chunks_fts", "chunks_fts_shared"],
+  ): D1PreparedStatement[] {
+    const guardedDelete = (corpus: IndexCorpus) => this.db.prepare(
+      `DELETE FROM ${corpus} WHERE rowid = ?
        AND EXISTS (
          SELECT 1 FROM jobs
          WHERE kind = 'index_revision' AND resource_id = ?
            AND state = 'running' AND lease_token = ?
        )`,
     ).bind(rowid, revisionId, leaseToken);
+    return corpora.map(guardedDelete);
+  }
+
+  private async availableIndexCorpora(): Promise<IndexCorpus[]> {
+    const rows = await this.db.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('chunks_fts', 'chunks_fts_shared')",
+    ).all<{ name: string }>();
+    const found = new Set(rows.results.map((row) => row.name));
+    return (["chunks_fts", "chunks_fts_shared"] as const).filter((name) => found.has(name));
   }
 
   private indexLeaseGuard(revisionId: string, leaseToken: string): D1PreparedStatement {
@@ -882,6 +928,23 @@ export class PublicationRepository implements PublicationRepositoryPort {
          WHERE kind = 'index_revision' AND resource_id = ?
            AND state = 'running' AND lease_token = ?
        ) THEN 1 ELSE json_extract('index-lease-guard', '$') END AS ok`,
+    ).bind(revisionId, leaseToken);
+  }
+
+  private activeIndexTargetGuard(revisionId: string, leaseToken: string): D1PreparedStatement {
+    return this.db.prepare(
+      `SELECT CASE WHEN EXISTS (
+         SELECT 1 FROM jobs j
+         JOIN revisions r ON r.id = j.resource_id
+         JOIN knowledge_items k
+           ON k.id = r.knowledge_item_id AND k.current_revision_id = r.id AND k.status = 'active'
+         JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+         LEFT JOIN collections c
+           ON c.id = k.collection_id AND c.space_id = k.space_id AND c.status = 'active'
+         WHERE j.kind = 'index_revision' AND j.resource_id = ?
+           AND j.state = 'running' AND j.lease_token = ?
+           AND (k.collection_id IS NULL OR c.id IS NOT NULL)
+       ) THEN 1 ELSE json_extract('active-index-target-guard', '$') END AS ok`,
     ).bind(revisionId, leaseToken);
   }
 

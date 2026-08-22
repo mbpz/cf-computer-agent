@@ -18,7 +18,7 @@ const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
-  ["0004_m1_gate_completion.sql", "f57146f604838f59bca0f95b61a34c710e23d366b171373ed646a74cfacde89b"],
+  ["0004_m1_gate_completion.sql", "ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],

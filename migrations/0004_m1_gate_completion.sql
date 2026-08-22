@@ -80,6 +80,8 @@ ON revisions(knowledge_item_id, id);
 CREATE INDEX revision_tags_tag_revision ON revision_tags(tag_id, revision_id);
 CREATE INDEX knowledge_items_current_revision_index_status
 ON knowledge_items(current_revision_id, search_status, status);
+CREATE INDEX knowledge_items_collection_reindex
+ON knowledge_items(status, collection_id, current_revision_id);
 
 -- Reindex only current readable revisions. Existing title, tag, and body terms
 -- remain searchable; M1-only summary/code fields are safely empty for legacy rows.
@@ -93,11 +95,72 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
   code,
   tokenize='unicode61 remove_diacritics 2'
 );
+WITH active_tag_documents AS (
+  SELECT revision_id, group_concat(tag_text, ' ') AS tags
+  FROM (
+    SELECT revision_tags.revision_id,
+      trim(lower(tags.slug) || ' ' || tags.name) AS tag_text
+    FROM revision_tags
+    JOIN tags ON tags.id = revision_tags.tag_id AND tags.status = 'active'
+    ORDER BY revision_tags.revision_id, tag_text
+  )
+  GROUP BY revision_id
+)
 INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
-SELECT chunks.rowid, chunks.id, revisions.title, revisions.summary, chunks.search_tags,
+SELECT chunks.rowid, chunks.id, revisions.title, revisions.summary,
+  coalesce(active_tag_documents.tags, ''),
   CASE WHEN chunks.index_field = 'body' THEN chunks.search_body ELSE '' END,
   CASE WHEN chunks.index_field = 'code' THEN chunks.search_body ELSE '' END
 FROM chunks
 JOIN revisions ON revisions.id = chunks.revision_id
 JOIN knowledge_items ON knowledge_items.current_revision_id = revisions.id
-WHERE knowledge_items.status = 'active';
+JOIN jobs ON jobs.kind = 'index_revision' AND jobs.resource_id = revisions.id
+  AND jobs.state = 'completed'
+JOIN spaces ON spaces.id = knowledge_items.space_id
+  AND spaces.status = 'active' AND spaces.kind != 'legacy'
+LEFT JOIN collections ON collections.id = knowledge_items.collection_id
+  AND collections.space_id = knowledge_items.space_id AND collections.status = 'active'
+LEFT JOIN active_tag_documents ON active_tag_documents.revision_id = revisions.id
+WHERE knowledge_items.status = 'active' AND knowledge_items.search_status = 'indexed'
+  AND (knowledge_items.collection_id IS NULL OR collections.id IS NOT NULL);
+
+-- Contributor ranking uses an independent corpus so admin-only documents can
+-- never alter contributor BM25 statistics, raw scores, ordering, or cursors.
+CREATE VIRTUAL TABLE chunks_fts_shared USING fts5(
+  chunk_id UNINDEXED,
+  title,
+  summary,
+  tags,
+  body,
+  code,
+  tokenize='unicode61 remove_diacritics 2'
+);
+WITH active_tag_documents AS (
+  SELECT revision_id, group_concat(tag_text, ' ') AS tags
+  FROM (
+    SELECT revision_tags.revision_id,
+      trim(lower(tags.slug) || ' ' || tags.name) AS tag_text
+    FROM revision_tags
+    JOIN tags ON tags.id = revision_tags.tag_id AND tags.status = 'active'
+    ORDER BY revision_tags.revision_id, tag_text
+  )
+  GROUP BY revision_id
+)
+INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+SELECT chunks.rowid, chunks.id, revisions.title, revisions.summary,
+  coalesce(active_tag_documents.tags, ''),
+  CASE WHEN chunks.index_field = 'body' THEN chunks.search_body ELSE '' END,
+  CASE WHEN chunks.index_field = 'code' THEN chunks.search_body ELSE '' END
+FROM chunks
+JOIN revisions ON revisions.id = chunks.revision_id
+JOIN knowledge_items ON knowledge_items.current_revision_id = revisions.id
+JOIN jobs ON jobs.kind = 'index_revision' AND jobs.resource_id = revisions.id
+  AND jobs.state = 'completed'
+JOIN spaces ON spaces.id = knowledge_items.space_id
+  AND spaces.status = 'active' AND spaces.kind != 'legacy'
+LEFT JOIN collections ON collections.id = knowledge_items.collection_id
+  AND collections.space_id = knowledge_items.space_id AND collections.status = 'active'
+LEFT JOIN active_tag_documents ON active_tag_documents.revision_id = revisions.id
+WHERE knowledge_items.status = 'active' AND knowledge_items.search_status = 'indexed'
+  AND revisions.visibility = 'shared'
+  AND (knowledge_items.collection_id IS NULL OR collections.id IS NOT NULL);

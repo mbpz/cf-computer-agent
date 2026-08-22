@@ -411,6 +411,18 @@ describe("Phase 1 control-plane migrations", () => {
       "chunk_id UNINDEXED",
       "tokenize='unicode61 remove_diacritics 2'",
     ]);
+    await expectTableSchema("chunks_fts_shared", [
+      "chunk_id::0:NULL:0",
+      "title::0:NULL:0",
+      "summary::0:NULL:0",
+      "tags::0:NULL:0",
+      "body::0:NULL:0",
+      "code::0:NULL:0",
+    ], [
+      "CREATE VIRTUAL TABLE chunks_fts_shared USING fts5",
+      "chunk_id UNINDEXED",
+      "tokenize='unicode61 remove_diacritics 2'",
+    ]);
 
     await expectForeignKeys("submissions", [
       { from: "submitter_id", table: "members", to: "id" },
@@ -868,11 +880,28 @@ describe("Phase 1 control-plane migrations", () => {
       env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('item-0004', 'default', 'collection-0004', NULL, 'active', 'indexed', ?, ?)").bind(now, now),
       env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('revision-0004', 'item-0004', 'source-version-0004', '/0004.md', 'content-hash-0004', 'Final title', '[\"tag-0004\"]', 'admin_only', 'member-0004', ?)").bind(now),
       env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'revision-0004' WHERE id = 'item-0004'"),
-      env.DB.prepare("INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-0004', 'default', 'schema', 'Schema', 'active', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-0004', 'default', 'schema', 'Schema', 'disabled', ?, ?)").bind(now, now),
       env.DB.prepare("INSERT INTO revision_tags (revision_id, tag_id) VALUES ('revision-0004', 'tag-0004')"),
       env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body) VALUES ('chunk-0004', 'revision-0004', 0, '[]', 1, 1, 'visible body', 'Final title', 'Schema', 'visible body')"),
       env.DB.prepare("INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES ('chunk-0004', 'Final title', 'Schema', 'visible body')"),
       env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at) VALUES ('job-0004', 'index_revision', 'revision-0004', 'completed', 1, ?, NULL, ?, ?)").bind(now, now, now),
+      env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-disabled-0004', 'default', NULL, 'Disabled', '', 'disabled', 2, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at) VALUES ('submission-disabled-0004', 'member-0004', 'default', 'collection-disabled-0004', 'markdown', 'published', 'Disabled', 'disabledcorpus', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('source-disabled-0004', 'member-0004', 'default', 'collection-disabled-0004', 'markdown', 'Disabled', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('source-version-disabled-0004', 'source-disabled-0004', 'submission-disabled-0004', 1, 'disabledcorpus', 'disabled-hash-0004', 'm1-v1', ?)").bind(now),
+      env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('item-disabled-0004', 'default', 'collection-disabled-0004', NULL, 'active', 'indexed', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('revision-disabled-0004', 'item-disabled-0004', 'source-version-disabled-0004', '/disabled-0004.md', 'disabled-hash-0004', 'Disabled', '[]', 'shared', 'member-0004', ?)").bind(now),
+      env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'revision-disabled-0004' WHERE id = 'item-disabled-0004'"),
+      env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body) VALUES ('chunk-disabled-0004', 'revision-disabled-0004', 0, '[]', 1, 1, 'disabledcorpus', 'Disabled', '', 'disabledcorpus')"),
+      env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at) VALUES ('job-disabled-0004', 'index_revision', 'revision-disabled-0004', 'completed', 1, ?, NULL, ?, ?)").bind(now, now, now),
+      env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at) VALUES ('submission-pending-0004', 'member-0004', 'default', NULL, 'markdown', 'published', 'Pending', 'pendingcorpus', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('source-pending-0004', 'member-0004', 'default', NULL, 'markdown', 'Pending', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('source-version-pending-0004', 'source-pending-0004', 'submission-pending-0004', 1, 'pendingcorpus', 'pending-hash-0004', 'm1-v1', ?)").bind(now),
+      env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('item-pending-0004', 'default', NULL, NULL, 'active', 'pending', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('revision-pending-0004', 'item-pending-0004', 'source-version-pending-0004', '/pending-0004.md', 'pending-hash-0004', 'Pending', '[]', 'shared', 'member-0004', ?)").bind(now),
+      env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'revision-pending-0004' WHERE id = 'item-pending-0004'"),
+      env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body) VALUES ('chunk-pending-0004', 'revision-pending-0004', 0, '[]', 1, 1, 'pendingcorpus', 'Pending', '', 'pendingcorpus')"),
+      env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at) VALUES ('job-pending-0004', 'index_revision', 'revision-pending-0004', 'pending', 0, ?, NULL, ?, ?)").bind(now, now, now),
     ]);
 
     await applyD1Migrations(env.DB, MIGRATIONS);
@@ -880,7 +909,9 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(env.DB.prepare("SELECT parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions WHERE id = 'source-version-0004'").first()).resolves.toEqual({ parser_schema_version: "m1-v1", source_identity_sha256: null, code_language: null, file_label: null, line_baseline: 1 });
     await expect(env.DB.prepare("SELECT requested_visibility FROM submissions WHERE id = 'submission-0004'").first()).resolves.toEqual({ requested_visibility: "shared" });
     await expect(env.DB.prepare("SELECT requested_title, requested_space_id, requested_collection_id, requested_visibility, final_space_id, final_collection_id, final_visibility FROM reviews WHERE id = 'review-0004'").first()).resolves.toEqual({ requested_title: "Requested title", requested_space_id: "default", requested_collection_id: "collection-0004", requested_visibility: "admin_only", final_space_id: "default", final_collection_id: "collection-0004", final_visibility: "admin_only" });
-    await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "Schema", body: "", code: "visible body" });
+    await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "", body: "", code: "visible body" });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM chunks_fts WHERE chunks_fts MATCH 'disabledcorpus OR pendingcorpus'").first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM chunks_fts_shared").first()).resolves.toEqual({ count: 0 });
     await expect(env.DB.prepare(
       "SELECT chunks_fts.rowid = chunks.rowid AS same_rowid FROM chunks_fts JOIN chunks ON chunks.id = chunks_fts.chunk_id WHERE chunks.id = 'chunk-0004'",
     ).first()).resolves.toEqual({ same_rowid: 1 });
@@ -944,6 +975,11 @@ describe("Phase 1 control-plane migrations", () => {
       "DELETE FROM chunks_fts WHERE rowid = ?",
       [42],
     );
+    const collectionInvalidationPlan = await queryPlan(
+      `SELECT current_revision_id FROM knowledge_items
+       WHERE status = 'active' AND current_revision_id IS NOT NULL AND collection_id = ?`,
+      ["collection-scale"],
+    );
 
     expect(jobsPlan).toContain("jobs_recoverable_scan");
     expect(jobsPlan).not.toMatch(/USE TEMP B-TREE/iu);
@@ -955,6 +991,8 @@ describe("Phase 1 control-plane migrations", () => {
     expect(cleanupPlan).not.toMatch(/SCAN (?:stale|c)\b|USE TEMP B-TREE/iu);
     expect(ftsDeletePlan).toContain("VIRTUAL TABLE INDEX 0:=");
     expect(ftsDeletePlan).not.toMatch(/LIST SUBQUERY|USE TEMP B-TREE/iu);
+    expect(collectionInvalidationPlan).toContain("knowledge_items_collection_reindex");
+    expect(collectionInvalidationPlan).not.toMatch(/SCAN knowledge_items|USE TEMP B-TREE/iu);
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

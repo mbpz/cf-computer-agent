@@ -244,6 +244,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       ? undefined
       : decodeSearchCursor(request.cursor, request.cursorKey);
     const filters = searchFilterSql(request, "k", "r");
+    const searchCorpus = scope.role === "admin" ? "chunks_fts" : "chunks_fts_shared";
     const cursorSql = cursor === undefined ? "" : `
        WHERE score > ?
           OR (score = ? AND published_at < ?)
@@ -274,23 +275,27 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
            r.id AS revision_id, c.id AS chunk_id, r.title, c.heading_path,
            c.start_line, c.end_line, c.body, r.published_at,
-           bm25(chunks_fts, ${SEARCH_BM25_WEIGHTS_SQL}) AS score,
-           instr(highlight(chunks_fts, 1, char(1), char(2)), char(1)) > 0 AS match_title,
-           instr(highlight(chunks_fts, 2, char(1), char(2)), char(1)) > 0 AS match_summary,
-           instr(highlight(chunks_fts, 3, char(1), char(2)), char(1)) > 0 AS match_tags,
-           instr(highlight(chunks_fts, 4, char(1), char(2)), char(1)) > 0 AS match_body,
-           instr(highlight(chunks_fts, 5, char(1), char(2)), char(1)) > 0 AS match_code
-         FROM chunks_fts
-         JOIN chunks c ON c.rowid = chunks_fts.rowid AND c.id = chunks_fts.chunk_id
+           bm25(${searchCorpus}, ${SEARCH_BM25_WEIGHTS_SQL}) AS score,
+           instr(highlight(${searchCorpus}, 1, char(1), char(2)), char(1)) > 0 AS match_title,
+           instr(highlight(${searchCorpus}, 2, char(1), char(2)), char(1)) > 0 AS match_summary,
+           instr(highlight(${searchCorpus}, 3, char(1), char(2)), char(1)) > 0 AS match_tags,
+           instr(highlight(${searchCorpus}, 4, char(1), char(2)), char(1)) > 0 AS match_body,
+           instr(highlight(${searchCorpus}, 5, char(1), char(2)), char(1)) > 0 AS match_code
+         FROM ${searchCorpus}
+         JOIN chunks c ON c.rowid = ${searchCorpus}.rowid AND c.id = ${searchCorpus}.chunk_id
          JOIN revisions r ON r.id = c.revision_id
          JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.current_revision_id = r.id
          JOIN jobs current_index_job
            ON current_index_job.kind = 'index_revision'
              AND current_index_job.resource_id = r.id AND current_index_job.state = 'completed'
          JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+         LEFT JOIN collections active_collection
+           ON active_collection.id = k.collection_id
+             AND active_collection.space_id = k.space_id AND active_collection.status = 'active'
          CROSS JOIN authorized_member am
-         WHERE chunks_fts MATCH ?
+         WHERE ${searchCorpus} MATCH ?
            AND k.status = 'active' AND k.search_status = 'indexed'
+           AND (k.collection_id IS NULL OR active_collection.id IS NOT NULL)
            AND (r.visibility = 'shared' OR am.role = 'admin')
            ${filters.sql}
        )

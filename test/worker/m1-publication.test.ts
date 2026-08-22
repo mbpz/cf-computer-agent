@@ -1186,6 +1186,30 @@ describe("M1 publication control plane", () => {
     await expect(indexedChunkIds("knowledge-index-failure-cleanup")).resolves.toEqual([]);
   });
 
+  it("fails closed and releases the lease when either isolated FTS corpus is unavailable", async () => {
+    await seedReviewPendingSubmission("submission-shared-corpus-failure");
+    const repository = repositoryWithIds(
+      "knowledge-shared-corpus-failure", "revision-shared-corpus-failure",
+    );
+    await finalizeWithoutIndex(repository, "submission-shared-corpus-failure");
+    await env.DB.prepare("DROP TABLE chunks_fts_shared").run();
+
+    await expect(repository.processIndexJob("revision-shared-corpus-failure"))
+      .resolves.toBe("search_degraded");
+    await expect(env.DB.prepare(
+      `SELECT j.state, j.lease_token, j.last_error_code, k.search_status
+       FROM jobs j JOIN revisions r ON r.id = j.resource_id
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       WHERE j.resource_id = ? LIMIT 1`,
+    ).bind("revision-shared-corpus-failure").first()).resolves.toEqual({
+      state: "failed_retryable",
+      lease_token: null,
+      last_error_code: "FTS_INDEX_FAILED",
+      search_status: "search_degraded",
+    });
+    await expect(indexedChunkIds("knowledge-shared-corpus-failure")).resolves.toEqual([]);
+  });
+
   it("changes nothing when an expired failure claimant loses its token before cleanup", async () => {
     await seedReviewPendingSubmission("submission-index-failure-expired");
     const seed = repositoryWithIds("knowledge-index-failure-expired", "revision-index-failure-expired");

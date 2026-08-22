@@ -59,7 +59,7 @@ The reviewed migration provenance is immutable for this candidate:
 | `0001_phase1_control_plane.sql` | `3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929` |
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
 | `0003_m1_knowledge_loop.sql` | `cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3` |
-| `0004_m1_gate_completion.sql` | `f57146f604838f59bca0f95b61a34c710e23d366b171373ed646a74cfacde89b` |
+| `0004_m1_gate_completion.sql` | `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb` |
 
 `verify:m1:migrations` hard-codes the four reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 

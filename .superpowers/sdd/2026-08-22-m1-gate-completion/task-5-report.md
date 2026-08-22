@@ -114,3 +114,74 @@ Evidence/tests:
 1. The deterministic BM25 metadata tie-break has the documented SQLite temp ORDER BY exception. Hosted `rows_read` evidence is still required under Task 10 / `OPS-015`.
 2. Local Vitest/Wrangler emits the existing AI-remote-resource warning and intentional invalid-journal test stderr; the full gate exits 0.
 3. No necessary index was missing from migration 0004, so the still-unapplied migration and hash pins were not modified.
+
+## Fix round 1 addendum: isolated active corpora (C1, I1, I2)
+
+This addendum supersedes the original report's statements that migration 0004 and its hash pins were unchanged. The still-unapplied migration now creates two authoritative six-field corpora: `chunks_fts` for admins and `chunks_fts_shared` for contributors. The reviewed 0004 SHA-256 is `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb`; the verifier, release contract, and runbook pin the same bytes.
+
+### RED/GREEN
+
+Focused RED was observed before each corrective production slice:
+
+1. Adding twelve `admin_only` matches changed a contributor hit score from `-0.000001` to `-0.0000011166306695464364` and changed the opaque cursor bytes, proving the single global corpus leaked hidden document statistics.
+2. Disabling a Collection left its unfiltered result searchable and its Job/corpus rows completed/indexed; `TagsRepository.updateStatus` did not exist and stale Tag text remained searchable.
+3. Running an index Job while its Collection was disabled returned `indexed` instead of remaining fail-closed `pending`.
+4. Upgrade migration backfill copied disabled Tag text (`Schema`) and admitted disabled-Collection/pending-Job rows.
+5. Dropping only `chunks_fts_shared` caused index failure cleanup itself to reject instead of degrading safely and releasing its lease.
+
+Focused GREEN:
+
+```text
+rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-publication.test.ts test/worker/spaces.test.ts test/worker/migrations.test.ts test/worker/m1-api.test.ts
+5 files passed; 111 tests passed
+
+rtk npm run verify:m1:migrations -- --files
+[pass] migration-files count=4
+```
+
+Final GREEN after the additional corpus-failure, concurrency, and rollback probes:
+
+```text
+rtk npm run check
+types:check passed
+typecheck passed
+smoke: 37 passed
+unit: 568 passed
+worker: 264 passed
+dry-run build passed
+
+rtk git diff --check
+passed
+```
+
+### Isolation and active-state evidence
+
+- Contributor queries run only against `chunks_fts_shared`; admin queries run against `chunks_fts`. The SQL still cross-checks the caller-claimed role against the active D1 member row before returning ranked data.
+- The hidden-influence probe captures the entire contributor page before and after twelve admin-only inserts. Score, order, result fields, and cursor bytes are exactly equal; the admin result set changes and includes the new rows.
+- Both migration backfill and the live writer admit only current active Knowledge Items in active non-legacy Spaces, active Collections when present, `indexed` state, and completed current index Jobs. Migration Tag text is rebuilt only from active authoritative Tags, never copied from stale chunk text.
+- Space and Collection status transitions atomically delete both corpora, mark affected current items `pending`, and reset their existing index Jobs to bounded recovery. Tag status transitions use the direct repository invalidation/rebuild primitive with the same fail-closed state change. Reactivation remains nonsearchable until the bounded Job worker completes.
+- The writer claim and its atomic replacement guard both re-check current Space/Collection state. A controlled race pauses replacement, disables the Collection, then proves the stale indexer returns `pending` with zero corpus rows. An injected duplicate audit proves failed Space status mutation rolls back metadata, Job state, and both corpora together.
+- Task 4 trash/stale-revision cleanup remains claimable even when the active-target predicate does not apply. Failure cleanup discovers which isolated corpus tables exist, removes every available row under the lease, degrades safely, and releases the lease if either corpus is unavailable.
+
+### Production-shaped D1 scale and plans
+
+The former 10,000-row `knowledge_items`-only decoy was replaced with 10,000 linked Submissions, Sources, SourceVersions, current Revisions, Knowledge Items, Chunks, Jobs, revision Tags, and authoritative FTS rows. The fixed distribution includes shared/admin-only visibility, active/trashed items, completed/pending Jobs, active/disabled Collections, two Spaces, active/disabled Tags, body/code fields, and AND/OR membership.
+
+Real D1 assertions cover both corpora and require:
+
+- `SCAN chunks_fts_shared VIRTUAL TABLE INDEX` for contributor MATCH and `SCAN chunks_fts VIRTUAL TABLE INDEX` for admin MATCH;
+- `knowledge_items_current_revision_index_status`, `revision_tags_tag_revision`, and Tag/revision primary indexes where applicable;
+- `knowledge_items_collection_reindex` for set-based Collection invalidation without a relational scan;
+- no full relational scan of Knowledge Items, Revisions, Chunks, Jobs, Spaces, Collections, Tags, or revision Tags;
+- strict 50-result pages backed by `LIMIT 51`, a second gap-free page, and 100 unique chunk IDs;
+- the controller-approved `USE TEMP B-TREE FOR ORDER BY` only for query-dependent BM25 plus deterministic publication/ID ties.
+
+No `COUNT`, N+1 fetch, unbounded result page, or remote operation was added. Hosted D1 `rows_read` remains mandatory Task 10 / `OPS-015` evidence for representative selective and worst-case queries; this fix does not check OPS or claim that evidence.
+
+### Files and remaining concern
+
+Production/contracts: `migrations/0004_m1_gate_completion.sql`, `src/library/repository.ts`, `src/publication/repository.ts`, `src/spaces/repository.ts`, `src/tags/repository.ts`, `scripts/verify-m1-migrations.mjs`, `scripts/m1-release-contract.test.mjs`, `docs/operations/m1-release.md`.
+
+Evidence: `test/worker/m1-library.test.ts`, `test/worker/m1-publication.test.ts`, `test/worker/migrations.test.ts`, and this report.
+
+The only remaining search-plan concern is the explicitly accepted dynamic BM25 ORDER BY temp B-tree. Hosted `rows_read` evidence is still required before release.

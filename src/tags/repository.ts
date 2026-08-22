@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor } from "../pagination";
-import type { Tag, TagPage, TagPageRepositoryRequest, TagsRepositoryPort } from "./types";
+import type { Tag, TagPage, TagPageRepositoryRequest, TagsRepositoryPort, TagStatus } from "./types";
 
 export type TagsRepositoryConflictKind = "target_invalid" | "slug_conflict";
 
@@ -44,6 +44,45 @@ export class TagsRepository implements TagsRepositoryPort {
       if (isSlugConflict(error)) throw new TagsRepositoryConflictError("slug_conflict");
       throw error;
     }
+  }
+
+  async updateStatus(id: string, status: TagStatus, updatedAt: string): Promise<Tag | null> {
+    const current = await this.db.prepare(
+      `SELECT id, space_id, slug, name, status, created_at, updated_at
+       FROM tags WHERE id = ? LIMIT 1`,
+    ).bind(id).first<TagRow>();
+    if (!current) return null;
+    if (current.status === status) return mapTag(current);
+    const affectedRevisions = `SELECT r.id FROM revision_tags rt
+      JOIN revisions r ON r.id = rt.revision_id
+      JOIN knowledge_items k ON k.current_revision_id = r.id AND k.status = 'active'
+      WHERE rt.tag_id = ?`;
+    const affectedRowids = `SELECT c.rowid FROM revision_tags rt
+      JOIN revisions r ON r.id = rt.revision_id
+      JOIN knowledge_items k ON k.current_revision_id = r.id AND k.status = 'active'
+      JOIN chunks c ON c.revision_id = r.id
+      WHERE rt.tag_id = ?`;
+    const results = await this.db.batch([
+      this.db.prepare(`DELETE FROM chunks_fts WHERE rowid IN (${affectedRowids})`).bind(id),
+      this.db.prepare(`DELETE FROM chunks_fts_shared WHERE rowid IN (${affectedRowids})`).bind(id),
+      this.db.prepare(
+        `UPDATE knowledge_items SET search_status = 'pending'
+         WHERE status = 'active' AND current_revision_id IN (${affectedRevisions})`,
+      ).bind(id),
+      this.db.prepare(
+        `UPDATE jobs SET state = 'pending', attempts = 0, available_at = ?, last_error_code = NULL,
+           lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+         WHERE kind = 'index_revision' AND resource_id IN (${affectedRevisions})`,
+      ).bind(updatedAt, updatedAt, id),
+      this.db.prepare(
+        "UPDATE tags SET status = ?, updated_at = ? WHERE id = ? AND updated_at = ?",
+      ).bind(status, updatedAt, id, current.updated_at),
+      this.db.prepare(
+        "SELECT CASE WHEN changes() = 1 THEN 1 ELSE json_extract('tag-change-guard', '$') END AS ok",
+      ),
+    ]);
+    if (results.at(-2)?.meta.changes !== 1) throw new TagsRepositoryConflictError("target_invalid");
+    return mapTag({ ...current, status, updated_at: updatedAt });
   }
 
   async listActive(spaceId: string): Promise<Tag[]> {

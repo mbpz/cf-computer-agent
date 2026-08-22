@@ -9,12 +9,16 @@ import {
   type CitedAnswerAiInput,
 } from "../../src/ai/cited-answer-service";
 import { AppError } from "../../src/http";
+import { AuditRepository } from "../../src/audit/repository";
 import type { KnowledgeBase } from "../../src/index";
 import { createPublishedContentReader } from "../../src/knowledge/published-content";
 import type { PublishedContentReader, PublishedContentReceipt, RpcResult } from "../../src/knowledge/types";
 import { LibraryRepository } from "../../src/library/repository";
 import { encodeCitationId, LibraryService } from "../../src/library/service";
 import type { LibraryScope } from "../../src/library/types";
+import { PublicationRepository } from "../../src/publication/repository";
+import { SpacesRepository } from "../../src/spaces/repository";
+import { TagsRepository } from "../../src/tags/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 import { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "../fixtures/m1-search-ranking";
 
@@ -345,6 +349,40 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
+  it("keeps contributor BM25 scores, order, and cursor bytes isolated from admin-only corpus changes", async () => {
+    await seedKnowledge({
+      id: "knowledge-isolation-a", revisionId: "revision-isolation-a", title: "Shared A",
+      visibility: "shared", body: "isolationterm contributor evidence",
+    });
+    await seedKnowledge({
+      id: "knowledge-isolation-b", revisionId: "revision-isolation-b", title: "Shared B",
+      visibility: "shared", body: "isolationterm contributor evidence",
+    });
+    const service = serviceWithContent();
+    const contributorBefore = await service.search(contributor, { query: "isolationterm", limit: 1 });
+    const adminBefore = await service.search(admin, { query: "isolationterm", limit: 20 });
+
+    for (let index = 0; index < 12; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-isolation-admin-${index}`,
+        revisionId: `revision-isolation-admin-${index}`,
+        title: "isolationterm admin-only",
+        visibility: "admin_only",
+        body: `isolationterm hidden evidence ${index}`,
+      });
+    }
+
+    const contributorAfter = await service.search(contributor, { query: "isolationterm", limit: 1 });
+    const adminAfter = await service.search(admin, { query: "isolationterm", limit: 20 });
+
+    expect(contributorBefore.nextCursor).toBeDefined();
+    expect(contributorAfter).toEqual(contributorBefore);
+    expect(adminAfter.items.map((item) => item.knowledgeItemId))
+      .not.toEqual(adminBefore.items.map((item) => item.knowledgeItemId));
+    expect(adminAfter.items.some((item) => item.knowledgeItemId.startsWith("knowledge-isolation-admin-")))
+      .toBe(true);
+  });
+
   it("uses the fixed field weights and returns exact server-derived match explanations", async () => {
     await seedKnowledge({
       id: "knowledge-rank-title", revisionId: "revision-rank-title", title: "rankterm title",
@@ -464,6 +502,196 @@ describe("M1 permission-scoped library", () => {
         query: "collectionfilter", spaceId: "default", collectionId,
       })).resolves.toEqual({ items: [], degraded: false });
     }
+  });
+
+  it("atomically removes a disabled Collection from unfiltered search and requires reindex after reactivation", async () => {
+    const spaces = new SpacesRepository(env.DB);
+    await spaces.createCollection({
+      id: "collection-activity", spaceId: "default", parentId: null, name: "Activity",
+      description: "", status: "active", position: 1, createdAt: now, updatedAt: now,
+    });
+    await seedKnowledge({
+      id: "knowledge-collection-activity", revisionId: "revision-collection-activity",
+      title: "Collection activity", visibility: "shared", body: "collectionactivityterm",
+    });
+    await env.DB.prepare(
+      "UPDATE knowledge_items SET collection_id = 'collection-activity' WHERE id = 'knowledge-collection-activity'",
+    ).run();
+    const service = serviceWithContent();
+    await expect(service.search(contributor, { query: "collectionactivityterm" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-collection-activity" })] });
+
+    await spaces.updateCollection("collection-activity", {
+      status: "disabled", updatedAt: "2026-08-22T00:01:00.000Z",
+    });
+
+    await expect(service.search(contributor, { query: "collectionactivityterm" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(indexActivityState("knowledge-collection-activity")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-collection-activity"))
+      .resolves.toBe("pending");
+    await expect(indexActivityState("knowledge-collection-activity")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+
+    await spaces.updateCollection("collection-activity", {
+      status: "active", updatedAt: "2026-08-22T00:02:00.000Z",
+    });
+    await expect(service.search(contributor, { query: "collectionactivityterm" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-collection-activity"))
+      .resolves.toBe("indexed");
+    await expect(service.search(contributor, { query: "collectionactivityterm" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-collection-activity" })] });
+  });
+
+  it("invalidates a disabled Space corpus and keeps reactivation pending until reindex", async () => {
+    await seedKnowledge({
+      id: "knowledge-space-activity", revisionId: "revision-space-activity",
+      title: "Space activity", visibility: "shared", spaceId: "space-two", body: "spaceactivityterm",
+    });
+    const spaces = new SpacesRepository(env.DB);
+    const service = serviceWithContent();
+    await expect(service.search(contributor, { query: "spaceactivityterm", spaceId: "space-two" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-space-activity" })] });
+
+    await spaces.updateSpace("space-two", {
+      status: "disabled", updatedAt: "2026-08-22T00:01:00.000Z",
+    });
+    await expect(indexActivityState("knowledge-space-activity")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+
+    await spaces.updateSpace("space-two", {
+      status: "active", updatedAt: "2026-08-22T00:02:00.000Z",
+    });
+    await expect(service.search(contributor, { query: "spaceactivityterm", spaceId: "space-two" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-space-activity"))
+      .resolves.toBe("indexed");
+    await expect(service.search(contributor, { query: "spaceactivityterm", spaceId: "space-two" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-space-activity" })] });
+  });
+
+  it("lets a concurrent Collection disable win before an index replacement becomes visible", async () => {
+    const spaces = new SpacesRepository(env.DB);
+    await spaces.createCollection({
+      id: "collection-index-race", spaceId: "default", parentId: null, name: "Race",
+      description: "", status: "active", position: 2, createdAt: now, updatedAt: now,
+    });
+    await seedKnowledge({
+      id: "knowledge-index-race", revisionId: "revision-index-race", title: "Index race",
+      visibility: "shared", body: "indexraceterm",
+    });
+    await env.DB.prepare(
+      "UPDATE knowledge_items SET collection_id = 'collection-index-race' WHERE id = 'knowledge-index-race'",
+    ).run();
+    await spaces.updateCollection("collection-index-race", {
+      status: "disabled", updatedAt: "2026-08-22T00:01:00.000Z",
+    });
+    await spaces.updateCollection("collection-index-race", {
+      status: "active", updatedAt: "2026-08-22T00:02:00.000Z",
+    });
+
+    let enterBatch!: () => void;
+    let releaseBatch!: () => void;
+    const entered = new Promise<void>((resolve) => { enterBatch = resolve; });
+    const released = new Promise<void>((resolve) => { releaseBatch = resolve; });
+    let paused = false;
+    const racingDb = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            if (!paused) {
+              paused = true;
+              enterBatch();
+              await released;
+            }
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const indexing = new PublicationRepository(racingDb, {
+      now: () => new Date("2026-08-22T00:03:00.000Z"),
+      leaseToken: () => "collection-race-indexer",
+    }).processIndexJob("revision-index-race");
+    await entered;
+    await spaces.updateCollection("collection-index-race", {
+      status: "disabled", updatedAt: "2026-08-22T00:04:00.000Z",
+    });
+    releaseBatch();
+
+    await expect(indexing).resolves.toBe("pending");
+    await expect(indexActivityState("knowledge-index-race")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+  });
+
+  it("rolls back corpus invalidation when an audited Space status mutation fails", async () => {
+    await seedKnowledge({
+      id: "knowledge-space-rollback", revisionId: "revision-space-rollback",
+      title: "Space rollback", visibility: "shared", spaceId: "space-two", body: "spacerollbackterm",
+    });
+    const audit = new AuditRepository(env.DB);
+    await audit.writeAudit({
+      id: "duplicate-space-status-audit", actorKind: "member", actorId: "admin-1",
+      action: "space.updated", resourceType: "space", resourceId: "unrelated",
+      metadata: { previousStatus: "active", newStatus: "disabled" }, createdAt: now,
+    });
+    const spaces = new SpacesRepository(env.DB, audit);
+
+    await expect(spaces.updateSpaceWithAudit("space-two", {
+      status: "disabled", updatedAt: "2026-08-22T00:01:00.000Z",
+    }, {
+      id: "duplicate-space-status-audit", actorKind: "member", actorId: "admin-1",
+      action: "space.updated", resourceType: "space", resourceId: "space-two",
+      metadata: { previousStatus: "active", newStatus: "disabled" },
+      createdAt: "2026-08-22T00:01:00.000Z",
+    })).rejects.toThrow();
+
+    await expect(spaces.findSpaceById("space-two")).resolves.toMatchObject({ status: "active" });
+    await expect(indexActivityState("knowledge-space-rollback")).resolves.toEqual({
+      searchStatus: "indexed", jobState: "completed", adminRows: 1, sharedRows: 1,
+    });
+    await expect(serviceWithContent().search(contributor, {
+      query: "spacerollbackterm", spaceId: "space-two",
+    })).resolves.toMatchObject({
+      items: [expect.objectContaining({ knowledgeItemId: "knowledge-space-rollback" })],
+    });
+  });
+
+  it("invalidates stale Tag text and keeps reactivated Tags nonsearchable until the bounded index job completes", async () => {
+    await seedTag("statusmarker", "default", "active");
+    await seedKnowledge({
+      id: "knowledge-tag-activity", revisionId: "revision-tag-activity",
+      title: "Tag activity", visibility: "shared", body: "ordinary evidence",
+      searchTags: "statusmarker", tagIds: ["statusmarker"],
+    });
+    const tags = new TagsRepository(env.DB);
+    const service = serviceWithContent();
+    await expect(service.search(contributor, { query: "statusmarker" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-tag-activity" })] });
+
+    await tags.updateStatus("statusmarker", "disabled", "2026-08-22T00:01:00.000Z");
+
+    await expect(service.search(contributor, { query: "statusmarker" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(indexActivityState("knowledge-tag-activity")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+
+    await tags.updateStatus("statusmarker", "active", "2026-08-22T00:02:00.000Z");
+    await expect(service.search(contributor, { query: "statusmarker" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-tag-activity"))
+      .resolves.toBe("indexed");
+    await expect(service.search(contributor, { query: "statusmarker" }))
+      .resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-tag-activity" })] });
   });
 
   it("centers excerpts on exact lexical tokens instead of prefixed substrings", async () => {
@@ -1058,22 +1286,11 @@ describe("M1 permission-scoped library", () => {
       .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
   });
 
-  it("uses selective Space, Collection, and Tag plans without full-table scans at 10,000-row shape", async () => {
-    await env.DB.prepare(
-      `WITH RECURSIVE sequence(value) AS (
-         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 10000
-       )
-       INSERT INTO knowledge_items (
-         id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at
-       )
-       SELECT printf('decoy-%04d', value), 'default', NULL, NULL, 'active', 'indexed', ?, ?
-       FROM sequence`,
-    ).bind(now, now).run();
+  it("uses both selective active corpora without relational scans at a 10,000-Revision production shape", async () => {
+    await seedProductionSearchScale(10_000);
     const prepared: string[] = [];
     const database = capturePreparedSql(env.DB, prepared);
     const service = new LibraryService(new LibraryRepository(database), noContentReader);
-    await seedTag("tag-plan-a", "default", "active");
-    await seedTag("tag-plan-b", "default", "active");
 
     await expect(service.list(contributor, { spaceId: "space-empty", limit: 20 }))
       .resolves.toEqual({ items: [] });
@@ -1088,6 +1305,15 @@ describe("M1 permission-scoped library", () => {
     await service.search(contributor, {
       query: "planterm", spaceId: "default", tagIds: ["tag-plan-a", "tag-plan-b"], tagMode: "or",
     });
+    const bounded = await service.search(contributor, { query: "planterm", spaceId: "default", limit: 50 });
+    expect(bounded.items).toHaveLength(50);
+    expect(bounded.nextCursor).toBeDefined();
+    const boundedNext = await service.search(contributor, {
+      query: "planterm", spaceId: "default", limit: 50, cursor: bounded.nextCursor,
+    });
+    expect(boundedNext.items).toHaveLength(50);
+    expect(new Set([...bounded.items, ...boundedNext.items].map((item) => item.chunkId))).toHaveLength(100);
+    await service.search(admin, { query: "planterm", spaceId: "default", limit: 50 });
 
     const listSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC"));
     const degradedSql = prepared.find((sql) => sql.includes("k.search_status = 'search_degraded'"));
@@ -1097,28 +1323,39 @@ describe("M1 permission-scoped library", () => {
     const degradedPlan = await explain(degradedSql!, ["member-1", "contributor", "space-empty"]);
     expect(listPlan).toContain("knowledge_items_space_page");
     expect(degradedPlan).toContain("knowledge_items_degraded_scope");
-    const searchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts"));
-    expect(searchSql).toHaveLength(4);
-    const collectionPlan = await explain(searchSql[1]!, [
+    const sharedSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts_shared"));
+    const adminSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts,"));
+    expect(sharedSearchSql).toHaveLength(6);
+    expect(adminSearchSql).toHaveLength(1);
+    const collectionPlan = await explain(sharedSearchSql[1]!, [
       "member-1", "contributor", "\"planterm\"", "default", "collection-plan", "collection-plan", 21,
     ]);
-    const andPlan = await explain(searchSql[2]!, [
+    const andPlan = await explain(sharedSearchSql[2]!, [
       "member-1", "contributor", "\"planterm\"", "default",
       "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 2, 21,
     ]);
-    const orPlan = await explain(searchSql[3]!, [
+    const orPlan = await explain(sharedSearchSql[3]!, [
       "member-1", "contributor", "\"planterm\"", "default",
       "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
+    ]);
+    const adminPlan = await explain(adminSearchSql[0]!, [
+      "admin-1", "admin", "\"planterm\"", "default", 51,
     ]);
     expect(andPlan).toContain("revision_tags_tag_revision");
     expect(orPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(andPlan).toContain("sqlite_autoindex_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_tags_1");
+    expect(collectionPlan).toContain("knowledge_items_collection_reindex");
     for (const plan of [collectionPlan, andPlan, orPlan]) {
-      expect(plan).toContain("SCAN chunks_fts VIRTUAL TABLE INDEX");
-      expect(plan).toContain("knowledge_items_current_revision_index_status");
-      expect(plan).not.toMatch(/SCAN knowledge_items(?:\s|$)/u);
+      expect(plan).toContain("SCAN chunks_fts_shared VIRTUAL TABLE INDEX");
+      expect(plan).toMatch(/knowledge_items_(?:current_revision_index_status|collection_reindex)/u);
+      expect(plan).toContain("USE TEMP B-TREE FOR ORDER BY");
+      expect(plan).not.toMatch(/SCAN (?:knowledge_items|revisions|chunks|jobs|spaces|collections|tags|revision_tags)(?:\s|$)/u);
     }
+    expect(adminPlan).toContain("SCAN chunks_fts VIRTUAL TABLE INDEX");
+    expect(adminPlan).toContain("knowledge_items_current_revision_index_status");
+    expect(adminPlan).toContain("USE TEMP B-TREE FOR ORDER BY");
+    expect(adminPlan).not.toMatch(/SCAN (?:knowledge_items|revisions|chunks|jobs|spaces|collections|tags|revision_tags)(?:\s|$)/u);
   });
 
   it("lets only D1-authorized stored path/hash values reach the real published-content reader", async () => {
@@ -1337,6 +1574,13 @@ async function seedKnowledge(input: SeedKnowledgeInput): Promise<void> {
          CASE WHEN index_field = 'code' THEN ? ELSE '' END
        FROM chunks WHERE id = ?`,
     ).bind(input.title, input.summary ?? "", input.searchTags ?? "", searchBody, searchBody, `${input.revisionId}-chunk-0`)]),
+    ...(input.index === false || input.visibility !== "shared" ? [] : [env.DB.prepare(
+      `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT rowid, id, ?, ?, ?,
+         CASE WHEN index_field = 'body' THEN ? ELSE '' END,
+         CASE WHEN index_field = 'code' THEN ? ELSE '' END
+       FROM chunks WHERE id = ?`,
+    ).bind(input.title, input.summary ?? "", input.searchTags ?? "", searchBody, searchBody, `${input.revisionId}-chunk-0`)]),
   ]);
 }
 
@@ -1344,6 +1588,209 @@ async function seedTag(id: string, spaceId: string, status: "active" | "disabled
   await env.DB.prepare(
     "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   ).bind(id, spaceId, id, id, status, now, now).run();
+}
+
+async function seedProductionSearchScale(count: number): Promise<void> {
+  if (!Number.isSafeInteger(count) || count < 1 || count > 10_000) throw new Error("invalid scale count");
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-plan', 'default', NULL, 'Plan', '', 'active', 10, ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-scale-disabled', 'default', NULL, 'Disabled scale', '', 'disabled', 11, ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-plan-a', 'default', 'tag-plan-a', 'Plan A', 'active', ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-plan-b', 'default', 'tag-plan-b', 'Plan B', 'active', ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES ('tag-plan-disabled', 'default', 'staletagterm', 'Stale Tag Term', 'disabled', ?, ?)",
+    ).bind(now, now),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO submissions (
+         id, submitter_id, requested_space_id, requested_collection_id, kind, status,
+         title, content, idempotency_key, created_at, updated_at
+       )
+       SELECT printf('scale-submission-%05d', value), 'member-1',
+         CASE WHEN value % 7 = 0 THEN 'space-two' ELSE 'default' END,
+         CASE WHEN value % 7 = 0 THEN NULL
+           WHEN value % 17 = 0 THEN 'collection-scale-disabled'
+           WHEN value % 3 = 0 THEN 'collection-plan' ELSE NULL END,
+         'markdown', 'published', printf('Scale %05d', value),
+         printf('# Scale %05d\n\nplanterm evidence %05d\n', value, value), NULL, ?, ?
+       FROM sequence`,
+    ).bind(count, now, now),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at)
+       SELECT printf('scale-source-%05d', value), 'member-1',
+         CASE WHEN value % 7 = 0 THEN 'space-two' ELSE 'default' END,
+         CASE WHEN value % 7 = 0 THEN NULL
+           WHEN value % 17 = 0 THEN 'collection-scale-disabled'
+           WHEN value % 3 = 0 THEN 'collection-plan' ELSE NULL END,
+         'markdown', printf('Scale %05d', value), ?, ? FROM sequence`,
+    ).bind(count, now, now),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO source_versions (
+         id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at
+       )
+       SELECT printf('scale-version-%05d', value), printf('scale-source-%05d', value),
+         printf('scale-submission-%05d', value), 1, printf('planterm evidence %05d', value),
+         printf('%064d', value), 'm1-v1', ? FROM sequence`,
+    ).bind(count, now),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO knowledge_items (
+         id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at
+       )
+       SELECT printf('scale-item-%05d', value),
+         CASE WHEN value % 7 = 0 THEN 'space-two' ELSE 'default' END,
+         CASE WHEN value % 7 = 0 THEN NULL
+           WHEN value % 17 = 0 THEN 'collection-scale-disabled'
+           WHEN value % 3 = 0 THEN 'collection-plan' ELSE NULL END,
+         NULL, CASE WHEN value % 19 = 0 THEN 'trashed' ELSE 'active' END,
+         CASE WHEN value % 23 = 0 THEN 'pending' ELSE 'indexed' END, ?, ? FROM sequence`,
+    ).bind(count, now, now),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO revisions (
+         id, knowledge_item_id, source_version_id, normalized_path, content_sha256,
+         title, summary, tags_json, visibility, published_by, published_at
+       )
+       SELECT printf('scale-revision-%05d', value), printf('scale-item-%05d', value),
+         printf('scale-version-%05d', value), printf('/scale/%05d.md', value), printf('%064d', value),
+         printf('Scale %05d', value), 'production shaped scale evidence',
+         CASE WHEN value % 6 = 0 THEN '["tag-plan-a","tag-plan-b"]'
+           WHEN value % 2 = 0 THEN '["tag-plan-a"]'
+           WHEN value % 3 = 0 THEN '["tag-plan-b"]' ELSE '[]' END,
+         CASE WHEN value % 10 = 0 THEN 'admin_only' ELSE 'shared' END,
+         'admin-1', ? FROM sequence`,
+    ).bind(count, now),
+    env.DB.prepare(
+      `UPDATE knowledge_items SET current_revision_id =
+         'scale-revision-' || substr(id, length('scale-item-') + 1)
+       WHERE id LIKE 'scale-item-%'`,
+    ),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO chunks (
+         id, revision_id, ordinal, heading_path, start_line, end_line, body,
+         search_title, search_tags, search_body, index_field
+       )
+       SELECT printf('scale-chunk-%05d', value), printf('scale-revision-%05d', value), 0,
+         '["Scale"]', 3, 3, printf('planterm evidence %05d', value), printf('Scale %05d', value),
+         CASE WHEN value % 5 = 0 THEN 'staletagterm' ELSE '' END,
+         printf('planterm evidence %05d', value), CASE WHEN value % 11 = 0 THEN 'code' ELSE 'body' END
+       FROM sequence`,
+    ).bind(count),
+    env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < ?
+       )
+       INSERT INTO jobs (
+         id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+       )
+       SELECT printf('scale-job-%05d', value), 'index_revision', printf('scale-revision-%05d', value),
+         CASE WHEN value % 23 = 0 THEN 'pending' ELSE 'completed' END,
+         CASE WHEN value % 23 = 0 THEN 0 ELSE 1 END, ?, NULL, ?, ? FROM sequence`,
+    ).bind(count, now, now, now),
+    env.DB.prepare(
+      `INSERT INTO revision_tags (revision_id, tag_id)
+       SELECT id, 'tag-plan-a' FROM revisions
+       WHERE id LIKE 'scale-revision-%' AND CAST(substr(id, -5) AS INTEGER) % 2 = 0`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO revision_tags (revision_id, tag_id)
+       SELECT id, 'tag-plan-b' FROM revisions
+       WHERE id LIKE 'scale-revision-%' AND CAST(substr(id, -5) AS INTEGER) % 3 = 0`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO revision_tags (revision_id, tag_id)
+       SELECT id, 'tag-plan-disabled' FROM revisions
+       WHERE id LIKE 'scale-revision-%' AND CAST(substr(id, -5) AS INTEGER) % 5 = 0`,
+    ),
+  ]);
+  const activeRows = `FROM chunks c
+    JOIN revisions r ON r.id = c.revision_id
+    JOIN knowledge_items k ON k.current_revision_id = r.id
+    JOIN jobs j ON j.kind = 'index_revision' AND j.resource_id = r.id AND j.state = 'completed'
+    JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+    LEFT JOIN collections collection_state ON collection_state.id = k.collection_id
+      AND collection_state.space_id = k.space_id AND collection_state.status = 'active'
+    WHERE c.id LIKE 'scale-chunk-%' AND k.status = 'active' AND k.search_status = 'indexed'
+      AND (k.collection_id IS NULL OR collection_state.id IS NOT NULL)`;
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT c.rowid, c.id, r.title, r.summary,
+         trim(CASE WHEN CAST(substr(r.id, -5) AS INTEGER) % 2 = 0 THEN 'tag-plan-a Plan A ' ELSE '' END
+           || CASE WHEN CAST(substr(r.id, -5) AS INTEGER) % 3 = 0 THEN 'tag-plan-b Plan B' ELSE '' END),
+         CASE WHEN c.index_field = 'body' THEN c.search_body ELSE '' END,
+         CASE WHEN c.index_field = 'code' THEN c.search_body ELSE '' END ${activeRows}`,
+    ),
+    env.DB.prepare(
+      `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT c.rowid, c.id, r.title, r.summary,
+         trim(CASE WHEN CAST(substr(r.id, -5) AS INTEGER) % 2 = 0 THEN 'tag-plan-a Plan A ' ELSE '' END
+           || CASE WHEN CAST(substr(r.id, -5) AS INTEGER) % 3 = 0 THEN 'tag-plan-b Plan B' ELSE '' END),
+         CASE WHEN c.index_field = 'body' THEN c.search_body ELSE '' END,
+         CASE WHEN c.index_field = 'code' THEN c.search_body ELSE '' END ${activeRows}
+       AND r.visibility = 'shared'`,
+    ),
+  ]);
+}
+
+async function indexActivityState(knowledgeItemId: string): Promise<{
+  searchStatus: string;
+  jobState: string;
+  adminRows: number;
+  sharedRows: number;
+}> {
+  const state = await env.DB.prepare(
+    `SELECT k.search_status, j.state AS job_state
+     FROM knowledge_items k JOIN jobs j
+       ON j.kind = 'index_revision' AND j.resource_id = k.current_revision_id
+     WHERE k.id = ? LIMIT 1`,
+  ).bind(knowledgeItemId).first<{ search_status: string; job_state: string }>();
+  if (!state) throw new Error("missing index activity state");
+  const [admin, shared] = await Promise.all([
+    env.DB.prepare(
+      `SELECT count(*) AS count FROM chunks_fts
+       WHERE chunk_id IN (
+         SELECT c.id FROM chunks c JOIN revisions r ON r.id = c.revision_id
+         WHERE r.knowledge_item_id = ?
+       )`,
+    ).bind(knowledgeItemId).first<{ count: number }>(),
+    env.DB.prepare(
+      `SELECT count(*) AS count FROM chunks_fts_shared
+       WHERE chunk_id IN (
+         SELECT c.id FROM chunks c JOIN revisions r ON r.id = c.revision_id
+         WHERE r.knowledge_item_id = ?
+       )`,
+    ).bind(knowledgeItemId).first<{ count: number }>(),
+  ]);
+  return {
+    searchStatus: state.search_status,
+    jobState: state.job_state,
+    adminRows: admin?.count ?? -1,
+    sharedRows: shared?.count ?? -1,
+  };
 }
 
 async function addCurrentRevision(input: Omit<SeedKnowledgeInput, "id" | "spaceId" | "status" | "searchStatus"> & {
@@ -1378,6 +1825,10 @@ async function addCurrentRevision(input: Omit<SeedKnowledgeInput, "id" | "spaceI
     ...(input.index === false ? [] : [env.DB.prepare(
       "INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES (?, ?, '', ?)",
     ).bind(`${input.revisionId}-chunk-0`, input.title, searchBody)]),
+    ...(input.index === false || input.visibility !== "shared" ? [] : [env.DB.prepare(
+      `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT rowid, id, ?, '', '', search_body, '' FROM chunks WHERE id = ?`,
+    ).bind(input.title, `${input.revisionId}-chunk-0`)]),
   ]);
 }
 

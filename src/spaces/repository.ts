@@ -37,8 +37,13 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     const current = await this.findSpaceById(id); if (!current) return null;
     const next = { ...current, ...defined(input) };
     try {
-      const result = await this.db.prepare("UPDATE spaces SET slug = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND kind != 'legacy' AND read_only = 0")
-        .bind(next.slug, next.name, next.description, next.status, next.position, input.updatedAt, id).run();
+      const update = this.db.prepare("UPDATE spaces SET slug = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND kind != 'legacy' AND read_only = 0")
+        .bind(next.slug, next.name, next.description, next.status, next.position, input.updatedAt, id);
+      const result = current.status === next.status
+        ? await update.run()
+        : (await this.db.batch([
+          ...this.prepareSpaceSearchInvalidation(id, input.updatedAt), update, this.changeGuard(),
+        ])).at(-2)!;
       if (!result.meta.changes) throw new SpacesRepositoryConflictError("space_read_only");
     } catch (error) { throwKnownSpaceConflict(error); }
     return { ...next, updatedAt: input.updatedAt };
@@ -49,12 +54,17 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     const next = { ...current, ...defined(input) };
     assertSpaceUpdateAudit(current, next, audit);
     try {
+      const invalidation = current.status === next.status
+        ? []
+        : this.prepareSpaceSearchInvalidation(id, input.updatedAt);
       const results = await this.db.batch([
+        ...invalidation,
         this.prepareUpdateSpace(id, current, next, input.updatedAt),
+        ...(invalidation.length > 0 ? [this.changeGuard()] : []),
         this.audit.prepareResourceWriteAudit(audit, { table: "spaces", id }),
       ]);
-      if (results[0]?.meta.changes !== 1) throw new SpacesRepositoryConflictError("space_read_only");
-      if (results[1]?.meta.changes !== 1) throw new Error("Space audit write did not persist");
+      if (results[invalidation.length]?.meta.changes !== 1) throw new SpacesRepositoryConflictError("space_read_only");
+      if (results.at(-1)?.meta.changes !== 1) throw new Error("Space audit write did not persist");
     } catch (error) { throwKnownSpaceConflict(error); }
     return { ...next, updatedAt: input.updatedAt };
   }
@@ -84,7 +94,12 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
   async updateCollection(id: string, input: UpdateCollection): Promise<Collection | null> {
     const current = await this.findCollectionById(id); if (!current) return null;
     const next = { ...current, ...defined(input) };
-    const result = await this.prepareCycleSafeCollectionUpdate(id, next, input.updatedAt).run();
+    const update = this.prepareCycleSafeCollectionUpdate(id, next, input.updatedAt);
+    const result = current.status === next.status
+      ? await update.run()
+      : (await this.db.batch([
+        ...this.prepareCollectionSearchInvalidation(id, input.updatedAt), update, this.changeGuard(),
+      ])).at(-2)!;
     if (!result.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
     return { ...next, updatedAt: input.updatedAt };
   }
@@ -93,12 +108,17 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     const current = await this.findCollectionById(id); if (!current) return null;
     const next = { ...current, ...defined(input) };
     assertCollectionUpdateAudit(current, next, audit);
+    const invalidation = current.status === next.status
+      ? []
+      : this.prepareCollectionSearchInvalidation(id, input.updatedAt);
     const results = await this.db.batch([
+      ...invalidation,
       this.prepareUpdateCollection(id, current, next, input.updatedAt),
+      ...(invalidation.length > 0 ? [this.changeGuard()] : []),
       this.audit.prepareResourceWriteAudit(audit, { table: "collections", id }),
     ]);
-    if (!results[0]?.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
-    if (results[1]?.meta.changes !== 1) throw new Error("Collection audit write did not persist");
+    if (!results[invalidation.length]?.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
+    if (results.at(-1)?.meta.changes !== 1) throw new Error("Collection audit write did not persist");
     return { ...next, updatedAt: input.updatedAt };
   }
   async listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage> {
@@ -115,6 +135,41 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
   private prepareCreateSpace(input: CreateSpace): D1PreparedStatement {
     return this.db.prepare("INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at) VALUES (?, ?, ?, ?, 'shared', ?, ?, 0, ?, ?)")
       .bind(input.id, input.slug, input.name, input.description, input.status, input.position, input.createdAt, input.updatedAt);
+  }
+  private prepareSpaceSearchInvalidation(spaceId: string, timestamp: string): D1PreparedStatement[] {
+    return this.prepareSearchInvalidation("k.space_id = ?", spaceId, timestamp);
+  }
+  private prepareCollectionSearchInvalidation(collectionId: string, timestamp: string): D1PreparedStatement[] {
+    return this.prepareSearchInvalidation("k.collection_id = ?", collectionId, timestamp);
+  }
+  private prepareSearchInvalidation(
+    predicate: "k.space_id = ?" | "k.collection_id = ?",
+    targetId: string,
+    timestamp: string,
+  ): D1PreparedStatement[] {
+    const currentRowids = `SELECT c.rowid FROM knowledge_items k
+      JOIN chunks c ON c.revision_id = k.current_revision_id
+      WHERE k.status = 'active' AND ${predicate}`;
+    const currentRevisions = `SELECT k.current_revision_id FROM knowledge_items k
+      WHERE k.status = 'active' AND k.current_revision_id IS NOT NULL AND ${predicate}`;
+    return [
+      this.db.prepare(`DELETE FROM chunks_fts WHERE rowid IN (${currentRowids})`).bind(targetId),
+      this.db.prepare(`DELETE FROM chunks_fts_shared WHERE rowid IN (${currentRowids})`).bind(targetId),
+      this.db.prepare(
+        `UPDATE knowledge_items AS k SET search_status = 'pending'
+         WHERE k.status = 'active' AND k.current_revision_id IS NOT NULL AND ${predicate}`,
+      ).bind(targetId),
+      this.db.prepare(
+        `UPDATE jobs SET state = 'pending', attempts = 0, available_at = ?, last_error_code = NULL,
+           lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+         WHERE kind = 'index_revision' AND resource_id IN (${currentRevisions})`,
+      ).bind(timestamp, timestamp, targetId),
+    ];
+  }
+  private changeGuard(): D1PreparedStatement {
+    return this.db.prepare(
+      "SELECT CASE WHEN changes() = 1 THEN 1 ELSE json_extract('space-change-guard', '$') END AS ok",
+    );
   }
   private prepareUpdateSpace(id: string, current: Space, next: Space, updatedAt: string): D1PreparedStatement {
     return this.db.prepare("UPDATE spaces SET slug = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND updated_at = ?")
