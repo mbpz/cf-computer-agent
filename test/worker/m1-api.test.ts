@@ -394,6 +394,10 @@ describe("M1 API authorization and request boundaries", () => {
     await expectApiError(memberApi("contributor", "/api/knowledge?limit=51"), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/absent?spaceId=default"), 400, "LIBRARY_REQUEST_INVALID");
+    expect((await memberApi("contributor", "/api/submissions/mine?status=review_pending")).status).toBe(200);
+    await expectApiError(memberApi("contributor", "/api/submissions/mine?status=draft"), 400, "PAGE_INVALID");
+    await expectApiError(memberApi("contributor", "/api/submissions/mine?status=published&status=rejected"), 400, "PAGE_INVALID");
+    await expectApiError(memberApi("contributor", "/api/submissions/mine?ownerId=member-other"), 400, "PAGE_INVALID");
     await expectApiError(memberApi(
       "contributor",
       "/api/knowledge/item/revisions/revision/download?path=%2Fworkspace%2Fsecret&hash=forged",

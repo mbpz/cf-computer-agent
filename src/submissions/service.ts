@@ -1,13 +1,20 @@
 import { AppError } from "../http";
 import { decodeSourceBytes } from "../sources/decoder";
-import { parsePageRequest, type PageRequest } from "../pagination";
+import { deriveCursorScopeKey, parsePageRequest, type PageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
   SubmissionsRepositoryConflictError,
   type PersistedSubmission,
   type SubmissionsRepositoryPort,
 } from "./repository";
-import type { Submission, SubmissionCreateResult, SubmissionKind, SubmissionPage } from "./types";
+import type {
+  Submission,
+  SubmissionCreateResult,
+  SubmissionKind,
+  SubmissionPage,
+  SubmissionPageRequest,
+  SubmissionStatusFilter,
+} from "./types";
 
 export interface CreateSubmissionInput { requestedSpaceId: string; requestedCollectionId?: string | null; requestedVisibility?: "shared" | "admin_only"; kind: SubmissionKind; title: string; content: string; }
 export interface CreateSourceSubmissionInput extends Omit<CreateSubmissionInput, "content"> {
@@ -179,8 +186,27 @@ export class SubmissionsService {
     }
   }
 
-  listOwn(submitterId: string, request?: PageRequest): Promise<SubmissionPage> { return this.repository.listOwned(submitterId, parsePageRequest(request?.limit, request?.cursor)); }
+  async listOwn(submitterId: string, request: SubmissionPageRequest = {}): Promise<SubmissionPage> {
+    const status = validateStatusFilter(request.status);
+    const page = parsePageRequest(request.limit, request.cursor);
+    return this.repository.listOwned(submitterId, {
+      ...page,
+      ...(status === undefined ? {} : { status }),
+      cursorKey: await deriveCursorScopeKey("own-submissions", {
+        memberId: submitterId,
+        status: status ?? null,
+        sort: "created_at-desc-id-desc",
+      }),
+    });
+  }
   listPending(request?: PageRequest): Promise<SubmissionPage> { return this.repository.listPending(parsePageRequest(request?.limit, request?.cursor)); }
+}
+
+function validateStatusFilter(status: unknown): SubmissionStatusFilter | undefined {
+  if (status === undefined) return undefined;
+  if (status === "review_pending" || status === "published" || status === "rejected"
+    || status === "revision_requested") return status;
+  throw new AppError("PAGE_INVALID", "Submission status filter is invalid", 400);
 }
 
 function resolveSourceContent(input: CreateSourceSubmissionInput): string {

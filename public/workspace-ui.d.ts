@@ -6,12 +6,24 @@ export interface RouteGuard {
   owns(owner: Readonly<{ generation: number; pathname: string }>, pathname: string): boolean;
 }
 
+export function configureWorkspaceI18n(
+  translate: (key: string, values?: Readonly<Record<string, string | number>>) => string,
+): void;
+
 export function createRouteGuard(): RouteGuard;
 export interface OperationGuard {
   begin(): number;
   isCurrent(value: number): boolean;
 }
 export function createOperationGuard(): OperationGuard;
+export function createLocaleRerenderController(
+  initialLocale: string,
+  callbacks: {
+    closeDialogs(): void;
+    applyLocale(locale: string): void;
+    rerenderRoute(): void;
+  },
+): Readonly<{ apply(locale: string): boolean }>;
 export interface ReplaceableOwner {
   claim(): () => boolean;
 }
@@ -46,7 +58,7 @@ export function drawerState(open: boolean): Readonly<{
   ariaExpanded: "true" | "false";
   ariaHidden: "true" | "false";
   inert: boolean;
-  label: "Open navigation" | "Close navigation";
+  label: string;
 }>;
 export function drawerStateForViewport(mobile: boolean, open: boolean): ReturnType<typeof drawerState>;
 export function anonymousShellState(): Readonly<{
@@ -96,8 +108,8 @@ export function createReviewTagController(options: {
 }): ReviewTagController;
 export function reviewTagLoadMoreModel(value: unknown): Readonly<{
   visible: boolean;
-  label: "Load more Tags" | "Loading more Tags…";
-  accessibleName: "Load more Tags in the requested Space";
+  label: string;
+  accessibleName: string;
   disabled: boolean;
 }>;
 export type OptionPageResource = "spaces" | "collections" | "tags";
@@ -172,7 +184,7 @@ export interface KnowledgeListViewItem {
   href: string;
   revisionId: string;
   visibility: "shared" | "admin_only";
-  visibilityLabel: "Shared" | "Admin only";
+  visibilityLabel: string;
   searchStatus: "pending" | "indexed" | "search_degraded" | "failed";
   tagIds: string[];
   publishedAt: string;
@@ -199,6 +211,7 @@ export function createChatItemPageController(options: {
   loadMore: () => Promise<unknown>;
   snapshot: () => Readonly<ChatItemPageState>;
 }>;
+export function chatScopeSummaryModel(scopeLabel: string, complete: boolean): string;
 
 export interface KnowledgeSearchViewItem {
   citationId: string;

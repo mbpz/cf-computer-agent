@@ -1,9 +1,16 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
-import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
+import { AppError } from "../http";
+import { decodeOpaqueCursor, decodePageCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
 import { SourcesRepository } from "../sources/repository";
 import type { Source, SourceVersion } from "../sources/types";
-import type { CreateSubmission, Submission, SubmissionCreateResult, SubmissionPage } from "./types";
+import type {
+  CreateSubmission,
+  Submission,
+  SubmissionCreateResult,
+  SubmissionPage,
+  SubmissionPageRepositoryRequest,
+} from "./types";
 
 export type SubmissionsRepositoryConflictKind = "target_invalid" | "idempotency_conflict" | "resubmission_conflict";
 export class SubmissionsRepositoryConflictError extends Error { constructor(readonly kind: SubmissionsRepositoryConflictKind) { super(`Submission conflict: ${kind}`); } }
@@ -22,7 +29,7 @@ export interface SubmissionsRepositoryPort {
   createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null>;
   createResubmissionWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
-  listOwned(submitterId: string, request: PageRequest): Promise<SubmissionPage>;
+  listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage>;
   listPending(request: PageRequest): Promise<SubmissionPage>;
 }
 
@@ -192,8 +199,28 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     return { submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null };
   }
 
-  async listOwned(submitterId: string, request: PageRequest): Promise<SubmissionPage> {
-    return this.listPage("WHERE submitter_id = ?", [submitterId], request);
+  async listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage> {
+    assertCursorKey(request.cursorKey);
+    const cursor = request.cursor === undefined
+      ? undefined
+      : decodeOwnedSubmissionCursor(request.cursor, request.cursorKey);
+    const statusSql = request.status === undefined ? "" : " AND status = ?";
+    const cursorSql = cursor === undefined
+      ? ""
+      : " AND (created_at < ? OR (created_at = ? AND id < ?))";
+    const cursorBindings = cursor === undefined
+      ? []
+      : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id];
+    const rows = await this.db.prepare(
+      `${submissionSelect} WHERE submitter_id = ?${statusSql}${cursorSql}
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+    ).bind(
+      submitterId,
+      ...(request.status === undefined ? [] : [request.status]),
+      ...cursorBindings,
+      request.limit + 1,
+    ).all<SubmissionRow>();
+    return ownedPage(rows.results.map(mapSubmissionRow), request.limit, request.cursorKey);
   }
 
   async listPending(request: PageRequest): Promise<SubmissionPage> {
@@ -244,7 +271,53 @@ FROM submissions s
 JOIN source_versions sv ON sv.submission_id = s.id
 JOIN sources src ON src.id = sv.source_id`;
 function timestamp(sort: number): string { return new Date(sort).toISOString(); }
-function page(items: Submission[], limit: number): SubmissionPage { const result = items.slice(0, limit); return { items: result, ...(items.length > limit ? { nextCursor: encodePageCursor({ sort: Date.parse(result.at(-1)!.createdAt), id: result.at(-1)!.id }) } : {}) }; }
+function page(items: Submission[], limit: number): SubmissionPage {
+  const result = items.slice(0, limit);
+  return {
+    items: result,
+    ...(items.length > limit ? {
+      nextCursor: encodeOpaqueCursor({
+        v: 1, sort: Date.parse(result.at(-1)!.createdAt), id: result.at(-1)!.id,
+      }),
+    } : {}),
+  };
+}
+function ownedPage(items: Submission[], limit: number, cursorKey: string): SubmissionPage {
+  const result = items.slice(0, limit);
+  const last = result.at(-1);
+  return {
+    items: result,
+    ...(items.length > limit && last ? {
+      nextCursor: encodeOpaqueCursor({
+        v: 2, sort: Date.parse(last.createdAt), id: last.id, key: cursorKey,
+      }),
+    } : {}),
+  };
+}
+function decodeOwnedSubmissionCursor(cursor: string, cursorKey: string): { sort: number; id: string } {
+  let record: Record<string, unknown>;
+  try {
+    const decoded = decodeOpaqueCursor(cursor);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    record = decoded as Record<string, unknown>;
+    if (Object.keys(record).length !== 4 || record.v !== 2
+      || typeof record.sort !== "number" || !Number.isSafeInteger(record.sort)
+      || record.sort < timestampCursorBounds.minSort || record.sort > timestampCursorBounds.maxSort
+      || typeof record.id !== "string" || record.id.length === 0
+      || typeof record.key !== "string" || !/^[a-f0-9]{64}$/u.test(record.key)) throw new Error();
+  } catch {
+    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  }
+  if (record.key !== cursorKey) {
+    throw new AppError("PAGE_INVALID", "Page cursor does not match the requested scope", 400);
+  }
+  return { sort: record.sort as number, id: record.id as string };
+}
+function assertCursorKey(cursorKey: string): void {
+  if (!/^[a-f0-9]{64}$/u.test(cursorKey)) {
+    throw new AppError("PAGE_INVALID", "Page request is invalid", 400);
+  }
+}
 function mapSubmissionRow(row: SubmissionRow): Submission { return { id: row.id, submitterId: row.submitter_id, requestedSpaceId: row.requested_space_id, requestedCollectionId: row.requested_collection_id, requestedVisibility: row.requested_visibility, ...(row.supersedes_submission_id === null ? {} : { supersedesSubmissionId: row.supersedes_submission_id }), kind: row.kind, status: row.status, title: row.title, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function mapCreationRow(row: CreationRow): SubmissionCreateResult {
   const submission = mapSubmissionRow(row);

@@ -9,4 +9,7 @@ export interface NavigationItem {
   group: "workspace" | "admin";
 }
 
-export function navigationForSession(session: BrowserSession | null | undefined): readonly NavigationItem[];
+export function navigationForSession(
+  session: BrowserSession | null | undefined,
+  translate?: (key: string) => string,
+): readonly NavigationItem[];

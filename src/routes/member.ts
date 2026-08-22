@@ -5,7 +5,7 @@ import type { Principal } from "../identity/principal";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
-import type { SubmissionKind } from "../submissions/types";
+import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } from "../submissions/types";
 import type { TagsService } from "../tags/service";
 
 export interface MemberRouteServices {
@@ -128,7 +128,12 @@ export async function routeMemberApi(
     requireCapability(principal, "submission:read-own");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const member = requireMember(principal);
-    return jsonResponse(await services.submissions.listOwn(member.memberId, pageRequest(url)), 200, context.requestId);
+    requireExactQuery(url, ["limit", "cursor", "status"]);
+    const status = url.searchParams.get("status");
+    return jsonResponse(await services.submissions.listOwn(member.memberId, {
+      ...pageRequest(url),
+      ...(status === null ? {} : { status: status as SubmissionStatusFilter }),
+    }), 200, context.requestId);
   }
 
   return undefined;

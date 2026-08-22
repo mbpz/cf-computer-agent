@@ -1,3 +1,4 @@
+import { createI18n } from "/i18n.js";
 import { navigationForSession } from "/navigation.js";
 import { renderSafeMarkdown } from "/markdown-renderer.js";
 import {
@@ -5,10 +6,13 @@ import {
   appendPage,
   chatRequest,
   chatScopeControlsModel,
+  chatScopeSummaryModel,
   citedAnswerModel,
+  configureWorkspaceI18n,
   createAdminSpacesRouteController,
   createChatItemPageController,
   createLogoutController,
+  createLocaleRerenderController,
   createMutationController,
   createOptionPageController,
   createOwnedActionController,
@@ -34,6 +38,13 @@ import {
   runLatestOperation,
 } from "/workspace-ui.js";
 
+const i18n = createI18n({
+  navigatorLanguage: navigator.language,
+  storage: browserStorage(),
+});
+const t = (key, values) => i18n.t(key, values);
+configureWorkspaceI18n(t);
+
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
 const outlet = byId("page-outlet");
@@ -41,15 +52,19 @@ const statusRegion = byId("status-region");
 const drawerToggle = byId("drawer-toggle");
 const sidebar = byId("sidebar");
 const logoutButton = byId("logout-button");
+const languageSelect = byId("language-select");
 const routeGuard = createRouteGuard();
 const mobileViewport = window.matchMedia("(max-width: 760px)");
 let session;
 let pendingFlash = "";
 const openDialogs = new Set();
 const logoutController = createLogoutController(fetch, {
-  onPendingChange(pending) { logoutButton.disabled = pending || !session; },
+  onPendingChange(pending) {
+    logoutButton.disabled = pending || !session;
+    logoutButton.textContent = t(pending ? "SHELL_LOGOUT_PENDING" : "SHELL_LOGOUT");
+  },
   onSuccess() { renderAnonymous(); },
-  onError(error) { setStatus(error.message || "退出失败，请重试。", "error"); },
+  onError(error) { setStatus(error.message || t("SHELL_LOGOUT_ERROR"), "error"); },
 });
 
 const routes = Object.freeze({
@@ -64,6 +79,19 @@ const routes = Object.freeze({
   "/admin/members": renderMembers,
   "/admin/spaces": renderSpaces,
   "/admin/audit": renderAudit,
+});
+const localeRerenderController = createLocaleRerenderController(i18n.locale, {
+  closeDialogs: closeOpenDialogs,
+  applyLocale,
+  rerenderRoute() {
+    if (session) {
+      renderSessionSummary();
+      applyDrawerState(drawerStateForViewport(mobileViewport.matches, shell.dataset.drawerOpen === "true"));
+      void renderRoute();
+    } else {
+      renderAnonymous();
+    }
+  },
 });
 
 function rendererFor(path) {
@@ -91,7 +119,7 @@ function element(tag, options = {}, children = []) {
 function page(title, description, children = []) {
   return element("div", {}, [
     element("header", { className: "page-header" }, [
-      element("p", { className: "eyebrow", text: "MEMORY GARDEN" }),
+      element("p", { className: "eyebrow", text: t("APP_EYEBROW") }),
       element("h1", { text: title, tabindex: "-1" }),
       element("p", { className: "muted", text: description }),
     ]),
@@ -115,7 +143,29 @@ function replaceOutlet(node, generation) {
 function setStatus(message = "", kind = "") {
   statusRegion.replaceChildren(message ? element("p", { className: "notice", "data-kind": kind, text: message }) : "");
 }
-function apiError(data, fallback) { return data?.error?.message || data?.error || fallback; }
+const apiErrorKeys = Object.freeze({
+  FORBIDDEN: "ERROR_FORBIDDEN",
+  UNAUTHORIZED: "ERROR_UNAUTHORIZED",
+  PAGE_INVALID: "ERROR_PAGE_INVALID",
+  PAGE_CURSOR_INVALID: "ERROR_PAGE_CURSOR_INVALID",
+  SUBMISSION_INVALID: "ERROR_SUBMISSION_INVALID",
+  SUBMISSION_REQUEST_INVALID: "ERROR_SUBMISSION_INVALID",
+  SUBMISSION_TARGET_INVALID: "ERROR_SUBMISSION_TARGET_INVALID",
+  SUBMISSION_NOT_FOUND: "ERROR_SUBMISSION_NOT_FOUND",
+  IDEMPOTENCY_CONFLICT: "ERROR_IDEMPOTENCY_CONFLICT",
+  RESUBMISSION_STATE_CONFLICT: "ERROR_RESUBMISSION_STATE_CONFLICT",
+  SOURCE_ENCODING_INVALID: "ERROR_SOURCE_ENCODING_INVALID",
+  LIBRARY_REQUEST_INVALID: "ERROR_LIBRARY_REQUEST_INVALID",
+  KNOWLEDGE_NOT_FOUND: "ERROR_KNOWLEDGE_NOT_FOUND",
+  REVIEW_INVALID: "ERROR_REVIEW_INVALID",
+  TAG_INVALID: "ERROR_TAG_INVALID",
+  TAG_TARGET_INVALID: "ERROR_TAG_TARGET_INVALID",
+});
+function apiError(data) {
+  const code = typeof data?.error?.code === "string" ? data.error.code : "";
+  if (!code) return t("ERROR_GENERIC");
+  return apiErrorKeys[code] ? t(apiErrorKeys[code]) : t("ERROR_UNKNOWN_CODE", { code });
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -125,7 +175,7 @@ async function api(path, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(apiError(data, response.statusText));
+    const error = new Error(apiError(data));
     error.status = response.status;
     throw error;
   }
@@ -137,7 +187,7 @@ async function loadSession() {
   const data = await response.json().catch(() => ({}));
   const state = sessionBootstrapState(response.status, data);
   if (state.kind !== "error") return state;
-  const error = new Error(apiError(data, response.statusText));
+  const error = new Error(apiError(data));
   error.status = response.status;
   throw error;
 }
@@ -174,13 +224,13 @@ function navigate(path, replace = false, flash = "") {
 function renderNavigation() {
   const nav = byId("primary-navigation");
   const groups = new Map();
-  for (const item of navigationForSession(session)) {
+  for (const item of navigationForSession(session, t)) {
     const group = groups.get(item.group) || [];
     group.push(item);
     groups.set(item.group, group);
   }
   nav.replaceChildren(...[...groups.entries()].map(([group, items]) => element("section", { className: "nav-group" }, [
-    element("p", { className: "nav-group-label", text: group === "admin" ? "治理" : "工作区" }),
+    element("p", { className: "nav-group-label", text: t(group === "admin" ? "SHELL_GROUP_ADMIN" : "SHELL_GROUP_WORKSPACE") }),
     ...items.map((item) => element("a", {
       href: item.href,
       className: "nav-link",
@@ -217,31 +267,54 @@ async function renderRoute() {
   outlet.setAttribute("aria-busy", "true");
   const routeCapability = requiredCapability(path);
   if ((isAdminRoute(path) && !has("submission:read-all")) || (routeCapability && !has(routeCapability))) {
-    replaceOutlet(page("403：没有管理权限", "管理路由由服务器独立授权；当前登录身份没有该能力。", [empty("请返回工作区，或联系管理员调整成员状态。")]), generation);
+    replaceOutlet(page(t("PAGE_FORBIDDEN_TITLE"), t("PAGE_FORBIDDEN_DESCRIPTION"), [empty(t("PAGE_FORBIDDEN_EMPTY"))]), generation);
     return;
   }
   const route = rendererFor(path);
   if (!route) {
-    replaceOutlet(page("页面不存在", "此地址没有对应的工作区页面。", [element("div", { className: "actions" }, [routeLink("返回首页", "/")])]), generation);
+    replaceOutlet(page(t("PAGE_NOT_FOUND_TITLE"), t("PAGE_NOT_FOUND_DESCRIPTION"), [element("div", { className: "actions" }, [routeLink(t("PAGE_RETURN_HOME"), "/")])]), generation);
     return;
   }
   try {
     await route.render(generation, route.parameter);
   } catch (error) {
     if (!routeGuard.isCurrent(generation)) return;
-    const label = error.status === 403 ? "403：访问被拒绝" : "无法加载页面";
-    replaceOutlet(page(label, error.message || "请稍后重试。", [empty("页面数据暂不可用；服务器权限仍是最终依据。")]), generation);
+    const label = error.status === 403 ? t("PAGE_FORBIDDEN_TITLE") : t("COMMON_PAGE_LOAD_FAILED");
+    replaceOutlet(page(label, error.message || t("COMMON_RETRY_LATER"), [empty(t("PAGE_DATA_UNAVAILABLE"))]), generation);
   }
 }
 
 function routeLink(label, href) { return element("a", { href, "data-route": "", className: "nav-link", text: label }); }
 function list(items, itemRenderer, emptyText) { return items.length ? element("ul", { className: "item-list" }, items.map(itemRenderer)) : empty(emptyText); }
 function item(title, meta, extra = []) { return element("li", { className: "item" }, [element("h3", { text: title }), element("p", { className: "item-meta", text: meta }), ...extra]); }
-function formatDate(value) { return value ? new Date(value).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" }) : "—"; }
-function visibilityBadge(value, label = value === "admin_only" ? "Admin only" : "Shared") {
+function formatDate(value) { return value ? new Date(value).toLocaleString(i18n.locale, { dateStyle: "medium", timeStyle: "short" }) : "—"; }
+function visibilityLabel(value) { return t(value === "admin_only" ? "COMMON_VISIBILITY_ADMIN_ONLY" : "COMMON_VISIBILITY_SHARED"); }
+function kindLabel(value) {
+  return t(value === "code" ? "COMMON_KIND_CODE" : value === "markdown" ? "COMMON_KIND_MARKDOWN" : "COMMON_KIND_TEXT");
+}
+function submissionStatusLabel(value) {
+  const key = {
+    review_pending: "SUBMISSION_STATUS_REVIEW_PENDING",
+    published: "SUBMISSION_STATUS_PUBLISHED",
+    rejected: "SUBMISSION_STATUS_REJECTED",
+    revision_requested: "SUBMISSION_STATUS_REVISION_REQUESTED",
+  }[value];
+  return key ? t(key) : String(value);
+}
+function searchStatusLabel(value) {
+  return t({
+    pending: "COMMON_STATUS_PENDING",
+    indexed: "COMMON_STATUS_INDEXED",
+    search_degraded: "COMMON_STATUS_SEARCH_DEGRADED",
+    failed: "COMMON_STATUS_FAILED",
+  }[value] || "COMMON_STATUS_PENDING");
+}
+function memberRoleLabel(value) { return t(value === "admin" ? "COMMON_ROLE_ADMIN" : "COMMON_ROLE_CONTRIBUTOR"); }
+function activeStatusLabel(value) { return t(value === "active" ? "COMMON_STATUS_ACTIVE" : "COMMON_STATUS_DISABLED"); }
+function visibilityBadge(value, label = visibilityLabel(value)) {
   return element("span", { className: `badge visibility-${value === "admin_only" ? "admin" : "shared"}`, text: label });
 }
-function safeErrorMessage(error, fallback = "操作失败，请重试。") {
+function safeErrorMessage(error, fallback = t("COMMON_OPERATION_FAILED")) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 function validationSummary(form, message) {
@@ -279,7 +352,7 @@ function closeOpenDialogs() {
 function openReviewDialog({ title, description, confirmLabel, danger = false, owns, onConfirm }) {
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
   const controller = createOwnedActionController(owns, onConfirm);
-  const cancel = element("button", { className: "secondary", type: "button", text: "Cancel" });
+  const cancel = element("button", { className: "secondary", type: "button", text: t("COMMON_CANCEL") });
   const confirm = element("button", { className: danger ? "danger" : "primary", type: "button", text: confirmLabel });
   const dialog = element("dialog", { className: "review-dialog", "aria-labelledby": "review-dialog-title" }, [
     element("div", { className: "stack" }, [
@@ -324,13 +397,13 @@ function openReviewDialog({ title, description, confirmLabel, danger = false, ow
 
 async function renderHome(generation) {
   const submissions = await api("/api/submissions/mine?limit=5");
-  if (replaceOutlet(page("Trusted knowledge workspace", "Submit, review, find, and cite the current published knowledge base.", [
+  if (replaceOutlet(page(t("HOME_TITLE"), t("HOME_DESCRIPTION"), [
     element("div", { className: "page-grid" }, [
-      card("Quick start", [
-        element("p", { text: "New content enters the review queue. Published knowledge remains immutable and citation-addressable." }),
-        element("div", { className: "actions" }, [routeLink("Submit knowledge", "/submit"), routeLink("Search", "/search"), routeLink("Ask Agent", "/agent")]),
+      card(t("HOME_QUICK_START"), [
+        element("p", { text: t("HOME_QUICK_START_BODY") }),
+        element("div", { className: "actions" }, [routeLink(t("HOME_SUBMIT_KNOWLEDGE"), "/submit"), routeLink(t("SEARCH_ACTION"), "/search"), routeLink(t("HOME_ASK_AGENT"), "/agent")]),
       ]),
-      card("Recent submissions", [list(submissions.items, (submission) => item(submission.title, `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`), "You have no submissions yet.")]),
+      card(t("HOME_RECENT_SUBMISSIONS"), [list(submissions.items, (submission) => item(submission.title, `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`), t("HOME_NO_SUBMISSIONS"))]),
     ]),
   ]), generation)) return;
 }
@@ -379,8 +452,8 @@ async function renderSubmit(generation) {
     resource: "spaces",
     writableOnly: true,
     owner,
-    label: "Spaces",
-    fieldLabel: "Target Space",
+    label: t("COMMON_SPACES"),
+    fieldLabel: t("SUBMIT_TARGET_SPACE"),
     required: true,
     onState: (state) => { if (submitButton) submitButton.disabled = state.items.length === 0; },
   });
@@ -388,22 +461,22 @@ async function renderSubmit(generation) {
   const title = element("input", { name: "title", required: "", maxlength: "200", autocomplete: "off" });
   const kind = element("select", { name: "kind" }, ["text", "markdown", "code"].map((value) => element("option", { value, text: value })));
   const requestedVisibility = element("select", { name: "visibility" }, [
-    element("option", { value: "shared", text: "Shared" }),
-    element("option", { value: "admin_only", text: "Admin only" }),
+    element("option", { value: "shared", text: t("COMMON_VISIBILITY_SHARED") }),
+    element("option", { value: "admin_only", text: t("COMMON_VISIBILITY_ADMIN_ONLY") }),
   ]);
   const space = spaceControl.select;
   space.name = "space";
   const collectionSlot = element("div", { className: "stack" });
-  let collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: "No collection" })]);
-  collectionSlot.replaceChildren(field("Collection (optional)", collection));
-  const language = element("select", { name: "language" }, ["", "bash", "css", "go", "html", "javascript", "json", "markdown", "python", "rust", "sql", "typescript", "yaml"].map((value) => element("option", { value, text: value || "Plain / auto" })));
-  const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: "Enter plain text, safe Markdown, or code…" });
-  submitButton = element("button", { className: "primary", type: "submit", text: "Submit for review", disabled: spaceControl.controller.snapshot().items.length ? undefined : "" });
+  let collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: t("COMMON_NO_COLLECTION") })]);
+  collectionSlot.replaceChildren(field(t("SUBMIT_COLLECTION_OPTIONAL"), collection));
+  const language = element("select", { name: "language" }, ["", "bash", "css", "go", "html", "javascript", "json", "markdown", "python", "rust", "sql", "typescript", "yaml"].map((value) => element("option", { value, text: value || t("COMMON_PLAIN_AUTO") })));
+  const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: t("SUBMIT_CONTENT_PLACEHOLDER") });
+  submitButton = element("button", { className: "primary", type: "submit", text: t("SUBMIT_ACTION"), disabled: spaceControl.controller.snapshot().items.length ? undefined : "" });
   const requestKey = idempotencyKey();
   let form;
   const mutation = createMutationController(
     () => ownsMutation(owner),
-    (pending) => setPending(submitButton, pending, "Submitting…", "Submit for review"),
+    (pending) => setPending(submitButton, pending, t("SUBMIT_PENDING"), t("SUBMIT_ACTION")),
   );
   form = element("form", { className: "stack", onsubmit: (event) => {
     event.preventDefault();
@@ -430,24 +503,24 @@ async function renderSubmit(generation) {
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
   } }, [
-    field("Title", title), field("Content type", kind), field("Requested visibility", requestedVisibility), spaceControl.root, collectionSlot,
-    field("Code language (optional)", language), field("Content", content), submitButton,
+    field(t("COMMON_TITLE"), title), field(t("COMMON_CONTENT_TYPE"), kind), field(t("COMMON_REQUESTED_VISIBILITY"), requestedVisibility), spaceControl.root, collectionSlot,
+    field(t("COMMON_CODE_LANGUAGE_OPTIONAL"), language), field(t("COMMON_CONTENT"), content), submitButton,
   ]);
   let collectionGeneration = 0;
   const updateCollections = async () => {
     collectionGeneration += 1;
     const fixedGeneration = collectionGeneration;
-    collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: "No collection" })]);
-    collectionSlot.replaceChildren(field("Collection (optional)", collection));
+    collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: t("COMMON_NO_COLLECTION") })]);
+    collectionSlot.replaceChildren(field(t("SUBMIT_COLLECTION_OPTIONAL"), collection));
     if (!space.value) return;
     const control = createPagedOptionControl({
       resource: "collections",
       spaceId: space.value,
       owner,
       owns: () => fixedGeneration === collectionGeneration,
-      label: "Collections",
-      fieldLabel: "Collection (optional)",
-      emptyLabel: "No collection",
+      label: t("COMMON_COLLECTIONS"),
+      fieldLabel: t("SUBMIT_COLLECTION_OPTIONAL"),
+      emptyLabel: t("COMMON_NO_COLLECTION"),
     });
     collection = control.select;
     collection.name = "collection";
@@ -457,8 +530,8 @@ async function renderSubmit(generation) {
   space.addEventListener("change", () => { void updateCollections(); });
   if (spaceControl.controller.snapshot().items.length) await updateCollections();
   const spaceState = spaceControl.controller.snapshot();
-  replaceOutlet(page("Submit knowledge", "Idempotent submission keeps retries safe. Identity, role, paths, hashes, sources, and citations are never accepted from this form.", [
-    card("New submission", [spaceState.items.length || spaceState.nextCursor ? form : empty("No active shared Space accepts submissions.")]),
+  replaceOutlet(page(t("SUBMIT_TITLE"), t("SUBMIT_DESCRIPTION"), [
+    card(t("SUBMIT_NEW"), [spaceState.items.length || spaceState.nextCursor ? form : empty(t("SUBMIT_NO_SPACE"))]),
   ]), generation);
 }
 function field(label, control) { return element("label", { text: label }, [control]); }
@@ -471,10 +544,10 @@ async function renderKnowledge(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (entry) => item(entry.title, `${entry.visibilityLabel} · ${entry.searchStatus} · ${formatDate(entry.updatedAt)}`, [
-      element("div", { className: "actions" }, [visibilityBadge(entry.visibility, entry.visibilityLabel), routeLink(`Read ${entry.title}`, entry.href)]),
-    ]), "No published knowledge is visible to this account.");
-    const more = cursor ? element("button", { className: "secondary", type: "button", text: "Load more", onclick: () => {
+    const rows = list(items, (entry) => item(entry.title, `${visibilityLabel(entry.visibility)} · ${searchStatusLabel(entry.searchStatus)} · ${formatDate(entry.updatedAt)}`, [
+      element("div", { className: "actions" }, [visibilityBadge(entry.visibility), routeLink(t("LIBRARY_READ_ITEM", { title: entry.title }), entry.href)]),
+    ]), t("LIBRARY_EMPTY"));
+    const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
       void runLatestOperation(operations, () => api(knowledgeQuery("/api/knowledge", { limit: 20, cursor })), (data) => {
         if (!ownsMutation(owner)) return;
@@ -487,23 +560,23 @@ async function renderKnowledge(generation) {
     region.replaceChildren(rows, more);
   };
   renderItems();
-  replaceOutlet(page("Library", "Browse the permission-filtered current Revision for every visible Knowledge Item.", [card("Published knowledge", [region])]), generation);
+  replaceOutlet(page(t("LIBRARY_TITLE"), t("LIBRARY_DESCRIPTION"), [card(t("LIBRARY_PUBLISHED"), [region])]), generation);
 }
 
 async function renderSearch(generation) {
   const owner = routeGuard.owner(generation, "/search");
-  const spaceControl = createPagedOptionControl({ resource: "spaces", owner, label: "Spaces", fieldLabel: "Space", emptyLabel: "All Spaces" });
+  const spaceControl = createPagedOptionControl({ resource: "spaces", owner, label: t("COMMON_SPACES"), fieldLabel: t("COMMON_SPACE"), emptyLabel: t("SEARCH_ALL_SPACES") });
   await spaceControl.controller.loadInitial();
-  const query = element("input", { type: "search", required: "", maxlength: "200", placeholder: "Search published knowledge", "aria-label": "Search query" });
+  const query = element("input", { type: "search", required: "", maxlength: "200", placeholder: t("SEARCH_PLACEHOLDER"), "aria-label": t("SEARCH_ARIA_QUERY") });
   const space = spaceControl.select;
-  let collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
-  let tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: "All Tags" })]);
+  let collection = element("select", { disabled: "" }, [element("option", { value: "", text: t("SEARCH_ALL_COLLECTIONS") })]);
+  let tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: t("SEARCH_ALL_TAGS") })]);
   const tagMode = element("select", {}, [
-    element("option", { value: "and", text: "Match all selected Tags" }),
-    element("option", { value: "or", text: "Match any selected Tag" }),
+    element("option", { value: "and", text: t("SEARCH_MATCH_ALL_TAGS") }),
+    element("option", { value: "or", text: t("SEARCH_MATCH_ANY_TAG") }),
   ]);
-  const collectionSlot = element("div", { className: "stack" }, [field("Collection", collection)]);
-  const tagSlot = element("div", { className: "stack" }, [field("Tag", tag)]);
+  const collectionSlot = element("div", { className: "stack" }, [field(t("COMMON_COLLECTION"), collection)]);
+  const tagSlot = element("div", { className: "stack" }, [field(t("COMMON_TAG"), tag)]);
   const results = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   let currentItems = [];
@@ -511,19 +584,19 @@ async function renderSearch(generation) {
   let currentFilters;
   const renderResults = (model) => {
     const nodes = [];
-    if (model.degraded) nodes.push(routeStateNode("degraded", "Search index is degraded. Published documents remain readable; results may be incomplete."));
+    if (model.degraded) nodes.push(routeStateNode("degraded", t("SEARCH_DEGRADED")));
     nodes.push(list(currentItems, (hit) => item(hit.title, hit.location, [
-      element("p", { className: "item-meta", text: `Matched: ${hit.matchedFieldLabels.join(", ")}` }),
+      element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", { fields: hit.matchedFieldLabels.join(", ") }) }),
       element("p", { className: "excerpt" }, hit.highlightSegments.map((segment) => (
         segment.highlighted ? element("mark", { text: segment.text }) : segment.text
       ))),
-      routeLink(`Open citation: ${hit.title}, ${hit.location}`, hit.citationHref),
-    ]), "No matching published knowledge."));
-    if (currentCursor) nodes.push(element("button", { className: "secondary", type: "button", text: "Load more results", onclick: () => { void search(currentCursor, true); } }));
+      routeLink(t("SEARCH_OPEN_CITATION", { title: hit.title, location: hit.location }), hit.citationHref),
+    ]), t("SEARCH_EMPTY")));
+    if (currentCursor) nodes.push(element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE_RESULTS"), onclick: () => { void search(currentCursor, true); } }));
     results.replaceChildren(...nodes);
   };
   const search = async (cursor, append = false) => {
-    results.replaceChildren(routeStateNode("loading", append ? "Loading more results…" : "Searching…"));
+    results.replaceChildren(routeStateNode("loading", t(append ? "COMMON_LOADING_MORE_RESULTS" : "COMMON_SEARCHING")));
     await runLatestOperation(operations, () => api(knowledgeQuery("/api/knowledge/search", { ...currentFilters, limit: 20, cursor })), (data) => {
       if (!ownsMutation(owner)) return;
       const model = knowledgeSearchModel(data);
@@ -544,22 +617,22 @@ async function renderSearch(generation) {
     currentItems = [];
     currentCursor = undefined;
     void search(undefined, false);
-  } }, [field("Query", query), spaceControl.root, collectionSlot, tagSlot, field("Tag mode", tagMode), element("button", { className: "primary", type: "submit", text: "Search" })]);
+  } }, [field(t("COMMON_QUERY"), query), spaceControl.root, collectionSlot, tagSlot, field(t("SEARCH_TAG_MODE"), tagMode), element("button", { className: "primary", type: "submit", text: t("SEARCH_ACTION") })]);
   let filterGeneration = 0;
   const updateDependentFilters = async () => {
     filterGeneration += 1;
     const fixedGeneration = filterGeneration;
-    collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
-    tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: "All Tags" })]);
-    collectionSlot.replaceChildren(field("Collection", collection));
-    tagSlot.replaceChildren(field("Tag", tag));
+    collection = element("select", { disabled: "" }, [element("option", { value: "", text: t("SEARCH_ALL_COLLECTIONS") })]);
+    tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: t("SEARCH_ALL_TAGS") })]);
+    collectionSlot.replaceChildren(field(t("COMMON_COLLECTION"), collection));
+    tagSlot.replaceChildren(field(t("COMMON_TAG"), tag));
     if (!space.value) return;
     const ownsFilter = () => fixedGeneration === filterGeneration;
     const collectionControl = createPagedOptionControl({
-      resource: "collections", spaceId: space.value, owner, owns: ownsFilter, label: "Collections", fieldLabel: "Collection", emptyLabel: "All Collections",
+      resource: "collections", spaceId: space.value, owner, owns: ownsFilter, label: t("COMMON_COLLECTIONS"), fieldLabel: t("COMMON_COLLECTION"), emptyLabel: t("SEARCH_ALL_COLLECTIONS"),
     });
     const tagControl = createPagedOptionControl({
-      resource: "tags", spaceId: space.value, owner, owns: ownsFilter, label: "Tags", fieldLabel: "Tag", emptyLabel: "All Tags",
+      resource: "tags", spaceId: space.value, owner, owns: ownsFilter, label: t("COMMON_TAGS"), fieldLabel: t("COMMON_TAG"), emptyLabel: t("SEARCH_ALL_TAGS"),
     });
     collection = collectionControl.select;
     tag = tagControl.select;
@@ -570,20 +643,20 @@ async function renderSearch(generation) {
     await Promise.all([collectionControl.controller.loadInitial(), tagControl.controller.loadInitial()]);
   };
   space.addEventListener("change", () => { void updateDependentFilters(); });
-  replaceOutlet(page("Search", "FTS search is permission-scoped and links every result to its exact Revision and Chunk.", [card("Search filters", [form]), card("Results", [results])]), generation);
+  replaceOutlet(page(t("SEARCH_TITLE"), t("SEARCH_DESCRIPTION"), [card(t("SEARCH_FILTERS"), [form]), card(t("SEARCH_RESULTS"), [results])]), generation);
 }
 
 async function renderAgent(generation) {
   const owner = routeGuard.owner(generation, "/agent");
   const scopeModel = chatScopeControlsModel({ kind: "all" });
-  const question = element("textarea", { required: "", maxlength: "200", placeholder: "Ask a question grounded in published knowledge…" });
+  const question = element("textarea", { required: "", maxlength: "200", placeholder: t("AGENT_QUESTION_PLACEHOLDER") });
   const answer = element("div", { className: "stack", "aria-live": "polite" });
-  const submitButton = element("button", { className: "primary", type: "submit", text: "Ask Agent" });
+  const submitButton = element("button", { className: "primary", type: "submit", text: t("AGENT_ACTION") });
   const scopeKindLabels = Object.freeze({
-    all: "All visible knowledge",
-    space: "One Space",
-    collection: "One Collection",
-    items: "Selected knowledge items",
+    all: t("KNOWLEDGE_CHAT_SCOPE_ALL"),
+    space: t("KNOWLEDGE_CHAT_SCOPE_SPACE"),
+    collection: t("KNOWLEDGE_CHAT_SCOPE_COLLECTION"),
+    items: t("KNOWLEDGE_CHAT_SCOPE_ITEMS"),
   });
   const scopeOptions = scopeModel.options.map((option, index) => {
     const input = element("input", {
@@ -596,40 +669,42 @@ async function renderAgent(generation) {
     return { ...option, input };
   });
   const scopeKinds = element("fieldset", { className: "scope-selector" }, [
-    element("legend", { text: "Answer source scope", "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_LEGEND" }),
+    element("legend", { text: t("KNOWLEDGE_CHAT_SCOPE_LEGEND"), "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_LEGEND" }),
     ...scopeOptions.map((option) => element("label", { className: "check-option", text: scopeKindLabels[option.kind] }, [option.input])),
   ]);
   const spaceControl = createPagedOptionControl({
     resource: "spaces",
     owner,
-    label: "Spaces",
-    fieldLabel: "Scope Space",
-    emptyLabel: "Select a Space",
+    label: t("COMMON_SPACES"),
+    fieldLabel: t("KNOWLEDGE_CHAT_SCOPE_SPACE_FIELD"),
+    emptyLabel: t("KNOWLEDGE_CHAT_SCOPE_SPACE_SELECT"),
   });
   await spaceControl.controller.loadInitial();
-  let collection = element("select", { disabled: "", "aria-label": "Scope Collection" }, [
-    element("option", { value: "", text: "Select a Collection" }),
+  let collection = element("select", { disabled: "", "aria-label": t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_FIELD") }, [
+    element("option", { value: "", text: t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_SELECT") }),
   ]);
-  const collectionSlot = element("div", { className: "stack" }, [field("Scope Collection", collection)]);
+  const collectionSlot = element("div", { className: "stack" }, [field(t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_FIELD"), collection)]);
   let collectionGeneration = 0;
   const loadCollections = async () => {
     collectionGeneration += 1;
     const fixedGeneration = collectionGeneration;
-    collection = element("select", { disabled: "", "aria-label": "Scope Collection" }, [
-      element("option", { value: "", text: "Select a Collection" }),
+    collection = element("select", { disabled: "", "aria-label": t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_FIELD") }, [
+      element("option", { value: "", text: t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_SELECT") }),
     ]);
-    collectionSlot.replaceChildren(field("Scope Collection", collection));
+    collection.addEventListener("change", updateScopeState);
+    collectionSlot.replaceChildren(field(t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_FIELD"), collection));
     if (!spaceControl.select.value) return;
     const control = createPagedOptionControl({
       resource: "collections",
       spaceId: spaceControl.select.value,
       owner,
       owns: () => fixedGeneration === collectionGeneration,
-      label: "Collections",
-      fieldLabel: "Scope Collection",
-      emptyLabel: "Select a Collection",
+      label: t("COMMON_COLLECTIONS"),
+      fieldLabel: t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_FIELD"),
+      emptyLabel: t("KNOWLEDGE_CHAT_SCOPE_COLLECTION_SELECT"),
     });
     collection = control.select;
+    collection.addEventListener("change", updateScopeState);
     collectionSlot.replaceChildren(control.root);
     await control.controller.loadInitial();
     updateScopeState();
@@ -637,18 +712,18 @@ async function renderAgent(generation) {
   const itemSelect = element("select", {
     multiple: "",
     size: "8",
-    "aria-label": "Selected knowledge items",
+    "aria-label": t("KNOWLEDGE_CHAT_SCOPE_ITEMS_ARIA"),
     "aria-describedby": "chat-item-selection-help",
   });
   const itemHelp = element("p", {
     id: "chat-item-selection-help",
     className: "muted",
-    text: "Select 1–8 visible current indexed knowledge items.",
+    text: t("KNOWLEDGE_CHAT_SCOPE_ITEMS_HELP"),
     "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_ITEMS_HELP",
   });
   const itemStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
-  const itemMore = element("button", { className: "secondary", type: "button", text: "Load more knowledge items" });
-  const itemSlot = element("div", { className: "stack" }, [field("Knowledge items", itemSelect), itemHelp, itemMore, itemStatus]);
+  const itemMore = element("button", { className: "secondary", type: "button", text: t("KNOWLEDGE_CHAT_SCOPE_ITEMS_LOAD_MORE") });
+  const itemSlot = element("div", { className: "stack" }, [field(t("KNOWLEDGE_CHAT_SCOPE_ITEMS_FIELD"), itemSelect), itemHelp, itemMore, itemStatus]);
   let itemCursor;
   let loadedItems = [];
   let loadingItems = false;
@@ -680,10 +755,13 @@ async function renderAgent(generation) {
     const selected = [...itemSelect.selectedOptions];
     if (selected.length > scopeModel.maxSelectedItems) {
       selected.slice(scopeModel.maxSelectedItems).forEach((option) => { option.selected = false; });
-      itemStatus.textContent = "You can select at most 8 knowledge items.";
+      itemStatus.textContent = t("KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX");
       itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX";
     } else {
-      itemStatus.textContent = `${selected.length} of ${scopeModel.maxSelectedItems} selected.`;
+      itemStatus.textContent = t("KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT", {
+        selected: selected.length,
+        maximum: scopeModel.maxSelectedItems,
+      });
       itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT";
     }
     updateScopeState();
@@ -718,9 +796,7 @@ async function renderAgent(generation) {
     itemMore.disabled = pending || loadingItems;
     for (const option of scopeOptions) option.input.disabled = pending;
     const requested = requestedScope();
-    scopeSummary.textContent = requested
-      ? `Current scope: ${scopeKindLabels[kind]}.`
-      : `Current scope: ${scopeKindLabels[kind]} requires a selection.`;
+    scopeSummary.textContent = chatScopeSummaryModel(scopeKindLabels[kind], Boolean(requested));
   }
   for (const option of scopeOptions) option.input.addEventListener("change", () => {
     updateScopeState();
@@ -738,7 +814,7 @@ async function renderAgent(generation) {
     (value) => {
       pending = value;
       question.disabled = value;
-      setPending(submitButton, value, "Asking…", "Ask Agent");
+      setPending(submitButton, value, t("AGENT_PENDING"), t("AGENT_ACTION"));
       updateScopeState();
     },
   );
@@ -746,19 +822,19 @@ async function renderAgent(generation) {
     event.preventDefault();
     const scope = requestedScope();
     if (!scope) {
-      answer.replaceChildren(routeStateNode("error", "Choose a complete answer source scope."));
+      answer.replaceChildren(routeStateNode("error", t("KNOWLEDGE_CHAT_SCOPE_INVALID")));
       return;
     }
     const request = chatRequest({ question: question.value, scope });
     void mutation.run(() => {
-      answer.replaceChildren(routeStateNode("loading", "Reading permission-scoped published knowledge…"));
+      answer.replaceChildren(routeStateNode("loading", t("KNOWLEDGE_CHAT_READING")));
       return api(request.path, request.init);
     }, (data) => {
       const model = citedAnswerModel(data);
       answer.replaceChildren(
         element("p", {
           className: "item-meta",
-          text: `Evidence confidence: ${Math.round(model.evidenceConfidence * 100)}%`,
+          text: t("KNOWLEDGE_CHAT_EVIDENCE_CONFIDENCE", { percent: Math.round(model.evidenceConfidence * 100) }),
           "data-i18n-key": "KNOWLEDGE_CHAT_EVIDENCE_CONFIDENCE",
         }),
         element("p", { className: "answer-text", text: model.answer }),
@@ -767,24 +843,24 @@ async function renderAgent(generation) {
           "data-kind": "degraded",
           "data-i18n-key": model.messageKey,
         }, [
-          element("p", { text: "Try rewriting the question or expanding the selected scope." }),
+          element("p", { text: t("KNOWLEDGE_CHAT_TRY_AGAIN") }),
           element("ul", {}, model.suggestedActionKeys.map((key) => element("li", {
-            text: key === "KNOWLEDGE_CHAT_REWRITE_QUESTION" ? "Rewrite the question" : "Expand the source scope",
+            text: t(key),
             "data-i18n-key": key,
           }))),
         ])] : []),
-        element("h3", { text: "Citations" }),
+        element("h3", { text: t("KNOWLEDGE_CHAT_CITATIONS") }),
         list(model.sources, (source) => item(`[${source.number}] ${source.title}`, source.location, [
-          element("p", { className: "item-meta", text: `Matched: ${source.matchedFieldLabels.join(", ")}` }),
+          element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", { fields: source.matchedFieldLabels.join(", ") }) }),
           element("p", { className: "excerpt" }, source.highlightSegments.map((segment) => (
             segment.highlighted ? element("mark", { text: segment.text }) : segment.text
           ))),
-          element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": source.accessibleName, text: "Open exact source location" }),
-        ]), "The answer contains no source citations."),
+          element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": source.accessibleName, text: t("KNOWLEDGE_CHAT_OPEN_SOURCE") }),
+        ]), t("KNOWLEDGE_CHAT_NO_CITATIONS")),
       );
     }, (error) => answer.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))));
   } }, [
-    field("Question", question),
+    field(t("AGENT_QUESTION"), question),
     scopeKinds,
     spaceControl.root,
     collectionSlot,
@@ -793,12 +869,14 @@ async function renderAgent(generation) {
     submitButton,
   ]);
   updateScopeState();
-  replaceOutlet(page("Agent", "Answers use only current permission-scoped search hits; unsupported claims fail closed.", [card("Grounded question", [form, answer])]), generation);
+  replaceOutlet(page(t("AGENT_TITLE"), t("AGENT_DESCRIPTION"), [card(t("AGENT_GROUNDED_QUESTION"), [form, answer])]), generation);
 }
 
 async function renderMySubmissions(generation) {
   const owner = routeGuard.owner(generation, "/my-submissions");
-  let data = await api("/api/submissions/mine?limit=20");
+  const requestedStatus = new URL(window.location.href).searchParams.get("status");
+  let status = ["review_pending", "published", "rejected", "revision_requested"].includes(requestedStatus) ? requestedStatus : "";
+  let data = await api(mySubmissionsPath(status));
   let items = data.items;
   let cursor = data.nextCursor;
   const region = element("div", { className: "stack", "aria-live": "polite" });
@@ -809,12 +887,12 @@ async function renderMySubmissions(generation) {
       if (submission.status === "revision_requested") {
         const revisedTitle = element("input", { required: "", maxlength: "200", value: submission.title });
         const revisedContent = element("textarea", { required: "", maxlength: String(128 * 1024), text: submission.content });
-        const button = element("button", { className: "primary", type: "submit", text: "Revise and resubmit" });
+        const button = element("button", { className: "primary", type: "submit", text: t("MY_SUBMISSIONS_REVISE") });
         const key = idempotencyKey();
         let form;
         const mutation = createMutationController(
           () => ownsMutation(owner),
-          (pending) => setPending(button, pending, "Resubmitting…", "Revise and resubmit"),
+          (pending) => setPending(button, pending, t("MY_SUBMISSIONS_RESUBMITTING"), t("MY_SUBMISSIONS_REVISE")),
         );
         form = element("form", { className: "stack", onsubmit: (event) => {
           event.preventDefault();
@@ -825,21 +903,21 @@ async function renderMySubmissions(generation) {
           }, key);
           void mutation.run(
             () => api(request.path, request.init),
-            () => navigate("/my-submissions", true, "Revision resubmitted for review."),
+            () => navigate("/my-submissions", true, t("MY_SUBMISSIONS_RESUBMITTED")),
             (error) => validationSummary(form, safeErrorMessage(error)),
           );
-        } }, [field("Revised title", revisedTitle), field("Revised content", revisedContent), button]);
+        } }, [field(t("MY_SUBMISSIONS_REVISED_TITLE"), revisedTitle), field(t("MY_SUBMISSIONS_REVISED_CONTENT"), revisedContent), button]);
         children.push(form);
       }
       return item(
         submission.title,
-        `${submission.kind} · ${submission.status} · ${formatDate(submission.createdAt)}`,
+        `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`,
         children,
       );
-    }, "You have no submissions.");
-    const more = cursor ? element("button", { className: "secondary", type: "button", text: "Load more", onclick: () => {
+    }, t("MY_SUBMISSIONS_EMPTY"));
+    const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
-      void runLatestOperation(operations, () => api(`/api/submissions/mine?limit=20&cursor=${encodeURIComponent(cursor)}`), (next) => {
+      void runLatestOperation(operations, () => api(mySubmissionsPath(status, cursor)), (next) => {
         if (!ownsMutation(owner)) return;
         items = appendPage(items, next.items, (submission) => submission.id);
         cursor = next.nextCursor;
@@ -848,15 +926,51 @@ async function renderMySubmissions(generation) {
     } }) : undefined;
     region.replaceChildren(rows, more);
   };
+  const statusFilter = element("select", { "aria-label": t("MY_SUBMISSIONS_FILTER_LABEL") }, [
+    element("option", { value: "", text: t("MY_SUBMISSIONS_FILTER_ALL") }),
+    ...["review_pending", "published", "rejected", "revision_requested"].map((value) => element("option", {
+      value,
+      text: submissionStatusLabel(value),
+    })),
+  ]);
+  statusFilter.value = status;
+  statusFilter.addEventListener("change", () => {
+    status = statusFilter.value;
+    const next = new URL(window.location.href);
+    if (status) next.searchParams.set("status", status);
+    else next.searchParams.delete("status");
+    history.replaceState({}, "", `${next.pathname}${next.search}`);
+    cursor = undefined;
+    items = [];
+    region.replaceChildren(routeStateNode("loading", t("SHELL_LOADING_BODY")));
+    void runLatestOperation(operations, () => api(mySubmissionsPath(status)), (nextPage) => {
+      if (!ownsMutation(owner)) return;
+      items = nextPage.items;
+      cursor = nextPage.nextCursor;
+      renderItems();
+    }, (error) => {
+      if (ownsMutation(owner)) region.replaceChildren(routeStateNode("error", safeErrorMessage(error)));
+    }, () => ownsMutation(owner));
+  });
   renderItems();
-  replaceOutlet(page("My Submissions", "Only your own submitted source text and review status are visible here.", [card("Submission history", [region])]), generation);
+  replaceOutlet(page(t("MY_SUBMISSIONS_TITLE"), t("MY_SUBMISSIONS_DESCRIPTION"), [card(t("MY_SUBMISSIONS_HISTORY"), [
+    field(t("MY_SUBMISSIONS_FILTER_LABEL"), statusFilter),
+    region,
+  ])]), generation);
+}
+
+function mySubmissionsPath(status, cursor) {
+  const query = new URLSearchParams({ limit: "20" });
+  if (status) query.set("status", status);
+  if (cursor) query.set("cursor", cursor);
+  return `/api/submissions/mine?${query.toString()}`;
 }
 
 async function renderKnowledgeReader(generation, knowledgeItemId) {
   const url = new URL(window.location.href);
   for (const key of url.searchParams.keys()) {
     if (!["revision", "chunk"].includes(key) || url.searchParams.getAll(key).length !== 1) {
-      replaceOutlet(page("Invalid reader location", "Only one Revision and Chunk location may be selected.", [routeStateNode("error", "The reader URL is invalid.")]), generation);
+      replaceOutlet(page(t("READER_INVALID_TITLE"), t("READER_INVALID_DESCRIPTION"), [routeStateNode("error", t("READER_INVALID_URL"))]), generation);
       return;
     }
   }
@@ -866,8 +980,8 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   const response = await api(request.path);
   const readerValue = response[request.responseKey];
   const model = knowledgeReaderModel(readerValue, { revision: requestedRevision, chunk: requestedChunk });
-  const outline = element("nav", { className: "reader-outline", "aria-label": "Document outline" }, [
-    element("h2", { text: "Outline" }),
+  const outline = element("nav", { className: "reader-outline", "aria-label": t("READER_OUTLINE_ARIA") }, [
+    element("h2", { text: t("READER_OUTLINE") }),
     list(model.outline, (entry) => element("li", { className: "item" }, [
       element("a", {
         href: entry.href,
@@ -875,52 +989,52 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
         "aria-current": entry.focused ? "location" : undefined,
         text: `${entry.label} · ${entry.lineLabel}`,
       }),
-    ]), "This Revision has no indexed headings."),
+    ]), t("READER_NO_HEADINGS")),
   ]);
   const markdownBody = element("div", { className: "markdown-body" });
   markdownBody.append(renderSafeMarkdown(model.markdown));
-  const metadata = element("dl", { className: "reader-metadata", "aria-label": "Revision metadata" }, [
-    element("dt", { text: "Revision ID" }), element("dd", { text: model.revisionId }),
-    element("dt", { text: "SourceVersion ID" }), element("dd", { text: model.sourceVersionId || "Legacy metadata unavailable" }),
-    element("dt", { text: "Reviewer ID" }), element("dd", { text: model.reviewerId || "Legacy metadata unavailable" }),
-    element("dt", { text: "SourceVersion ordinal" }), element("dd", { text: model.sourceVersionOrdinal === null ? "Legacy metadata unavailable" : String(model.sourceVersionOrdinal) }),
-    element("dt", { text: "Parser schema" }), element("dd", { text: model.parserSchemaVersion || "Legacy metadata unavailable" }),
-    element("dt", { text: "Index status" }), element("dd", { text: model.indexStatus }),
+  const metadata = element("dl", { className: "reader-metadata", "aria-label": t("READER_METADATA_ARIA") }, [
+    element("dt", { text: t("READER_REVISION_ID") }), element("dd", { text: model.revisionId }),
+    element("dt", { text: t("READER_SOURCE_VERSION_ID") }), element("dd", { text: model.sourceVersionId || t("COMMON_LEGACY_UNAVAILABLE") }),
+    element("dt", { text: t("READER_REVIEWER_ID") }), element("dd", { text: model.reviewerId || t("COMMON_LEGACY_UNAVAILABLE") }),
+    element("dt", { text: t("READER_SOURCE_VERSION_ORDINAL") }), element("dd", { text: model.sourceVersionOrdinal === null ? t("COMMON_LEGACY_UNAVAILABLE") : String(model.sourceVersionOrdinal) }),
+    element("dt", { text: t("READER_PARSER_SCHEMA") }), element("dd", { text: model.parserSchemaVersion || t("COMMON_LEGACY_UNAVAILABLE") }),
+    element("dt", { text: t("READER_INDEX_STATUS") }), element("dd", { text: searchStatusLabel(model.indexStatus) }),
     ...(model.codeMetadata ? [
-      element("dt", { text: "Code source" }),
-      element("dd", { text: `${model.codeMetadata.fileLabel} · ${model.codeMetadata.language} · starts at line ${model.codeMetadata.lineBaseline}` }),
+      element("dt", { text: t("READER_CODE_SOURCE") }),
+      element("dd", { text: t("READER_CODE_SOURCE_VALUE", { file: model.codeMetadata.fileLabel, language: model.codeMetadata.language, line: model.codeMetadata.lineBaseline }) }),
     ] : []),
   ]);
-  const body = element("article", { className: "reader-body", "aria-label": "Revision body" }, [
+  const body = element("article", { className: "reader-body", "aria-label": t("READER_BODY_ARIA") }, [
     element("div", { className: "actions" }, [
       visibilityBadge(model.visibility, model.visibilityLabel),
       element("span", { className: "badge", text: model.revisionLabel }),
-      element("a", { href: model.downloadHref, className: "download-link", download: "", text: "Download Markdown" }),
+      element("a", { href: model.downloadHref, className: "download-link", download: "", text: t("READER_DOWNLOAD_MARKDOWN") }),
     ]),
     !model.isCurrent
-      ? routeStateNode("degraded", "You are reading an immutable historical Revision. Citations do not silently move to the current text.")
+      ? routeStateNode("degraded", t("READER_HISTORY_WARNING"))
       : undefined,
     model.indexStatus === "search_degraded"
-      ? routeStateNode("degraded", "This document is readable, but its search index is degraded.")
+      ? routeStateNode("degraded", t("READER_INDEX_DEGRADED"))
       : undefined,
     model.indexStatus === "failed"
-      ? routeStateNode("error", "This document is readable, but search indexing failed and requires administrator recovery.")
+      ? routeStateNode("error", t("READER_INDEX_FAILED"))
       : undefined,
     metadata,
     markdownBody,
   ]);
-  const sources = element("aside", { className: "reader-sources", "aria-label": "Sources and locations" }, [
-    element("h2", { text: "Sources" }),
+  const sources = element("aside", { className: "reader-sources", "aria-label": t("READER_SOURCES_ARIA") }, [
+    element("h2", { text: t("READER_SOURCES") }),
     list(model.sources, (source) => element("li", {
       id: `chunk-${source.id}`,
       className: "item source-location",
       tabindex: source.id === model.focusedChunkId ? "-1" : undefined,
     }, [
       element("p", { text: source.label }),
-      element("a", { href: source.href, "data-route": "", "aria-label": `Open source location: ${source.label}`, text: "Copyable reader location" }),
-    ]), "This Revision has no source locations."),
+      element("a", { href: source.href, "data-route": "", "aria-label": t("READER_OPEN_SOURCE_ARIA", { label: source.label }), text: t("READER_COPYABLE_LOCATION") }),
+    ]), t("READER_NO_SOURCES")),
   ]);
-  if (replaceOutlet(page(model.title, `${model.revisionLabel} · published ${formatDate(model.publishedAt)}`, [
+  if (replaceOutlet(page(model.title, `${model.revisionLabel} · ${t("COMMON_PUBLISHED_AT", { date: formatDate(model.publishedAt) })}`, [
     element("div", { className: "reader-grid" }, [outline, body, sources]),
   ]), generation) && model.focusedChunkId) {
     byId(`chunk-${model.focusedChunkId}`)?.focus({ preventScroll: false });
@@ -932,28 +1046,32 @@ async function renderAdminDashboard(generation) {
   const [pending, members, spaces, audit] = await Promise.all([
     api("/api/admin/submissions?status=review_pending&limit=5"), api("/api/admin/members?limit=5"), api("/api/spaces?limit=5"), api("/api/admin/audit-events?limit=5"),
   ]);
-  const recoveryButton = element("button", { className: "secondary", type: "button", text: "Recover pending publications" });
+  const recoveryButton = element("button", { className: "secondary", type: "button", text: t("ADMIN_RECOVER_ACTION") });
   const recovery = createMutationController(
     () => ownsMutation(owner),
-    (pendingState) => setPending(recoveryButton, pendingState, "Recovering…", "Recover pending publications"),
+    (pendingState) => setPending(recoveryButton, pendingState, t("ADMIN_RECOVER_PENDING"), t("ADMIN_RECOVER_ACTION")),
   );
   recoveryButton.addEventListener("click", () => openReviewDialog({
-    title: "Recover pending publications?",
-    description: "This bounded operation resumes up to 20 durable publication or indexing intents.",
-    confirmLabel: "Run recovery",
+    title: t("ADMIN_RECOVER_DIALOG_TITLE"),
+    description: t("ADMIN_RECOVER_DIALOG_DESCRIPTION"),
+    confirmLabel: t("ADMIN_RECOVER_CONFIRM"),
     owns: () => ownsMutation(owner),
     onConfirm: () => { void recovery.run(
       () => api("/api/admin/publications/recover", { method: "POST", body: JSON.stringify({ limit: 20 }) }),
-      (result) => setStatus(`Recovery finished: ${result.recovery.recoveredIntents} publications and ${result.recovery.recoveredIndexJobs} indexes recovered; ${result.recovery.failures.length} failures.`, result.recovery.failures.length ? "error" : "success"),
+      (result) => setStatus(t("ADMIN_RECOVER_RESULT", {
+        publications: result.recovery.recoveredIntents,
+        indexes: result.recovery.recoveredIndexJobs,
+        failures: result.recovery.failures.length,
+      }), result.recovery.failures.length ? "error" : "success"),
       (error) => setStatus(safeErrorMessage(error), "error"),
     ); },
   }));
-  replaceOutlet(page("Administration", "Every governance operation is authorized again by its server API.", [
+  replaceOutlet(page(t("ADMIN_TITLE"), t("ADMIN_DESCRIPTION"), [
     element("div", { className: "page-grid" }, [
-      metricCard("Review queue", pending.items.length, "Open Review Queue", "/admin/submissions"), metricCard("Members", members.items.length, "Manage members", "/admin/members"),
-      metricCard("Spaces", spaces.items.length, "Manage Spaces", "/admin/spaces"), metricCard("Audit events", audit.items.length, "Open audit", "/admin/audit"),
+      metricCard(t("ADMIN_REVIEW_QUEUE"), pending.items.length, t("ADMIN_OPEN_REVIEW_QUEUE"), "/admin/submissions"), metricCard(t("NAV_MEMBERS"), members.items.length, t("ADMIN_MANAGE_MEMBERS"), "/admin/members"),
+      metricCard(t("NAV_SPACES"), spaces.items.length, t("ADMIN_MANAGE_SPACES"), "/admin/spaces"), metricCard(t("ADMIN_AUDIT_EVENTS"), audit.items.length, t("ADMIN_OPEN_AUDIT"), "/admin/audit"),
     ]),
-    card("Recovery", [element("p", { text: "Recovery is bounded, explicit, and safe to retry." }), recoveryButton]),
+    card(t("ADMIN_RECOVERY"), [element("p", { text: t("ADMIN_RECOVERY_BODY") }), recoveryButton]),
   ]), generation);
 }
 function metricCard(title, value, label, href) { return card(title, [element("p", { text: String(value) }), routeLink(label, href)]); }
@@ -966,11 +1084,11 @@ async function renderPendingSubmissions(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (submission) => item(submission.title, `${submission.kind} · submitted ${formatDate(submission.createdAt)}`, [
+    const rows = list(items, (submission) => item(submission.title, `${kindLabel(submission.kind)} · ${t("COMMON_SUBMITTED_AT", { date: formatDate(submission.createdAt) })}`, [
       element("pre", { className: "content-preview", text: submission.content }),
-      routeLink(`Review ${submission.title}`, `/admin/submissions/${encodeURIComponent(submission.id)}`),
-    ]), "The review queue is empty.");
-    const more = cursor ? element("button", { className: "secondary", type: "button", text: "Load more", onclick: () => {
+      routeLink(t("REVIEW_QUEUE_REVIEW_ITEM", { title: submission.title }), `/admin/submissions/${encodeURIComponent(submission.id)}`),
+    ]), t("REVIEW_QUEUE_EMPTY"));
+    const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
       void runLatestOperation(operations, () => api(`/api/admin/submissions?status=review_pending&limit=20&cursor=${encodeURIComponent(cursor)}`), (next) => {
         if (!ownsMutation(owner)) return;
@@ -982,7 +1100,7 @@ async function renderPendingSubmissions(generation) {
     region.replaceChildren(rows, more);
   };
   renderItems();
-  replaceOutlet(page("Review Queue", "Preview normalized source content before publishing, rejecting, or requesting a revision.", [card("review_pending", [region])]), generation);
+  replaceOutlet(page(t("REVIEW_QUEUE_TITLE"), t("REVIEW_QUEUE_DESCRIPTION"), [card(t("SUBMISSION_STATUS_REVIEW_PENDING"), [region])]), generation);
 }
 
 async function renderReviewSubmission(generation, submissionId) {
@@ -993,8 +1111,8 @@ async function renderReviewSubmission(generation, submissionId) {
   const target = reviewTargetModel(previewResponse.preview);
   const title = element("input", { required: "", maxlength: "200", value: model.title });
   const visibility = element("select", {}, [
-    element("option", { value: "shared", text: "Shared" }),
-    element("option", { value: "admin_only", text: "Admin only" }),
+    element("option", { value: "shared", text: t("COMMON_VISIBILITY_SHARED") }),
+    element("option", { value: "admin_only", text: t("COMMON_VISIBILITY_ADMIN_ONLY") }),
   ]);
   visibility.value = model.requestedVisibility;
   const finalSpace = element("input", { required: "", maxlength: "128", value: target.spaceId });
@@ -1002,8 +1120,8 @@ async function renderReviewSubmission(generation, submissionId) {
   const tags = element("fieldset", { className: "tag-selector", "aria-live": "polite" });
   let tagController;
   const renderTags = (state) => {
-    const nodes = [element("legend", { text: "Tags in the requested Space" })];
-    if (!state.loaded) nodes.push(routeStateNode("loading", "Loading active Tags…"));
+    const nodes = [element("legend", { text: t("REVIEW_TAGS_LEGEND") })];
+    if (!state.loaded) nodes.push(routeStateNode("loading", t("REVIEW_TAGS_LOADING")));
     if (state.items.length) nodes.push(...state.items.map((tag) => element("label", { className: "check-option", text: tag.name }, [
       element("input", {
         type: "checkbox",
@@ -1012,7 +1130,7 @@ async function renderReviewSubmission(generation, submissionId) {
         onchange: (event) => tagController.select(tag.id, event.currentTarget.checked),
       }),
     ])));
-    else if (state.loaded && !state.error) nodes.push(element("p", { className: "muted", text: "No active Tags in this Space." }));
+    else if (state.loaded && !state.error) nodes.push(element("p", { className: "muted", text: t("REVIEW_TAGS_EMPTY") }));
     if (state.error) nodes.push(routeStateNode("error", state.error));
     const loadMore = reviewTagLoadMoreModel(state);
     if (loadMore.visible) nodes.push(element("button", {
@@ -1043,14 +1161,14 @@ async function renderReviewSubmission(generation, submissionId) {
   });
   resetTagController();
   const reason = element("select", {}, [
-    element("option", { value: "not_relevant", text: "Not relevant" }),
-    element("option", { value: "duplicate", text: "Duplicate" }),
-    element("option", { value: "unsafe", text: "Unsafe content" }),
+    element("option", { value: "not_relevant", text: t("REVIEW_REASON_NOT_RELEVANT") }),
+    element("option", { value: "duplicate", text: t("REVIEW_REASON_DUPLICATE") }),
+    element("option", { value: "unsafe", text: t("REVIEW_REASON_UNSAFE") }),
   ]);
-  const note = element("textarea", { maxlength: "4000", placeholder: "Review note or revision request…" });
-  const publishButton = element("button", { className: "primary", type: "button", text: "Publish" });
-  const rejectButton = element("button", { className: "danger", type: "button", text: "Reject" });
-  const revisionButton = element("button", { className: "secondary", type: "button", text: "Request revision" });
+  const note = element("textarea", { maxlength: "4000", placeholder: t("REVIEW_NOTE_PLACEHOLDER") });
+  const publishButton = element("button", { className: "primary", type: "button", text: t("REVIEW_PUBLISH") });
+  const rejectButton = element("button", { className: "danger", type: "button", text: t("REVIEW_REJECT") });
+  const revisionButton = element("button", { className: "secondary", type: "button", text: t("REVIEW_REQUEST_REVISION") });
   const actionButtons = [publishButton, rejectButton, revisionButton];
   let form;
   const mutation = createMutationController(
@@ -1064,7 +1182,7 @@ async function renderReviewSubmission(generation, submissionId) {
   const runDecision = (kind, visibilityReasonCode) => {
     form.querySelector(".validation-summary")?.remove();
     if (kind === "publish" && !form.reportValidity()) {
-      validationSummary(form, "Select an active writable final Space and complete every required publication field.");
+      validationSummary(form, t("REVIEW_PUBLICATION_VALIDATION"));
       return;
     }
     let request;
@@ -1092,9 +1210,9 @@ async function renderReviewSubmission(generation, submissionId) {
       () => api(request.path, request.init),
       (result) => {
         if (kind === "publish") {
-          navigate(`/knowledge/${encodeURIComponent(result.revision.knowledgeItemId)}?revision=${encodeURIComponent(result.revision.id)}`, true, `Published ${result.revision.title}.`);
+          navigate(`/knowledge/${encodeURIComponent(result.revision.knowledgeItemId)}?revision=${encodeURIComponent(result.revision.id)}`, true, t("REVIEW_PUBLISHED", { title: result.revision.title }));
         } else {
-          navigate("/admin/submissions", true, kind === "reject" ? "Submission rejected." : "Revision requested.");
+          navigate("/admin/submissions", true, t(kind === "reject" ? "REVIEW_REJECTED" : "REVIEW_REVISION_REQUESTED"));
         }
       },
       (error) => validationSummary(form, safeErrorMessage(error)),
@@ -1103,9 +1221,9 @@ async function renderReviewSubmission(generation, submissionId) {
   const confirmPublication = () => {
     if (model.requestedVisibility === "admin_only" && visibility.value === "shared") {
       openReviewDialog({
-        title: "Expand visibility to Shared?",
-        description: "This expands an Admin-only request. Confirm the bounded administrator visibility-expansion reason.",
-        confirmLabel: "Confirm visibility expansion",
+        title: t("REVIEW_EXPAND_TITLE"),
+        description: t("REVIEW_EXPAND_DESCRIPTION"),
+        confirmLabel: t("REVIEW_EXPAND_CONFIRM"),
         owns: () => ownsMutation(owner),
         onConfirm: () => runDecision("publish", "admin_visibility_expansion"),
       });
@@ -1114,53 +1232,55 @@ async function renderReviewSubmission(generation, submissionId) {
     runDecision("publish");
   };
   publishButton.addEventListener("click", () => openReviewDialog({
-    title: "Publish this immutable Revision?",
-    description: "The server will validate the active target, write canonical Markdown, create chunks, and index the current Revision.",
-    confirmLabel: "Publish Revision",
+    title: t("REVIEW_PUBLISH_TITLE"),
+    description: t("REVIEW_PUBLISH_DESCRIPTION"),
+    confirmLabel: t("REVIEW_PUBLISH_CONFIRM"),
     owns: () => ownsMutation(owner),
     onConfirm: confirmPublication,
   }));
   rejectButton.addEventListener("click", () => openReviewDialog({
-    title: "Reject this submission?",
-    description: "The review decision is audited and the submission will leave the pending queue.",
-    confirmLabel: "Reject submission",
+    title: t("REVIEW_REJECT_TITLE"),
+    description: t("REVIEW_REJECT_DESCRIPTION"),
+    confirmLabel: t("REVIEW_REJECT_CONFIRM"),
     danger: true,
     owns: () => ownsMutation(owner),
     onConfirm: () => runDecision("reject"),
   }));
   revisionButton.addEventListener("click", () => openReviewDialog({
-    title: "Request a revision?",
-    description: "The contributor will see that this source needs revision; no formal knowledge will be published.",
-    confirmLabel: "Request revision",
+    title: t("REVIEW_REVISION_TITLE"),
+    description: t("REVIEW_REVISION_DESCRIPTION"),
+    confirmLabel: t("REVIEW_REVISION_CONFIRM"),
     owns: () => ownsMutation(owner),
     onConfirm: () => runDecision("revision"),
   }));
   form = element("form", { className: "stack", onsubmit: (event) => event.preventDefault() }, [
-    field("Final visibility", visibility),
-    element("dl", { className: "review-target", "aria-label": "Requested and final review metadata" }, [
-      element("dt", { text: "Requested title" }), element("dd", { text: model.title }),
-      element("dt", { text: "Final title" }), element("dd", {}, [title]),
-      element("dt", { text: "Requested Space" }), element("dd", { text: target.spaceLabel }),
-      element("dt", { text: "Requested Collection" }), element("dd", { text: target.collectionLabel }),
-      element("dt", { text: "Requested visibility" }), element("dd", { text: model.requestedVisibility }),
-      element("dt", { text: "Final Space ID" }), element("dd", {}, [finalSpace]),
-      element("dt", { text: "Final Collection ID" }), element("dd", {}, [finalCollection]),
+    field(t("REVIEW_FINAL_VISIBILITY"), visibility),
+    element("dl", { className: "review-target", "aria-label": t("REVIEW_METADATA_ARIA") }, [
+      element("dt", { text: t("REVIEW_REQUESTED_TITLE") }), element("dd", { text: model.title }),
+      element("dt", { text: t("REVIEW_FINAL_TITLE") }), element("dd", {}, [title]),
+      element("dt", { text: t("REVIEW_REQUESTED_SPACE") }), element("dd", { text: target.spaceLabel }),
+      element("dt", { text: t("REVIEW_REQUESTED_COLLECTION") }), element("dd", { text: target.collectionLabel }),
+      element("dt", { text: t("COMMON_REQUESTED_VISIBILITY") }), element("dd", { text: visibilityLabel(model.requestedVisibility) }),
+      element("dt", { text: t("REVIEW_FINAL_SPACE_ID") }), element("dd", {}, [finalSpace]),
+      element("dt", { text: t("REVIEW_FINAL_COLLECTION_ID") }), element("dd", {}, [finalCollection]),
     ]),
     tags,
-    field("Rejection reason", reason), field("Review note", note), element("div", { className: "actions" }, actionButtons),
+    field(t("REVIEW_REJECTION_REASON"), reason), field(t("REVIEW_NOTE"), note), element("div", { className: "actions" }, actionButtons),
   ]);
-  if (replaceOutlet(page(`Review: ${model.title}`, `${model.kind} · ${model.status} · parser ${model.parserVersion}`, [
+  if (replaceOutlet(page(t("REVIEW_TITLE", { title: model.title }), t("REVIEW_META", {
+    kind: kindLabel(model.kind), status: submissionStatusLabel(model.status), parser: model.parserVersion,
+  }), [
     element("div", { className: "review-grid" }, [
-      card("Raw input (inert text)", [element("pre", { className: "content-preview", text: model.rawInput })]),
-      card("Normalized Markdown (inert text)", [element("pre", { className: "content-preview", text: model.normalizedMarkdown })]),
+      card(t("REVIEW_RAW_INPUT"), [element("pre", { className: "content-preview", text: model.rawInput })]),
+      card(t("REVIEW_NORMALIZED_MARKDOWN"), [element("pre", { className: "content-preview", text: model.normalizedMarkdown })]),
     ]),
     element("div", { className: "page-grid" }, [
-      card("Chunk and location preview", [list(model.chunks, (chunk) => item(chunk.heading, chunk.lineLabel, [
+      card(t("REVIEW_CHUNK_PREVIEW"), [list(model.chunks, (chunk) => item(chunk.heading, chunk.lineLabel, [
         element("pre", { className: "content-preview", text: chunk.excerpt }),
-      ]), "No publication Chunks were produced.")]),
-      card("Warnings", [list(model.warnings, (warning) => element("li", { className: "item", text: warning }), "No warnings.")]),
+      ]), t("REVIEW_NO_CHUNKS"))]),
+      card(t("REVIEW_WARNINGS"), [list(model.warnings, (warning) => element("li", { className: "item", text: warning }), t("REVIEW_NO_WARNINGS"))]),
     ]),
-    card("Review decision", [form]),
+    card(t("REVIEW_DECISION"), [form]),
   ]), generation)) {
     void tagController.loadInitial();
   }
@@ -1170,20 +1290,22 @@ async function renderMembers(generation) {
   const data = await api("/api/admin/members?limit=50");
   const owner = routeGuard.owner(generation, "/admin/members");
   const rows = data.items.map((member) => {
-    const readyLabel = member.status === "active" ? "Disable contributor" : "Enable contributor";
+    const readyLabel = t(member.status === "active" ? "MEMBERS_DISABLE" : "MEMBERS_ENABLE");
     const status = element("button", { className: "secondary", type: "button", text: readyLabel, disabled: member.role === "admin" ? "" : undefined });
     const mutation = createMutationController(
       () => ownsMutation(owner),
-      (pending) => setPending(status, pending, "Updating…", readyLabel),
+      (pending) => setPending(status, pending, t("MEMBERS_UPDATING"), readyLabel),
     );
     status.addEventListener("click", () => { void mutation.run(
       () => api(`/api/admin/members/${encodeURIComponent(member.id)}/status`, { method: "PATCH", body: JSON.stringify({ status: member.status === "active" ? "disabled" : "active" }) }),
-      () => navigate("/admin/members", true, "Member status updated."),
+      () => navigate("/admin/members", true, t("MEMBERS_UPDATED")),
       (error) => setStatus(safeErrorMessage(error), "error"),
     ); });
-    return element("tr", {}, [element("td", { text: member.email }), element("td", { text: member.role }), element("td", { text: member.status }), element("td", {}, [status])]);
+    return element("tr", {}, [element("td", { text: member.email }), element("td", { text: memberRoleLabel(member.role) }), element("td", { text: activeStatusLabel(member.status) }), element("td", {}, [status])]);
   });
-  replaceOutlet(page("Members", "The sole administrator remains protected from browser status changes.", [card("Member directory", [table(["Email", "Role", "Status", "Action"], rows)])]), generation);
+  replaceOutlet(page(t("MEMBERS_TITLE"), t("MEMBERS_DESCRIPTION"), [card(t("MEMBERS_DIRECTORY"), [table([
+    t("COMMON_EMAIL"), t("COMMON_ROLE"), t("COMMON_STATUS"), t("COMMON_ACTION"),
+  ], rows)])]), generation);
 }
 function table(headers, rows) { return element("div", { className: "table-wrap" }, [element("table", {}, [element("thead", {}, [element("tr", {}, headers.map((header) => element("th", { text: header }))) ]), element("tbody", {}, rows)])]); }
 
@@ -1202,59 +1324,59 @@ async function renderSpaces(generation) {
   await controller.loadInitial();
   const spaces = controller.snapshot().spaces;
   const managedSpaces = spaces.filter((space) => !space.readOnly && space.kind === "shared");
-  const slug = element("input", { required: "", placeholder: "engineering" });
-  const name = element("input", { required: "", placeholder: "Engineering" });
+  const slug = element("input", { required: "", placeholder: t("SPACES_SLUG_PLACEHOLDER") });
+  const name = element("input", { required: "", placeholder: t("SPACES_NAME_PLACEHOLDER") });
   const position = element("input", { type: "number", value: String(spaces.length) });
-  const createSpaceButton = element("button", { className: "primary", type: "submit", text: "Create shared Space" });
+  const createSpaceButton = element("button", { className: "primary", type: "submit", text: t("SPACES_CREATE") });
   let form;
   const spaceMutation = createMutationController(
     () => ownsMutation(owner),
-    (pending) => setPending(createSpaceButton, pending, "Creating…", "Create shared Space"),
+    (pending) => setPending(createSpaceButton, pending, t("SPACES_CREATING"), t("SPACES_CREATE")),
   );
   form = element("form", { className: "stack", onsubmit: (event) => {
     event.preventDefault();
     void spaceMutation.run(
       () => api("/api/admin/spaces", { method: "POST", body: JSON.stringify({ slug: slug.value, name: name.value, position: Number(position.value) }) }),
-      () => navigate("/admin/spaces", true, "Space created."),
+      () => navigate("/admin/spaces", true, t("SPACES_CREATED")),
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
-  } }, [field("Slug", slug), field("Name", name), field("Position", position), createSpaceButton]);
+  } }, [field(t("COMMON_SLUG"), slug), field(t("COMMON_NAME"), name), field(t("COMMON_POSITION"), position), createSpaceButton]);
   const collectionSpace = element("select", { required: "" }, managedSpaces.map((space) => element("option", { value: space.id, text: space.name })));
-  const collectionName = element("input", { required: "", placeholder: "Runbooks" });
+  const collectionName = element("input", { required: "", placeholder: t("SPACES_COLLECTION_PLACEHOLDER") });
   const collectionPosition = element("input", { type: "number", value: "0" });
-  const createCollectionButton = element("button", { className: "primary", type: "submit", text: "Create Collection", disabled: managedSpaces.length ? undefined : "" });
+  const createCollectionButton = element("button", { className: "primary", type: "submit", text: t("SPACES_CREATE_COLLECTION"), disabled: managedSpaces.length ? undefined : "" });
   let collectionForm;
   const collectionMutation = createMutationController(
     () => ownsMutation(owner),
-    (pending) => setPending(createCollectionButton, pending, "Creating…", "Create Collection"),
+    (pending) => setPending(createCollectionButton, pending, t("SPACES_CREATING"), t("SPACES_CREATE_COLLECTION")),
   );
   collectionForm = element("form", { className: "stack", onsubmit: (event) => {
     event.preventDefault();
     void collectionMutation.run(
       () => api("/api/admin/collections", { method: "POST", body: JSON.stringify({ spaceId: collectionSpace.value, name: collectionName.value, position: Number(collectionPosition.value) }) }),
-      () => navigate("/admin/spaces", true, "Collection created."),
+      () => navigate("/admin/spaces", true, t("SPACES_COLLECTION_CREATED")),
       (error) => validationSummary(collectionForm, safeErrorMessage(error)),
     );
-  } }, [field("Target Space", collectionSpace), field("Collection name", collectionName), field("Position", collectionPosition), createCollectionButton]);
+  } }, [field(t("SUBMIT_TARGET_SPACE"), collectionSpace), field(t("SPACES_COLLECTION_NAME"), collectionName), field(t("COMMON_POSITION"), collectionPosition), createCollectionButton]);
   const spacesSlot = element("div");
   const collectionsSlot = element("div");
   const spacesMore = element("button", { className: "secondary", type: "button" });
   const spacesStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
   spacesMore.addEventListener("click", () => { void controller.loadMoreSpaces(); });
-  replaceOutlet(page("Spaces", "Legacy personal Spaces remain read-only; server APIs validate every shared Space and Collection mutation.", [
-    element("div", { className: "page-grid wide-left" }, [card("Existing Spaces", [spacesSlot, spacesMore, spacesStatus]), card("New shared Space", [form])]),
+  replaceOutlet(page(t("SPACES_TITLE"), t("SPACES_DESCRIPTION"), [
+    element("div", { className: "page-grid wide-left" }, [card(t("SPACES_EXISTING"), [spacesSlot, spacesMore, spacesStatus]), card(t("SPACES_NEW"), [form])]),
     element("div", { className: "page-grid wide-left" }, [
-      card("Collections", [collectionsSlot]),
-      card("New Collection", [collectionForm]),
+      card(t("SPACES_COLLECTIONS"), [collectionsSlot]),
+      card(t("SPACES_NEW_COLLECTION"), [collectionForm]),
     ]),
   ]), generation);
   renderState = () => {
     if (!ownsMutation(owner) || !latestState) return;
     spacesSlot.replaceChildren(list(latestState.spaces, (space) => item(
       space.name,
-      `${space.slug} · ${space.kind} · ${space.readOnly ? "read-only" : space.status}`,
-    ), "No Spaces."));
-    const spaceMoreModel = optionLoadMoreModel(latestState, "Spaces");
+      `${space.slug} · ${space.kind} · ${space.readOnly ? t("COMMON_READ_ONLY") : activeStatusLabel(space.status)}`,
+    ), t("SPACES_EMPTY")));
+    const spaceMoreModel = optionLoadMoreModel(latestState, t("COMMON_SPACES"));
     spacesMore.hidden = !spaceMoreModel.visible;
     spacesMore.disabled = spaceMoreModel.disabled;
     spacesMore.textContent = spaceMoreModel.label;
@@ -1273,22 +1395,25 @@ async function renderSpaces(generation) {
       latestState.collectionPages,
       (collectionPage) => {
         const more = element("button", { className: "secondary", type: "button" });
-        const moreModel = optionLoadMoreModel(collectionPage, "Collections");
+        const moreModel = optionLoadMoreModel(collectionPage, t("COMMON_COLLECTIONS"));
         more.hidden = !moreModel.visible;
         more.disabled = moreModel.disabled;
         more.textContent = moreModel.label;
-        more.setAttribute("aria-label", `${moreModel.accessibleName} in ${spaceById.get(collectionPage.spaceId)?.name || "Space"}`);
+        more.setAttribute("aria-label", t("OPTIONS_LOAD_MORE_IN_SPACE_ARIA", {
+          label: moreModel.accessibleName,
+          space: spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
+        }));
         more.addEventListener("click", () => { void controller.loadMoreCollections(collectionPage.spaceId); });
         const status = element("p", { className: "muted", role: "status", "aria-live": "polite", text: collectionPage.error });
         status.hidden = !collectionPage.error;
         return item(
-          spaceById.get(collectionPage.spaceId)?.name || "Space",
-          collectionPage.items.length ? collectionPage.items.map((collection) => collection.name).join(" · ") : "No Collections yet.",
+          spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
+          collectionPage.items.length ? collectionPage.items.map((collection) => collection.name).join(" · ") : t("SPACES_NO_COLLECTIONS"),
           [more, status],
         );
       },
-      "No manageable shared Space.",
-    ) : empty("No manageable shared Space."));
+      t("SPACES_NO_MANAGEABLE"),
+    ) : empty(t("SPACES_NO_MANAGEABLE")));
   };
   latestState = controller.snapshot();
   renderState();
@@ -1296,7 +1421,7 @@ async function renderSpaces(generation) {
 
 async function renderAudit(generation) {
   const data = await api("/api/admin/audit-events?limit=50");
-  replaceOutlet(page("Audit", "Server action allowlists redact event metadata before it reaches this browser.", [card("Recent events", [list(data.items, (event) => item(event.action, `${event.resourceType} · ${formatDate(event.createdAt)}`, [element("code", { text: JSON.stringify(event.metadata) })]), "No audit events.")])]), generation);
+  replaceOutlet(page(t("AUDIT_TITLE"), t("AUDIT_DESCRIPTION"), [card(t("AUDIT_RECENT"), [list(data.items, (event) => item(event.action, `${event.resourceType} · ${formatDate(event.createdAt)}`, [element("code", { text: JSON.stringify(event.metadata) })]), t("AUDIT_EMPTY"))])]), generation);
 }
 
 async function bootstrap() {
@@ -1308,7 +1433,7 @@ async function bootstrap() {
     }
     logoutController.invalidate();
     session = state.session;
-    byId("session-summary").textContent = `${session.member.email} · ${session.member.role}`;
+    renderSessionSummary();
     logoutButton.hidden = false;
     logoutButton.disabled = false;
     drawerToggle.disabled = false;
@@ -1316,7 +1441,7 @@ async function bootstrap() {
     shell.dataset.ready = "true";
     await renderRoute();
   } catch (error) {
-    replaceOutlet(page("无法启动工作区", error.message || "无法获取当前会话。", [empty("请稍后重试。")]))
+    replaceOutlet(page(t("BOOTSTRAP_FAILED_TITLE"), error.message || t("BOOTSTRAP_SESSION_FAILED"), [empty(t("COMMON_RETRY_LATER"))]));
   }
 }
 
@@ -1327,17 +1452,42 @@ function renderAnonymous() {
   session = undefined;
   routeGuard.begin();
   pendingFlash = "";
-  setStatus(state.statusMessage);
+  setStatus(t("ANONYMOUS_STATUS"));
   byId("primary-navigation").replaceChildren();
-  byId("session-summary").textContent = "登录后即可访问你的知识工作区。";
+  byId("session-summary").textContent = t("SESSION_SIGN_IN_HINT");
   logoutButton.hidden = true;
   logoutButton.disabled = true;
   drawerToggle.disabled = true;
   applyDrawerState(state.drawer);
   shell.dataset.ready = "false";
-  replaceOutlet(page("欢迎来到 Memory Garden", "使用 GitHub 登录后，即可继续访问你的知识工作区。", [
-    element("div", { className: "actions" }, [element("a", { href: "/auth/github", className: "login-action", text: "使用 GitHub 登录" })]),
+  replaceOutlet(page(t("ANONYMOUS_TITLE"), t("ANONYMOUS_DESCRIPTION"), [
+    element("div", { className: "actions" }, [element("a", { href: "/auth/github", className: "login-action", text: t("ANONYMOUS_GITHUB") })]),
   ]));
+}
+
+function renderSessionSummary() {
+  if (!session) return;
+  byId("session-summary").textContent = t("SESSION_SUMMARY", {
+    email: session.member.email,
+    role: memberRoleLabel(session.member.role),
+  });
+}
+
+function applyLocale() {
+  document.documentElement.lang = i18n.locale;
+  document.title = t("APP_TITLE");
+  languageSelect.value = i18n.locale;
+  for (const node of document.querySelectorAll("[data-i18n]")) {
+    node.textContent = t(node.dataset.i18n);
+  }
+  for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  }
+  configureWorkspaceI18n(t);
+}
+
+function browserStorage() {
+  try { return window.localStorage; } catch { return undefined; }
 }
 
 function logout() { return logoutController.run(); }
@@ -1357,7 +1507,12 @@ window.addEventListener("popstate", () => {
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && shell.dataset.drawerOpen === "true") setDrawer(false); });
 drawerToggle.addEventListener("click", () => setDrawer(shell.dataset.drawerOpen !== "true", true));
 logoutButton.addEventListener("click", () => { void logout(); });
+languageSelect.addEventListener("change", () => { i18n.setLocale(languageSelect.value); });
 mobileViewport.addEventListener("change", () => { if (session) setDrawer(false); });
+i18n.subscribe(() => {
+  localeRerenderController.apply(i18n.locale);
+});
+applyLocale();
 applyDrawerState(anonymousShellState().drawer);
 drawerToggle.disabled = true;
 void bootstrap();

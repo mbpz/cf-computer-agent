@@ -276,7 +276,7 @@
 
 ## COL — 协作与个人工作区
 
-- [ ] `COL-001` P0/M1 我的 Submission；验收：只看本人、有界分页和状态过滤。
+- [ ] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
 - [ ] `COL-002` P1/M1 驳回理由；验收：安全文本、历史可见、无 admin 内部 metadata。
 - [ ] `COL-003` P1/M3 审核评论；验收：admin 与 owner 可见，编辑留历史。
 - [ ] `COL-004` P1/M4 收藏；验收：成员私有、删除 Knowledge 后安全清理。
@@ -314,7 +314,7 @@
 
 ## I18N — 国际化
 
-- [ ] `I18N-001` P0/M1 中英文完整国际化；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。
+- [ ] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 348 键及 45 个插值占位符完全对齐，切换保持当前路由且不重启认证/重复请求或 mutation，陈旧完成被抑制，静态门禁及 6 类 mutation 测试覆盖缺键、占位符漂移、硬编码中英文、未知键与绕过形式；命令：`rtk npm run verify:i18n`、`rtk npm run check`。
 
 ## EVAL — 质量评测
 

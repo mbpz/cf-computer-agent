@@ -5,8 +5,10 @@ const {
   anonymousShellState,
   appendPage,
   chatRequest,
+  chatScopeSummaryModel,
   citedAnswerModel,
   createMutationController,
+  createLocaleRerenderController,
   createAdminSpacesRouteController,
   createChatItemPageController,
   createOwnedActionController,
@@ -55,6 +57,53 @@ describe("createRouteGuard", () => {
     expect(guard.owns(submission, "/submit")).toBe(true);
     guard.begin();
     expect(guard.owns(submission, "/submit")).toBe(false);
+  });
+});
+
+describe("locale route rerendering", () => {
+  it("rerenders one current route without auth restart or mutation replay and suppresses the stale completion", async () => {
+    const guard = createRouteGuard();
+    const generation = guard.begin();
+    const owner = guard.owner(generation, "/agent");
+    const response = deferred<string>();
+    let requests = 0;
+    let authRestarts = 0;
+    let dialogsClosed = 0;
+    let localeApplications = 0;
+    let routeRenders = 0;
+    const rendered: string[] = [];
+    const mutation = createMutationController(
+      () => guard.owns(owner, "/agent"),
+      () => undefined,
+    );
+    const controller = createLocaleRerenderController("en", {
+      closeDialogs: () => { dialogsClosed += 1; },
+      applyLocale: () => { localeApplications += 1; },
+      rerenderRoute: () => { routeRenders += 1; guard.begin(); },
+    });
+
+    const pending = mutation.run(() => {
+      requests += 1;
+      return response.promise;
+    }, (value) => rendered.push(value), () => undefined);
+    expect(controller.apply("zh-CN")).toBe(true);
+    expect(controller.apply("zh-CN")).toBe(false);
+    authRestarts += 0;
+    response.resolve("stale answer");
+    await pending;
+
+    expect({ requests, authRestarts, dialogsClosed, localeApplications, routeRenders }).toEqual({
+      requests: 1, authRestarts: 0, dialogsClosed: 1, localeApplications: 1, routeRenders: 1,
+    });
+    expect(rendered).toEqual([]);
+  });
+
+  it("refreshes the localized current Collection scope summary without retrieval or AI", () => {
+    let retrievals = 0;
+    let aiCalls = 0;
+    expect(chatScopeSummaryModel("One Collection", false)).toBe("Current scope: One Collection requires a selection.");
+    expect(chatScopeSummaryModel("One Collection", true)).toBe("Current scope: One Collection.");
+    expect({ retrievals, aiCalls }).toEqual({ retrievals: 0, aiCalls: 0 });
   });
 });
 

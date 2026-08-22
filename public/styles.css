@@ -34,6 +34,8 @@ a { color: inherit; }
 .nav-link:hover, .nav-link[aria-current="page"] { background: var(--surface-raised); color: var(--ink); }
 .nav-link[aria-current="page"] { box-shadow: inset 3px 0 0 var(--accent); }
 .sidebar-footer { margin-top: auto; color: var(--muted); font-size: 14px; }
+.language-control { display: grid; gap: 5px; margin-bottom: 12px; }
+.language-control select { width: 100%; }
 .logout-button { border: 0; padding: 0; background: transparent; color: inherit; text-decoration: underline; }
 .logout-button:hover { color: var(--ink); }
 .app-frame { min-width: 0; }

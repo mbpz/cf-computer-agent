@@ -8,6 +8,7 @@ import { SubmissionsRepository } from "../../src/submissions/repository";
 import { SubmissionsService } from "../../src/submissions/service";
 import { SourcesRepository } from "../../src/sources/repository";
 import type { CreateSubmissionWithSourceVersion } from "../../src/submissions/repository";
+import type { SubmissionStatusFilter } from "../../src/submissions/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("submissions D1 control plane", () => {
@@ -56,14 +57,77 @@ describe("submissions D1 control plane", () => {
     const second = await service.listOwn("member-a", { limit: 1, cursor: first.nextCursor });
     expect([...first.items, ...second.items].map((item) => item.submitterId)).toEqual(["member-a", "member-a"]);
     const copiedAdminCursor = (await service.listPending({ limit: 2 })).nextCursor;
-    await expect(service.listOwn("member-a", { limit: 10, cursor: copiedAdminCursor })).resolves.toMatchObject({
-      items: [expect.objectContaining({ submitterId: "member-a" })],
-    });
+    await expect(service.listOwn("member-a", { limit: 10, cursor: copiedAdminCursor }))
+      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
     await expect(service.listOwn("member-a", { limit: 1, cursor: "member-b" })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
     await expect(service.listPending({ limit: 10 })).resolves.toMatchObject({ items: expect.arrayContaining([
       expect.objectContaining({ submitterId: "member-a", status: "review_pending" }),
       expect.objectContaining({ submitterId: "member-b", status: "review_pending" }),
     ]) });
+  });
+
+  it("pages an owner's exact status with a scope-bound opaque cursor and the selective index", async () => {
+    const statuses: SubmissionStatusFilter[] = [
+      "review_pending", "published", "rejected", "revision_requested",
+    ];
+    const statements = [];
+    for (const owner of ["member-a", "member-b"] as const) {
+      for (let index = 0; index < 60; index += 1) {
+        const status = statuses[index % statuses.length]!;
+        const createdAt = `2026-08-13T00:00:${String(Math.floor(index / 3)).padStart(2, "0")}.000Z`;
+        statements.push(env.DB.prepare(
+          `INSERT INTO submissions (
+             id, submitter_id, requested_space_id, requested_collection_id, requested_visibility,
+             kind, status, title, content, created_at, updated_at
+           ) VALUES (?, ?, 'default', NULL, 'shared', 'text', ?, ?, 'Body', ?, ?)`,
+        ).bind(`page-${owner}-${String(index).padStart(2, "0")}`, owner, status, `Title ${index}`, createdAt, createdAt));
+      }
+    }
+    await env.DB.batch(statements);
+    const service = createService();
+
+    const expected = Array.from({ length: 15 }, (_, ordinal) => 56 - ordinal * 4)
+      .map((index) => `page-member-a-${String(index).padStart(2, "0")}`)
+      .sort((left, right) => right.localeCompare(left));
+    const actual: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const result = await service.listOwn("member-a", { limit: 4, cursor, status: "review_pending" });
+      expect(result.items.every((submission) => submission.submitterId === "member-a"
+        && submission.status === "review_pending")).toBe(true);
+      actual.push(...result.items.map((submission) => submission.id));
+      cursor = result.nextCursor;
+    } while (cursor);
+    expect(actual).toEqual(expected);
+    expect(new Set(actual).size).toBe(actual.length);
+
+    const first = await service.listOwn("member-a", { limit: 4, status: "published" });
+    expect(first.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/u);
+    const decoded = JSON.parse(atob(first.nextCursor!.replace(/-/gu, "+").replace(/_/gu, "/"))) as Record<string, unknown>;
+    expect(Object.keys(decoded).sort()).toEqual(["id", "key", "sort", "v"]);
+    expect(decoded).not.toHaveProperty("memberId");
+    expect(decoded).not.toHaveProperty("status");
+    await expect(service.listOwn("member-b", {
+      limit: 4, status: "published", cursor: first.nextCursor,
+    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    await expect(service.listOwn("member-a", {
+      limit: 4, status: "rejected", cursor: first.nextCursor,
+    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    await expect(service.listOwn("member-a", {
+      limit: 4, status: "draft" as SubmissionStatusFilter,
+    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+
+    await expect(service.listOwn("member-a", { status: "published" })).resolves.toMatchObject({ items: expect.any(Array) });
+    await expect(service.listOwn("member-a", { limit: 50 })).resolves.toMatchObject({ items: expect.any(Array) });
+    await expect(service.listOwn("member-a", { limit: 51 })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    expect((await service.listOwn("member-a", { status: "published" })).items).toHaveLength(15);
+    expect((await service.listOwn("member-a")).items).toHaveLength(20);
+    expect((await service.listOwn("member-a", { limit: 50 })).items).toHaveLength(50);
+
+    const plan = await env.DB.prepare(
+      "EXPLAIN QUERY PLAN SELECT id FROM submissions WHERE submitter_id = ? AND status = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+    ).bind("member-a", "review_pending", 5).all<{ detail: string }>();
+    expect(plan.results.map((row) => row.detail).join("\n")).toContain("submissions_owner_status_page");
   });
 
   it("enforces target state in the conditional persistence insert", async () => {

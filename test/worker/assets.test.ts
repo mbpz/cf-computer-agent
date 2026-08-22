@@ -31,6 +31,8 @@ describe("workspace assets", () => {
     expect(page.headers.get("x-request-id")).toBeTruthy();
     expect(html).toContain('id="app-shell"');
     expect(html).toContain('id="primary-navigation"');
+    expect(html).toContain('id="language-select"');
+    expect(html).toContain('data-i18n="SHELL_LOADING_TITLE"');
     expect(html).toContain('src="/app.js"');
     expect(html).toContain('src="/vendor/markdown-it.min.js"');
     expect(html).toContain('src="/vendor/purify.min.js"');
@@ -95,16 +97,22 @@ describe("workspace assets", () => {
   });
 
   it("ships the M1 browser contract without executable data sinks or internal request fields", async () => {
-    const [response, uiResponse, markdownResponse] = await Promise.all([
+    const [response, uiResponse, markdownResponse, i18nResponse, enResponse, zhResponse] = await Promise.all([
       SELF.fetch("https://example.test/app.js"),
       SELF.fetch("https://example.test/workspace-ui.js"),
       SELF.fetch("https://example.test/markdown-renderer.js"),
+      SELF.fetch("https://example.test/i18n.js"),
+      SELF.fetch("https://example.test/locales/en.js"),
+      SELF.fetch("https://example.test/locales/zh-CN.js"),
     ]);
-    const source = `${await response.text()}\n${await uiResponse.text()}\n${await markdownResponse.text()}`;
+    const source = `${await response.text()}\n${await uiResponse.text()}\n${await markdownResponse.text()}\n${await i18nResponse.text()}\n${await enResponse.text()}\n${await zhResponse.text()}`;
 
     expect(response.status).toBe(200);
     expect(uiResponse.status).toBe(200);
     expect(markdownResponse.status).toBe(200);
+    expect(i18nResponse.status).toBe(200);
+    expect(enResponse.status).toBe(200);
+    expect(zhResponse.status).toBe(200);
     expect(source).toContain("/api/knowledge");
     expect(source).toContain("/api/knowledge/search");
     expect(source).toContain("/api/knowledge/chat");
@@ -118,13 +126,19 @@ describe("workspace assets", () => {
     expect(source).toContain("createMutationController");
     expect(source).toContain("createOptionPageController");
     expect(source).toContain("createPagedOptionControl");
-    expect(source).toContain("Load more ${safeLabel} options");
+    expect(source).toContain("createLocaleRerenderController");
+    expect(source).toContain("OPTIONS_LOAD_MORE_ARIA");
+    expect(source).toContain("memory-garden-locale");
   });
 
   it("ships only the reviewed pinned local Markdown vendor bytes", async () => {
     expect(SHIPPED_PUBLIC_ASSETS).toEqual(expect.arrayContaining([
       "markdown-renderer.js",
       "markdown-renderer.d.ts",
+      "i18n.js",
+      "i18n.d.ts",
+      "locales/en.js",
+      "locales/zh-CN.js",
       "vendor/markdown-it.min.js",
       "vendor/purify.min.js",
     ]));

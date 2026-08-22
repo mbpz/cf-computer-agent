@@ -4,34 +4,41 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Memory Garden</title>
+    <title data-i18n="APP_TITLE">Memory Garden</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <a class="skip-link" href="#main-content" data-i18n="SHELL_SKIP_MAIN">Skip to main content</a>
     <div id="app-shell" class="app-shell" data-ready="false">
-      <aside id="sidebar" class="sidebar" aria-label="工作区导航">
+      <aside id="sidebar" class="sidebar" aria-label="Workspace navigation" data-i18n-aria-label="SHELL_WORKSPACE_NAVIGATION">
         <div class="brand">
-          <span class="eyebrow">PRIVATE KNOWLEDGE WORKSPACE</span>
+          <span class="eyebrow" data-i18n="APP_BRAND_EYEBROW">PRIVATE KNOWLEDGE WORKSPACE</span>
           <a href="/" data-route class="brand-name">Memory Garden</a>
         </div>
-        <nav id="primary-navigation" aria-label="主要导航"></nav>
+        <nav id="primary-navigation" aria-label="Primary navigation" data-i18n-aria-label="SHELL_PRIMARY_NAVIGATION"></nav>
         <div class="sidebar-footer">
-          <button id="logout-button" class="logout-button" type="button" hidden>退出工作区</button>
+          <label class="language-control">
+            <span data-i18n="SHELL_LANGUAGE_LABEL">Language</span>
+            <select id="language-select" aria-label="Language" data-i18n-aria-label="SHELL_LANGUAGE_LABEL">
+              <option value="en" data-i18n="SHELL_LANGUAGE_EN">English</option>
+              <option value="zh-CN" data-i18n="SHELL_LANGUAGE_ZH_CN">简体中文</option>
+            </select>
+          </label>
+          <button id="logout-button" class="logout-button" type="button" hidden data-i18n="SHELL_LOGOUT">Log out</button>
         </div>
       </aside>
       <div class="app-frame">
         <header class="topbar">
-          <button id="drawer-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="sidebar">Open navigation</button>
-          <div id="session-summary" class="session-summary" aria-live="polite">正在确认登录状态…</div>
+          <button id="drawer-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="sidebar" data-i18n="SHELL_OPEN_NAVIGATION">Open navigation</button>
+          <div id="session-summary" class="session-summary" aria-live="polite" data-i18n="SHELL_SESSION_CHECKING">Checking sign-in status…</div>
         </header>
         <main id="main-content" tabindex="-1">
           <div id="status-region" class="status-region" aria-live="polite"></div>
           <div id="page-outlet" aria-live="polite" aria-busy="true" tabindex="-1">
             <section class="page-state" aria-labelledby="loading-title">
-              <p class="eyebrow">MEMORY GARDEN</p>
-              <h1 id="loading-title">正在加载工作区</h1>
-              <p>正在确认当前登录状态，再加载页面内容。</p>
+              <p class="eyebrow" data-i18n="APP_EYEBROW">MEMORY GARDEN</p>
+              <h1 id="loading-title" data-i18n="SHELL_LOADING_TITLE">Loading workspace</h1>
+              <p data-i18n="SHELL_LOADING_BODY">Checking your current sign-in status before loading the page.</p>
             </section>
           </div>
         </main>

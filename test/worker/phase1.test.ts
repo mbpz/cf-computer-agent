@@ -158,12 +158,10 @@ describe("Phase 1 API permission matrix", () => {
       nextCursor?: string;
     }>()).nextCursor;
     expect(copiedAdminCursor).toBeTruthy();
-    const ownFromAdminCursor = await memberApi(
+    const cursorBody = await expectApiError(memberApi(
       "sub-contributor",
       `/api/submissions/mine?limit=20&cursor=${encodeURIComponent(copiedAdminCursor!)}`,
-    );
-    const cursorBody = await ownFromAdminCursor.json<{ items: Array<{ submitterId: string }> }>();
-    expect(cursorBody.items.every((item) => item.submitterId === "member-contributor")).toBe(true);
+    ), 400, "PAGE_CURSOR_INVALID");
     expect(JSON.stringify(cursorBody)).not.toContain("member-other");
 
     await expectOk(memberApi("sub-contributor", "/api/notes"));

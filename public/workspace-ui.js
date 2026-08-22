@@ -1,3 +1,13 @@
+import { translateEnglish } from "./i18n.js";
+
+let translate = translateEnglish;
+
+export function configureWorkspaceI18n(nextTranslate) {
+  translate = typeof nextTranslate === "function" ? nextTranslate : translateEnglish;
+}
+
+function t(key, values) { return translate(key, values); }
+
 export function createRouteGuard() {
   let generation = 0;
   return Object.freeze({
@@ -14,6 +24,21 @@ export function createOperationGuard() {
   return Object.freeze({
     begin() { generation += 1; return generation; },
     isCurrent(value) { return value === generation; },
+  });
+}
+
+export function createLocaleRerenderController(initialLocale, callbacks) {
+  let locale = safeString(initialLocale);
+  return Object.freeze({
+    apply(nextLocale) {
+      const candidate = safeString(nextLocale);
+      if (!candidate || candidate === locale) return false;
+      locale = candidate;
+      callbacks.closeDialogs();
+      callbacks.applyLocale(candidate);
+      callbacks.rerenderRoute();
+      return true;
+    },
   });
 }
 
@@ -92,7 +117,7 @@ export function drawerState(open) {
     ariaExpanded: String(open),
     ariaHidden: String(!open),
     inert: !open,
-    label: open ? "Close navigation" : "Open navigation",
+    label: t(open ? "SHELL_CLOSE_NAVIGATION" : "SHELL_OPEN_NAVIGATION"),
   });
 }
 
@@ -102,7 +127,7 @@ export function drawerStateForViewport(mobile, open) {
     ariaExpanded: "false",
     ariaHidden: "false",
     inert: false,
-    label: "Open navigation",
+    label: t("SHELL_OPEN_NAVIGATION"),
   });
 }
 
@@ -124,7 +149,7 @@ export function sessionBootstrapState(status, session) {
 export async function postLogout(request) {
   const response = await request("/auth/logout", { method: "POST", credentials: "same-origin" });
   if (!response.ok) {
-    const error = new Error(response.statusText || "退出失败，请重试。");
+    const error = new Error(response.statusText || t("SHELL_LOGOUT_ERROR"));
     error.status = response.status;
     throw error;
   }
@@ -209,7 +234,7 @@ export function createReviewTagController({ spaceId, owns, request, onChange }) 
       },
       () => {
         loaded = true;
-        error = append ? "Could not load more Tags." : "Could not load Tags.";
+        error = t(append ? "REVIEW_TAGS_LOAD_MORE_FAILED" : "REVIEW_TAGS_LOAD_FAILED");
         emit();
       },
     );
@@ -233,8 +258,8 @@ export function reviewTagLoadMoreModel(value) {
   const pending = state.pending === true;
   return Object.freeze({
     visible: safeString(state.nextCursor).length > 0,
-    label: pending ? "Loading more Tags…" : "Load more Tags",
-    accessibleName: "Load more Tags in the requested Space",
+    label: t(pending ? "REVIEW_TAGS_LOADING_MORE" : "REVIEW_TAGS_LOAD_MORE"),
+    accessibleName: t("REVIEW_TAGS_LOAD_MORE_ARIA"),
     disabled: pending,
   });
 }
@@ -275,7 +300,7 @@ export function createOptionPageController({ resource, spaceId, writableOnly = f
       () => {
         loaded = true;
         const label = optionResourceLabel(fixedResource);
-        error = append ? `Could not load more ${label}.` : `Could not load ${label}.`;
+        error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", { resource: label });
         emit();
       },
     );
@@ -345,7 +370,9 @@ export function createAdminSpacesRouteController({ owns, request, onChange }) {
       },
       () => {
         loaded = true;
-        error = append ? "Could not load more Spaces." : "Could not load Spaces.";
+        error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
+          resource: t("COMMON_SPACES"),
+        });
         emit();
       },
     ).then(ensureCollections);
@@ -366,8 +393,8 @@ export function optionLoadMoreModel(value, label) {
   const pending = state.pending === true;
   return Object.freeze({
     visible: safeString(state.nextCursor).length > 0,
-    label: pending ? `Loading more ${safeLabel}…` : `Load more ${safeLabel}`,
-    accessibleName: `Load more ${safeLabel} options`,
+    label: t(pending ? "OPTIONS_LOADING_MORE" : "OPTIONS_LOAD_MORE", { resource: safeLabel }),
+    accessibleName: t("OPTIONS_LOAD_MORE_ARIA", { resource: safeLabel }),
     disabled: pending,
   });
 }
@@ -433,9 +460,9 @@ export function createChatItemPageController({ owns, request, onChange }) {
       },
       () => {
         loaded = true;
-        error = append
-          ? "Could not load more knowledge items."
-          : "Could not load knowledge items.";
+        error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
+          resource: t("KNOWLEDGE_CHAT_SCOPE_ITEMS_FIELD"),
+        });
         emit();
       },
     );
@@ -466,16 +493,16 @@ export function reviewPreviewModel(value) {
     const startLine = safeLine(chunk.startLine);
     const endLine = safeLine(chunk.endLine, startLine);
     return Object.freeze({
-      heading: headingPath.join(" › ") || "Document",
+      heading: headingPath.join(" › ") || t("COMMON_DOCUMENT"),
       startLine,
       endLine,
       lineLabel: lineLabel(startLine, endLine),
       excerpt: safeString(chunk.excerpt),
     });
   });
-  const warnings = ["Preview is inert text; Markdown and HTML are never executed."];
-  if (chunks.length === 0) warnings.push("No publication Chunk was produced; this submission cannot be published.");
-  if (sourceVersion.parserVersion !== "m1-v1") warnings.push("The parser version is not recognized by this workspace.");
+  const warnings = [t("REVIEW_WARNING_INERT")];
+  if (chunks.length === 0) warnings.push(t("REVIEW_WARNING_NO_CHUNK"));
+  if (sourceVersion.parserVersion !== "m1-v1") warnings.push(t("REVIEW_WARNING_PARSER"));
   return Object.freeze({
     submissionId: safeString(preview.submissionId),
     status: safeString(preview.status),
@@ -506,9 +533,11 @@ export function reviewTargetModel(value) {
   const available = target.available === true && spaceMatches && collectionMatches;
   return Object.freeze({
     spaceId,
-    spaceLabel: spaceMatches ? safeString(space.name) : "Requested Space unavailable",
+    spaceLabel: spaceMatches ? safeString(space.name) : t("REVIEW_REQUESTED_SPACE_UNAVAILABLE"),
     collectionId,
-    collectionLabel: collectionId === null ? "No collection" : collectionMatches ? safeString(collection.name) : "Requested Collection unavailable",
+    collectionLabel: collectionId === null
+      ? t("COMMON_NO_COLLECTION")
+      : collectionMatches ? safeString(collection.name) : t("REVIEW_REQUESTED_COLLECTION_UNAVAILABLE"),
     tagSpaceId: spaceId,
     available,
   });
@@ -543,11 +572,11 @@ export function knowledgeReaderModel(value, location = {}) {
     const headingPath = safeArray(chunk.headingPath).map(safeString).filter(Boolean);
     const startLine = safeLine(chunk.startLine);
     const endLine = safeLine(chunk.endLine, startLine);
-    const label = `${headingPath.join(" › ") || "Document"} · ${lineLabel(startLine, endLine)}`;
+    const label = `${headingPath.join(" › ") || t("COMMON_DOCUMENT")} · ${lineLabel(startLine, endLine)}`;
     return Object.freeze({
       id,
       citationId: safeString(chunk.citationId),
-      label: headingPath.join(" › ") || "Document",
+      label: headingPath.join(" › ") || t("COMMON_DOCUMENT"),
       lineLabel: lineLabel(startLine, endLine),
       focused: id === focusedChunkId,
       href: readerHref(knowledgeItemId, revisionId, id),
@@ -561,7 +590,10 @@ export function knowledgeReaderModel(value, location = {}) {
     visibilityLabel: visibilityLabel(revision.visibility),
     revisionId,
     isCurrent,
-    revisionLabel: `Revision ${revisionId} · ${isCurrent ? "current" : "history"}`,
+    revisionLabel: t("READER_REVISION_LABEL", {
+      revisionId,
+      state: t(isCurrent ? "READER_REVISION_CURRENT" : "READER_REVISION_HISTORY"),
+    }),
     sourceVersionId: safeString(revision.sourceVersionId),
     reviewerId: safeString(revision.reviewerId),
     sourceVersionOrdinal,
@@ -588,7 +620,11 @@ export function citedAnswerModel(value) {
     .map((source, index) => Object.freeze({
       ...source,
       number: index + 1,
-      accessibleName: `Open citation ${index + 1}: ${source.title}, ${source.headingPath.join(" › ") || "Document"}, ${lineLabel(source.startLine, source.endLine)}`,
+      accessibleName: t("READER_OPEN_CITATION_ARIA", {
+        number: index + 1,
+        title: source.title,
+        location: `${source.headingPath.join(" › ") || t("COMMON_DOCUMENT")}, ${lineLabel(source.startLine, source.endLine)}`,
+      }),
       href: source.citationHref,
     }));
   const evidenceConfidence = typeof input.evidenceConfidence === "number"
@@ -630,21 +666,27 @@ export function chatScopeControlsModel(value) {
   });
 }
 
+export function chatScopeSummaryModel(scopeLabel, complete) {
+  return t(complete ? "KNOWLEDGE_CHAT_SCOPE_CURRENT" : "KNOWLEDGE_CHAT_SCOPE_CURRENT_INCOMPLETE", {
+    scope: safeString(scopeLabel),
+  });
+}
+
 export function submissionResultModel(value) {
   const input = safeRecord(value);
   const duplicate = safeRecord(input.duplicateCandidate);
   if (safeString(duplicate.submissionId)) {
-    const title = safeString(duplicate.title) || "an earlier submission";
+    const title = safeString(duplicate.title) || t("SUBMIT_EARLIER");
     return Object.freeze({
       kind: "duplicate",
-      message: `A matching submission already exists: ${title}.`,
+      message: t("SUBMIT_DUPLICATE", { title }),
       submissionId: safeString(duplicate.submissionId),
     });
   }
   const submission = safeRecord(input.submission);
   return Object.freeze({
     kind: "created",
-    message: `Submitted ${safeString(submission.title) || "knowledge"} for review.`,
+    message: t("SUBMIT_CREATED", { title: safeString(submission.title) || t("SUBMIT_FALLBACK_TITLE") }),
     submissionId: safeString(submission.id),
   });
 }
@@ -766,7 +808,7 @@ function chatScopeRequestBody(value) {
       return { kind: "items", knowledgeItemIds: ids };
     }
   }
-  throw new Error("Chat scope is invalid.");
+  throw new Error(t("KNOWLEDGE_CHAT_SCOPE_REQUEST_INVALID"));
 }
 
 function hasExactKeys(value, expected) {
@@ -912,7 +954,9 @@ function createAdminCollectionPageController({ spaceId, owns, request, onChange 
       },
       () => {
         loaded = true;
-        error = append ? "Could not load more Collections." : "Could not load Collections.";
+        error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
+          resource: t("COMMON_COLLECTIONS"),
+        });
         emit();
       },
     );
@@ -952,9 +996,9 @@ function emptyAdminCollectionState() {
 }
 
 function optionResourceLabel(resource) {
-  if (resource === "collections") return "Collections";
-  if (resource === "tags") return "Tags";
-  return "Spaces";
+  if (resource === "collections") return t("COMMON_COLLECTIONS");
+  if (resource === "tags") return t("COMMON_TAGS");
+  return t("COMMON_SPACES");
 }
 
 function searchHitModel(candidate) {
@@ -980,7 +1024,7 @@ function searchHitModel(candidate) {
     headingPath,
     startLine,
     endLine,
-    location: `${headingPath.join(" › ") || "Document"} · ${lineLabel(startLine, endLine)}`,
+    location: `${headingPath.join(" › ") || t("COMMON_DOCUMENT")} · ${lineLabel(startLine, endLine)}`,
     excerpt,
     matchedFields,
     matchedFieldLabels,
@@ -992,11 +1036,11 @@ function searchHitModel(candidate) {
 }
 
 function searchMatchedFieldLabel(field) {
-  if (field === "title") return "Title";
-  if (field === "summary") return "Summary";
-  if (field === "tags") return "Tags";
-  if (field === "code") return "Code";
-  return "Body";
+  if (field === "title") return t("COMMON_TITLE");
+  if (field === "summary") return t("COMMON_SUMMARY");
+  if (field === "tags") return t("COMMON_TAGS");
+  if (field === "code") return t("COMMON_CODE");
+  return t("COMMON_BODY");
 }
 
 function normalizeHighlightRanges(value, excerptLength) {
@@ -1043,11 +1087,13 @@ function readerHref(knowledgeItemId, revisionId, chunkId) {
 }
 
 function lineLabel(startLine, endLine) {
-  return startLine === endLine ? `line ${startLine}` : `lines ${startLine}–${endLine}`;
+  return startLine === endLine
+    ? t("READER_LINE", { line: startLine })
+    : t("READER_LINES", { start: startLine, end: endLine });
 }
 
 function visibilityLabel(value) {
-  return value === "admin_only" ? "Admin only" : "Shared";
+  return t(value === "admin_only" ? "COMMON_VISIBILITY_ADMIN_ONLY" : "COMMON_VISIBILITY_SHARED");
 }
 
 function searchStatus(value) {
