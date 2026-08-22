@@ -677,6 +677,9 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
     model.searchStatus === "search_degraded"
       ? routeStateNode("degraded", "This document is readable, but its search index is degraded.")
       : undefined,
+    model.searchStatus === "failed"
+      ? routeStateNode("error", "This document is readable, but search indexing failed and requires administrator recovery.")
+      : undefined,
     element("pre", { className: "markdown-body", text: model.markdown }),
   ]);
   const sources = element("aside", { className: "reader-sources", "aria-label": "Sources and locations" }, [

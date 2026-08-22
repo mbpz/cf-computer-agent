@@ -64,6 +64,17 @@ CREATE INDEX reviews_final_target_lookup
 ON reviews(final_space_id, final_collection_id, final_visibility, created_at DESC, id DESC);
 
 ALTER TABLE revisions ADD COLUMN summary TEXT NOT NULL DEFAULT '';
+ALTER TABLE chunks ADD COLUMN index_field TEXT NOT NULL DEFAULT 'body'
+  CHECK(index_field IN ('body', 'code'));
+UPDATE chunks SET index_field = 'code'
+WHERE revision_id IN (
+  SELECT revisions.id FROM revisions
+  JOIN source_versions ON source_versions.id = revisions.source_version_id
+  JOIN sources ON sources.id = source_versions.source_id
+  WHERE sources.kind = 'code'
+);
+ALTER TABLE jobs ADD COLUMN lease_token TEXT;
+ALTER TABLE jobs ADD COLUMN lease_expires_at TEXT;
 CREATE INDEX revisions_knowledge_item_cleanup
 ON revisions(knowledge_item_id, id);
 CREATE INDEX revision_tags_tag_revision ON revision_tags(tag_id, revision_id);
@@ -82,8 +93,10 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
   code,
   tokenize='unicode61 remove_diacritics 2'
 );
-INSERT INTO chunks_fts (chunk_id, title, summary, tags, body, code)
-SELECT chunks.id, revisions.title, revisions.summary, chunks.search_tags, chunks.search_body, ''
+INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+SELECT chunks.rowid, chunks.id, revisions.title, revisions.summary, chunks.search_tags,
+  CASE WHEN chunks.index_field = 'body' THEN chunks.search_body ELSE '' END,
+  CASE WHEN chunks.index_field = 'code' THEN chunks.search_body ELSE '' END
 FROM chunks
 JOIN revisions ON revisions.id = chunks.revision_id
 JOIN knowledge_items ON knowledge_items.current_revision_id = revisions.id

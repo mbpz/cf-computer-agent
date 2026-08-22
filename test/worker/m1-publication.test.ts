@@ -326,6 +326,49 @@ describe("M1 publication control plane", () => {
     });
   });
 
+  it("persists parser-authoritative mixed prose and divergent fences into the matching FTS fields", async () => {
+    const parsed = await parseSource({
+      kind: "markdown",
+      content: "Before prose marker.\n\n~~~~language~variant\nconst fence_drift_marker = true;\n~~~~\nAfter close marker.\n",
+    });
+    await seedNormalizedReviewPendingSubmission(
+      "submission-fence-structure", "markdown", parsed.normalizedMarkdown, parsed.contentSha256,
+    );
+    const service = new PublicationService(
+      repositoryWithIds("knowledge-fence-structure", "revision-fence-structure"),
+      durableContentCommitter(),
+    );
+
+    await expect(service.publish(adminReviewer, "submission-fence-structure", publicationInput))
+      .resolves.toMatchObject({ searchStatus: "indexed" });
+
+    const rows = await env.DB.prepare(
+      `SELECT c.ordinal, c.start_line, c.end_line, c.body AS citation_body, c.index_field,
+         f.body AS fts_body, f.code AS fts_code, f.rowid = c.rowid AS same_rowid
+       FROM chunks c JOIN chunks_fts f ON f.rowid = c.rowid
+       WHERE c.revision_id = ? ORDER BY c.ordinal ASC LIMIT 4`,
+    ).bind("revision-fence-structure").all<{
+      ordinal: number; start_line: number; end_line: number; citation_body: string;
+      index_field: string; fts_body: string; fts_code: string; same_rowid: number;
+    }>();
+    expect(rows.results).toEqual([
+      {
+        ordinal: 0, start_line: 1, end_line: 1, citation_body: "Before prose marker.",
+        index_field: "body", fts_body: "before prose marker", fts_code: "", same_rowid: 1,
+      },
+      {
+        ordinal: 1, start_line: 3, end_line: 5,
+        citation_body: "~~~~language~variant\nconst fence_drift_marker = true;\n~~~~",
+        index_field: "code", fts_body: "", fts_code: "language variant const fence drift marker true",
+        same_rowid: 1,
+      },
+      {
+        ordinal: 2, start_line: 6, end_line: 6, citation_body: "After close marker.",
+        index_field: "body", fts_body: "after close marker", fts_code: "", same_rowid: 1,
+      },
+    ]);
+  });
+
   it("replays idempotently, removes the old current Revision, and removes all rows when trashed", async () => {
     await seedReviewPendingSubmission("submission-switch-base");
     const repository = repositoryWithIds("knowledge-switch", "revision-switch-base");
@@ -336,6 +379,7 @@ describe("M1 publication control plane", () => {
     await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual([
       "revision-switch-base-chunk-0", "revision-switch-base-chunk-1",
     ]);
+    await expect(indexRowidMismatches("knowledge-switch")).resolves.toEqual([]);
 
     const replacement = await parseSource({
       kind: "markdown",
@@ -346,12 +390,14 @@ describe("M1 publication control plane", () => {
     );
     await expect(repository.processIndexJob("revision-switch-next")).resolves.toBe("indexed");
     await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual(["revision-switch-next-chunk-0"]);
+    await expect(indexRowidMismatches("knowledge-switch")).resolves.toEqual([]);
 
     await env.DB.batch([
       env.DB.prepare("UPDATE knowledge_items SET status = 'trashed' WHERE id = ?").bind("knowledge-switch"),
       env.DB.prepare(
-        "UPDATE jobs SET state = 'pending' WHERE kind = 'index_revision' AND resource_id = ?",
-      ).bind("revision-switch-next"),
+        `UPDATE jobs SET state = 'pending', available_at = ?, lease_token = NULL, lease_expires_at = NULL
+         WHERE kind = 'index_revision' AND resource_id = ?`,
+      ).bind(now, "revision-switch-next"),
     ]);
     await expect(repository.processIndexJob("revision-switch-next")).resolves.toBe("indexed");
     await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual([]);
@@ -565,6 +611,7 @@ describe("M1 publication control plane", () => {
     await repository.markContentWritten(intent.submissionId, receipt);
     const chunks = Array.from({ length: 257 }, (_, ordinal) => ({
       ordinal,
+      indexField: "body" as const,
       headingPath: [],
       startLine: ordinal + 1,
       endLine: ordinal + 1,
@@ -640,7 +687,9 @@ describe("M1 publication control plane", () => {
       second.publish(adminReviewer, "submission-concurrent", publicationInput),
     ]);
 
-    expect(results[0]).toEqual(results[1]);
+    expect(results.map((result) => result.id)).toEqual([results[0].id, results[0].id]);
+    expect(results.some((result) => result.searchStatus === "indexed")).toBe(true);
+    expect(results.every((result) => ["pending", "indexed"].includes(result.searchStatus))).toBe(true);
     await expect(publicationState("submission-concurrent")).resolves.toMatchObject({
       submissionStatus: "published",
       intentState: "completed",
@@ -847,6 +896,7 @@ describe("M1 publication control plane", () => {
       ftsCount: 2,
       auditCount: 1,
     });
+    await expect(indexRowidMismatches("knowledge-degraded")).resolves.toEqual([]);
   });
 
   it("terminalizes a repeatedly failing index Job and keeps the terminal state stable", async () => {
@@ -923,6 +973,122 @@ describe("M1 publication control plane", () => {
         auditCount: 1,
       });
     }
+  });
+
+  it("allows only one concurrent index claim without consuming a duplicate attempt", async () => {
+    await seedReviewPendingSubmission("submission-index-claim-race");
+    const repository = repositoryWithIds("knowledge-index-claim-race", "revision-index-claim-race");
+    await finalizeWithoutIndex(repository, "submission-index-claim-race");
+
+    const [first, second] = await Promise.all([
+      new PublicationRepository(env.DB).processIndexJob("revision-index-claim-race"),
+      new PublicationRepository(env.DB).processIndexJob("revision-index-claim-race"),
+    ]);
+
+    expect([first, second].sort()).toEqual(["indexed", "pending"]);
+    await expect(env.DB.prepare(
+      "SELECT state, attempts FROM jobs WHERE resource_id = ? LIMIT 1",
+    ).bind("revision-index-claim-race").first()).resolves.toEqual({ state: "completed", attempts: 1 });
+    await expect(indexedChunkIds("knowledge-index-claim-race")).resolves.toEqual([
+      "revision-index-claim-race-chunk-0", "revision-index-claim-race-chunk-1",
+    ]);
+  });
+
+  it("skips an unexpired running lease and takes it over only after expiry", async () => {
+    await seedReviewPendingSubmission("submission-index-lease-expiry");
+    const repository = repositoryWithIds("knowledge-index-lease-expiry", "revision-index-lease-expiry");
+    await finalizeWithoutIndex(repository, "submission-index-lease-expiry");
+    const future = "2026-08-22T00:01:00.000Z";
+    await env.DB.prepare(
+      `UPDATE jobs SET state = 'running', attempts = 1, lease_token = 'active-owner',
+         lease_expires_at = ?, available_at = ? WHERE resource_id = ?`,
+    ).bind(future, future, "revision-index-lease-expiry").run();
+    const service = new PublicationService(new PublicationRepository(env.DB, {
+      now: () => new Date(now),
+      leaseToken: () => "takeover-owner",
+    }), durableContentCommitter());
+
+    await expect(service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [],
+    });
+    await expect(env.DB.prepare(
+      "SELECT state, attempts, lease_token FROM jobs WHERE resource_id = ? LIMIT 1",
+    ).bind("revision-index-lease-expiry").first()).resolves.toEqual({
+      state: "running", attempts: 1, lease_token: "active-owner",
+    });
+
+    await env.DB.prepare(
+      "UPDATE jobs SET lease_expires_at = ?, available_at = ? WHERE resource_id = ?",
+    ).bind("2026-08-21T23:59:59.000Z", "2026-08-21T23:59:59.000Z", "revision-index-lease-expiry").run();
+    await expect(service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 1,
+      failures: [],
+    });
+    await expect(env.DB.prepare(
+      "SELECT state, attempts, lease_token, lease_expires_at FROM jobs WHERE resource_id = ? LIMIT 1",
+    ).bind("revision-index-lease-expiry").first()).resolves.toEqual({
+      state: "completed", attempts: 2, lease_token: null, lease_expires_at: null,
+    });
+  });
+
+  it("lets an expiry winner complete while preventing the stale loser from completing or failing it", async () => {
+    await seedReviewPendingSubmission("submission-index-lease-winner");
+    const seed = repositoryWithIds("knowledge-index-lease-winner", "revision-index-lease-winner");
+    await finalizeWithoutIndex(seed, "submission-index-lease-winner");
+    let mutate = true;
+    let winnerStatus: string | undefined;
+    const db = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            if (mutate) {
+              mutate = false;
+              await env.DB.prepare(
+                `UPDATE jobs SET lease_expires_at = ?, available_at = ?
+                 WHERE resource_id = ? AND state = 'running'`,
+              ).bind(
+                "2026-08-21T23:59:59.000Z",
+                "2026-08-21T23:59:59.000Z",
+                "revision-index-lease-winner",
+              ).run();
+              winnerStatus = await new PublicationRepository(env.DB, {
+                now: () => new Date(now),
+                leaseToken: () => "winner-owner",
+              }).processIndexJob("revision-index-lease-winner");
+            }
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const loser = new PublicationRepository(db, {
+      now: () => new Date(now),
+      leaseToken: () => "loser-owner",
+    });
+
+    await expect(loser.processIndexJob("revision-index-lease-winner")).resolves.toBe("indexed");
+    expect(winnerStatus).toBe("indexed");
+    await expect(env.DB.prepare(
+      `SELECT j.state, j.attempts, j.lease_token, j.last_error_code, k.search_status
+       FROM jobs j JOIN revisions r ON r.id = j.resource_id
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       WHERE j.resource_id = ? LIMIT 1`,
+    ).bind("revision-index-lease-winner").first()).resolves.toEqual({
+      state: "completed",
+      attempts: 2,
+      lease_token: null,
+      last_error_code: null,
+      search_status: "indexed",
+    });
+    await expect(indexedChunkIds("knowledge-index-lease-winner")).resolves.toEqual([
+      "revision-index-lease-winner-chunk-0", "revision-index-lease-winner-chunk-1",
+    ]);
+    await expect(indexRowidMismatches("knowledge-index-lease-winner")).resolves.toEqual([]);
   });
 
   it("recovers an actual DO write whose response was lost before D1 left pending_content", async () => {
@@ -1317,6 +1483,17 @@ async function indexedChunkIds(knowledgeItemId: string): Promise<string[]> {
      JOIN chunks c ON c.id = f.chunk_id
      JOIN revisions r ON r.id = c.revision_id
      WHERE r.knowledge_item_id = ? ORDER BY f.chunk_id ASC LIMIT ?`,
+  ).bind(knowledgeItemId, 257).all<{ chunk_id: string }>();
+  return rows.results.map((row) => row.chunk_id);
+}
+
+async function indexRowidMismatches(knowledgeItemId: string): Promise<string[]> {
+  const rows = await env.DB.prepare(
+    `SELECT f.chunk_id FROM chunks_fts f
+     JOIN chunks c ON c.id = f.chunk_id
+     JOIN revisions r ON r.id = c.revision_id
+     WHERE r.knowledge_item_id = ? AND f.rowid != c.rowid
+     ORDER BY f.chunk_id ASC LIMIT ?`,
   ).bind(knowledgeItemId, 257).all<{ chunk_id: string }>();
   return rows.results.map((row) => row.chunk_id);
 }

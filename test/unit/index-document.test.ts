@@ -17,7 +17,7 @@ describe("buildIndexDocument", () => {
     const chunks = chunkDocument({ normalizedMarkdown: content, kind: "markdown" });
 
     const document = buildIndexDocument(
-      { id: "revision-1", title: "  Governed title  ", kind: "markdown", content },
+      { id: "revision-1", title: "  Governed title  " },
       chunks,
       [
         { id: "tag-b", slug: "  RECOVERY  ", name: "  Retry   Safety " },
@@ -46,7 +46,7 @@ describe("buildIndexDocument", () => {
     const chunks = chunkDocument({ normalizedMarkdown: content, kind: "markdown" });
 
     const document = buildIndexDocument(
-      { id: "revision-2", title: "T".repeat(400), kind: "markdown", content },
+      { id: "revision-2", title: "T".repeat(400) },
       chunks,
       [{ id: "tag", slug: "s".repeat(200), name: "N".repeat(400) }],
     );
@@ -58,5 +58,24 @@ describe("buildIndexDocument", () => {
     expect(new TextEncoder().encode(document.tags).byteLength).toBeLessThanOrEqual(16_384);
     expect(new TextEncoder().encode(document.body).byteLength).toBeLessThanOrEqual(131_072);
     expect(new TextEncoder().encode(document.code).byteLength).toBeLessThanOrEqual(131_072);
+  });
+
+  it("uses the chunker's structural field without re-parsing fence syntax", () => {
+    const document = buildIndexDocument(
+      { id: "revision-structure", title: "Structure" },
+      [{
+        ordinal: 0,
+        indexField: "code",
+        headingPath: [],
+        startLine: 1,
+        endLine: 1,
+        body: "structural_code();",
+        searchBody: "structural code",
+      }],
+      [],
+    );
+
+    expect(document.body).toBe("");
+    expect(document.code).toBe("structural code");
   });
 });

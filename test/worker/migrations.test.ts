@@ -354,10 +354,12 @@ describe("Phase 1 control-plane migrations", () => {
       "search_title:TEXT:1:NULL:0",
       "search_tags:TEXT:1:NULL:0",
       "search_body:TEXT:1:NULL:0",
+      "index_field:TEXT:1:'body':0",
     ], [
       "CHECK(ordinal >= 0)",
       "CHECK(start_line > 0)",
       "CHECK(end_line >= start_line)",
+      "CHECK(index_field IN ('body', 'code'))",
     ]);
     await expectTableSchema("publication_intents", [
       "submission_id:TEXT:0:NULL:1",
@@ -390,6 +392,8 @@ describe("Phase 1 control-plane migrations", () => {
       "last_error_code:TEXT:0:NULL:0",
       "created_at:TEXT:1:NULL:0",
       "updated_at:TEXT:1:NULL:0",
+      "lease_token:TEXT:0:NULL:0",
+      "lease_expires_at:TEXT:0:NULL:0",
     ], [
       "CHECK(kind IN ('index_revision'))",
       "CHECK(state IN ('pending', 'running', 'completed', 'failed_retryable', 'failed_terminal'))",
@@ -876,7 +880,10 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(env.DB.prepare("SELECT parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline FROM source_versions WHERE id = 'source-version-0004'").first()).resolves.toEqual({ parser_schema_version: "m1-v1", source_identity_sha256: null, code_language: null, file_label: null, line_baseline: 1 });
     await expect(env.DB.prepare("SELECT requested_visibility FROM submissions WHERE id = 'submission-0004'").first()).resolves.toEqual({ requested_visibility: "shared" });
     await expect(env.DB.prepare("SELECT requested_title, requested_space_id, requested_collection_id, requested_visibility, final_space_id, final_collection_id, final_visibility FROM reviews WHERE id = 'review-0004'").first()).resolves.toEqual({ requested_title: "Requested title", requested_space_id: "default", requested_collection_id: "collection-0004", requested_visibility: "admin_only", final_space_id: "default", final_collection_id: "collection-0004", final_visibility: "admin_only" });
-    await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "Schema", body: "visible body", code: "" });
+    await expect(env.DB.prepare("SELECT chunk_id, title, summary, tags, body, code FROM chunks_fts WHERE chunks_fts MATCH 'visible'").first()).resolves.toEqual({ chunk_id: "chunk-0004", title: "Final title", summary: "", tags: "Schema", body: "", code: "visible body" });
+    await expect(env.DB.prepare(
+      "SELECT chunks_fts.rowid = chunks.rowid AS same_rowid FROM chunks_fts JOIN chunks ON chunks.id = chunks_fts.chunk_id WHERE chunks.id = 'chunk-0004'",
+    ).first()).resolves.toEqual({ same_rowid: 1 });
     await expect(env.DB.prepare("SELECT m.id AS member_id, a.token_hash, s.id AS space_id, c.id AS collection_id, sub.id AS submission_id, sv.id AS source_version_id, r.id AS review_id, k.id AS item_id, rev.id AS revision_id, t.id AS tag_id, ch.id AS chunk_id, j.id AS job_id FROM members m JOIN auth_sessions a ON a.member_id = m.id JOIN spaces s ON s.id = 'default' JOIN collections c ON c.id = 'collection-0004' JOIN submissions sub ON sub.id = 'submission-0004' JOIN source_versions sv ON sv.submission_id = sub.id JOIN reviews r ON r.submission_id = sub.id JOIN knowledge_items k ON k.id = 'item-0004' JOIN revisions rev ON rev.id = k.current_revision_id JOIN revision_tags rt ON rt.revision_id = rev.id JOIN tags t ON t.id = rt.tag_id JOIN chunks ch ON ch.revision_id = rev.id JOIN jobs j ON j.resource_id = rev.id").first()).resolves.toEqual({ member_id: "member-0004", token_hash: "session-0004", space_id: "default", collection_id: "collection-0004", submission_id: "submission-0004", source_version_id: "source-version-0004", review_id: "review-0004", item_id: "item-0004", revision_id: "revision-0004", tag_id: "tag-0004", chunk_id: "chunk-0004", job_id: "job-0004" });
   });
 
@@ -908,8 +915,9 @@ describe("Phase 1 control-plane migrations", () => {
     const jobsPlan = await queryPlan(
       `SELECT resource_id FROM jobs
        WHERE kind = 'index_revision' AND state IN ('pending', 'running', 'failed_retryable')
+         AND available_at <= ?
        ORDER BY available_at ASC, id ASC LIMIT ?`,
-      [20],
+      [timestamp, 20],
     );
     const tagsPlan = await queryPlan(
       `SELECT t.id, t.space_id, t.slug, t.name, t.status, t.created_at, t.updated_at
@@ -924,11 +932,17 @@ describe("Phase 1 control-plane migrations", () => {
       ["default", timestamp, timestamp, "active-tag-9999", 51],
     );
     const cleanupPlan = await queryPlan(
-      `SELECT c.id
+      `SELECT c.rowid
        FROM revisions stale
        JOIN chunks c ON c.revision_id = stale.id
-       WHERE stale.knowledge_item_id = ? AND stale.id != ?`,
+       CROSS JOIN chunks_fts f
+       WHERE stale.knowledge_item_id = ? AND stale.id != ? AND f.rowid = c.rowid
+       LIMIT 257`,
       ["knowledge-cleanup", "revision-current"],
+    );
+    const ftsDeletePlan = await queryPlan(
+      "DELETE FROM chunks_fts WHERE rowid = ?",
+      [42],
     );
 
     expect(jobsPlan).toContain("jobs_recoverable_scan");
@@ -937,7 +951,10 @@ describe("Phase 1 control-plane migrations", () => {
     expect(tagsPlan).not.toMatch(/USE TEMP B-TREE/iu);
     expect(cleanupPlan).toContain("revisions_knowledge_item_cleanup");
     expect(cleanupPlan).toContain("chunks_revision");
+    expect(cleanupPlan).toContain("VIRTUAL TABLE INDEX 0:=");
     expect(cleanupPlan).not.toMatch(/SCAN (?:stale|c)\b|USE TEMP B-TREE/iu);
+    expect(ftsDeletePlan).toContain("VIRTUAL TABLE INDEX 0:=");
+    expect(ftsDeletePlan).not.toMatch(/LIST SUBQUERY|USE TEMP B-TREE/iu);
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

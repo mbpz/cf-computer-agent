@@ -400,6 +400,29 @@ describe("M1 trusted knowledge view models", () => {
     ]);
   });
 
+  it("preserves every authoritative search status including terminal failure", () => {
+    const statuses = ["pending", "indexed", "search_degraded", "failed"] as const;
+    const model = knowledgeListModel({
+      items: statuses.map((searchStatus, index) => ({
+        ...libraryItem(`knowledge-status-${index}`, searchStatus, "shared"),
+        searchStatus,
+      })),
+    });
+
+    expect(model.items.map((item) => item.searchStatus)).toEqual(statuses);
+    for (const searchStatus of statuses) {
+      expect(knowledgeReaderModel({
+        id: `revision-${searchStatus}`,
+        knowledgeItemId: "knowledge-status",
+        title: searchStatus,
+        visibility: "shared",
+        isCurrent: true,
+        searchStatus,
+        chunks: [],
+      }).searchStatus).toBe(searchStatus);
+    }
+  });
+
   it("uses the server-owned chunk preview without parsing Markdown in the browser", () => {
     const model = reviewPreviewModel({
       submissionId: "submission-1",

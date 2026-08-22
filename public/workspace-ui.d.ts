@@ -173,7 +173,7 @@ export interface KnowledgeListViewItem {
   revisionId: string;
   visibility: "shared" | "admin_only";
   visibilityLabel: "Shared" | "Admin only";
-  searchStatus: "pending" | "indexed" | "search_degraded";
+  searchStatus: "pending" | "indexed" | "search_degraded" | "failed";
   tagIds: string[];
   publishedAt: string;
   updatedAt: string;
@@ -245,7 +245,7 @@ export interface KnowledgeReaderViewModel {
   revisionId: string;
   isCurrent: boolean;
   revisionLabel: string;
-  searchStatus?: "pending" | "indexed" | "search_degraded";
+  searchStatus?: "pending" | "indexed" | "search_degraded" | "failed";
   publishedAt: string;
   markdown: string;
   tagIds: string[];

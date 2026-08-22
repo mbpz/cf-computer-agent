@@ -8,6 +8,7 @@ const defaultOverlapCodePoints = 120;
 
 export interface ChunkDraft {
   ordinal: number;
+  indexField: "body" | "code";
   headingPath: string[];
   startLine: number;
   endLine: number;
@@ -36,6 +37,7 @@ export function chunkDocument(
       if (chunk.body.trim().length === 0 || searchBody.trim().length === 0) continue;
       drafts.push({
         ordinal: drafts.length,
+        indexField: block.kind === "code" ? "code" : "body",
         headingPath: [...block.headingPath],
         ...sourceLocation(document, chunk.startLine, chunk.endLine),
         body: chunk.body,
@@ -58,6 +60,7 @@ export function chunkDocument(
     const heading = parseHeading(firstLine.text);
     return [{
       ordinal: 0,
+      indexField: "body",
       headingPath: heading === null ? [] : [heading.title],
       ...sourceLocation(document, firstLine.line, firstLine.line),
       body: firstLine.text,
@@ -170,8 +173,11 @@ interface Fence {
 }
 
 function parseFenceStart(line: string): Fence | null {
-  const match = /^(?: {0,3})(`{3,}|~{3,})[^`~]*$/u.exec(line);
-  return match === null ? null : { marker: match[1]![0] as Fence["marker"], length: match[1]!.length };
+  const match = /^(?: {0,3})(`{3,}|~{3,})(.*)$/u.exec(line);
+  if (match === null) return null;
+  const marker = match[1]![0] as Fence["marker"];
+  if (marker === "`" && match[2]!.includes("`")) return null;
+  return { marker, length: match[1]!.length };
 }
 
 function isFenceEnd(line: string, fence: Fence): boolean {

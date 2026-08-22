@@ -836,7 +836,7 @@ function visibilityLabel(value) {
 }
 
 function searchStatus(value) {
-  return value === "search_degraded" || value === "pending" ? value : "indexed";
+  return value === "search_degraded" || value === "pending" || value === "failed" ? value : "indexed";
 }
 
 function safeLine(value, fallback = 1) {

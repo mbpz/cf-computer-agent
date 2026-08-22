@@ -99,6 +99,32 @@ describe("chunkDocument", () => {
     });
   });
 
+  it("emits authoritative prose/code fields for tilde info, longer fences, and prose after close", () => {
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: [
+        "Before prose.",
+        "",
+        "~~~~language~variant",
+        "const fenceDrift = true;",
+        "~~~~",
+        "After prose.",
+        "",
+      ].join("\n"),
+    });
+
+    expect(chunks).toEqual([
+      expect.objectContaining({ body: "Before prose.", startLine: 1, endLine: 1, indexField: "body" }),
+      expect.objectContaining({
+        body: "~~~~language~variant\nconst fenceDrift = true;\n~~~~",
+        startLine: 3,
+        endLine: 5,
+        indexField: "code",
+      }),
+      expect.objectContaining({ body: "After prose.", startLine: 6, endLine: 6, indexField: "body" }),
+    ]);
+  });
+
   it("splits an oversized fenced code block only at complete lines", () => {
     const input = {
       kind: "code" as const,

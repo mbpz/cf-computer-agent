@@ -5,7 +5,7 @@ const migrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
-  ["0004_m1_gate_completion.sql", "7a45d9a22dd33fd3cb3c5153f3f60ffc5c3efe5748bb1cea54940843f22c2890"],
+  ["0004_m1_gate_completion.sql", "f57146f604838f59bca0f95b61a34c710e23d366b171373ed646a74cfacde89b"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
