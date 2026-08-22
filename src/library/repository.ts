@@ -2,6 +2,7 @@ import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
+import type { CodeSourceMetadata, ParserSchemaVersion } from "../sources/types";
 import {
   buildSearchMatchQuery,
   isCanonicalSearchTerm,
@@ -67,6 +68,10 @@ export interface AuthorizedRevisionRecord {
   updatedAt: string;
   revisionId: string;
   sourceVersionId: string;
+  reviewerId?: string;
+  sourceVersionOrdinal?: number | null;
+  parserSchemaVersion?: ParserSchemaVersion | null;
+  codeMetadata?: CodeSourceMetadata | null;
   title: string;
   tagIds: string[];
   visibility: KnowledgeVisibility;
@@ -112,6 +117,12 @@ type KnowledgeRow = {
 
 type RevisionRow = KnowledgeRow & {
   source_version_id: string;
+  reviewer_id: string;
+  source_version_ordinal: number | null;
+  parser_schema_version: string | null;
+  code_language: string | null;
+  file_label: string | null;
+  line_baseline: number | null;
   normalized_path: string;
   content_sha256: string;
   published_by: string;
@@ -377,22 +388,30 @@ export class LibraryRepository implements LibraryRepositoryPort {
     const rows = await this.db.prepare(
       `WITH authorized_member AS (
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
+       ), authorized_revision AS (
+         SELECT k.id, k.space_id, k.collection_id, k.status,
+           ${visibleSearchStatusSql} AS search_status, k.updated_at,
+           k.current_revision_id, r.id AS revision_id, r.source_version_id, r.normalized_path,
+           r.content_sha256, r.title, r.tags_json, r.visibility, r.published_by, r.published_at
+         FROM authorized_member am
+         JOIN knowledge_items k
+         JOIN revisions current_revision ON current_revision.id = k.current_revision_id
+         LEFT JOIN jobs current_index_job
+           ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
+         JOIN revisions r ON ${requestedRevision}
+         JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+         WHERE k.id = ? AND k.status = 'active'
+           AND (r.visibility = 'shared' OR am.role = 'admin')
        )
-       SELECT k.id, k.space_id, k.collection_id, k.status,
-         ${visibleSearchStatusSql} AS search_status, k.updated_at,
-         k.current_revision_id, r.id AS revision_id, r.source_version_id, r.normalized_path,
-         r.content_sha256, r.title, r.tags_json, r.visibility, r.published_by, r.published_at,
+       SELECT ar.*, sv.ordinal AS source_version_ordinal, sv.parser_schema_version,
+         sv.code_language, sv.file_label, sv.line_baseline,
+         coalesce(review.reviewer_id, ar.published_by) AS reviewer_id,
          c.id AS chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line
-       FROM authorized_member am
-       JOIN knowledge_items k
-       JOIN revisions current_revision ON current_revision.id = k.current_revision_id
-       LEFT JOIN jobs current_index_job
-         ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
-       JOIN revisions r ON ${requestedRevision}
-       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
-       LEFT JOIN chunks c ON c.revision_id = r.id
-       WHERE k.id = ? AND k.status = 'active'
-         AND (r.visibility = 'shared' OR am.role = 'admin')
+       FROM authorized_revision ar
+       JOIN source_versions sv ON sv.id = ar.source_version_id
+       LEFT JOIN reviews review
+         ON review.submission_id = sv.submission_id AND review.decision = 'published'
+       LEFT JOIN chunks c ON c.revision_id = ar.revision_id
        ORDER BY c.ordinal ASC
        LIMIT ?`,
     ).bind(
@@ -415,6 +434,10 @@ export class LibraryRepository implements LibraryRepositoryPort {
       updatedAt: first.updated_at,
       revisionId: first.revision_id,
       sourceVersionId: first.source_version_id,
+      reviewerId: first.reviewer_id,
+      sourceVersionOrdinal: positiveIntegerOrNull(first.source_version_ordinal),
+      parserSchemaVersion: parserSchemaVersionOrNull(first.parser_schema_version),
+      codeMetadata: codeMetadataOrNull(first),
       title: first.title,
       tagIds: parseStringArray(first.tags_json),
       visibility: first.visibility,
@@ -458,6 +481,21 @@ export class LibraryRepository implements LibraryRepositoryPort {
     ).bind(scope.memberId, scope.role, ...selected.bindings).first<{ degraded: number }>();
     return row?.degraded === 1;
   }
+}
+
+function positiveIntegerOrNull(value: number | null): number | null {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value : null;
+}
+
+function parserSchemaVersionOrNull(value: string | null): ParserSchemaVersion | null {
+  return value === "m1-v1" || value === "m1-v2" ? value : null;
+}
+
+function codeMetadataOrNull(row: Pick<RevisionRow, "code_language" | "file_label" | "line_baseline">): CodeSourceMetadata | null {
+  return typeof row.code_language === "string" && typeof row.file_label === "string"
+    && Number.isSafeInteger(row.line_baseline) && (row.line_baseline ?? 0) > 0
+    ? { language: row.code_language, fileLabel: row.file_label, lineBaseline: row.line_baseline! }
+    : null;
 }
 
 function searchFilterSql(

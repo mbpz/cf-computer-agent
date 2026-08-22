@@ -1,4 +1,5 @@
 import { navigationForSession } from "/navigation.js";
+import { renderSafeMarkdown } from "/markdown-renderer.js";
 import {
   anonymousShellState,
   appendPage,
@@ -687,18 +688,37 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
       }),
     ]), "This Revision has no indexed headings."),
   ]);
+  const markdownBody = element("div", { className: "markdown-body" });
+  markdownBody.append(renderSafeMarkdown(model.markdown));
+  const metadata = element("dl", { className: "reader-metadata", "aria-label": "Revision metadata" }, [
+    element("dt", { text: "Revision ID" }), element("dd", { text: model.revisionId }),
+    element("dt", { text: "SourceVersion ID" }), element("dd", { text: model.sourceVersionId || "Legacy metadata unavailable" }),
+    element("dt", { text: "Reviewer ID" }), element("dd", { text: model.reviewerId || "Legacy metadata unavailable" }),
+    element("dt", { text: "SourceVersion ordinal" }), element("dd", { text: model.sourceVersionOrdinal === null ? "Legacy metadata unavailable" : String(model.sourceVersionOrdinal) }),
+    element("dt", { text: "Parser schema" }), element("dd", { text: model.parserSchemaVersion || "Legacy metadata unavailable" }),
+    element("dt", { text: "Index status" }), element("dd", { text: model.indexStatus }),
+    ...(model.codeMetadata ? [
+      element("dt", { text: "Code source" }),
+      element("dd", { text: `${model.codeMetadata.fileLabel} · ${model.codeMetadata.language} · starts at line ${model.codeMetadata.lineBaseline}` }),
+    ] : []),
+  ]);
   const body = element("article", { className: "reader-body", "aria-label": "Revision body" }, [
-    element("div", { className: "actions" }, [visibilityBadge(model.visibility, model.visibilityLabel), element("span", { className: "badge", text: model.revisionLabel })]),
+    element("div", { className: "actions" }, [
+      visibilityBadge(model.visibility, model.visibilityLabel),
+      element("span", { className: "badge", text: model.revisionLabel }),
+      element("a", { href: model.downloadHref, className: "download-link", download: "", text: "Download Markdown" }),
+    ]),
     !model.isCurrent
       ? routeStateNode("degraded", "You are reading an immutable historical Revision. Citations do not silently move to the current text.")
       : undefined,
-    model.searchStatus === "search_degraded"
+    model.indexStatus === "search_degraded"
       ? routeStateNode("degraded", "This document is readable, but its search index is degraded.")
       : undefined,
-    model.searchStatus === "failed"
+    model.indexStatus === "failed"
       ? routeStateNode("error", "This document is readable, but search indexing failed and requires administrator recovery.")
       : undefined,
-    element("pre", { className: "markdown-body", text: model.markdown }),
+    metadata,
+    markdownBody,
   ]);
   const sources = element("aside", { className: "reader-sources", "aria-label": "Sources and locations" }, [
     element("h2", { text: "Sources" }),

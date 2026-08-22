@@ -130,6 +130,43 @@ describe("M1 permission-scoped library", () => {
     expect(reads).toHaveLength(1);
   });
 
+  it("exposes only authorized Review and SourceVersion metadata after visibility succeeds", async () => {
+    await seedKnowledge({
+      id: "knowledge-metadata",
+      revisionId: "revision-metadata",
+      title: "Metadata",
+      visibility: "shared",
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE source_versions
+         SET ordinal = 3, parser_schema_version = 'm1-v2', code_language = 'typescript',
+           file_label = 'metadata.ts', line_baseline = 17
+         WHERE id = 'source-version-revision-metadata'`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO reviews (
+           id, submission_id, reviewer_id, decision, reason_code, reason, title, visibility, created_at
+         ) VALUES (
+           'review-metadata', 'submission-revision-metadata', 'admin-1', 'published',
+           'approved', '', 'Metadata', 'shared', ?
+         )`,
+      ).bind(now),
+    ]);
+    const service = serviceWithContent();
+
+    const detail = await service.detail(contributor, "knowledge-metadata");
+    expect(detail.currentRevision).toMatchObject({
+      sourceVersionId: "source-version-revision-metadata",
+      reviewerId: "admin-1",
+      sourceVersionOrdinal: 3,
+      parserSchemaVersion: "m1-v2",
+      codeMetadata: { language: "typescript", fileLabel: "metadata.ts", lineBaseline: 17 },
+      indexStatus: "indexed",
+    });
+    expect(JSON.stringify(detail)).not.toMatch(/email|normalizedPath|contentSha256|sourceIdentity|provider/i);
+  });
+
   it("reads exactly 256 authorized chunks and fails closed at 257 before reading content", async () => {
     await seedKnowledge({
       id: "knowledge-chunk-boundary",
@@ -1502,25 +1539,46 @@ describe("M1 permission-scoped library", () => {
       await expect(service.readCitation(contributor, sharedCitation)).resolves.toMatchObject({
         body: "Authorized citation body",
       });
-      expect(readerCalls).toEqual([[
-        "/workspace/published/default/knowledge-real-shared/revision-real-shared.md",
-        sharedHash,
-      ]]);
+      await expect(service.download(
+        contributor,
+        "knowledge-real-shared",
+        "revision-real-shared",
+      )).resolves.toEqual({ markdown: sharedMarkdown, filename: "Real shared.md" });
+      await expect(service.download(
+        admin,
+        "knowledge-real-secret",
+        "revision-real-secret",
+      )).resolves.toEqual({ markdown: secretMarkdown, filename: "Real secret.md" });
+      expect(readerCalls).toEqual([
+        ["/workspace/published/default/knowledge-real-shared/revision-real-shared.md", sharedHash],
+        ["/workspace/published/default/knowledge-real-shared/revision-real-shared.md", sharedHash],
+        ["/workspace/published/default/knowledge-real-secret/revision-real-secret.md", secretHash],
+      ]);
 
       const forged: LibraryScope = { memberId: "member-1", role: "admin" };
       await expect(service.detail(disabled, "knowledge-real-shared")).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.revision(disabled, "knowledge-real-shared", "revision-real-shared")).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.search(disabled, { query: "authorized", limit: 20 })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.readCitation(disabled, sharedCitation)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(service.download(disabled, "knowledge-real-shared", "revision-real-shared"))
+        .rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.detail(forged, "knowledge-real-secret")).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.revision(forged, "knowledge-real-secret", "revision-real-secret")).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.search(forged, { query: "secret", limit: 20 })).rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.readCitation(forged, secretCitation)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(service.download(forged, "knowledge-real-secret", "revision-real-secret"))
+        .rejects.toMatchObject({ code: "FORBIDDEN" });
       await expect(service.detail(contributor, "knowledge-real-secret")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.revision(contributor, "knowledge-real-secret", "revision-real-secret")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.readCitation(contributor, secretCitation)).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
+      await expect(service.download(contributor, "knowledge-real-secret", "revision-real-secret"))
+        .rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
+      await expect(service.download(contributor, "knowledge-real-shared", "revision-real-secret"))
+        .rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.detail(contributor, "knowledge-invisible-id")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.revision(contributor, "knowledge-invisible-id", "revision-invisible-id")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
+      await expect(service.download(contributor, "knowledge-invisible-id", "revision-invisible-id"))
+        .rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.readCitation(contributor, encodeCitationId({
         revisionId: "revision-invisible-id",
         chunkId: "revision-invisible-id-chunk-0",
@@ -1541,14 +1599,16 @@ describe("M1 permission-scoped library", () => {
         limit: 20,
         cursorKey: "a".repeat(64),
       })).resolves.toEqual({ items: [], degraded: false });
-      expect(readerCalls).toHaveLength(1);
+      expect(readerCalls).toHaveLength(3);
 
       await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
       await expect(service.detail(contributor, "knowledge-real-shared")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.revision(contributor, "knowledge-real-shared", "revision-real-shared")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.search(contributor, { query: "authorized", limit: 20 })).resolves.toEqual({ items: [], degraded: false });
       await expect(service.readCitation(contributor, sharedCitation)).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
-      expect(readerCalls).toHaveLength(1);
+      await expect(service.download(contributor, "knowledge-real-shared", "revision-real-shared"))
+        .rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
+      expect(readerCalls).toHaveLength(3);
     } finally {
       disposeWorkspace(workspace);
     }

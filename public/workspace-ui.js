@@ -472,6 +472,20 @@ export function knowledgeReaderModel(value, location = {}) {
   const revisionId = safeString(revision.id);
   const focusedChunkId = safeString(safeRecord(location).chunk);
   const isCurrent = revision.isCurrent === true;
+  const sourceVersionOrdinal = Number.isSafeInteger(revision.sourceVersionOrdinal)
+    && revision.sourceVersionOrdinal > 0 ? revision.sourceVersionOrdinal : null;
+  const parserSchemaVersion = revision.parserSchemaVersion === "m1-v1" || revision.parserSchemaVersion === "m1-v2"
+    ? revision.parserSchemaVersion : null;
+  const rawCodeMetadata = safeRecord(revision.codeMetadata);
+  const codeMetadata = safeString(rawCodeMetadata.language) && safeString(rawCodeMetadata.fileLabel)
+    && Number.isSafeInteger(rawCodeMetadata.lineBaseline) && rawCodeMetadata.lineBaseline > 0
+    ? Object.freeze({
+      language: safeString(rawCodeMetadata.language),
+      fileLabel: safeString(rawCodeMetadata.fileLabel),
+      lineBaseline: rawCodeMetadata.lineBaseline,
+    })
+    : null;
+  const indexStatus = searchStatus(revision.indexStatus ?? input.searchStatus);
   const chunks = safeArray(revision.chunks).map((candidate) => {
     const chunk = safeRecord(candidate);
     const id = safeString(chunk.id);
@@ -497,7 +511,14 @@ export function knowledgeReaderModel(value, location = {}) {
     revisionId,
     isCurrent,
     revisionLabel: `Revision ${revisionId} · ${isCurrent ? "current" : "history"}`,
-    ...(typeof input.searchStatus === "string" ? { searchStatus: searchStatus(input.searchStatus) } : {}),
+    sourceVersionId: safeString(revision.sourceVersionId),
+    reviewerId: safeString(revision.reviewerId),
+    sourceVersionOrdinal,
+    parserSchemaVersion,
+    codeMetadata,
+    indexStatus,
+    searchStatus: indexStatus,
+    downloadHref: knowledgeDownloadRequest(knowledgeItemId, revisionId),
     publishedAt: safeString(revision.publishedAt),
     markdown: safeString(revision.markdown),
     tagIds: safeArray(revision.tagIds).map(safeString),
@@ -664,6 +685,10 @@ export function knowledgeReaderRequest(knowledgeItemId, revisionId) {
     path: `/api/knowledge/${item}`,
     responseKey: "knowledge",
   });
+}
+
+export function knowledgeDownloadRequest(knowledgeItemId, revisionId) {
+  return `/api/knowledge/${encodeURIComponent(safeString(knowledgeItemId))}/revisions/${encodeURIComponent(safeString(revisionId))}/download`;
 }
 
 function reviewTagPageModel(value, spaceId) {

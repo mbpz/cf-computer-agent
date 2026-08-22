@@ -17,20 +17,25 @@
     "typecheck": "tsc --noEmit",
     "types:check": "wrangler types --check --env-file config/types.env",
     "build": "wrangler deploy --dry-run",
-    "check": "npm run types:check && npm run typecheck && npm test && npm run build",
+    "check": "npm run vendor:check && npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
     "probe:automation:invalid": "node scripts/automation-probe.mjs --invalid-health",
     "probe:automation:admin-forbidden": "node scripts/automation-probe.mjs --admin-forbidden",
     "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs",
-    "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all"
+    "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all",
+    "vendor:browser": "node scripts/vendor-browser-deps.mjs",
+    "vendor:check": "node scripts/vendor-browser-deps.mjs --check"
   },
   "dependencies": {
-    "@cloudflare/computer": "0.1.1"
+    "@cloudflare/computer": "0.1.1",
+    "dompurify": "3.4.14",
+    "markdown-it": "15.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.3",
     "@types/node": "^24.13.3",
+    "happy-dom": "20.11.6",
     "typescript": "7.0.2",
     "vitest": "^4.1.10",
     "wrangler": "4.119.0"

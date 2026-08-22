@@ -32,6 +32,11 @@ describe("workspace assets", () => {
     expect(html).toContain('id="app-shell"');
     expect(html).toContain('id="primary-navigation"');
     expect(html).toContain('src="/app.js"');
+    expect(html).toContain('src="/vendor/markdown-it.min.js"');
+    expect(html).toContain('src="/vendor/purify.min.js"');
+    expect(html.indexOf('src="/vendor/markdown-it.min.js"')).toBeLessThan(html.indexOf('src="/app.js"'));
+    expect(html.indexOf('src="/vendor/purify.min.js"')).toBeLessThan(html.indexOf('src="/app.js"'));
+    expect(html).not.toMatch(/(?:cdn|unpkg|jsdelivr|cdnjs)\./iu);
     expect(html).toContain('<html lang="en">');
     expect(html).not.toMatch(/localStorage|APP_TOKEN|AUTOMATION_SECRET|设置令牌|authorization|cdn-cgi\/access\/logout|Cloudflare Access|Access 会话/i);
 
@@ -90,21 +95,23 @@ describe("workspace assets", () => {
   });
 
   it("ships the M1 browser contract without executable data sinks or internal request fields", async () => {
-    const [response, uiResponse] = await Promise.all([
+    const [response, uiResponse, markdownResponse] = await Promise.all([
       SELF.fetch("https://example.test/app.js"),
       SELF.fetch("https://example.test/workspace-ui.js"),
+      SELF.fetch("https://example.test/markdown-renderer.js"),
     ]);
-    const source = `${await response.text()}\n${await uiResponse.text()}`;
+    const source = `${await response.text()}\n${await uiResponse.text()}\n${await markdownResponse.text()}`;
 
     expect(response.status).toBe(200);
     expect(uiResponse.status).toBe(200);
+    expect(markdownResponse.status).toBe(200);
     expect(source).toContain("/api/knowledge");
     expect(source).toContain("/api/knowledge/search");
     expect(source).toContain("/api/knowledge/chat");
     expect(source).toContain("/api/admin/publications/recover");
     expect(source).toContain("Idempotency-Key");
     expect(source).not.toMatch(/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|\beval\s*\(/u);
-    expect(source).not.toMatch(/normalizedPath|contentSha256|sourceVersionId/u);
+    expect(source).not.toMatch(/normalizedPath|contentSha256/u);
     expect(source).not.toMatch(/function markdownLocations|^\s*const locations = markdownLocations/mu);
     expect(source).toContain("closeOpenDialogs");
     expect(source.match(/closeOpenDialogs\(\)/gu)?.length).toBeGreaterThanOrEqual(3);
@@ -112,6 +119,25 @@ describe("workspace assets", () => {
     expect(source).toContain("createOptionPageController");
     expect(source).toContain("createPagedOptionControl");
     expect(source).toContain("Load more ${safeLabel} options");
+  });
+
+  it("ships only the reviewed pinned local Markdown vendor bytes", async () => {
+    expect(SHIPPED_PUBLIC_ASSETS).toEqual(expect.arrayContaining([
+      "markdown-renderer.js",
+      "markdown-renderer.d.ts",
+      "vendor/markdown-it.min.js",
+      "vendor/purify.min.js",
+    ]));
+    const [markdownItResponse, purifyResponse] = await Promise.all([
+      SELF.fetch("https://example.test/vendor/markdown-it.min.js"),
+      SELF.fetch("https://example.test/vendor/purify.min.js"),
+    ]);
+    expect(markdownItResponse.status).toBe(200);
+    expect(purifyResponse.status).toBe(200);
+    expect(await sha256Hex(new Uint8Array(await markdownItResponse.arrayBuffer())))
+      .toBe("8d0f6aca8f4de3321b6d07e03286176c59ec19b7b84abb6eb31f0fa795e83abc");
+    expect(await sha256Hex(new Uint8Array(await purifyResponse.arrayBuffer())))
+      .toBe("c2f26ea4fc0d88141c9aa430eb515ac86fce59418ceebd85fa475b87a8d6c3e6");
   });
 
   it("ships responsive reader, review-dialog, focus, and reduced-motion styles", async () => {
@@ -146,3 +172,10 @@ describe("workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 });
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", copy.buffer);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}

@@ -252,6 +252,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/knowledge/search", "POST", "GET"],
       ["/api/knowledge/chat", "GET", "POST"],
       ["/api/knowledge/item/revisions/revision", "POST", "GET"],
+      ["/api/knowledge/item/revisions/revision/download", "POST", "GET"],
       ["/api/knowledge/citations/citation", "POST", "GET"],
       ["/api/admin/submissions/submission", "POST", "GET"],
       ["/api/admin/submissions/submission/publish", "GET", "POST"],
@@ -315,6 +316,10 @@ describe("M1 API authorization and request boundaries", () => {
     await expectApiError(memberApi("contributor", "/api/knowledge?limit=51"), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/absent?spaceId=default"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi(
+      "contributor",
+      "/api/knowledge/item/revisions/revision/download?path=%2Fworkspace%2Fsecret&hash=forged",
+    ), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/publications/recover?limit=20", {
       method: "POST",
       body: "{}",
@@ -540,8 +545,16 @@ describe("M1 trusted knowledge HTTP journey", () => {
 
     const detailResponse = await memberApi("contributor", `/api/knowledge/${published.revision.knowledgeItemId}`);
     expect(detailResponse.status).toBe(200);
-    const detail = await detailResponse.json<{ knowledge: { currentRevision: { markdown: string } } }>();
+    const detail = await detailResponse.json<{ knowledge: { currentRevision: Record<string, unknown> & { markdown: string } } }>();
     expect(detail.knowledge.currentRevision.markdown).toBe("# Launch\n\nLaunch latency is under 50ms.\n");
+    expect(detail.knowledge.currentRevision).toMatchObject({
+      sourceVersionId: expect.any(String),
+      reviewerId: "member-admin",
+      sourceVersionOrdinal: 1,
+      parserSchemaVersion: "m1-v2",
+      codeMetadata: null,
+      indexStatus: "indexed",
+    });
     expect(JSON.stringify(detail)).not.toMatch(/contentSha256|normalizedPath/);
 
     const revisionResponse = await memberApi(
@@ -550,6 +563,22 @@ describe("M1 trusted knowledge HTTP journey", () => {
     );
     expect(revisionResponse.status).toBe(200);
     await expect(revisionResponse.json()).resolves.toMatchObject({ revision: { id: published.revision.id, isCurrent: true } });
+
+    await env.DB.prepare("UPDATE revisions SET title = ? WHERE id = ?")
+      .bind("../../Launch\r\nX-Evil: injected", published.revision.id).run();
+    const downloadResponse = await memberApi(
+      "contributor",
+      `/api/knowledge/${published.revision.knowledgeItemId}/revisions/${published.revision.id}/download`,
+      { headers: { "cf-ray": "download-request-id" } },
+    );
+    expect(downloadResponse.status).toBe(200);
+    expect(downloadResponse.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
+    const disposition = downloadResponse.headers.get("content-disposition") || "";
+    expect(disposition).toMatch(/^attachment; filename="[A-Za-z0-9._ -]+\.md"$/u);
+    expect(disposition).not.toMatch(/[\r\n\\/]/u);
+    expect(downloadResponse.headers.get("x-evil")).toBeNull();
+    expectSecurityHeaders(downloadResponse, "download-request-id");
+    await expect(downloadResponse.text()).resolves.toBe("# Launch\n\nLaunch latency is under 50ms.\n");
 
     const searchResponse = await memberApi("contributor", "/api/knowledge/search?q=launch%20latency&limit=20");
     expect(searchResponse.status).toBe(200);
@@ -601,6 +630,12 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(historicalCitation.json()).resolves.toMatchObject({
       citation: { citationId: search.items[0]!.citationId, revisionId: published.revision.id },
     });
+    const historicalDownload = await memberApi(
+      "contributor",
+      `/api/knowledge/${published.revision.knowledgeItemId}/revisions/${published.revision.id}/download`,
+    );
+    expect(historicalDownload.status).toBe(200);
+    await expect(historicalDownload.text()).resolves.toBe("# Launch\n\nLaunch latency is under 50ms.\n");
     await expectApiError(
       memberApi("contributor", `/api/knowledge/${published.revision.knowledgeItemId}`),
       404,
@@ -626,11 +661,26 @@ describe("M1 trusted knowledge HTTP journey", () => {
     for (const path of [
       `/api/knowledge/${hidden.knowledgeItemId}`,
       `/api/knowledge/${hidden.knowledgeItemId}/revisions/${hidden.id}`,
+      `/api/knowledge/${hidden.knowledgeItemId}/revisions/${hidden.id}/download`,
       `/api/knowledge/citations/${encodeURIComponent(hiddenHit.citationId)}`,
       "/api/knowledge/absent-item",
     ]) {
       await expectApiError(memberApi("contributor", path), 404, "KNOWLEDGE_NOT_FOUND");
     }
+    const adminDownload = await memberApi(
+      "admin",
+      `/api/knowledge/${hidden.knowledgeItemId}/revisions/${hidden.id}/download`,
+    );
+    expect(adminDownload.status).toBe(200);
+    await expect(adminDownload.text()).resolves.toBe("secret policy evidence");
+    await expectApiError(memberApi(
+      "contributor",
+      `/api/knowledge/${shared.knowledgeItemId}/revisions/${hidden.id}/download`,
+    ), 404, "KNOWLEDGE_NOT_FOUND");
+    await expectApiError(memberApi(
+      "disabled",
+      `/api/knowledge/${shared.knowledgeItemId}/revisions/${shared.id}/download`,
+    ), 403, "MEMBER_DISABLED");
 
     const before = await memberApi("contributor", `/api/knowledge/${shared.knowledgeItemId}`);
     expect(before.status).toBe(200);

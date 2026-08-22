@@ -17,6 +17,7 @@ const {
   drawerStateForViewport,
   knowledgeListModel,
   knowledgeQuery,
+  knowledgeDownloadRequest,
   knowledgeReaderModel,
   knowledgeReaderRequest,
   knowledgeSearchModel,
@@ -789,11 +790,16 @@ describe("M1 trusted knowledge view models", () => {
       currentRevision: {
         id: "revision-current",
         knowledgeItemId: "knowledge-1",
-        sourceVersionId: "source-secret",
+        sourceVersionId: "source-version-1",
+        reviewerId: "member-admin",
+        sourceVersionOrdinal: 2,
+        parserSchemaVersion: "m1-v2",
+        codeMetadata: { language: "typescript", fileLabel: "launch.ts", lineBaseline: 41 },
+        indexStatus: "indexed",
         title: "Launch runbook",
         tagIds: ["tag-1"],
         visibility: "admin_only",
-        publishedBy: "member-secret",
+        publishedBy: "member-admin",
         publishedAt: "2026-08-22T00:00:00.000Z",
         isCurrent: true,
         markdown: "# Launch\n\nLatency is bounded.\n",
@@ -811,6 +817,13 @@ describe("M1 trusted knowledge view models", () => {
     expect(model).toMatchObject({
       revisionLabel: "Revision revision-current · current",
       visibilityLabel: "Admin only",
+      sourceVersionId: "source-version-1",
+      reviewerId: "member-admin",
+      sourceVersionOrdinal: 2,
+      parserSchemaVersion: "m1-v2",
+      codeMetadata: { language: "typescript", fileLabel: "launch.ts", lineBaseline: 41 },
+      indexStatus: "indexed",
+      downloadHref: "/api/knowledge/knowledge-1/revisions/revision-current/download",
       focusedChunkId: "chunk-1",
       outline: [{ label: "Launch", lineLabel: "lines 1–3", focused: true }],
       sources: [{
@@ -818,7 +831,7 @@ describe("M1 trusted knowledge view models", () => {
         href: "/knowledge/knowledge-1?revision=revision-current&chunk=chunk-1",
       }],
     });
-    expect(JSON.stringify(model)).not.toMatch(/source-secret|member-secret/);
+    expect(JSON.stringify(model)).not.toMatch(/normalizedPath|contentSha256|email|storage|provider/i);
   });
 
   it("keeps a server-declared historical Revision citation-navigable even when no current detail was loaded", () => {
@@ -1095,6 +1108,12 @@ describe("M1 browser request allowlists", () => {
       path: "/api/knowledge/knowledge%2F1",
       responseKey: "knowledge",
     });
+  });
+
+  it("builds a download location from item and Revision IDs only", () => {
+    expect(knowledgeDownloadRequest("knowledge/1", "revision/old")).toBe(
+      "/api/knowledge/knowledge%2F1/revisions/revision%2Fold/download",
+    );
   });
 });
 

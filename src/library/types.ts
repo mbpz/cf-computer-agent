@@ -86,6 +86,11 @@ export interface KnowledgeDetail extends Omit<KnowledgeListItem, "revisionId"> {
   currentRevision: RevisionDetail;
 }
 
+export interface RevisionDownload {
+  markdown: string;
+  filename: string;
+}
+
 export interface SearchHit {
   citationId: string;
   knowledgeItemId: string;

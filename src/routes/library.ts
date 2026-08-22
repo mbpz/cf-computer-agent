@@ -73,6 +73,18 @@ export async function routeLibraryApi(
     );
   }
 
+  const download = /^\/api\/knowledge\/([^/]+)\/revisions\/([^/]+)\/download$/.exec(url.pathname);
+  if (download) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const result = await services.library.download(
+      scope,
+      decodePathId(download[1]!),
+      decodePathId(download[2]!),
+    );
+    return markdownAttachmentResponse(result.markdown, result.filename, context.requestId);
+  }
+
   const revision = /^\/api\/knowledge\/([^/]+)\/revisions\/([^/]+)$/.exec(url.pathname);
   if (revision) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
@@ -155,4 +167,20 @@ function requireNoQuery(url: URL): void {
 
 function invalidRequest(): AppError {
   return new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
+}
+
+function markdownAttachmentResponse(markdown: string, filename: string, requestId: string): Response {
+  return new Response(markdown, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+      "content-type": "text/markdown; charset=utf-8",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-request-id": requestId,
+    },
+  });
 }

@@ -175,13 +175,13 @@
 
 - [x] `READ-001` P0/M1 Knowledge 列表；状态：L/W；验收：current published、权限、有界分页。
 - [x] `READ-002` P0/M1 Knowledge detail；状态：L/W；验收：D1 metadata 与规范 Markdown 一致。
-- [ ] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。
+- [ ] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。证据：本地固定 `markdown-it@15.0.0` + `dompurify@3.4.14` 双边界，`happy-dom` 覆盖 raw HTML、混淆协议、表格、代码围栏、嵌套列表和链接目标；应用仅插入 `DocumentFragment`。
 - [x] `READ-004` P0/M1 目录；状态：L/W；验收：heading path 与正文锚点一致。
 - [x] `READ-005` P0/M1 heading/line 定位；状态：L/W；验收：citation 打开目标并高亮。
 - [ ] `READ-006` P0/M2 PDF 页定位；验收：无页预览时显示页码和下载入口。
 - [ ] `READ-007` P0/M2 表格定位；验收：sheet/cell range 可理解。
 - [ ] `READ-008` P0/M2 幻灯片定位；验收：slide number 和元素顺序可理解。
-- [ ] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。
+- [ ] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。证据：可见性授权 CTE 后联结 Review/SourceVersion，Reader 以文本节点显示稳定 ID、ordinal、parser schema、code metadata 和 index status；不导出 email/path/hash/provider 字段。
 - [x] `READ-010` P0/M1 历史 Revision；状态：L/W；验收：旧引用可读但明确非 current。
 - [ ] `READ-011` P1/M3 Revision diff；验收：正文和 metadata 差异有界展示。
 - [ ] `READ-012` P1/M4 Sources panel；验收：原件、解析状态、位置和选中状态。
@@ -307,7 +307,7 @@
 - [x] `AUTH-012` P0/M0 automation 非管理员；状态：L/W。
 - [x] `AUTH-013` P0/M1 新 Source/Submission capability；状态：L/W；验收：admin/contributor 可创建、automation 不可。
 - [x] `AUTH-014` P0/M1 Review/Publish capability；状态：L/W；验收：仅 active admin。
-- [ ] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。
+- [ ] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。证据：真实 D1+DO 覆盖 list/search/current detail/history/citation/download 的 admin/contributor/disabled/伪造角色，hidden/absent/cross-item download 统一 404，客户端 path/hash query 被拒绝。
 - [ ] `AUTH-016` P0/M5 Note/Research owner scope；验收：ID 猜测和跨用户读取为 404/403 稳定合同。
 - [ ] `AUTH-017` P0/M6 Agent 工具授权；验收：每次工具调用重新校验。
 - [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。

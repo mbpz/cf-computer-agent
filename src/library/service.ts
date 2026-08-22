@@ -17,6 +17,7 @@ import type {
   LibraryFilters,
   LibraryScope,
   RevisionDetail,
+  RevisionDownload,
   SearchPage,
   SearchRequest,
 } from "./types";
@@ -85,6 +86,23 @@ export class LibraryService {
     return this.readRevision(record);
   }
 
+  async download(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+  ): Promise<RevisionDownload> {
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    assertLookupId(revisionId);
+    const record = await this.repository.findRevision(scope, knowledgeItemId, revisionId);
+    if (!record) throw knowledgeNotFound();
+    const markdown = await this.content.read(record.normalizedPath, record.contentSha256);
+    return {
+      markdown,
+      filename: attachmentFilename(record.codeMetadata?.fileLabel || record.title),
+    };
+  }
+
   async search(scope: LibraryScope, request: SearchRequest): Promise<SearchPage> {
     await this.authorize(scope);
     const filters = normalizeFilters(request);
@@ -133,10 +151,10 @@ export class LibraryService {
       id: record.revisionId,
       knowledgeItemId: record.id,
       sourceVersionId: record.sourceVersionId,
-      reviewerId: record.publishedBy,
-      sourceVersionOrdinal: null,
-      parserSchemaVersion: null,
-      codeMetadata: null,
+      reviewerId: record.reviewerId || record.publishedBy,
+      sourceVersionOrdinal: record.sourceVersionOrdinal ?? null,
+      parserSchemaVersion: record.parserSchemaVersion ?? null,
+      codeMetadata: record.codeMetadata ? { ...record.codeMetadata } : null,
       indexStatus: record.searchStatus,
       title: record.title,
       tagIds: [...record.tagIds],
@@ -152,6 +170,17 @@ export class LibraryService {
       })),
     };
   }
+}
+
+function attachmentFilename(value: string): string {
+  const bounded = [...value].slice(0, 96).join("")
+    .replace(/[\p{Cc}\\/]/gu, " ")
+    .replace(/[^A-Za-z0-9._ -]/gu, "_")
+    .replace(/\s+/gu, " ")
+    .replace(/^[ .]+|[ .]+$/gu, "")
+    .replace(/\.md$/iu, "")
+    .replace(/[ .]+$/gu, "");
+  return `${bounded || "revision"}.md`;
 }
 
 function normalizeSearchTags(request: SearchRequest): Pick<RepositorySearchRequest, "tagIds" | "tagMode"> {

@@ -249,7 +249,14 @@ export interface KnowledgeReaderViewModel {
   revisionId: string;
   isCurrent: boolean;
   revisionLabel: string;
-  searchStatus?: "pending" | "indexed" | "search_degraded" | "failed";
+  sourceVersionId: string;
+  reviewerId: string;
+  sourceVersionOrdinal: number | null;
+  parserSchemaVersion: "m1-v1" | "m1-v2" | null;
+  codeMetadata: Readonly<{ language: string; fileLabel: string; lineBaseline: number }> | null;
+  indexStatus: "pending" | "indexed" | "search_degraded" | "failed";
+  searchStatus: "pending" | "indexed" | "search_degraded" | "failed";
+  downloadHref: string;
   publishedAt: string;
   markdown: string;
   tagIds: string[];
@@ -262,6 +269,7 @@ export function knowledgeReaderRequest(knowledgeItemId: string, revisionId?: str
   path: string;
   responseKey: "knowledge" | "revision";
 }>;
+export function knowledgeDownloadRequest(knowledgeItemId: string, revisionId: string): string;
 
 export interface CitedAnswerViewModel {
   answer: string;
