@@ -9,20 +9,22 @@ import { buildIndexDocument } from "../../src/indexing/document";
 import { LibraryService } from "../../src/library/service";
 import { normalizeSearchQuery } from "../../src/library/lexical";
 import { PublicationService } from "../../src/publication/service";
-import { buildSearchPresentation, SEARCH_POLICY } from "../../src/library/search-policy";
+import { buildSearchPresentation, rankSearchMatchedFields } from "../../src/library/search-policy";
 import { decodeSourceBytes } from "../../src/sources/decoder";
 import { parseSource } from "../../src/sources/parser";
 import { SubmissionsService } from "../../src/submissions/service";
 import { createI18n } from "../../public/i18n.js";
 import { knowledgeReaderModel } from "../../public/workspace-ui.js";
-import { renderSafeMarkdown } from "../../public/markdown-renderer.js";
+import { createSafeMarkdownRenderer } from "../../public/markdown-renderer.js";
 import type { LibraryRepositoryPort, RepositorySearchRequest } from "../../src/library/repository";
 import type { PublicationIntent, PublicationRepositoryPort, ReviewSubmissionSnapshot } from "../../src/publication/types";
 import type { SearchHit } from "../../src/library/types";
 import {
   assertStrictM1MutationResults,
   observation,
+  REQUIRED_M1_MUTATION_FEATURE_IDS,
   runM1MutationWitnesses,
+  type M1MutationFeatureId,
   type M1MutationWitness,
 } from "../fixtures/m1-mutation-matrix";
 
@@ -50,14 +52,17 @@ async function throwsCode(action: () => unknown | Promise<unknown>, code: string
   try { await action(); return false; } catch (error) { return (error as { code?: string }).code === code; }
 }
 
-function documentFixture() {
+function documentFixture(mutatedField?: "title" | "summary" | "tags" | "body" | "code") {
   return buildIndexDocument(
-    { id: "revision", title: "Launch title" },
+    { id: "revision", title: mutatedField === "title" ? "" : "Launch title" },
     [
-      { ordinal: 0, headingPath: ["Overview"], startLine: 1, endLine: 1, body: "summary body", searchBody: "summary body", indexField: "body" },
-      { ordinal: 1, headingPath: ["Code"], startLine: 2, endLine: 2, body: "const launchCode = true", searchBody: "const launchCode = true", indexField: "code" },
+      { ordinal: 0, headingPath: ["Overview"], startLine: 1, endLine: 1,
+        body: mutatedField === "summary" ? "" : "summary body",
+        searchBody: mutatedField === "body" ? "" : "summary body", indexField: "body" },
+      { ordinal: 1, headingPath: ["Code"], startLine: 2, endLine: 2, body: "const launchCode = true",
+        searchBody: mutatedField === "code" ? "" : "const launchCode = true", indexField: "code" },
     ],
-    [{ id: "tag", slug: "launch-tag", name: "Launch Tag" }],
+    mutatedField === "tags" ? [] : [{ id: "tag", slug: "launch-tag", name: "Launch Tag" }],
   );
 }
 
@@ -129,7 +134,7 @@ async function resubmissionAccepted(mutated: boolean): Promise<boolean> {
   } catch { return false; }
 }
 
-function witness(id: string, baseline: () => Promise<boolean> | boolean, mutant: () => Promise<boolean> | boolean): M1MutationWitness {
+function witness(id: M1MutationFeatureId, baseline: () => Promise<boolean> | boolean, mutant: () => Promise<boolean> | boolean): M1MutationWitness {
   return {
     id, featureId: id,
     baseline: async () => observation(id, await baseline(), `${id}:baseline literal violated`),
@@ -140,14 +145,19 @@ function witness(id: string, baseline: () => Promise<boolean> | boolean, mutant:
 async function witnesses(): Promise<M1MutationWitness[]> {
   const validBytes = new TextEncoder().encode("knowledge").buffer;
   const invalidBytes = Uint8Array.from([0xc3, 0x28]).buffer;
-  const doc = documentFixture();
-  const reader = knowledgeReaderModel({
-    id: "revision", knowledgeItemId: "item", sourceVersionId: "source-version", reviewerId: "admin",
-    sourceVersionOrdinal: 2, parserSchemaVersion: "m1-v2", codeMetadata: { language: "typescript", fileLabel: "agent.ts", lineBaseline: 10 },
-    indexStatus: "indexed", title: "Reader", tagIds: ["tag"], visibility: "admin_only", publishedBy: "admin",
-    publishedAt: "2026-01-01T00:00:00.000Z", isCurrent: true, markdown: "# Reader\n", chunks: [],
+  const reader = (mutation?: "current" | "index" | "metadata") => knowledgeReaderModel({
+    id: "revision", knowledgeItemId: "item", sourceVersionId: "source-version",
+    reviewerId: mutation === "metadata" ? "" : "admin", sourceVersionOrdinal: 2, parserSchemaVersion: "m1-v2",
+    codeMetadata: { language: "typescript", fileLabel: "agent.ts", lineBaseline: 10 },
+    indexStatus: mutation === "index" ? "failed" : "indexed", title: "Reader", tagIds: ["tag"],
+    visibility: "admin_only", publishedBy: "admin", publishedAt: "2026-01-01T00:00:00.000Z",
+    isCurrent: mutation !== "current", markdown: "# Reader\n", chunks: [],
   });
-  const presentation = buildSearchPresentation("launch latency budget", normalizeSearchQuery("launch").termKeys, ["title", "body"]);
+  const presentation = (mutation?: "fields" | "highlights") => buildSearchPresentation(
+    "launch latency budget",
+    normalizeSearchQuery(mutation === "highlights" ? "absent" : "launch").termKeys,
+    mutation === "fields" ? [] : ["title", "body"],
+  );
   const strong = computeEvidenceConfidence("launch latency", [hit()]);
   const downloadVisible = async (visible: boolean) => {
     const record = {
@@ -185,11 +195,27 @@ async function witnesses(): Promise<M1MutationWitness[]> {
     try { await service.listOwn("member", { status: statusInput as "published" }); return status; } catch { return undefined; }
   };
   const markdownSafe = (mutated: boolean) => {
-    const fragment = renderSafeMarkdown("# Safe\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))");
-    const host = (globalThis as unknown as { document: { createElement(name: string): { append(value: unknown): void; querySelector(value: string): unknown; innerHTML: string } } }).document.createElement("div");
+    const window = new Window({ settings: { disableJavaScriptEvaluation: true } });
+    const purifier = createDOMPurify(window as never);
+    const sanitizer = mutated ? {
+      sanitize(markup: string) {
+        const template = window.document.createElement("template");
+        template.innerHTML = markup;
+        return template.content;
+      },
+    } : purifier;
+    const renderer = createSafeMarkdownRenderer({
+      markdownFactory: mutated
+        ? ((options: Record<string, unknown>) => new MarkdownIt({ ...options, html: true }))
+        : MarkdownIt,
+      purifier: sanitizer as never,
+    });
+    const fragment = renderer("# Safe\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))");
+    const host = window.document.createElement("div");
     host.append(fragment);
-    if (mutated) host.innerHTML += "<script>mutated()</script>";
-    return host.querySelector("script,a") === null;
+    const safe = host.querySelector("script,a") === null;
+    window.close();
+    return safe;
   };
   const governanceAuditAccepted = (mutated: boolean) => {
     try {
@@ -216,13 +242,14 @@ async function witnesses(): Promise<M1MutationWitness[]> {
     witness("governance-target", async () => (await publicationCapture("none")).ok, async () => (await publicationCapture("target")).ok),
     witness("governance-visibility-expansion", async () => (await publicationCapture("none")).ok, async () => (await publicationCapture("visibility")).ok),
     witness("governance-resubmit", () => resubmissionAccepted(false), () => resubmissionAccepted(true)),
-    ...(["title", "summary", "tags", "body", "code"] as const).map((field) => witness(`fts-field-${field}`, () => doc[field].length > 0, () => ({ ...doc, [field]: "" })[field].length > 0)),
-    witness("current-revision-switch", () => reader.isCurrent === true, () => ({ ...reader, isCurrent: false }).isCurrent === true),
-    witness("index-status", () => reader.indexStatus === "indexed", () => ({ ...reader, indexStatus: "failed" }).indexStatus === "indexed"),
-    witness("ranking-policy", () => SEARCH_POLICY.weights.title > SEARCH_POLICY.weights.body, () => ({ ...SEARCH_POLICY.weights, title: 0 }).title > SEARCH_POLICY.weights.body),
-    witness("matched-fields", () => presentation.matchedFields.join(",") === "title,body", () => ({ ...presentation, matchedFields: [] }).matchedFields.join(",") === "title,body"),
-    witness("highlights", () => presentation.highlights.length > 0 && presentation.highlights.every(({ start, end }) => start >= 0 && end > start), () => ({ ...presentation, highlights: [{ start: 2, end: 1 }] }).highlights.every(({ start, end }) => start >= 0 && end > start)),
-    witness("revision-metadata", () => reader.sourceVersionId === "source-version" && reader.reviewerId === "admin" && reader.codeMetadata?.fileLabel === "agent.ts", () => ({ ...reader, reviewerId: "" }).reviewerId.length > 0),
+    ...(["title", "summary", "tags", "body", "code"] as const).map((field) => witness(`fts-field-${field}`,
+      () => documentFixture()[field].length > 0, () => documentFixture(field)[field].length > 0)),
+    witness("current-revision-switch", () => reader().isCurrent === true, () => reader("current").isCurrent === true),
+    witness("index-status", () => reader().indexStatus === "indexed", () => reader("index").indexStatus === "indexed"),
+    witness("ranking-policy", () => rankSearchMatchedFields(["body", "title"])[0] === "title", () => rankSearchMatchedFields(["body"])[0] === "title"),
+    witness("matched-fields", () => presentation().matchedFields.join(",") === "title,body", () => presentation("fields").matchedFields.join(",") === "title,body"),
+    witness("highlights", () => presentation().highlights.length > 0, () => presentation("highlights").highlights.length > 0),
+    witness("revision-metadata", () => reader().sourceVersionId === "source-version" && reader().reviewerId === "admin" && reader().codeMetadata?.fileLabel === "agent.ts", () => reader("metadata").reviewerId.length > 0),
     witness("download-visibility", () => downloadVisible(true), () => downloadVisible(false)),
     witness("confidence-refusal", () => strong >= EVIDENCE_CONFIDENCE_THRESHOLD, () => computeEvidenceConfidence("unrelated missing", [hit()]) >= EVIDENCE_CONFIDENCE_THRESHOLD),
     witness("tag-and", async () => await capturedTags("and") === "and", async () => await capturedTags("invalid") === "and"),
@@ -242,23 +269,58 @@ describe("M1 behavior-level mutation matrix", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("fails every independent literal mutation with its exact named feature", async () => {
-    const window = new Window({ settings: { disableJavaScriptEvaluation: true } });
-    vi.stubGlobal("document", window.document);
-    vi.stubGlobal("markdownit", MarkdownIt);
-    vi.stubGlobal("DOMPurify", createDOMPurify(window as never));
     const results = await runM1MutationWitnesses(await witnesses());
-    expect(results).toHaveLength(28);
+    expect(results).toHaveLength(REQUIRED_M1_MUTATION_FEATURE_IDS.length);
     expect(results.filter(({ baselineFailures }) => baselineFailures.length > 0)).toEqual([]);
     expect(results.map(({ mutantFailures }) => mutantFailures)).toEqual(results.map(({ featureId }) => [featureId]));
     expect(() => assertStrictM1MutationResults(results)).not.toThrow();
-    window.close();
   });
 
   it("fails closed for zero witnesses, missing mutant failures, and missing reasons", async () => {
-    await expect(runM1MutationWitnesses([])).rejects.toThrow("M1_MUTATION_WITNESSES_MISSING");
-    expect(() => assertStrictM1MutationResults([])).toThrow("M1_MUTATION_RESULTS_MISSING");
-    expect(() => assertStrictM1MutationResults([{ id: "missing", featureId: "missing", baselineFailures: [], mutantFailures: [], mutantReasons: [] }])).toThrow("MUTATION_NOT_ISOLATED");
-    expect(() => assertStrictM1MutationResults([{ id: "reason", featureId: "reason", baselineFailures: [], mutantFailures: ["reason"], mutantReasons: [] }])).toThrow("MUTATION_REASON_MISSING");
+    await expect(runM1MutationWitnesses([])).rejects.toThrow("M1_MUTATION_WITNESS_IDS_SET_MISMATCH");
+    expect(() => assertStrictM1MutationResults([])).toThrow("M1_MUTATION_RESULT_IDS_SET_MISMATCH");
+    const valid = REQUIRED_M1_MUTATION_FEATURE_IDS.map((id) => ({
+      id, featureId: id, baselineFailures: [], mutantFailures: [id], mutantReasons: [`${id}:reason`],
+    }));
+    const missingFailure = valid.map((result, index) => index === 0 ? { ...result, mutantFailures: [] } : result);
+    expect(() => assertStrictM1MutationResults(missingFailure)).toThrow("MUTATION_NOT_ISOLATED");
+    const missingReason = valid.map((result, index) => index === 0 ? { ...result, mutantReasons: [] } : result);
+    expect(() => assertStrictM1MutationResults(missingReason)).toThrow("MUTATION_REASON_MISSING");
+  });
+
+  it("requires the exact frozen witness and result ID set despite cardinality-preserving mutations", async () => {
+    const valid = await witnesses();
+    expect(valid.map(({ id }) => id)).toEqual(REQUIRED_M1_MUTATION_FEATURE_IDS);
+    const placeholder = { ...valid[0]!, id: "replacement-placeholder", featureId: "replacement-placeholder" } as never;
+    const mutations = [
+      [...valid.slice(1), placeholder],
+      [...valid.slice(0, -1), placeholder],
+      valid.map((entry, index) => index === 7 ? placeholder : entry),
+      valid.map((entry, index) => index === 7 ? valid[6]! : entry),
+    ];
+    for (const mutation of mutations) {
+      expect(mutation).toHaveLength(REQUIRED_M1_MUTATION_FEATURE_IDS.length);
+      await expect(runM1MutationWitnesses(mutation)).rejects.toThrow(/M1_MUTATION_WITNESS_IDS_(?:SET_MISMATCH|DUPLICATE)/u);
+    }
+
+    const validResults = REQUIRED_M1_MUTATION_FEATURE_IDS.map((id) => ({
+      id, featureId: id, baselineFailures: [], mutantFailures: [id], mutantReasons: [`${id}:reason`],
+    }));
+    const resultPlaceholder = { ...validResults[0]!, id: "replacement-placeholder", featureId: "replacement-placeholder" };
+    const resultMutations = [
+      [...validResults.slice(1), resultPlaceholder],
+      [...validResults.slice(0, -1), resultPlaceholder],
+      validResults.map((entry, index) => index === 7 ? resultPlaceholder : entry),
+      validResults.map((entry, index) => index === 7 ? validResults[6]! : entry),
+    ];
+    for (const mutation of resultMutations) {
+      expect(mutation).toHaveLength(REQUIRED_M1_MUTATION_FEATURE_IDS.length);
+      expect(() => assertStrictM1MutationResults(mutation)).toThrow(/M1_MUTATION_RESULT_IDS_(?:SET_MISMATCH|DUPLICATE)/u);
+    }
+    const featureReplacement = validResults.map((entry, index) => index === 0
+      ? { ...entry, featureId: "replacement-placeholder" }
+      : entry);
+    expect(() => assertStrictM1MutationResults(featureReplacement)).toThrow("M1_MUTATION_RESULT_FEATURE_ID_MISMATCH");
   });
 
   it.each(["and", "or"] as const)("passes Tag %s through LibraryService and rejects a mutated mode", async (mode) => {
@@ -287,18 +349,19 @@ describe("M1 behavior-level mutation matrix", () => {
     await expect(service.listOwn("member", { status: "published-mutated" as "published" })).rejects.toMatchObject({ code: "PAGE_INVALID" });
   });
 
-  it("sanitizes active Markdown and exposes an exact failure when sanitizer policy is mutated", () => {
+  it("sanitizes active Markdown and exposes an exact failure when dependencies are mutated before rendering", () => {
     const window = new Window({ settings: { disableJavaScriptEvaluation: true } });
-    vi.stubGlobal("document", window.document);
-    vi.stubGlobal("markdownit", MarkdownIt);
-    vi.stubGlobal("DOMPurify", createDOMPurify(window as never));
-    const host = window.document.createElement("div");
-    host.append(renderSafeMarkdown("# Safe\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))"));
-    expect(host.querySelector("script,a")).toBeNull();
-    expect(host.textContent).toContain("Safe");
-    const mutated = host.cloneNode(true) as typeof host;
-    mutated.innerHTML += "<script>mutated()</script>";
-    expect(mutated.querySelector("script"), "markdown-sanitization: mutated DOM must fail").not.toBeNull();
+    const purifier = createDOMPurify(window as never);
+    const render = createSafeMarkdownRenderer({ markdownFactory: MarkdownIt, purifier: purifier as never });
+    const mutant = createSafeMarkdownRenderer({
+      markdownFactory: (options) => new MarkdownIt({ ...options, html: true }),
+      purifier: { sanitize(markup: string) { const template = window.document.createElement("template"); template.innerHTML = markup; return template.content; } } as never,
+    });
+    const input = "# Safe\n\n<script>alert(1)</script>";
+    const baselineHost = window.document.createElement("div"); baselineHost.append(render(input));
+    const mutantHost = window.document.createElement("div"); mutantHost.append(mutant(input));
+    expect(baselineHost.querySelector("script")).toBeNull();
+    expect(mutantHost.querySelector("script"), "markdown-sanitization: mutated dependency must fail").not.toBeNull();
     window.close();
   });
 });

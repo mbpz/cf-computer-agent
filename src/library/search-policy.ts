@@ -19,6 +19,14 @@ export interface SearchPresentation {
   highlights: SearchHighlightRange[];
 }
 
+export function rankSearchMatchedFields(
+  fields: readonly SearchMatchedField[],
+  weights: Readonly<Record<SearchMatchedField, number>> = SEARCH_POLICY.weights,
+): SearchMatchedField[] {
+  return [...new Set(fields)].sort((left, right) => weights[right] - weights[left]
+    || MATCHED_FIELD_ORDER.indexOf(left) - MATCHED_FIELD_ORDER.indexOf(right));
+}
+
 export function buildSearchPresentation(
   body: string,
   termKeys: readonly string[],

@@ -37,11 +37,11 @@ It requires reviewed production `rows_read`/`rows_written` rows for bounded list
 
 ## Verification evidence
 
-- `rtk npm run test:m1`: PASS after fix round 2 — 30 operations contracts, 13 i18n contracts, and 21 Vitest files / 561 tests; migration/docs/i18n verifiers passed first.
+- `rtk npm run test:m1`: PASS after fix round 3 — 30 operations contracts, 13 i18n contracts, and 21 Vitest files / 562 tests; migration/docs/i18n verifiers passed first.
 - `rtk npm run verify:m1:migrations -- --files`: PASS — four exact reviewed files, including unchanged `0004` SHA-256 `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb`.
 - `rtk npm run verify:m1:docs`: PASS — 14 executable evidence blocks; 76 atoms = 75 checked + 1 unchecked; gate unchecked.
 - `rtk npm run verify:i18n`: PASS — 349 keys, 45 placeholders, six checked UI files, TypeScript AST and DOM hard-copy gate.
-- `rtk npm run check`: PASS after fix round 2 — 38 smoke/contracts, 620 unit tests, 289 Workerd tests, generated types, TypeScript, vendored dependency digests, and Wrangler dry-run build.
+- `rtk npm run check`: PASS after fix round 3 — 38 smoke/contracts, 621 unit tests, 289 Workerd tests, generated types, TypeScript, vendored dependency digests, and Wrangler dry-run build.
 - `rtk npm audit --omit=dev --offline`: PASS — zero runtime vulnerabilities.
 - `rtk git diff --check`: PASS.
 
@@ -63,3 +63,11 @@ The Workerd run emitted the pre-existing deliberate invalid-journal fail-closed 
 - The matrix uses public production functions/services rather than source-text matching or synthetic completion booleans. Each mutant is reported by its exact feature ID; duplicate IDs, zero witnesses/results, missing failures, cross-feature failures, and missing reasons fail closed.
 - `test:m1` and its omission mutation contract now require the matrix directly.
 - Complete GREEN: 30 operations contracts, 13 i18n contracts, and 21 Vitest files / 561 tests.
+
+## Fix round 3 — authoritative IDs and pre-invocation mutations
+
+- Froze the exact 28 approved IDs in `REQUIRED_M1_MUTATION_FEATURE_IDS`. Witness and result runners now require exact set equality and matching `id`/`featureId`; missing, extra, duplicate, renamed, or placeholder replacement IDs fail with stable reasons even when cardinality remains 28.
+- Added cardinality-preserving delete/add/replace/duplicate mutation tests for witness and result ID sets.
+- Replaced every post-output edit: FTS witnesses now mutate Revision/Chunk/Tag inputs before `buildIndexDocument`; Reader witnesses mutate state before `knowledgeReaderModel`; ranking/presentation witnesses mutate matched-field/query inputs before public production helpers.
+- Extracted `rankSearchMatchedFields` as a reusable production-shaped pure policy runner. Extracted `createSafeMarkdownRenderer` while preserving the existing secure production default; the Markdown mutant changes parser/sanitizer dependencies before rendering and still traverses the real renderer.
+- Complete GREEN: 30 operations contracts, 13 i18n contracts, 21 Vitest files / 562 tests; full repository check 38 smoke/contracts, 621 unit tests, 289 Workerd tests, and dry-run build.
