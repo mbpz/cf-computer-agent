@@ -118,6 +118,43 @@ export function createOptionPageController(options: {
   request: (path: string) => Promise<unknown>;
   onChange: (state: Readonly<OptionPageState>) => void;
 }): OptionPageController;
+export interface AdminSpacePageItem {
+  id: string;
+  slug: string;
+  name: string;
+  kind: "shared" | "legacy";
+  status: "active" | "disabled";
+  readOnly: boolean;
+}
+export interface AdminCollectionPageItem {
+  id: string;
+  spaceId: string;
+  name: string;
+  status: "active" | "disabled";
+}
+export interface AdminCollectionPageState extends OptionPageState {
+  spaceId: string;
+  items: Array<Readonly<AdminCollectionPageItem>>;
+}
+export interface AdminSpacesRouteState {
+  spaces: Array<Readonly<AdminSpacePageItem>>;
+  collectionPages: Array<Readonly<AdminCollectionPageState>>;
+  nextCursor?: string;
+  pending: boolean;
+  loaded: boolean;
+  error: string;
+}
+export interface AdminSpacesRouteController {
+  loadInitial(): Promise<void>;
+  loadMoreSpaces(): Promise<void>;
+  loadMoreCollections(spaceId: string): Promise<void>;
+  snapshot(): Readonly<AdminSpacesRouteState>;
+}
+export function createAdminSpacesRouteController(options: {
+  owns: () => boolean;
+  request: (path: string) => Promise<unknown>;
+  onChange: (state: Readonly<AdminSpacesRouteState>) => void;
+}): AdminSpacesRouteController;
 export function optionLoadMoreModel(value: unknown, label: string): Readonly<{
   visible: boolean;
   label: string;

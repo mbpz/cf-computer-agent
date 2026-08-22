@@ -1,6 +1,7 @@
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
+import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import {
   buildSearchMatchQuery,
   isCanonicalSearchTerm,
@@ -18,7 +19,6 @@ import type {
   SearchPage,
 } from "./types";
 
-const MAX_REVISION_CHUNKS = 256;
 const MAX_EXCERPT_CODE_POINTS = 240;
 const CURSOR_KEY = /^[a-f0-9]{64}$/u;
 
@@ -349,6 +349,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
     if (rows.results.length === 0) return null;
     if (rows.results.length > MAX_REVISION_CHUNKS) throw invalidKnowledgeData();
     const first = rows.results[0]!;
+    if (first.chunk_id === null) throw invalidKnowledgeData();
     return {
       id: first.id,
       spaceId: first.space_id,

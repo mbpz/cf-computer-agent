@@ -1,5 +1,7 @@
 import { AppError } from "../http";
 import { chunkDocument } from "../sources/chunker";
+import { hasSemanticSourceContent, MAX_REVISION_CHUNKS } from "../sources/limits";
+import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
   PublicationIntent,
@@ -32,7 +34,8 @@ export class PublicationService {
     requireActiveAdmin(reviewer);
     const preview = await this.repository.getPreview(requireId(submissionId));
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
-    return { ...preview, chunks: reviewChunkPreviews(preview) };
+    const chunks = await validatedPublicationChunks(preview);
+    return { ...preview, chunks: reviewChunkPreviews(chunks) };
   }
 
   async publish(
@@ -50,7 +53,7 @@ export class PublicationService {
     }
     const preview = await this.repository.getPreview(stableSubmissionId);
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
-    await assertSourceVersion(preview.sourceVersion, preview.sourceVersion.contentSha256);
+    const chunks = await validatedPublicationChunks(preview);
     let intent: PublicationIntent;
     try {
       intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized);
@@ -58,7 +61,7 @@ export class PublicationService {
       throwPublicationError(error);
     }
     assertStableIntent(intent, preview, reviewer.id, normalized);
-    return this.resumeIntent(intent);
+    return this.resumeIntent(intent, chunks);
   }
 
   async reject(
@@ -105,8 +108,22 @@ export class PublicationService {
     const intents = await this.repository.listPendingIntents(boundedLimit);
     const attemptedRevisionIds = new Set<string>();
     for (const intent of intents) {
+      let chunks: ChunkDraft[];
       try {
-        const revision = await this.resumeIntent(intent);
+        chunks = await validatedPublicationChunks(intent);
+      } catch (error) {
+        if (isPublicationContentMismatch(error)) {
+          try {
+            await this.repository.markIntentFailedTerminal(intent.submissionId);
+          } catch {
+            // A failed terminal-state write remains recoverable for a later run.
+          }
+        }
+        result.failures.push({ resourceId: intent.submissionId, code: "PUBLICATION_RECOVERY_FAILED" });
+        continue;
+      }
+      try {
+        const revision = await this.resumeIntent(intent, chunks);
         attemptedRevisionIds.add(revision.id);
         if (revision.searchStatus === "indexed") result.recoveredIntents += 1;
         else result.failures.push({ resourceId: revision.id, code: "INDEX_RECOVERY_FAILED" });
@@ -131,12 +148,8 @@ export class PublicationService {
     return result;
   }
 
-  private async resumeIntent(intent: PublicationIntent): Promise<PublishedRevision> {
-    await assertSourceContent(intent);
-    const chunks = publicationChunks(intent);
-    if (chunks.length === 0) {
-      throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content is invalid", 409);
-    }
+  private async resumeIntent(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision> {
+    if (intent.state === "failed_terminal") throw publicationContentMismatch();
 
     if (intent.state === "pending_content") {
       const receipt = await this.content.commit({
@@ -219,24 +232,13 @@ function assertStableIntent(
   }
 }
 
-function publicationChunks(source: Pick<ReviewSubmissionSnapshot, "sourceVersion"> | PublicationIntent) {
-  return chunkDocument({
-    normalizedMarkdown: source.sourceVersion.content,
-    kind: source.sourceVersion.kind,
-  });
-}
-
-function reviewChunkPreviews(preview: ReviewSubmissionSnapshot) {
-  return publicationChunks(preview).map((chunk) => ({
+function reviewChunkPreviews(chunks: ChunkDraft[]) {
+  return chunks.map((chunk) => ({
     headingPath: [...chunk.headingPath],
     startLine: chunk.startLine,
     endLine: chunk.endLine,
     excerpt: [...chunk.body].slice(0, 240).join(""),
   }));
-}
-
-async function assertSourceContent(intent: PublicationIntent): Promise<void> {
-  await assertSourceVersion(intent.sourceVersion, intent.contentSha256);
 }
 
 async function assertSourceVersion(
@@ -249,6 +251,40 @@ async function assertSourceVersion(
     || await sha256Hex(sourceVersion.content) !== expectedSha256) {
     throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content does not match the stable intent", 409);
   }
+}
+
+async function validatedPublicationChunks(
+  source: Pick<ReviewSubmissionSnapshot, "sourceVersion"> | PublicationIntent,
+): Promise<ChunkDraft[]> {
+  const expectedSha256 = "contentSha256" in source
+    ? source.contentSha256
+    : source.sourceVersion.contentSha256;
+  await assertSourceVersion(source.sourceVersion, expectedSha256);
+  if (!hasSemanticSourceContent(source.sourceVersion.kind, source.sourceVersion.content)) {
+    throw publicationContentMismatch();
+  }
+  let chunks: ChunkDraft[];
+  try {
+    chunks = chunkDocument({
+      normalizedMarkdown: source.sourceVersion.content,
+      kind: source.sourceVersion.kind,
+    });
+  } catch {
+    throw publicationContentMismatch();
+  }
+  if (chunks.length < 1 || chunks.length > MAX_REVISION_CHUNKS
+    || chunks.some((chunk) => chunk.body.trim().length === 0 || chunk.searchBody.trim().length === 0)) {
+    throw publicationContentMismatch();
+  }
+  return chunks;
+}
+
+function publicationContentMismatch(): AppError {
+  return new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content is invalid", 409);
+}
+
+function isPublicationContentMismatch(error: unknown): boolean {
+  return error instanceof AppError && error.code === "PUBLICATION_CONTENT_MISMATCH";
 }
 
 function assertReceipt(intent: PublicationIntent, receipt: { path: string; contentSha256: string; bytes: number }): void {

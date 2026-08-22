@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { hasSemanticSourceContent } from "./limits";
 import type { ParsedSource, ParseSourceInput } from "./types";
 
 const maxSourceBytes = 128 * 1024;
@@ -12,7 +13,7 @@ export async function parseSource(input: ParseSourceInput): Promise<ParsedSource
   assertParseInput(input);
   const normalizedMarkdown = normalizeSource(input);
   const normalizedBytes = new TextEncoder().encode(normalizedMarkdown);
-  if (normalizedMarkdown.trim().length === 0 || normalizedBytes.byteLength > maxSourceBytes) {
+  if (!hasSemanticSourceContent(input.kind, normalizedMarkdown) || normalizedBytes.byteLength > maxSourceBytes) {
     throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
   }
   const digest = await crypto.subtle.digest("SHA-256", normalizedBytes);

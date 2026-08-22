@@ -92,6 +92,56 @@ describe("M1 permission-scoped library", () => {
     expect(reads).toHaveLength(1);
   });
 
+  it("reads exactly 256 authorized chunks and fails closed at 257 before reading content", async () => {
+    await seedKnowledge({
+      id: "knowledge-chunk-boundary",
+      revisionId: "revision-chunk-boundary",
+      title: "Chunk boundary",
+      visibility: "shared",
+    });
+    await env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 255
+       )
+       INSERT INTO chunks (
+         id, revision_id, ordinal, heading_path, start_line, end_line, body,
+         search_title, search_tags, search_body
+       )
+       SELECT printf('revision-chunk-boundary-chunk-%03d', value),
+         'revision-chunk-boundary', value, '[]', value + 3, value + 3,
+         printf('body %d', value), 'Chunk boundary', '', printf('body %d', value)
+       FROM sequence`,
+    ).run();
+    const reads: Array<[string, string]> = [];
+    const service = serviceWithContent(reads);
+
+    await expect(service.detail(contributor, "knowledge-chunk-boundary")).resolves.toMatchObject({
+      currentRevision: { chunks: expect.arrayContaining([
+        expect.objectContaining({ ordinal: 0 }),
+        expect.objectContaining({ ordinal: 255 }),
+      ]) },
+    });
+    const accepted = await service.detail(contributor, "knowledge-chunk-boundary");
+    expect(accepted.currentRevision.chunks).toHaveLength(256);
+    expect(reads).toHaveLength(2);
+
+    await env.DB.prepare(
+      `INSERT INTO chunks (
+         id, revision_id, ordinal, heading_path, start_line, end_line, body,
+         search_title, search_tags, search_body
+       ) VALUES ('revision-chunk-boundary-chunk-256', 'revision-chunk-boundary', 256,
+         '[]', 259, 259, 'body 256', 'Chunk boundary', '', 'body 256')`,
+    ).run();
+    await expect(service.detail(contributor, "knowledge-chunk-boundary"))
+      .rejects.toMatchObject({ code: "KNOWLEDGE_DATA_INVALID", status: 500 });
+    expect(reads).toHaveLength(2);
+
+    await env.DB.prepare("DELETE FROM chunks WHERE revision_id = 'revision-chunk-boundary'").run();
+    await expect(service.detail(contributor, "knowledge-chunk-boundary"))
+      .rejects.toMatchObject({ code: "KNOWLEDGE_DATA_INVALID", status: 500 });
+    expect(reads).toHaveLength(2);
+  });
+
   it("reads a visible historical revision but never silently substitutes the current one", async () => {
     await seedKnowledge({
       id: "knowledge-history",

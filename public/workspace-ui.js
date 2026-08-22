@@ -276,6 +276,79 @@ export function createOptionPageController({ resource, spaceId, writableOnly = f
   });
 }
 
+export function createAdminSpacesRouteController({ owns, request, onChange }) {
+  let spaces = [];
+  let nextCursor;
+  let pending = false;
+  let loaded = false;
+  let error = "";
+  const collectionControllers = new Map();
+  const collectionStates = new Map();
+  const snapshot = () => Object.freeze({
+    spaces: spaces.map((space) => Object.freeze({ ...space })),
+    collectionPages: spaces.filter(isManagedAdminSpace).map((space) => Object.freeze({
+      spaceId: space.id,
+      ...(collectionStates.get(space.id) || emptyAdminCollectionState()),
+    })),
+    ...(nextCursor ? { nextCursor } : {}),
+    pending,
+    loaded,
+    error,
+  });
+  const emit = () => onChange(snapshot());
+  const spacesMutation = createMutationController(owns, (value) => {
+    pending = value;
+    emit();
+  });
+  const ensureCollections = async () => {
+    const loads = [];
+    for (const space of spaces.filter(isManagedAdminSpace)) {
+      if (collectionControllers.has(space.id)) continue;
+      const controller = createAdminCollectionPageController({
+        spaceId: space.id,
+        owns,
+        request,
+        onChange(state) {
+          collectionStates.set(space.id, state);
+          emit();
+        },
+      });
+      collectionControllers.set(space.id, controller);
+      collectionStates.set(space.id, controller.snapshot());
+      loads.push(controller.loadInitial());
+    }
+    await Promise.all(loads);
+  };
+  const loadSpaces = (append) => {
+    if (!owns() || (append && !nextCursor)) return Promise.resolve();
+    const cursor = append ? nextCursor : undefined;
+    return spacesMutation.run(
+      () => request(optionPagePath("spaces", "", cursor)),
+      (value) => {
+        const page = adminSpacePageModel(value);
+        spaces = appendPage(append ? spaces : [], page.items, (space) => space.id);
+        nextCursor = page.nextCursor;
+        loaded = true;
+        error = "";
+        emit();
+      },
+      () => {
+        loaded = true;
+        error = append ? "Could not load more Spaces." : "Could not load Spaces.";
+        emit();
+      },
+    ).then(ensureCollections);
+  };
+  return Object.freeze({
+    loadInitial() { return loadSpaces(false); },
+    loadMoreSpaces() { return loadSpaces(true); },
+    loadMoreCollections(spaceId) {
+      return collectionControllers.get(safeString(spaceId))?.loadMore() || Promise.resolve();
+    },
+    snapshot,
+  });
+}
+
 export function optionLoadMoreModel(value, label) {
   const state = safeRecord(value);
   const safeLabel = safeString(label);
@@ -578,6 +651,100 @@ function optionPageModel(value, resource, spaceId, writableOnly) {
     items,
     ...(safeString(input.nextCursor) ? { nextCursor: safeString(input.nextCursor) } : {}),
   });
+}
+
+function adminSpacePageModel(value) {
+  const input = safeRecord(value);
+  const items = safeArray(input.items).map(safeRecord).filter((space) => (
+    safeString(space.id).length > 0
+    && safeString(space.slug).length > 0
+    && safeString(space.name).length > 0
+    && (space.kind === "shared" || space.kind === "legacy")
+    && (space.status === "active" || space.status === "disabled")
+  )).map((space) => Object.freeze({
+    id: safeString(space.id),
+    slug: safeString(space.slug),
+    name: safeString(space.name),
+    kind: space.kind,
+    status: space.status,
+    readOnly: space.readOnly === true,
+  }));
+  return Object.freeze({
+    items,
+    ...(safeString(input.nextCursor) ? { nextCursor: safeString(input.nextCursor) } : {}),
+  });
+}
+
+function createAdminCollectionPageController({ spaceId, owns, request, onChange }) {
+  let items = [];
+  let nextCursor;
+  let pending = false;
+  let loaded = false;
+  let error = "";
+  const snapshot = () => Object.freeze({
+    items: items.map((collection) => Object.freeze({ ...collection })),
+    ...(nextCursor ? { nextCursor } : {}),
+    pending,
+    loaded,
+    error,
+  });
+  const emit = () => onChange(snapshot());
+  const mutation = createMutationController(owns, (value) => {
+    pending = value;
+    emit();
+  });
+  const load = (append) => {
+    if (!owns() || (append && !nextCursor)) return Promise.resolve();
+    const cursor = append ? nextCursor : undefined;
+    return mutation.run(
+      () => request(optionPagePath("collections", spaceId, cursor)),
+      (value) => {
+        const page = adminCollectionPageModel(value, spaceId);
+        items = appendPage(append ? items : [], page.items, (collection) => collection.id);
+        nextCursor = page.nextCursor;
+        loaded = true;
+        error = "";
+        emit();
+      },
+      () => {
+        loaded = true;
+        error = append ? "Could not load more Collections." : "Could not load Collections.";
+        emit();
+      },
+    );
+  };
+  return Object.freeze({
+    loadInitial() { return load(false); },
+    loadMore() { return load(true); },
+    snapshot,
+  });
+}
+
+function adminCollectionPageModel(value, spaceId) {
+  const input = safeRecord(value);
+  const items = safeArray(input.items).map(safeRecord).filter((collection) => (
+    safeString(collection.id).length > 0
+    && safeString(collection.spaceId) === spaceId
+    && safeString(collection.name).length > 0
+    && (collection.status === "active" || collection.status === "disabled")
+  )).map((collection) => Object.freeze({
+    id: safeString(collection.id),
+    spaceId,
+    name: safeString(collection.name),
+    status: collection.status,
+  }));
+  return Object.freeze({
+    items,
+    ...(safeString(input.nextCursor) ? { nextCursor: safeString(input.nextCursor) } : {}),
+  });
+}
+
+function isManagedAdminSpace(space) {
+  return space.kind === "shared" && space.readOnly !== true;
+}
+
+function emptyAdminCollectionState() {
+  return Object.freeze({ items: [], pending: false, loaded: false, error: "" });
 }
 
 function optionResourceLabel(resource) {

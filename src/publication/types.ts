@@ -5,7 +5,7 @@ import type { SourceVersion } from "../sources/types";
 import type { SubmissionKind } from "../submissions/types";
 
 export type KnowledgeVisibility = "shared" | "admin_only";
-export type PublicationIntentState = "pending_content" | "content_written" | "completed";
+export type PublicationIntentState = "pending_content" | "content_written" | "completed" | "failed_terminal";
 export type SearchStatus = "pending" | "indexed" | "search_degraded";
 
 export interface PublicationReviewer {
@@ -120,6 +120,7 @@ export interface PublicationRepositoryPort {
     input: PublishSubmissionInput,
   ): Promise<PublicationIntent>;
   markContentWritten(submissionId: string, receipt: PublishedContentReceipt): Promise<void>;
+  markIntentFailedTerminal(submissionId: string): Promise<void>;
   finalize(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision>;
   processIndexJob(revisionId: string): Promise<"indexed" | "search_degraded">;
   reject(

@@ -3,6 +3,7 @@ import type { CreateAuditEvent } from "../audit/types";
 import { APP_CONFIG } from "../config";
 import type { PublishedContentReceipt } from "../knowledge/types";
 import type { ChunkDraft } from "../sources/chunker";
+import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import type {
   PublicationIntent,
   PublicationRepositoryPort,
@@ -251,6 +252,17 @@ export class PublicationRepository implements PublicationRepositoryPort {
     const intent = await this.findIntent(submissionId);
     if (intent && (intent.state === "content_written" || intent.state === "completed")
       && intent.normalizedPath === receipt.path && intent.contentSha256 === receipt.contentSha256) return;
+    throw new PublicationRepositoryConflictError("receipt_mismatch");
+  }
+
+  async markIntentFailedTerminal(submissionId: string): Promise<void> {
+    const result = await this.db.prepare(
+      `UPDATE publication_intents SET state = 'failed_terminal', updated_at = ?
+       WHERE submission_id = ? AND state IN ('pending_content', 'content_written')`,
+    ).bind(this.now().toISOString(), submissionId).run();
+    if (result.meta.changes === 1) return;
+    const intent = await this.findIntent(submissionId);
+    if (intent?.state === "failed_terminal") return;
     throw new PublicationRepositoryConflictError("receipt_mismatch");
   }
 
@@ -771,9 +783,12 @@ function sameIntent(left: PublicationIntent, right: PublicationIntent): boolean 
 }
 
 function assertChunks(chunks: ChunkDraft[]): void {
+  if (chunks.length < 1 || chunks.length > MAX_REVISION_CHUNKS) {
+    throw new TypeError("Publication chunks are invalid");
+  }
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index]!;
-    if (chunk.ordinal !== index || chunk.body.length === 0 || chunk.searchBody.length === 0
+    if (chunk.ordinal !== index || chunk.body.trim().length === 0 || chunk.searchBody.trim().length === 0
       || chunk.startLine < 1 || chunk.endLine < chunk.startLine) {
       throw new TypeError("Publication chunks are invalid");
     }

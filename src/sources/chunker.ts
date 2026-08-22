@@ -1,6 +1,7 @@
 import { uniqueSearchTerms } from "../library/lexical";
 import type { SubmissionKind } from "../submissions/types";
 import type { ParsedSource } from "./types";
+import { MAX_REVISION_CHUNKS } from "./limits";
 
 const defaultMaxCodePoints = 1_200;
 const defaultOverlapCodePoints = 120;
@@ -31,14 +32,19 @@ export function chunkDocument(
       ? splitCodeBlock(block, maxCodePoints, overlapCodePoints)
       : splitTextBlock(block, maxCodePoints, overlapCodePoints);
     for (const chunk of chunks) {
+      const searchBody = makeSearchBody(chunk.body);
+      if (chunk.body.trim().length === 0 || searchBody.trim().length === 0) continue;
       drafts.push({
         ordinal: drafts.length,
         headingPath: [...block.headingPath],
         startLine: chunk.startLine,
         endLine: chunk.endLine,
         body: chunk.body,
-        searchBody: makeSearchBody(chunk.body),
+        searchBody,
       });
+      if (drafts.length > MAX_REVISION_CHUNKS) {
+        throw new RangeError(`Document exceeds ${MAX_REVISION_CHUNKS} revision chunks`);
+      }
     }
   }
 

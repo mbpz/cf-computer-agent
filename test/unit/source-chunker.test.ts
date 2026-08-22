@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chunkDocument } from "../../src/sources/chunker";
+import { MAX_REVISION_CHUNKS } from "../../src/sources/limits";
 
 describe("chunkDocument", () => {
   it("tracks heading paths and 1-based source lines", () => {
@@ -128,6 +129,26 @@ describe("chunkDocument", () => {
       expect(chunk.body).not.toBe("");
       expect(chunk.body).not.toMatch(/[\ud800-\udfff]/u);
     }
+  });
+
+  it("never emits an empty retrieval body for a 1201-space oversized code line", () => {
+    const chunks = chunkDocument({
+      kind: "code",
+      normalizedMarkdown: `\`\`\`text\n${" ".repeat(1_201)}\n\`\`\`\n`,
+    });
+
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks.every((chunk) => chunk.body.trim().length > 0 && chunk.searchBody.trim().length > 0)).toBe(true);
+  });
+
+  it("accepts 256 deterministic paragraph chunks and rejects chunk 257", () => {
+    const document = (count: number) => ({
+      kind: "markdown" as const,
+      normalizedMarkdown: Array.from({ length: count }, (_, index) => `paragraph ${index + 1}`).join("\n\n") + "\n",
+    });
+
+    expect(chunkDocument(document(MAX_REVISION_CHUNKS))).toHaveLength(256);
+    expect(() => chunkDocument(document(MAX_REVISION_CHUNKS + 1))).toThrow(/revision chunks/i);
   });
 
   it("indexes shared unicode61 tokens, underscore separators, and adjacent Han bigrams", () => {

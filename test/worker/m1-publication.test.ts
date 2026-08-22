@@ -286,6 +286,133 @@ describe("M1 publication control plane", () => {
     }
   });
 
+  it("publishes and reads exactly 256 paragraph chunks through real D1 and Durable Object boundaries", async () => {
+    const markdown = paragraphDocument(256);
+    const source = await seedNormalizedReviewPendingSubmission("submission-256", "markdown", markdown);
+    const repository = repositoryWithIds("knowledge-256", "revision-256");
+    const service = new PublicationService(repository, durableContentCommitter());
+
+    const published = await service.publish(adminReviewer, "submission-256", publicationInput);
+
+    await expect(publicationState("submission-256")).resolves.toMatchObject({
+      submissionStatus: "published",
+      intentState: "completed",
+      chunkCount: 256,
+      revisionCount: 1,
+      reviewCount: 1,
+      auditCount: 1,
+      jobState: "completed",
+    });
+    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
+    const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+    try {
+      await expect(createPublishedContentReader(workspace).read(published.normalizedPath, published.contentSha256))
+        .resolves.toBe(source.normalizedMarkdown);
+    } finally {
+      disposeWorkspace(workspace);
+    }
+  });
+
+  it.each([
+    ["257 paragraph chunks", "submission-257", "markdown", paragraphDocument(257)],
+    ["whitespace-only code", "submission-whitespace-code", "code", `\`\`\`text\n${" ".repeat(1_201)}\n\`\`\`\n`],
+  ] as const)("rejects %s before D1 intent or Durable Object content", async (_label, submissionId, kind, content) => {
+    await seedNormalizedReviewPendingSubmission(submissionId, kind, content);
+    let contentCommits = 0;
+    const durable = durableContentCommitter();
+    const service = new PublicationService(repositoryWithIds(`knowledge-${submissionId}`, `revision-${submissionId}`), {
+      async commit(input) {
+        contentCommits += 1;
+        return durable.commit(input);
+      },
+    });
+
+    await expect(service.publish(adminReviewer, submissionId, publicationInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_CONTENT_MISMATCH", status: 409 });
+    expect(contentCommits).toBe(0);
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "review_pending",
+      intentState: null,
+      currentRevisionId: null,
+      revisionCount: 0,
+      reviewCount: 0,
+      chunkCount: 0,
+      auditCount: 0,
+      jobState: null,
+    });
+  });
+
+  it.each([
+    ["257 paragraph chunks", "submission-recovery-257", "markdown", paragraphDocument(257)],
+    ["whitespace-only code", "submission-recovery-whitespace", "code", "```text\n  \n```\n"],
+  ] as const)("terminalizes legacy pending recovery with %s without content, audit, or job", async (_label, submissionId, kind, content) => {
+    await seedNormalizedReviewPendingSubmission(submissionId, kind, content);
+    const repository = repositoryWithIds(`knowledge-${submissionId}`, `revision-${submissionId}`);
+    await repository.createOrReadIntent(submissionId, adminReviewer.id, publicationInput);
+    let contentCommits = 0;
+    const service = new PublicationService(repository, {
+      async commit() {
+        contentCommits += 1;
+        throw new Error("invalid recovery must not commit content");
+      },
+    });
+
+    await expect(service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [{ resourceId: submissionId, code: "PUBLICATION_RECOVERY_FAILED" }],
+    });
+    expect(contentCommits).toBe(0);
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "review_pending",
+      intentState: "failed_terminal",
+      currentRevisionId: null,
+      revisionCount: 0,
+      reviewCount: 0,
+      chunkCount: 0,
+      auditCount: 0,
+      jobState: null,
+    });
+    await expect(service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [],
+    });
+  });
+
+  it("defensively rejects 257 chunks in the D1 repository before revision, review, audit, or job rows", async () => {
+    await seedReviewPendingSubmission("submission-repository-257");
+    const repository = repositoryWithIds("knowledge-repository-257", "revision-repository-257");
+    const intent = await repository.createOrReadIntent("submission-repository-257", adminReviewer.id, publicationInput);
+    const receipt = await durableContentCommitter().commit({
+      spaceId: intent.spaceId,
+      knowledgeItemId: intent.knowledgeItemId,
+      revisionId: intent.revisionId,
+      contentSha256: intent.contentSha256,
+      markdown: intent.sourceVersion.content,
+    });
+    await repository.markContentWritten(intent.submissionId, receipt);
+    const chunks = Array.from({ length: 257 }, (_, ordinal) => ({
+      ordinal,
+      headingPath: [],
+      startLine: ordinal + 1,
+      endLine: ordinal + 1,
+      body: `body ${ordinal}`,
+      searchBody: `body ${ordinal}`,
+    }));
+
+    await expect(repository.finalize(intent, chunks)).rejects.toThrow(/publication chunks/i);
+    await expect(publicationState("submission-repository-257")).resolves.toMatchObject({
+      submissionStatus: "review_pending",
+      intentState: "content_written",
+      revisionCount: 0,
+      reviewCount: 0,
+      chunkCount: 0,
+      auditCount: 0,
+      jobState: null,
+    });
+  });
+
   it("converges concurrent publishers on one intent, revision, current pointer, FTS set, and audit", async () => {
     await seedReviewPendingSubmission("submission-concurrent");
     const first = new PublicationService(
@@ -822,21 +949,35 @@ async function seedReviewPendingSubmission(submissionId: string) {
     kind: "markdown",
     content: "# Trusted\n\nFirst paragraph.\n\nSecond paragraph.\n",
   });
+  return seedNormalizedReviewPendingSubmission(submissionId, "markdown", parsed.normalizedMarkdown, parsed.contentSha256);
+}
+
+async function seedNormalizedReviewPendingSubmission(
+  submissionId: string,
+  kind: "markdown" | "code",
+  normalizedMarkdown: string,
+  knownSha256?: string,
+) {
+  const contentSha256 = knownSha256 ?? await sha256Hex(normalizedMarkdown);
   const sourceId = `source-${submissionId}`;
   const sourceVersionId = `source-version-${submissionId}`;
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at)
-       VALUES (?, 'member-1', 'default', 'collection-1', 'markdown', 'review_pending', 'Submitted title', ?, NULL, ?, ?)`,
-    ).bind(submissionId, parsed.normalizedMarkdown, now, now),
+       VALUES (?, 'member-1', 'default', 'collection-1', ?, 'review_pending', 'Submitted title', ?, NULL, ?, ?)`,
+    ).bind(submissionId, kind, normalizedMarkdown, now, now),
     env.DB.prepare(
-      "INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, 'member-1', 'default', 'collection-1', 'markdown', 'Submitted title', ?, ?)",
-    ).bind(sourceId, now, now),
+      "INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES (?, 'member-1', 'default', 'collection-1', ?, 'Submitted title', ?, ?)",
+    ).bind(sourceId, kind, now, now),
     env.DB.prepare(
       "INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES (?, ?, ?, 1, ?, ?, 'm1-v1', ?)",
-    ).bind(sourceVersionId, sourceId, submissionId, parsed.normalizedMarkdown, parsed.contentSha256, now),
+    ).bind(sourceVersionId, sourceId, submissionId, normalizedMarkdown, contentSha256, now),
   ]);
-  return parsed;
+  return { normalizedMarkdown, contentSha256 };
+}
+
+function paragraphDocument(count: number): string {
+  return Array.from({ length: count }, (_, index) => `paragraph ${index + 1}`).join("\n\n") + "\n";
 }
 
 async function publicationState(submissionId: string) {

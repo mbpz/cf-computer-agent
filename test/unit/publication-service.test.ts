@@ -30,8 +30,7 @@ describe("PublicationService", () => {
     ["absolute-lines", "markdown", "# One\n\nfirst\n\n## Two\n\nsecond\n"],
   ] as const)("returns %s preview locations from the exact publication chunker", async (_case, kind, content) => {
     const fixture = await publicationFixture();
-    fixture.intent.sourceVersion.kind = kind;
-    fixture.intent.sourceVersion.content = content;
+    await replaceFixtureSource(fixture.intent, content, kind);
 
     const preview = await fixture.service.preview(reviewer, "submission-1");
     const publicationChunks = chunkDocument({ normalizedMarkdown: content, kind });
@@ -191,6 +190,43 @@ describe("PublicationService", () => {
       .rejects.toMatchObject({ code: "PUBLICATION_CONTENT_MISMATCH", status: 409 });
     expect(fixture.events).toEqual(["validate-target"]);
     expect(fixture.commits).toHaveLength(0);
+  });
+
+  it.each([
+    ["257 paragraph chunks", Array.from({ length: 257 }, (_, index) => `paragraph ${index + 1}`).join("\n\n") + "\n", "markdown"],
+    ["whitespace-only legacy code", `\`\`\`text\n${" ".repeat(1_201)}\n\`\`\`\n`, "code"],
+  ] as const)("rejects %s before creating an intent or committing content", async (_label, content, kind) => {
+    const fixture = await publicationFixture();
+    await replaceFixtureSource(fixture.intent, content, kind);
+
+    await expect(fixture.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_CONTENT_MISMATCH", status: 409 });
+    expect(fixture.events).toEqual(["validate-target"]);
+    expect(fixture.commits).toHaveLength(0);
+  });
+
+  it.each([
+    ["257 chunks", Array.from({ length: 257 }, (_, index) => `paragraph ${index + 1}`).join("\n\n") + "\n", "markdown"],
+    ["semantically empty code", "```text\n   \n```\n", "code"],
+  ] as const)("terminalizes a legacy pending intent with %s so recovery does not retry forever", async (_label, content, kind) => {
+    const fixture = await publicationFixture();
+    await replaceFixtureSource(fixture.intent, content, kind);
+
+    await expect(fixture.service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [{ resourceId: "submission-1", code: "PUBLICATION_RECOVERY_FAILED" }],
+    });
+    expect(fixture.intent.state).toBe("failed_terminal");
+    expect(fixture.events).toEqual(["terminalize-intent"]);
+    expect(fixture.commits).toHaveLength(0);
+
+    await expect(fixture.service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [],
+    });
+    expect(fixture.events).toEqual(["terminalize-intent"]);
   });
 
   it("maps a target invalidated between validation and intent creation to the public target error", async () => {
@@ -448,6 +484,10 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
       intent.state = "content_written";
       if (options.markResponseLoss && !markResponseLost) { markResponseLost = true; throw new Error("mark response lost"); }
     },
+    async markIntentFailedTerminal() {
+      events.push("terminalize-intent");
+      intent.state = "failed_terminal";
+    },
     async finalize(_stableIntent, chunks) {
       finalizedChunks = chunks;
       events.push(`finalize:${chunks.length}`);
@@ -469,7 +509,9 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
       revisionInputs.push(input);
       return revisionDecision;
     },
-    async listPendingIntents(limit) { return limit > 0 && intent.state !== "completed" ? [intent] : []; },
+    async listPendingIntents(limit) {
+      return limit > 0 && intent.state !== "completed" && intent.state !== "failed_terminal" ? [intent] : [];
+    },
     async listRecoverableIndexRevisionIds(limit) {
       return limit > 0 && intent.state === "completed" && indexCount === 0 ? [intent.revisionId] : [];
     },
@@ -495,4 +537,12 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function replaceFixtureSource(intent: PublicationIntent, content: string, kind: "markdown" | "code"): Promise<void> {
+  const contentSha256 = await sha256(content);
+  intent.sourceVersion.kind = kind;
+  intent.sourceVersion.content = content;
+  intent.sourceVersion.contentSha256 = contentSha256;
+  intent.contentSha256 = contentSha256;
 }

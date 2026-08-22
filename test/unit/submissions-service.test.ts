@@ -91,6 +91,23 @@ describe("SubmissionsService", () => {
     expect(repository.sourceCreation).toBeUndefined();
   });
 
+  it.each([
+    ["ordinary whitespace", " \t\r\n"],
+    ["1,201-space oversized line", " ".repeat(1_201)],
+  ])("rejects %s code before any submission, source, or version persistence", async (_label, content) => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+
+    await expect(service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default",
+      kind: "code",
+      title: "Title",
+      content,
+      idempotencyKey: "abcdefghijklmnop",
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    expect(repository.sourceCreation).toBeUndefined();
+  });
+
   it("maps an exact-key payload or target mismatch to a typed 409", async () => {
     const repository = new FakeSubmissionsRepository();
     repository.conflict = new SubmissionsRepositoryConflictError("idempotency_conflict");

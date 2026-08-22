@@ -7,6 +7,7 @@ const {
   chatRequest,
   citedAnswerModel,
   createMutationController,
+  createAdminSpacesRouteController,
   createOwnedActionController,
   createOperationGuard,
   createOptionPageController,
@@ -121,6 +122,72 @@ describe("createOperationGuard", () => {
     );
 
     expect(operations).toBe(0);
+  });
+});
+
+describe("createAdminSpacesRouteController", () => {
+  it("executes the bounded Admin Spaces route loader and exposes explicit Space and Collection next pages", async () => {
+    const paths: string[] = [];
+    const controller = createAdminSpacesRouteController({
+      owns: () => true,
+      request: async (path: string) => {
+        paths.push(path);
+        if (path === "/api/spaces?limit=50") return {
+          items: [
+            { id: "legacy", slug: "legacy", name: "Legacy", kind: "legacy", status: "active", readOnly: true },
+            { id: "space-1", slug: "one", name: "One", kind: "shared", status: "active", readOnly: false },
+          ],
+          nextCursor: "space-page-2",
+        };
+        if (path === "/api/spaces/space-1/collections?limit=50") return {
+          items: [{ id: "collection-1", spaceId: "space-1", name: "First", status: "active" }],
+          nextCursor: "collection-page-2",
+        };
+        if (path === "/api/spaces?limit=50&cursor=space-page-2") return {
+          items: [{ id: "space-2", slug: "two", name: "Two", kind: "shared", status: "active", readOnly: false }],
+        };
+        if (path === "/api/spaces/space-2/collections?limit=50") return { items: [] };
+        if (path === "/api/spaces/space-1/collections?limit=50&cursor=collection-page-2") return {
+          items: [
+            { id: "collection-1", spaceId: "space-1", name: "First", status: "active" },
+            { id: "collection-51", spaceId: "space-1", name: "Fifty one", status: "active" },
+          ],
+        };
+        throw new Error(`unexpected route request: ${path}`);
+      },
+      onChange: () => undefined,
+    });
+
+    await controller.loadInitial();
+    expect(paths).toEqual([
+      "/api/spaces?limit=50",
+      "/api/spaces/space-1/collections?limit=50",
+    ]);
+    expect(controller.snapshot()).toMatchObject({
+      spaces: [
+        { id: "legacy", slug: "legacy", name: "Legacy", kind: "legacy", status: "active", readOnly: true },
+        { id: "space-1", slug: "one", name: "One", kind: "shared", status: "active", readOnly: false },
+      ],
+      nextCursor: "space-page-2",
+      collectionPages: [{ spaceId: "space-1", nextCursor: "collection-page-2" }],
+    });
+
+    await controller.loadMoreSpaces();
+    await controller.loadMoreCollections("space-1");
+    expect(paths).toEqual([
+      "/api/spaces?limit=50",
+      "/api/spaces/space-1/collections?limit=50",
+      "/api/spaces?limit=50&cursor=space-page-2",
+      "/api/spaces/space-2/collections?limit=50",
+      "/api/spaces/space-1/collections?limit=50&cursor=collection-page-2",
+    ]);
+    expect(controller.snapshot()).toMatchObject({
+      spaces: [expect.objectContaining({ id: "legacy" }), expect.objectContaining({ id: "space-1" }), expect.objectContaining({ id: "space-2" })],
+      collectionPages: [
+        { spaceId: "space-1", items: [expect.objectContaining({ id: "collection-1" }), expect.objectContaining({ id: "collection-51" })] },
+        { spaceId: "space-2", items: [] },
+      ],
+    });
   });
 });
 

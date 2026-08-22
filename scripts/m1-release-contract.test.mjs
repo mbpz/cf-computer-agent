@@ -17,7 +17,7 @@ const reportPath = new URL("../.superpowers/sdd/2026-08-21-m1-single-source-know
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
-  ["0003_m1_knowledge_loop.sql", "8d19e4bc328a13e324b027b54fd4a0b91581461f2f10b9f738f39c4f4e20778d"],
+  ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],

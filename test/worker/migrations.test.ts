@@ -357,7 +357,7 @@ describe("Phase 1 control-plane migrations", () => {
       "updated_at:TEXT:1:NULL:0",
     ], [
       "CHECK(visibility IN ('shared', 'admin_only'))",
-      "CHECK(state IN ('pending_content', 'content_written', 'completed'))",
+      "CHECK(state IN ('pending_content', 'content_written', 'completed', 'failed_terminal'))",
     ]);
     await expectTableSchema("jobs", [
       "id:TEXT:0:NULL:1",

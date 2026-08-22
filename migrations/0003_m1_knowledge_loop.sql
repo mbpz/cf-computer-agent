@@ -166,7 +166,7 @@ CREATE TABLE publication_intents (
   tags_json TEXT NOT NULL,
   normalized_path TEXT NOT NULL UNIQUE,
   content_sha256 TEXT NOT NULL,
-  state TEXT NOT NULL CHECK(state IN ('pending_content', 'content_written', 'completed')),
+  state TEXT NOT NULL CHECK(state IN ('pending_content', 'content_written', 'completed', 'failed_terminal')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

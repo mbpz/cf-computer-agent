@@ -4,6 +4,7 @@ import {
   appendPage,
   chatRequest,
   citedAnswerModel,
+  createAdminSpacesRouteController,
   createLogoutController,
   createMutationController,
   createOptionPageController,
@@ -888,14 +889,21 @@ async function renderMembers(generation) {
 function table(headers, rows) { return element("div", { className: "table-wrap" }, [element("table", {}, [element("thead", {}, [element("tr", {}, headers.map((header) => element("th", { text: header }))) ]), element("tbody", {}, rows)])]); }
 
 async function renderSpaces(generation) {
-  const spaces = await loadSpaces();
-  const managedSpaces = spaces.filter((space) => !space.readOnly && space.kind === "shared");
-  const collectionPages = await Promise.all(managedSpaces.map(async (space) => ({
-    space,
-    collections: (await api(`/api/spaces/${encodeURIComponent(space.id)}/collections?limit=50`)).items,
-  })));
-  const slug = element("input", { required: "", placeholder: "engineering" });
   const owner = routeGuard.owner(generation, "/admin/spaces");
+  let latestState;
+  let renderState = () => undefined;
+  const controller = createAdminSpacesRouteController({
+    owns: () => ownsMutation(owner),
+    request: api,
+    onChange(state) {
+      latestState = state;
+      renderState();
+    },
+  });
+  await controller.loadInitial();
+  const spaces = controller.snapshot().spaces;
+  const managedSpaces = spaces.filter((space) => !space.readOnly && space.kind === "shared");
+  const slug = element("input", { required: "", placeholder: "engineering" });
   const name = element("input", { required: "", placeholder: "Engineering" });
   const position = element("input", { type: "number", value: String(spaces.length) });
   const createSpaceButton = element("button", { className: "primary", type: "submit", text: "Create shared Space" });
@@ -929,13 +937,62 @@ async function renderSpaces(generation) {
       (error) => validationSummary(collectionForm, safeErrorMessage(error)),
     );
   } }, [field("Target Space", collectionSpace), field("Collection name", collectionName), field("Position", collectionPosition), createCollectionButton]);
+  const spacesSlot = element("div");
+  const collectionsSlot = element("div");
+  const spacesMore = element("button", { className: "secondary", type: "button" });
+  const spacesStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
+  spacesMore.addEventListener("click", () => { void controller.loadMoreSpaces(); });
   replaceOutlet(page("Spaces", "Legacy personal Spaces remain read-only; server APIs validate every shared Space and Collection mutation.", [
-    element("div", { className: "page-grid wide-left" }, [card("Existing Spaces", [list(spaces, (space) => item(space.name, `${space.slug} · ${space.kind} · ${space.readOnly ? "read-only" : space.status}`), "No Spaces.")]), card("New shared Space", [form])]),
+    element("div", { className: "page-grid wide-left" }, [card("Existing Spaces", [spacesSlot, spacesMore, spacesStatus]), card("New shared Space", [form])]),
     element("div", { className: "page-grid wide-left" }, [
-      card("Collections", [collectionPages.length ? list(collectionPages, ({ space, collections }) => item(space.name, collections.length ? collections.map((collection) => collection.name).join(" · ") : "No Collections yet."), "No manageable shared Space.") : empty("No manageable shared Space.")]),
+      card("Collections", [collectionsSlot]),
       card("New Collection", [collectionForm]),
     ]),
   ]), generation);
+  renderState = () => {
+    if (!ownsMutation(owner) || !latestState) return;
+    spacesSlot.replaceChildren(list(latestState.spaces, (space) => item(
+      space.name,
+      `${space.slug} · ${space.kind} · ${space.readOnly ? "read-only" : space.status}`,
+    ), "No Spaces."));
+    const spaceMoreModel = optionLoadMoreModel(latestState, "Spaces");
+    spacesMore.hidden = !spaceMoreModel.visible;
+    spacesMore.disabled = spaceMoreModel.disabled;
+    spacesMore.textContent = spaceMoreModel.label;
+    spacesMore.setAttribute("aria-label", spaceMoreModel.accessibleName);
+    spacesStatus.textContent = latestState.error;
+    spacesStatus.hidden = !latestState.error;
+
+    const selection = collectionSpace.value;
+    const writableSpaces = latestState.spaces.filter((space) => !space.readOnly && space.kind === "shared");
+    collectionSpace.replaceChildren(...writableSpaces.map((space) => element("option", { value: space.id, text: space.name })));
+    if ([...collectionSpace.options].some((option) => option.value === selection)) collectionSpace.value = selection;
+    createCollectionButton.disabled = writableSpaces.length === 0;
+
+    const spaceById = new Map(latestState.spaces.map((space) => [space.id, space]));
+    collectionsSlot.replaceChildren(latestState.collectionPages.length ? list(
+      latestState.collectionPages,
+      (collectionPage) => {
+        const more = element("button", { className: "secondary", type: "button" });
+        const moreModel = optionLoadMoreModel(collectionPage, "Collections");
+        more.hidden = !moreModel.visible;
+        more.disabled = moreModel.disabled;
+        more.textContent = moreModel.label;
+        more.setAttribute("aria-label", `${moreModel.accessibleName} in ${spaceById.get(collectionPage.spaceId)?.name || "Space"}`);
+        more.addEventListener("click", () => { void controller.loadMoreCollections(collectionPage.spaceId); });
+        const status = element("p", { className: "muted", role: "status", "aria-live": "polite", text: collectionPage.error });
+        status.hidden = !collectionPage.error;
+        return item(
+          spaceById.get(collectionPage.spaceId)?.name || "Space",
+          collectionPage.items.length ? collectionPage.items.map((collection) => collection.name).join(" · ") : "No Collections yet.",
+          [more, status],
+        );
+      },
+      "No manageable shared Space.",
+    ) : empty("No manageable shared Space."));
+  };
+  latestState = controller.snapshot();
+  renderState();
 }
 
 async function renderAudit(generation) {

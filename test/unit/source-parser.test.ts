@@ -134,4 +134,12 @@ describe("parseSource", () => {
     await expect(parseSource({ kind: "markdown", content: " \t\r\n" }))
       .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
   });
+
+  it.each([
+    ["ordinary whitespace", " \t\r\n"],
+    ["oversized-line whitespace", " ".repeat(1_201)],
+  ])("rejects %s code before source persistence", async (_label, content) => {
+    await expect(parseSource({ kind: "code", content, language: "text" }))
+      .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+  });
 });
