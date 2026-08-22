@@ -27,7 +27,7 @@ const TECHNICAL_COPY_PREFIX_ALLOWLIST = Object.freeze([
   "Translation property is not user-visible:",
   "Translation placeholder mismatch for",
 ]);
-const USER_VISIBLE_ATTRIBUTES = new Set(["aria-label", "aria-description", "placeholder", "title"]);
+const USER_VISIBLE_ATTRIBUTES = new Set(["alt", "aria-label", "aria-description", "placeholder", "title"]);
 const TRANSLATION_KEY = /^[A-Z][A-Z0-9_]*$/u;
 
 const en = await importCatalog(resolve(publicRoot, "locales/en.js"), "en");
@@ -129,16 +129,15 @@ function scanJavaScript(path, sourceFile) {
       scanTranslationCall(node, path, environment);
       scanCallSink(node, path, environment);
     }
+    if (ast.isNewExpression(node) && errorConstructorName(node.expression) && node.arguments?.[0]) {
+      checkCopy(node.arguments[0], path, environment);
+    }
+    if (ast.isThrowStatement(node) && node.expression) checkCopy(node.expression, path, environment);
     if (ast.isBinaryExpression(node) && node.operatorToken.kind === ast.SyntaxKind.EqualsToken) {
       const property = accessName(node.left);
       if (property && ["textContent", "innerText", "title", "placeholder", "ariaLabel"].includes(property)) {
         checkCopy(node.right, path, environment);
       }
-    }
-    if (ast.isThrowStatement(node) && node.expression && ast.isNewExpression(node.expression)
-      && ast.isIdentifier(node.expression.expression)
-      && (node.expression.expression.text === "Error" || node.expression.expression.text === "TypeError")) {
-      if (node.expression.arguments?.[0]) checkCopy(node.expression.arguments[0], path, environment);
     }
   });
 }
@@ -191,9 +190,20 @@ function resolveTranslationKeys(expression, environment, seen = new Set()) {
 function scanCallSink(node, path, environment) {
   const callName = ast.isIdentifier(node.expression) ? node.expression.text : accessName(node.expression);
   if (!callName) return;
+  if (errorConstructorName(node.expression) && node.arguments[0]) {
+    checkCopy(node.arguments[0], path, environment);
+    return;
+  }
+  if (callName === "reject" && ast.isPropertyAccessExpression(node.expression)
+    && node.expression.expression.getText(environment.sourceFile) === "Promise" && node.arguments[0]) {
+    checkCopy(node.arguments[0], path, environment);
+    return;
+  }
   if (callName === "setAttribute" && ast.isPropertyAccessExpression(node.expression)) {
     const attribute = literalText(node.arguments[0]);
-    if (attribute && USER_VISIBLE_ATTRIBUTES.has(attribute) && node.arguments[1]) checkCopy(node.arguments[1], path, environment);
+    const visible = attribute && (USER_VISIBLE_ATTRIBUTES.has(attribute)
+      || (attribute === "value" && visibleValueTarget(node.expression.expression, environment)));
+    if (visible && node.arguments[1]) checkCopy(node.arguments[1], path, environment);
     return;
   }
   if (callName === "createTextNode" && node.arguments[0]) {
@@ -210,7 +220,7 @@ function scanCallSink(node, path, environment) {
     return;
   }
   if (callName === "element") {
-    scanElementOptions(node.arguments[1], path, environment);
+    scanElementOptions(node.arguments[0], node.arguments[1], path, environment);
     scanChildren(node.arguments[2], path, environment);
     return;
   }
@@ -227,17 +237,21 @@ function scanCallSink(node, path, environment) {
   }
 }
 
-function scanElementOptions(expression, path, environment) {
-  const object = unwrapObjectLiteral(expression);
+function scanElementOptions(tagExpression, expression, path, environment) {
+  const object = resolveObjectLiteral(expression, environment);
   if (!object) return;
+  const tag = literalText(tagExpression);
   for (const property of object.properties.filter(ast.isPropertyAssignment)) {
     const name = propertyName(property.name);
-    if (name === "text" || USER_VISIBLE_ATTRIBUTES.has(name)) checkCopy(property.initializer, path, environment);
+    if (name === "text" || USER_VISIBLE_ATTRIBUTES.has(name)
+      || (name === "value" && tag === "input" && visibleInputType(object))) {
+      checkCopy(property.initializer, path, environment);
+    }
   }
 }
 
 function scanNamedObjectProperties(expression, names, path, environment) {
-  const object = unwrapObjectLiteral(expression);
+  const object = resolveObjectLiteral(expression, environment);
   if (!object) return;
   for (const property of object.properties.filter(ast.isPropertyAssignment)) {
     if (names.includes(propertyName(property.name))) checkCopy(property.initializer, path, environment);
@@ -268,6 +282,20 @@ function staticCopy(expression, environment, seen = new Set()) {
     if (!initializer) return "";
     seen.add(expression.text);
     return staticCopy(initializer, environment, seen);
+  }
+  if (ast.isPropertyAccessExpression(expression) || ast.isElementAccessExpression(expression)) {
+    const object = resolveObjectLiteral(expression.expression, environment);
+    const name = accessName(expression);
+    const property = object?.properties.find((candidate) => {
+      return (ast.isPropertyAssignment(candidate) || ast.isShorthandPropertyAssignment(candidate))
+        && propertyName(candidate.name) === name;
+    });
+    if (property && ast.isPropertyAssignment(property)) {
+      return staticCopy(property.initializer, environment, new Set(seen));
+    }
+    if (property && ast.isShorthandPropertyAssignment(property)) {
+      return staticCopy(property.name, environment, new Set(seen));
+    }
   }
   if (ast.isTemplateExpression(expression)) {
     return [expression.head.text, ...expression.templateSpans.flatMap((span) => [
@@ -304,31 +332,42 @@ async function scanHtml(path) {
   } });
   try {
     const document = new window.DOMParser().parseFromString(source, "text/html");
-    for (const element of document.querySelectorAll("*")) {
-      const tag = element.tagName.toLowerCase();
-      if (tag === "script" || tag === "style" || tag === "template") continue;
-      const textKey = element.getAttribute("data-i18n");
-      if (textKey) checkedKeys.add(textKey);
-      const ariaKey = element.getAttribute("data-i18n-aria-label");
-      if (ariaKey) checkedKeys.add(ariaKey);
-      for (const node of element.childNodes) {
-        if (node.nodeType !== 3) continue;
-        const text = node.textContent.trim();
-        if (humanCopy(text) && !allowedTechnicalCopy(text) && !textKey) {
-          errors.push(`[fail] hardcoded-copy file=${relative(path)} html-text=${compact(text)}`);
+    const roots = [document];
+    for (let index = 0; index < roots.length; index += 1) {
+      const scanRoot = roots[index];
+      scanHtmlTextChildren(scanRoot, undefined, path);
+      for (const element of scanRoot.querySelectorAll("*")) {
+        const tag = element.tagName.toLowerCase();
+        if (tag === "script" || tag === "style") continue;
+        const textKey = element.getAttribute("data-i18n");
+        if (textKey) checkedKeys.add(textKey);
+        const ariaKey = element.getAttribute("data-i18n-aria-label");
+        if (ariaKey) checkedKeys.add(ariaKey);
+        scanHtmlTextChildren(element, textKey, path);
+        for (const name of [...USER_VISIBLE_ATTRIBUTES, "value"]) {
+          if (name === "value" && !visibleHtmlValue(element)) continue;
+          const value = element.getAttribute(name);
+          if (!value || !humanCopy(value) || allowedTechnicalCopy(value)) continue;
+          if (name === "aria-label" && ariaKey) continue;
+          errors.push(`[fail] hardcoded-copy file=${relative(path)} html-attr=${name}`);
         }
-      }
-      for (const name of USER_VISIBLE_ATTRIBUTES) {
-        const value = element.getAttribute(name);
-        if (!value || !humanCopy(value) || allowedTechnicalCopy(value)) continue;
-        if (name === "aria-label" && ariaKey) continue;
-        errors.push(`[fail] hardcoded-copy file=${relative(path)} html-attr=${name}`);
+        if (tag === "template" && element.content) roots.push(element.content);
       }
     }
   } catch {
     errors.push(`[fail] html-parse file=${relative(path)}`);
   } finally {
     window.close();
+  }
+}
+
+function scanHtmlTextChildren(parent, textKey, path) {
+  for (const node of parent.childNodes || []) {
+    if (node.nodeType !== 3) continue;
+    const text = node.textContent.trim();
+    if (humanCopy(text) && !allowedTechnicalCopy(text) && !textKey) {
+      errors.push(`[fail] hardcoded-copy file=${relative(path)} html-text=${compact(text)}`);
+    }
   }
 }
 
@@ -357,6 +396,45 @@ function unwrapObjectLiteral(expression) {
   return undefined;
 }
 
+function resolveObjectLiteral(expression, environment, seen = new Set()) {
+  if (!expression) return undefined;
+  const object = unwrapObjectLiteral(expression);
+  if (object) return object;
+  if (ast.isIdentifier(expression) && !environment.reassigned.has(expression.text) && !seen.has(expression.text)) {
+    const initializer = environment.declarations.get(expression.text);
+    if (!initializer) return undefined;
+    seen.add(expression.text);
+    return resolveObjectLiteral(initializer, environment, seen);
+  }
+  return undefined;
+}
+
+function visibleValueTarget(expression, environment, seen = new Set()) {
+  if (!expression) return false;
+  if (ast.isParenthesizedExpression(expression)) return visibleValueTarget(expression.expression, environment, seen);
+  if (ast.isIdentifier(expression) && !environment.reassigned.has(expression.text) && !seen.has(expression.text)) {
+    const initializer = environment.declarations.get(expression.text);
+    if (!initializer) return false;
+    seen.add(expression.text);
+    return visibleValueTarget(initializer, environment, seen);
+  }
+  if (!ast.isCallExpression(expression) || !ast.isIdentifier(expression.expression)
+    || expression.expression.text !== "element" || literalText(expression.arguments[0]) !== "input") return false;
+  const options = resolveObjectLiteral(expression.arguments[1], environment);
+  return Boolean(options && visibleInputType(options));
+}
+
+function visibleInputType(object) {
+  const type = object.properties.filter(ast.isPropertyAssignment)
+    .find((property) => propertyName(property.name) === "type");
+  return Boolean(type && ["button", "reset", "submit"].includes(literalText(type.initializer)));
+}
+
+function visibleHtmlValue(element) {
+  if (element.tagName.toLowerCase() !== "input") return false;
+  return ["button", "reset", "submit"].includes((element.getAttribute("type") || "text").toLowerCase());
+}
+
 function literalText(node) {
   return node && (ast.isStringLiteral(node) || ast.isNoSubstitutionTemplateLiteral(node)) ? node.text : undefined;
 }
@@ -365,6 +443,9 @@ function accessName(node) {
   if (ast.isPropertyAccessExpression(node)) return node.name.text;
   if (ast.isElementAccessExpression(node)) return literalText(node.argumentExpression) || "";
   return "";
+}
+function errorConstructorName(node) {
+  return ast.isIdentifier(node) && ["Error", "TypeError", "DOMException"].includes(node.text) ? node.text : "";
 }
 function union(left, right) {
   if (!left || !right) return undefined;

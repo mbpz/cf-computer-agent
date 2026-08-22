@@ -14,7 +14,7 @@ export function createI18n({ navigatorLanguage = "", storedLocale, storage } = {
   const api = {
     get locale() { return locale; },
     t(key, values = undefined) {
-      const template = catalogs[locale][key] ?? en[key];
+      const template = ownCatalogValue(catalogs[locale], key) ?? ownCatalogValue(en, key);
       if (template === undefined) return String(key);
       return interpolate(template, values, key);
     },
@@ -35,7 +35,7 @@ export function createI18n({ navigatorLanguage = "", storedLocale, storage } = {
 }
 
 export function translateEnglish(key, values = undefined) {
-  const template = en[key];
+  const template = ownCatalogValue(en, key);
   return template === undefined ? String(key) : interpolate(template, values, key);
 }
 
@@ -44,6 +44,7 @@ export function createTranslationBindings(translate) {
   const descriptors = new WeakSet();
   const records = new Set();
   const recordsByTarget = new WeakMap();
+  const textNodesByTarget = new WeakMap();
 
   const value = (key, values = undefined) => {
     const descriptor = {
@@ -79,6 +80,22 @@ export function createTranslationBindings(translate) {
     targetRecords.delete(channel);
   };
   const applyValue = (candidate) => descriptors.has(candidate) ? candidate.toString() : String(candidate ?? "");
+  const textNodeFor = (target) => {
+    if (target?.nodeType === 3 && "data" in target) return target;
+    const existing = textNodesByTarget.get(target);
+    if (existing) return existing;
+    if (target?.firstChild?.nodeType === 3 && "data" in target.firstChild) {
+      textNodesByTarget.set(target, target.firstChild);
+      return target.firstChild;
+    }
+    const textNode = target?.ownerDocument?.createTextNode("");
+    if (!textNode || typeof target.insertBefore !== "function") {
+      throw new TypeError("Translation binding target must be an object");
+    }
+    target.insertBefore(textNode, target.firstChild ?? null);
+    textNodesByTarget.set(target, textNode);
+    return textNode;
+  };
 
   return Object.freeze({
     value,
@@ -93,15 +110,16 @@ export function createTranslationBindings(translate) {
     },
     isValue(candidate) { return descriptors.has(candidate); },
     text(target, candidate) {
+      const textNode = textNodeFor(target);
       if (!descriptors.has(candidate)) {
-        unbind(target, "textContent");
-        target.textContent = String(candidate ?? "");
+        unbind(textNode, "data");
+        textNode.data = String(candidate ?? "");
         return;
       }
-      bind(target, "textContent", () => { target.textContent = candidate.toString(); });
+      bind(textNode, "data", () => { textNode.data = candidate.toString(); });
     },
     attribute(target, name, candidate) {
-      if (!/^(?:aria-label|aria-description|placeholder|title)$/u.test(name)) {
+      if (!/^(?:alt|aria-label|aria-description|placeholder|title)$/u.test(name)) {
         throw new TypeError(`Translation attribute is not user-visible: ${name}`);
       }
       if (!descriptors.has(candidate)) {
@@ -158,6 +176,10 @@ function interpolate(template, values, key) {
 
 function resolveValues(values) {
   return typeof values === "function" ? values() : values;
+}
+
+function ownCatalogValue(catalog, key) {
+  return Object.hasOwn(catalog, key) ? catalog[key] : undefined;
 }
 
 function isLocale(value) {

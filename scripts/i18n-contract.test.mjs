@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { createI18n, createTranslationBindings, LOCALE_STORAGE_KEY } from "../public/i18n.js";
+import { Window } from "happy-dom";
+
+import { createI18n, createTranslationBindings, LOCALE_STORAGE_KEY, translateEnglish } from "../public/i18n.js";
 import { en } from "../public/locales/en.js";
 import { zhCN } from "../public/locales/zh-CN.js";
 
@@ -59,10 +61,20 @@ test("switching persists, notifies once, validates interpolation, and never trea
   assert.deepEqual(notifications, ["zh-CN"]);
 });
 
+test("catalog lookup only accepts own keys and falls back safely for prototype names", () => {
+  const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
+  for (const key of ["__proto__", "constructor", "toString"]) {
+    assert.equal(i18n.t(key), key);
+    assert.equal(translateEnglish(key), key);
+  }
+});
+
 test("translation bindings refresh existing text, safe attributes, and title without replacing UI state", () => {
+  const window = new Window();
   const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
   const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
-  const textNode = { textContent: "", isConnected: true };
+  const textNode = window.document.createTextNode("");
+  window.document.body.append(textNode);
   const aria = new Map();
   const ariaNode = { isConnected: true, setAttribute(name, value) { aria.set(name, value); } };
   const pageDocument = { title: "" };
@@ -76,23 +88,80 @@ test("translation bindings refresh existing text, safe attributes, and title wit
 
   bindings.text(textNode, bindings.value("HOME_TITLE"));
   bindings.attribute(ariaNode, "aria-label", bindings.value("SEARCH_ARIA_QUERY"));
+  bindings.attribute(ariaNode, "alt", bindings.value("COMMON_TITLE"));
   bindings.property(pageDocument, "title", bindings.value("APP_TITLE"));
-  assert.equal(textNode.textContent, en.HOME_TITLE);
+  assert.equal(textNode.data, en.HOME_TITLE);
   assert.equal(aria.get("aria-label"), en.SEARCH_ARIA_QUERY);
+  assert.equal(aria.get("alt"), en.COMMON_TITLE);
   assert.equal(pageDocument.title, en.APP_TITLE);
 
   i18n.setLocale("zh-CN");
   bindings.refresh();
-  assert.equal(textNode.textContent, zhCN.HOME_TITLE);
+  assert.equal(textNode.data, zhCN.HOME_TITLE);
   assert.equal(aria.get("aria-label"), zhCN.SEARCH_ARIA_QUERY);
+  assert.equal(aria.get("alt"), zhCN.COMMON_TITLE);
   assert.equal(pageDocument.title, zhCN.APP_TITLE);
   assert.deepEqual(retainedState, before);
+  window.close();
+});
+
+test("localized label bindings preserve nested form controls, values, selection, and focus in a real DOM", () => {
+  const window = new Window();
+  try {
+    const { document } = window;
+    const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
+    const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
+    const input = document.createElement("input");
+    const select = document.createElement("select");
+    const textarea = document.createElement("textarea");
+    const inputLabel = document.createElement("label");
+    const selectLabel = document.createElement("label");
+    const textareaLabel = document.createElement("label");
+    const firstOption = document.createElement("option");
+    firstOption.value = "first";
+    const secondOption = document.createElement("option");
+    secondOption.value = "second";
+    select.append(firstOption, secondOption);
+
+    bindings.text(inputLabel, bindings.value("COMMON_TITLE"));
+    bindings.text(selectLabel, bindings.value("COMMON_STATUS"));
+    bindings.text(textareaLabel, bindings.value("COMMON_SUMMARY"));
+    inputLabel.append(input);
+    selectLabel.append(select);
+    textareaLabel.append(textarea);
+    document.body.append(inputLabel, selectLabel, textareaLabel);
+
+    input.value = "draft title";
+    select.value = "second";
+    textarea.value = "draft summary";
+    input.focus();
+    input.setSelectionRange(2, 7);
+
+    i18n.setLocale("zh-CN");
+    bindings.refresh();
+
+    assert.equal(inputLabel.firstChild?.nodeType, window.Node.TEXT_NODE);
+    assert.equal(inputLabel.firstChild?.textContent, zhCN.COMMON_TITLE);
+    assert.ok(inputLabel.lastChild === input, "input node identity was replaced");
+    assert.ok(selectLabel.lastChild === select, "select node identity was replaced");
+    assert.ok(textareaLabel.lastChild === textarea, "textarea node identity was replaced");
+    assert.equal(input.value, "draft title");
+    assert.equal(select.value, "second");
+    assert.equal(textarea.value, "draft summary");
+    assert.ok(document.activeElement === input, "input focus was lost");
+    assert.equal(input.selectionStart, 2);
+    assert.equal(input.selectionEnd, 7);
+  } finally {
+    window.close();
+  }
 });
 
 test("replacing localized text with runtime content removes the stale translation binding", () => {
+  const window = new Window();
   const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
   const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
-  const status = { textContent: "", isConnected: true };
+  const status = window.document.createElement("p");
+  window.document.body.append(status);
   bindings.text(status, bindings.value("COMMON_OPERATION_FAILED"));
   bindings.text(status, "Runtime status");
 
@@ -100,6 +169,26 @@ test("replacing localized text with runtime content removes the stale translatio
   bindings.refresh();
 
   assert.equal(status.textContent, "Runtime status");
+  window.close();
+});
+
+test("binding checked-in shell text reuses its text node instead of duplicating copy", () => {
+  const window = new Window();
+  try {
+    const button = window.document.createElement("button");
+    button.append("Loading shell copy");
+    window.document.body.append(button);
+    const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
+    const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
+
+    bindings.text(button, bindings.value("SHELL_LOGOUT"));
+
+    assert.equal(button.childNodes.length, 1);
+    assert.equal(button.firstChild?.nodeType, window.Node.TEXT_NODE);
+    assert.equal(button.textContent, en.SHELL_LOGOUT);
+  } finally {
+    window.close();
+  }
 });
 
 test("static verifier passes the shipped bilingual UI and reports key and placeholder counts", async () => {
@@ -194,6 +283,60 @@ test("static verifier rejects a thrown Markdown renderer message that can reach 
   });
 });
 
+test("AST verifier rejects direct, rejected, stored, option-object, and visible-attribute bypasses", async () => {
+  const mutations = [
+    { label: "direct Error call", suffix: '\nthrow Error("Direct thrown English error");\n' },
+    { label: "direct thrown value", suffix: '\nthrow "Direct thrown English value";\n' },
+    { label: "DOMException", suffix: '\nthrow new DOMException("DOM exception English error");\n' },
+    { label: "rejected display error", suffix: '\nPromise.reject("Rejected displayed English error");\n' },
+    {
+      label: "stored displayed error",
+      suffix: '\nconst storedDisplayedError = new Error("Stored displayed English error");\nsetStatus(storedDisplayedError.message, "error");\n',
+    },
+    {
+      label: "stored display object",
+      suffix: '\nconst storedDisplayState = { error: "Stored object English error" };\nsetStatus(storedDisplayState.error, "error");\n',
+    },
+    {
+      label: "variable element options",
+      suffix: '\nconst variableElementOptions = { text: "Variable options English copy" };\nelement("p", variableElementOptions);\n',
+    },
+    { label: "setAttribute alt", suffix: '\ndocument.body.setAttribute("alt", "Dynamic alternate English copy");\n' },
+    {
+      label: "setAttribute value",
+      suffix: '\nelement("input", { type: "submit" }).setAttribute("value", "Dynamic button English value");\n',
+    },
+  ];
+  for (const mutation of mutations) {
+    await withWorkspace(async (root) => {
+      await mutate(root, "public/app.js", (source) => source + mutation.suffix);
+      await expectFailure(root, /hardcoded-copy/u, mutation.label);
+    });
+  }
+});
+
+test("HTML verifier rejects alternate text, visible submit values, and template content", async () => {
+  const mutations = [
+    { label: "HTML alt", html: '<img alt="Hardcoded alternate English text">' },
+    { label: "HTML submit value", html: '<input type="submit" value="Hardcoded submit English value">' },
+    { label: "HTML template content", html: "<template>Hardcoded template English text</template>" },
+  ];
+  for (const mutation of mutations) {
+    await withWorkspace(async (root) => {
+      await mutate(root, "public/index.html", (source) => source.replace("</body>", `${mutation.html}</body>`));
+      await expectFailure(root, /hardcoded-copy/u, mutation.label);
+    });
+  }
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/index.html", (source) => source.replace(
+      "</body>",
+      '<input type="hidden" value="opaque technical request token"></body>',
+    ));
+    const result = await runVerifier(root);
+    assert.equal(result.code, 0, `non-visible form value: ${result.output}`);
+  });
+});
+
 function placeholders(value) {
   return [...value.matchAll(/\{([A-Za-z][A-Za-z0-9_]*)\}/gu)].map((match) => match[1]).sort();
 }
@@ -229,8 +372,8 @@ async function mutate(root, relativePath, transform) {
   await writeFile(path, transform(source), "utf8");
 }
 
-async function expectFailure(root, pattern) {
+async function expectFailure(root, pattern, label = "mutation") {
   const result = await runVerifier(root);
-  assert.notEqual(result.code, 0, result.output);
-  assert.match(result.output, pattern);
+  assert.notEqual(result.code, 0, `${label}: ${result.output}`);
+  assert.match(result.output, pattern, label);
 }

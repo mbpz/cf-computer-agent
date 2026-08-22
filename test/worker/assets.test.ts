@@ -120,6 +120,7 @@ describe("workspace assets", () => {
     expect(source).toContain("/api/admin/publications/recover");
     expect(source).toContain("Idempotency-Key");
     expect(source).not.toMatch(/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|\beval\s*\(/u);
+    expect(appSource).not.toMatch(/\.textContent\s*=/u);
     expect(source).not.toMatch(/normalizedPath|contentSha256/u);
     expect(source).not.toMatch(/function markdownLocations|^\s*const locations = markdownLocations/mu);
     expect(source).toContain("closeOpenDialogs");
@@ -130,12 +131,23 @@ describe("workspace assets", () => {
     expect(source).toContain("createLocaleRefreshController");
     expect(source).toContain("createTranslationBindings");
     expect(source).toContain("refreshTranslations: () => translationBindings.refresh()");
+    expect(appSource).toContain('localized(() => `${event.resourceType} · ${formatDate(event.createdAt)}`)');
+    expect(source).toContain('new Error("LOGOUT_FAILED")');
+    expect(source).not.toContain("response.statusText");
     const localeLifecycle = appSource.slice(
       appSource.indexOf("const localeRefreshController"),
       appSource.indexOf("function rendererFor"),
     );
     expect(localeLifecycle).not.toContain("renderRoute");
     expect(localeLifecycle).not.toContain("closeOpenDialogs");
+    const applyLocaleLifecycle = appSource.slice(
+      appSource.indexOf("function applyLocale"),
+      appSource.indexOf("function browserStorage"),
+    );
+    expect(applyLocaleLifecycle).toContain("translationBindings.text(node");
+    expect(applyLocaleLifecycle).toContain("translationBindings.attribute(node");
+    expect(applyLocaleLifecycle).not.toContain("node.textContent =");
+    expect(applyLocaleLifecycle).not.toContain('node.setAttribute("aria-label"');
     expect(source).toContain("MARKDOWN_RENDERER_UNAVAILABLE");
     expect(source).toContain("OPTIONS_LOAD_MORE_ARIA");
     expect(source).toContain("memory-garden-locale");

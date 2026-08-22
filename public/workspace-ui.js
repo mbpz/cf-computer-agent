@@ -148,7 +148,7 @@ export function sessionBootstrapState(status, session) {
 export async function postLogout(request) {
   const response = await request("/auth/logout", { method: "POST", credentials: "same-origin" });
   if (!response.ok) {
-    const error = new Error(response.statusText || t("SHELL_LOGOUT_ERROR"));
+    const error = new Error("LOGOUT_FAILED");
     error.status = response.status;
     throw error;
   }

@@ -325,6 +325,13 @@ describe("postLogout", () => {
     await expect(postLogout(request)).resolves.toEqual({ kind: "anonymous" });
     expect(requests).toEqual([{ path: "/auth/logout", init: { method: "POST", credentials: "same-origin" } }]);
   });
+
+  it("returns a stable error code without exposing response status text", async () => {
+    const request = async () => new Response(null, { status: 503, statusText: "Upstream private detail" });
+
+    await expect(postLogout(request)).rejects.toMatchObject({ message: "LOGOUT_FAILED", status: 503 });
+    await expect(postLogout(request)).rejects.not.toMatchObject({ message: "Upstream private detail" });
+  });
 });
 
 describe("createLogoutController", () => {

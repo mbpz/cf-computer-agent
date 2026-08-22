@@ -98,3 +98,40 @@ Date: 2026-08-23
 - `COL-001` and `I18N-001` remain unchecked pending Task 9 acceptance.
 - This round performed no deployment, network call, or migration and did not change CSP/vendor hashes, authentication/governance, D1 migrations, leases, dual FTS, Chat scope semantics, downloads, or KnowledgeBase-v1.
 - The prototype own-property minor remains ledgered for final review and is intentionally outside this round.
+
+## Fix round 2/5 — child-preserving bindings and verifier bypass closure
+
+Date: 2026-08-23
+
+### Findings resolved
+
+- Translation text bindings now own or reuse a dedicated `Text` node and update only its `data`. They never assign `textContent` to a rendered element container. A real happy-dom regression covers localized label parents containing the same input, select, and textarea nodes across a locale switch, preserving their values, select choice, input selection range, and active focus.
+- Pager buttons and the live Chat scope summary were also converted from locale effects that assigned container `textContent`; the checked-in browser asset contract now rejects any `textContent` assignment in `public/app.js`.
+- Checked-in shell text is adopted rather than duplicated. `applyLocale()` binds checked-in `data-i18n` text and ARIA through the same registry, so a locale switch does not detach the managed logout, drawer, session, or loading nodes and later state changes remain live.
+- Audit timestamps are computed locale bindings. Changing locale reformats the existing loaded audit rows without another `/api/admin/audit-events` request.
+- Logout failures no longer surface `Response.statusText`. The request layer emits stable `LOGOUT_FAILED`; the app maps it to `SHELL_LOGOUT_ERROR`, and the displayed binding refreshes with the selected locale.
+- Catalog lookup now uses own-property checks for both the active catalog and English fallback. `__proto__`, `constructor`, and `toString` are safe runtime unknown keys rather than inherited catalog values.
+- The AST verifier now covers direct thrown values, direct and constructed `Error`/`TypeError`/`DOMException` messages, relevant `Promise.reject` values, stored constructed errors, stored object-property display values, and variable-provided element/dialog option objects. Visible `alt` and submit/reset/button `value` paths are checked while hidden form values remain non-visible. HTML template fragments are traversed explicitly, including direct template text.
+
+### RED evidence
+
+- The real-DOM label regression failed because refreshing the localized parent replaced the nested input node; the prototype-name regression threw because an inherited function reached interpolation.
+- The checked-in shell regression found two text nodes after binding because the existing text node was not adopted.
+- The logout unit regression received the raw `Upstream private detail` status text instead of `LOGOUT_FAILED`; the asset contract showed audit time was a primitive string.
+- The original verifier passed direct `Error(...)`, variable-provided element options, dynamic `alt`, and direct template-text mutations. Tightening generic `value` scanning then intentionally exposed false positives for option/hidden values, leading to the element-type-aware rule.
+
+### GREEN evidence
+
+- `rtk npm run test:i18n`: 13/13 passed. Locale packs remain exactly 349 keys with 45 placeholder occurrences.
+- `rtk npm run verify:i18n`: key/placeholder parity and `[pass] i18n-hardcoded-copy ast=typescript html=dom` passed.
+- New isolated mutations reject direct thrown strings, direct `Error(...)`, `DOMException`, rejected and stored/displayed errors (including object-property storage), variable element options, dynamic `alt`, visible dynamic `value`, HTML `alt`, HTML submit value, and direct template content. A hidden technical form value remains accepted as non-visible.
+- Focused workspace UI and asset suites: 94/94 passed, including stable logout errors, in-place locale lifecycle, shell binding source contracts, and computed audit time.
+- JavaScript syntax checks for `public/i18n.js`, `public/app.js`, `public/workspace-ui.js`, `scripts/verify-i18n.mjs`, and `scripts/i18n-contract.test.mjs` passed. `rtk npm run typecheck` passed.
+- Fresh `rtk npm run check` passed: vendor hashes, generated Wrangler types, TypeScript, 37 smoke tests, 13 i18n tests plus static verifier, 609 unit tests, 288 worker tests, and Wrangler dry-run build.
+- `rtk git diff --check` passed before the full gate.
+
+### Boundaries and concerns
+
+- `COL-001` and `I18N-001` remain unchecked pending Task 9 acceptance.
+- No remote request, deployment, or migration was performed. CSP, vendored hashes, authentication/governance, migration `0001`-`0004` bytes, Task 4 leases, dual FTS, Chat scope semantics, downloads, and KnowledgeBase-v1 remain unchanged.
+- The worker suite continues to print its deliberate invalid-journal diagnostics while all 288 assertions pass and the full gate exits zero.

@@ -67,7 +67,7 @@ const logoutController = createLogoutController(fetch, {
     translationBindings.text(logoutButton, t(pending ? "SHELL_LOGOUT_PENDING" : "SHELL_LOGOUT"));
   },
   onSuccess() { renderAnonymous(); },
-  onError(error) { setStatus(error.message || t("SHELL_LOGOUT_ERROR"), "error"); },
+  onError(error) { setStatus(safeErrorMessage(error, t("SHELL_LOGOUT_ERROR")), "error"); },
 });
 
 const routes = Object.freeze({
@@ -178,6 +178,7 @@ const reviewWarningKeys = Object.freeze({
   REVIEW_WARNING_PARSER: "REVIEW_WARNING_PARSER",
 });
 const runtimeErrorKeys = Object.freeze({
+  LOGOUT_FAILED: "SHELL_LOGOUT_ERROR",
   MARKDOWN_RENDERER_UNAVAILABLE: "ERROR_MARKDOWN_RENDERER_UNAVAILABLE",
 });
 function apiError(data) {
@@ -477,12 +478,13 @@ function createPagedOptionControl({ resource, spaceId, writableOnly = false, own
       select.replaceChildren(...(emptyLabel === undefined ? [] : [element("option", { value: "", text: emptyLabel })]), ...options);
       if ([...select.options].some((option) => option.value === selected)) select.value = selected;
       select.disabled = state.pending && !state.loaded;
+      const moreModel = () => optionLoadMoreModel(state, String(label));
+      translationBindings.text(more, localized(() => moreModel().label));
+      translationBindings.attribute(more, "aria-label", localized(() => moreModel().accessibleName));
       translationBindings.effect(more, "option-page", () => {
-        const model = optionLoadMoreModel(state, String(label));
+        const model = moreModel();
         more.hidden = !model.visible;
         more.disabled = model.disabled;
-        more.textContent = model.label;
-        more.setAttribute("aria-label", model.accessibleName);
       });
       translationBindings.text(status, state.errorKey
         ? t(controllerErrorKeys[state.errorKey], { resource: String(label) })
@@ -840,6 +842,10 @@ async function renderAgent(generation) {
       ? { kind: "items", knowledgeItemIds }
       : null;
   };
+  const scopeSummaryText = localized(() => {
+    const kind = selectedScopeKind();
+    return chatScopeSummaryModel(String(scopeKindLabels[kind]), Boolean(requestedScope()));
+  });
   function updateScopeState() {
     const kind = selectedScopeKind();
     spaceControl.select.disabled = pending || (kind !== "space" && kind !== "collection");
@@ -847,8 +853,7 @@ async function renderAgent(generation) {
     itemSelect.disabled = pending || kind !== "items";
     itemMore.disabled = pending || loadingItems;
     for (const option of scopeOptions) option.input.disabled = pending;
-    const requested = requestedScope();
-    scopeSummary.textContent = chatScopeSummaryModel(String(scopeKindLabels[kind]), Boolean(requested));
+    translationBindings.text(scopeSummary, scopeSummaryText);
   }
   translationBindings.effect(scopeSummary, "scope-summary", updateScopeState);
   for (const option of scopeOptions) option.input.addEventListener("change", () => {
@@ -1223,11 +1228,12 @@ async function renderReviewSubmission(generation, submissionId) {
         type: "button",
         onclick: () => { void tagController.loadMore(); },
       });
+      const currentPage = () => reviewTagLoadMoreModel(state);
+      translationBindings.text(loadMoreButton, localized(() => currentPage().label));
+      translationBindings.attribute(loadMoreButton, "aria-label", localized(() => currentPage().accessibleName));
       translationBindings.effect(loadMoreButton, "review-tag-page", () => {
-        const current = reviewTagLoadMoreModel(state);
-        loadMoreButton.textContent = current.label;
+        const current = currentPage();
         loadMoreButton.disabled = current.disabled;
-        loadMoreButton.setAttribute("aria-label", current.accessibleName);
       });
       nodes.push(loadMoreButton);
     }
@@ -1471,12 +1477,13 @@ async function renderSpaces(generation) {
       space.name,
       localized(() => `${space.slug} · ${space.kind} · ${space.readOnly ? t("COMMON_READ_ONLY") : activeStatusLabel(space.status)}`),
     ), t("SPACES_EMPTY")));
+    const currentSpacePage = () => optionLoadMoreModel(latestState, String(t("COMMON_SPACES")));
+    translationBindings.text(spacesMore, localized(() => currentSpacePage().label));
+    translationBindings.attribute(spacesMore, "aria-label", localized(() => currentSpacePage().accessibleName));
     translationBindings.effect(spacesMore, "space-page", () => {
-      const spaceMoreModel = optionLoadMoreModel(latestState, String(t("COMMON_SPACES")));
+      const spaceMoreModel = currentSpacePage();
       spacesMore.hidden = !spaceMoreModel.visible;
       spacesMore.disabled = spaceMoreModel.disabled;
-      spacesMore.textContent = spaceMoreModel.label;
-      spacesMore.setAttribute("aria-label", spaceMoreModel.accessibleName);
     });
     translationBindings.text(spacesStatus, latestState.errorKey
       ? t(controllerErrorKeys[latestState.errorKey], { resource: t("COMMON_SPACES") })
@@ -1494,15 +1501,16 @@ async function renderSpaces(generation) {
       latestState.collectionPages,
       (collectionPage) => {
         const more = element("button", { className: "secondary", type: "button" });
+        const currentCollectionPage = () => optionLoadMoreModel(collectionPage, String(t("COMMON_COLLECTIONS")));
+        translationBindings.text(more, localized(() => currentCollectionPage().label));
+        translationBindings.attribute(more, "aria-label", localized(() => t("OPTIONS_LOAD_MORE_IN_SPACE_ARIA", {
+          label: currentCollectionPage().accessibleName,
+          space: spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
+        })));
         translationBindings.effect(more, "collection-page", () => {
-          const moreModel = optionLoadMoreModel(collectionPage, String(t("COMMON_COLLECTIONS")));
+          const moreModel = currentCollectionPage();
           more.hidden = !moreModel.visible;
           more.disabled = moreModel.disabled;
-          more.textContent = moreModel.label;
-          translationBindings.attribute(more, "aria-label", t("OPTIONS_LOAD_MORE_IN_SPACE_ARIA", {
-            label: moreModel.accessibleName,
-            space: spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
-          }));
         });
         more.addEventListener("click", () => { void controller.loadMoreCollections(collectionPage.spaceId); });
         const status = element("p", { className: "muted", role: "status", "aria-live": "polite", text: collectionPage.errorKey
@@ -1524,7 +1532,7 @@ async function renderSpaces(generation) {
 
 async function renderAudit(generation) {
   const data = await api("/api/admin/audit-events?limit=50");
-  replaceOutlet(page(t("AUDIT_TITLE"), t("AUDIT_DESCRIPTION"), [card(t("AUDIT_RECENT"), [list(data.items, (event) => item(event.action, `${event.resourceType} · ${formatDate(event.createdAt)}`, [element("code", { text: JSON.stringify(event.metadata) })]), t("AUDIT_EMPTY"))])]), generation);
+  replaceOutlet(page(t("AUDIT_TITLE"), t("AUDIT_DESCRIPTION"), [card(t("AUDIT_RECENT"), [list(data.items, (event) => item(event.action, localized(() => `${event.resourceType} · ${formatDate(event.createdAt)}`), [element("code", { text: JSON.stringify(event.metadata) })]), t("AUDIT_EMPTY"))])]), generation);
 }
 
 async function bootstrap() {
@@ -1581,10 +1589,10 @@ function applyLocale() {
   translationBindings.property(document, "title", t("APP_TITLE"));
   languageSelect.value = i18n.locale;
   for (const node of document.querySelectorAll("[data-i18n]")) {
-    node.textContent = translate(node.dataset.i18n);
+    translationBindings.text(node, localized(() => translate(node.dataset.i18n)));
   }
   for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
-    node.setAttribute("aria-label", translate(node.dataset.i18nAriaLabel));
+    translationBindings.attribute(node, "aria-label", localized(() => translate(node.dataset.i18nAriaLabel)));
   }
   configureWorkspaceI18n(translate);
 }
