@@ -8,6 +8,7 @@ import {
   createMutationController,
   createOwnedActionController,
   createOperationGuard,
+  createReviewTagController,
   createRouteGuard,
   drawerStateForViewport,
   knowledgeListModel,
@@ -17,6 +18,7 @@ import {
   knowledgeSearchModel,
   publishRequest,
   reviewPreviewModel,
+  reviewTagLoadMoreModel,
   reviewTargetModel,
   sessionBootstrapState,
   submissionRequest,
@@ -656,23 +658,45 @@ async function renderReviewSubmission(generation, submissionId) {
   const owner = routeGuard.owner(generation, pathname);
   const previewResponse = await api(`/api/admin/submissions/${encodeURIComponent(submissionId)}`);
   const model = reviewPreviewModel(previewResponse.preview);
-  const [spaces, collections, activeTags] = await Promise.all([
-    loadSpaces(),
-    loadCollections(model.requestedSpaceId),
-    loadTags(model.requestedSpaceId),
-  ]);
-  const target = reviewTargetModel(previewResponse.preview, spaces, collections);
+  const target = reviewTargetModel(previewResponse.preview);
   const title = element("input", { required: "", maxlength: "200", value: model.title });
   const visibility = element("select", {}, [
     element("option", { value: "shared", text: "Shared" }),
     element("option", { value: "admin_only", text: "Admin only" }),
   ]);
-  const tags = element("fieldset", { className: "tag-selector" }, [
-    element("legend", { text: "Tags in the requested Space" }),
-    ...(activeTags.length ? activeTags.map((tag) => element("label", { className: "check-option", text: tag.name }, [
-      element("input", { type: "checkbox", value: tag.id }),
-    ])) : [element("p", { className: "muted", text: "No active Tags in this Space." })]),
-  ]);
+  const tags = element("fieldset", { className: "tag-selector", "aria-live": "polite" });
+  let tagController;
+  const renderTags = (state) => {
+    const nodes = [element("legend", { text: "Tags in the requested Space" })];
+    if (!state.loaded) nodes.push(routeStateNode("loading", "Loading active Tags…"));
+    if (state.items.length) nodes.push(...state.items.map((tag) => element("label", { className: "check-option", text: tag.name }, [
+      element("input", {
+        type: "checkbox",
+        value: tag.id,
+        checked: tag.selected ? "" : undefined,
+        onchange: (event) => tagController.select(tag.id, event.currentTarget.checked),
+      }),
+    ])));
+    else if (state.loaded && !state.error) nodes.push(element("p", { className: "muted", text: "No active Tags in this Space." }));
+    if (state.error) nodes.push(routeStateNode("error", state.error));
+    const loadMore = reviewTagLoadMoreModel(state);
+    if (loadMore.visible) nodes.push(element("button", {
+      className: "secondary",
+      type: "button",
+      text: loadMore.label,
+      disabled: loadMore.disabled ? "" : undefined,
+      "aria-label": loadMore.accessibleName,
+      onclick: () => { void tagController.loadMore(); },
+    }));
+    tags.replaceChildren(...nodes);
+  };
+  tagController = createReviewTagController({
+    spaceId: target.tagSpaceId,
+    owns: () => ownsMutation(owner),
+    request: (path) => api(path),
+    onChange: renderTags,
+  });
+  renderTags(tagController.snapshot());
   const reason = element("select", {}, [
     element("option", { value: "not_relevant", text: "Not relevant" }),
     element("option", { value: "duplicate", text: "Duplicate" }),
@@ -705,7 +729,7 @@ async function renderReviewSubmission(generation, submissionId) {
         visibility: visibility.value,
         spaceId: target.spaceId,
         collectionId: target.collectionId,
-        tagIds: [...tags.querySelectorAll('input[type="checkbox"]:checked')].map((checkbox) => checkbox.value),
+        tagIds: tagController.snapshot().items.filter((tag) => tag.selected).map((tag) => tag.id),
       });
     } else {
       request = {
@@ -761,7 +785,7 @@ async function renderReviewSubmission(generation, submissionId) {
     tags,
     field("Rejection reason", reason), field("Review note", note), element("div", { className: "actions" }, actionButtons),
   ]);
-  replaceOutlet(page(`Review: ${model.title}`, `${model.kind} · ${model.status} · parser ${model.parserVersion}`, [
+  if (replaceOutlet(page(`Review: ${model.title}`, `${model.kind} · ${model.status} · parser ${model.parserVersion}`, [
     element("div", { className: "review-grid" }, [
       card("Raw input (inert text)", [element("pre", { className: "content-preview", text: model.rawInput })]),
       card("Normalized Markdown (inert text)", [element("pre", { className: "content-preview", text: model.normalizedMarkdown })]),
@@ -773,7 +797,9 @@ async function renderReviewSubmission(generation, submissionId) {
       card("Warnings", [list(model.warnings, (warning) => element("li", { className: "item", text: warning }), "No warnings.")]),
     ]),
     card("Review decision", [form]),
-  ]), generation);
+  ]), generation)) {
+    void tagController.loadInitial();
+  }
 }
 
 async function renderMembers(generation) {

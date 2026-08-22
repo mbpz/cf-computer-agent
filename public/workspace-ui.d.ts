@@ -71,6 +71,31 @@ export function createMutationController(
   owns: () => boolean,
   onPendingChange: (pending: boolean) => void,
 ): MutationController;
+export interface ReviewTagSelectorState {
+  items: Array<Readonly<{ id: string; name: string; selected: boolean }>>;
+  nextCursor?: string;
+  pending: boolean;
+  loaded: boolean;
+  error: string;
+}
+export interface ReviewTagController {
+  loadInitial(): Promise<void>;
+  loadMore(): Promise<void>;
+  select(tagId: string, selected: boolean): void;
+  snapshot(): Readonly<ReviewTagSelectorState>;
+}
+export function createReviewTagController(options: {
+  spaceId: string;
+  owns: () => boolean;
+  request: (path: string) => Promise<unknown>;
+  onChange: (state: Readonly<ReviewTagSelectorState>) => void;
+}): ReviewTagController;
+export function reviewTagLoadMoreModel(value: unknown): Readonly<{
+  visible: boolean;
+  label: "Load more Tags" | "Loading more Tags…";
+  accessibleName: "Load more Tags in the requested Space";
+  disabled: boolean;
+}>;
 
 export interface KnowledgeListViewItem {
   id: string;
@@ -140,7 +165,7 @@ export interface ReviewTargetViewModel {
   tagSpaceId: string;
   available: boolean;
 }
-export function reviewTargetModel(value: unknown, spaces: unknown, collections: unknown): Readonly<ReviewTargetViewModel>;
+export function reviewTargetModel(value: unknown): Readonly<ReviewTargetViewModel>;
 
 export interface KnowledgeReaderViewModel {
   knowledgeItemId: string;

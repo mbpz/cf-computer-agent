@@ -9,6 +9,7 @@ const {
   createMutationController,
   createOwnedActionController,
   createOperationGuard,
+  createReviewTagController,
   createRouteGuard,
   drawerState,
   drawerStateForViewport,
@@ -21,6 +22,7 @@ const {
   postLogout,
   renderKnowledgeSearch,
   reviewPreviewModel,
+  reviewTagLoadMoreModel,
   reviewTargetModel,
   routeState,
   sessionBootstrapState,
@@ -375,17 +377,27 @@ describe("M1 trusted knowledge view models", () => {
     expect(JSON.stringify(model)).not.toMatch(/must-not-leak|chunk-secret|workspace\/private|chunk-private/);
   });
 
-  it("keeps the requested review target fixed and scopes tags to that Space", () => {
+  it("uses the exact preview target summary without consulting generic paginated lists", () => {
     const target = reviewTargetModel({
       requestedSpaceId: "space-requested",
       requestedCollectionId: "collection-requested",
-    }, [
-      { id: "space-other", name: "Other", status: "active", kind: "shared", readOnly: false },
-      { id: "space-requested", name: "Requested", status: "active", kind: "shared", readOnly: false },
-    ], [
-      { id: "collection-other", spaceId: "space-requested", name: "Other collection", status: "active" },
-      { id: "collection-requested", spaceId: "space-requested", name: "Requested collection", status: "active" },
-    ]);
+      requestedTarget: {
+        space: {
+          id: "space-requested",
+          slug: "requested",
+          name: "Requested",
+          status: "active",
+          normalizedPath: "/workspace/private",
+        },
+        collection: {
+          id: "collection-requested",
+          name: "Requested collection",
+          status: "active",
+          contentSha256: "secret",
+        },
+        available: true,
+      },
+    });
 
     expect(target).toEqual({
       spaceId: "space-requested",
@@ -395,7 +407,120 @@ describe("M1 trusted knowledge view models", () => {
       tagSpaceId: "space-requested",
       available: true,
     });
-    expect(JSON.stringify(target)).not.toContain("space-other");
+    expect(JSON.stringify(target)).not.toMatch(/workspace\/private|secret|normalizedPath|contentSha256/u);
+  });
+
+  it("loads Tag page 51, preserves selections, and deduplicates only active same-Space IDs", async () => {
+    const paths: string[] = [];
+    const firstPage = Array.from({ length: 50 }, (_, index) => tagFixture(`tag-${String(index + 1).padStart(2, "0")}`));
+    const controller = createReviewTagController({
+      spaceId: "space-requested",
+      owns: () => true,
+      request: async (path: string) => {
+        paths.push(path);
+        return paths.length === 1 ? { tags: firstPage, nextCursor: "cursor-page-2" } : {
+          tags: [
+            tagFixture("tag-50"),
+            tagFixture("tag-51"),
+            tagFixture("tag-disabled", "disabled"),
+            tagFixture("tag-other-space", "active", "space-other"),
+          ],
+        };
+      },
+      onChange: () => undefined,
+    });
+
+    await controller.loadInitial();
+    controller.select("tag-01", true);
+    await controller.loadMore();
+    controller.select("tag-51", true);
+
+    const state = controller.snapshot();
+    expect(paths).toEqual([
+      "/api/spaces/space-requested/tags?limit=50",
+      "/api/spaces/space-requested/tags?limit=50&cursor=cursor-page-2",
+    ]);
+    expect(state.items).toHaveLength(51);
+    expect(new Set(state.items.map((tag) => tag.id))).toHaveLength(51);
+    expect(state.items.filter((tag) => tag.selected).map((tag) => tag.id)).toEqual(["tag-01", "tag-51"]);
+    expect(state.nextCursor).toBeUndefined();
+  });
+
+  it("keeps Tag loads single-flight and suppresses a stale page after navigation", async () => {
+    const next = deferred<{ tags: ReturnType<typeof tagFixture>[] }>();
+    let owns = true;
+    let requests = 0;
+    let changes = 0;
+    const controller = createReviewTagController({
+      spaceId: "space-requested",
+      owns: () => owns,
+      request: async () => {
+        requests += 1;
+        return requests === 1
+          ? { tags: [tagFixture("tag-01")], nextCursor: "cursor-page-2" }
+          : next.promise;
+      },
+      onChange: () => { changes += 1; },
+    });
+    await controller.loadInitial();
+    const load = controller.loadMore();
+    const duplicate = controller.loadMore();
+    expect(duplicate).toBe(load);
+    expect(requests).toBe(2);
+    const changesBeforeNavigation = changes;
+
+    owns = false;
+    next.resolve({ tags: [tagFixture("tag-51")] });
+    await load;
+
+    expect(controller.snapshot().items.map((tag) => tag.id)).toEqual(["tag-01"]);
+    expect(changes).toBe(changesBeforeNavigation);
+  });
+
+  it("retains loaded Tags and selections when a scoped cursor is rejected", async () => {
+    let requests = 0;
+    const controller = createReviewTagController({
+      spaceId: "space-requested",
+      owns: () => true,
+      request: async () => {
+        requests += 1;
+        if (requests === 1) return { tags: [tagFixture("tag-01")], nextCursor: "foreign-cursor" };
+        throw new Error("/private/path and secret hash must not render");
+      },
+      onChange: () => undefined,
+    });
+    await controller.loadInitial();
+    controller.select("tag-01", true);
+    await controller.loadMore();
+
+    expect(controller.snapshot()).toMatchObject({
+      items: [{ id: "tag-01", name: "Tag tag-01", selected: true }],
+      nextCursor: "foreign-cursor",
+      pending: false,
+      error: "Could not load more Tags.",
+    });
+    expect(JSON.stringify(controller.snapshot())).not.toMatch(/private\/path|secret hash/u);
+  });
+
+  it("exposes an accessible pending-aware Load more Tag control only while a cursor remains", () => {
+    expect(reviewTagLoadMoreModel({ nextCursor: "cursor-page-2", pending: false })).toEqual({
+      visible: true,
+      label: "Load more Tags",
+      accessibleName: "Load more Tags in the requested Space",
+      disabled: false,
+    });
+    expect(reviewTagLoadMoreModel({ nextCursor: "cursor-page-2", pending: true })).toEqual({
+      visible: true,
+      label: "Loading more Tags…",
+      accessibleName: "Load more Tags in the requested Space",
+      disabled: true,
+    });
+    expect(reviewTagLoadMoreModel({ pending: false })).toEqual({
+      visible: false,
+      label: "Load more Tags",
+      accessibleName: "Load more Tags in the requested Space",
+      disabled: false,
+    });
   });
 
   it("models reader history, exact chunk focus, and citation source navigation", () => {
@@ -719,5 +844,21 @@ function searchHit(citationId: string, knowledgeItemId: string, revisionId: stri
     excerpt: "Launch latency is documented.",
     score: -1,
     publishedAt: "2026-08-22T00:00:00.000Z",
+  };
+}
+
+function tagFixture(
+  id: string,
+  status: "active" | "disabled" = "active",
+  spaceId = "space-requested",
+) {
+  return {
+    id,
+    spaceId,
+    slug: id,
+    name: `Tag ${id}`,
+    status,
+    createdAt: "2026-08-22T00:00:00.000Z",
+    updatedAt: "2026-08-22T00:00:00.000Z",
   };
 }

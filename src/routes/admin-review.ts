@@ -139,6 +139,20 @@ function reviewPreviewDto(preview: ReviewPreview) {
     status: preview.status,
     requestedSpaceId: preview.requestedSpaceId,
     requestedCollectionId: preview.requestedCollectionId,
+    requestedTarget: preview.requestedTarget === null ? null : {
+      space: {
+        id: preview.requestedTarget.space.id,
+        slug: preview.requestedTarget.space.slug,
+        name: preview.requestedTarget.space.name,
+        status: preview.requestedTarget.space.status,
+      },
+      collection: preview.requestedTarget.collection === null ? null : {
+        id: preview.requestedTarget.collection.id,
+        name: preview.requestedTarget.collection.name,
+        status: preview.requestedTarget.collection.status,
+      },
+      available: preview.requestedTarget.available,
+    },
     kind: preview.kind,
     title: preview.title,
     rawContent: preview.rawContent,

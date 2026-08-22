@@ -163,6 +163,71 @@ export function createMutationController(owns, onPendingChange) {
   });
 }
 
+export function createReviewTagController({ spaceId, owns, request, onChange }) {
+  const fixedSpaceId = safeString(spaceId);
+  let items = [];
+  let nextCursor;
+  let pending = false;
+  let loaded = false;
+  let error = "";
+  const selectedIds = new Set();
+  const snapshot = () => Object.freeze({
+    items: items.map((tag) => Object.freeze({ ...tag, selected: selectedIds.has(tag.id) })),
+    ...(nextCursor ? { nextCursor } : {}),
+    pending,
+    loaded,
+    error,
+  });
+  const emit = () => onChange(snapshot());
+  const mutation = createMutationController(owns, (value) => {
+    pending = value;
+    emit();
+  });
+  const load = (append) => {
+    if (!owns() || (append && !nextCursor)) return Promise.resolve();
+    const cursor = append ? nextCursor : undefined;
+    return mutation.run(
+      () => request(tagPagePath(fixedSpaceId, cursor)),
+      (value) => {
+        const page = reviewTagPageModel(value, fixedSpaceId);
+        items = appendPage(append ? items : [], page.items, (tag) => tag.id);
+        nextCursor = page.nextCursor;
+        loaded = true;
+        error = "";
+        emit();
+      },
+      () => {
+        loaded = true;
+        error = append ? "Could not load more Tags." : "Could not load Tags.";
+        emit();
+      },
+    );
+  };
+  return Object.freeze({
+    loadInitial() { return load(false); },
+    loadMore() { return load(true); },
+    select(tagId, selected) {
+      if (!owns()) return;
+      const id = safeString(tagId);
+      if (!items.some((tag) => tag.id === id)) return;
+      if (selected) selectedIds.add(id);
+      else selectedIds.delete(id);
+    },
+    snapshot,
+  });
+}
+
+export function reviewTagLoadMoreModel(value) {
+  const state = safeRecord(value);
+  const pending = state.pending === true;
+  return Object.freeze({
+    visible: safeString(state.nextCursor).length > 0,
+    label: pending ? "Loading more Tags…" : "Load more Tags",
+    accessibleName: "Load more Tags in the requested Space",
+    disabled: pending,
+  });
+}
+
 export function knowledgeListModel(page) {
   const input = safeRecord(page);
   return Object.freeze({
@@ -231,22 +296,25 @@ export function reviewPreviewModel(value) {
   });
 }
 
-export function reviewTargetModel(value, spacesValue, collectionsValue) {
+export function reviewTargetModel(value) {
   const preview = safeRecord(value);
   const spaceId = safeString(preview.requestedSpaceId);
   const collectionId = preview.requestedCollectionId === null ? null : safeString(preview.requestedCollectionId);
-  const space = safeArray(spacesValue).map(safeRecord).find((candidate) => safeString(candidate.id) === spaceId);
-  const collection = collectionId === null ? undefined : safeArray(collectionsValue).map(safeRecord)
-    .find((candidate) => safeString(candidate.id) === collectionId && safeString(candidate.spaceId) === spaceId);
-  const activeSpace = space?.status === "active" && space?.kind === "shared" && space?.readOnly !== true;
-  const activeCollection = collectionId === null || collection?.status === "active";
+  const target = safeRecord(preview.requestedTarget);
+  const space = safeRecord(target.space);
+  const collection = safeRecord(target.collection);
+  const spaceMatches = safeString(space.id) === spaceId && space.status === "active";
+  const collectionMatches = collectionId === null
+    ? target.collection === null
+    : safeString(collection.id) === collectionId && collection.status === "active";
+  const available = target.available === true && spaceMatches && collectionMatches;
   return Object.freeze({
     spaceId,
-    spaceLabel: activeSpace ? safeString(space.name) : "Requested Space unavailable",
+    spaceLabel: spaceMatches ? safeString(space.name) : "Requested Space unavailable",
     collectionId,
-    collectionLabel: collectionId === null ? "No collection" : activeCollection ? safeString(collection?.name) : "Requested Collection unavailable",
+    collectionLabel: collectionId === null ? "No collection" : collectionMatches ? safeString(collection.name) : "Requested Collection unavailable",
     tagSpaceId: spaceId,
-    available: activeSpace && activeCollection,
+    available,
   });
 }
 
@@ -409,6 +477,24 @@ export function knowledgeReaderRequest(knowledgeItemId, revisionId) {
     path: `/api/knowledge/${item}`,
     responseKey: "knowledge",
   });
+}
+
+function reviewTagPageModel(value, spaceId) {
+  const input = safeRecord(value);
+  return Object.freeze({
+    items: safeArray(input.tags).map(safeRecord).filter((tag) => (
+      safeString(tag.id).length > 0
+      && safeString(tag.spaceId) === spaceId
+      && tag.status === "active"
+    )).map((tag) => Object.freeze({ id: safeString(tag.id), name: safeString(tag.name) })),
+    ...(safeString(input.nextCursor) ? { nextCursor: safeString(input.nextCursor) } : {}),
+  });
+}
+
+function tagPagePath(spaceId, cursor) {
+  const query = new URLSearchParams({ limit: "50" });
+  if (cursor) query.set("cursor", cursor);
+  return `/api/spaces/${encodeURIComponent(spaceId)}/tags?${query.toString()}`;
 }
 
 function searchHitModel(candidate) {

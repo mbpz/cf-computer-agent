@@ -11,6 +11,7 @@ import type {
   RejectionReasonCode,
   ReviewDecision,
   ReviewSubmissionSnapshot,
+  ReviewTargetSummary,
 } from "./types";
 
 export type PublicationRepositoryConflictKind =
@@ -43,6 +44,18 @@ type PreviewRow = {
   source_content: string;
   content_sha256: string;
   parser_version: "m1-v1";
+};
+
+type TargetRow = {
+  space_id: string;
+  space_slug: string;
+  space_name: string;
+  space_status: "active" | "disabled";
+  space_kind: "shared" | "legacy";
+  space_read_only: number;
+  collection_id: string | null;
+  collection_name: string | null;
+  collection_status: "active" | "disabled" | null;
 };
 
 type IntentRow = PreviewRow & {
@@ -112,22 +125,57 @@ export class PublicationRepository implements PublicationRepositoryPort {
   async getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null> {
     const row = await this.db.prepare(`${previewSelect} WHERE s.id = ? LIMIT 1`)
       .bind(submissionId).first<PreviewRow>();
-    return row ? mapPreview(row) : null;
+    if (!row) return null;
+    const requestedTarget = await this.readTargetSummary(
+      row.requested_space_id,
+      row.requested_collection_id,
+    );
+    return mapPreview(row, requestedTarget);
   }
 
   async validateTarget(input: PublishSubmissionInput): Promise<void> {
-    const tags = await this.countActiveTags(input.spaceId, input.tagIds);
-    const row = await this.db.prepare(
-      `SELECT 1 AS valid FROM spaces s
-       WHERE s.id = ? AND s.status = 'active' AND s.kind != 'legacy' AND s.read_only = 0
-         AND (? IS NULL OR EXISTS (
-           SELECT 1 FROM collections c
-           WHERE c.id = ? AND c.space_id = s.id AND c.status = 'active'
-         ))`,
-    ).bind(input.spaceId, input.collectionId, input.collectionId).first<{ valid: number }>();
-    if (row?.valid !== 1 || tags !== input.tagIds.length) {
+    const [target, tags] = await Promise.all([
+      this.readTargetSummary(input.spaceId, input.collectionId),
+      this.countActiveTags(input.spaceId, input.tagIds),
+    ]);
+    if (target?.available !== true || tags !== input.tagIds.length) {
       throw new PublicationRepositoryConflictError("target_invalid");
     }
+  }
+
+  private async readTargetSummary(
+    spaceId: string,
+    collectionId: string | null,
+  ): Promise<ReviewTargetSummary | null> {
+    const row = await this.db.prepare(
+      `SELECT s.id AS space_id, s.slug AS space_slug, s.name AS space_name,
+         s.status AS space_status, s.kind AS space_kind, s.read_only AS space_read_only,
+         c.id AS collection_id, c.name AS collection_name, c.status AS collection_status
+       FROM spaces s
+       LEFT JOIN collections c ON c.id = ? AND c.space_id = s.id
+       WHERE s.id = ?
+       LIMIT 1`,
+    ).bind(collectionId, spaceId).first<TargetRow>();
+    if (!row) return null;
+    const collectionMatches = collectionId === null
+      || (row.collection_id === collectionId && row.collection_status === "active");
+    return {
+      space: {
+        id: row.space_id,
+        slug: row.space_slug,
+        name: row.space_name,
+        status: row.space_status,
+      },
+      collection: row.collection_id === null ? null : {
+        id: row.collection_id,
+        name: row.collection_name || "",
+        status: row.collection_status || "disabled",
+      },
+      available: row.space_status === "active"
+        && row.space_kind !== "legacy"
+        && row.space_read_only === 0
+        && collectionMatches,
+    };
   }
 
   async createOrReadIntent(
@@ -556,7 +604,10 @@ FROM publication_intents pi
 JOIN submissions s ON s.id = pi.submission_id
 JOIN source_versions sv ON sv.submission_id = s.id`;
 
-function mapPreview(row: PreviewRow): ReviewSubmissionSnapshot {
+function mapPreview(
+  row: PreviewRow,
+  requestedTarget: ReviewTargetSummary | null,
+): ReviewSubmissionSnapshot {
   return {
     submissionId: row.submission_id,
     submitterId: row.submitter_id,
@@ -566,6 +617,7 @@ function mapPreview(row: PreviewRow): ReviewSubmissionSnapshot {
     kind: row.kind,
     title: row.title,
     rawContent: row.raw_content,
+    requestedTarget,
     sourceVersion: {
       id: row.source_version_id,
       kind: row.kind,
@@ -577,7 +629,7 @@ function mapPreview(row: PreviewRow): ReviewSubmissionSnapshot {
 }
 
 function mapIntent(row: IntentRow): PublicationIntent {
-  const preview = mapPreview(row);
+  const preview = mapPreview(row, null);
   return {
     submissionId: row.submission_id,
     revisionId: row.revision_id,

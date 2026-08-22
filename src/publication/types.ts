@@ -27,6 +27,21 @@ export interface PublicationSourceVersion extends Pick<SourceVersion,
   kind: SubmissionKind;
 }
 
+export interface ReviewTargetSummary {
+  space: {
+    id: string;
+    slug: string;
+    name: string;
+    status: "active" | "disabled";
+  };
+  collection: {
+    id: string;
+    name: string;
+    status: "active" | "disabled";
+  } | null;
+  available: boolean;
+}
+
 export interface ReviewSubmissionSnapshot {
   submissionId: string;
   submitterId: string;
@@ -37,6 +52,7 @@ export interface ReviewSubmissionSnapshot {
   title: string;
   rawContent: string;
   sourceVersion: PublicationSourceVersion;
+  requestedTarget: ReviewTargetSummary | null;
 }
 
 export interface ReviewChunkPreview {

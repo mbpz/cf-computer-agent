@@ -386,6 +386,11 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     kind: "markdown",
     title: "Submitted title",
     rawContent: "# Submitted title\n\nBody\n",
+    requestedTarget: {
+      space: { id: "default", slug: "default", name: "Default", status: "active" },
+      collection: { id: "collection-1", name: "Collection 1", status: "active" },
+      available: true,
+    },
     sourceVersion: intent.sourceVersion,
   };
   const revision: PublishedRevision = {

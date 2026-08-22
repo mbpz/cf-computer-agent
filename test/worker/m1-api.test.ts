@@ -160,36 +160,38 @@ describe("M1 API authorization and request boundaries", () => {
     await expect(disabled.json()).resolves.toEqual({ tags: [] });
   });
 
-  it("bounds tag listing with an opaque keyset cursor", async () => {
+  it("loads Tag 51 with an opaque Space-scoped keyset cursor", async () => {
     await env.DB.prepare(
       `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
        VALUES ('tag-space-b', 'tag-space-b', 'Tag Space B', '', 'shared', 'active', 2, 0, ?, ?)`,
     ).bind(now, now).run();
-    for (let index = 0; index < 7; index += 1) {
+    for (let index = 0; index < 51; index += 1) {
+      const suffix = String(index).padStart(2, "0");
+      const createdAt = index === 50 ? "2026-08-21T00:00:00.000Z" : now;
       await env.DB.prepare(
         "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, 'default', ?, ?, 'active', ?, ?)",
-      ).bind(`tag-${index}`, `tag-${index}`, `Tag ${index}`, now, now).run();
+      ).bind(`tag-${suffix}`, `tag-${suffix}`, `Tag ${index}`, createdAt, now).run();
       await env.DB.prepare(
         "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, 'tag-space-b', ?, ?, 'active', ?, ?)",
-      ).bind(`tag-b-${index}`, `tag-b-${index}`, `Tag B ${index}`, now, now).run();
+      ).bind(`tag-b-${suffix}`, `tag-b-${suffix}`, `Tag B ${index}`, createdAt, now).run();
     }
-    const first = await memberApi("contributor", "/api/spaces/default/tags?limit=3");
+    const first = await memberApi("contributor", "/api/spaces/default/tags?limit=50");
     expect(first.status).toBe(200);
     const firstBody = await first.json<{ tags: Array<{ id: string }>; nextCursor: string }>();
-    expect(firstBody.tags).toHaveLength(3);
+    expect(firstBody.tags).toHaveLength(50);
     expect(firstBody.nextCursor).toEqual(expect.any(String));
 
     const second = await memberApi(
       "contributor",
-      `/api/spaces/default/tags?limit=3&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
+      `/api/spaces/default/tags?limit=50&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
     );
     expect(second.status).toBe(200);
     const secondBody = await second.json<{ tags: Array<{ id: string }> }>();
-    expect(secondBody.tags).toHaveLength(3);
-    expect(new Set([...firstBody.tags, ...secondBody.tags].map((tag) => tag.id)).size).toBe(6);
+    expect(secondBody.tags).toEqual([{ id: "tag-50", spaceId: "default", slug: "tag-50", name: "Tag 50", status: "active", createdAt: "2026-08-21T00:00:00.000Z", updatedAt: now }]);
+    expect(new Set([...firstBody.tags, ...secondBody.tags].map((tag) => tag.id)).size).toBe(51);
     await expectApiError(memberApi(
       "contributor",
-      `/api/spaces/tag-space-b/tags?limit=3&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
+      `/api/spaces/tag-space-b/tags?limit=50&cursor=${encodeURIComponent(firstBody.nextCursor)}`,
     ), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/spaces/default/tags?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
   });
@@ -513,6 +515,67 @@ describe("M1 trusted knowledge HTTP journey", () => {
     }
   });
 
+  it("previews and publishes the exact requested target even when generic Space and Collection page one omit it", async () => {
+    for (let index = 0; index < 55; index += 1) {
+      const suffix = String(index).padStart(2, "0");
+      await env.DB.prepare(
+        `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+         VALUES (?, ?, ?, '', 'shared', 'active', ?, 0, ?, ?)`,
+      ).bind(`filler-space-${suffix}`, `filler-space-${suffix}`, `Filler Space ${suffix}`, index + 10, now, now).run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO spaces (id, slug, name, description, kind, status, position, read_only, created_at, updated_at)
+       VALUES ('requested-space-51', 'requested-space', 'Requested Space', '', 'shared', 'active', 10000, 0, ?, ?)`,
+    ).bind(now, now).run();
+    for (let index = 0; index < 55; index += 1) {
+      const suffix = String(index).padStart(2, "0");
+      await env.DB.prepare(
+        `INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at)
+         VALUES (?, 'requested-space-51', NULL, ?, '', 'active', ?, ?, ?)`,
+      ).bind(`filler-collection-${suffix}`, `Filler Collection ${suffix}`, index, now, now).run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at)
+       VALUES ('requested-collection-51', 'requested-space-51', NULL, 'Requested Collection', '', 'active', 10000, ?, ?)`,
+    ).bind(now, now).run();
+
+    const genericSpaces = await memberApi("admin", "/api/spaces?limit=50");
+    const genericSpacePage = await genericSpaces.json<{ items: Array<{ id: string }> }>();
+    expect(genericSpacePage.items.map(({ id }) => id)).not.toContain("requested-space-51");
+    const genericCollections = await memberApi("admin", "/api/spaces/requested-space-51/collections?limit=50");
+    const genericCollectionPage = await genericCollections.json<{ items: Array<{ id: string }> }>();
+    expect(genericCollectionPage.items.map(({ id }) => id)).not.toContain("requested-collection-51");
+
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "requested-space-51",
+      requestedCollectionId: "requested-collection-51",
+      kind: "markdown",
+      title: "Late-page target",
+      content: "# Late-page target\n",
+    }, "late-page-target1");
+    const previewResponse = await memberApi("admin", `/api/admin/submissions/${created.body.submission.id}`);
+    expect(previewResponse.status).toBe(200);
+    const preview = await previewResponse.json<{ preview: { requestedTarget: unknown } }>();
+    expect(preview.preview.requestedTarget).toEqual({
+      space: { id: "requested-space-51", slug: "requested-space", name: "Requested Space", status: "active" },
+      collection: { id: "requested-collection-51", name: "Requested Collection", status: "active" },
+      available: true,
+    });
+    expect(JSON.stringify(preview.preview.requestedTarget)).not.toMatch(/description|position|readOnly|kind|path|hash/iu);
+
+    const publish = await memberApi("admin", `/api/admin/submissions/${created.body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Late-page target",
+        visibility: "shared",
+        spaceId: "requested-space-51",
+        collectionId: "requested-collection-51",
+        tagIds: [],
+      }),
+    });
+    expect(publish.status).toBe(200);
+  });
+
   it("rejects and requests revision through admin-only bounded review APIs", async () => {
     const rejected = await createSubmission("contributor", {
       requestedSpaceId: "default", kind: "text", title: "Reject me", content: "reject body",
@@ -575,7 +638,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
 
 async function createSubmission(
   subject: string,
-  input: { requestedSpaceId: string; kind: "text" | "markdown" | "code"; title: string; content: string },
+  input: { requestedSpaceId: string; requestedCollectionId?: string | null; kind: "text" | "markdown" | "code"; title: string; content: string },
   idempotencyKey: string,
 ): Promise<{
   response: Response;
