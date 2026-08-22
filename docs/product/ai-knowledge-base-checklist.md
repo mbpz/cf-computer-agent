@@ -312,6 +312,10 @@
 - [ ] `AUTH-017` P0/M6 Agent 工具授权；验收：每次工具调用重新校验。
 - [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。
 
+## I18N — 国际化
+
+- [ ] `I18N-001` P0/M1 中英文完整国际化；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。
+
 ## EVAL — 质量评测
 
 M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。4 条 Tag 用例仅靠 Tag 命中；关闭 Tag 索引会同时击穿 Recall@5 与逐例门禁。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
