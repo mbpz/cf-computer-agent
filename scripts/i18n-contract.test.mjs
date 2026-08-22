@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { createI18n, LOCALE_STORAGE_KEY } from "../public/i18n.js";
+import { createI18n, createTranslationBindings, LOCALE_STORAGE_KEY } from "../public/i18n.js";
 import { en } from "../public/locales/en.js";
 import { zhCN } from "../public/locales/zh-CN.js";
 
@@ -59,14 +59,57 @@ test("switching persists, notifies once, validates interpolation, and never trea
   assert.deepEqual(notifications, ["zh-CN"]);
 });
 
+test("translation bindings refresh existing text, safe attributes, and title without replacing UI state", () => {
+  const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
+  const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
+  const textNode = { textContent: "", isConnected: true };
+  const aria = new Map();
+  const ariaNode = { isConnected: true, setAttribute(name, value) { aria.set(name, value); } };
+  const pageDocument = { title: "" };
+  const retainedState = {
+    formValue: "draft answer",
+    selection: "collection-1",
+    drawerOpen: true,
+    focused: "language-select",
+  };
+  const before = structuredClone(retainedState);
+
+  bindings.text(textNode, bindings.value("HOME_TITLE"));
+  bindings.attribute(ariaNode, "aria-label", bindings.value("SEARCH_ARIA_QUERY"));
+  bindings.property(pageDocument, "title", bindings.value("APP_TITLE"));
+  assert.equal(textNode.textContent, en.HOME_TITLE);
+  assert.equal(aria.get("aria-label"), en.SEARCH_ARIA_QUERY);
+  assert.equal(pageDocument.title, en.APP_TITLE);
+
+  i18n.setLocale("zh-CN");
+  bindings.refresh();
+  assert.equal(textNode.textContent, zhCN.HOME_TITLE);
+  assert.equal(aria.get("aria-label"), zhCN.SEARCH_ARIA_QUERY);
+  assert.equal(pageDocument.title, zhCN.APP_TITLE);
+  assert.deepEqual(retainedState, before);
+});
+
+test("replacing localized text with runtime content removes the stale translation binding", () => {
+  const i18n = createI18n({ navigatorLanguage: "en", storedLocale: "en" });
+  const bindings = createTranslationBindings((key, values) => i18n.t(key, values));
+  const status = { textContent: "", isConnected: true };
+  bindings.text(status, bindings.value("COMMON_OPERATION_FAILED"));
+  bindings.text(status, "Runtime status");
+
+  i18n.setLocale("zh-CN");
+  bindings.refresh();
+
+  assert.equal(status.textContent, "Runtime status");
+});
+
 test("static verifier passes the shipped bilingual UI and reports key and placeholder counts", async () => {
   const result = await runVerifier(repositoryRoot.pathname);
   assert.equal(result.code, 0, result.output);
   assert.match(result.output, /^\[pass\] i18n keys=\d+ placeholders=\d+ files=\d+$/mu);
-  assert.match(result.output, /^\[pass\] i18n-hardcoded-copy$/mu);
+  assert.match(result.output, /^\[pass\] i18n-hardcoded-copy ast=typescript html=dom$/mu);
 });
 
-test("static verifier fails closed on missing keys, placeholder drift, hardcoded copy, unknown keys, and bypass forms", async () => {
+test("AST and HTML verifier mutations fail closed across keys, sinks, indirection, encoding, and composition", async () => {
   await withWorkspace(async (root) => {
     await mutate(root, "public/locales/zh-CN.js", (source) => source.replace(/^\s*INTERPOLATION_TEST:.*\n/mu, ""));
     await expectFailure(root, /locale-key-parity/u);
@@ -89,6 +132,64 @@ test("static verifier fails closed on missing keys, placeholder drift, hardcoded
   });
   await withWorkspace(async (root) => {
     await mutate(root, "public/app.js", (source) => `${source}\ndocument.title = "Bypass " + "copy";\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\nconst indirectCopy = "Variable indirect English copy";\ndocument.title = indirectCopy;\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => source.replace(
+      'FORBIDDEN: "ERROR_FORBIDDEN"',
+      'FORBIDDEN: "UNKNOWN_DYNAMIC_MAP_KEY"',
+    ));
+    await expectFailure(root, /unknown-key/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\ndocument.body.setAttribute("aria-label", "Set attribute English copy");\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\ndocument.body.append(document.createTextNode("Created text node copy"));\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\nelement("div", {}, ["DOM helper child copy"]);\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => source
+      + '\nconst templateValue = "hardcoded";\ndocument.title = `Template ${templateValue} English copy`;\n');
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\ndocument.title = "\\u0048ardcoded\\u0020English\\u0020copy";\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\ndocument.title = "\\u786c\\u7f16\\u7801\\u4e2d\\u6587";\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/app.js", (source) => `${source}\ndocument.title = atob("SGFyZGNvZGVkIEVuZ2xpc2ggY29weQ==");\n`);
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/index.html", (source) => source.replace("</body>", '<button aria-label="Hardcoded HTML attribute"></button></body>'));
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/index.html", (source) => source.replace("</body>", "<p>Hardcoded HTML text</p></body>"));
+    await expectFailure(root, /hardcoded-copy/u);
+  });
+});
+
+test("static verifier rejects a thrown Markdown renderer message that can reach the error display path", async () => {
+  await withWorkspace(async (root) => {
+    await mutate(root, "public/markdown-renderer.js", (source) => source.replace(
+      "MARKDOWN_RENDERER_UNAVAILABLE",
+      "Displayed Markdown renderer English error",
+    ));
     await expectFailure(root, /hardcoded-copy/u);
   });
 });

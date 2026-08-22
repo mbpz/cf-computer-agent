@@ -1,4 +1,4 @@
-import { createI18n } from "/i18n.js";
+import { createI18n, createTranslationBindings } from "/i18n.js";
 import { navigationForSession } from "/navigation.js";
 import { renderSafeMarkdown } from "/markdown-renderer.js";
 import {
@@ -12,7 +12,7 @@ import {
   createAdminSpacesRouteController,
   createChatItemPageController,
   createLogoutController,
-  createLocaleRerenderController,
+  createLocaleRefreshController,
   createMutationController,
   createOptionPageController,
   createOwnedActionController,
@@ -42,8 +42,11 @@ const i18n = createI18n({
   navigatorLanguage: navigator.language,
   storage: browserStorage(),
 });
-const t = (key, values) => i18n.t(key, values);
-configureWorkspaceI18n(t);
+const translate = (key, values) => i18n.t(key, values);
+const translationBindings = createTranslationBindings(translate);
+const t = (key, values) => translationBindings.value(key, values);
+const localized = (render) => translationBindings.computed(render);
+configureWorkspaceI18n(translate);
 
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
@@ -61,7 +64,7 @@ const openDialogs = new Set();
 const logoutController = createLogoutController(fetch, {
   onPendingChange(pending) {
     logoutButton.disabled = pending || !session;
-    logoutButton.textContent = t(pending ? "SHELL_LOGOUT_PENDING" : "SHELL_LOGOUT");
+    translationBindings.text(logoutButton, t(pending ? "SHELL_LOGOUT_PENDING" : "SHELL_LOGOUT"));
   },
   onSuccess() { renderAnonymous(); },
   onError(error) { setStatus(error.message || t("SHELL_LOGOUT_ERROR"), "error"); },
@@ -80,18 +83,9 @@ const routes = Object.freeze({
   "/admin/spaces": renderSpaces,
   "/admin/audit": renderAudit,
 });
-const localeRerenderController = createLocaleRerenderController(i18n.locale, {
-  closeDialogs: closeOpenDialogs,
+const localeRefreshController = createLocaleRefreshController(i18n.locale, {
   applyLocale,
-  rerenderRoute() {
-    if (session) {
-      renderSessionSummary();
-      applyDrawerState(drawerStateForViewport(mobileViewport.matches, shell.dataset.drawerOpen === "true"));
-      void renderRoute();
-    } else {
-      renderAnonymous();
-    }
-  },
+  refreshTranslations: () => translationBindings.refresh(),
 });
 
 function rendererFor(path) {
@@ -108,8 +102,9 @@ function element(tag, options = {}, children = []) {
   for (const [name, value] of Object.entries(options)) {
     if (value === undefined || value === null) continue;
     if (name === "className") node.className = value;
-    else if (name === "text") node.textContent = value;
+    else if (name === "text") translationBindings.text(node, value);
     else if (name.startsWith("on") && typeof value === "function") node.addEventListener(name.slice(2).toLowerCase(), value);
+    else if (translationBindings.isValue(value)) translationBindings.attribute(node, name, value);
     else node.setAttribute(name, String(value));
   }
   node.append(...children.filter(Boolean));
@@ -161,6 +156,30 @@ const apiErrorKeys = Object.freeze({
   TAG_INVALID: "ERROR_TAG_INVALID",
   TAG_TARGET_INVALID: "ERROR_TAG_TARGET_INVALID",
 });
+const submissionStatusKeys = Object.freeze({
+  review_pending: "SUBMISSION_STATUS_REVIEW_PENDING",
+  published: "SUBMISSION_STATUS_PUBLISHED",
+  rejected: "SUBMISSION_STATUS_REJECTED",
+  revision_requested: "SUBMISSION_STATUS_REVISION_REQUESTED",
+});
+const controllerErrorKeys = Object.freeze({
+  REVIEW_TAGS_LOAD_MORE_FAILED: "REVIEW_TAGS_LOAD_MORE_FAILED",
+  REVIEW_TAGS_LOAD_FAILED: "REVIEW_TAGS_LOAD_FAILED",
+  OPTIONS_LOAD_MORE_FAILED: "OPTIONS_LOAD_MORE_FAILED",
+  OPTIONS_LOAD_FAILED: "OPTIONS_LOAD_FAILED",
+});
+const suggestedActionKeys = Object.freeze({
+  KNOWLEDGE_CHAT_REWRITE_QUESTION: "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+  KNOWLEDGE_CHAT_EXPAND_SCOPE: "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+});
+const reviewWarningKeys = Object.freeze({
+  REVIEW_WARNING_INERT: "REVIEW_WARNING_INERT",
+  REVIEW_WARNING_NO_CHUNK: "REVIEW_WARNING_NO_CHUNK",
+  REVIEW_WARNING_PARSER: "REVIEW_WARNING_PARSER",
+});
+const runtimeErrorKeys = Object.freeze({
+  MARKDOWN_RENDERER_UNAVAILABLE: "ERROR_MARKDOWN_RENDERER_UNAVAILABLE",
+});
 function apiError(data) {
   const code = typeof data?.error?.code === "string" ? data.error.code : "";
   if (!code) return t("ERROR_GENERIC");
@@ -175,7 +194,9 @@ async function api(path, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(apiError(data));
+    const localizedMessage = apiError(data);
+    const error = new Error(String(localizedMessage));
+    error.localizedMessage = localizedMessage;
     error.status = response.status;
     throw error;
   }
@@ -187,7 +208,9 @@ async function loadSession() {
   const data = await response.json().catch(() => ({}));
   const state = sessionBootstrapState(response.status, data);
   if (state.kind !== "error") return state;
-  const error = new Error(apiError(data));
+  const localizedMessage = apiError(data);
+  const error = new Error(String(localizedMessage));
+  error.localizedMessage = localizedMessage;
   error.status = response.status;
   throw error;
 }
@@ -198,7 +221,7 @@ function ownsMutation(owner) { return routeGuard.owns(owner, window.location.pat
 function applyDrawerState(state) {
   shell.dataset.drawerOpen = String(state.open);
   drawerToggle.setAttribute("aria-expanded", state.ariaExpanded);
-  drawerToggle.textContent = state.label;
+  translationBindings.text(drawerToggle, t(state.open ? "SHELL_CLOSE_NAVIGATION" : "SHELL_OPEN_NAVIGATION"));
   sidebar.setAttribute("aria-hidden", state.ariaHidden);
   sidebar.inert = state.inert;
 }
@@ -280,7 +303,7 @@ async function renderRoute() {
   } catch (error) {
     if (!routeGuard.isCurrent(generation)) return;
     const label = error.status === 403 ? t("PAGE_FORBIDDEN_TITLE") : t("COMMON_PAGE_LOAD_FAILED");
-    replaceOutlet(page(label, error.message || t("COMMON_RETRY_LATER"), [empty(t("PAGE_DATA_UNAVAILABLE"))]), generation);
+    replaceOutlet(page(label, safeErrorMessage(error, t("COMMON_RETRY_LATER")), [empty(t("PAGE_DATA_UNAVAILABLE"))]), generation);
   }
 }
 
@@ -293,13 +316,7 @@ function kindLabel(value) {
   return t(value === "code" ? "COMMON_KIND_CODE" : value === "markdown" ? "COMMON_KIND_MARKDOWN" : "COMMON_KIND_TEXT");
 }
 function submissionStatusLabel(value) {
-  const key = {
-    review_pending: "SUBMISSION_STATUS_REVIEW_PENDING",
-    published: "SUBMISSION_STATUS_PUBLISHED",
-    rejected: "SUBMISSION_STATUS_REJECTED",
-    revision_requested: "SUBMISSION_STATUS_REVISION_REQUESTED",
-  }[value];
-  return key ? t(key) : String(value);
+  return submissionStatusKeys[value] ? t(submissionStatusKeys[value]) : String(value);
 }
 function searchStatusLabel(value) {
   return t({
@@ -311,10 +328,39 @@ function searchStatusLabel(value) {
 }
 function memberRoleLabel(value) { return t(value === "admin" ? "COMMON_ROLE_ADMIN" : "COMMON_ROLE_CONTRIBUTOR"); }
 function activeStatusLabel(value) { return t(value === "active" ? "COMMON_STATUS_ACTIVE" : "COMMON_STATUS_DISABLED"); }
+function lineLabel(startLine, endLine) {
+  return t(startLine === endLine ? "READER_LINE" : "READER_LINES", startLine === endLine
+    ? { line: startLine }
+    : { start: startLine, end: endLine });
+}
+function documentLabel(headingPath) { return headingPath.join(" › ") || t("COMMON_DOCUMENT"); }
+function searchLocation(hit) {
+  return localized(() => `${documentLabel(hit.headingPath)} · ${lineLabel(hit.startLine, hit.endLine)}`);
+}
+function matchedFieldLabels(fields) {
+  const matchedFieldKeys = {
+    title: "COMMON_TITLE",
+    summary: "COMMON_SUMMARY",
+    tags: "COMMON_TAGS",
+    code: "COMMON_CODE",
+    body: "COMMON_BODY",
+  };
+  return fields.map((fieldName) => String(t(matchedFieldKeys[fieldName] || "COMMON_BODY"))).join(", ");
+}
+function rawChunkLocations(value) {
+  const revision = value?.currentRevision?.id ? value.currentRevision : value;
+  return Array.isArray(revision?.chunks) ? revision.chunks.map((chunk) => ({
+    headingPath: Array.isArray(chunk?.headingPath) ? chunk.headingPath.filter((heading) => typeof heading === "string" && heading) : [],
+    startLine: Number.isSafeInteger(chunk?.startLine) && chunk.startLine > 0 ? chunk.startLine : 1,
+    endLine: Number.isSafeInteger(chunk?.endLine) && chunk.endLine > 0 ? chunk.endLine : 1,
+  })) : [];
+}
 function visibilityBadge(value, label = visibilityLabel(value)) {
   return element("span", { className: `badge visibility-${value === "admin_only" ? "admin" : "shared"}`, text: label });
 }
 function safeErrorMessage(error, fallback = t("COMMON_OPERATION_FAILED")) {
+  if (error?.localizedMessage) return error.localizedMessage;
+  if (error instanceof Error && runtimeErrorKeys[error.message]) return t(runtimeErrorKeys[error.message]);
   return error instanceof Error && error.message ? error.message : fallback;
 }
 function validationSummary(form, message) {
@@ -325,7 +371,7 @@ function validationSummary(form, message) {
 }
 function setPending(button, pending, pendingLabel, readyLabel) {
   button.disabled = pending;
-  button.textContent = pending ? pendingLabel : readyLabel;
+  translationBindings.text(button, pending ? pendingLabel : readyLabel);
 }
 function idempotencyKey() {
   return crypto.randomUUID().replaceAll("-", "");
@@ -403,7 +449,7 @@ async function renderHome(generation) {
         element("p", { text: t("HOME_QUICK_START_BODY") }),
         element("div", { className: "actions" }, [routeLink(t("HOME_SUBMIT_KNOWLEDGE"), "/submit"), routeLink(t("SEARCH_ACTION"), "/search"), routeLink(t("HOME_ASK_AGENT"), "/agent")]),
       ]),
-      card(t("HOME_RECENT_SUBMISSIONS"), [list(submissions.items, (submission) => item(submission.title, `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`), t("HOME_NO_SUBMISSIONS"))]),
+      card(t("HOME_RECENT_SUBMISSIONS"), [list(submissions.items, (submission) => item(submission.title, localized(() => `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`)), t("HOME_NO_SUBMISSIONS"))]),
     ]),
   ]), generation)) return;
 }
@@ -431,12 +477,16 @@ function createPagedOptionControl({ resource, spaceId, writableOnly = false, own
       select.replaceChildren(...(emptyLabel === undefined ? [] : [element("option", { value: "", text: emptyLabel })]), ...options);
       if ([...select.options].some((option) => option.value === selected)) select.value = selected;
       select.disabled = state.pending && !state.loaded;
-      const model = optionLoadMoreModel(state, label);
-      more.hidden = !model.visible;
-      more.disabled = model.disabled;
-      more.textContent = model.label;
-      more.setAttribute("aria-label", model.accessibleName);
-      status.textContent = state.error;
+      translationBindings.effect(more, "option-page", () => {
+        const model = optionLoadMoreModel(state, String(label));
+        more.hidden = !model.visible;
+        more.disabled = model.disabled;
+        more.textContent = model.label;
+        more.setAttribute("aria-label", model.accessibleName);
+      });
+      translationBindings.text(status, state.errorKey
+        ? t(controllerErrorKeys[state.errorKey], { resource: String(label) })
+        : "");
       status.hidden = !state.error;
       onState?.(state);
     },
@@ -495,10 +545,10 @@ async function renderSubmit(generation) {
       (result) => {
         const outcome = submissionResultModel(result);
         if (outcome.kind === "duplicate") {
-          validationSummary(form, outcome.message);
+          validationSummary(form, localized(() => submissionResultModel(result).message));
           return;
         }
-        navigate("/my-submissions", true, outcome.message);
+        navigate("/my-submissions", true, localized(() => submissionResultModel(result).message));
       },
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
@@ -544,7 +594,7 @@ async function renderKnowledge(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (entry) => item(entry.title, `${visibilityLabel(entry.visibility)} · ${searchStatusLabel(entry.searchStatus)} · ${formatDate(entry.updatedAt)}`, [
+    const rows = list(items, (entry) => item(entry.title, localized(() => `${visibilityLabel(entry.visibility)} · ${searchStatusLabel(entry.searchStatus)} · ${formatDate(entry.updatedAt)}`), [
       element("div", { className: "actions" }, [visibilityBadge(entry.visibility), routeLink(t("LIBRARY_READ_ITEM", { title: entry.title }), entry.href)]),
     ]), t("LIBRARY_EMPTY"));
     const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
@@ -585,12 +635,12 @@ async function renderSearch(generation) {
   const renderResults = (model) => {
     const nodes = [];
     if (model.degraded) nodes.push(routeStateNode("degraded", t("SEARCH_DEGRADED")));
-    nodes.push(list(currentItems, (hit) => item(hit.title, hit.location, [
-      element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", { fields: hit.matchedFieldLabels.join(", ") }) }),
+    nodes.push(list(currentItems, (hit) => item(hit.title, searchLocation(hit), [
+      element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", () => ({ fields: matchedFieldLabels(hit.matchedFields) })) }),
       element("p", { className: "excerpt" }, hit.highlightSegments.map((segment) => (
         segment.highlighted ? element("mark", { text: segment.text }) : segment.text
       ))),
-      routeLink(t("SEARCH_OPEN_CITATION", { title: hit.title, location: hit.location }), hit.citationHref),
+      routeLink(t("SEARCH_OPEN_CITATION", () => ({ title: hit.title, location: String(searchLocation(hit)) })), hit.citationHref),
     ]), t("SEARCH_EMPTY")));
     if (currentCursor) nodes.push(element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE_RESULTS"), onclick: () => { void search(currentCursor, true); } }));
     results.replaceChildren(...nodes);
@@ -731,7 +781,7 @@ async function renderAgent(generation) {
     const selected = new Set([...itemSelect.selectedOptions].map((option) => option.value));
     itemSelect.replaceChildren(...loadedItems.map((item) => element("option", {
       value: item.id,
-      text: `${item.title} · ${item.visibilityLabel}`,
+      text: localized(() => `${item.title} · ${visibilityLabel(item.visibility)}`),
       selected: selected.has(item.id) ? "" : undefined,
     })));
     itemMore.hidden = !itemCursor;
@@ -745,7 +795,9 @@ async function renderAgent(generation) {
       loadedItems = state.items;
       itemCursor = state.nextCursor;
       loadingItems = state.pending;
-      itemStatus.textContent = state.error;
+      translationBindings.text(itemStatus, state.errorKey
+        ? t(controllerErrorKeys[state.errorKey], { resource: t("KNOWLEDGE_CHAT_SCOPE_ITEMS_FIELD") })
+        : "");
       renderItemOptions();
       updateScopeState();
     },
@@ -755,13 +807,13 @@ async function renderAgent(generation) {
     const selected = [...itemSelect.selectedOptions];
     if (selected.length > scopeModel.maxSelectedItems) {
       selected.slice(scopeModel.maxSelectedItems).forEach((option) => { option.selected = false; });
-      itemStatus.textContent = t("KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX");
+      translationBindings.text(itemStatus, t("KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX"));
       itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX";
     } else {
-      itemStatus.textContent = t("KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT", {
+      translationBindings.text(itemStatus, t("KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT", {
         selected: selected.length,
         maximum: scopeModel.maxSelectedItems,
-      });
+      }));
       itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT";
     }
     updateScopeState();
@@ -796,8 +848,9 @@ async function renderAgent(generation) {
     itemMore.disabled = pending || loadingItems;
     for (const option of scopeOptions) option.input.disabled = pending;
     const requested = requestedScope();
-    scopeSummary.textContent = chatScopeSummaryModel(scopeKindLabels[kind], Boolean(requested));
+    scopeSummary.textContent = chatScopeSummaryModel(String(scopeKindLabels[kind]), Boolean(requested));
   }
+  translationBindings.effect(scopeSummary, "scope-summary", updateScopeState);
   for (const option of scopeOptions) option.input.addEventListener("change", () => {
     updateScopeState();
     if (option.kind === "items" && !itemController.snapshot().loaded) {
@@ -845,17 +898,21 @@ async function renderAgent(generation) {
         }, [
           element("p", { text: t("KNOWLEDGE_CHAT_TRY_AGAIN") }),
           element("ul", {}, model.suggestedActionKeys.map((key) => element("li", {
-            text: t(key),
+            text: t(suggestedActionKeys[key]),
             "data-i18n-key": key,
           }))),
         ])] : []),
         element("h3", { text: t("KNOWLEDGE_CHAT_CITATIONS") }),
-        list(model.sources, (source) => item(`[${source.number}] ${source.title}`, source.location, [
-          element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", { fields: source.matchedFieldLabels.join(", ") }) }),
+        list(model.sources, (source) => item(`[${source.number}] ${source.title}`, searchLocation(source), [
+          element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", () => ({ fields: matchedFieldLabels(source.matchedFields) })) }),
           element("p", { className: "excerpt" }, source.highlightSegments.map((segment) => (
             segment.highlighted ? element("mark", { text: segment.text }) : segment.text
           ))),
-          element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": source.accessibleName, text: t("KNOWLEDGE_CHAT_OPEN_SOURCE") }),
+          element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": t("READER_OPEN_CITATION_ARIA", () => ({
+            number: source.number,
+            title: source.title,
+            location: `${documentLabel(source.headingPath)}, ${lineLabel(source.startLine, source.endLine)}`,
+          })), text: t("KNOWLEDGE_CHAT_OPEN_SOURCE") }),
         ]), t("KNOWLEDGE_CHAT_NO_CITATIONS")),
       );
     }, (error) => answer.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))));
@@ -911,7 +968,7 @@ async function renderMySubmissions(generation) {
       }
       return item(
         submission.title,
-        `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`,
+        localized(() => `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`),
         children,
       );
     }, t("MY_SUBMISSIONS_EMPTY"));
@@ -980,14 +1037,18 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   const response = await api(request.path);
   const readerValue = response[request.responseKey];
   const model = knowledgeReaderModel(readerValue, { revision: requestedRevision, chunk: requestedChunk });
+  const readerLocations = rawChunkLocations(readerValue);
   const outline = element("nav", { className: "reader-outline", "aria-label": t("READER_OUTLINE_ARIA") }, [
     element("h2", { text: t("READER_OUTLINE") }),
-    list(model.outline, (entry) => element("li", { className: "item" }, [
+    list(model.outline, (entry, index) => element("li", { className: "item" }, [
       element("a", {
         href: entry.href,
         "data-route": "",
         "aria-current": entry.focused ? "location" : undefined,
-        text: `${entry.label} · ${entry.lineLabel}`,
+        text: localized(() => {
+          const location = readerLocations[index] || { headingPath: [], startLine: 1, endLine: 1 };
+          return `${documentLabel(location.headingPath)} · ${lineLabel(location.startLine, location.endLine)}`;
+        }),
       }),
     ]), t("READER_NO_HEADINGS")),
   ]);
@@ -1007,8 +1068,11 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   ]);
   const body = element("article", { className: "reader-body", "aria-label": t("READER_BODY_ARIA") }, [
     element("div", { className: "actions" }, [
-      visibilityBadge(model.visibility, model.visibilityLabel),
-      element("span", { className: "badge", text: model.revisionLabel }),
+      visibilityBadge(model.visibility),
+      element("span", { className: "badge", text: t("READER_REVISION_LABEL", () => ({
+        revisionId: model.revisionId,
+        state: t(model.isCurrent ? "READER_REVISION_CURRENT" : "READER_REVISION_HISTORY"),
+      })) }),
       element("a", { href: model.downloadHref, className: "download-link", download: "", text: t("READER_DOWNLOAD_MARKDOWN") }),
     ]),
     !model.isCurrent
@@ -1025,16 +1089,25 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
   ]);
   const sources = element("aside", { className: "reader-sources", "aria-label": t("READER_SOURCES_ARIA") }, [
     element("h2", { text: t("READER_SOURCES") }),
-    list(model.sources, (source) => element("li", {
-      id: `chunk-${source.id}`,
-      className: "item source-location",
-      tabindex: source.id === model.focusedChunkId ? "-1" : undefined,
-    }, [
-      element("p", { text: source.label }),
-      element("a", { href: source.href, "data-route": "", "aria-label": t("READER_OPEN_SOURCE_ARIA", { label: source.label }), text: t("READER_COPYABLE_LOCATION") }),
-    ]), t("READER_NO_SOURCES")),
+    list(model.sources, (source, index) => {
+      const location = readerLocations[index] || { headingPath: [], startLine: 1, endLine: 1 };
+      const sourceLocation = localized(() => `${documentLabel(location.headingPath)} · ${lineLabel(location.startLine, location.endLine)}`);
+      return element("li", {
+        id: `chunk-${source.id}`,
+        className: "item source-location",
+        tabindex: source.id === model.focusedChunkId ? "-1" : undefined,
+      }, [
+        element("p", { text: sourceLocation }),
+        element("a", { href: source.href, "data-route": "", "aria-label": t("READER_OPEN_SOURCE_ARIA", () => ({
+          label: String(sourceLocation),
+        })), text: t("READER_COPYABLE_LOCATION") }),
+      ]);
+    }, t("READER_NO_SOURCES")),
   ]);
-  if (replaceOutlet(page(model.title, `${model.revisionLabel} · ${t("COMMON_PUBLISHED_AT", { date: formatDate(model.publishedAt) })}`, [
+  if (replaceOutlet(page(model.title, localized(() => `${t("READER_REVISION_LABEL", {
+    revisionId: model.revisionId,
+    state: t(model.isCurrent ? "READER_REVISION_CURRENT" : "READER_REVISION_HISTORY"),
+  })} · ${t("COMMON_PUBLISHED_AT", { date: formatDate(model.publishedAt) })}`), [
     element("div", { className: "reader-grid" }, [outline, body, sources]),
   ]), generation) && model.focusedChunkId) {
     byId(`chunk-${model.focusedChunkId}`)?.focus({ preventScroll: false });
@@ -1084,7 +1157,7 @@ async function renderPendingSubmissions(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (submission) => item(submission.title, `${kindLabel(submission.kind)} · ${t("COMMON_SUBMITTED_AT", { date: formatDate(submission.createdAt) })}`, [
+    const rows = list(items, (submission) => item(submission.title, localized(() => `${kindLabel(submission.kind)} · ${t("COMMON_SUBMITTED_AT", { date: formatDate(submission.createdAt) })}`), [
       element("pre", { className: "content-preview", text: submission.content }),
       routeLink(t("REVIEW_QUEUE_REVIEW_ITEM", { title: submission.title }), `/admin/submissions/${encodeURIComponent(submission.id)}`),
     ]), t("REVIEW_QUEUE_EMPTY"));
@@ -1109,6 +1182,17 @@ async function renderReviewSubmission(generation, submissionId) {
   const previewResponse = await api(`/api/admin/submissions/${encodeURIComponent(submissionId)}`);
   const model = reviewPreviewModel(previewResponse.preview);
   const target = reviewTargetModel(previewResponse.preview);
+  const previewLocations = rawChunkLocations({ chunks: previewResponse.preview?.chunks });
+  const requestedTarget = previewResponse.preview?.requestedTarget || {};
+  const requestedSpace = requestedTarget.space || {};
+  const requestedCollection = requestedTarget.collection;
+  const requestedSpaceAvailable = requestedSpace.id === target.spaceId && requestedSpace.status === "active";
+  const requestedCollectionAvailable = target.collectionId === null
+    ? requestedCollection === null
+    : requestedCollection?.id === target.collectionId && requestedCollection?.status === "active";
+  const warningKeys = ["REVIEW_WARNING_INERT"];
+  if (model.chunks.length === 0) warningKeys.push("REVIEW_WARNING_NO_CHUNK");
+  if (model.parserVersion !== "m1-v1") warningKeys.push("REVIEW_WARNING_PARSER");
   const title = element("input", { required: "", maxlength: "200", value: model.title });
   const visibility = element("select", {}, [
     element("option", { value: "shared", text: t("COMMON_VISIBILITY_SHARED") }),
@@ -1131,16 +1215,22 @@ async function renderReviewSubmission(generation, submissionId) {
       }),
     ])));
     else if (state.loaded && !state.error) nodes.push(element("p", { className: "muted", text: t("REVIEW_TAGS_EMPTY") }));
-    if (state.error) nodes.push(routeStateNode("error", state.error));
+    if (state.error) nodes.push(routeStateNode("error", state.errorKey ? t(controllerErrorKeys[state.errorKey]) : state.error));
     const loadMore = reviewTagLoadMoreModel(state);
-    if (loadMore.visible) nodes.push(element("button", {
-      className: "secondary",
-      type: "button",
-      text: loadMore.label,
-      disabled: loadMore.disabled ? "" : undefined,
-      "aria-label": loadMore.accessibleName,
-      onclick: () => { void tagController.loadMore(); },
-    }));
+    if (loadMore.visible) {
+      const loadMoreButton = element("button", {
+        className: "secondary",
+        type: "button",
+        onclick: () => { void tagController.loadMore(); },
+      });
+      translationBindings.effect(loadMoreButton, "review-tag-page", () => {
+        const current = reviewTagLoadMoreModel(state);
+        loadMoreButton.textContent = current.label;
+        loadMoreButton.disabled = current.disabled;
+        loadMoreButton.setAttribute("aria-label", current.accessibleName);
+      });
+      nodes.push(loadMoreButton);
+    }
     tags.replaceChildren(...nodes);
   };
   const tagOwnership = createReplaceableOwner(() => ownsMutation(owner));
@@ -1258,8 +1348,10 @@ async function renderReviewSubmission(generation, submissionId) {
     element("dl", { className: "review-target", "aria-label": t("REVIEW_METADATA_ARIA") }, [
       element("dt", { text: t("REVIEW_REQUESTED_TITLE") }), element("dd", { text: model.title }),
       element("dt", { text: t("REVIEW_FINAL_TITLE") }), element("dd", {}, [title]),
-      element("dt", { text: t("REVIEW_REQUESTED_SPACE") }), element("dd", { text: target.spaceLabel }),
-      element("dt", { text: t("REVIEW_REQUESTED_COLLECTION") }), element("dd", { text: target.collectionLabel }),
+      element("dt", { text: t("REVIEW_REQUESTED_SPACE") }), element("dd", { text: requestedSpaceAvailable ? requestedSpace.name : t("REVIEW_REQUESTED_SPACE_UNAVAILABLE") }),
+      element("dt", { text: t("REVIEW_REQUESTED_COLLECTION") }), element("dd", { text: target.collectionId === null
+        ? t("COMMON_NO_COLLECTION")
+        : requestedCollectionAvailable ? requestedCollection.name : t("REVIEW_REQUESTED_COLLECTION_UNAVAILABLE") }),
       element("dt", { text: t("COMMON_REQUESTED_VISIBILITY") }), element("dd", { text: visibilityLabel(model.requestedVisibility) }),
       element("dt", { text: t("REVIEW_FINAL_SPACE_ID") }), element("dd", {}, [finalSpace]),
       element("dt", { text: t("REVIEW_FINAL_COLLECTION_ID") }), element("dd", {}, [finalCollection]),
@@ -1275,10 +1367,13 @@ async function renderReviewSubmission(generation, submissionId) {
       card(t("REVIEW_NORMALIZED_MARKDOWN"), [element("pre", { className: "content-preview", text: model.normalizedMarkdown })]),
     ]),
     element("div", { className: "page-grid" }, [
-      card(t("REVIEW_CHUNK_PREVIEW"), [list(model.chunks, (chunk) => item(chunk.heading, chunk.lineLabel, [
-        element("pre", { className: "content-preview", text: chunk.excerpt }),
-      ]), t("REVIEW_NO_CHUNKS"))]),
-      card(t("REVIEW_WARNINGS"), [list(model.warnings, (warning) => element("li", { className: "item", text: warning }), t("REVIEW_NO_WARNINGS"))]),
+      card(t("REVIEW_CHUNK_PREVIEW"), [list(model.chunks, (chunk, index) => {
+        const location = previewLocations[index] || { headingPath: [], startLine: chunk.startLine, endLine: chunk.endLine };
+        return item(documentLabel(location.headingPath), lineLabel(location.startLine, location.endLine), [
+          element("pre", { className: "content-preview", text: chunk.excerpt }),
+        ]);
+      }, t("REVIEW_NO_CHUNKS"))]),
+      card(t("REVIEW_WARNINGS"), [list(warningKeys, (key) => element("li", { className: "item", text: t(reviewWarningKeys[key]) }), t("REVIEW_NO_WARNINGS"))]),
     ]),
     card(t("REVIEW_DECISION"), [form]),
   ]), generation)) {
@@ -1374,14 +1469,18 @@ async function renderSpaces(generation) {
     if (!ownsMutation(owner) || !latestState) return;
     spacesSlot.replaceChildren(list(latestState.spaces, (space) => item(
       space.name,
-      `${space.slug} · ${space.kind} · ${space.readOnly ? t("COMMON_READ_ONLY") : activeStatusLabel(space.status)}`,
+      localized(() => `${space.slug} · ${space.kind} · ${space.readOnly ? t("COMMON_READ_ONLY") : activeStatusLabel(space.status)}`),
     ), t("SPACES_EMPTY")));
-    const spaceMoreModel = optionLoadMoreModel(latestState, t("COMMON_SPACES"));
-    spacesMore.hidden = !spaceMoreModel.visible;
-    spacesMore.disabled = spaceMoreModel.disabled;
-    spacesMore.textContent = spaceMoreModel.label;
-    spacesMore.setAttribute("aria-label", spaceMoreModel.accessibleName);
-    spacesStatus.textContent = latestState.error;
+    translationBindings.effect(spacesMore, "space-page", () => {
+      const spaceMoreModel = optionLoadMoreModel(latestState, String(t("COMMON_SPACES")));
+      spacesMore.hidden = !spaceMoreModel.visible;
+      spacesMore.disabled = spaceMoreModel.disabled;
+      spacesMore.textContent = spaceMoreModel.label;
+      spacesMore.setAttribute("aria-label", spaceMoreModel.accessibleName);
+    });
+    translationBindings.text(spacesStatus, latestState.errorKey
+      ? t(controllerErrorKeys[latestState.errorKey], { resource: t("COMMON_SPACES") })
+      : "");
     spacesStatus.hidden = !latestState.error;
 
     const selection = collectionSpace.value;
@@ -1395,16 +1494,20 @@ async function renderSpaces(generation) {
       latestState.collectionPages,
       (collectionPage) => {
         const more = element("button", { className: "secondary", type: "button" });
-        const moreModel = optionLoadMoreModel(collectionPage, t("COMMON_COLLECTIONS"));
-        more.hidden = !moreModel.visible;
-        more.disabled = moreModel.disabled;
-        more.textContent = moreModel.label;
-        more.setAttribute("aria-label", t("OPTIONS_LOAD_MORE_IN_SPACE_ARIA", {
-          label: moreModel.accessibleName,
-          space: spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
-        }));
+        translationBindings.effect(more, "collection-page", () => {
+          const moreModel = optionLoadMoreModel(collectionPage, String(t("COMMON_COLLECTIONS")));
+          more.hidden = !moreModel.visible;
+          more.disabled = moreModel.disabled;
+          more.textContent = moreModel.label;
+          translationBindings.attribute(more, "aria-label", t("OPTIONS_LOAD_MORE_IN_SPACE_ARIA", {
+            label: moreModel.accessibleName,
+            space: spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
+          }));
+        });
         more.addEventListener("click", () => { void controller.loadMoreCollections(collectionPage.spaceId); });
-        const status = element("p", { className: "muted", role: "status", "aria-live": "polite", text: collectionPage.error });
+        const status = element("p", { className: "muted", role: "status", "aria-live": "polite", text: collectionPage.errorKey
+          ? t(controllerErrorKeys[collectionPage.errorKey], { resource: t("COMMON_COLLECTIONS") })
+          : "" });
         status.hidden = !collectionPage.error;
         return item(
           spaceById.get(collectionPage.spaceId)?.name || t("COMMON_SPACE"),
@@ -1441,7 +1544,7 @@ async function bootstrap() {
     shell.dataset.ready = "true";
     await renderRoute();
   } catch (error) {
-    replaceOutlet(page(t("BOOTSTRAP_FAILED_TITLE"), error.message || t("BOOTSTRAP_SESSION_FAILED"), [empty(t("COMMON_RETRY_LATER"))]));
+    replaceOutlet(page(t("BOOTSTRAP_FAILED_TITLE"), safeErrorMessage(error, t("BOOTSTRAP_SESSION_FAILED")), [empty(t("COMMON_RETRY_LATER"))]));
   }
 }
 
@@ -1454,7 +1557,7 @@ function renderAnonymous() {
   pendingFlash = "";
   setStatus(t("ANONYMOUS_STATUS"));
   byId("primary-navigation").replaceChildren();
-  byId("session-summary").textContent = t("SESSION_SIGN_IN_HINT");
+  translationBindings.text(byId("session-summary"), t("SESSION_SIGN_IN_HINT"));
   logoutButton.hidden = true;
   logoutButton.disabled = true;
   drawerToggle.disabled = true;
@@ -1467,23 +1570,23 @@ function renderAnonymous() {
 
 function renderSessionSummary() {
   if (!session) return;
-  byId("session-summary").textContent = t("SESSION_SUMMARY", {
+  translationBindings.text(byId("session-summary"), t("SESSION_SUMMARY", {
     email: session.member.email,
     role: memberRoleLabel(session.member.role),
-  });
+  }));
 }
 
 function applyLocale() {
   document.documentElement.lang = i18n.locale;
-  document.title = t("APP_TITLE");
+  translationBindings.property(document, "title", t("APP_TITLE"));
   languageSelect.value = i18n.locale;
   for (const node of document.querySelectorAll("[data-i18n]")) {
-    node.textContent = t(node.dataset.i18n);
+    node.textContent = translate(node.dataset.i18n);
   }
   for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
-    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+    node.setAttribute("aria-label", translate(node.dataset.i18nAriaLabel));
   }
-  configureWorkspaceI18n(t);
+  configureWorkspaceI18n(translate);
 }
 
 function browserStorage() {
@@ -1510,7 +1613,7 @@ logoutButton.addEventListener("click", () => { void logout(); });
 languageSelect.addEventListener("change", () => { i18n.setLocale(languageSelect.value); });
 mobileViewport.addEventListener("change", () => { if (session) setDrawer(false); });
 i18n.subscribe(() => {
-  localeRerenderController.apply(i18n.locale);
+  localeRefreshController.apply(i18n.locale);
 });
 applyLocale();
 applyDrawerState(anonymousShellState().drawer);

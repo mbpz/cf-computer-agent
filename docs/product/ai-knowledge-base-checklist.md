@@ -314,7 +314,7 @@
 
 ## I18N — 国际化
 
-- [ ] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 348 键及 45 个插值占位符完全对齐，切换保持当前路由且不重启认证/重复请求或 mutation，陈旧完成被抑制，静态门禁及 6 类 mutation 测试覆盖缺键、占位符漂移、硬编码中英文、未知键与绕过形式；命令：`rtk npm run verify:i18n`、`rtk npm run check`。
+- [ ] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 349 键及 45 个插值占位符完全对齐；切换只原位刷新已绑定文本、安全属性/ARIA 与标题，不重新渲染/抓取当前路由，不重启认证或重放 GET、mutation/AI，且保持已加载分页/游标、表单值/选择、抽屉/对话框状态、语言控件焦点和当前 mutation ownership；常规导航与前进/后退仍按原合同抓取，既有 route guard 继续拒绝陈旧路由完成。静态门禁使用固定 TypeScript AST API 与 DOM HTML 解析，mutation 测试覆盖缺键/占位符、动态键 map、直接/变量间接/setAttribute/createTextNode/DOM helper/HTML 文本和属性、转义中英文、base64、模板/拼接及可显示 Markdown 异常；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
 
 ## EVAL — 质量评测
 

@@ -105,7 +105,8 @@ describe("workspace assets", () => {
       SELF.fetch("https://example.test/locales/en.js"),
       SELF.fetch("https://example.test/locales/zh-CN.js"),
     ]);
-    const source = `${await response.text()}\n${await uiResponse.text()}\n${await markdownResponse.text()}\n${await i18nResponse.text()}\n${await enResponse.text()}\n${await zhResponse.text()}`;
+    const appSource = await response.text();
+    const source = `${appSource}\n${await uiResponse.text()}\n${await markdownResponse.text()}\n${await i18nResponse.text()}\n${await enResponse.text()}\n${await zhResponse.text()}`;
 
     expect(response.status).toBe(200);
     expect(uiResponse.status).toBe(200);
@@ -126,7 +127,16 @@ describe("workspace assets", () => {
     expect(source).toContain("createMutationController");
     expect(source).toContain("createOptionPageController");
     expect(source).toContain("createPagedOptionControl");
-    expect(source).toContain("createLocaleRerenderController");
+    expect(source).toContain("createLocaleRefreshController");
+    expect(source).toContain("createTranslationBindings");
+    expect(source).toContain("refreshTranslations: () => translationBindings.refresh()");
+    const localeLifecycle = appSource.slice(
+      appSource.indexOf("const localeRefreshController"),
+      appSource.indexOf("function rendererFor"),
+    );
+    expect(localeLifecycle).not.toContain("renderRoute");
+    expect(localeLifecycle).not.toContain("closeOpenDialogs");
+    expect(source).toContain("MARKDOWN_RENDERER_UNAVAILABLE");
     expect(source).toContain("OPTIONS_LOAD_MORE_ARIA");
     expect(source).toContain("memory-garden-locale");
   });

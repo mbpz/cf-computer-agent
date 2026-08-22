@@ -330,6 +330,7 @@ export const zhCN = Object.freeze({
   BOOTSTRAP_FAILED_TITLE: "无法启动工作区",
   BOOTSTRAP_SESSION_FAILED: "无法获取当前会话。",
   ERROR_GENERIC: "操作失败，请重试。",
+  ERROR_MARKDOWN_RENDERER_UNAVAILABLE: "本地 Markdown 渲染器不可用，请稍后重试。",
   ERROR_FORBIDDEN: "访问被拒绝。",
   ERROR_UNAUTHORIZED: "请先登录。",
   ERROR_PAGE_INVALID: "分页请求无效。",

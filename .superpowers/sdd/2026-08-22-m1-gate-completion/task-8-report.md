@@ -63,3 +63,38 @@ Implemented owner-only My Submissions status filtering and complete authenticate
 - This is local/worktree evidence only; no remote browser, deployment, or migration was performed.
 - Existing CSP, vendored dependency hashes, migration `0001`-`0004` hashes, authentication/governance behavior, leases, dual FTS paths, Chat scopes, download behavior, and KnowledgeBase-v1 format remain unchanged.
 - The worker suite intentionally emits existing journal-corruption exception diagnostics while its assertions pass; the full gate exits zero.
+
+## Fix round 1/5 — locale lifecycle and static gate
+
+Date: 2026-08-23
+
+### Findings resolved
+
+- Replaced locale-triggered route reconstruction with explicit in-place translation bindings for text, safe visible attributes/ARIA, computed localized copy, and document title. A locale switch no longer closes dialogs, advances route generation, invokes `renderRoute()`, reconstructs route DOM, or starts a GET/mutation/AI call.
+- Existing Home data, admin multi-fetch results, My Submissions accumulated pages/cursor/status, Search and Chat selections, form values, drawer/dialog state, active mutation ownership, and focus on the language selector remain in place. The current mutation completes once; an already-stale route completion remains rejected by the unchanged route guard. Normal navigation and browser back/forward retain their existing fetch behavior.
+- Replaced the regex-only JavaScript scan with the pinned TypeScript compiler AST API. Dynamic translation maps such as API/runtime/controller errors are declared explicitly and their values are checked. HTML is parsed as DOM with script execution and external loading disabled.
+- The gate checks direct and variable-indirected display sinks, `textContent`, `createTextNode`, visible `setAttribute` attributes, DOM helper options/children, dialogs, ARIA/title/error paths, concatenations, templates, decoded/escaped literals, and HTML text/attributes against a narrow documented technical-copy allowlist.
+- Replaced the Markdown renderer's English thrown message with stable code `MARKDOWN_RENDERER_UNAVAILABLE`; the UI maps it through the bilingual `ERROR_MARKDOWN_RENDERER_UNAVAILABLE` key.
+
+### RED evidence
+
+- The new lifecycle contract failed with `createLocaleRefreshController is not a function`; the old controller closed dialogs and invoked route rendering.
+- The translation-binding contract failed because `createTranslationBindings` was not exported.
+- The stale-binding regression reproduced an old localized error returning after runtime text replacement and a later locale refresh.
+- The old verifier passed a variable-indirected hard-coded title mutation and a thrown/displayed Markdown renderer message mutation.
+- The existing asset contract failed because it still required `createLocaleRerenderController`.
+
+### GREEN evidence
+
+- `rtk npm run test:i18n`: 8/8 passed. Locale packs contain 349 keys and 45 placeholder occurrences.
+- The mutation suite rejects missing keys, placeholder drift, direct English/Chinese, unknown direct and dynamic-map keys, variable indirection, `setAttribute`, `createTextNode`, DOM-helper children, templates, concatenation, Unicode-escaped English/Chinese, base64-decoded copy, HTML text/attributes, and thrown/displayed Markdown errors.
+- `rtk npm run verify:i18n`: `[pass] i18n-hardcoded-copy ast=typescript html=dom`.
+- Focused UI/asset run: 93/93 passed; focused lifecycle model run: 62/62 passed.
+- JavaScript syntax checks and `rtk npm run typecheck` passed.
+- Fresh `rtk npm run check` passed: pinned vendor bytes, Wrangler types, TypeScript, 37 smoke tests, 8 i18n tests, AST/DOM gate, 608 unit tests, 288 worker tests, and Wrangler dry-run build.
+
+### Boundaries and concerns
+
+- `COL-001` and `I18N-001` remain unchecked pending Task 9 acceptance.
+- This round performed no deployment, network call, or migration and did not change CSP/vendor hashes, authentication/governance, D1 migrations, leases, dual FTS, Chat scope semantics, downloads, or KnowledgeBase-v1.
+- The prototype own-property minor remains ledgered for final review and is intentionally outside this round.

@@ -8,7 +8,7 @@ const {
   chatScopeSummaryModel,
   citedAnswerModel,
   createMutationController,
-  createLocaleRerenderController,
+  createLocaleRefreshController,
   createAdminSpacesRouteController,
   createChatItemPageController,
   createOwnedActionController,
@@ -60,42 +60,62 @@ describe("createRouteGuard", () => {
   });
 });
 
-describe("locale route rerendering", () => {
-  it("rerenders one current route without auth restart or mutation replay and suppresses the stale completion", async () => {
+describe("in-place locale refresh", () => {
+  it("preserves loaded route state, selections, focus, drawer, dialogs, and active work without duplicate calls", async () => {
     const guard = createRouteGuard();
+    const staleGeneration = guard.begin();
+    const staleResponse = deferred<string>();
+    let staleCompletions = 0;
+    const stale = staleResponse.promise.then((value) => {
+      if (guard.isCurrent(staleGeneration)) staleCompletions += value.length;
+    });
     const generation = guard.begin();
     const owner = guard.owner(generation, "/agent");
-    const response = deferred<string>();
-    let requests = 0;
-    let authRestarts = 0;
-    let dialogsClosed = 0;
+    const mutationResponse = deferred<string>();
+    let getRequests = 8;
+    let mutationCalls = 0;
+    let aiCalls = 0;
     let localeApplications = 0;
-    let routeRenders = 0;
+    let translationRefreshes = 0;
     const rendered: string[] = [];
+    const routeState = {
+      home: { submissions: ["sub-1"] },
+      admin: { spaces: ["space-1"], collections: ["collection-1"], pendingCursor: "admin-next" },
+      mySubmissions: { pages: [["sub-1"], ["sub-2"]], cursor: "mine-next", status: "published" },
+      search: { query: "needle", space: "space-1", collection: "collection-1", tags: ["tag-1"] },
+      chat: { scope: "collection", space: "space-1", collection: "collection-1", items: ["item-1"] },
+      form: { title: "unsent title", visibility: "admin_only" },
+      drawerOpen: true,
+      dialogOpen: true,
+      focus: "language-select",
+    };
+    const before = structuredClone(routeState);
     const mutation = createMutationController(
       () => guard.owns(owner, "/agent"),
       () => undefined,
     );
-    const controller = createLocaleRerenderController("en", {
-      closeDialogs: () => { dialogsClosed += 1; },
+    const controller = createLocaleRefreshController("en", {
       applyLocale: () => { localeApplications += 1; },
-      rerenderRoute: () => { routeRenders += 1; guard.begin(); },
+      refreshTranslations: () => { translationRefreshes += 1; },
     });
 
     const pending = mutation.run(() => {
-      requests += 1;
-      return response.promise;
+      mutationCalls += 1;
+      aiCalls += 1;
+      return mutationResponse.promise;
     }, (value) => rendered.push(value), () => undefined);
     expect(controller.apply("zh-CN")).toBe(true);
     expect(controller.apply("zh-CN")).toBe(false);
-    authRestarts += 0;
-    response.resolve("stale answer");
-    await pending;
+    staleResponse.resolve("stale route response");
+    mutationResponse.resolve("current answer");
+    await Promise.all([stale, pending]);
 
-    expect({ requests, authRestarts, dialogsClosed, localeApplications, routeRenders }).toEqual({
-      requests: 1, authRestarts: 0, dialogsClosed: 1, localeApplications: 1, routeRenders: 1,
+    expect({ getRequests, mutationCalls, aiCalls, localeApplications, translationRefreshes }).toEqual({
+      getRequests: 8, mutationCalls: 1, aiCalls: 1, localeApplications: 1, translationRefreshes: 1,
     });
-    expect(rendered).toEqual([]);
+    expect(routeState).toEqual(before);
+    expect(rendered).toEqual(["current answer"]);
+    expect(staleCompletions).toBe(0);
   });
 
   it("refreshes the localized current Collection scope summary without retrieval or AI", () => {

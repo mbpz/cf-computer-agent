@@ -39,6 +39,100 @@ export function translateEnglish(key, values = undefined) {
   return template === undefined ? String(key) : interpolate(template, values, key);
 }
 
+export function createTranslationBindings(translate) {
+  if (typeof translate !== "function") throw new TypeError("Translation binding translator must be a function");
+  const descriptors = new WeakSet();
+  const records = new Set();
+  const recordsByTarget = new WeakMap();
+
+  const value = (key, values = undefined) => {
+    const descriptor = {
+      key: String(key),
+      values,
+      toString() { return String(translate(descriptor.key, resolveValues(descriptor.values))); },
+      [Symbol.toPrimitive]() { return descriptor.toString(); },
+    };
+    descriptors.add(descriptor);
+    return Object.freeze(descriptor);
+  };
+  const bind = (target, channel, update) => {
+    if (!target || (typeof target !== "object" && typeof target !== "function")) {
+      throw new TypeError("Translation binding target must be an object");
+    }
+    let targetRecords = recordsByTarget.get(target);
+    if (!targetRecords) {
+      targetRecords = new Map();
+      recordsByTarget.set(target, targetRecords);
+    }
+    const previous = targetRecords.get(channel);
+    if (previous) records.delete(previous);
+    const record = { target, channel, update, connected: target.isConnected !== false };
+    targetRecords.set(channel, record);
+    records.add(record);
+    update();
+  };
+  const unbind = (target, channel) => {
+    const targetRecords = recordsByTarget.get(target);
+    const previous = targetRecords?.get(channel);
+    if (!previous) return;
+    records.delete(previous);
+    targetRecords.delete(channel);
+  };
+  const applyValue = (candidate) => descriptors.has(candidate) ? candidate.toString() : String(candidate ?? "");
+
+  return Object.freeze({
+    value,
+    computed(render) {
+      if (typeof render !== "function") throw new TypeError("Computed translation must be a function");
+      const descriptor = {
+        toString() { return String(render()); },
+        [Symbol.toPrimitive]() { return descriptor.toString(); },
+      };
+      descriptors.add(descriptor);
+      return Object.freeze(descriptor);
+    },
+    isValue(candidate) { return descriptors.has(candidate); },
+    text(target, candidate) {
+      if (!descriptors.has(candidate)) {
+        unbind(target, "textContent");
+        target.textContent = String(candidate ?? "");
+        return;
+      }
+      bind(target, "textContent", () => { target.textContent = candidate.toString(); });
+    },
+    attribute(target, name, candidate) {
+      if (!/^(?:aria-label|aria-description|placeholder|title)$/u.test(name)) {
+        throw new TypeError(`Translation attribute is not user-visible: ${name}`);
+      }
+      if (!descriptors.has(candidate)) {
+        unbind(target, `attribute:${name}`);
+        target.setAttribute(name, String(candidate ?? ""));
+        return;
+      }
+      bind(target, `attribute:${name}`, () => { target.setAttribute(name, candidate.toString()); });
+    },
+    property(target, name, candidate) {
+      if (name !== "title") throw new TypeError(`Translation property is not user-visible: ${name}`);
+      bind(target, `property:${name}`, () => { target[name] = applyValue(candidate); });
+    },
+    effect(target, channel, update) {
+      if (typeof update !== "function") throw new TypeError("Translation binding update must be a function");
+      bind(target, `effect:${channel}`, update);
+    },
+    refresh() {
+      for (const record of [...records]) {
+        if (record.target.isConnected === false && record.connected) {
+          records.delete(record);
+          recordsByTarget.get(record.target)?.delete(record.channel);
+          continue;
+        }
+        if (record.target.isConnected !== false) record.connected = true;
+        record.update();
+      }
+    },
+  });
+}
+
 function resolveInitialLocale(navigatorLanguage, storedLocale, storage) {
   let persisted = storedLocale;
   if (persisted === undefined) {
@@ -60,6 +154,10 @@ function interpolate(template, values, key) {
   }
   if (!uniqueExpected.length) return template;
   return template.replace(placeholderPattern, (_match, name) => String(values[name]));
+}
+
+function resolveValues(values) {
+  return typeof values === "function" ? values() : values;
 }
 
 function isLocale(value) {

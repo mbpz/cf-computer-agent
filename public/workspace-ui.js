@@ -27,16 +27,15 @@ export function createOperationGuard() {
   });
 }
 
-export function createLocaleRerenderController(initialLocale, callbacks) {
+export function createLocaleRefreshController(initialLocale, callbacks) {
   let locale = safeString(initialLocale);
   return Object.freeze({
     apply(nextLocale) {
       const candidate = safeString(nextLocale);
       if (!candidate || candidate === locale) return false;
       locale = candidate;
-      callbacks.closeDialogs();
       callbacks.applyLocale(candidate);
-      callbacks.rerenderRoute();
+      callbacks.refreshTranslations();
       return true;
     },
   });
@@ -206,6 +205,7 @@ export function createReviewTagController({ spaceId, owns, request, onChange }) 
   let pending = false;
   let loaded = false;
   let error = "";
+  let errorKey = "";
   const selectedIds = new Set();
   const snapshot = () => Object.freeze({
     items: items.map((tag) => Object.freeze({ ...tag, selected: selectedIds.has(tag.id) })),
@@ -213,6 +213,7 @@ export function createReviewTagController({ spaceId, owns, request, onChange }) 
     pending,
     loaded,
     error,
+    errorKey,
   });
   const emit = () => onChange(snapshot());
   const mutation = createMutationController(owns, (value) => {
@@ -230,10 +231,12 @@ export function createReviewTagController({ spaceId, owns, request, onChange }) 
         nextCursor = page.nextCursor;
         loaded = true;
         error = "";
+        errorKey = "";
         emit();
       },
       () => {
         loaded = true;
+        errorKey = append ? "REVIEW_TAGS_LOAD_MORE_FAILED" : "REVIEW_TAGS_LOAD_FAILED";
         error = t(append ? "REVIEW_TAGS_LOAD_MORE_FAILED" : "REVIEW_TAGS_LOAD_FAILED");
         emit();
       },
@@ -272,12 +275,14 @@ export function createOptionPageController({ resource, spaceId, writableOnly = f
   let pending = false;
   let loaded = false;
   let error = "";
+  let errorKey = "";
   const snapshot = () => Object.freeze({
     items: items.map((item) => Object.freeze({ ...item })),
     ...(nextCursor ? { nextCursor } : {}),
     pending,
     loaded,
     error,
+    errorKey,
   });
   const emit = () => onChange(snapshot());
   const mutation = createMutationController(owns, (value) => {
@@ -295,11 +300,13 @@ export function createOptionPageController({ resource, spaceId, writableOnly = f
         nextCursor = page.nextCursor;
         loaded = true;
         error = "";
+        errorKey = "";
         emit();
       },
       () => {
         loaded = true;
         const label = optionResourceLabel(fixedResource);
+        errorKey = append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED";
         error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", { resource: label });
         emit();
       },
@@ -318,6 +325,7 @@ export function createAdminSpacesRouteController({ owns, request, onChange }) {
   let pending = false;
   let loaded = false;
   let error = "";
+  let errorKey = "";
   const collectionControllers = new Map();
   const collectionStates = new Map();
   const snapshot = () => Object.freeze({
@@ -330,6 +338,7 @@ export function createAdminSpacesRouteController({ owns, request, onChange }) {
     pending,
     loaded,
     error,
+    errorKey,
   });
   const emit = () => onChange(snapshot());
   const spacesMutation = createMutationController(owns, (value) => {
@@ -366,10 +375,12 @@ export function createAdminSpacesRouteController({ owns, request, onChange }) {
         nextCursor = page.nextCursor;
         loaded = true;
         error = "";
+        errorKey = "";
         emit();
       },
       () => {
         loaded = true;
+        errorKey = append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED";
         error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
           resource: t("COMMON_SPACES"),
         });
@@ -429,12 +440,14 @@ export function createChatItemPageController({ owns, request, onChange }) {
   let pending = false;
   let loaded = false;
   let error = "";
+  let errorKey = "";
   const snapshot = () => Object.freeze({
     items: items.map((item) => Object.freeze({ ...item })),
     ...(nextCursor ? { nextCursor } : {}),
     pending,
     loaded,
     error,
+    errorKey,
   });
   const emit = () => onChange(snapshot());
   const mutation = createMutationController(owns, (value) => {
@@ -456,10 +469,12 @@ export function createChatItemPageController({ owns, request, onChange }) {
         nextCursor = page.nextCursor;
         loaded = true;
         error = "";
+        errorKey = "";
         emit();
       },
       () => {
         loaded = true;
+        errorKey = append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED";
         error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
           resource: t("KNOWLEDGE_CHAT_SCOPE_ITEMS_FIELD"),
         });
@@ -927,12 +942,14 @@ function createAdminCollectionPageController({ spaceId, owns, request, onChange 
   let pending = false;
   let loaded = false;
   let error = "";
+  let errorKey = "";
   const snapshot = () => Object.freeze({
     items: items.map((collection) => Object.freeze({ ...collection })),
     ...(nextCursor ? { nextCursor } : {}),
     pending,
     loaded,
     error,
+    errorKey,
   });
   const emit = () => onChange(snapshot());
   const mutation = createMutationController(owns, (value) => {
@@ -950,10 +967,12 @@ function createAdminCollectionPageController({ spaceId, owns, request, onChange 
         nextCursor = page.nextCursor;
         loaded = true;
         error = "";
+        errorKey = "";
         emit();
       },
       () => {
         loaded = true;
+        errorKey = append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED";
         error = t(append ? "OPTIONS_LOAD_MORE_FAILED" : "OPTIONS_LOAD_FAILED", {
           resource: t("COMMON_COLLECTIONS"),
         });
@@ -992,7 +1011,7 @@ function isManagedAdminSpace(space) {
 }
 
 function emptyAdminCollectionState() {
-  return Object.freeze({ items: [], pending: false, loaded: false, error: "" });
+  return Object.freeze({ items: [], pending: false, loaded: false, error: "", errorKey: "" });
 }
 
 function optionResourceLabel(resource) {

@@ -330,6 +330,7 @@ export const en = Object.freeze({
   BOOTSTRAP_FAILED_TITLE: "Unable to start the workspace",
   BOOTSTRAP_SESSION_FAILED: "Unable to load the current session.",
   ERROR_GENERIC: "The operation failed. Try again.",
+  ERROR_MARKDOWN_RENDERER_UNAVAILABLE: "The local Markdown renderer is unavailable. Try again later.",
   ERROR_FORBIDDEN: "Access denied.",
   ERROR_UNAUTHORIZED: "Sign in is required.",
   ERROR_PAGE_INVALID: "The pagination request is invalid.",

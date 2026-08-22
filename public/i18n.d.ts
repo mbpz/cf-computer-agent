@@ -6,6 +6,21 @@ export interface I18n {
   setLocale(locale: Locale): boolean;
   subscribe(subscriber: (locale: Locale) => void): () => void;
 }
+export interface TranslationBindingValue {
+  readonly key?: string;
+  readonly values?: TranslationValues | (() => TranslationValues);
+  toString(): string;
+}
+export interface TranslationBindings {
+  value(key: string, values?: TranslationValues | (() => TranslationValues)): TranslationBindingValue;
+  computed(render: () => string): TranslationBindingValue;
+  isValue(candidate: unknown): candidate is TranslationBindingValue;
+  text(target: { textContent: string | null }, value: unknown): void;
+  attribute(target: { setAttribute(name: string, value: string): void }, name: "aria-label" | "aria-description" | "placeholder" | "title", value: unknown): void;
+  property(target: Record<string, unknown>, name: "title", value: unknown): void;
+  effect(target: object, channel: string, update: () => void): void;
+  refresh(): void;
+}
 export const LOCALE_STORAGE_KEY: "memory-garden-locale";
 export const SUPPORTED_LOCALES: readonly Locale[];
 export function createI18n(options?: {
@@ -13,4 +28,7 @@ export function createI18n(options?: {
   storedLocale?: string;
   storage?: Pick<Storage, "getItem" | "setItem">;
 }): I18n;
+export function createTranslationBindings(
+  translate: (key: string, values?: TranslationValues) => string,
+): TranslationBindings;
 export function translateEnglish(key: string, values?: TranslationValues): string;

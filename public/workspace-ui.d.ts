@@ -16,12 +16,11 @@ export interface OperationGuard {
   isCurrent(value: number): boolean;
 }
 export function createOperationGuard(): OperationGuard;
-export function createLocaleRerenderController(
+export function createLocaleRefreshController(
   initialLocale: string,
   callbacks: {
-    closeDialogs(): void;
     applyLocale(locale: string): void;
-    rerenderRoute(): void;
+    refreshTranslations(): void;
   },
 ): Readonly<{ apply(locale: string): boolean }>;
 export interface ReplaceableOwner {

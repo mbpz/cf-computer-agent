@@ -9,7 +9,7 @@ export function renderSafeMarkdown(markdown) {
   const markdownFactory = globalThis.markdownit;
   const purifier = globalThis.DOMPurify;
   if (typeof markdownFactory !== "function" || !purifier || typeof purifier.sanitize !== "function") {
-    throw new Error("Local Markdown renderer dependencies are unavailable");
+    throw new Error("MARKDOWN_RENDERER_UNAVAILABLE");
   }
   const parser = markdownFactory({ html: false, linkify: true, breaks: false });
   parser.validateLink = isSafeLink;
