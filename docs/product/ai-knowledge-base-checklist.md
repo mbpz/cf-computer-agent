@@ -321,7 +321,7 @@
 M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从独立 fixture 导出的 34 条 parser 用例和中英文强/弱证据信心语料，并报告非零精确分母。评测计算 Recall@5、citation precision/recall/location、逐例答案/拒答/拒绝契约、错误引用和权限泄露。`test:m1` 契约直接包含 audit、index document、search policy、Markdown renderer 和 evidence confidence 等生产入口套件，删除任一必需套件会使发布契约失败。这不替代 M4/M5 的语义、同义词、表格、冲突和生产评测验收。
 
 - [x] `EVAL-001` P0/M1 解析 fixture 规范；状态：L/W；验收：输入字节、期望 Markdown、行数、warning、错误码和 metadata 由独立 fixture 定义，不调用生产 helper。证据：`test/fixtures/m1-parser-cases.ts`；命令：`rtk npm run test:m1`。
-- [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
+- [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。行为级 mutation matrix 另含 28 个具名 witness：每项以独立字面 fixture 通过公共生产函数/服务建立基线，再变异一个输入、策略或状态；每个变异必须只报告其精确 feature ID 和非空原因，零/缺失 witness 失败关闭。证据：`test/fixtures/m1-parser-cases.ts`、`test/fixtures/m1-mutation-matrix.ts`、`test/unit/m1-mutation-matrix.test.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
 - [ ] `EVAL-003` P0/M2 每种文件格式解析集；验收：正常/损坏/空/超限。
 - [ ] `EVAL-004` P0/M2 Chunk golden set；验收：heading/table/code/location 期望手工给定。
 - [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。

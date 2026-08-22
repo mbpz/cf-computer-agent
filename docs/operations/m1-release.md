@@ -425,7 +425,7 @@ The following local evidence must stay green for every candidate:
 
 | Boundary | Local evidence |
 | --- | --- |
-| Fixed M1 quality gate | `test/fixtures/m1-evaluation.ts`, `test/unit/m1-evaluation.test.ts`, `rtk npm run test:m1` |
+| Fixed M1 quality gate | `test/fixtures/m1-evaluation.ts`, `test/unit/m1-evaluation.test.ts`, `test/fixtures/m1-mutation-matrix.ts`, `test/unit/m1-mutation-matrix.test.ts`, `rtk npm run test:m1` |
 | Exact automation rejection probe | `scripts/automation-probe.mjs`, `scripts/automation-probe.test.mjs`, `rtk npm run test:ops:m1` |
 | Migration byte/ledger provenance | `scripts/verify-m1-migrations.mjs`, `scripts/m1-release-contract.test.mjs`, `rtk npm run verify:m1:migrations -- --files` |
 | D1 schema upgrade/preservation | `test/worker/migrations.test.ts` |

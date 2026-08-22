@@ -20,6 +20,7 @@ const requiredM1Suites = [
   "test/unit/search-policy.test.ts",
   "test/unit/markdown-renderer.test.ts",
   "test/unit/evidence-confidence.test.ts",
+  "test/unit/m1-mutation-matrix.test.ts",
 ];
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
