@@ -303,6 +303,15 @@ describe("M1 API authorization and request boundaries", () => {
 
     await expectApiError(memberApi("contributor", "/api/knowledge?unknown=x"), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&q=latency"), 400, "LIBRARY_REQUEST_INVALID");
+    const boundedTags = await memberApi(
+      "contributor",
+      "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a&tagId=tag-b&tagMode=or",
+    );
+    expect(boundedTags.status).toBe(200);
+    await expect(boundedTags.json()).resolves.toEqual({ items: [], degraded: false });
+    await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a&tagMode=x"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", `/api/knowledge/search?q=launch&spaceId=default&tagMode=or&${Array.from({ length: 9 }, (_, index) => `tagId=tag-${index}`).join("&")}`), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge?limit=51"), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/absent?spaceId=default"), 400, "LIBRARY_REQUEST_INVALID");

@@ -7,8 +7,8 @@ import {
   isCanonicalSearchTerm,
   searchComparisonKey,
   searchFtsEquivalenceKey,
-  tokenizeSearchText,
 } from "./lexical";
+import { buildSearchPresentation, SEARCH_POLICY } from "./search-policy";
 import type {
   CitationSource,
   KnowledgeListItem,
@@ -19,8 +19,15 @@ import type {
   SearchPage,
 } from "./types";
 
-const MAX_EXCERPT_CODE_POINTS = 240;
 const CURSOR_KEY = /^[a-f0-9]{64}$/u;
+const SEARCH_BM25_WEIGHTS_SQL = [
+  0,
+  SEARCH_POLICY.weights.title,
+  SEARCH_POLICY.weights.summary,
+  SEARCH_POLICY.weights.tags,
+  SEARCH_POLICY.weights.body,
+  SEARCH_POLICY.weights.code,
+].map((weight) => weight.toFixed(1)).join(", ");
 const visibleSearchStatusSql = `CASE
   WHEN current_index_job.state = 'failed_terminal' THEN 'failed'
   WHEN current_index_job.state = 'failed_retryable' THEN 'search_degraded'
@@ -38,6 +45,9 @@ export interface RepositorySearchRequest extends RepositoryKnowledgePageRequest 
   matchQuery: string;
   terms: string[];
   termKeys: string[];
+  tagIds?: string[];
+  tagMode?: "and" | "or";
+  policyVersion: number;
 }
 
 export interface AuthorizedRevisionChunk {
@@ -126,6 +136,11 @@ type SearchRow = {
   body: string;
   published_at: string;
   score: number;
+  match_title: number;
+  match_summary: number;
+  match_tags: number;
+  match_body: number;
+  match_code: number;
 };
 
 type CitationRow = {
@@ -148,6 +163,8 @@ interface ListCursor {
 interface SearchCursor {
   score: number;
   publishedAt: string;
+  knowledgeItemId: string;
+  revisionId: string;
   chunkId: string;
 }
 
@@ -226,17 +243,28 @@ export class LibraryRepository implements LibraryRepositoryPort {
     const cursor = request.cursor === undefined
       ? undefined
       : decodeSearchCursor(request.cursor, request.cursorKey);
-    const filters = filterSql(request, "k", "r");
+    const filters = searchFilterSql(request, "k", "r");
     const cursorSql = cursor === undefined ? "" : `
        WHERE score > ?
           OR (score = ? AND published_at < ?)
-          OR (score = ? AND published_at = ? AND chunk_id > ?)`;
+          OR (score = ? AND published_at = ? AND knowledge_item_id > ?)
+          OR (score = ? AND published_at = ? AND knowledge_item_id = ? AND revision_id > ?)
+          OR (score = ? AND published_at = ? AND knowledge_item_id = ? AND revision_id = ? AND chunk_id > ?)`;
     const cursorBindings = cursor === undefined ? [] : [
       cursor.score,
       cursor.score,
       cursor.publishedAt,
       cursor.score,
       cursor.publishedAt,
+      cursor.knowledgeItemId,
+      cursor.score,
+      cursor.publishedAt,
+      cursor.knowledgeItemId,
+      cursor.revisionId,
+      cursor.score,
+      cursor.publishedAt,
+      cursor.knowledgeItemId,
+      cursor.revisionId,
       cursor.chunkId,
     ];
     const rows = await this.db.prepare(
@@ -246,23 +274,28 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
            r.id AS revision_id, c.id AS chunk_id, r.title, c.heading_path,
            c.start_line, c.end_line, c.body, r.published_at,
-           bm25(chunks_fts, 0.0, 8.0, 6.0, 5.0, 1.0, 1.0) AS score
+           bm25(chunks_fts, ${SEARCH_BM25_WEIGHTS_SQL}) AS score,
+           instr(highlight(chunks_fts, 1, char(1), char(2)), char(1)) > 0 AS match_title,
+           instr(highlight(chunks_fts, 2, char(1), char(2)), char(1)) > 0 AS match_summary,
+           instr(highlight(chunks_fts, 3, char(1), char(2)), char(1)) > 0 AS match_tags,
+           instr(highlight(chunks_fts, 4, char(1), char(2)), char(1)) > 0 AS match_body,
+           instr(highlight(chunks_fts, 5, char(1), char(2)), char(1)) > 0 AS match_code
          FROM chunks_fts
-         JOIN chunks c ON c.id = chunks_fts.chunk_id
+         JOIN chunks c ON c.rowid = chunks_fts.rowid AND c.id = chunks_fts.chunk_id
          JOIN revisions r ON r.id = c.revision_id
          JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.current_revision_id = r.id
-         LEFT JOIN jobs current_index_job
-           ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
+         JOIN jobs current_index_job
+           ON current_index_job.kind = 'index_revision'
+             AND current_index_job.resource_id = r.id AND current_index_job.state = 'completed'
          JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
          CROSS JOIN authorized_member am
          WHERE chunks_fts MATCH ?
            AND k.status = 'active' AND k.search_status = 'indexed'
-           AND (current_index_job.state IS NULL OR current_index_job.state = 'completed')
            AND (r.visibility = 'shared' OR am.role = 'admin')
            ${filters.sql}
        )
        SELECT * FROM ranked${cursorSql}
-       ORDER BY score ASC, published_at DESC, chunk_id ASC
+       ORDER BY score ASC, published_at DESC, knowledge_item_id ASC, revision_id ASC, chunk_id ASC
        LIMIT ?`,
     ).bind(
       scope.memberId,
@@ -280,10 +313,13 @@ export class LibraryRepository implements LibraryRepositoryPort {
       degraded,
       ...(rows.results.length > request.limit && last ? {
         nextCursor: encodeOpaqueCursor({
-          v: 1,
+          v: 2,
           score: last.score,
           publishedAt: last.published_at,
+          knowledgeItemId: last.knowledge_item_id,
+          revisionId: last.revision_id,
           chunkId: last.chunk_id,
+          policyVersion: SEARCH_POLICY.version,
           key: request.cursorKey,
         }),
       } : {}),
@@ -394,9 +430,9 @@ export class LibraryRepository implements LibraryRepositoryPort {
 
   private async hasDegraded(
     scope: LibraryScope,
-    filters: LibraryFilters,
+    filters: LibraryFilters & Partial<Pick<RepositorySearchRequest, "tagIds" | "tagMode">>,
   ): Promise<boolean> {
-    const selected = filterSql(filters, "k", "r");
+    const selected = searchFilterSql(filters, "k", "r");
     const row = await this.db.prepare(
       `WITH authorized_member AS (
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
@@ -415,6 +451,48 @@ export class LibraryRepository implements LibraryRepositoryPort {
   }
 }
 
+function searchFilterSql(
+  filters: LibraryFilters & Partial<Pick<RepositorySearchRequest, "tagIds" | "tagMode">>,
+  itemAlias: string,
+  revisionAlias: string,
+): { sql: string; bindings: Array<string | number> } {
+  const base = filterSql(filters, itemAlias, revisionAlias);
+  if (!filters.tagIds || !filters.tagMode || filters.tagIds.length === 0 || filters.spaceId === undefined) {
+    return base;
+  }
+  const placeholders = filters.tagIds.map(() => "?").join(", ");
+  const requestedRows = filters.tagIds.map((_, index) => (
+    index === 0 ? "SELECT ? AS id" : "SELECT ?"
+  )).join(" UNION ALL ");
+  const validTags = `NOT EXISTS (
+    SELECT 1 FROM (${requestedRows}) requested_tag
+    LEFT JOIN tags active_tag
+      ON active_tag.id = requested_tag.id
+        AND active_tag.space_id = ? AND active_tag.status = 'active'
+    WHERE active_tag.id IS NULL
+  )`;
+  const membership = filters.tagMode === "or" ? `EXISTS (
+    SELECT 1 FROM revision_tags selected_tag
+    WHERE selected_tag.revision_id = ${revisionAlias}.id
+      AND selected_tag.tag_id IN (${placeholders})
+  )` : `${revisionAlias}.id IN (
+    SELECT selected_tag.revision_id FROM revision_tags selected_tag
+    WHERE selected_tag.tag_id IN (${placeholders})
+    GROUP BY selected_tag.revision_id
+    HAVING count(DISTINCT selected_tag.tag_id) = ?
+  )`;
+  return {
+    sql: `${base.sql} AND ${validTags} AND ${membership}`,
+    bindings: [
+      ...base.bindings,
+      ...filters.tagIds,
+      filters.spaceId,
+      ...filters.tagIds,
+      ...(filters.tagMode === "and" ? [filters.tagIds.length] : []),
+    ],
+  };
+}
+
 function filterSql(filters: LibraryFilters, itemAlias: string, revisionAlias: string): {
   sql: string;
   bindings: string[];
@@ -427,6 +505,13 @@ function filterSql(filters: LibraryFilters, itemAlias: string, revisionAlias: st
   }
   if (filters.collectionId !== undefined) {
     clauses.push(`${itemAlias}.collection_id = ?`);
+    bindings.push(filters.collectionId);
+    clauses.push(`EXISTS (
+      SELECT 1 FROM collections selected_collection
+      WHERE selected_collection.id = ?
+        AND selected_collection.space_id = ${itemAlias}.space_id
+        AND selected_collection.status = 'active'
+    )`);
     bindings.push(filters.collectionId);
   }
   if (filters.tagId !== undefined) {
@@ -458,6 +543,13 @@ function mapKnowledge(row: KnowledgeRow): KnowledgeListItem {
 }
 
 function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
+  const presentation = buildSearchPresentation(row.body, termKeys, [
+    ...(row.match_title === 1 ? ["title"] : []),
+    ...(row.match_summary === 1 ? ["summary"] : []),
+    ...(row.match_tags === 1 ? ["tags"] : []),
+    ...(row.match_body === 1 ? ["body"] : []),
+    ...(row.match_code === 1 ? ["code"] : []),
+  ]);
   return {
     citationId: encodeCitationKey(row.revision_id, row.chunk_id),
     knowledgeItemId: row.knowledge_item_id,
@@ -469,33 +561,10 @@ function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
     headingPath: parseStringArray(row.heading_path),
     startLine: row.start_line,
     endLine: row.end_line,
-    excerpt: safeExcerpt(row.body, termKeys),
+    ...presentation,
     score: row.score,
     publishedAt: row.published_at,
   };
-}
-
-function safeExcerpt(body: string, termKeys: string[]): string {
-  const inert = body.normalize("NFKC").replace(/\p{Cc}/gu, " ").replace(/\s+/gu, " ").trim();
-  const tokenized = tokenizeSearchText(inert);
-  const points = [...tokenized.normalizedText];
-  if (points.length <= MAX_EXCERPT_CODE_POINTS) return inert;
-  let match = 0;
-  for (let index = termKeys.length - 1; index >= 0; index -= 1) {
-    const token = tokenized.tokens.find((candidate) => (
-      candidate.comparisonKey === termKeys[index]
-    ));
-    if (!token) continue;
-    match = token.start;
-    break;
-  }
-  let start = Math.max(0, match - 60);
-  let prefix = start > 0 ? "…" : "";
-  const suffix = start + MAX_EXCERPT_CODE_POINTS < points.length ? "…" : "";
-  const budget = MAX_EXCERPT_CODE_POINTS - [...prefix].length - [...suffix].length;
-  if (start + budget > points.length) start = Math.max(0, points.length - budget);
-  prefix = start > 0 ? "…" : "";
-  return `${prefix}${points.slice(start, start + budget).join("")}${suffix}`;
 }
 
 function decodeListCursor(cursor: string, key: string): ListCursor {
@@ -517,11 +586,20 @@ function decodeSearchCursor(cursor: string, key: string): SearchCursor {
     const decoded = decodeOpaqueCursor(cursor);
     if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
     const record = decoded as Record<string, unknown>;
-    if (Object.keys(record).length !== 5 || record.v !== 1 || record.key !== key
+    if (Object.keys(record).length !== 8 || record.v !== 2 || record.policyVersion !== SEARCH_POLICY.version
+      || record.key !== key
       || typeof record.score !== "number" || !Number.isFinite(record.score)
       || typeof record.publishedAt !== "string" || !isCanonicalTimestamp(record.publishedAt)
+      || typeof record.knowledgeItemId !== "string" || record.knowledgeItemId.length === 0
+      || typeof record.revisionId !== "string" || record.revisionId.length === 0
       || typeof record.chunkId !== "string" || record.chunkId.length === 0) throw new Error();
-    return { score: record.score, publishedAt: record.publishedAt, chunkId: record.chunkId };
+    return {
+      score: record.score,
+      publishedAt: record.publishedAt,
+      knowledgeItemId: record.knowledgeItemId,
+      revisionId: record.revisionId,
+      chunkId: record.chunkId,
+    };
   } catch {
     throw invalidPageCursor();
   }
@@ -529,7 +607,8 @@ function decodeSearchCursor(cursor: string, key: string): SearchCursor {
 
 function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   assertRepositoryPageRequest(request);
-  if (!Array.isArray(request.terms)
+  if (request.policyVersion !== SEARCH_POLICY.version
+    || !Array.isArray(request.terms)
     || !Array.isArray(request.termKeys)
     || request.terms.length < 1
     || request.terms.length > 32
@@ -542,6 +621,18 @@ function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
     || request.termKeys.some((key, index) => key !== searchComparisonKey(request.terms[index]!))
     || request.matchQuery !== buildSearchMatchQuery(request.terms)) {
     throw new AppError("SEARCH_QUERY_INVALID", "Search query is invalid", 400);
+  }
+  if ((request.tagIds === undefined) !== (request.tagMode === undefined)
+    || (request.tagIds !== undefined && (
+      request.spaceId === undefined
+      || request.tagIds.length < 1
+      || request.tagIds.length > SEARCH_POLICY.maxTags
+      || request.tagIds.some((tagId) => !/^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(tagId))
+      || new Set(request.tagIds).size !== request.tagIds.length
+      || request.tagIds.some((tagId, index) => index > 0 && request.tagIds![index - 1]! >= tagId)
+      || (request.tagMode !== "and" && request.tagMode !== "or")
+    ))) {
+    throw new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
   }
 }
 

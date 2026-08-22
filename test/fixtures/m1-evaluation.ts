@@ -19,6 +19,31 @@ import type {
   SearchHit,
   SearchPage,
 } from "../../src/library/types";
+export { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "./m1-search-ranking";
+
+export const M1_FENCE_FIELD_EXPECTATIONS = Object.freeze([
+  Object.freeze({
+    id: "markdown-prose-before-fence",
+    sourceKind: "markdown" as const,
+    normalizedMarkdown: "Operational prose.\n\n```ts\nconst getUserByID = true;\n```\n",
+    expectedBody: "Operational prose.",
+    expectedIndexField: "body" as const,
+  }),
+  Object.freeze({
+    id: "markdown-fenced-code",
+    sourceKind: "markdown" as const,
+    normalizedMarkdown: "Operational prose.\n\n```ts\nconst getUserByID = true;\n```\n",
+    expectedBody: "```ts\nconst getUserByID = true;\n```",
+    expectedIndexField: "code" as const,
+  }),
+  Object.freeze({
+    id: "standalone-code",
+    sourceKind: "code" as const,
+    normalizedMarkdown: "```ts\nconst SESSION_COOKIE = 'secure';\n```\n",
+    expectedBody: "```ts\nconst SESSION_COOKIE = 'secure';\n```",
+    expectedIndexField: "code" as const,
+  }),
+]);
 
 export type M1EvaluationCoverage =
   | "chinese"
@@ -563,9 +588,20 @@ function toSearchHit(entry: EvaluationDocument, termKeys: string[], includeTags:
     : new Set<string>();
   const bodyKeys = new Set(tokenizeSearchText(entry.chunk.body).tokens.map((token) => token.comparisonKey));
   const weight = termKeys.reduce((total, key) => total
-    + (titleKeys.has(key) ? 100 : 0)
-    + (tagKeys.has(key) ? 10 : 0)
+    + (titleKeys.has(key) ? 8 : 0)
+    + (tagKeys.has(key) ? 6 : 0)
     + (bodyKeys.has(key) ? 1 : 0), 1);
+  const matchedFields = [
+    ...(termKeys.some((key) => titleKeys.has(key)) ? ["title" as const] : []),
+    ...(termKeys.some((key) => tagKeys.has(key)) ? ["tags" as const] : []),
+    ...(termKeys.some((key) => bodyKeys.has(key)) ? ["body" as const] : []),
+  ];
+  const highlights = tokenizeSearchText(entry.chunk.body).tokens
+    .filter((token) => termKeys.includes(token.comparisonKey))
+    .map((token) => ({ start: token.start, end: token.end }))
+    .filter((range, index, ranges) => index === 0
+      || range.start >= ranges[index - 1]!.end)
+    .slice(0, 8);
   return {
     citationId: citationId(entry),
     knowledgeItemId: entry.id,
@@ -578,6 +614,8 @@ function toSearchHit(entry: EvaluationDocument, termKeys: string[], includeTags:
     startLine: entry.chunk.startLine,
     endLine: entry.chunk.endLine,
     excerpt: entry.chunk.body,
+    matchedFields,
+    highlights,
     score: -weight,
     publishedAt: entry.publishedAt,
   };

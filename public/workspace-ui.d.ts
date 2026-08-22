@@ -195,6 +195,10 @@ export interface KnowledgeSearchViewItem {
   endLine: number;
   location: string;
   excerpt: string;
+  matchedFields: Array<"title" | "summary" | "tags" | "body" | "code">;
+  matchedFieldLabels: string[];
+  highlights: Array<Readonly<{ start: number; end: number }>>;
+  highlightSegments: Array<Readonly<{ text: string; highlighted: boolean }>>;
   publishedAt: string;
   citationHref: string;
 }

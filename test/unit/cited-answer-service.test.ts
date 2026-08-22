@@ -20,6 +20,8 @@ const firstHit: SearchHit = {
   startLine: 3,
   endLine: 5,
   excerpt: "Launch latency was caused by a compressed test window.",
+  matchedFields: ["body"],
+  highlights: [],
   score: -0.0000038,
   publishedAt: "2026-01-01T00:00:00.000Z",
 };

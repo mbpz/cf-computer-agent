@@ -545,7 +545,13 @@ export function renderKnowledgeSearch(model) {
   const input = safeRecord(model);
   const items = safeArray(input.items).map((candidate) => {
     const item = safeRecord(candidate);
-    return `<li><a href="${escapeHtml(item.citationHref)}">${escapeHtml(item.title)}</a><p>${escapeHtml(item.location)}</p><p>${escapeHtml(item.excerpt)}</p></li>`;
+    const matched = safeArray(item.matchedFieldLabels).map(safeString).filter(Boolean).join(", ");
+    const excerpt = safeArray(item.highlightSegments).map((candidate) => {
+      const segment = safeRecord(candidate);
+      const text = escapeHtml(segment.text);
+      return segment.highlighted === true ? `<mark>${text}</mark>` : text;
+    }).join("");
+    return `<li><a href="${escapeHtml(item.citationHref)}">${escapeHtml(item.title)}</a><p>${escapeHtml(item.location)}</p>${matched ? `<p>${escapeHtml(matched)}</p>` : ""}<p>${excerpt}</p></li>`;
   }).join("");
   return `<section${input.degraded === true ? ' data-degraded="true"' : ""}><ul>${items}</ul></section>`;
 }
@@ -637,6 +643,12 @@ export function knowledgeQuery(path, value) {
     } else if (safeString(candidate)) {
       query.set(key, safeString(candidate));
     }
+  }
+  const tagIds = safeArray(input.tagIds).map(safeString).filter(Boolean).slice(0, 8);
+  if (tagIds.length > 0 && (input.tagMode === "and" || input.tagMode === "or")) {
+    query.delete("tagId");
+    for (const tagId of tagIds) query.append("tagId", tagId);
+    query.set("tagMode", input.tagMode);
   }
   const serialized = query.toString();
   return `${path}${serialized ? `?${serialized}` : ""}`;
@@ -803,6 +815,12 @@ function searchHitModel(candidate) {
   const headingPath = safeArray(hit.headingPath).map(safeString).filter(Boolean);
   const startLine = safeLine(hit.startLine);
   const endLine = safeLine(hit.endLine, startLine);
+  const excerpt = safeString(hit.excerpt);
+  const matchedFields = ["title", "summary", "tags", "body", "code"].filter((field) => (
+    safeArray(hit.matchedFields).includes(field)
+  ));
+  const matchedFieldLabels = matchedFields.map(searchMatchedFieldLabel);
+  const highlights = normalizeHighlightRanges(hit.highlights, [...excerpt].length);
   return Object.freeze({
     citationId: safeString(hit.citationId),
     knowledgeItemId,
@@ -813,10 +831,57 @@ function searchHitModel(candidate) {
     startLine,
     endLine,
     location: `${headingPath.join(" › ") || "Document"} · ${lineLabel(startLine, endLine)}`,
-    excerpt: safeString(hit.excerpt),
+    excerpt,
+    matchedFields,
+    matchedFieldLabels,
+    highlights,
+    highlightSegments: highlightSegments(excerpt, highlights),
     publishedAt: safeString(hit.publishedAt),
     citationHref: readerHref(knowledgeItemId, revisionId, chunkId),
   });
+}
+
+function searchMatchedFieldLabel(field) {
+  if (field === "title") return "Title";
+  if (field === "summary") return "Summary";
+  if (field === "tags") return "Tags";
+  if (field === "code") return "Code";
+  return "Body";
+}
+
+function normalizeHighlightRanges(value, excerptLength) {
+  const ranges = safeArray(value).map(safeRecord).filter((range) => (
+    Number.isSafeInteger(range.start) && Number.isSafeInteger(range.end)
+    && range.start >= 0 && range.start < range.end && range.end <= excerptLength
+  )).map((range) => ({ start: range.start, end: range.end }))
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const accepted = [];
+  for (const range of ranges) {
+    const prior = accepted.at(-1);
+    if (prior && range.start < prior.end) continue;
+    if (accepted.length === 8) break;
+    accepted.push(Object.freeze(range));
+  }
+  return accepted;
+}
+
+function highlightSegments(excerpt, ranges) {
+  const points = [...excerpt];
+  const segments = [];
+  let offset = 0;
+  for (const range of ranges) {
+    if (range.start > offset) segments.push(Object.freeze({
+      text: points.slice(offset, range.start).join(""), highlighted: false,
+    }));
+    segments.push(Object.freeze({
+      text: points.slice(range.start, range.end).join(""), highlighted: true,
+    }));
+    offset = range.end;
+  }
+  if (offset < points.length || segments.length === 0) segments.push(Object.freeze({
+    text: points.slice(offset).join(""), highlighted: false,
+  }));
+  return segments;
 }
 
 function readerHref(knowledgeItemId, revisionId, chunkId) {

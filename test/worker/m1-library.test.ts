@@ -16,6 +16,7 @@ import { LibraryRepository } from "../../src/library/repository";
 import { encodeCitationId, LibraryService } from "../../src/library/service";
 import type { LibraryScope } from "../../src/library/types";
 import { MIGRATIONS } from "../fixtures/d1";
+import { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "../fixtures/m1-search-ranking";
 
 const contributor: LibraryScope = { memberId: "member-1", role: "contributor" };
 const admin: LibraryScope = { memberId: "admin-1", role: "admin" };
@@ -342,6 +343,127 @@ describe("M1 permission-scoped library", () => {
     await expect(service.search(contributor, { query: "obsolete_unique_token", limit: 20 })).resolves.toMatchObject({
       items: [],
     });
+  });
+
+  it("uses the fixed field weights and returns exact server-derived match explanations", async () => {
+    await seedKnowledge({
+      id: "knowledge-rank-title", revisionId: "revision-rank-title", title: "rankterm title",
+      visibility: "shared", body: "literal <script>alert(1)</script> 😀 filler",
+    });
+    await seedKnowledge({
+      id: "knowledge-rank-tags", revisionId: "revision-rank-tags", title: "Tag document",
+      visibility: "shared", body: "literal tag body", searchTags: "rankterm",
+    });
+    await seedKnowledge({
+      id: "knowledge-rank-summary", revisionId: "revision-rank-summary", title: "Summary document",
+      visibility: "shared", summary: "rankterm summary", body: "literal summary body",
+    });
+    await seedKnowledge({
+      id: "knowledge-rank-code", revisionId: "revision-rank-code", title: "Code document",
+      visibility: "shared", body: "😀 const rankterm = '<img onerror=alert(1)>';", indexField: "code",
+      searchBody: "const rankterm img onerror alert",
+    });
+    await seedKnowledge({
+      id: "knowledge-rank-body", revisionId: "revision-rank-body", title: "Body document",
+      visibility: "shared", body: "body rankterm evidence", searchBody: "body rankterm evidence",
+    });
+
+    const page = await serviceWithContent().search(contributor, { query: "rankterm", limit: 20 });
+
+    expect(page.items.map((hit) => hit.knowledgeItemId)).toEqual([
+      "knowledge-rank-title",
+      "knowledge-rank-tags",
+      "knowledge-rank-summary",
+      "knowledge-rank-code",
+      "knowledge-rank-body",
+    ]);
+    expect(page.items.map((hit) => hit.matchedFields)).toEqual([
+      ["title"], ["tags"], ["summary"], ["code"], ["body"],
+    ]);
+    const codeHit = page.items[3]!;
+    expect(codeHit.excerpt).toBe("😀 const rankterm = '<img onerror=alert(1)>';");
+    expect(codeHit.highlights).toEqual([{ start: 8, end: 16 }]);
+    expect(codeHit.excerpt).not.toContain("<mark>");
+  });
+
+  it("meets every exact top-five expectation in the independent 30-Revision corpus", async () => {
+    expect(M1_SEARCH_RANKING_DOCUMENTS).toHaveLength(30);
+    for (const document of M1_SEARCH_RANKING_DOCUMENTS) {
+      await seedKnowledge({
+        ...document,
+        revisionId: `revision-${document.id}`,
+        visibility: document.visibility ?? "shared",
+      });
+    }
+    await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'space-two'").run();
+    const service = serviceWithContent();
+
+    for (const rankingCase of M1_SEARCH_RANKING_CASES) {
+      const page = await service.search(contributor, { query: rankingCase.query, limit: 5 });
+      expect(page.items.map((hit) => hit.knowledgeItemId)).toEqual(rankingCase.expectedTopFive);
+      expect(page.items.map((hit) => hit.matchedFields)).toEqual(rankingCase.expectedMatchedFields);
+      expect(page.items.map((hit) => hit.highlights)).toEqual(rankingCase.expectedHighlights);
+    }
+  });
+
+  it("applies bounded active same-Space Tag AND/OR filters before ranking", async () => {
+    await seedTag("tag-a", "default", "active");
+    await seedTag("tag-b", "default", "active");
+    await seedTag("tag-disabled", "default", "disabled");
+    await seedTag("tag-other", "space-two", "active");
+    await seedKnowledge({ id: "knowledge-tag-a", revisionId: "revision-tag-a", title: "A", visibility: "shared", body: "filterterm", tagIds: ["tag-a"] });
+    await seedKnowledge({ id: "knowledge-tag-b", revisionId: "revision-tag-b", title: "B", visibility: "shared", body: "filterterm", tagIds: ["tag-b"] });
+    await seedKnowledge({ id: "knowledge-tag-ab", revisionId: "revision-tag-ab", title: "AB", visibility: "shared", body: "filterterm", tagIds: ["tag-a", "tag-b"] });
+
+    const service = serviceWithContent();
+    const ids = async (tagIds: string[], tagMode: "and" | "or") => (
+      (await service.search(contributor, { query: "filterterm", spaceId: "default", tagIds, tagMode })).items
+        .map((hit) => hit.knowledgeItemId).sort()
+    );
+
+    await expect(ids(["tag-a", "tag-b"], "and")).resolves.toEqual(["knowledge-tag-ab"]);
+    await expect(ids(["tag-a", "tag-b"], "or")).resolves.toEqual([
+      "knowledge-tag-a", "knowledge-tag-ab", "knowledge-tag-b",
+    ]);
+    await expect(ids(["tag-a", "tag-disabled"], "and")).resolves.toEqual([]);
+    await expect(ids(["tag-other"], "or")).resolves.toEqual([]);
+    await expect(ids(["tag-absent"], "or")).resolves.toEqual([]);
+
+    const first = await service.search(contributor, {
+      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "or", limit: 1,
+    });
+    expect(first.nextCursor).toBeDefined();
+    await expect(service.search(contributor, {
+      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "or",
+      limit: 2, cursor: first.nextCursor,
+    })).resolves.toMatchObject({ items: expect.any(Array) });
+    await expect(service.search(contributor, {
+      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "and",
+      limit: 1, cursor: first.nextCursor,
+    })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+  });
+
+  it("fails closed for disabled, absent, and cross-Space Collection filters", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-active', 'default', NULL, 'Active', '', 'active', 1, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-disabled', 'default', NULL, 'Disabled', '', 'disabled', 2, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-other', 'space-two', NULL, 'Other', '', 'active', 1, ?, ?)").bind(now, now),
+    ]);
+    await seedKnowledge({ id: "knowledge-collection", revisionId: "revision-collection", title: "Collection", visibility: "shared", body: "collectionfilter" });
+    await env.DB.prepare("UPDATE knowledge_items SET collection_id = 'collection-active' WHERE id = 'knowledge-collection'").run();
+    const service = serviceWithContent();
+
+    await expect(service.search(contributor, {
+      query: "collectionfilter", spaceId: "default", collectionId: "collection-active",
+    })).resolves.toMatchObject({ items: [expect.objectContaining({ knowledgeItemId: "knowledge-collection" })] });
+
+    for (const collectionId of ["collection-disabled", "collection-other", "collection-absent"]) {
+      await env.DB.prepare("UPDATE knowledge_items SET collection_id = ? WHERE id = 'knowledge-collection'")
+        .bind(collectionId === "collection-absent" ? null : collectionId).run();
+      await expect(service.search(contributor, {
+        query: "collectionfilter", spaceId: "default", collectionId,
+      })).resolves.toEqual({ items: [], degraded: false });
+    }
   });
 
   it("centers excerpts on exact lexical tokens instead of prefixed substrings", async () => {
@@ -936,10 +1058,10 @@ describe("M1 permission-scoped library", () => {
       .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
   });
 
-  it("uses selective indexes for an empty Space page and an empty degraded scan at scale shape", async () => {
+  it("uses selective Space, Collection, and Tag plans without full-table scans at 10,000-row shape", async () => {
     await env.DB.prepare(
       `WITH RECURSIVE sequence(value) AS (
-         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 500
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 10000
        )
        INSERT INTO knowledge_items (
          id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at
@@ -950,11 +1072,22 @@ describe("M1 permission-scoped library", () => {
     const prepared: string[] = [];
     const database = capturePreparedSql(env.DB, prepared);
     const service = new LibraryService(new LibraryRepository(database), noContentReader);
+    await seedTag("tag-plan-a", "default", "active");
+    await seedTag("tag-plan-b", "default", "active");
 
     await expect(service.list(contributor, { spaceId: "space-empty", limit: 20 }))
       .resolves.toEqual({ items: [] });
     await expect(service.search(contributor, { query: "not-present", spaceId: "space-empty", limit: 20 }))
       .resolves.toEqual({ items: [], degraded: false });
+    await service.search(contributor, {
+      query: "planterm", spaceId: "default", collectionId: "collection-plan",
+    });
+    await service.search(contributor, {
+      query: "planterm", spaceId: "default", tagIds: ["tag-plan-a", "tag-plan-b"], tagMode: "and",
+    });
+    await service.search(contributor, {
+      query: "planterm", spaceId: "default", tagIds: ["tag-plan-a", "tag-plan-b"], tagMode: "or",
+    });
 
     const listSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC"));
     const degradedSql = prepared.find((sql) => sql.includes("k.search_status = 'search_degraded'"));
@@ -964,6 +1097,28 @@ describe("M1 permission-scoped library", () => {
     const degradedPlan = await explain(degradedSql!, ["member-1", "contributor", "space-empty"]);
     expect(listPlan).toContain("knowledge_items_space_page");
     expect(degradedPlan).toContain("knowledge_items_degraded_scope");
+    const searchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts"));
+    expect(searchSql).toHaveLength(4);
+    const collectionPlan = await explain(searchSql[1]!, [
+      "member-1", "contributor", "\"planterm\"", "default", "collection-plan", "collection-plan", 21,
+    ]);
+    const andPlan = await explain(searchSql[2]!, [
+      "member-1", "contributor", "\"planterm\"", "default",
+      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 2, 21,
+    ]);
+    const orPlan = await explain(searchSql[3]!, [
+      "member-1", "contributor", "\"planterm\"", "default",
+      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
+    ]);
+    expect(andPlan).toContain("revision_tags_tag_revision");
+    expect(orPlan).toContain("sqlite_autoindex_revision_tags_1");
+    expect(andPlan).toContain("sqlite_autoindex_tags_1");
+    expect(orPlan).toContain("sqlite_autoindex_tags_1");
+    for (const plan of [collectionPlan, andPlan, orPlan]) {
+      expect(plan).toContain("SCAN chunks_fts VIRTUAL TABLE INDEX");
+      expect(plan).toContain("knowledge_items_current_revision_index_status");
+      expect(plan).not.toMatch(/SCAN knowledge_items(?:\s|$)/u);
+    }
   });
 
   it("lets only D1-authorized stored path/hash values reach the real published-content reader", async () => {
@@ -1079,6 +1234,7 @@ describe("M1 permission-scoped library", () => {
         matchQuery: "\"secret\"",
         terms: ["secret"],
         termKeys: ["SECRET"],
+        policyVersion: 2,
         limit: 20,
         cursorKey: "a".repeat(64),
       })).resolves.toEqual({ items: [], degraded: false });
@@ -1133,6 +1289,10 @@ interface SeedKnowledgeInput {
   searchBody?: string;
   index?: boolean;
   contentSha256?: string;
+  summary?: string;
+  searchTags?: string;
+  indexField?: "body" | "code";
+  tagIds?: string[];
 }
 
 async function seedKnowledge(input: SeedKnowledgeInput): Promise<void> {
@@ -1158,16 +1318,32 @@ async function seedKnowledge(input: SeedKnowledgeInput): Promise<void> {
       "INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES (?, ?, NULL, NULL, ?, ?, ?, ?)",
     ).bind(input.id, spaceId, input.status ?? "active", input.searchStatus ?? "indexed", now, now),
     env.DB.prepare(
-      "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?, '[]', ?, 'admin-1', ?)",
-    ).bind(input.revisionId, input.id, sourceVersionId, `/workspace/published/${spaceId}/${input.id}/${input.revisionId}.md`, contentSha256, input.title, input.visibility, now),
+      "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, summary, tags_json, visibility, published_by, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin-1', ?)",
+    ).bind(input.revisionId, input.id, sourceVersionId, `/workspace/published/${spaceId}/${input.id}/${input.revisionId}.md`, contentSha256, input.title, input.summary ?? "", JSON.stringify(input.tagIds ?? []), input.visibility, now),
     env.DB.prepare("UPDATE knowledge_items SET current_revision_id = ? WHERE id = ?").bind(input.revisionId, input.id),
     env.DB.prepare(
-      "INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body) VALUES (?, ?, 0, '[\"Section\"]', 3, 3, ?, ?, '', ?)",
-    ).bind(`${input.revisionId}-chunk-0`, input.revisionId, body, input.title, searchBody),
+      "INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field) VALUES (?, ?, 0, '[\"Section\"]', 3, 3, ?, ?, ?, ?, ?)",
+    ).bind(`${input.revisionId}-chunk-0`, input.revisionId, body, input.title, input.searchTags ?? "", searchBody, input.indexField ?? "body"),
+    ...((input.tagIds ?? []).map((tagId) => env.DB.prepare(
+      "INSERT INTO revision_tags (revision_id, tag_id) VALUES (?, ?)",
+    ).bind(input.revisionId, tagId))),
+    ...(input.searchStatus === "search_degraded" ? [] : [env.DB.prepare(
+      "INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, created_at, updated_at) VALUES (?, 'index_revision', ?, 'completed', 1, ?, ?, ?)",
+    ).bind(`job-${input.revisionId}`, input.revisionId, now, now, now)]),
     ...(input.index === false ? [] : [env.DB.prepare(
-      "INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES (?, ?, '', ?)",
-    ).bind(`${input.revisionId}-chunk-0`, input.title, searchBody)]),
+      `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT rowid, id, ?, ?, ?,
+         CASE WHEN index_field = 'body' THEN ? ELSE '' END,
+         CASE WHEN index_field = 'code' THEN ? ELSE '' END
+       FROM chunks WHERE id = ?`,
+    ).bind(input.title, input.summary ?? "", input.searchTags ?? "", searchBody, searchBody, `${input.revisionId}-chunk-0`)]),
   ]);
+}
+
+async function seedTag(id: string, spaceId: string, status: "active" | "disabled"): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(id, spaceId, id, id, status, now, now).run();
 }
 
 async function addCurrentRevision(input: Omit<SeedKnowledgeInput, "id" | "spaceId" | "status" | "searchStatus"> & {

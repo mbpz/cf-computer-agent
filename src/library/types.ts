@@ -32,6 +32,8 @@ export interface KnowledgePageRequest extends LibraryFilters {
 
 export interface SearchRequest extends KnowledgePageRequest {
   query: string;
+  tagIds?: string[];
+  tagMode?: "and" | "or";
 }
 
 export interface KnowledgeListItem {
@@ -96,6 +98,8 @@ export interface SearchHit {
   startLine: number;
   endLine: number;
   excerpt: string;
+  matchedFields: SearchMatchedField[];
+  highlights: SearchHighlightRange[];
   score: number;
   publishedAt: string;
 }

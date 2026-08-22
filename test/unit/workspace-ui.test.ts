@@ -357,6 +357,14 @@ describe("M1 trusted knowledge view models", () => {
         startLine: 7,
         endLine: 11,
         excerpt: "<img src=x onerror=alert(1)><script>alert(2)</script>",
+        matchedFields: ["code", "title", "code", "unknown"],
+        highlights: [
+          { start: 28, end: 36 },
+          { start: 0, end: 4 },
+          { start: 2, end: 10 },
+          { start: -1, end: 2 },
+          { start: 36, end: 1_000 },
+        ],
         score: -1,
         publishedAt: "2026-08-22T00:00:00.000Z",
         normalizedPath: "/workspace/published/private.md",
@@ -374,10 +382,19 @@ describe("M1 trusted knowledge view models", () => {
         title: "Runbook",
         location: "Launch › Rollback · lines 7–11",
         citationHref: "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
+        matchedFields: ["title", "code"],
+        matchedFieldLabels: ["Title", "Code"],
+        highlightSegments: [
+          { text: "<img", highlighted: true },
+          { text: " src=x onerror=alert(1)>", highlighted: false },
+          { text: "<script>", highlighted: true },
+          { text: "alert(2)</script>", highlighted: false },
+        ],
       }],
     });
     expect(JSON.stringify(model)).not.toMatch(/workspace\/published|secret-hash|source-secret/);
     expect(renderKnowledgeSearch(model)).toContain("&lt;script&gt;");
+    expect(renderKnowledgeSearch(model)).toContain("<mark>&lt;script&gt;</mark>");
     expect(renderKnowledgeSearch(model)).not.toMatch(/<script|onerror=/i);
   });
 
@@ -1063,6 +1080,10 @@ describe("M1 browser request allowlists", () => {
       role: "admin",
       path: "/workspace/private.md",
     })).toBe("/api/knowledge/search?q=launch+latency&limit=20&cursor=next&spaceId=space-1&collectionId=collection-1&tagId=tag-1");
+
+    expect(knowledgeQuery("/api/knowledge/search", {
+      q: "launch", spaceId: "space-1", tagIds: ["tag-b", "tag-a"], tagMode: "or",
+    })).toBe("/api/knowledge/search?q=launch&spaceId=space-1&tagId=tag-b&tagId=tag-a&tagMode=or");
   });
 
   it("loads a requested historical Revision directly without first probing the current detail", () => {

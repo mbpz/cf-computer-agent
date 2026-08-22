@@ -210,6 +210,52 @@ describe("LibraryService", () => {
     expect(requests[0]?.cursorKey).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("canonicalizes bounded multi-Tag filters and binds the explicit mode and policy", async () => {
+    const requests: RepositorySearchRequest[] = [];
+    const repository = repositoryFixture({
+      async search(_scope, request) { requests.push(request); return { items: [], degraded: false }; },
+    });
+    const service = new LibraryService(repository, noContentReader);
+
+    await service.search(contributor, {
+      query: "launch",
+      spaceId: "default",
+      tagIds: ["tag-z", "tag-a", "tag-z"],
+      tagMode: "and",
+    });
+
+    expect(requests).toEqual([expect.objectContaining({
+      tagIds: ["tag-a", "tag-z"],
+      tagMode: "and",
+      policyVersion: 2,
+      limit: 20,
+    })]);
+    const canonicalKey = requests[0]!.cursorKey;
+
+    await service.search(contributor, {
+      query: "launch",
+      spaceId: "default",
+      tagIds: ["tag-a", "tag-z"],
+      tagMode: "and",
+    });
+    expect(requests[1]!.cursorKey).toBe(canonicalKey);
+
+    for (const request of [
+      { query: "launch", spaceId: "default", tagIds: ["tag-a"] },
+      { query: "launch", spaceId: "default", tagMode: "or" as const },
+      { query: "launch", tagIds: ["tag-a"], tagMode: "or" as const },
+      { query: "launch", spaceId: "default", tagId: "tag-a", tagIds: ["tag-b"], tagMode: "or" as const },
+      { query: "launch", spaceId: "default", tagIds: Array.from({ length: 9 }, (_, index) => `tag-${index}`), tagMode: "or" as const },
+      { query: "launch", spaceId: "default", tagIds: ["../tag"], tagMode: "and" as const },
+    ]) {
+      await expect(service.search(contributor, request)).rejects.toMatchObject({
+        code: "LIBRARY_REQUEST_INVALID",
+        status: 400,
+      });
+    }
+    expect(requests).toHaveLength(2);
+  });
+
   it("encodes citations as canonical versioned lookup keys and rejects all other payloads", () => {
     const citationId = encodeCitationId({ revisionId: "revision-知识", chunkId: "chunk-😀" });
     expect(citationId).toMatch(/^[A-Za-z0-9_-]+$/);

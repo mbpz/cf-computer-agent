@@ -134,7 +134,7 @@
 - [ ] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
 - [ ] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
 - [x] `IDX-003` P0/M1 FTS tokenizer 配置；状态：L/W；验收：中英文 fixture 和代码 token 有基线。
-- [ ] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。
+- [ ] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。证据：`src/library/search-policy.ts`、`test/fixtures/m1-search-ranking.ts`、`test/worker/m1-library.test.ts`；30 Revision 独立语料的 3 个 query/15 个 top-five 位置与命中字段精确通过。
 - [x] `IDX-005` P0/M1 索引 Job 幂等；状态：L/W/D；验收：重复消息不重复写或改变 current。
 - [ ] `IDX-006` P0/M1 索引状态；验收：pending/indexed/search_degraded/failed 可见。
 - [ ] `IDX-007` P0/M4 Vectorize 384 维 index；验收：维度、metric、namespace 固定并生成类型。
@@ -151,12 +151,12 @@
 ## SRCH — 搜索
 
 - [x] `SRCH-001` P0/M1 关键词查询；状态：L/W；验收：空/超长/控制字符有稳定响应。
-- [ ] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。
-- [ ] `SRCH-003` P0/M1 title/tag/body 命中说明；验收：结果显示匹配字段。
-- [ ] `SRCH-004` P0/M1 安全高亮；验收：不产生 HTML/XSS，保留命中上下文。
+- [ ] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。证据：policy v2 固定 title=8/summary=4/tags=6/body=1/code=3，真实 D1 重分数 keyset 无漏项/重复测试见 `test/worker/m1-library.test.ts`。
+- [ ] `SRCH-003` P0/M1 title/tag/body 命中说明；验收：结果显示匹配字段。证据：服务端 allowlist 顺序和 UI 文本标签见 `src/library/repository.ts`、`public/workspace-ui.js`。
+- [ ] `SRCH-004` P0/M1 安全高亮；验收：不产生 HTML/XSS，保留命中上下文。证据：NFKC、emoji、组合字符、代码点 range 和 XSS-shaped 文本测试见 `test/unit/search-policy.test.ts`、`test/unit/workspace-ui.test.ts`。
 - [x] `SRCH-005` P0/M1 Space 过滤；状态：L/W；验收：无权限 Space 不进入候选。
 - [x] `SRCH-006` P0/M1 Collection 过滤；状态：L/W；验收：父子范围规则明确。
-- [ ] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。
+- [ ] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。证据：1..8 Tag、显式 AND/OR、active same-Space fail-closed、cursor drift 和真实 D1 plan 测试见 `test/unit/library-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`。
 - [ ] `SRCH-008` P1/M4 类型、作者和时间过滤；验收：使用索引、无全表扫描。
 - [x] `SRCH-009` P0/M1 visibility 过滤；状态：L/W；验收：contributor 永不返回 admin_only。
 - [x] `SRCH-010` P0/M1 keyset pagination；状态：L/W；验收：重复排序值无漏项/重复。

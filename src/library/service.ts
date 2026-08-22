@@ -2,6 +2,7 @@ import { AppError } from "../http";
 import type { PublishedContentReader } from "../knowledge/types";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
 import { normalizeSearchQuery } from "./lexical";
+import { SEARCH_POLICY } from "./search-policy";
 import type {
   AuthorizedRevisionRecord,
   LibraryRepositoryPort,
@@ -87,15 +88,20 @@ export class LibraryService {
   async search(scope: LibraryScope, request: SearchRequest): Promise<SearchPage> {
     await this.authorize(scope);
     const filters = normalizeFilters(request);
+    const tagFilter = normalizeSearchTags(request);
     const page = parsePageRequest(request.limit, request.cursor);
     const query = normalizeSearchQuery(request.query);
     const normalized: RepositorySearchRequest = {
       ...filters,
       ...page,
       ...query,
+      ...tagFilter,
+      policyVersion: SEARCH_POLICY.version,
       cursorKey: await cursorKey("library-search", scope, {
         ...filters,
         query: query.normalizedQuery,
+        ...tagFilter,
+        policyVersion: SEARCH_POLICY.version,
       }),
     };
     return this.repository.search(scope, normalized);
@@ -146,6 +152,19 @@ export class LibraryService {
       })),
     };
   }
+}
+
+function normalizeSearchTags(request: SearchRequest): Pick<RepositorySearchRequest, "tagIds" | "tagMode"> {
+  const { tagIds, tagMode } = request;
+  if (tagIds === undefined && tagMode === undefined) return {};
+  if (!Array.isArray(tagIds) || tagIds.length < 1 || tagIds.length > SEARCH_POLICY.maxTags
+    || (tagMode !== "and" && tagMode !== "or")
+    || request.tagId !== undefined
+    || request.spaceId === undefined
+    || tagIds.some((tagId) => typeof tagId !== "string" || !FILTER_ID.test(tagId))) {
+    throw new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
+  }
+  return { tagIds: [...new Set(tagIds)].sort(), tagMode };
 }
 
 export function encodeCitationId(lookup: CitationLookup): string {

@@ -494,7 +494,11 @@ async function renderSearch(generation) {
   const query = element("input", { type: "search", required: "", maxlength: "200", placeholder: "Search published knowledge", "aria-label": "Search query" });
   const space = spaceControl.select;
   let collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
-  let tag = element("select", { disabled: "" }, [element("option", { value: "", text: "All Tags" })]);
+  let tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: "All Tags" })]);
+  const tagMode = element("select", {}, [
+    element("option", { value: "and", text: "Match all selected Tags" }),
+    element("option", { value: "or", text: "Match any selected Tag" }),
+  ]);
   const collectionSlot = element("div", { className: "stack" }, [field("Collection", collection)]);
   const tagSlot = element("div", { className: "stack" }, [field("Tag", tag)]);
   const results = element("div", { className: "stack", "aria-live": "polite" });
@@ -506,7 +510,10 @@ async function renderSearch(generation) {
     const nodes = [];
     if (model.degraded) nodes.push(routeStateNode("degraded", "Search index is degraded. Published documents remain readable; results may be incomplete."));
     nodes.push(list(currentItems, (hit) => item(hit.title, hit.location, [
-      element("p", { className: "excerpt", text: hit.excerpt }),
+      element("p", { className: "item-meta", text: `Matched: ${hit.matchedFieldLabels.join(", ")}` }),
+      element("p", { className: "excerpt" }, hit.highlightSegments.map((segment) => (
+        segment.highlighted ? element("mark", { text: segment.text }) : segment.text
+      ))),
       routeLink(`Open citation: ${hit.title}, ${hit.location}`, hit.citationHref),
     ]), "No matching published knowledge."));
     if (currentCursor) nodes.push(element("button", { className: "secondary", type: "button", text: "Load more results", onclick: () => { void search(currentCursor, true); } }));
@@ -524,17 +531,23 @@ async function renderSearch(generation) {
   };
   const form = element("form", { className: "filter-grid", onsubmit: (event) => {
     event.preventDefault();
-    currentFilters = { q: query.value, spaceId: space.value, collectionId: collection.value, tagId: tag.value };
+    currentFilters = {
+      q: query.value,
+      spaceId: space.value,
+      collectionId: collection.value,
+      tagIds: [...tag.selectedOptions].map((option) => option.value).filter(Boolean).slice(0, 8),
+      tagMode: tagMode.value,
+    };
     currentItems = [];
     currentCursor = undefined;
     void search(undefined, false);
-  } }, [field("Query", query), spaceControl.root, collectionSlot, tagSlot, element("button", { className: "primary", type: "submit", text: "Search" })]);
+  } }, [field("Query", query), spaceControl.root, collectionSlot, tagSlot, field("Tag mode", tagMode), element("button", { className: "primary", type: "submit", text: "Search" })]);
   let filterGeneration = 0;
   const updateDependentFilters = async () => {
     filterGeneration += 1;
     const fixedGeneration = filterGeneration;
     collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
-    tag = element("select", { disabled: "" }, [element("option", { value: "", text: "All Tags" })]);
+    tag = element("select", { disabled: "", multiple: "", size: "4" }, [element("option", { value: "", text: "All Tags" })]);
     collectionSlot.replaceChildren(field("Collection", collection));
     tagSlot.replaceChildren(field("Tag", tag));
     if (!space.value) return;
@@ -547,6 +560,8 @@ async function renderSearch(generation) {
     });
     collection = collectionControl.select;
     tag = tagControl.select;
+    tag.multiple = true;
+    tag.size = 4;
     collectionSlot.replaceChildren(collectionControl.root);
     tagSlot.replaceChildren(tagControl.root);
     await Promise.all([collectionControl.controller.loadInitial(), tagControl.controller.loadInitial()]);
@@ -579,7 +594,10 @@ async function renderAgent(generation) {
         element("p", { className: "answer-text", text: model.answer }),
         element("h3", { text: "Citations" }),
         list(model.sources, (source) => item(`[${source.number}] ${source.title}`, source.location, [
-          element("p", { className: "excerpt", text: source.excerpt }),
+          element("p", { className: "item-meta", text: `Matched: ${source.matchedFieldLabels.join(", ")}` }),
+          element("p", { className: "excerpt" }, source.highlightSegments.map((segment) => (
+            segment.highlighted ? element("mark", { text: segment.text }) : segment.text
+          ))),
           element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": source.accessibleName, text: "Open exact source location" }),
         ]), "The answer contains no source citations."),
       );

@@ -10,7 +10,7 @@ import {
 } from "../http";
 import type { Principal } from "../identity/principal";
 import type { LibraryService } from "../library/service";
-import type { LibraryScope } from "../library/types";
+import type { LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import { strictRecord, stringValue } from "./member";
 
@@ -41,11 +41,7 @@ export async function routeLibraryApi(
 
   if (url.pathname === "/api/knowledge/search") {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    const query = queryRecord(url, ["q", "limit", "cursor", "spaceId", "collectionId", "tagId"]);
-    return jsonResponse(await services.library.search(scope, {
-      ...pageRequest(query),
-      query: query.q ?? "",
-    }), 200, context.requestId);
+    return jsonResponse(await services.library.search(scope, searchRequest(url)), 200, context.requestId);
   }
 
   if (url.pathname === "/api/knowledge/chat") {
@@ -102,6 +98,31 @@ export async function routeLibraryApi(
   }
 
   throw new AppError("NOT_FOUND", "Not found", 404);
+}
+
+function searchRequest(url: URL): SearchRequest {
+  const allowed = ["q", "limit", "cursor", "spaceId", "collectionId", "tagId", "tagMode"];
+  for (const key of url.searchParams.keys()) {
+    if (!allowed.includes(key) || (key !== "tagId" && url.searchParams.getAll(key).length !== 1)) {
+      throw invalidRequest();
+    }
+  }
+  const tagIds = url.searchParams.getAll("tagId");
+  const tagMode = url.searchParams.get("tagMode");
+  if ((tagIds.length === 0) !== (tagMode === null)) throw invalidRequest();
+  if (tagMode !== null && tagMode !== "and" && tagMode !== "or") throw invalidRequest();
+  const query: Record<string, string | undefined> = Object.create(null) as Record<string, string | undefined>;
+  for (const key of ["q", "limit", "cursor", "spaceId", "collectionId"] as const) {
+    query[key] = url.searchParams.get(key) ?? undefined;
+  }
+  const tagFilter: Pick<SearchRequest, "tagIds" | "tagMode"> = tagMode === null
+    ? {}
+    : { tagIds, tagMode };
+  return {
+    ...pageRequest(query),
+    query: query.q ?? "",
+    ...tagFilter,
+  };
 }
 
 function memberScope(principal: Principal): LibraryScope {
