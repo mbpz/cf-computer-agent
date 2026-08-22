@@ -6,6 +6,10 @@ import {
   type NormalizedSearchQuery,
 } from "../library/lexical";
 import type { LibraryScope, SearchHit } from "../library/types";
+import {
+  computeEvidenceConfidence,
+  EVIDENCE_CONFIDENCE_THRESHOLD,
+} from "./evidence-confidence";
 
 const SYSTEM_PROMPT = [
   "你是私有知识库的引用回答器。",
@@ -92,6 +96,11 @@ export interface CitedAnswerResult {
   answer: string;
   citations: string[];
   sources: SearchHit[];
+  evidenceConfidence: number;
+  messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT";
+  suggestedActionKeys?: Array<
+    "KNOWLEDGE_CHAT_REWRITE_QUESTION" | "KNOWLEDGE_CHAT_EXPAND_SCOPE"
+  >;
 }
 
 export interface CitedAnswerServiceOptions {
@@ -135,7 +144,17 @@ export class CitedAnswerService {
     assertScope(scope);
     const normalizedQuestion = normalizeSearchQuery(question);
     const preparedSources = prepareSources(normalizedQuestion, authorizedHits);
-    if (preparedSources.length === 0) return noEvidence();
+    const evidenceConfidence = computeEvidenceConfidence(
+      normalizedQuestion.normalizedQuery,
+      preparedSources.map(({ hit, context }) => ({
+        ...hit,
+        title: context.title,
+        excerpt: context.excerpt,
+      })),
+    );
+    if (evidenceConfidence < EVIDENCE_CONFIDENCE_THRESHOLD) {
+      return noEvidence(evidenceConfidence);
+    }
 
     let providerResult: unknown;
     try {
@@ -167,8 +186,8 @@ export class CitedAnswerService {
 
     const providerAnswer = parseProviderAnswer(providerResult);
     const normalizedClaims = validateGrounding(providerAnswer, preparedSources);
-    if (providerAnswer.insufficientEvidence) return noEvidence();
-    return renderGroundedAnswer(normalizedClaims, preparedSources);
+    if (providerAnswer.insufficientEvidence) return noEvidence(evidenceConfidence);
+    return renderGroundedAnswer(normalizedClaims, preparedSources, evidenceConfidence);
   }
 }
 
@@ -181,7 +200,7 @@ function prepareSources(query: NormalizedSearchQuery, hits: SearchHit[]): Prepar
     if (prepared.length >= MAX_SOURCES) break;
     if (!isSearchHit(hit) || seen.has(hit.citationId)) continue;
     const context = toContextSource(hit);
-    if (!context || !hasQueryTermCoverage(context, query.termKeys)) continue;
+    if (!context || !hasAnyQueryTermCoverage(context, query.termKeys)) continue;
 
     if (fitsContext(query.normalizedQuery, [...prepared.map((source) => source.context), context])) {
       seen.add(hit.citationId);
@@ -192,7 +211,7 @@ function prepareSources(query: NormalizedSearchQuery, hits: SearchHit[]): Prepar
     const excerpt = fitExcerpt(query.normalizedQuery, prepared, context);
     if (excerpt === null) continue;
     const fittedContext = { ...context, excerpt };
-    if (!hasQueryTermCoverage(fittedContext, query.termKeys)) continue;
+    if (!hasAnyQueryTermCoverage(fittedContext, query.termKeys)) continue;
     seen.add(hit.citationId);
     prepared.push({ hit, context: fittedContext });
   }
@@ -219,13 +238,13 @@ function isSearchHit(value: unknown): value is SearchHit {
     && !hasMalformedSurrogate(value.excerpt);
 }
 
-function hasQueryTermCoverage(
+function hasAnyQueryTermCoverage(
   source: Pick<ContextSource, "title" | "excerpt">,
   queryKeys: string[],
 ): boolean {
   const visibleKeys = new Set(tokenizeSearchText(`${source.title}\n${source.excerpt}`)
     .tokens.map((token) => token.comparisonKey));
-  return queryKeys.every((key) => visibleKeys.has(key));
+  return queryKeys.some((key) => visibleKeys.has(key));
 }
 
 function toContextSource(hit: SearchHit): ContextSource | null {
@@ -340,6 +359,7 @@ function validateGrounding(
 function renderGroundedAnswer(
   claims: NormalizedClaim[],
   sources: PreparedSource[],
+  evidenceConfidence: number,
 ): CitedAnswerResult {
   if (claims.length === 0) throw answerUngrounded();
   const sourceOrder = sources.map((source) => source.context.citationId);
@@ -357,6 +377,7 @@ function renderGroundedAnswer(
     answer: rendered,
     citations,
     sources: citedSources.map((source) => source.hit),
+    evidenceConfidence,
   };
 }
 
@@ -450,8 +471,18 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
-function noEvidence(): CitedAnswerResult {
-  return { answer: NO_EVIDENCE_ANSWER, citations: [], sources: [] };
+function noEvidence(evidenceConfidence: number): CitedAnswerResult {
+  return {
+    answer: NO_EVIDENCE_ANSWER,
+    citations: [],
+    sources: [],
+    evidenceConfidence,
+    messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+    suggestedActionKeys: [
+      "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+      "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+    ],
+  };
 }
 
 function aiUnavailable(): AppError {

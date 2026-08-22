@@ -5,7 +5,9 @@ import {
   M1_EVALUATION_CASES,
   runM1Evaluation,
   summarizeM1Evaluation,
+  M1_EVIDENCE_CONFIDENCE_CASES,
 } from "../fixtures/m1-evaluation";
+import { EVIDENCE_CONFIDENCE_THRESHOLD } from "../../src/ai/evidence-confidence";
 
 describe("M1 fixed knowledge-loop evaluation", () => {
   it("keeps at least twenty hand-labelled cases across the required risk surfaces", () => {
@@ -56,6 +58,16 @@ describe("M1 fixed knowledge-loop evaluation", () => {
     }
   });
 
+  it("keeps nonzero independently labelled strong and weak confidence denominators", () => {
+    const strong = M1_EVIDENCE_CONFIDENCE_CASES.filter(({ expected }) => expected.mayCallAi);
+    const weak = M1_EVIDENCE_CONFIDENCE_CASES.filter(({ expected }) => !expected.mayCallAi);
+
+    expect(strong.length).toBeGreaterThan(0);
+    expect(weak.length).toBeGreaterThan(0);
+    expect(strong.every(({ expected }) => expected.score >= EVIDENCE_CONFIDENCE_THRESHOLD)).toBe(true);
+    expect(weak.every(({ expected }) => expected.score < EVIDENCE_CONFIDENCE_THRESHOLD)).toBe(true);
+  });
+
   it("gates recall, exact citations, citation locations, and permission isolation", async () => {
     const report = await runM1Evaluation();
 
@@ -104,11 +116,13 @@ describe("M1 fixed knowledge-loop evaluation", () => {
         expect(result?.locatedCitationIds, evaluation.id).toEqual(evaluation.expectedAnswerCitationIds);
         expect(result?.providerCalled, evaluation.id).toBe(true);
         expect(result?.noEvidence, evaluation.id).toBe(false);
+        expect(result?.evidenceConfidence, evaluation.id).toBeGreaterThanOrEqual(EVIDENCE_CONFIDENCE_THRESHOLD);
       } else if (evaluation.expectedOutcome === "refusal") {
         expect(result?.returnedCitationIds, evaluation.id).toEqual([]);
         expect(result?.providerCalled, evaluation.id).toBe(false);
         expect(result?.noEvidence, evaluation.id).toBe(true);
         expect(result?.denied, evaluation.id).toBe(false);
+        expect(result?.evidenceConfidence, evaluation.id).toBeLessThan(EVIDENCE_CONFIDENCE_THRESHOLD);
       } else {
         expect(result?.returnedCitationIds, evaluation.id).toEqual([]);
         expect(result?.providerCalled, evaluation.id).toBe(false);

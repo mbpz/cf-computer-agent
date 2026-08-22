@@ -6,6 +6,7 @@ import { CitedAnswerService } from "../../src/ai/cited-answer-service";
 import type { PublishedContentReader } from "../../src/knowledge/types";
 import type {
   AuthorizedCitationRecord,
+  AuthorizedChatScope,
   AuthorizedRevisionRecord,
   LibraryRepositoryPort,
   RepositoryKnowledgePageRequest,
@@ -15,11 +16,13 @@ import { encodeCitationId, LibraryService } from "../../src/library/service";
 import { tokenizeSearchText } from "../../src/library/lexical";
 import type {
   KnowledgePage,
+  ChatScope,
   LibraryScope,
   SearchHit,
   SearchPage,
 } from "../../src/library/types";
 export { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "./m1-search-ranking";
+export { M1_EVIDENCE_CONFIDENCE_CASES, M1_CORPUS_GROWTH_FIXTURE } from "./m1-evidence-confidence";
 
 export const M1_FENCE_FIELD_EXPECTATIONS = Object.freeze([
   Object.freeze({
@@ -99,6 +102,7 @@ export interface M1EvaluationCaseResult {
   degraded: boolean;
   noEvidence: boolean;
   providerCalled: boolean;
+  evidenceConfidence: number;
   retrievedCitationIds: string[];
   returnedCitationIds: string[];
   locatedCitationIds: string[];
@@ -277,6 +281,7 @@ export async function runM1Evaluation(
     let search: SearchPage = { items: [], degraded: false };
     let answer = "";
     let returnedCitationIds: string[] = [];
+    let evidenceConfidence = 0;
     let denied = false;
     const locatedCitationIds: string[] = [];
 
@@ -289,6 +294,7 @@ export async function runM1Evaluation(
       );
       answer = response.answer;
       returnedCitationIds = response.citations;
+      evidenceConfidence = response.evidenceConfidence;
       for (const returnedCitationId of returnedCitationIds) {
         const source = await library.readCitation(evaluation.scope, returnedCitationId);
         const expected = DOCUMENTS.find((entry) => citationId(entry) === returnedCitationId);
@@ -318,6 +324,7 @@ export async function runM1Evaluation(
       degraded: search.degraded,
       noEvidence: returnedCitationIds.length === 0,
       providerCalled: provider.calls > 0,
+      evidenceConfidence,
       retrievedCitationIds,
       returnedCitationIds,
       locatedCitationIds,
@@ -417,6 +424,25 @@ class EvaluationRepository implements LibraryRepositoryPort {
       && scope.memberId !== DISABLED.memberId
       && ((scope.memberId === CONTRIBUTOR.memberId && scope.role === CONTRIBUTOR.role)
         || (scope.memberId === ADMIN.memberId && scope.role === ADMIN.role));
+  }
+
+  async authorizeChatScope(
+    scope: LibraryScope,
+    chatScope: ChatScope,
+  ): Promise<AuthorizedChatScope | null> {
+    if (!await this.authorizeScope(scope)) return null;
+    if (chatScope.kind === "all") return { kind: "all" };
+    if (chatScope.kind === "space") {
+      return chatScope.spaceId === "default" ? { kind: "space", spaceId: "default" } : null;
+    }
+    if (chatScope.kind === "collection") return null;
+    const visibleIds = new Set(DOCUMENTS
+      .filter((entry) => entry.visibility === "shared" || scope.role === "admin")
+      .map((entry) => entry.id));
+    const requested = [...chatScope.knowledgeItemIds].sort();
+    return requested.every((id) => visibleIds.has(id))
+      ? { kind: "items", knowledgeItemIds: requested }
+      : null;
   }
 
   async list(_scope: LibraryScope, _request: RepositoryKnowledgePageRequest): Promise<KnowledgePage> {

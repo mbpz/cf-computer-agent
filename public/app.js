@@ -4,6 +4,7 @@ import {
   anonymousShellState,
   appendPage,
   chatRequest,
+  chatScopeControlsModel,
   citedAnswerModel,
   createAdminSpacesRouteController,
   createLogoutController,
@@ -572,27 +573,210 @@ async function renderSearch(generation) {
 }
 
 async function renderAgent(generation) {
+  const owner = routeGuard.owner(generation, "/agent");
+  const scopeModel = chatScopeControlsModel({ kind: "all" });
   const question = element("textarea", { required: "", maxlength: "200", placeholder: "Ask a question grounded in published knowledge…" });
   const answer = element("div", { className: "stack", "aria-live": "polite" });
-  const owner = routeGuard.owner(generation, "/agent");
   const submitButton = element("button", { className: "primary", type: "submit", text: "Ask Agent" });
+  const scopeKindLabels = Object.freeze({
+    all: "All visible knowledge",
+    space: "One Space",
+    collection: "One Collection",
+    items: "Selected knowledge items",
+  });
+  const scopeOptions = scopeModel.options.map((option, index) => {
+    const input = element("input", {
+      type: "radio",
+      name: "chat-scope-kind",
+      value: option.kind,
+      checked: index === 0 ? "" : undefined,
+      "data-i18n-key": option.labelKey,
+    });
+    return { ...option, input };
+  });
+  const scopeKinds = element("fieldset", { className: "scope-selector" }, [
+    element("legend", { text: "Answer source scope", "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_LEGEND" }),
+    ...scopeOptions.map((option) => element("label", { className: "check-option", text: scopeKindLabels[option.kind] }, [option.input])),
+  ]);
+  const spaceControl = createPagedOptionControl({
+    resource: "spaces",
+    owner,
+    label: "Spaces",
+    fieldLabel: "Scope Space",
+    emptyLabel: "Select a Space",
+  });
+  await spaceControl.controller.loadInitial();
+  let collection = element("select", { disabled: "", "aria-label": "Scope Collection" }, [
+    element("option", { value: "", text: "Select a Collection" }),
+  ]);
+  const collectionSlot = element("div", { className: "stack" }, [field("Scope Collection", collection)]);
+  let collectionGeneration = 0;
+  const loadCollections = async () => {
+    collectionGeneration += 1;
+    const fixedGeneration = collectionGeneration;
+    collection = element("select", { disabled: "", "aria-label": "Scope Collection" }, [
+      element("option", { value: "", text: "Select a Collection" }),
+    ]);
+    collectionSlot.replaceChildren(field("Scope Collection", collection));
+    if (!spaceControl.select.value) return;
+    const control = createPagedOptionControl({
+      resource: "collections",
+      spaceId: spaceControl.select.value,
+      owner,
+      owns: () => fixedGeneration === collectionGeneration,
+      label: "Collections",
+      fieldLabel: "Scope Collection",
+      emptyLabel: "Select a Collection",
+    });
+    collection = control.select;
+    collectionSlot.replaceChildren(control.root);
+    await control.controller.loadInitial();
+    updateScopeState();
+  };
+  const itemSelect = element("select", {
+    multiple: "",
+    size: "8",
+    "aria-label": "Selected knowledge items",
+    "aria-describedby": "chat-item-selection-help",
+  });
+  const itemHelp = element("p", {
+    id: "chat-item-selection-help",
+    className: "muted",
+    text: "Select 1–8 visible current indexed knowledge items.",
+    "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_ITEMS_HELP",
+  });
+  const itemStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
+  const itemMore = element("button", { className: "secondary", type: "button", text: "Load more knowledge items" });
+  const itemSlot = element("div", { className: "stack" }, [field("Knowledge items", itemSelect), itemHelp, itemMore, itemStatus]);
+  let itemCursor;
+  let loadedItems = [];
+  let loadingItems = false;
+  const renderItemOptions = () => {
+    const selected = new Set([...itemSelect.selectedOptions].map((option) => option.value));
+    itemSelect.replaceChildren(...loadedItems.map((item) => element("option", {
+      value: item.id,
+      text: `${item.title} · ${item.visibilityLabel}`,
+      selected: selected.has(item.id) ? "" : undefined,
+    })));
+    itemMore.hidden = !itemCursor;
+    itemMore.disabled = loadingItems;
+  };
+  const loadItems = async (append) => {
+    if (!ownsMutation(owner) || loadingItems || (append && !itemCursor)) return;
+    loadingItems = true;
+    renderItemOptions();
+    try {
+      const page = knowledgeListModel(await api(knowledgeQuery("/api/knowledge", {
+        limit: 50,
+        ...(append ? { cursor: itemCursor } : {}),
+      })));
+      if (!ownsMutation(owner)) return;
+      loadedItems = appendPage(append ? loadedItems : [], page.items, (item) => item.id);
+      itemCursor = page.nextCursor;
+      itemStatus.textContent = "";
+    } catch (error) {
+      if (ownsMutation(owner)) itemStatus.textContent = safeErrorMessage(error);
+    } finally {
+      loadingItems = false;
+      if (ownsMutation(owner)) renderItemOptions();
+    }
+  };
+  itemMore.addEventListener("click", () => { void loadItems(true); });
+  itemSelect.addEventListener("change", () => {
+    const selected = [...itemSelect.selectedOptions];
+    if (selected.length > scopeModel.maxSelectedItems) {
+      selected.slice(scopeModel.maxSelectedItems).forEach((option) => { option.selected = false; });
+      itemStatus.textContent = "You can select at most 8 knowledge items.";
+      itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_MAX";
+    } else {
+      itemStatus.textContent = `${selected.length} of ${scopeModel.maxSelectedItems} selected.`;
+      itemStatus.dataset.i18nKey = "KNOWLEDGE_CHAT_SCOPE_ITEMS_COUNT";
+    }
+    updateScopeState();
+  });
+  const scopeSummary = element("p", {
+    className: "muted",
+    role: "status",
+    "aria-live": "polite",
+    "data-i18n-key": "KNOWLEDGE_CHAT_SCOPE_CURRENT",
+  });
+  let pending = false;
+  const selectedScopeKind = () => scopeOptions.find((option) => option.input.checked)?.kind || "all";
+  const requestedScope = () => {
+    const kind = selectedScopeKind();
+    if (kind === "all") return { kind: "all" };
+    if (kind === "space" && spaceControl.select.value) {
+      return { kind: "space", spaceId: spaceControl.select.value };
+    }
+    if (kind === "collection" && collection.value) {
+      return { kind: "collection", collectionId: collection.value };
+    }
+    const knowledgeItemIds = [...itemSelect.selectedOptions].map((option) => option.value);
+    return kind === "items" && knowledgeItemIds.length >= 1 && knowledgeItemIds.length <= 8
+      ? { kind: "items", knowledgeItemIds }
+      : null;
+  };
+  function updateScopeState() {
+    const kind = selectedScopeKind();
+    spaceControl.select.disabled = pending || (kind !== "space" && kind !== "collection");
+    collection.disabled = pending || kind !== "collection" || !spaceControl.select.value;
+    itemSelect.disabled = pending || kind !== "items";
+    itemMore.disabled = pending || loadingItems;
+    for (const option of scopeOptions) option.input.disabled = pending;
+    const requested = requestedScope();
+    scopeSummary.textContent = requested
+      ? `Current scope: ${scopeKindLabels[kind]}.`
+      : `Current scope: ${scopeKindLabels[kind]} requires a selection.`;
+  }
+  for (const option of scopeOptions) option.input.addEventListener("change", () => {
+    updateScopeState();
+    if (option.kind === "items" && loadedItems.length === 0) void loadItems(false);
+    if (option.kind === "collection" && spaceControl.select.value) void loadCollections();
+  });
+  spaceControl.select.addEventListener("change", () => {
+    if (selectedScopeKind() === "collection") void loadCollections();
+    updateScopeState();
+  });
   const mutation = createMutationController(
     () => ownsMutation(owner),
-    (pending) => {
-      question.disabled = pending;
-      setPending(submitButton, pending, "Asking…", "Ask Agent");
+    (value) => {
+      pending = value;
+      question.disabled = value;
+      setPending(submitButton, value, "Asking…", "Ask Agent");
+      updateScopeState();
     },
   );
   const form = element("form", { className: "stack", onsubmit: (event) => {
     event.preventDefault();
-    const request = chatRequest({ question: question.value });
+    const scope = requestedScope();
+    if (!scope) {
+      answer.replaceChildren(routeStateNode("error", "Choose a complete answer source scope."));
+      return;
+    }
+    const request = chatRequest({ question: question.value, scope });
     void mutation.run(() => {
       answer.replaceChildren(routeStateNode("loading", "Reading permission-scoped published knowledge…"));
       return api(request.path, request.init);
     }, (data) => {
       const model = citedAnswerModel(data);
       answer.replaceChildren(
+        element("p", {
+          className: "item-meta",
+          text: `Evidence confidence: ${Math.round(model.evidenceConfidence * 100)}%`,
+          "data-i18n-key": "KNOWLEDGE_CHAT_EVIDENCE_CONFIDENCE",
+        }),
         element("p", { className: "answer-text", text: model.answer }),
+        ...(model.messageKey ? [element("div", {
+          className: "notice",
+          "data-kind": "degraded",
+          "data-i18n-key": model.messageKey,
+        }, [
+          element("p", { text: "Try rewriting the question or expanding the selected scope." }),
+          element("ul", {}, model.suggestedActionKeys.map((key) => element("li", {
+            text: key === "KNOWLEDGE_CHAT_REWRITE_QUESTION" ? "Rewrite the question" : "Expand the source scope",
+            "data-i18n-key": key,
+          }))),
+        ])] : []),
         element("h3", { text: "Citations" }),
         list(model.sources, (source) => item(`[${source.number}] ${source.title}`, source.location, [
           element("p", { className: "item-meta", text: `Matched: ${source.matchedFieldLabels.join(", ")}` }),
@@ -603,7 +787,16 @@ async function renderAgent(generation) {
         ]), "The answer contains no source citations."),
       );
     }, (error) => answer.replaceChildren(routeStateNode(error?.status === 403 ? "forbidden" : "error", safeErrorMessage(error))));
-  } }, [field("Question", question), submitButton]);
+  } }, [
+    field("Question", question),
+    scopeKinds,
+    spaceControl.root,
+    collectionSlot,
+    itemSlot,
+    scopeSummary,
+    submitButton,
+  ]);
+  updateScopeState();
   replaceOutlet(page("Agent", "Answers use only current permission-scoped search hits; unsupported claims fail closed.", [card("Grounded question", [form, answer])]), generation);
 }
 

@@ -3,6 +3,7 @@ import { AppError } from "../../src/http";
 import type { PublishedContentReader } from "../../src/knowledge/types";
 import {
   LibraryRepository,
+  type AuthorizedChatScope,
   type AuthorizedCitationRecord,
   type AuthorizedRevisionRecord,
   type LibraryRepositoryPort,
@@ -15,7 +16,7 @@ import {
   LibraryService,
   normalizeSearchQuery,
 } from "../../src/library/service";
-import type { KnowledgePage, LibraryScope, SearchPage } from "../../src/library/types";
+import type { ChatScope, KnowledgePage, LibraryScope, SearchPage } from "../../src/library/types";
 
 const contributor: LibraryScope = { memberId: "member-1", role: "contributor" };
 const admin: LibraryScope = { memberId: "admin-1", role: "admin" };
@@ -210,6 +211,112 @@ describe("LibraryService", () => {
     expect(requests[0]?.cursorKey).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("authorizes an explicit ChatScope before scoped retrieval and passes only the canonical D1 result", async () => {
+    const events: string[] = [];
+    const requests: RepositorySearchRequest[] = [];
+    const requested: ChatScope = {
+      kind: "items",
+      knowledgeItemIds: ["knowledge-b", "knowledge-a"],
+    };
+    const authorized: AuthorizedChatScope = {
+      kind: "items",
+      knowledgeItemIds: ["knowledge-a", "knowledge-b"],
+    };
+    const repository = repositoryFixture({
+      async authorizeScope() { events.push("authorize-member"); return true; },
+      async authorizeChatScope(_scope, chatScope) {
+        events.push(`authorize-chat:${JSON.stringify(chatScope)}`);
+        return authorized;
+      },
+      async search(_scope, request) {
+        events.push("search");
+        requests.push(request);
+        return { items: [], degraded: false };
+      },
+    });
+
+    await new LibraryService(repository, noContentReader).search(
+      contributor,
+      { query: "launch latency", limit: 8 },
+      requested,
+    );
+
+    expect(events).toEqual([
+      "authorize-member",
+      `authorize-chat:${JSON.stringify(requested)}`,
+      "search",
+    ]);
+    expect(requests).toEqual([expect.objectContaining({ chatScope: authorized })]);
+    expect(requests[0]!.chatScope).not.toBe(requested);
+  });
+
+  it("rejects malformed, mixed, duplicated, or unbounded item ChatScopes without widening to search", async () => {
+    const events: string[] = [];
+    const repository = repositoryFixture({
+      async authorizeScope() { events.push("authorize-member"); return true; },
+      async authorizeChatScope() { events.push("authorize-chat"); return null; },
+      async search() { events.push("search"); return { items: [], degraded: false }; },
+    });
+    const service = new LibraryService(repository, noContentReader);
+    const invalid = [
+      { kind: "items", knowledgeItemIds: [] },
+      { kind: "items", knowledgeItemIds: Array.from({ length: 9 }, (_, index) => `knowledge-${index}`) },
+      { kind: "items", knowledgeItemIds: ["knowledge-a", "knowledge-a"] },
+      { kind: "items", knowledgeItemIds: ["knowledge/a"] },
+      { kind: "all", spaceId: "default" },
+      { kind: "space", spaceId: "default", collectionId: "collection-a" },
+      { kind: "collection", collectionId: "collection-a", knowledgeItemIds: ["knowledge-a"] },
+      { kind: "unknown" },
+    ] as unknown as ChatScope[];
+
+    for (const chatScope of invalid) {
+      await expect(service.search(contributor, { query: "launch", limit: 8 }, chatScope))
+        .rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_INVALID", status: 400 });
+    }
+    expect(events).toEqual(Array.from({ length: invalid.length }, () => "authorize-member"));
+  });
+
+  it("fails closed when any requested scope resource is absent or invisible", async () => {
+    const events: string[] = [];
+    const repository = repositoryFixture({
+      async authorizeChatScope() { events.push("authorize-chat"); return null; },
+      async search() { events.push("search"); return { items: [], degraded: false }; },
+    });
+    const service = new LibraryService(repository, noContentReader);
+
+    await expect(service.search(contributor, { query: "launch", limit: 8 }, {
+      kind: "items",
+      knowledgeItemIds: ["knowledge-shared", "knowledge-hidden"],
+    })).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND", status: 404 });
+    expect(events).toEqual(["authorize-chat"]);
+  });
+
+  it("binds the canonical ChatScope into the search cursor key", async () => {
+    const requests: RepositorySearchRequest[] = [];
+    const repository = repositoryFixture({
+      async authorizeChatScope(_scope, chatScope) {
+        return chatScope as AuthorizedChatScope;
+      },
+      async search(_scope, request) {
+        requests.push(request);
+        return { items: [], degraded: false };
+      },
+    });
+    const service = new LibraryService(repository, noContentReader);
+
+    await service.search(contributor, { query: "launch", limit: 1 }, { kind: "all" });
+    await service.search(contributor, { query: "launch", limit: 1 }, {
+      kind: "space",
+      spaceId: "default",
+    });
+
+    expect(requests[0]!.cursorKey).not.toBe(requests[1]!.cursorKey);
+    expect(requests.map(({ chatScope }) => chatScope)).toEqual([
+      { kind: "all" },
+      { kind: "space", spaceId: "default" },
+    ]);
+  });
+
   it("canonicalizes bounded multi-Tag filters and binds the explicit mode and policy", async () => {
     const requests: RepositorySearchRequest[] = [];
     const repository = repositoryFixture({
@@ -329,6 +436,7 @@ const noContentReader: PublishedContentReader = {
 function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): LibraryRepositoryPort {
   return {
     async authorizeScope() { return true; },
+    async authorizeChatScope(_scope, chatScope) { return chatScope as AuthorizedChatScope; },
     async list() { return emptyKnowledgePage; },
     async findCurrent() { return revisionRecord(); },
     async findRevision() { return revisionRecord(); },

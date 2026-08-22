@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CitedAnswerService,
   type CitedAnswerAi,
@@ -60,11 +60,7 @@ describe("CitedAnswerService.answer", () => {
     const ai = new FakeAi();
     const service = new CitedAnswerService(ai);
 
-    await expect(service.answer(scope, "launch latency", [])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(service.answer(scope, "launch latency", [])).resolves.toEqual(refusalResult(0));
     expect(ai.calls).toHaveLength(0);
   });
 
@@ -78,11 +74,8 @@ describe("CitedAnswerService.answer", () => {
       score: -100,
     };
 
-    await expect(service.answer(scope, "launch latency", [weakHit])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(service.answer(scope, "launch latency", [weakHit]))
+      .resolves.toEqual(refusalResult(0.275));
     expect(ai.calls).toHaveLength(0);
   });
 
@@ -96,11 +89,8 @@ describe("CitedAnswerService.answer", () => {
       score: -100,
     };
 
-    await expect(service.answer(scope, "launch latency", [substringHit])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(service.answer(scope, "launch latency", [substringHit]))
+      .resolves.toEqual(refusalResult(0));
     expect(ai.calls).toHaveLength(0);
   });
 
@@ -161,6 +151,7 @@ describe("CitedAnswerService.answer", () => {
         answer: "测试窗口需要独立安排。 [2]\n这个改进来自发布复盘。 [1][2]",
         citations: [firstHit.citationId, secondHit.citationId],
         sources: [firstHit, secondHit],
+        evidenceConfidence: 0.85,
       });
 
     const context = modelContext(ai.calls[0]!.input);
@@ -241,14 +232,27 @@ describe("CitedAnswerService.answer", () => {
     });
     const service = new CitedAnswerService(ai);
 
-    await expect(service.answer(scope, "launch latency", [firstHit])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(service.answer(scope, "launch latency", [firstHit]))
+      .resolves.toEqual(refusalResult(0.7));
+  });
+
+  it("does not call AI below 0.60 and returns stable localized-ready rewrite and scope actions", async () => {
+    const ai = new FakeAi();
+    const weak = {
+      ...firstHit,
+      title: "General handbook",
+      excerpt: `launch ${"policy filler ".repeat(20)}latency`,
+      matchedFields: ["body" as const],
+      score: -999_999,
+    };
+
+    await expect(new CitedAnswerService(ai).answer(scope, "launch latency", [weak]))
+      .resolves.toEqual(refusalResult(0.5));
+    expect(ai.calls).toHaveLength(0);
   });
 
   it.each([
+    "[1]",
     "[1,2]",
     "[1 ]",
     "[1-2]",
@@ -414,6 +418,33 @@ describe("CitedAnswerService.answer", () => {
     });
   });
 
+  it("never logs provider bodies, source content, or answers on refusal and provider failure", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const weakAi = new FakeAi();
+      await new CitedAnswerService(weakAi).answer(scope, "launch latency", [{
+        ...firstHit,
+        title: "General handbook",
+        excerpt: "launch source-secret without the other term",
+      }]);
+
+      const failingAi = new FakeAi();
+      failingAi.result = { response: "provider-secret" };
+      await expect(new CitedAnswerService(failingAi).answer(scope, "launch latency", [firstHit]))
+        .rejects.toMatchObject({ code: "AI_UNAVAILABLE" });
+
+      expect(log).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
   it("bounds serialized Unicode source context without splitting surrogate pairs", async () => {
     const ai = new FakeAi();
     ai.result = providerResponse({ claims: [], insufficientEvidence: true });
@@ -549,4 +580,18 @@ function rawSquareBracketTokens(value: string): string[] {
 
 function providerText(answer: string): string {
   return answer.replace(/ \[\d+\](?:\[\d+\])*$/u, "");
+}
+
+function refusalResult(evidenceConfidence: number) {
+  return {
+    answer: "知识库中没有足够依据回答这个问题。",
+    citations: [],
+    sources: [],
+    evidenceConfidence,
+    messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+    suggestedActionKeys: [
+      "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+      "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+    ],
+  };
 }

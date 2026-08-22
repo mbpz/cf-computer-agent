@@ -1046,7 +1046,12 @@ describe("M1 browser request allowlists", () => {
       memberId: "forged",
       contentSha256: "secret",
     });
-    const chat = chatRequest({ question: "launch latency", sources: ["forged"], role: "admin" });
+    const chat = chatRequest({
+      question: "launch latency",
+      scope: { kind: "all" },
+      sources: ["forged"],
+      role: "admin",
+    });
 
     expect(publish.path).toBe("/api/admin/submissions/submission%2F1/publish");
     expect(JSON.parse(publish.init.body)).toEqual({
@@ -1056,7 +1061,11 @@ describe("M1 browser request allowlists", () => {
       collectionId: null,
       tagIds: ["tag-1"],
     });
-    expect(JSON.parse(chat.init.body)).toEqual({ question: "launch latency" });
+    expect(JSON.parse(chat.init.body)).toEqual({
+      question: "launch latency",
+      scope: { kind: "all" },
+    });
+    expect(() => chatRequest({ question: "launch latency" })).toThrow(/Chat scope/u);
   });
 
   it("includes only the exact expansion reason and builds an owner resubmission request", () => {

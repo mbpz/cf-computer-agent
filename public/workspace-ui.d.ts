@@ -274,8 +274,23 @@ export function knowledgeDownloadRequest(knowledgeItemId: string, revisionId: st
 export interface CitedAnswerViewModel {
   answer: string;
   sources: Array<KnowledgeSearchViewItem & Readonly<{ number: number; accessibleName: string; href: string }>>;
+  evidenceConfidence: number;
+  messageKey: "" | "KNOWLEDGE_EVIDENCE_INSUFFICIENT";
+  suggestedActionKeys: Array<"KNOWLEDGE_CHAT_REWRITE_QUESTION" | "KNOWLEDGE_CHAT_EXPAND_SCOPE">;
 }
 export function citedAnswerModel(value: unknown): Readonly<CitedAnswerViewModel>;
+export function chatScopeControlsModel(value: unknown): Readonly<{
+  selectedKind: "all" | "space" | "collection" | "items";
+  maxSelectedItems: 8;
+  options: ReadonlyArray<Readonly<{
+    kind: "all" | "space" | "collection" | "items";
+    labelKey:
+      | "KNOWLEDGE_CHAT_SCOPE_ALL"
+      | "KNOWLEDGE_CHAT_SCOPE_SPACE"
+      | "KNOWLEDGE_CHAT_SCOPE_COLLECTION"
+      | "KNOWLEDGE_CHAT_SCOPE_ITEMS";
+  }>>;
+}>;
 export function submissionResultModel(value: unknown): Readonly<{
   kind: "created" | "duplicate";
   message: string;

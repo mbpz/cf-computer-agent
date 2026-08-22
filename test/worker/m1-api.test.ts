@@ -13,6 +13,12 @@ import { APP_CONFIG } from "../../src/config";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
 import { chunkDocument } from "../../src/sources/chunker";
+import {
+  chatRequest,
+  chatScopeControlsModel,
+  citedAnswerModel,
+  createMutationController,
+} from "../../public/workspace-ui.js";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const now = "2026-08-22T00:00:00.000Z";
@@ -21,9 +27,11 @@ const AUTOMATION_SECRET = "fake-automation-secret";
 const APP_TOKEN = "worker-test-token";
 const sessionBySubject = new Map<string, string>();
 let automationNonce = 0;
+let fakeAiCalls = 0;
 
 const fakeAi = {
   async run(_model: string, input: { messages: Array<{ content: string }>; response_format?: unknown }): Promise<unknown> {
+    fakeAiCalls += 1;
     if (!input.response_format) return { response: "legacy local answer" };
     const marker = "输入 JSON：\n";
     const content = input.messages.at(-1)?.content || "";
@@ -31,7 +39,10 @@ const fakeAi = {
     const context = JSON.parse(serialized) as { sources: Array<{ citationId: string }> };
     return {
       response: JSON.stringify({
-        claims: [{ text: "Launch latency is documented.", citationIds: [context.sources[0]!.citationId] }],
+        claims: [{
+          text: "Launch latency is documented.",
+          citationIds: context.sources.map((source) => source.citationId),
+        }],
         insufficientEvidence: false,
       }),
     };
@@ -44,6 +55,7 @@ beforeEach(async () => {
   await seedMembers();
   sessionBySubject.clear();
   automationNonce = 0;
+  fakeAiCalls = 0;
   const repository = new MembersRepository(env.DB);
   const sessions = new SessionService(env.DB, repository, { waitUntil: () => undefined });
   for (const subject of ["contributor", "admin", "other"]) {
@@ -57,6 +69,71 @@ beforeEach(async () => {
 });
 
 describe("M1 API authorization and request boundaries", () => {
+  it("models exactly four localized-ready ChatScope controls and builds allowlisted bodies", async () => {
+    const controls = chatScopeControlsModel({ kind: "collection", collectionId: "collection-1" });
+    expect(controls.options).toEqual([
+      { kind: "all", labelKey: "KNOWLEDGE_CHAT_SCOPE_ALL" },
+      { kind: "space", labelKey: "KNOWLEDGE_CHAT_SCOPE_SPACE" },
+      { kind: "collection", labelKey: "KNOWLEDGE_CHAT_SCOPE_COLLECTION" },
+      { kind: "items", labelKey: "KNOWLEDGE_CHAT_SCOPE_ITEMS" },
+    ]);
+    expect(controls.selectedKind).toBe("collection");
+    expect(controls.maxSelectedItems).toBe(8);
+
+    for (const scope of [
+      { kind: "all" },
+      { kind: "space", spaceId: "default" },
+      { kind: "collection", collectionId: "collection-1" },
+      { kind: "items", knowledgeItemIds: ["knowledge-1", "knowledge-2"] },
+    ]) {
+      const built = chatRequest({
+        question: "launch latency", scope, sources: ["forged"], role: "admin",
+      });
+      expect(JSON.parse(built.init.body)).toEqual({ question: "launch latency", scope });
+    }
+    expect(() => chatRequest({
+      question: "launch",
+      scope: { kind: "items", knowledgeItemIds: Array.from({ length: 9 }, (_, index) => `knowledge-${index}`) },
+    })).toThrow(/Chat scope/u);
+    for (const scope of [
+      { kind: "all", spaceId: "default" },
+      { kind: "space", spaceId: "default", collectionId: "collection-1" },
+      { kind: "collection", collectionId: "collection-1", knowledgeItemIds: ["knowledge-1"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-1", "knowledge-1"] },
+      { kind: "unknown" },
+      undefined,
+    ]) {
+      expect(() => chatRequest({ question: "launch", scope })).toThrow(/Chat scope/u);
+    }
+
+    const view = citedAnswerModel({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [], sources: [], evidenceConfidence: 0.5,
+      messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+      suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "forged"],
+    });
+    expect(view).toMatchObject({
+      evidenceConfidence: 0.5,
+      messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+      suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE"],
+    });
+
+    let owns = true;
+    let aiCalls = 0;
+    let resolveAi!: () => void;
+    const ai = new Promise<void>((resolve) => { resolveAi = resolve; });
+    const mutation = createMutationController(() => owns, () => undefined);
+    const first = mutation.run(async () => { aiCalls += 1; await ai; }, () => undefined, () => undefined);
+    const localeRerender = mutation.run(async () => { aiCalls += 1; }, () => undefined, () => undefined);
+    expect(localeRerender).toBe(first);
+    expect(aiCalls).toBe(1);
+    owns = false;
+    resolveAi();
+    await first;
+    await mutation.run(async () => { aiCalls += 1; }, () => undefined, () => undefined);
+    expect(aiCalls).toBe(1);
+  });
+
   it("accepts only canonical base64 source bytes and persists M1-v2 code metadata", async () => {
     const contentBase64 = btoa("const x = 1;\\r\\n");
     const created = await memberApi("contributor", "/api/submissions", {
@@ -148,7 +225,7 @@ describe("M1 API authorization and request boundaries", () => {
     for (const [path, init] of [
       ["/api/knowledge", undefined],
       ["/api/knowledge/search?q=launch", undefined],
-      ["/api/knowledge/chat", { method: "POST", body: JSON.stringify({ question: "launch" }) }],
+      ["/api/knowledge/chat", { method: "POST", body: JSON.stringify({ question: "launch", scope: { kind: "all" } }) }],
       ["/api/spaces/default/tags", undefined],
     ] satisfies Array<[string, RequestInit | undefined]>) {
       await expectApiError(automationApi(path, init), 403, "FORBIDDEN");
@@ -172,6 +249,7 @@ describe("M1 API authorization and request boundaries", () => {
       method: "POST",
       body: JSON.stringify({
         question: "launch",
+        scope: { kind: "all" },
         sources: [{ content: "client controlled" }],
         citations: ["forged"],
         path: "/workspace/published/forged.md",
@@ -289,7 +367,7 @@ describe("M1 API authorization and request boundaries", () => {
 
   it("applies CSRF and exact query/cursor parsing to every new request shape", async () => {
     for (const [path, body] of [
-      ["/api/knowledge/chat", { question: "launch" }],
+      ["/api/knowledge/chat", { question: "launch", scope: { kind: "all" } }],
       ["/api/admin/submissions/submission/publish", {}],
       ["/api/admin/submissions/submission/reject", {}],
       ["/api/admin/submissions/submission/request-revision", {}],
@@ -588,13 +666,19 @@ describe("M1 trusted knowledge HTTP journey", () => {
 
     const chatResponse = await memberApi("contributor", "/api/knowledge/chat", {
       method: "POST",
-      body: JSON.stringify({ question: "launch latency" }),
+      body: JSON.stringify({ question: "launch latency", scope: { kind: "all" } }),
     });
     expect(chatResponse.status).toBe(200);
-    const answer = await chatResponse.json<{ answer: string; citations: string[]; sources: unknown[] }>();
+    const answer = await chatResponse.json<{
+      answer: string;
+      citations: string[];
+      sources: unknown[];
+      evidenceConfidence: number;
+    }>();
     expect(answer.answer).toContain("[1]");
     expect(answer.citations).toEqual([search.items[0]!.citationId]);
     expect(answer.sources).toHaveLength(1);
+    expect(answer.evidenceConfidence).toBe(0.85);
 
     const citationResponse = await memberApi(
       "contributor",
@@ -650,6 +734,143 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(recovery.json()).resolves.toEqual({
       recovery: { recoveredIntents: 0, recoveredIndexJobs: 0, failures: [] },
     });
+  });
+
+  it("enforces exact ChatScope bodies, authorizes every selected resource, and never calls AI on failure", async () => {
+    await env.DB.prepare(
+      `INSERT INTO spaces (
+         id, slug, name, description, kind, status, position, read_only, created_at, updated_at
+       ) VALUES ('space-two', 'space-two', 'Space Two', '', 'shared', 'active', 2, 0, ?, ?)`,
+    ).bind(now, now).run();
+    await env.DB.prepare(
+      `INSERT INTO collections (
+         id, space_id, parent_id, name, description, status, position, created_at, updated_at
+       ) VALUES ('api-chat-collection', 'default', NULL, 'API chat', '', 'active', 1, ?, ?)`,
+    ).bind(now, now).run();
+    const collection = await publishSubmission(
+      "contributor", "Scoped collection", "scopedmarker collection evidence", "shared", "scope-collection1",
+    );
+    const uncollected = await publishSubmission(
+      "contributor", "Scoped default", "scopedmarker default evidence", "shared", "scope-default-key1",
+    );
+    const secondSpace = await publishSubmission(
+      "other", "Scoped second Space", "scopedmarker second Space evidence", "shared", "scope-second-key01",
+    );
+    await env.DB.batch([
+      env.DB.prepare("UPDATE knowledge_items SET collection_id = 'api-chat-collection' WHERE id = ?")
+        .bind(collection.knowledgeItemId),
+      env.DB.prepare("UPDATE knowledge_items SET space_id = 'space-two' WHERE id = ?")
+        .bind(secondSpace.knowledgeItemId),
+    ]);
+
+    const ask = async (scope: unknown) => {
+      const response = await memberApi("contributor", "/api/knowledge/chat", {
+        method: "POST",
+        body: JSON.stringify({ question: "scopedmarker", scope }),
+      });
+      expect(response.status).toBe(200);
+      return response.json<{
+        citations: string[];
+        sources: Array<{ knowledgeItemId: string }>;
+        evidenceConfidence: number;
+      }>();
+    };
+    const ids = (result: Awaited<ReturnType<typeof ask>>) => (
+      result.sources.map((source) => source.knowledgeItemId).sort()
+    );
+
+    expect(ids(await ask({ kind: "all" }))).toEqual([
+      collection.knowledgeItemId, secondSpace.knowledgeItemId, uncollected.knowledgeItemId,
+    ].sort());
+    expect(ids(await ask({ kind: "space", spaceId: "default" }))).toEqual([
+      collection.knowledgeItemId, uncollected.knowledgeItemId,
+    ].sort());
+    expect(ids(await ask({ kind: "collection", collectionId: "api-chat-collection" })))
+      .toEqual([collection.knowledgeItemId]);
+    expect(ids(await ask({
+      kind: "items",
+      knowledgeItemIds: [secondSpace.knowledgeItemId, uncollected.knowledgeItemId],
+    }))).toEqual([secondSpace.knowledgeItemId, uncollected.knowledgeItemId].sort());
+    expect(fakeAiCalls).toBe(4);
+
+    for (const body of [
+      { question: "scopedmarker" },
+      { question: "scopedmarker", scope: { kind: "all", spaceId: "default" } },
+      { question: "scopedmarker", scope: { kind: "items", knowledgeItemIds: [] } },
+      { question: "scopedmarker", scope: { kind: "items", knowledgeItemIds: [uncollected.knowledgeItemId, uncollected.knowledgeItemId] } },
+      { question: "scopedmarker", scope: { kind: "items", knowledgeItemIds: Array.from({ length: 9 }, (_, index) => `knowledge-${index}`) } },
+    ]) {
+      await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+        method: "POST", body: JSON.stringify(body),
+      }), 400, "KNOWLEDGE_CHAT_REQUEST_INVALID");
+    }
+    expect(fakeAiCalls).toBe(4);
+
+    const hidden = await publishSubmission(
+      "other", "Hidden scoped", "scopedmarker hidden evidence", "admin_only", "scope-hidden-key01",
+    );
+    const beforeDenied = fakeAiCalls;
+    await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "scopedmarker",
+        scope: {
+          kind: "items",
+          knowledgeItemIds: [uncollected.knowledgeItemId, hidden.knowledgeItemId],
+        },
+      }),
+    }), 404, "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND");
+    await env.DB.prepare("UPDATE knowledge_items SET search_status = 'pending' WHERE id = ?")
+      .bind(uncollected.knowledgeItemId).run();
+    await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "scopedmarker",
+        scope: { kind: "items", knowledgeItemIds: [uncollected.knowledgeItemId] },
+      }),
+    }), 404, "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND");
+    await env.DB.prepare("UPDATE collections SET status = 'disabled' WHERE id = 'api-chat-collection'").run();
+    await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "scopedmarker",
+        scope: { kind: "items", knowledgeItemIds: [collection.knowledgeItemId] },
+      }),
+    }), 404, "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND");
+    expect(fakeAiCalls).toBe(beforeDenied);
+  });
+
+  it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
+    const weak = await publishSubmission(
+      "contributor",
+      "General handbook",
+      `launch ${"generic policy filler ".repeat(24)}latency`,
+      "shared",
+      "scope-weak-key001",
+    );
+    const callsBefore = fakeAiCalls;
+
+    const response = await memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "launch latency",
+        scope: { kind: "items", knowledgeItemIds: [weak.knowledgeItemId] },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      answer: "知识库中没有足够依据回答这个问题。",
+      citations: [],
+      sources: [],
+      evidenceConfidence: 0.325,
+      messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+      suggestedActionKeys: [
+        "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+        "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+      ],
+    });
+    expect(fakeAiCalls).toBe(callsBefore);
   });
 
   it("keeps invisible resources indistinguishable and reports degraded search without breaking reads", async () => {

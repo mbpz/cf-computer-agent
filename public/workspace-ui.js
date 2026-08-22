@@ -540,7 +540,43 @@ export function citedAnswerModel(value) {
       accessibleName: `Open citation ${index + 1}: ${source.title}, ${source.headingPath.join(" › ") || "Document"}, ${lineLabel(source.startLine, source.endLine)}`,
       href: source.citationHref,
     }));
-  return Object.freeze({ answer: safeString(input.answer), sources });
+  const evidenceConfidence = typeof input.evidenceConfidence === "number"
+    && Number.isFinite(input.evidenceConfidence)
+    && input.evidenceConfidence >= 0
+    && input.evidenceConfidence <= 1
+    ? Math.round(input.evidenceConfidence * 10_000) / 10_000
+    : 0;
+  const messageKey = input.messageKey === "KNOWLEDGE_EVIDENCE_INSUFFICIENT"
+    ? input.messageKey
+    : "";
+  const suggestedActionKeys = [
+    "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+    "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+  ].filter((key) => safeArray(input.suggestedActionKeys).includes(key));
+  return Object.freeze({
+    answer: safeString(input.answer),
+    sources,
+    evidenceConfidence,
+    messageKey,
+    suggestedActionKeys: Object.freeze(suggestedActionKeys),
+  });
+}
+
+export function chatScopeControlsModel(value) {
+  const scope = safeRecord(value);
+  const selectedKind = ["all", "space", "collection", "items"].includes(scope.kind)
+    ? scope.kind
+    : "all";
+  return Object.freeze({
+    selectedKind,
+    maxSelectedItems: 8,
+    options: Object.freeze([
+      Object.freeze({ kind: "all", labelKey: "KNOWLEDGE_CHAT_SCOPE_ALL" }),
+      Object.freeze({ kind: "space", labelKey: "KNOWLEDGE_CHAT_SCOPE_SPACE" }),
+      Object.freeze({ kind: "collection", labelKey: "KNOWLEDGE_CHAT_SCOPE_COLLECTION" }),
+      Object.freeze({ kind: "items", labelKey: "KNOWLEDGE_CHAT_SCOPE_ITEMS" }),
+    ]),
+  });
 }
 
 export function submissionResultModel(value) {
@@ -648,10 +684,48 @@ export function resubmissionRequest(priorSubmissionId, value, idempotencyKey) {
 
 export function chatRequest(value) {
   const input = safeRecord(value);
+  const scope = chatScopeRequestBody(input.scope);
   return Object.freeze({
     path: "/api/knowledge/chat",
-    init: Object.freeze({ method: "POST", body: JSON.stringify({ question: safeString(input.question) }) }),
+    init: Object.freeze({
+      method: "POST",
+      body: JSON.stringify({ question: safeString(input.question), scope }),
+    }),
   });
+}
+
+function chatScopeRequestBody(value) {
+  const scope = safeRecord(value);
+  if (scope.kind === "all" && hasExactKeys(scope, ["kind"])) return { kind: "all" };
+  if (scope.kind === "space"
+    && hasExactKeys(scope, ["kind", "spaceId"])
+    && chatResourceId(scope.spaceId)) {
+    return { kind: "space", spaceId: safeString(scope.spaceId) };
+  }
+  if (scope.kind === "collection"
+    && hasExactKeys(scope, ["collectionId", "kind"])
+    && chatResourceId(scope.collectionId)) {
+    return { kind: "collection", collectionId: safeString(scope.collectionId) };
+  }
+  if (scope.kind === "items" && hasExactKeys(scope, ["kind", "knowledgeItemIds"])) {
+    const ids = safeArray(scope.knowledgeItemIds).map(safeString);
+    if (ids.length >= 1 && ids.length <= 8
+      && ids.every(chatResourceId)
+      && new Set(ids).size === ids.length) {
+      return { kind: "items", knowledgeItemIds: ids };
+    }
+  }
+  throw new Error("Chat scope is invalid.");
+}
+
+function hasExactKeys(value, expected) {
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
+function chatResourceId(value) {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(safeString(value));
 }
 
 export function knowledgeQuery(path, value) {

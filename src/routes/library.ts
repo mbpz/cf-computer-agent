@@ -10,7 +10,7 @@ import {
 } from "../http";
 import type { Principal } from "../identity/principal";
 import type { LibraryService } from "../library/service";
-import type { LibraryScope, SearchRequest } from "../library/types";
+import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import { strictRecord, stringValue } from "./member";
 
@@ -49,11 +49,13 @@ export async function routeLibraryApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["question"],
+      ["question", "scope"],
       "KNOWLEDGE_CHAT_REQUEST_INVALID",
     );
+    if (!hasExactKeys(input, ["question", "scope"])) throw invalidChatRequest();
     const question = stringValue(input.question);
-    const hits = await services.library.search(scope, { query: question, limit: 8 });
+    const chatScope = chatScopeRequest(input.scope);
+    const hits = await services.library.search(scope, { query: question, limit: 8 }, chatScope);
     return jsonResponse(
       await services.citedAnswers.answer(scope, question, hits.items),
       200,
@@ -110,6 +112,64 @@ export async function routeLibraryApi(
   }
 
   throw new AppError("NOT_FOUND", "Not found", 404);
+}
+
+function chatScopeRequest(value: unknown): ChatScope {
+  if (!isRecord(value) || typeof value.kind !== "string") throw invalidChatRequest();
+  if (value.kind === "all") {
+    if (!hasExactKeys(value, ["kind"])) throw invalidChatRequest();
+    return { kind: "all" };
+  }
+  if (value.kind === "space") {
+    if (!hasExactKeys(value, ["kind", "spaceId"]) || !isChatResourceId(value.spaceId)) {
+      throw invalidChatRequest();
+    }
+    return { kind: "space", spaceId: value.spaceId };
+  }
+  if (value.kind === "collection") {
+    if (!hasExactKeys(value, ["collectionId", "kind"]) || !isChatResourceId(value.collectionId)) {
+      throw invalidChatRequest();
+    }
+    return { kind: "collection", collectionId: value.collectionId };
+  }
+  if (value.kind === "items") {
+    if (!hasExactKeys(value, ["kind", "knowledgeItemIds"])
+      || !Array.isArray(value.knowledgeItemIds)
+      || value.knowledgeItemIds.length < 1
+      || value.knowledgeItemIds.length > 8
+      || value.knowledgeItemIds.some((id) => !isChatResourceId(id))
+      || new Set(value.knowledgeItemIds).size !== value.knowledgeItemIds.length) {
+      throw invalidChatRequest();
+    }
+    return { kind: "items", knowledgeItemIds: [...value.knowledgeItemIds] };
+  }
+  throw invalidChatRequest();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
+}
+
+function isChatResourceId(value: unknown): value is string {
+  return typeof value === "string"
+    && /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(value);
+}
+
+function invalidChatRequest(): AppError {
+  return new AppError(
+    "KNOWLEDGE_CHAT_REQUEST_INVALID",
+    "Knowledge chat request is invalid",
+    400,
+  );
 }
 
 function searchRequest(url: URL): SearchRequest {

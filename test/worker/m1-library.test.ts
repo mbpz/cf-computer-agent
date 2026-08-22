@@ -8,6 +8,7 @@ import {
   type CitedAnswerAi,
   type CitedAnswerAiInput,
 } from "../../src/ai/cited-answer-service";
+import { computeEvidenceConfidence } from "../../src/ai/evidence-confidence";
 import { AppError } from "../../src/http";
 import { AuditRepository } from "../../src/audit/repository";
 import type { KnowledgeBase } from "../../src/index";
@@ -384,6 +385,221 @@ describe("M1 permission-scoped library", () => {
     await expect(service.search(contributor, { query: "obsolete_unique_token", limit: 20 })).resolves.toMatchObject({
       items: [],
     });
+  });
+
+  it("authorizes all, Space, Collection, and 1-8 selected-item ChatScopes before retrieval", async () => {
+    await env.DB.prepare(
+      `INSERT INTO collections (
+         id, space_id, parent_id, name, description, status, position, created_at, updated_at
+       ) VALUES ('collection-chat', 'default', NULL, 'Chat', '', 'active', 1, ?, ?)`,
+    ).bind(now, now).run();
+    await seedKnowledge({
+      id: "knowledge-chat-collection", revisionId: "revision-chat-collection",
+      title: "Scoped marker collection", visibility: "shared", body: "scopedmarker launch latency",
+    });
+    await env.DB.prepare(
+      "UPDATE knowledge_items SET collection_id = 'collection-chat' WHERE id = 'knowledge-chat-collection'",
+    ).run();
+    await seedKnowledge({
+      id: "knowledge-chat-default", revisionId: "revision-chat-default",
+      title: "Scoped marker default", visibility: "shared", body: "scopedmarker launch latency",
+    });
+    await seedKnowledge({
+      id: "knowledge-chat-space-two", revisionId: "revision-chat-space-two",
+      title: "Scoped marker second Space", visibility: "shared", spaceId: "space-two",
+      body: "scopedmarker launch latency",
+    });
+    const service = serviceWithContent();
+    const ids = (items: Awaited<ReturnType<LibraryService["search"]>>["items"]): string[] => (
+      items.map((item) => item.knowledgeItemId).sort()
+    );
+
+    expect(ids((await service.search(contributor, { query: "scopedmarker", limit: 8 }, {
+      kind: "all",
+    })).items)).toEqual([
+      "knowledge-chat-collection", "knowledge-chat-default", "knowledge-chat-space-two",
+    ]);
+    expect(ids((await service.search(contributor, { query: "scopedmarker", limit: 8 }, {
+      kind: "space", spaceId: "default",
+    })).items)).toEqual(["knowledge-chat-collection", "knowledge-chat-default"]);
+    expect(ids((await service.search(contributor, { query: "scopedmarker", limit: 8 }, {
+      kind: "collection", collectionId: "collection-chat",
+    })).items)).toEqual(["knowledge-chat-collection"]);
+    expect(ids((await service.search(contributor, { query: "scopedmarker", limit: 8 }, {
+      kind: "items", knowledgeItemIds: ["knowledge-chat-default", "knowledge-chat-collection"],
+    })).items)).toEqual(["knowledge-chat-collection", "knowledge-chat-default"]);
+
+    for (let index = 0; index < 6; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-chat-selected-${index}`,
+        revisionId: `revision-chat-selected-${index}`,
+        title: `Selected ${index}`,
+        visibility: "shared",
+        body: "scopedmarker selected evidence",
+      });
+    }
+    const selectedIds = [
+      "knowledge-chat-collection",
+      "knowledge-chat-default",
+      ...Array.from({ length: 6 }, (_, index) => `knowledge-chat-selected-${index}`),
+    ];
+    const selected = await service.search(contributor, { query: "scopedmarker", limit: 8 }, {
+      kind: "items", knowledgeItemIds: selectedIds,
+    });
+    expect(ids(selected.items)).toEqual([...selectedIds].sort());
+  });
+
+  it("fails closed for malformed, hidden, inactive, disabled, mixed, and role-drift ChatScopes", async () => {
+    await env.DB.prepare(
+      `INSERT INTO collections (
+         id, space_id, parent_id, name, description, status, position, created_at, updated_at
+       ) VALUES ('collection-chat-disabled', 'default', NULL, 'Disabled chat', '', 'disabled', 1, ?, ?)`,
+    ).bind(now, now).run();
+    await seedKnowledge({
+      id: "knowledge-chat-visible", revisionId: "revision-chat-visible",
+      title: "Visible", visibility: "shared", body: "closedmarker evidence",
+    });
+    await seedKnowledge({
+      id: "knowledge-chat-hidden", revisionId: "revision-chat-hidden",
+      title: "Hidden", visibility: "admin_only", body: "closedmarker evidence",
+    });
+    await seedKnowledge({
+      id: "knowledge-chat-trashed", revisionId: "revision-chat-trashed",
+      title: "Trashed", visibility: "shared", status: "trashed", body: "closedmarker evidence",
+    });
+    await seedKnowledge({
+      id: "knowledge-chat-pending", revisionId: "revision-chat-pending",
+      title: "Pending", visibility: "shared", body: "closedmarker evidence",
+    });
+    await env.DB.prepare(
+      "UPDATE knowledge_items SET search_status = 'pending' WHERE id = 'knowledge-chat-pending'",
+    ).run();
+    await seedKnowledge({
+      id: "knowledge-chat-disabled-collection", revisionId: "revision-chat-disabled-collection",
+      title: "Disabled Collection", visibility: "shared", body: "closedmarker evidence",
+    });
+    await env.DB.prepare(
+      "UPDATE knowledge_items SET collection_id = 'collection-chat-disabled' WHERE id = 'knowledge-chat-disabled-collection'",
+    ).run();
+    await seedKnowledge({
+      id: "knowledge-chat-disabled-space", revisionId: "revision-chat-disabled-space",
+      title: "Disabled Space", visibility: "shared", spaceId: "space-two", body: "closedmarker evidence",
+    });
+    await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'space-two'").run();
+    const prepared: string[] = [];
+    const service = new LibraryService(
+      new LibraryRepository(capturePreparedSql(env.DB, prepared)),
+      noContentReader,
+    );
+
+    const malformed = [
+      { kind: "items", knowledgeItemIds: [] },
+      { kind: "items", knowledgeItemIds: Array.from({ length: 9 }, (_, index) => `knowledge-${index}`) },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-visible", "knowledge-chat-visible"] },
+      { kind: "all", spaceId: "default" },
+    ] as const;
+    for (const chatScope of malformed) {
+      await expect(service.search(
+        contributor,
+        { query: "closedmarker", limit: 8 },
+        chatScope as never,
+      )).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_INVALID", status: 400 });
+    }
+
+    for (const chatScope of [
+      { kind: "space", spaceId: "absent-space" },
+      { kind: "space", spaceId: "space-two" },
+      { kind: "collection", collectionId: "collection-chat-disabled" },
+      { kind: "items", knowledgeItemIds: ["knowledge-absent"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-hidden"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-trashed"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-pending"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-disabled-collection"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-disabled-space"] },
+      { kind: "items", knowledgeItemIds: ["knowledge-chat-visible", "knowledge-chat-hidden"] },
+    ] as const) {
+      await expect(service.search(
+        contributor,
+        { query: "closedmarker", limit: 8 },
+        chatScope as never,
+      )).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND", status: 404 });
+    }
+    await expect(service.search(
+      { memberId: contributor.memberId, role: "admin" },
+      { query: "closedmarker", limit: 8 },
+      { kind: "all" },
+    )).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    expect(prepared.some((sql) => sql.includes(" MATCH ?"))).toBe(false);
+  });
+
+  it("binds ChatScope to cursor replay and keeps unrelated corpus growth from changing scoped context", async () => {
+    await seedKnowledge({
+      id: "knowledge-chat-invariant-a", revisionId: "revision-chat-invariant-a",
+      title: "Launch latency A", visibility: "shared", body: "Launch latency has a measured budget.",
+    });
+    await seedKnowledge({
+      id: "knowledge-chat-invariant-b", revisionId: "revision-chat-invariant-b",
+      title: "Launch latency B", visibility: "shared", body: "Launch latency has a rollback threshold.",
+    });
+    const service = serviceWithContent();
+    const chatScope = {
+      kind: "items" as const,
+      knowledgeItemIds: ["knowledge-chat-invariant-a", "knowledge-chat-invariant-b"],
+    };
+    const before = await service.search(contributor, { query: "launch latency", limit: 1 }, chatScope);
+    expect(before.nextCursor).toBeDefined();
+    await expect(service.search(contributor, {
+      query: "launch latency", limit: 1, cursor: before.nextCursor,
+    }, chatScope)).resolves.toMatchObject({
+      items: [expect.objectContaining({ knowledgeItemId: "knowledge-chat-invariant-b" })],
+    });
+    await expect(service.search(contributor, {
+      query: "launch latency", limit: 1, cursor: before.nextCursor,
+    }, { kind: "space", spaceId: "default" })).rejects.toMatchObject({
+      code: "PAGE_CURSOR_INVALID", status: 400,
+    });
+
+    const beforeAll = await service.search(contributor, { query: "launch latency", limit: 8 }, chatScope);
+    for (let index = 0; index < 24; index += 1) {
+      await seedKnowledge({
+        id: `knowledge-chat-unrelated-${index}`,
+        revisionId: `revision-chat-unrelated-${index}`,
+        title: `Vacation ${index}`,
+        visibility: index % 2 === 0 ? "shared" : "admin_only",
+        body: "Directory contacts and holiday policy.",
+      });
+    }
+    const after = await service.search(contributor, { query: "launch latency", limit: 1 }, chatScope);
+    const afterAll = await service.search(contributor, { query: "launch latency", limit: 8 }, chatScope);
+    expect(after.nextCursor).toBe(before.nextCursor);
+    await expect(service.search(contributor, {
+      query: "launch latency", limit: 1, cursor: before.nextCursor,
+    }, chatScope)).resolves.toMatchObject({
+      items: [expect.objectContaining({ knowledgeItemId: "knowledge-chat-invariant-b" })],
+    });
+    expect(afterAll.items.map(({ score: _score, ...hit }) => hit))
+      .toEqual(beforeAll.items.map(({ score: _score, ...hit }) => hit));
+    expect(computeEvidenceConfidence("launch latency", afterAll.items))
+      .toBe(computeEvidenceConfidence("launch latency", beforeAll.items));
+
+    const contexts: string[] = [];
+    const ai: CitedAnswerAi = {
+      async run(_model, input): Promise<unknown> {
+        contexts.push(input.messages[1]!.content);
+        const context = JSON.parse(input.messages[1]!.content.split("输入 JSON：\n")[1]!) as {
+          sources: Array<{ citationId: string }>;
+        };
+        return { response: JSON.stringify({
+          claims: [{ text: "Scoped evidence is consistent.", citationIds: context.sources.map(({ citationId }) => citationId) }],
+          insufficientEvidence: false,
+        }) };
+      },
+    };
+    const answers = new CitedAnswerService(ai);
+    const beforeAnswer = await answers.answer(contributor, "launch latency", beforeAll.items);
+    const afterAnswer = await answers.answer(contributor, "launch latency", afterAll.items);
+    expect(afterAnswer.evidenceConfidence).toBe(beforeAnswer.evidenceConfidence);
+    expect(contexts[1]).toBe(contexts[0]);
   });
 
   it("keeps contributor BM25 scores, order, and cursor bytes isolated from admin-only corpus changes", async () => {
@@ -772,11 +988,7 @@ describe("M1 permission-scoped library", () => {
       contributor,
       "prelaunch postlatency launch latency",
       stuffed.items,
-    )).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    )).resolves.toEqual(citedRefusal(0.3417));
     expect(ai.calls).toBe(0);
   });
 
@@ -812,6 +1024,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "The foo bar rollout requires review. [1]",
         citations: [hit.citationId],
+        evidenceConfidence: 0.85,
       });
     expect(ai.calls).toBe(1);
   });
@@ -851,6 +1064,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "The sigma control is verified. [1]",
         citations: [hit.citationId],
+        evidenceConfidence: 0.7,
       });
     expect(ai.calls).toBe(1);
   });
@@ -890,6 +1104,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "The Straße control is verified. [1]",
         citations: [hit.citationId],
+        evidenceConfidence: 0.7,
       });
     expect(ai.calls).toBe(1);
   });
@@ -956,6 +1171,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "The dotless control is verified. [1]",
         citations: [dotlessHit.citationId],
+        evidenceConfidence: 0.7,
       });
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!.messages[1]!.content).toContain("ı verified control");
@@ -968,11 +1184,7 @@ describe("M1 permission-scoped library", () => {
       },
     };
     await expect(new CitedAnswerService(combinedAi).answer(contributor, "I ı", [combinedHit]))
-      .resolves.toEqual({
-        answer: "知识库中没有足够依据回答这个问题。",
-        citations: [],
-        sources: [],
-      });
+      .resolves.toEqual(citedRefusal(0.275));
     expect(combinedAi.calls).toBe(0);
   });
 
@@ -1032,6 +1244,7 @@ describe("M1 permission-scoped library", () => {
       answer: "Current shared evidence. [1]",
       citations: [sharedHit.citationId],
       sources: [sharedHit],
+      evidenceConfidence: 0.7,
     });
     const context = JSON.parse(inputs[0]!.messages[1]!.content.split("输入 JSON：\n")[1]!) as {
       sources: Array<{ citationId: string; excerpt: string }>;
@@ -1081,6 +1294,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "The compressed test window caused launch latency. [1]",
         citations: [hit.citationId],
+        evidenceConfidence: 0.85,
       });
     expect(ai.calls).toBe(1);
   });
@@ -1116,6 +1330,7 @@ describe("M1 permission-scoped library", () => {
       .resolves.toMatchObject({
         answer: "权限治理需要双人复核。 [1]",
         citations: [hit.citationId],
+        evidenceConfidence: 0.7,
       });
     expect(ai.calls).toBe(1);
   });
@@ -1174,11 +1389,8 @@ describe("M1 permission-scoped library", () => {
       },
     };
     const weakAnswers = new CitedAnswerService(weakAi);
-    await expect(weakAnswers.answer(contributor, "   launch latency   ", [weakBefore])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(weakAnswers.answer(contributor, "   launch latency   ", [weakBefore]))
+      .resolves.toEqual(citedRefusal(0.275));
     expect(weakAi.calls).toBe(0);
 
     for (let index = 0; index < 24; index += 1) {
@@ -1214,11 +1426,8 @@ describe("M1 permission-scoped library", () => {
     )).resolves.toMatchObject({ citations: [strongAfter.citationId] });
     expect(grownStrongAi.calls).toBe(1);
 
-    await expect(weakAnswers.answer(contributor, "launch latency", [weakAfter])).resolves.toEqual({
-      answer: "知识库中没有足够依据回答这个问题。",
-      citations: [],
-      sources: [],
-    });
+    await expect(weakAnswers.answer(contributor, "launch latency", [weakAfter]))
+      .resolves.toEqual(citedRefusal(0.275));
     expect(weakAi.calls).toBe(0);
   });
 
@@ -2022,6 +2231,20 @@ async function rejectedAppError(promise: Promise<unknown>): Promise<{
     if (!(error instanceof AppError)) throw error;
     return { code: error.code, message: error.message, status: error.status };
   }
+}
+
+function citedRefusal(evidenceConfidence: number) {
+  return {
+    answer: "知识库中没有足够依据回答这个问题。",
+    citations: [],
+    sources: [],
+    evidenceConfidence,
+    messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
+    suggestedActionKeys: [
+      "KNOWLEDGE_CHAT_REWRITE_QUESTION",
+      "KNOWLEDGE_CHAT_EXPAND_SCOPE",
+    ],
+  };
 }
 
 async function sha256Hex(value: string): Promise<string> {

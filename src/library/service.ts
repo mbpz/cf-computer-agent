@@ -11,6 +11,7 @@ import type {
 } from "./repository";
 import type {
   CitationSource,
+  ChatScope,
   KnowledgeDetail,
   KnowledgePage,
   KnowledgePageRequest,
@@ -103,8 +104,26 @@ export class LibraryService {
     };
   }
 
-  async search(scope: LibraryScope, request: SearchRequest): Promise<SearchPage> {
+  async search(
+    scope: LibraryScope,
+    request: SearchRequest,
+    chatScope?: ChatScope,
+  ): Promise<SearchPage> {
     await this.authorize(scope);
+    const requestedChatScope = chatScope === undefined ? undefined : normalizeChatScope(chatScope);
+    if (requestedChatScope !== undefined && hasMixedSearchScope(request)) {
+      throw invalidChatScope();
+    }
+    const authorizedChatScope = requestedChatScope === undefined
+      ? undefined
+      : await this.repository.authorizeChatScope(scope, requestedChatScope);
+    if (authorizedChatScope === null) {
+      throw new AppError(
+        "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND",
+        "Knowledge chat scope was not found",
+        404,
+      );
+    }
     const filters = normalizeFilters(request);
     const tagFilter = normalizeSearchTags(request);
     const page = parsePageRequest(request.limit, request.cursor);
@@ -114,11 +133,13 @@ export class LibraryService {
       ...page,
       ...query,
       ...tagFilter,
+      ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
       policyVersion: SEARCH_POLICY.version,
       cursorKey: await cursorKey("library-search", scope, {
         ...filters,
         query: query.normalizedQuery,
         ...tagFilter,
+        ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
         policyVersion: SEARCH_POLICY.version,
       }),
     };
@@ -170,6 +191,67 @@ export class LibraryService {
       })),
     };
   }
+}
+
+function normalizeChatScope(value: ChatScope): ChatScope {
+  if (!isPlainRecord(value) || typeof value.kind !== "string") throw invalidChatScope();
+  if (value.kind === "all") {
+    if (!hasExactKeys(value, ["kind"])) throw invalidChatScope();
+    return { kind: "all" };
+  }
+  if (value.kind === "space") {
+    if (!hasExactKeys(value, ["kind", "spaceId"]) || !FILTER_ID.test(value.spaceId)) {
+      throw invalidChatScope();
+    }
+    return { kind: "space", spaceId: value.spaceId };
+  }
+  if (value.kind === "collection") {
+    if (!hasExactKeys(value, ["collectionId", "kind"]) || !FILTER_ID.test(value.collectionId)) {
+      throw invalidChatScope();
+    }
+    return { kind: "collection", collectionId: value.collectionId };
+  }
+  if (value.kind === "items") {
+    if (!hasExactKeys(value, ["kind", "knowledgeItemIds"])
+      || !Array.isArray(value.knowledgeItemIds)
+      || value.knowledgeItemIds.length < 1
+      || value.knowledgeItemIds.length > 8
+      || value.knowledgeItemIds.some((id) => typeof id !== "string" || !FILTER_ID.test(id))
+      || new Set(value.knowledgeItemIds).size !== value.knowledgeItemIds.length) {
+      throw invalidChatScope();
+    }
+    return { kind: "items", knowledgeItemIds: [...value.knowledgeItemIds] };
+  }
+  throw invalidChatScope();
+}
+
+function hasMixedSearchScope(request: SearchRequest): boolean {
+  return request.spaceId !== undefined
+    || request.collectionId !== undefined
+    || request.tagId !== undefined
+    || request.tagIds !== undefined
+    || request.tagMode !== undefined;
+}
+
+function invalidChatScope(): AppError {
+  return new AppError(
+    "KNOWLEDGE_CHAT_SCOPE_INVALID",
+    "Knowledge chat scope is invalid",
+    400,
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const expected = [...keys].sort();
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
 }
 
 function attachmentFilename(value: string): string {

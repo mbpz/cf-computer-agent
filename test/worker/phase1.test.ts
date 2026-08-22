@@ -70,8 +70,12 @@ describe("Phase 1 API permission matrix", () => {
     await expectOk(memberApi("sub-contributor", "/api/knowledge/search?q=alpha"));
     await expectOk(memberApi("sub-contributor", "/api/knowledge/chat", {
       method: "POST",
-      body: JSON.stringify({ question: "alpha" }),
+      body: JSON.stringify({ question: "alpha", scope: { kind: "all" } }),
     }));
+    await expectApiError(memberApi("sub-contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({ question: "alpha" }),
+    }), 400, "KNOWLEDGE_CHAT_REQUEST_INVALID");
     for (const [method, path] of m1Boundaries.slice(3)) {
       await expectApiError(memberApi("sub-contributor", path, {
         method,
