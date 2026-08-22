@@ -24,6 +24,24 @@ export const M1_EVIDENCE_CONFIDENCE_CASES: readonly EvidenceConfidenceFixture[] 
   confidenceCase("strong-chinese-body", "权限治理", [
     hit("strong-zh", "团队手册", "权限治理。权限治理需要双人复核。", ["body"]),
   ], [1, 1, 0.25, 0, 0.7, true]),
+  confidenceCase("strong-chinese-unpunctuated", "权限治理", [
+    hit("strong-zh-unpunctuated", "团队手册", "权限治理需要复核", ["body"]),
+  ], [1, 1, 0.25, 0, 0.7, true]),
+  confidenceCase("strong-chinese-middle-of-longer-run", "权限治理", [
+    hit("strong-zh-middle", "团队手册", "团队权限治理需要复核", ["body"]),
+  ], [1, 1, 0.25, 0, 0.7, true]),
+  confidenceCase("weak-chinese-scattered", "权限治理", [
+    hit("weak-zh-scattered", "团队手册", "权限管理和治理流程", ["body"]),
+  ], [0.5, 0, 0.25, 0, 0.275, false]),
+  confidenceCase("partial-chinese-overlap", "权限治理", [
+    hit("partial-zh-overlap", "团队手册", "限治理流程", ["body"]),
+  ], [0.5, 0.5, 0.25, 0, 0.375, false]),
+  confidenceCase("unrelated-chinese-substrings", "权限治理", [
+    hit("unrelated-zh-substrings", "团队手册", "权力限制治理", ["body"]),
+  ], [0.25, 0, 0.25, 0, 0.1625, false]),
+  confidenceCase("strong-chinese-longer-query-run", "权限治理流程", [
+    hit("strong-zh-long-query", "团队手册", "团队权限治理流程需要复核", ["body"]),
+  ], [1, 1, 0.25, 0, 0.7, true]),
   confidenceCase("strong-code", "getUserByID retry", [
     hit("strong-code", "Identity helper", "getUserByID retry uses bounded exponential backoff.", ["code"]),
   ], [1, 1, 0.375, 0, 0.725, true]),
@@ -69,6 +87,10 @@ export const M1_CORPUS_GROWTH_FIXTURE = Object.freeze({
   ))),
   hiddenHits: Object.freeze([
     hit("growth-hidden", "Secret rotation", "Secret rotation is restricted.", ["title"], "admin-only"),
+  ]),
+  hanQuery: "权限治理",
+  hanAuthorizedHits: Object.freeze([
+    hit("growth-strong-han", "团队手册", "团队权限治理需要复核", ["body"]),
   ]),
 });
 

@@ -22,7 +22,10 @@ interface VisibleHitEvidence {
   hit: SearchHit;
   keys: Set<string>;
   textTokenSequences: string[][];
+  exactHanPhrase: boolean;
 }
+
+const HAN_POINT = /\p{Script=Han}/u;
 
 export function computeEvidenceConfidence(query: string, hits: readonly SearchHit[]): number {
   const features = evidenceConfidenceFeatures(query, hits);
@@ -43,17 +46,21 @@ export function evidenceConfidenceFeatures(
   const queryKeys = new Set(normalized.termKeys);
   const surfaceSequence = surfaceTokenSequence(normalized.normalizedQuery);
   const visibleHits = Array.isArray(hits)
-    ? hits.flatMap((hit) => visibleEvidence(hit, queryKeys))
+    ? hits.flatMap((hit) => visibleEvidence(
+      hit,
+      normalized.normalizedQuery,
+      queryKeys,
+    ))
     : [];
   const covered = new Set(visibleHits.flatMap(({ keys }) => [...keys]));
   const termCoverage = ratio(covered.size, queryKeys.size);
 
-  let phraseAdjacency = 0;
-  if (surfaceSequence.length === 1) {
+  let phraseAdjacency = visibleHits.some(({ exactHanPhrase }) => exactHanPhrase) ? 1 : 0;
+  if (phraseAdjacency === 0 && surfaceSequence.length === 1) {
     phraseAdjacency = visibleHits.some(({ textTokenSequences }) => (
       textTokenSequences.some((sequence) => sequence.includes(surfaceSequence[0]!))
     )) ? 1 : 0;
-  } else if (surfaceSequence.length > 1) {
+  } else if (phraseAdjacency === 0 && surfaceSequence.length > 1) {
     let adjacentPairs = 0;
     for (let index = 0; index + 1 < surfaceSequence.length; index += 1) {
       const left = surfaceSequence[index]!;
@@ -89,25 +96,50 @@ export function evidenceConfidenceFeatures(
   };
 }
 
-function visibleEvidence(hit: SearchHit, queryKeys: ReadonlySet<string>): VisibleHitEvidence[] {
+function visibleEvidence(
+  hit: SearchHit,
+  normalizedQuery: string,
+  queryKeys: ReadonlySet<string>,
+): VisibleHitEvidence[] {
   if (!hit || typeof hit !== "object") return [];
   const texts = [hit.title, hit.excerpt].filter((value): value is string => typeof value === "string");
   const textTokenSequences = texts.map(surfaceTokenSequence);
   const keys = new Set(texts.flatMap((text) => tokenizeSearchText(text).tokens
     .map((token) => token.comparisonKey)
     .filter((key) => queryKeys.has(key))));
-  return keys.size === 0 ? [] : [{ hit, keys, textTokenSequences }];
+  const exactHanPhrase = isHanOnly(normalizedQuery) && texts.some((text) => (
+    text.normalize("NFKC").includes(normalizedQuery)
+  ));
+  if (exactHanPhrase) {
+    for (const key of queryKeys) keys.add(key);
+  }
+  return keys.size === 0 ? [] : [{ hit, keys, textTokenSequences, exactHanPhrase }];
 }
 
 function surfaceTokenSequence(value: string): string[] {
   const tokens = tokenizeSearchText(value).tokens;
-  return tokens.filter((candidate) => !tokens.some((other) => (
-    other !== candidate
-    && other.start <= candidate.start
-    && other.end >= candidate.end
-    && (other.start < candidate.start || other.end > candidate.end)
-  ))).sort((left, right) => left.start - right.start || right.end - left.end)
-    .map((token) => token.comparisonKey);
+  const seen = new Set<string>();
+  return tokens.filter((candidate) => {
+    const points = [...candidate.value];
+    if (points.every((point) => HAN_POINT.test(point))) return points.length <= 2;
+    return !tokens.some((other) => (
+      other !== candidate
+      && other.start <= candidate.start
+      && other.end >= candidate.end
+      && (other.start < candidate.start || other.end > candidate.end)
+    ));
+  }).sort((left, right) => left.start - right.start || right.end - left.end)
+    .flatMap((token) => {
+      const identity = `${token.start}:${token.end}:${token.comparisonKey}`;
+      if (seen.has(identity)) return [];
+      seen.add(identity);
+      return [token.comparisonKey];
+    });
+}
+
+function isHanOnly(value: string): boolean {
+  const points = [...value];
+  return points.length > 0 && points.every((point) => HAN_POINT.test(point));
 }
 
 function isMatchedField(value: unknown): value is SearchMatchedField {

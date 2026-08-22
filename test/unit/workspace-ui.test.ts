@@ -8,6 +8,7 @@ const {
   citedAnswerModel,
   createMutationController,
   createAdminSpacesRouteController,
+  createChatItemPageController,
   createOwnedActionController,
   createOperationGuard,
   createOptionPageController,
@@ -742,6 +743,60 @@ describe("M1 trusted knowledge view models", () => {
     next.resolve({ items: [{ id: "collection-51", spaceId: "space-requested", name: "Stale", status: "active" }] });
     await load;
     expect(controller.snapshot().items.map((item) => item.id)).toEqual(["collection-1"]);
+  });
+
+  it("offers only indexed Chat items and never applies a stale ineligible page", async () => {
+    const stale = deferred<{ items: ReturnType<typeof libraryItem>[] }>();
+    let owns = true;
+    let requests = 0;
+    const statusItem = (
+      id: string,
+      searchStatus: "pending" | "indexed" | "search_degraded" | "failed",
+    ) => ({
+      ...libraryItem(id, id, "shared"),
+      searchStatus,
+    });
+    const controller = createChatItemPageController({
+      owns: () => owns,
+      request: async () => {
+        requests += 1;
+        return requests === 1 ? {
+          items: [
+            statusItem("knowledge-pending", "pending"),
+            statusItem("knowledge-indexed", "indexed"),
+            statusItem("knowledge-degraded", "search_degraded"),
+            statusItem("knowledge-failed", "failed"),
+          ],
+          nextCursor: "cursor-page-2",
+        } : stale.promise;
+      },
+      onChange: () => undefined,
+    });
+
+    await controller.loadInitial();
+    expect(controller.snapshot().items.map((item) => item.id)).toEqual(["knowledge-indexed"]);
+    const request = chatRequest({
+      question: "launch latency",
+      scope: {
+        kind: "items",
+        knowledgeItemIds: controller.snapshot().items.map((item) => item.id),
+      },
+    });
+    expect(JSON.parse(request.init.body)).toEqual({
+      question: "launch latency",
+      scope: { kind: "items", knowledgeItemIds: ["knowledge-indexed"] },
+    });
+
+    const load = controller.loadMore();
+    owns = false;
+    stale.resolve({
+      items: [
+        statusItem("knowledge-stale-indexed", "indexed"),
+        statusItem("knowledge-stale-pending", "pending"),
+      ],
+    });
+    await load;
+    expect(controller.snapshot().items.map((item) => item.id)).toEqual(["knowledge-indexed"]);
   });
 
   it("retains a bounded next page when the first Space page has no eligible option", async () => {

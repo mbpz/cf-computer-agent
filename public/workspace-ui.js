@@ -396,6 +396,57 @@ export function knowledgeListModel(page) {
   });
 }
 
+export function createChatItemPageController({ owns, request, onChange }) {
+  let items = [];
+  let nextCursor;
+  let pending = false;
+  let loaded = false;
+  let error = "";
+  const snapshot = () => Object.freeze({
+    items: items.map((item) => Object.freeze({ ...item })),
+    ...(nextCursor ? { nextCursor } : {}),
+    pending,
+    loaded,
+    error,
+  });
+  const emit = () => onChange(snapshot());
+  const mutation = createMutationController(owns, (value) => {
+    pending = value;
+    emit();
+  });
+  const load = (append) => {
+    if (!owns() || (append && !nextCursor)) return Promise.resolve();
+    const cursor = append ? nextCursor : undefined;
+    return mutation.run(
+      () => request(knowledgeQuery("/api/knowledge", {
+        limit: 50,
+        ...(cursor ? { cursor } : {}),
+      })),
+      (value) => {
+        const page = knowledgeListModel(value);
+        const eligible = page.items.filter((item) => item.searchStatus === "indexed");
+        items = appendPage(append ? items : [], eligible, (item) => item.id);
+        nextCursor = page.nextCursor;
+        loaded = true;
+        error = "";
+        emit();
+      },
+      () => {
+        loaded = true;
+        error = append
+          ? "Could not load more knowledge items."
+          : "Could not load knowledge items.";
+        emit();
+      },
+    );
+  };
+  return Object.freeze({
+    loadInitial() { return load(false); },
+    loadMore() { return load(true); },
+    snapshot,
+  });
+}
+
 export function knowledgeSearchModel(page) {
   const input = safeRecord(page);
   return Object.freeze({

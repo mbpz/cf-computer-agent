@@ -51,6 +51,19 @@ describe("corpus-stable evidence confidence", () => {
     expect(computeEvidenceConfidence(query, [...authorizedHits, ...unrelatedHits])).toBe(baseline);
   });
 
+  it("keeps unpunctuated Han confidence invariant as unrelated corpus entries grow", () => {
+    const {
+      hanQuery, hanAuthorizedHits, unrelatedHits,
+    } = M1_CORPUS_GROWTH_FIXTURE;
+    const baseline = computeEvidenceConfidence(hanQuery, [...hanAuthorizedHits]);
+
+    expect(baseline).toBe(0.7);
+    expect(computeEvidenceConfidence(hanQuery, [
+      ...hanAuthorizedHits,
+      ...unrelatedHits,
+    ])).toBe(0.7);
+  });
+
   it("does not let a matched-field label without visible term evidence inflate confidence", () => {
     const forgedLabel = evidenceHit(
       "label-only",

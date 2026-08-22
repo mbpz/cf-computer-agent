@@ -183,6 +183,22 @@ export interface KnowledgeListViewModel {
   nextCursor?: string;
 }
 export function knowledgeListModel(value: unknown): Readonly<KnowledgeListViewModel>;
+export interface ChatItemPageState {
+  items: KnowledgeListViewItem[];
+  nextCursor?: string;
+  pending: boolean;
+  loaded: boolean;
+  error: string;
+}
+export function createChatItemPageController(options: {
+  owns: () => boolean;
+  request: (path: string) => Promise<unknown>;
+  onChange: (state: Readonly<ChatItemPageState>) => void;
+}): Readonly<{
+  loadInitial: () => Promise<unknown>;
+  loadMore: () => Promise<unknown>;
+  snapshot: () => Readonly<ChatItemPageState>;
+}>;
 
 export interface KnowledgeSearchViewItem {
   citationId: string;

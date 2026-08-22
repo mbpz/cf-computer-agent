@@ -7,6 +7,7 @@ import {
   chatScopeControlsModel,
   citedAnswerModel,
   createAdminSpacesRouteController,
+  createChatItemPageController,
   createLogoutController,
   createMutationController,
   createOptionPageController,
@@ -661,27 +662,20 @@ async function renderAgent(generation) {
     itemMore.hidden = !itemCursor;
     itemMore.disabled = loadingItems;
   };
-  const loadItems = async (append) => {
-    if (!ownsMutation(owner) || loadingItems || (append && !itemCursor)) return;
-    loadingItems = true;
-    renderItemOptions();
-    try {
-      const page = knowledgeListModel(await api(knowledgeQuery("/api/knowledge", {
-        limit: 50,
-        ...(append ? { cursor: itemCursor } : {}),
-      })));
+  const itemController = createChatItemPageController({
+    owns: () => ownsMutation(owner),
+    request: api,
+    onChange(state) {
       if (!ownsMutation(owner)) return;
-      loadedItems = appendPage(append ? loadedItems : [], page.items, (item) => item.id);
-      itemCursor = page.nextCursor;
-      itemStatus.textContent = "";
-    } catch (error) {
-      if (ownsMutation(owner)) itemStatus.textContent = safeErrorMessage(error);
-    } finally {
-      loadingItems = false;
-      if (ownsMutation(owner)) renderItemOptions();
-    }
-  };
-  itemMore.addEventListener("click", () => { void loadItems(true); });
+      loadedItems = state.items;
+      itemCursor = state.nextCursor;
+      loadingItems = state.pending;
+      itemStatus.textContent = state.error;
+      renderItemOptions();
+      updateScopeState();
+    },
+  });
+  itemMore.addEventListener("click", () => { void itemController.loadMore(); });
   itemSelect.addEventListener("change", () => {
     const selected = [...itemSelect.selectedOptions];
     if (selected.length > scopeModel.maxSelectedItems) {
@@ -730,7 +724,9 @@ async function renderAgent(generation) {
   }
   for (const option of scopeOptions) option.input.addEventListener("change", () => {
     updateScopeState();
-    if (option.kind === "items" && loadedItems.length === 0) void loadItems(false);
+    if (option.kind === "items" && !itemController.snapshot().loaded) {
+      void itemController.loadInitial();
+    }
     if (option.kind === "collection" && spaceControl.select.value) void loadCollections();
   });
   spaceControl.select.addEventListener("change", () => {
