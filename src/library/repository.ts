@@ -706,6 +706,10 @@ function filterSql(filters: LibraryFilters, itemAlias: string, revisionAlias: st
   if (filters.tagId !== undefined) {
     clauses.push(`EXISTS (
       SELECT 1 FROM revision_tags selected_tag
+      JOIN tags active_tag
+        ON active_tag.id = selected_tag.tag_id
+          AND active_tag.space_id = ${itemAlias}.space_id
+          AND active_tag.status = 'active'
       WHERE selected_tag.revision_id = ${revisionAlias}.id AND selected_tag.tag_id = ?
     )`);
     bindings.push(filters.tagId);

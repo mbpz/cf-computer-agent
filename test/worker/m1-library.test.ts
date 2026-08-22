@@ -735,6 +735,84 @@ describe("M1 permission-scoped library", () => {
     })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
   });
 
+  it("fails closed for disabled, absent, and cross-Space single Tag filters in list and search", async () => {
+    await seedTag("tag-active", "default", "active");
+    await seedTag("tag-disabled", "default", "disabled");
+    await seedTag("tag-other", "space-two", "active");
+    await seedKnowledge({
+      id: "knowledge-tag-active-a", revisionId: "revision-tag-active-a", title: "Active A",
+      visibility: "shared", body: "singletagterm", tagIds: ["tag-active"],
+    });
+    await seedKnowledge({
+      id: "knowledge-tag-active-b", revisionId: "revision-tag-active-b", title: "Active B",
+      visibility: "shared", body: "singletagterm", tagIds: ["tag-active"],
+    });
+    await seedKnowledge({
+      id: "knowledge-tag-disabled", revisionId: "revision-tag-disabled", title: "Disabled secret",
+      visibility: "shared", body: "singletagterm disabled-metadata", tagIds: ["tag-disabled"],
+    });
+    await seedKnowledge({
+      id: "knowledge-tag-other", revisionId: "revision-tag-other", title: "Cross-space secret",
+      visibility: "shared", body: "singletagterm cross-space-metadata", tagIds: ["tag-other"],
+    });
+    await seedKnowledge({
+      id: "knowledge-tag-admin", revisionId: "revision-tag-admin", title: "Admin secret",
+      visibility: "admin_only", body: "singletagterm admin-metadata", tagIds: ["tag-active"],
+    });
+    const service = serviceWithContent();
+
+    const first = await service.list(contributor, { spaceId: "default", tagId: "tag-active", limit: 1 });
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]?.id).toMatch(/^knowledge-tag-active-/u);
+    expect(first.nextCursor).toBeDefined();
+    const second = await service.list(contributor, {
+      spaceId: "default", tagId: "tag-active", limit: 1, cursor: first.nextCursor,
+    });
+    expect(new Set([...first.items, ...second.items].map(({ id }) => id))).toEqual(new Set([
+      "knowledge-tag-active-a", "knowledge-tag-active-b",
+    ]));
+    await expect(service.list(contributor, {
+      spaceId: "default", tagId: "tag-disabled", limit: 20,
+    })).resolves.toEqual({ items: [] });
+    await expect(service.list(contributor, {
+      spaceId: "default", tagId: "tag-other", limit: 20,
+    })).resolves.toEqual({ items: [] });
+    await expect(service.list(contributor, {
+      spaceId: "default", tagId: "tag-absent", limit: 20,
+    })).resolves.toEqual({ items: [] });
+
+    await expect(service.search(contributor, {
+      query: "singletagterm", spaceId: "default", tagId: "tag-active", limit: 20,
+    })).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ knowledgeItemId: expect.stringMatching(/^knowledge-tag-active-/u) }),
+        expect.objectContaining({ knowledgeItemId: expect.stringMatching(/^knowledge-tag-active-/u) }),
+      ],
+      degraded: false,
+    });
+    for (const tagId of ["tag-disabled", "tag-other", "tag-absent"]) {
+      const page = await service.search(contributor, {
+        query: "singletagterm", spaceId: "default", tagId, limit: 20,
+      });
+      expect(page).toEqual({ items: [], degraded: false });
+      expect(JSON.stringify(page)).not.toMatch(/disabled-metadata|cross-space-metadata|admin-metadata/u);
+    }
+    await expect(service.list(contributor, {
+      spaceId: "default", tagId: "tag-active", limit: 1, cursor: first.nextCursor,
+    })).resolves.toMatchObject({ items: [expect.any(Object)] });
+    await expect(service.list(contributor, {
+      spaceId: "default", tagId: "tag-disabled", limit: 1, cursor: first.nextCursor,
+    })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+
+    const contributorIds = (await service.search(contributor, {
+      query: "singletagterm", spaceId: "default", tagId: "tag-active", limit: 20,
+    })).items.map(({ knowledgeItemId }) => knowledgeItemId);
+    expect(contributorIds).not.toContain("knowledge-tag-admin");
+    expect((await service.search(admin, {
+      query: "singletagterm", spaceId: "default", tagId: "tag-active", limit: 20,
+    })).items.map(({ knowledgeItemId }) => knowledgeItemId)).toContain("knowledge-tag-admin");
+  });
+
   it("fails closed for disabled, absent, and cross-Space Collection filters", async () => {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO collections (id, space_id, parent_id, name, description, status, position, created_at, updated_at) VALUES ('collection-active', 'default', NULL, 'Active', '', 'active', 1, ?, ?)").bind(now, now),
@@ -1602,8 +1680,12 @@ describe("M1 permission-scoped library", () => {
       .resolves.toEqual({ items: [] });
     await expect(service.search(contributor, { query: "not-present", spaceId: "space-empty", limit: 20 }))
       .resolves.toEqual({ items: [], degraded: false });
+    await service.list(contributor, { spaceId: "default", tagId: "tag-plan-a", limit: 20 });
     await service.search(contributor, {
       query: "planterm", spaceId: "default", collectionId: "collection-plan",
+    });
+    await service.search(contributor, {
+      query: "planterm", spaceId: "default", tagId: "tag-plan-a",
     });
     await service.search(contributor, {
       query: "planterm", spaceId: "default", tagIds: ["tag-plan-a", "tag-plan-b"], tagMode: "and",
@@ -1622,25 +1704,37 @@ describe("M1 permission-scoped library", () => {
     await service.search(admin, { query: "planterm", spaceId: "default", limit: 50 });
 
     const listSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC"));
+    const taggedListSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC")
+      && sql.includes("JOIN tags active_tag"));
     const degradedSql = prepared.find((sql) => sql.includes("k.search_status = 'search_degraded'"));
     expect(listSql).toBeDefined();
+    expect(taggedListSql).toBeDefined();
     expect(degradedSql).toBeDefined();
     const listPlan = await explain(listSql!, ["member-1", "contributor", "space-empty", 21]);
+    const taggedListPlan = await explain(taggedListSql!, [
+      "member-1", "contributor", "default", "tag-plan-a", 21,
+    ]);
     const degradedPlan = await explain(degradedSql!, ["member-1", "contributor", "space-empty"]);
     expect(listPlan).toContain("knowledge_items_space_page");
+    expect(taggedListPlan).toContain("sqlite_autoindex_revision_tags_1");
+    expect(taggedListPlan).toContain("sqlite_autoindex_tags_1");
+    expect(taggedListPlan).toContain("knowledge_items_space_page");
     expect(degradedPlan).toContain("knowledge_items_degraded_scope");
     const sharedSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts_shared"));
     const adminSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts,"));
-    expect(sharedSearchSql).toHaveLength(6);
+    expect(sharedSearchSql).toHaveLength(7);
     expect(adminSearchSql).toHaveLength(1);
     const collectionPlan = await explain(sharedSearchSql[1]!, [
       "member-1", "contributor", "\"planterm\"", "default", "collection-plan", "collection-plan", 21,
     ]);
-    const andPlan = await explain(sharedSearchSql[2]!, [
+    const singleTagPlan = await explain(sharedSearchSql[2]!, [
+      "member-1", "contributor", "\"planterm\"", "default", "tag-plan-a", 21,
+    ]);
+    const andPlan = await explain(sharedSearchSql[3]!, [
       "member-1", "contributor", "\"planterm\"", "default",
       "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
     ]);
-    const orPlan = await explain(sharedSearchSql[3]!, [
+    const orPlan = await explain(sharedSearchSql[4]!, [
       "member-1", "contributor", "\"planterm\"", "default",
       "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
     ]);
@@ -1649,10 +1743,12 @@ describe("M1 permission-scoped library", () => {
     ]);
     expect(andPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_revision_tags_1");
+    expect(singleTagPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(andPlan).toContain("sqlite_autoindex_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_tags_1");
+    expect(singleTagPlan).toContain("sqlite_autoindex_tags_1");
     expect(collectionPlan).toContain("knowledge_items_collection_reindex");
-    for (const plan of [collectionPlan, andPlan, orPlan]) {
+    for (const plan of [collectionPlan, singleTagPlan, andPlan, orPlan]) {
       assertSelectiveSearchPlan(plan.split("\n"), "chunks_fts_shared");
       expect(plan).toMatch(/knowledge_items_(?:current_revision_index_status|collection_reindex)/u);
     }
