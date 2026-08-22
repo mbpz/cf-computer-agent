@@ -286,6 +286,77 @@ describe("M1 publication control plane", () => {
     }
   });
 
+  it("writes complete deterministic FTS fields and keeps fenced code out of prose", async () => {
+    const prose = `${"😀".repeat(238)} tail prose marker`;
+    const parsed = await parseSource({
+      kind: "markdown",
+      content: `# Fields\n\n${prose}\n\n\`\`\`typescript\nconst CODE_MARKER = true;\n\`\`\`\n`,
+    });
+    await seedNormalizedReviewPendingSubmission(
+      "submission-fields", "markdown", parsed.normalizedMarkdown, parsed.contentSha256,
+    );
+    const service = new PublicationService(
+      repositoryWithIds("knowledge-fields", "revision-fields"),
+      durableContentCommitter(),
+    );
+
+    await expect(service.publish(adminReviewer, "submission-fields", {
+      ...publicationInput, tagIds: ["tag-b", "tag-a"],
+    })).resolves.toMatchObject({ searchStatus: "indexed" });
+
+    const rows = await env.DB.prepare(
+      `SELECT f.title, f.summary, f.tags, f.body, f.code
+       FROM chunks_fts f JOIN chunks c ON c.id = f.chunk_id
+       WHERE c.revision_id = ? ORDER BY c.ordinal ASC LIMIT 3`,
+    ).bind("revision-fields").all<{
+      title: string; summary: string; tags: string; body: string; code: string;
+    }>();
+    expect(rows.results).toHaveLength(2);
+    expect(rows.results[0]).toMatchObject({
+      title: "Reviewed title",
+      summary: `${"😀".repeat(238)} t`,
+      tags: "tag-a Alpha Governance tag-b Beta Safety",
+      body: expect.stringContaining("tail prose marker"),
+      code: "",
+    });
+    expect(rows.results[1]).toMatchObject({
+      summary: `${"😀".repeat(238)} t`,
+      body: "",
+      code: expect.stringContaining("code marker"),
+    });
+  });
+
+  it("replays idempotently, removes the old current Revision, and removes all rows when trashed", async () => {
+    await seedReviewPendingSubmission("submission-switch-base");
+    const repository = repositoryWithIds("knowledge-switch", "revision-switch-base");
+    const service = new PublicationService(repository, durableContentCommitter());
+    await service.publish(adminReviewer, "submission-switch-base", publicationInput);
+
+    await expect(repository.processIndexJob("revision-switch-base")).resolves.toBe("indexed");
+    await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual([
+      "revision-switch-base-chunk-0", "revision-switch-base-chunk-1",
+    ]);
+
+    const replacement = await parseSource({
+      kind: "markdown",
+      content: "# Replacement\n\nNew current marker.\n",
+    });
+    await seedReplacementIndexRevision(
+      "knowledge-switch", "revision-switch-next", replacement.normalizedMarkdown, replacement.contentSha256,
+    );
+    await expect(repository.processIndexJob("revision-switch-next")).resolves.toBe("indexed");
+    await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual(["revision-switch-next-chunk-0"]);
+
+    await env.DB.batch([
+      env.DB.prepare("UPDATE knowledge_items SET status = 'trashed' WHERE id = ?").bind("knowledge-switch"),
+      env.DB.prepare(
+        "UPDATE jobs SET state = 'pending' WHERE kind = 'index_revision' AND resource_id = ?",
+      ).bind("revision-switch-next"),
+    ]);
+    await expect(repository.processIndexJob("revision-switch-next")).resolves.toBe("indexed");
+    await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual([]);
+  });
+
   it("publishes an audited final metadata patch to another active Space without mutating requested metadata", async () => {
     await seedReviewPendingSubmission("submission-metadata-patch");
     await env.DB.batch([
@@ -761,7 +832,7 @@ describe("M1 publication control plane", () => {
       disposeWorkspace(workspace);
     }
 
-    await env.DB.prepare("CREATE VIRTUAL TABLE chunks_fts USING fts5(chunk_id UNINDEXED, title, tags, body, tokenize='unicode61 remove_diacritics 2')").run();
+    await env.DB.prepare("CREATE VIRTUAL TABLE chunks_fts USING fts5(chunk_id UNINDEXED, title, summary, tags, body, code, tokenize='unicode61 remove_diacritics 2')").run();
     const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
     await expect(recreated.recoverPending(20)).resolves.toEqual({
       recoveredIntents: 0,
@@ -776,6 +847,37 @@ describe("M1 publication control plane", () => {
       ftsCount: 2,
       auditCount: 1,
     });
+  });
+
+  it("terminalizes a repeatedly failing index Job and keeps the terminal state stable", async () => {
+    await seedReviewPendingSubmission("submission-index-terminal");
+    const repository = repositoryWithIds("knowledge-index-terminal", "revision-index-terminal");
+    await finalizeWithoutIndex(repository, "submission-index-terminal");
+    await env.DB.prepare("DROP TABLE chunks_fts").run();
+    const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await expect(service.recoverPending(20)).resolves.toEqual({
+        recoveredIntents: 0,
+        recoveredIndexJobs: 0,
+        failures: [{ resourceId: "revision-index-terminal", code: "INDEX_RECOVERY_FAILED" }],
+      });
+      await expect(env.DB.prepare(
+        "SELECT state, attempts, last_error_code FROM jobs WHERE resource_id = ? LIMIT 1",
+      ).bind("revision-index-terminal").first()).resolves.toEqual({
+        state: attempt === 3 ? "failed_terminal" : "failed_retryable",
+        attempts: attempt,
+        last_error_code: "FTS_INDEX_FAILED",
+      });
+    }
+
+    await expect(service.recoverPending(20)).resolves.toEqual({
+      recoveredIntents: 0,
+      recoveredIndexJobs: 0,
+      failures: [],
+    });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-index-terminal"))
+      .resolves.toBe("failed");
   });
 
   it("recreates services to recover pending-content, pending-index, and running-index boundaries exactly once", async () => {
@@ -1149,6 +1251,74 @@ async function seedNormalizedReviewPendingSubmission(
     ).bind(sourceVersionId, sourceId, submissionId, normalizedMarkdown, contentSha256, now),
   ]);
   return { normalizedMarkdown, contentSha256 };
+}
+
+async function seedReplacementIndexRevision(
+  knowledgeItemId: string,
+  revisionId: string,
+  normalizedMarkdown: string,
+  contentSha256: string,
+): Promise<void> {
+  const submissionId = `submission-${revisionId}`;
+  const sourceId = `source-${revisionId}`;
+  const sourceVersionId = `source-version-${revisionId}`;
+  const chunks = chunkDocument({ normalizedMarkdown, kind: "markdown" });
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO submissions (
+         id, submitter_id, requested_space_id, requested_collection_id, kind, status,
+         title, content, idempotency_key, created_at, updated_at
+       ) VALUES (?, 'member-1', 'default', 'collection-1', 'markdown', 'published', ?, ?, NULL, ?, ?)`,
+    ).bind(submissionId, revisionId, normalizedMarkdown, now, now),
+    env.DB.prepare(
+      `INSERT INTO sources (
+         id, owner_id, space_id, collection_id, kind, title, created_at, updated_at
+       ) VALUES (?, 'member-1', 'default', 'collection-1', 'markdown', ?, ?, ?)`,
+    ).bind(sourceId, revisionId, now, now),
+    env.DB.prepare(
+      `INSERT INTO source_versions (
+         id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at
+       ) VALUES (?, ?, ?, 1, ?, ?, 'm1-v1', ?)`,
+    ).bind(sourceVersionId, sourceId, submissionId, normalizedMarkdown, contentSha256, now),
+    env.DB.prepare(
+      `INSERT INTO revisions (
+         id, knowledge_item_id, source_version_id, normalized_path, content_sha256,
+         title, tags_json, visibility, published_by, published_at
+       ) VALUES (?, ?, ?, ?, ?, ?, '[]', 'shared', 'admin-1', ?)`,
+    ).bind(
+      revisionId, knowledgeItemId, sourceVersionId,
+      `/workspace/published/default/${knowledgeItemId}/${revisionId}.md`,
+      contentSha256, revisionId, now,
+    ),
+    ...chunks.map((chunk) => env.DB.prepare(
+      `INSERT INTO chunks (
+         id, revision_id, ordinal, heading_path, start_line, end_line, body,
+         search_title, search_tags, search_body
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?)`,
+    ).bind(
+      `${revisionId}-chunk-${chunk.ordinal}`, revisionId, chunk.ordinal,
+      JSON.stringify(chunk.headingPath), chunk.startLine, chunk.endLine, chunk.body,
+      revisionId, chunk.searchBody,
+    )),
+    env.DB.prepare(
+      "UPDATE knowledge_items SET current_revision_id = ?, search_status = 'pending', updated_at = ? WHERE id = ?",
+    ).bind(revisionId, now, knowledgeItemId),
+    env.DB.prepare(
+      `INSERT INTO jobs (
+         id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+       ) VALUES (?, 'index_revision', ?, 'pending', 0, ?, NULL, ?, ?)`,
+    ).bind(`index-${revisionId}`, revisionId, now, now, now),
+  ]);
+}
+
+async function indexedChunkIds(knowledgeItemId: string): Promise<string[]> {
+  const rows = await env.DB.prepare(
+    `SELECT f.chunk_id FROM chunks_fts f
+     JOIN chunks c ON c.id = f.chunk_id
+     JOIN revisions r ON r.id = c.revision_id
+     WHERE r.knowledge_item_id = ? ORDER BY f.chunk_id ASC LIMIT ?`,
+  ).bind(knowledgeItemId, 257).all<{ chunk_id: string }>();
+  return rows.results.map((row) => row.chunk_id);
 }
 
 function paragraphDocument(count: number): string {

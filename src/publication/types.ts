@@ -128,7 +128,7 @@ export interface PublicationRepositoryPort {
   markContentWritten(submissionId: string, receipt: PublishedContentReceipt): Promise<void>;
   markIntentFailedTerminal(submissionId: string): Promise<void>;
   finalize(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision>;
-  processIndexJob(revisionId: string): Promise<"indexed" | "search_degraded">;
+  processIndexJob(revisionId: string): Promise<SearchStatus>;
   reject(
     submissionId: string,
     reviewerId: string,

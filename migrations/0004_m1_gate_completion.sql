@@ -64,6 +64,8 @@ CREATE INDEX reviews_final_target_lookup
 ON reviews(final_space_id, final_collection_id, final_visibility, created_at DESC, id DESC);
 
 ALTER TABLE revisions ADD COLUMN summary TEXT NOT NULL DEFAULT '';
+CREATE INDEX revisions_knowledge_item_cleanup
+ON revisions(knowledge_item_id, id);
 CREATE INDEX revision_tags_tag_revision ON revision_tags(tag_id, revision_id);
 CREATE INDEX knowledge_items_current_revision_index_status
 ON knowledge_items(current_revision_id, search_status, status);

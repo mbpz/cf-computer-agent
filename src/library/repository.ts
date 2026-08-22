@@ -21,6 +21,13 @@ import type {
 
 const MAX_EXCERPT_CODE_POINTS = 240;
 const CURSOR_KEY = /^[a-f0-9]{64}$/u;
+const visibleSearchStatusSql = `CASE
+  WHEN current_index_job.state = 'failed_terminal' THEN 'failed'
+  WHEN current_index_job.state = 'failed_retryable' THEN 'search_degraded'
+  WHEN current_index_job.state IN ('pending', 'running') THEN 'pending'
+  WHEN current_index_job.state = 'completed' AND k.search_status = 'indexed' THEN 'indexed'
+  ELSE k.search_status
+END`;
 
 export interface RepositoryKnowledgePageRequest extends PageRequest, LibraryFilters {
   cursorKey: string;
@@ -168,10 +175,12 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        )
        SELECT k.id, k.space_id, k.collection_id, r.id AS revision_id, r.title, r.tags_json,
-         r.visibility, k.search_status, r.published_at, k.updated_at
+         r.visibility, ${visibleSearchStatusSql} AS search_status, r.published_at, k.updated_at
        FROM authorized_member am
        JOIN knowledge_items k
        JOIN revisions r ON r.id = k.current_revision_id
+       LEFT JOIN jobs current_index_job
+         ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
        WHERE k.status = 'active'
          AND (r.visibility = 'shared' OR am.role = 'admin')
@@ -237,15 +246,18 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
            r.id AS revision_id, c.id AS chunk_id, r.title, c.heading_path,
            c.start_line, c.end_line, c.body, r.published_at,
-           bm25(chunks_fts, 0.0, 8.0, 5.0, 1.0) AS score
+           bm25(chunks_fts, 0.0, 8.0, 6.0, 5.0, 1.0, 1.0) AS score
          FROM chunks_fts
          JOIN chunks c ON c.id = chunks_fts.chunk_id
          JOIN revisions r ON r.id = c.revision_id
          JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.current_revision_id = r.id
+         LEFT JOIN jobs current_index_job
+           ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
          JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
          CROSS JOIN authorized_member am
          WHERE chunks_fts MATCH ?
            AND k.status = 'active' AND k.search_status = 'indexed'
+           AND (current_index_job.state IS NULL OR current_index_job.state = 'completed')
            AND (r.visibility = 'shared' OR am.role = 'admin')
            ${filters.sql}
        )
@@ -325,13 +337,16 @@ export class LibraryRepository implements LibraryRepositoryPort {
       `WITH authorized_member AS (
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        )
-       SELECT k.id, k.space_id, k.collection_id, k.status, k.search_status, k.updated_at,
+       SELECT k.id, k.space_id, k.collection_id, k.status,
+         ${visibleSearchStatusSql} AS search_status, k.updated_at,
          k.current_revision_id, r.id AS revision_id, r.source_version_id, r.normalized_path,
          r.content_sha256, r.title, r.tags_json, r.visibility, r.published_by, r.published_at,
          c.id AS chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line
        FROM authorized_member am
        JOIN knowledge_items k
        JOIN revisions current_revision ON current_revision.id = k.current_revision_id
+       LEFT JOIN jobs current_index_job
+         ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
        JOIN revisions r ON ${requestedRevision}
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
        LEFT JOIN chunks c ON c.revision_id = r.id

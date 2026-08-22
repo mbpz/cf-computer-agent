@@ -526,6 +526,10 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "tag_id", desc: 0 },
       { name: "revision_id", desc: 0 },
     ]);
+    await expectIndex("revisions", "revisions_knowledge_item_cleanup", [
+      { name: "knowledge_item_id", desc: 0 },
+      { name: "id", desc: 0 },
+    ]);
     await expectIndex("knowledge_items", "knowledge_items_current_revision_index_status", [
       { name: "current_revision_id", desc: 0 },
       { name: "search_status", desc: 0 },
@@ -919,11 +923,21 @@ describe("Phase 1 control-plane migrations", () => {
        ORDER BY t.created_at DESC, t.id DESC LIMIT ?`,
       ["default", timestamp, timestamp, "active-tag-9999", 51],
     );
+    const cleanupPlan = await queryPlan(
+      `SELECT c.id
+       FROM revisions stale
+       JOIN chunks c ON c.revision_id = stale.id
+       WHERE stale.knowledge_item_id = ? AND stale.id != ?`,
+      ["knowledge-cleanup", "revision-current"],
+    );
 
     expect(jobsPlan).toContain("jobs_recoverable_scan");
     expect(jobsPlan).not.toMatch(/USE TEMP B-TREE/iu);
     expect(tagsPlan).toContain("tags_active_page");
     expect(tagsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(cleanupPlan).toContain("revisions_knowledge_item_cleanup");
+    expect(cleanupPlan).toContain("chunks_revision");
+    expect(cleanupPlan).not.toMatch(/SCAN (?:stale|c)\b|USE TEMP B-TREE/iu);
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

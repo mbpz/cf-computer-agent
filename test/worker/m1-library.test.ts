@@ -59,6 +59,39 @@ describe("M1 permission-scoped library", () => {
     await expect(service.list(disabled, { limit: 20 })).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 
+  it("derives a safe failed status from the current terminal index Job while keeping knowledge readable", async () => {
+    await seedKnowledge({
+      id: "knowledge-terminal-index",
+      revisionId: "revision-terminal-index",
+      title: "Terminal index guide",
+      visibility: "shared",
+      searchStatus: "search_degraded",
+      index: false,
+      body: "Canonical readable terminal marker",
+    });
+    await env.DB.prepare(
+      `INSERT INTO jobs (
+         id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+       ) VALUES ('index-terminal', 'index_revision', 'revision-terminal-index',
+         'failed_terminal', 3, ?, 'FTS_INDEX_FAILED', ?, ?)`,
+    ).bind(now, now, now).run();
+    const service = serviceWithContent();
+
+    await expect(service.list(contributor, { limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: "knowledge-terminal-index", searchStatus: "failed" })],
+    });
+    await expect(service.detail(contributor, "knowledge-terminal-index")).resolves.toMatchObject({
+      currentRevision: {
+        indexStatus: "failed",
+        markdown: expect.stringContaining("Canonical readable terminal marker"),
+      },
+    });
+    await expect(service.search(contributor, { query: "terminal marker", limit: 20 })).resolves.toEqual({
+      items: [],
+      degraded: true,
+    });
+  });
+
   it("cross-checks the D1 member role instead of trusting a caller-claimed admin role", async () => {
     await seedKnowledge({ id: "knowledge-admin", revisionId: "revision-admin", title: "Admin", visibility: "admin_only" });
     const forged: LibraryScope = { memberId: "member-1", role: "admin" };

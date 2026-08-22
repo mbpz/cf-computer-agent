@@ -1,6 +1,7 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import { APP_CONFIG } from "../config";
+import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import type { PublishedContentReceipt } from "../knowledge/types";
 import type { ChunkDraft } from "../sources/chunker";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
@@ -13,6 +14,7 @@ import type {
   ReviewDecision,
   ReviewSubmissionSnapshot,
   ReviewTargetSummary,
+  SearchStatus,
 } from "./types";
 
 export type PublicationRepositoryConflictKind =
@@ -109,17 +111,40 @@ type ReviewRow = {
 
 type IndexJobRow = {
   state: "pending" | "running" | "completed" | "failed_retryable" | "failed_terminal";
+  attempts: number;
+  knowledge_item_id: string;
+  current_revision_id: string | null;
+  item_status: "active" | "trashed";
   search_status: PublishedRevision["searchStatus"];
 };
 
 type IndexChunkRow = {
   id: string;
-  search_title: string;
-  search_tags: string;
-  search_body: string;
+  ordinal: number;
+  heading_path: string;
+  start_line: number;
+  end_line: number;
+  body: string;
+  searchBody: string;
+};
+
+type IndexRevisionRow = {
+  id: string;
+  title: string;
+  summary: string;
+  kind: ReviewSubmissionSnapshot["kind"];
+  content: string;
 };
 
 const SAFE_PATH_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const MAX_INDEX_ATTEMPTS = 3;
+const visibleCurrentIndexStatusSql = `CASE
+  WHEN current_index_job.state = 'failed_terminal' THEN 'failed'
+  WHEN current_index_job.state = 'failed_retryable' THEN 'search_degraded'
+  WHEN current_index_job.state IN ('pending', 'running') THEN 'pending'
+  WHEN current_index_job.state = 'completed' AND k.search_status = 'indexed' THEN 'indexed'
+  ELSE k.search_status
+END`;
 
 export class PublicationRepository implements PublicationRepositoryPort {
   private readonly audit: AuditRepository;
@@ -292,7 +317,13 @@ export class PublicationRepository implements PublicationRepositoryPort {
     assertChunks(chunks);
     const requested = await this.getPreview(current.submissionId);
     if (!requested) throw new PublicationRepositoryConflictError("submission_not_pending");
-    const searchTags = await this.activeTagSearchText(current.spaceId, current.tagIds);
+    const indexTags = await this.activeIndexTags(current.spaceId, current.tagIds);
+    const indexDocument = buildIndexDocument({
+      id: current.revisionId,
+      title: current.title,
+      kind: current.sourceVersion.kind,
+      content: current.sourceVersion.content,
+    }, chunks, indexTags);
     const timestamp = this.now().toISOString();
     const reviewId = `review-${current.submissionId}`;
     const jobId = `index-${current.revisionId}`;
@@ -367,11 +398,11 @@ export class PublicationRepository implements PublicationRepositoryPort {
       this.db.prepare(
         `INSERT INTO revisions (
           id, knowledge_item_id, source_version_id, normalized_path, content_sha256,
-          title, tags_json, visibility, published_by, published_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          title, summary, tags_json, visibility, published_by, published_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         current.revisionId, current.knowledgeItemId, current.sourceVersion.id, current.normalizedPath,
-        current.contentSha256, current.title, JSON.stringify(current.tagIds), current.visibility,
+        current.contentSha256, current.title, indexDocument.summary, JSON.stringify(current.tagIds), current.visibility,
         current.reviewerId, timestamp,
       ),
       this.db.prepare(
@@ -379,7 +410,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
          WHERE id = ? AND current_revision_id IS NULL AND status = 'active'`,
       ).bind(current.revisionId, timestamp, current.knowledgeItemId),
       this.changeGuard(),
-      ...chunks.map((chunk) => this.prepareChunk(current, chunk, searchTags)),
+      ...chunks.map((chunk) => this.prepareChunk(current, chunk, indexDocument.tags)),
       ...current.tagIds.map((tagId) => this.db.prepare(
         "INSERT INTO revision_tags (revision_id, tag_id) VALUES (?, ?)",
       ).bind(current.revisionId, tagId)),
@@ -407,10 +438,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
     return this.requireRevision(current.revisionId);
   }
 
-  async processIndexJob(revisionId: string): Promise<"indexed" | "search_degraded"> {
+  async processIndexJob(revisionId: string): Promise<SearchStatus> {
     let job = await this.findIndexJob(revisionId);
     if (!job) throw new Error("Index job not found");
-    if (job.state === "completed") return "indexed";
+    if (job.state === "completed" || job.state === "failed_terminal") return visibleIndexStatus(job);
     const timestamp = this.now().toISOString();
     const claim = await this.db.prepare(
       `UPDATE jobs SET state = 'running', attempts = attempts + 1, last_error_code = NULL, updated_at = ?
@@ -419,27 +450,69 @@ export class PublicationRepository implements PublicationRepositoryPort {
     ).bind(timestamp, revisionId).run();
     if (claim.meta.changes !== 1) {
       job = await this.findIndexJob(revisionId);
-      if (job?.state === "completed") return "indexed";
+      if (job && (job.state === "completed" || job.state === "failed_terminal")) {
+        return visibleIndexStatus(job);
+      }
       throw new Error("Index job is not recoverable");
     }
 
     try {
+      job = await this.findIndexJob(revisionId);
+      if (!job || job.state !== "running") throw new Error("Index job claim was lost");
+      if (job.item_status === "trashed") {
+        await this.completeRemovedIndexJob(job.knowledge_item_id, revisionId, timestamp, true);
+        return "indexed";
+      }
+      if (job.current_revision_id !== revisionId) {
+        await this.completeRemovedIndexJob(job.knowledge_item_id, revisionId, timestamp, false);
+        const current = await this.findIndexJob(revisionId);
+        return current ? visibleIndexStatus(current) : "pending";
+      }
+      const revision = await this.db.prepare(
+        `SELECT r.id, r.title, r.summary, s.kind, sv.content
+         FROM revisions r
+         JOIN source_versions sv ON sv.id = r.source_version_id
+         JOIN sources s ON s.id = sv.source_id
+         WHERE r.id = ? AND r.knowledge_item_id = ? LIMIT 1`,
+      ).bind(revisionId, job.knowledge_item_id).first<IndexRevisionRow>();
+      if (!revision) throw new Error("Index revision not found");
       const chunks = await this.db.prepare(
-        `SELECT id, search_title, search_tags, search_body FROM chunks
-         WHERE revision_id = ? ORDER BY ordinal ASC`,
-      ).bind(revisionId).all<IndexChunkRow>();
-      if (chunks.results.length === 0) throw new Error("Index job has no chunks");
+        `SELECT id, ordinal, heading_path, start_line, end_line, body, search_body AS searchBody
+         FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
+      ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<IndexChunkRow>();
+      if (chunks.results.length === 0 || chunks.results.length > MAX_REVISION_CHUNKS) {
+        throw new Error("Index job has invalid chunks");
+      }
+      const normalizedChunks = chunks.results.map((chunk) => ({
+        id: chunk.id,
+        ordinal: chunk.ordinal,
+        headingPath: parseStringArray(chunk.heading_path),
+        startLine: chunk.start_line,
+        endLine: chunk.end_line,
+        body: chunk.body,
+        searchBody: chunk.searchBody,
+      }));
+      const tags = await this.indexTagsForRevision(revisionId);
+      const document = buildIndexDocument(revision, normalizedChunks, tags);
+      const fields = buildIndexChunkFields(revision, normalizedChunks);
       await this.db.batch([
+        this.db.prepare(
+          `DELETE FROM chunks_fts WHERE chunk_id IN (
+             SELECT c.id FROM chunks c JOIN revisions stale ON stale.id = c.revision_id
+             WHERE stale.knowledge_item_id = ? AND stale.id != ?
+           )`,
+        ).bind(job.knowledge_item_id, revisionId),
         this.db.prepare(
           "DELETE FROM chunks_fts WHERE chunk_id IN (SELECT id FROM chunks WHERE revision_id = ?)",
         ).bind(revisionId),
-        ...chunks.results.map((chunk) => this.db.prepare(
-          "INSERT INTO chunks_fts (chunk_id, title, tags, body) VALUES (?, ?, ?, ?)",
-        ).bind(chunk.id, chunk.search_title, chunk.search_tags, chunk.search_body)),
+        ...fields.map((field) => this.db.prepare(
+          `INSERT INTO chunks_fts (chunk_id, title, summary, tags, body, code)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        ).bind(field.chunkId, document.title, document.summary, document.tags, field.body, field.code)),
         this.db.prepare(
           `UPDATE knowledge_items SET search_status = 'indexed', updated_at = ?
-           WHERE current_revision_id = ? AND status = 'active'`,
-        ).bind(timestamp, revisionId),
+           WHERE id = ? AND current_revision_id = ? AND status = 'active'`,
+        ).bind(timestamp, job.knowledge_item_id, revisionId),
         this.changeGuard(),
         this.db.prepare(
           `UPDATE jobs SET state = 'completed', last_error_code = NULL, updated_at = ?
@@ -450,9 +523,12 @@ export class PublicationRepository implements PublicationRepositoryPort {
       return "indexed";
     } catch {
       job = await this.findIndexJob(revisionId);
-      if (job?.state === "completed") return "indexed";
+      if (job && (job.state === "completed" || job.state === "failed_terminal")) {
+        return visibleIndexStatus(job);
+      }
       await this.markIndexFailure(revisionId, timestamp);
-      return "search_degraded";
+      job = await this.findIndexJob(revisionId);
+      return job ? visibleIndexStatus(job) : "search_degraded";
     }
   }
 
@@ -500,8 +576,11 @@ export class PublicationRepository implements PublicationRepositoryPort {
   private async requireRevision(revisionId: string): Promise<PublishedRevision> {
     const row = await this.db.prepare(
       `SELECT r.id, r.knowledge_item_id, r.source_version_id, r.normalized_path, r.content_sha256,
-         r.title, r.tags_json, r.visibility, r.published_by, r.published_at, k.search_status
+         r.title, r.tags_json, r.visibility, r.published_by, r.published_at,
+         ${visibleCurrentIndexStatusSql} AS search_status
        FROM revisions r JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       LEFT JOIN jobs current_index_job
+         ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
        WHERE r.id = ? LIMIT 1`,
     ).bind(revisionId).first<RevisionRow>();
     if (!row) throw new Error("Published revision not found");
@@ -538,8 +617,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
     return row?.count ?? 0;
   }
 
-  private async activeTagSearchText(spaceId: string, tagIds: string[]): Promise<string> {
-    if (tagIds.length === 0) return "";
+  private async activeIndexTags(spaceId: string, tagIds: string[]): Promise<IndexTag[]> {
+    if (tagIds.length === 0) return [];
     const placeholders = tagIds.map(() => "?").join(", ");
     const rows = await this.db.prepare(
       `SELECT id, slug, name FROM tags
@@ -549,7 +628,17 @@ export class PublicationRepository implements PublicationRepositoryPort {
     if (rows.results.length !== tagIds.length) {
       throw new PublicationRepositoryConflictError("target_invalid");
     }
-    return rows.results.map((tag) => `${tag.slug} ${tag.name}`).join(" ");
+    return rows.results;
+  }
+
+  private async indexTagsForRevision(revisionId: string): Promise<IndexTag[]> {
+    const rows = await this.db.prepare(
+      `SELECT t.id, t.slug, t.name FROM revision_tags rt
+       JOIN tags t ON t.id = rt.tag_id AND t.status = 'active'
+       WHERE rt.revision_id = ? ORDER BY t.id ASC LIMIT 21`,
+    ).bind(revisionId).all<IndexTag>();
+    if (rows.results.length > 20) throw new Error("Index revision has too many tags");
+    return rows.results;
   }
 
   private async decide(
@@ -627,7 +716,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
 
   private findIndexJob(revisionId: string): Promise<IndexJobRow | null> {
     return this.db.prepare(
-      `SELECT j.state, k.search_status FROM jobs j
+      `SELECT j.state, j.attempts, r.knowledge_item_id, k.current_revision_id,
+         k.status AS item_status, k.search_status
+       FROM jobs j
        JOIN revisions r ON r.id = j.resource_id
        JOIN knowledge_items k ON k.id = r.knowledge_item_id
        WHERE j.kind = 'index_revision' AND j.resource_id = ? LIMIT 1`,
@@ -637,14 +728,45 @@ export class PublicationRepository implements PublicationRepositoryPort {
   private async markIndexFailure(revisionId: string, timestamp: string): Promise<void> {
     await this.db.batch([
       this.db.prepare(
-        `UPDATE jobs SET state = 'failed_retryable', last_error_code = 'FTS_INDEX_FAILED', updated_at = ?
-         WHERE kind = 'index_revision' AND resource_id = ? AND state != 'completed'`,
-      ).bind(timestamp, revisionId),
+        `UPDATE jobs SET
+           state = CASE WHEN attempts >= ? THEN 'failed_terminal' ELSE 'failed_retryable' END,
+           last_error_code = 'FTS_INDEX_FAILED', updated_at = ?
+         WHERE kind = 'index_revision' AND resource_id = ? AND state = 'running'`,
+      ).bind(MAX_INDEX_ATTEMPTS, timestamp, revisionId),
       this.changeGuard(),
       this.db.prepare(
         `UPDATE knowledge_items SET search_status = 'search_degraded', updated_at = ?
          WHERE current_revision_id = ? AND status = 'active'`,
       ).bind(timestamp, revisionId),
+    ]);
+    try {
+      await this.db.prepare(
+        "DELETE FROM chunks_fts WHERE chunk_id IN (SELECT id FROM chunks WHERE revision_id = ?)",
+      ).bind(revisionId).run();
+    } catch {
+      // The index itself may be unavailable; the authoritative Job state is durable.
+    }
+  }
+
+  private async completeRemovedIndexJob(
+    knowledgeItemId: string,
+    revisionId: string,
+    timestamp: string,
+    removeAll: boolean,
+  ): Promise<void> {
+    await this.db.batch([
+      this.db.prepare(removeAll
+        ? `DELETE FROM chunks_fts WHERE chunk_id IN (
+             SELECT c.id FROM chunks c JOIN revisions r ON r.id = c.revision_id
+             WHERE r.knowledge_item_id = ?
+           )`
+        : "DELETE FROM chunks_fts WHERE chunk_id IN (SELECT id FROM chunks WHERE revision_id = ?)")
+        .bind(removeAll ? knowledgeItemId : revisionId),
+      this.db.prepare(
+        `UPDATE jobs SET state = 'completed', last_error_code = NULL, updated_at = ?
+         WHERE kind = 'index_revision' AND resource_id = ? AND state = 'running'`,
+      ).bind(timestamp, revisionId),
+      this.changeGuard(),
     ]);
   }
 
@@ -745,6 +867,13 @@ function mapRevision(row: RevisionRow): PublishedRevision {
     publishedAt: row.published_at,
     searchStatus: row.search_status,
   };
+}
+
+function visibleIndexStatus(job: IndexJobRow): SearchStatus {
+  if (job.state === "failed_terminal") return "failed";
+  if (job.state === "failed_retryable") return "search_degraded";
+  if (job.state === "completed") return "indexed";
+  return job.search_status === "search_degraded" ? "search_degraded" : "pending";
 }
 
 function mapReview(row: ReviewRow): ReviewDecision {
