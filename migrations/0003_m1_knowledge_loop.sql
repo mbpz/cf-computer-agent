@@ -1,3 +1,12 @@
+-- Pre-M1 review_pending rows have no immutable SourceVersion and therefore
+-- cannot enter the M1 review/publish path. Abort before any schema change so
+-- an operator must explicitly return or reject them under the preflight.
+SELECT CASE
+  WHEN EXISTS (SELECT 1 FROM submissions WHERE status = 'review_pending')
+    THEN json_extract('[]', '$[')
+  ELSE 1
+END;
+
 ALTER TABLE submissions RENAME TO submissions_legacy;
 
 DROP INDEX submissions_owner_page;
@@ -187,11 +196,19 @@ ON knowledge_items(status, search_status, space_id, id);
 CREATE INDEX sources_owner_page
 ON sources(owner_id, updated_at DESC, id DESC);
 
+CREATE INDEX tags_active_page
+ON tags(space_id, created_at DESC, id DESC)
+WHERE status = 'active';
+
 CREATE INDEX chunks_revision
 ON chunks(revision_id, ordinal);
 
 CREATE INDEX publication_intents_pending
 ON publication_intents(state, updated_at, submission_id);
+
+CREATE INDEX jobs_recoverable_scan
+ON jobs(kind, available_at, id)
+WHERE state IN ('pending', 'running', 'failed_retryable');
 
 CREATE VIRTUAL TABLE chunks_fts USING fts5(
   chunk_id UNINDEXED,

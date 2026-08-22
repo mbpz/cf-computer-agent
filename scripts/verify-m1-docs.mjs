@@ -8,6 +8,8 @@ const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
   ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["pre-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"'],
+  ["legacy-pending-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT count(*) AS legacy_review_pending_without_source_versions FROM submissions WHERE status = \'review_pending\'" --json > "$M1_PENDING_FILE"'],
+  ["legacy-pending-verification", 'rtk npm run verify:m1:migrations -- --legacy-pending "$M1_PENDING_FILE"'],
   ["migration-apply", "rtk npm run db:migrate:remote"],
   ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],

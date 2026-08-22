@@ -17,6 +17,7 @@ import type {
 
 const MAX_TITLE_CODE_POINTS = 200;
 const MAX_TITLE_BYTES = 512;
+const MAX_SOURCE_BYTES = 128 * 1024;
 const MAX_REVIEW_NOTE_BYTES = 4_000;
 const MAX_TAGS = 20;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
@@ -49,6 +50,7 @@ export class PublicationService {
     }
     const preview = await this.repository.getPreview(stableSubmissionId);
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    await assertSourceVersion(preview.sourceVersion, preview.sourceVersion.contentSha256);
     let intent: PublicationIntent;
     try {
       intent = await this.repository.createOrReadIntent(stableSubmissionId, reviewer.id, normalized);
@@ -234,9 +236,17 @@ function reviewChunkPreviews(preview: ReviewSubmissionSnapshot) {
 }
 
 async function assertSourceContent(intent: PublicationIntent): Promise<void> {
-  if (intent.sourceVersion.parserVersion !== "m1-v1"
-    || intent.contentSha256 !== intent.sourceVersion.contentSha256
-    || await sha256Hex(intent.sourceVersion.content) !== intent.contentSha256) {
+  await assertSourceVersion(intent.sourceVersion, intent.contentSha256);
+}
+
+async function assertSourceVersion(
+  sourceVersion: ReviewSubmissionSnapshot["sourceVersion"],
+  expectedSha256: string,
+): Promise<void> {
+  if (sourceVersion.parserVersion !== "m1-v1"
+    || expectedSha256 !== sourceVersion.contentSha256
+    || new TextEncoder().encode(sourceVersion.content).byteLength > MAX_SOURCE_BYTES
+    || await sha256Hex(sourceVersion.content) !== expectedSha256) {
     throw new AppError("PUBLICATION_CONTENT_MISMATCH", "Publication content does not match the stable intent", 409);
   }
 }

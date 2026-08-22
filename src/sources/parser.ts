@@ -11,10 +11,11 @@ const allowedLanguages = new Set([
 export async function parseSource(input: ParseSourceInput): Promise<ParsedSource> {
   assertParseInput(input);
   const normalizedMarkdown = normalizeSource(input);
-  if (normalizedMarkdown.trim().length === 0) {
+  const normalizedBytes = new TextEncoder().encode(normalizedMarkdown);
+  if (normalizedMarkdown.trim().length === 0 || normalizedBytes.byteLength > maxSourceBytes) {
     throw new AppError("SOURCE_INVALID", "Source content is invalid", 400);
   }
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizedMarkdown));
+  const digest = await crypto.subtle.digest("SHA-256", normalizedBytes);
   return {
     normalizedMarkdown,
     contentSha256: [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""),

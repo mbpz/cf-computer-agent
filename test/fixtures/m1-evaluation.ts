@@ -107,7 +107,7 @@ const DOCUMENTS: EvaluationDocument[] = [
   document({
     id: "knowledge-launch",
     title: "Launch reliability playbook",
-    tags: ["release", "latency"],
+    tags: ["shiplabel", "latencytag"],
     body: "The release checklist sets the launch latency budget to 200 milliseconds. Rollback uses a forward compatible Worker version.",
     headingPath: ["Launch", "Latency budget"],
     startLine: 10,
@@ -116,7 +116,7 @@ const DOCUMENTS: EvaluationDocument[] = [
   document({
     id: "knowledge-permissions",
     title: "权限治理",
-    tags: ["权限", "治理", "访问控制"],
+    tags: ["边界标签"],
     body: "访问控制。共享知识。贡献者只能读取共享知识。每次读取都会重新校验成员状态。",
     headingPath: ["权限治理", "读取边界"],
     startLine: 20,
@@ -125,7 +125,7 @@ const DOCUMENTS: EvaluationDocument[] = [
   document({
     id: "knowledge-code",
     title: "Identity code reference",
-    tags: ["typescript", "oauth"],
+    tags: ["typedidentity", "tokenflow"],
     body: "TypeScript OAuth callback code calls getUserByID(userId). The SESSION_COOKIE and get_user_id identifiers remain searchable.",
     headingPath: ["Code", "Identity helpers"],
     startLine: 30,
@@ -176,16 +176,16 @@ const ALL_CITATIONS = DOCUMENTS.map(citationId);
 export const M1_EVALUATION_CASES: M1EvaluationCase[] = [
   evaluationCase("english-title", "launch reliability", CONTRIBUTOR, ["english", "title", "citation-location"], "knowledge-launch"),
   evaluationCase("english-body", "latency budget", CONTRIBUTOR, ["english", "body"], "knowledge-launch"),
-  evaluationCase("english-tag", "release", CONTRIBUTOR, ["english", "tag"], "knowledge-launch"),
+  retrievalOnlyCase("english-tag", "shiplabel", CONTRIBUTOR, ["english", "tag"], "knowledge-launch"),
   evaluationCase("rollback-body", "forward compatible rollback", CONTRIBUTOR, ["english", "body"], "knowledge-launch"),
-  evaluationCase("english-normalization", "ＦＯＲＷＡＲＤ compatible", CONTRIBUTOR, ["english", "body"], "knowledge-launch"),
+  retrievalOnlyCase("english-normalization", "ＬＡＴＥＮＣＹＴＡＧ", CONTRIBUTOR, ["english", "tag"], "knowledge-launch"),
   evaluationCase("chinese-title", "权限治理", CONTRIBUTOR, ["chinese", "title"], "knowledge-permissions"),
   evaluationCase("chinese-body", "共享知识", CONTRIBUTOR, ["chinese", "body"], "knowledge-permissions"),
-  evaluationCase("chinese-tag", "访问控制", CONTRIBUTOR, ["chinese", "tag"], "knowledge-permissions"),
+  retrievalOnlyCase("chinese-tag", "边界标签", CONTRIBUTOR, ["chinese", "tag"], "knowledge-permissions"),
   evaluationCase("code-camel", "getUserByID", CONTRIBUTOR, ["english", "code-identifier", "body"], "knowledge-code"),
   evaluationCase("code-constant", "SESSION_COOKIE", CONTRIBUTOR, ["english", "code-identifier", "body"], "knowledge-code"),
   evaluationCase("code-underscore", "get_user_id", CONTRIBUTOR, ["english", "code-identifier", "body"], "knowledge-code"),
-  evaluationCase("code-tag", "typescript oauth", CONTRIBUTOR, ["english", "tag"], "knowledge-code"),
+  retrievalOnlyCase("code-tag", "typedidentity tokenflow", CONTRIBUTOR, ["english", "tag"], "knowledge-code"),
   evaluationCase("markdown-title", "markdown citation", CONTRIBUTOR, ["english", "title"], "knowledge-citations"),
   evaluationCase("citation-location", "exact source lines", CONTRIBUTOR, ["english", "body", "citation-location"], "knowledge-citations"),
   evaluationCase("citation-heading", "heading path", CONTRIBUTOR, ["english", "body", "citation-location"], "knowledge-citations"),
@@ -240,11 +240,13 @@ export const M1_EVALUATION_CASES: M1EvaluationCase[] = [
   },
 ];
 
-export async function runM1Evaluation(): Promise<M1EvaluationReport> {
+export async function runM1Evaluation(
+  options: { includeTags?: boolean } = {},
+): Promise<M1EvaluationReport> {
   const cases: M1EvaluationCaseResult[] = [];
 
   for (const evaluation of M1_EVALUATION_CASES) {
-    const repository = new EvaluationRepository(evaluation);
+    const repository = new EvaluationRepository(evaluation, options.includeTags !== false);
     const library = new LibraryService(repository, UNUSED_CONTENT_READER);
     const provider = new DeterministicEvaluationAi();
     let search: SearchPage = { items: [], degraded: false };
@@ -335,11 +337,12 @@ export function summarizeM1Evaluation(
 
     const exactReturned = sameValues(result.returnedCitationIds, evaluation.expectedAnswerCitationIds);
     const exactLocated = sameValues(result.locatedCitationIds, evaluation.expectedAnswerCitationIds);
-    const outcomeMatches = evaluation.expectedOutcome === "answer"
+    const exactRetrieved = sameValues(result.retrievedCitationIds.slice(0, 5), evaluation.expectedRetrievalCitationIds);
+    const outcomeMatches = exactRetrieved && (evaluation.expectedOutcome === "answer"
       ? !result.denied && !result.noEvidence && result.providerCalled && exactReturned && exactLocated
       : evaluation.expectedOutcome === "refusal"
         ? !result.denied && result.noEvidence && !result.providerCalled && result.returnedCitationIds.length === 0
-        : result.denied && !result.providerCalled && result.returnedCitationIds.length === 0;
+        : result.denied && !result.providerCalled && result.returnedCitationIds.length === 0);
     if (!outcomeMatches) expectedOutcomeFailures += 1;
   }
 
@@ -379,7 +382,10 @@ export function assertM1EvaluationGate(report: M1EvaluationReport): void {
 }
 
 class EvaluationRepository implements LibraryRepositoryPort {
-  constructor(private readonly evaluation: M1EvaluationCase) {}
+  constructor(
+    private readonly evaluation: M1EvaluationCase,
+    private readonly includeTags: boolean,
+  ) {}
 
   async authorizeScope(scope: LibraryScope): Promise<boolean> {
     return !this.evaluation.disabled
@@ -402,9 +408,9 @@ class EvaluationRepository implements LibraryRepositoryPort {
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {
     const visible = DOCUMENTS.filter((entry) => entry.visibility === "shared" || scope.role === "admin");
-    const matched = visible.filter((entry) => matchesAllTerms(entry, request.termKeys));
+    const matched = visible.filter((entry) => matchesAllTerms(entry, request.termKeys, this.includeTags));
     const items = matched
-      .map((entry) => toSearchHit(entry, request.termKeys))
+      .map((entry) => toSearchHit(entry, request.termKeys, this.includeTags))
       .sort((left, right) => left.score - right.score || left.chunkId.localeCompare(right.chunkId))
       .slice(0, request.limit);
     return { items, degraded: this.evaluation.degraded === true };
@@ -513,23 +519,48 @@ function evaluationCase(
   };
 }
 
+function retrievalOnlyCase(
+  id: string,
+  query: string,
+  scope: LibraryScope,
+  coverage: M1EvaluationCoverage[],
+  documentId: string,
+): M1EvaluationCase {
+  const citation = CITATIONS[documentId]!;
+  return {
+    id,
+    query,
+    scope,
+    coverage,
+    expectedRetrievalCitationIds: [citation],
+    expectedAnswerCitationIds: [],
+    forbiddenCitationIds: scope.role === "contributor" ? [CITATIONS["knowledge-admin"]!] : [],
+    expectedOutcome: "refusal",
+  };
+}
+
 function citationId(entry: EvaluationDocument): string {
   return encodeCitationId({ revisionId: entry.revisionId, chunkId: entry.chunk.id });
 }
 
-function matchesAllTerms(entry: EvaluationDocument, termKeys: string[]): boolean {
-  const keys = searchableKeys(entry);
+function matchesAllTerms(entry: EvaluationDocument, termKeys: string[], includeTags: boolean): boolean {
+  const keys = searchableKeys(entry, includeTags);
   return termKeys.every((key) => keys.has(key));
 }
 
-function searchableKeys(entry: EvaluationDocument): Set<string> {
-  return new Set(tokenizeSearchText(`${entry.title}\n${entry.tags.join(" ")}\n${entry.chunk.body}`)
+function searchableKeys(entry: EvaluationDocument, includeTags: boolean): Set<string> {
+  const text = includeTags
+    ? `${entry.title}\n${entry.tags.join(" ")}\n${entry.chunk.body}`
+    : `${entry.title}\n${entry.chunk.body}`;
+  return new Set(tokenizeSearchText(text)
     .tokens.map((token) => token.comparisonKey));
 }
 
-function toSearchHit(entry: EvaluationDocument, termKeys: string[]): SearchHit {
+function toSearchHit(entry: EvaluationDocument, termKeys: string[], includeTags: boolean): SearchHit {
   const titleKeys = new Set(tokenizeSearchText(entry.title).tokens.map((token) => token.comparisonKey));
-  const tagKeys = new Set(tokenizeSearchText(entry.tags.join(" ")).tokens.map((token) => token.comparisonKey));
+  const tagKeys = includeTags
+    ? new Set(tokenizeSearchText(entry.tags.join(" ")).tokens.map((token) => token.comparisonKey))
+    : new Set<string>();
   const bodyKeys = new Set(tokenizeSearchText(entry.chunk.body).tokens.map((token) => token.comparisonKey));
   const weight = termKeys.reduce((total, key) => total
     + (titleKeys.has(key) ? 100 : 0)

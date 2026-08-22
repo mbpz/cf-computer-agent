@@ -44,6 +44,7 @@ Current default decision: **M1 local acceptance pending; remote verification pen
 | Export stored outside repository with restricted access | [ ] pending | restricted reference `<pending>` |
 | Reviewed `0001`/`0002`/`0003` SHA-256 verifier | [ ] pending | `rtk npm run verify:m1:migrations -- --files`; exact pass output `<pending>` |
 | Pre-apply `d1_migrations` ledger exact | [ ] pending | `rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"`; exact names/pass `<pending>` |
+| Legacy `review_pending` guard clear | [ ] pending | `rtk npm run verify:m1:migrations -- --legacy-pending "$M1_PENDING_FILE"`; exact zero-count pass `<pending>` |
 | `0003_m1_knowledge_loop.sql` reviewed in full | [ ] pending | reviewer `<pending>` |
 | Local upgrade preservation and FK checks passed | [ ] pending | command/count `<pending>` |
 | Remote `0003` applied once | [ ] pending | date/result `<pending>` |
@@ -71,6 +72,7 @@ The fixed evaluator is provider-free. Do not enter a Workers AI key, account tok
 | Check | Status | Evidence |
 | --- | --- | --- |
 | One `versions upload --strict` candidate | [ ] pending | uploaded version `<pending>` |
+| Protected upload secret file and dedicated directory both absent | [ ] pending | cleanup exit/result only; never record the paths or values `<pending>` |
 | Exact upload ID captured as nonempty `M1_VERSION_ID` | [ ] pending | `test -n "${M1_VERSION_ID:-}"`; exact ID `<pending>` |
 | Complete seven-secret **names** present | [ ] pending | names-only inspection `<pending>` |
 | `DB` binding exact | [ ] pending | `<pending>` |

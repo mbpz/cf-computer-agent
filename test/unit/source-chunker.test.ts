@@ -106,6 +106,30 @@ describe("chunkDocument", () => {
     expect(chunks.map((chunk) => chunk.endLine)).toEqual([2, 3, 5]);
   });
 
+  it("splits one oversized code line by Unicode code points with stable same-line locations", () => {
+    const input = {
+      kind: "code" as const,
+      normalizedMarkdown: "```ts\n😀abcdefghi\n```\n",
+    };
+    const options = { maxCodePoints: 5, overlapCodePoints: 1 };
+    const first = chunkDocument(input, options);
+    const second = chunkDocument(input, options);
+
+    expect(first).toEqual(second);
+    expect(first.map(({ ordinal }) => ordinal)).toEqual([0, 1, 2, 3, 4]);
+    expect(first.map(({ body }) => body)).toEqual(["```ts", "😀abcd", "defgh", "hi", "```"]);
+    expect(first.slice(1, 4).map(({ startLine, endLine }) => [startLine, endLine])).toEqual([
+      [2, 2],
+      [2, 2],
+      [2, 2],
+    ]);
+    for (const chunk of first) {
+      expect([...chunk.body].length).toBeLessThanOrEqual(options.maxCodePoints);
+      expect(chunk.body).not.toBe("");
+      expect(chunk.body).not.toMatch(/[\ud800-\udfff]/u);
+    }
+  });
+
   it("indexes shared unicode61 tokens, underscore separators, and adjacent Han bigrams", () => {
     const chunks = chunkDocument({
       kind: "markdown",

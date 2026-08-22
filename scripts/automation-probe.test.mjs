@@ -45,10 +45,10 @@ async function startProbeServer(statuses = [401, 403], requestIds = ["bad-hmac-i
       const body = Buffer.concat(chunks);
       requests.push({ method: request.method, url: request.url, headers: { ...request.headers }, body });
       const index = requests.length - 1;
-      response.writeHead(statuses[index] ?? 500, {
-        "content-type": "application/json",
-        "x-request-id": requestIds[index] ?? "unexpected-request",
-      });
+      const responseHeaders = { "content-type": "application/json" };
+      const requestId = requestIds[index];
+      if (typeof requestId === "string") responseHeaders["x-request-id"] = requestId;
+      response.writeHead(statuses[index] ?? 500, responseHeaders);
       response.end('{"secret":"response-body-must-not-be-logged"}');
     });
   });
@@ -126,6 +126,29 @@ test("supports one-request ordered evidence stages", async () => {
     assert.match(admin.output, /^\[pass\] automation-admin-forbidden status=403 /mu);
     assert.doesNotMatch(admin.output, /invalid-signature-health/u);
   } finally { await adminServer.close(); }
+});
+
+test("fails both one-stage probes when the response request ID is missing, malformed, or reflected", async () => {
+  const cases = [
+    [null, "missing"],
+    ["contains spaces", "malformed"],
+    [`prefix-${credentials.APP_TOKEN}-suffix`, "reflected"],
+  ];
+  for (const [requestId, label] of cases) {
+    for (const [status, mode, step] of [
+      [401, "--invalid-health", "invalid-signature-health"],
+      [403, "--admin-forbidden", "automation-admin-forbidden"],
+    ]) {
+      const server = await startProbeServer([status], [requestId]);
+      try {
+        const result = await runProbe(server.baseUrl, {}, [mode]);
+        assert.equal(result.code, 1, `${label} ${mode} ${result.output}`);
+        assert.equal(server.requests.length, 1);
+        assert.match(result.output, new RegExp(`^\\[fail\\] ${step} status=${status} request_id=invalid `, "mu"));
+        assert.doesNotMatch(result.output, /probe-client-id|probe-valid-secret|probe-app-token/u);
+      } finally { await server.close(); }
+    }
+  }
 });
 
 test("fails after the one health request on every status except exactly 401", async () => {

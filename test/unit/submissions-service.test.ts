@@ -73,6 +73,24 @@ describe("SubmissionsService", () => {
     });
   });
 
+  it.each([
+    ["text", `!${"a".repeat(128 * 1024 - 1)}`],
+    ["markdown", "a".repeat(128 * 1024)],
+    ["code", "a".repeat(128 * 1024)],
+  ] as const)("rejects normalized-oversize %s before any submission, source, or version persistence", async (kind, content) => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+
+    await expect(service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default",
+      kind,
+      title: "Title",
+      content,
+      idempotencyKey: "abcdefghijklmnop",
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    expect(repository.sourceCreation).toBeUndefined();
+  });
+
   it("maps an exact-key payload or target mismatch to a typed 409", async () => {
     const repository = new FakeSubmissionsRepository();
     repository.conflict = new SubmissionsRepositoryConflictError("idempotency_conflict");

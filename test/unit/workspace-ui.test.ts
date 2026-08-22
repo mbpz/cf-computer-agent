@@ -9,6 +9,7 @@ const {
   createMutationController,
   createOwnedActionController,
   createOperationGuard,
+  createOptionPageController,
   createReviewTagController,
   createRouteGuard,
   drawerState,
@@ -18,6 +19,7 @@ const {
   knowledgeReaderModel,
   knowledgeReaderRequest,
   knowledgeSearchModel,
+  optionLoadMoreModel,
   publishRequest,
   postLogout,
   renderKnowledgeSearch,
@@ -520,6 +522,107 @@ describe("M1 trusted knowledge view models", () => {
       label: "Load more Tags",
       accessibleName: "Load more Tags in the requested Space",
       disabled: false,
+    });
+  });
+
+  it.each([
+    ["spaces", undefined, "items", "/api/spaces?limit=50"],
+    ["collections", "space-requested", "items", "/api/spaces/space-requested/collections?limit=50"],
+    ["tags", "space-requested", "tags", "/api/spaces/space-requested/tags?limit=50"],
+  ] as const)("loads %s option 51 only after an explicit bounded Load more action", async (resource, spaceId, responseKey, firstPath) => {
+    const paths: string[] = [];
+    const option = (index: number) => resource === "spaces"
+      ? { id: `${resource}-${index}`, name: `${resource} ${index}`, status: "active", kind: "shared", readOnly: false }
+      : { id: `${resource}-${index}`, spaceId, name: `${resource} ${index}`, status: "active" };
+    const firstPage = Array.from({ length: 50 }, (_, index) => option(index + 1));
+    const controller = createOptionPageController({
+      resource,
+      spaceId,
+      writableOnly: resource === "spaces",
+      owns: () => true,
+      request: async (path: string) => {
+        paths.push(path);
+        return paths.length === 1
+          ? { [responseKey]: firstPage, nextCursor: "cursor-page-2" }
+          : { [responseKey]: [option(50), option(51)] };
+      },
+      onChange: () => undefined,
+    });
+
+    await controller.loadInitial();
+    expect(paths).toEqual([firstPath]);
+    expect(controller.snapshot().items).toHaveLength(50);
+    expect(controller.snapshot().nextCursor).toBe("cursor-page-2");
+
+    await controller.loadMore();
+    expect(paths).toEqual([firstPath, `${firstPath}&cursor=cursor-page-2`]);
+    expect(controller.snapshot().items).toHaveLength(51);
+    expect(new Set(controller.snapshot().items.map((item) => item.id))).toHaveLength(51);
+    expect(controller.snapshot().nextCursor).toBeUndefined();
+  });
+
+  it("keeps dependent option loads single-flight and suppresses stale scope results", async () => {
+    const next = deferred<{ items: Array<{ id: string; spaceId: string; name: string; status: string }> }>();
+    let owns = true;
+    let requests = 0;
+    const controller = createOptionPageController({
+      resource: "collections",
+      spaceId: "space-requested",
+      owns: () => owns,
+      request: async () => {
+        requests += 1;
+        return requests === 1
+          ? { items: [{ id: "collection-1", spaceId: "space-requested", name: "One", status: "active" }], nextCursor: "cursor-page-2" }
+          : next.promise;
+      },
+      onChange: () => undefined,
+    });
+    await controller.loadInitial();
+    const load = controller.loadMore();
+    const duplicate = controller.loadMore();
+    expect(duplicate).toBe(load);
+    expect(requests).toBe(2);
+
+    owns = false;
+    next.resolve({ items: [{ id: "collection-51", spaceId: "space-requested", name: "Stale", status: "active" }] });
+    await load;
+    expect(controller.snapshot().items.map((item) => item.id)).toEqual(["collection-1"]);
+  });
+
+  it("retains a bounded next page when the first Space page has no eligible option", async () => {
+    let requests = 0;
+    const controller = createOptionPageController({
+      resource: "spaces",
+      writableOnly: true,
+      owns: () => true,
+      request: async () => {
+        requests += 1;
+        return requests === 1
+          ? { items: [{ id: "space-readonly", name: "Read only", status: "active", kind: "shared", readOnly: true }], nextCursor: "cursor-page-2" }
+          : { items: [{ id: "space-writable", name: "Writable", status: "active", kind: "shared", readOnly: false }] };
+      },
+      onChange: () => undefined,
+    });
+
+    await controller.loadInitial();
+    expect(controller.snapshot()).toMatchObject({ items: [], nextCursor: "cursor-page-2" });
+    await controller.loadMore();
+    expect(controller.snapshot().items).toEqual([{ id: "space-writable", name: "Writable" }]);
+    expect(requests).toBe(2);
+  });
+
+  it("models accessible bounded option controls without starting another page automatically", () => {
+    expect(optionLoadMoreModel({ nextCursor: "cursor-page-2", pending: false }, "Spaces")).toEqual({
+      visible: true,
+      label: "Load more Spaces",
+      accessibleName: "Load more Spaces options",
+      disabled: false,
+    });
+    expect(optionLoadMoreModel({ nextCursor: "cursor-page-2", pending: true }, "Tags")).toEqual({
+      visible: true,
+      label: "Loading more Tags…",
+      accessibleName: "Load more Tags options",
+      disabled: true,
     });
   });
 

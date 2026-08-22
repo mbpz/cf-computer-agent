@@ -70,9 +70,12 @@ export class TagsRepository implements TagsRepositoryPort {
       : [];
     const rows = await this.db.prepare(
       `SELECT t.id, t.space_id, t.slug, t.name, t.status, t.created_at, t.updated_at
-       FROM tags t JOIN spaces s ON s.id = t.space_id
+       FROM tags t
        WHERE t.space_id = ? AND t.status = 'active'
-         AND s.status = 'active' AND s.kind != 'legacy'
+         AND EXISTS (
+           SELECT 1 FROM spaces s
+           WHERE s.id = t.space_id AND s.status = 'active' AND s.kind != 'legacy'
+         )
          ${cursorSql}
        ORDER BY t.created_at DESC, t.id DESC LIMIT ?`,
     ).bind(spaceId, ...cursorBindings, request.limit + 1).all<TagRow>();

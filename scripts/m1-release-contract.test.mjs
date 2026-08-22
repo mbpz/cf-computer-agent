@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -17,12 +17,14 @@ const reportPath = new URL("../.superpowers/sdd/2026-08-21-m1-single-source-know
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
-  ["0003_m1_knowledge_loop.sql", "17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d"],
+  ["0003_m1_knowledge_loop.sql", "8d19e4bc328a13e324b027b54fd4a0b91581461f2f10b9f738f39c4f4e20778d"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
   ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["pre-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"'],
+  ["legacy-pending-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT count(*) AS legacy_review_pending_without_source_versions FROM submissions WHERE status = \'review_pending\'" --json > "$M1_PENDING_FILE"'],
+  ["legacy-pending-verification", 'rtk npm run verify:m1:migrations -- --legacy-pending "$M1_PENDING_FILE"'],
   ["migration-apply", "rtk npm run db:migrate:remote"],
   ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],
@@ -112,6 +114,51 @@ async function withTextFile(prefix, value, callback) {
   }
 }
 
+async function runSecretCleanupContract(runbook, forceFailure) {
+  const cleanupFunction = runbook.match(/^cleanup_m1_secret_bundle\(\) \{[\s\S]*?^\}/mu)?.[0];
+  const postUpload = runbook.match(/```bash\n(M1_UPLOAD_STATUS=\$\?[\s\S]*?)\n```/u)?.[1];
+  assert.ok(cleanupFunction, "cleanup function missing");
+  assert.ok(postUpload, "post-upload cleanup block missing");
+  const directory = await mkdtemp(join(tmpdir(), "m1-secret-cleanup-contract-"));
+  const secretFile = join(directory, "worker-secrets.json");
+  const attemptsFile = join(tmpdir(), `m1-secret-cleanup-attempts-${process.pid}-${Date.now()}`);
+  await writeFile(secretFile, "protected", { mode: 0o600 });
+  const script = `
+rtk() {
+  printf '%s\\n' "$1" >> "$M1_ATTEMPTS_FILE"
+  if [ "$M1_FORCE_CLEANUP_FAILURE" = "1" ] && { [ "$1" = "rm" ] || [ "$1" = "rmdir" ]; }; then
+    return 70
+  fi
+  command "$@"
+}
+${cleanupFunction}
+trap cleanup_m1_secret_bundle EXIT HUP INT TERM
+true
+${postUpload}
+`;
+  try {
+    const result = spawnSync("bash", [], {
+      env: {
+        ...process.env,
+        M1_SECRETS_DIR: directory,
+        M1_SECRETS_FILE: secretFile,
+        M1_ATTEMPTS_FILE: attemptsFile,
+        M1_FORCE_CLEANUP_FAILURE: forceFailure ? "1" : "0",
+      },
+      input: script,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const attempts = await readFile(attemptsFile, "utf8").catch(() => "");
+    const fileRemains = await access(secretFile).then(() => true, () => false);
+    const directoryRemains = await access(directory).then(() => true, () => false);
+    return { result, attempts, fileRemains, directoryRemains };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(attemptsFile, { force: true });
+  }
+}
+
 test("pins the reviewed bytes of all three forward migrations", async () => {
   for (const [name, expectedHash] of expectedMigrations) {
     const bytes = await readFile(new URL(`../migrations/${name}`, import.meta.url));
@@ -134,6 +181,32 @@ test("accepts only the exact pre-0003 and post-0003 Wrangler ledger states", asy
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /^\[pass\] migration-ledger phase=after names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql$/mu);
   });
+});
+
+test("accepts only a zero legacy review_pending preflight result", async () => {
+  await withLedger([{
+    results: [{ legacy_review_pending_without_source_versions: 0 }],
+    success: true,
+    meta: { rows_read: 1, rows_written: 0 },
+  }], async (path) => {
+    const result = await runVerifier(["--legacy-pending", path]);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /^\[pass\] legacy-pending count=0$/mu);
+  });
+
+  for (const value of [
+    [{ results: [{ legacy_review_pending_without_source_versions: 1 }], success: true }],
+    [{ results: [{ legacy_review_pending_without_source_versions: "0" }], success: true }],
+    [{ results: [{ legacy_review_pending_without_source_versions: 0, id: "leak" }], success: true }],
+    [{ results: [], success: true }],
+  ]) {
+    await withLedger(value, async (path) => {
+      const result = await runVerifier(["--legacy-pending", path]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] legacy-pending$/mu);
+      assert.doesNotMatch(result.output, /legacy_review_pending_without_source_versions|leak/u);
+    });
+  }
 });
 
 test("fails closed on missing, renamed, extra, reordered, or malformed ledger rows", async () => {
@@ -167,7 +240,7 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
   ]);
   const verified = await runDocsVerifier(["--runbook", runbookPath.pathname]);
   assert.equal(verified.code, 0, verified.output);
-  assert.match(verified.output, /^\[pass\] m1-runbook evidence_blocks=12$/mu);
+  assert.match(verified.output, /^\[pass\] m1-runbook evidence_blocks=14$/mu);
   assert.equal(wrangler.d1_databases[0].database_name, "memory-garden-control-plane");
   assert.equal(wrangler.d1_databases[0].migrations_dir, "migrations");
   assert.equal(wrangler.d1_databases[0].migrations_table, undefined);
@@ -178,6 +251,28 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
   assert.match(packageJson.scripts["test:m1"], /npm run test:ops:m1/u);
   assert.match(packageJson.scripts["test:smoke"], /automation-probe\.test\.mjs/u);
   assert.ok(runbook.includes("Reviewed SHA-256"));
+});
+
+test("secret cleanup failure fails the release stage and leaves the EXIT trap armed", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const clean = await runSecretCleanupContract(runbook, false);
+  assert.equal(clean.result.status, 0, clean.result.stderr);
+  assert.equal(clean.fileRemains, false);
+  assert.equal(clean.directoryRemains, false);
+
+  const failed = await runSecretCleanupContract(runbook, true);
+  assert.notEqual(failed.result.status, 0, failed.result.stderr);
+  assert.equal(failed.fileRemains, true);
+  assert.equal(failed.directoryRemains, true);
+  assert.ok(failed.attempts.trim().split("\n").length >= 4, "EXIT trap did not retry protected cleanup");
+
+  const mutated = runbook.replace(
+    'test "$M1_CLEANUP_STATUS" -eq 0 || exit "$M1_CLEANUP_STATUS"',
+    "true # mutation: ignore cleanup failure",
+  );
+  assert.notEqual(mutated, runbook, "cleanup failure assertion missing");
+  const mutation = await runSecretCleanupContract(mutated, true);
+  assert.equal(mutation.result.status, 0, mutation.result.stderr);
 });
 
 test("runbook contract does not accept required commands moved into HTML or shell comments", async () => {

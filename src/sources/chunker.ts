@@ -206,6 +206,25 @@ function splitCodeBlock(block: Block, max: number, overlap: number): LocatedChun
   const chunks: LocatedChunk[] = [];
   let start = 0;
   while (start < lines.length) {
+    const oversizedLine = [...lines[start]!.text];
+    if (oversizedLine.length > max) {
+      let offset = 0;
+      while (offset < oversizedLine.length) {
+        const end = Math.min(offset + max, oversizedLine.length);
+        const body = oversizedLine.slice(offset, end).join("");
+        if (body.length > 0) {
+          chunks.push({
+            body,
+            startLine: lines[start]!.line,
+            endLine: lines[start]!.line,
+          });
+        }
+        if (end === oversizedLine.length) break;
+        offset = end - overlap;
+      }
+      start += 1;
+      continue;
+    }
     let end = start;
     let size = 0;
     while (end < lines.length) {

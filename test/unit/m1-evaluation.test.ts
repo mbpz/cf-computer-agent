@@ -72,10 +72,10 @@ describe("M1 fixed knowledge-loop evaluation", () => {
     expect(report.metrics.expectedRefusals).toBeGreaterThan(0);
     expect(report.metrics).toMatchObject({
       expectedRetrievalCitations: 20,
-      requiredAnswerCitations: 20,
-      returnedCitations: 20,
-      answerExpectedCases: 20,
-      expectedRefusals: 3,
+      requiredAnswerCitations: 16,
+      returnedCitations: 16,
+      answerExpectedCases: 16,
+      expectedRefusals: 7,
       expectedOutcomeFailures: 0,
     });
     expect(() => assertM1EvaluationGate(report)).not.toThrow();
@@ -180,5 +180,30 @@ describe("M1 fixed knowledge-loop evaluation", () => {
       providerCalled: true,
     });
     expect(result("prompt-injection")?.answer).not.toMatch(/EXFILTRATE|SYSTEM_OVERRIDE/u);
+  });
+
+  it("makes Tag-labelled cases fail recall and per-case gates when Tag indexing is removed", async () => {
+    const report = await runM1Evaluation({ includeTags: false });
+    const tagCaseIds = M1_EVALUATION_CASES
+      .filter((entry) => entry.coverage.includes("tag"))
+      .map((entry) => entry.id);
+
+    expect(tagCaseIds).toEqual([
+      "english-tag",
+      "english-normalization",
+      "chinese-tag",
+      "code-tag",
+    ]);
+    for (const id of tagCaseIds) {
+      expect(report.cases.find((entry) => entry.id === id)).toMatchObject({
+        retrievedCitationIds: [],
+        returnedCitationIds: [],
+        providerCalled: false,
+        noEvidence: true,
+      });
+    }
+    expect(report.metrics.recallAt5).toBeLessThan(0.85);
+    expect(report.metrics.expectedOutcomeFailures).toBe(tagCaseIds.length);
+    expect(() => assertM1EvaluationGate(report)).toThrow(/retrieval recall/u);
   });
 });

@@ -228,6 +228,66 @@ export function reviewTagLoadMoreModel(value) {
   });
 }
 
+export function createOptionPageController({ resource, spaceId, writableOnly = false, owns, request, onChange }) {
+  const fixedResource = safeString(resource);
+  const fixedSpaceId = safeString(spaceId);
+  let items = [];
+  let nextCursor;
+  let pending = false;
+  let loaded = false;
+  let error = "";
+  const snapshot = () => Object.freeze({
+    items: items.map((item) => Object.freeze({ ...item })),
+    ...(nextCursor ? { nextCursor } : {}),
+    pending,
+    loaded,
+    error,
+  });
+  const emit = () => onChange(snapshot());
+  const mutation = createMutationController(owns, (value) => {
+    pending = value;
+    emit();
+  });
+  const load = (append) => {
+    if (!owns() || (append && !nextCursor)) return Promise.resolve();
+    const cursor = append ? nextCursor : undefined;
+    return mutation.run(
+      () => request(optionPagePath(fixedResource, fixedSpaceId, cursor)),
+      (value) => {
+        const page = optionPageModel(value, fixedResource, fixedSpaceId, writableOnly);
+        items = appendPage(append ? items : [], page.items, (item) => item.id);
+        nextCursor = page.nextCursor;
+        loaded = true;
+        error = "";
+        emit();
+      },
+      () => {
+        loaded = true;
+        const label = optionResourceLabel(fixedResource);
+        error = append ? `Could not load more ${label}.` : `Could not load ${label}.`;
+        emit();
+      },
+    );
+  };
+  return Object.freeze({
+    loadInitial() { return load(false); },
+    loadMore() { return load(true); },
+    snapshot,
+  });
+}
+
+export function optionLoadMoreModel(value, label) {
+  const state = safeRecord(value);
+  const safeLabel = safeString(label);
+  const pending = state.pending === true;
+  return Object.freeze({
+    visible: safeString(state.nextCursor).length > 0,
+    label: pending ? `Loading more ${safeLabel}…` : `Load more ${safeLabel}`,
+    accessibleName: `Load more ${safeLabel} options`,
+    disabled: pending,
+  });
+}
+
 export function knowledgeListModel(page) {
   const input = safeRecord(page);
   return Object.freeze({
@@ -495,6 +555,35 @@ function tagPagePath(spaceId, cursor) {
   const query = new URLSearchParams({ limit: "50" });
   if (cursor) query.set("cursor", cursor);
   return `/api/spaces/${encodeURIComponent(spaceId)}/tags?${query.toString()}`;
+}
+
+function optionPagePath(resource, spaceId, cursor) {
+  const query = new URLSearchParams({ limit: "50" });
+  if (cursor) query.set("cursor", cursor);
+  if (resource === "spaces") return `/api/spaces?${query.toString()}`;
+  return `/api/spaces/${encodeURIComponent(spaceId)}/${resource}?${query.toString()}`;
+}
+
+function optionPageModel(value, resource, spaceId, writableOnly) {
+  const input = safeRecord(value);
+  const candidates = safeArray(resource === "tags" ? input.tags : input.items);
+  const items = candidates.map(safeRecord).filter((item) => {
+    if (!safeString(item.id) || !safeString(item.name) || item.status !== "active") return false;
+    if (resource === "spaces") {
+      return item.kind === "shared" && (!writableOnly || item.readOnly !== true);
+    }
+    return safeString(item.spaceId) === spaceId;
+  }).map((item) => Object.freeze({ id: safeString(item.id), name: safeString(item.name) }));
+  return Object.freeze({
+    items,
+    ...(safeString(input.nextCursor) ? { nextCursor: safeString(input.nextCursor) } : {}),
+  });
+}
+
+function optionResourceLabel(resource) {
+  if (resource === "collections") return "Collections";
+  if (resource === "tags") return "Tags";
+  return "Spaces";
 }
 
 function searchHitModel(candidate) {

@@ -23,7 +23,7 @@
 - [x] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；状态：L/W；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
 - [x] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；状态：L/W；验收：保留标题层级和代码块。
 - [ ] `SRC-003` P0/M1 `[AnythingLLM]` 创建代码来源；验收：记录语言、文件标签和行号基准。
-- [x] `SRC-004` P0/M1 输入大小边界；状态：L/W；验收：精确上限接受、超一字节稳定拒绝。
+- [x] `SRC-004` P0/M1 输入大小边界；状态：L/W；验收：规范化 Markdown 的 UTF-8 精确上限接受，任何规范化扩张超限都在 Source/Version/Submission/发布 intent 持久化前稳定拒绝。
 - [x] `SRC-005` P0/M1 标题规范化；状态：L/W；验收：trim、UTF-8 上限和控制字符拒绝。
 - [x] `SRC-006` P0/M1 Space/Collection 目标选择；状态：L/W；验收：只接受 active 且同 Space 集合。
 - [x] `SRC-007` P0/M1 Submission 幂等键；状态：L/W；验收：重放不创建第二条提交。
@@ -86,8 +86,8 @@
 ## CHK — Chunk 与来源定位
 
 - [x] `CHK-001` P0/M1 Markdown heading-aware chunk；状态：L；验收：不跨无关一级章节。
-- [x] `CHK-002` P0/M1 代码行 chunk；状态：L；验收：行范围稳定且不截断单个短函数。
-- [x] `CHK-003` P0/M1 token/字符预算；状态：L；验收：精确上限、超长段落安全切分。
+- [x] `CHK-002` P0/M1 代码行 chunk；状态：L；验收：短代码按完整行切分；单行自身超预算时按 Unicode code point 有界切分，所有片段保留同一源码行范围且顺序/ID 确定。
+- [x] `CHK-003` P0/M1 token/字符预算；状态：L；验收：每个 chunk 不超过精确 code-point 上限，超长段落/代码行无空片段或 surrogate 截断。
 - [x] `CHK-004` P0/M1 chunk ordinal 稳定；状态：L；验收：相同 SourceVersion/parser 得到相同顺序。
 - [x] `CHK-005` P0/M1 Markdown heading path；状态：L/W；验收：引用可打开对应标题。
 - [x] `CHK-006` P0/M1 Markdown line range；状态：L/W；验收：引用回读包含目标文本。
@@ -314,7 +314,7 @@
 
 ## EVAL — 质量评测
 
-M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
+M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。4 条 Tag 用例仅靠 Tag 命中；关闭 Tag 索引会同时击穿 Recall@5 与逐例门禁。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
 
 - [ ] `EVAL-001` P0/M1 解析 fixture 规范；状态：L；验收：输入、期望结构、位置和 warning 独立定义。当前解析测试未形成独立的期望矩阵。
 - [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L；验收：正常/空/超限/恶意。当前缺少包含 fatal UTF-8 的精确独立语料契约。
@@ -339,7 +339,7 @@ M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代�
 
 - [x] `OPS-001` P0/M0 本地完整门禁；状态：L/W；证据：types、TS、smoke、unit、workerd、dry build。
 - [x] `OPS-002` P0/M0 GitHub OAuth 生产部署手册；状态：I/L；证据：`docs/operations/production-environment-handbook.md`。
-- [x] `OPS-003` P0/M0 Secret bundle 单版本发布；状态：L；远程流程已由操作员执行。
+- [x] `OPS-003` P0/M0 Secret bundle 单版本发布；状态：L；远程流程已由操作员执行；M1 本地合同要求受保护临时文件/目录均已删除才算 stage 成功，清理失败保留 EXIT trap 并使 stage 失败。
 - [x] `OPS-004` P0/M0 append-only D1 migrations；状态：L/R；0001/0002 已由操作员应用。
 - [ ] `OPS-005` P0/M0 signed automation 远程 smoke 证据；验收：自定义域、脱敏 request ID。
 - [ ] `OPS-006` P0/M0 disabled contributor 远程证据；验收：真实 GitHub session 被拒绝。
@@ -352,7 +352,7 @@ M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代�
 - [ ] `OPS-013` P0/M4 Vectorize 用量断路器；验收：80% 后停止普通向量。
 - [ ] `OPS-014` P0/M2 Workers AI 日额度策略；验收：优先级、deferred_quota 和次日恢复。
 - [ ] `OPS-015` P0/M1 D1 query 成本证据；验收：关键列表/搜索记录 rows_read/written。
-- [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界。
+- [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界；Submit/Search 的 Space/Collection/Tag 第 51 项仅由可访问的显式 Load more 获取，去重、single-flight 且抑制 stale scope 结果。
 - [ ] `OPS-017` P0/M7 全量导出；验收：manifest、metadata、Revision、原件和引用映射。
 - [ ] `OPS-018` P0/M7 增量导出；验收：基于稳定 cursor/checkpoint，无漏项。
 - [ ] `OPS-019` P0/M7 导入 dry-run；验收：schema、容量、冲突和权限报告，不写数据。

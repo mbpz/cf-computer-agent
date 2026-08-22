@@ -17,7 +17,7 @@
 - Preserve signed automation HMAC + `APP_TOKEN`; automation remains limited to legacy endpoints and receives no M1 capability.
 - Do not reintroduce Cloudflare Access/Zero Trust or public registration.
 - Preserve Durable Object class `KnowledgeBase` and migration tag `v1`; add only append-only D1 migration `0003_m1_knowledge_loop.sql`.
-- Text, Markdown, and code source content remains limited to 128 KiB UTF-8; JSON transport uses the existing escaped-envelope protection.
+- Text, Markdown, and code source content remains limited to 128 KiB UTF-8 after deterministic Markdown normalization; normalization expansion is rejected before source/version/submission or publication-intent persistence. JSON transport uses the existing escaped-envelope protection.
 - All lists use versioned opaque keyset cursors, default 20, maximum 50, and `LIMIT + 1`; do not use `COUNT(*)` in request paths.
 - AI, Vectorize, and Queue are not required for M1 publication, reading, or FTS5 search. Workers AI failure affects only answer generation.
 - Document content is untrusted inert data. It cannot modify prompts, authorization, tools, or publication decisions.
@@ -299,7 +299,7 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
 );
 ```
 
-Add indexes for current knowledge pagination `(status, updated_at DESC, id DESC)`, source owner, chunks revision, pending intents, and review queue. Rebuild `submissions` within this append-only migration with nullable `idempotency_key TEXT`, a partial unique index on `(submitter_id, idempotency_key) WHERE idempotency_key IS NOT NULL`, the existing kinds `text`, `markdown`, `code`, `rich_text`, and statuses `draft`, `review_pending`, `published`, `rejected`, `revision_requested`. Preserve every existing row and recreate `submissions_owner_page` and `submissions_admin_page` before dropping the renamed table.
+Add indexes for current knowledge pagination `(status, updated_at DESC, id DESC)`, active Tag keyset pages, recoverable Job scans, source owner, chunks revision, pending intents, and review queue. Rebuild `submissions` within this append-only migration with nullable `idempotency_key TEXT`, a partial unique index on `(submitter_id, idempotency_key) WHERE idempotency_key IS NOT NULL`, the existing kinds `text`, `markdown`, `code`, `rich_text`, and statuses `draft`, `review_pending`, `published`, `rejected`, `revision_requested`. Fail closed before the first schema change if a pre-M1 `review_pending` row exists because it has no immutable SourceVersion; the runbook must resolve those rows explicitly before retrying. Preserve every draft/rejected legacy row and recreate `submissions_owner_page` and `submissions_admin_page` before dropping the renamed table.
 
 - [ ] **Step 4: Prove migration preservation and FTS availability**
 
@@ -448,7 +448,7 @@ export function chunkDocument(
 ): ChunkDraft[];
 ```
 
-Default to 1,200 code points with 120 code-point overlap. Never split a short fenced code block; split an oversized code block by complete lines. Build `searchBody` from normalized lower-case tokens plus deterministic adjacent Han bigrams so Chinese queries do not depend on whitespace tokenization.
+Default to 1,200 code points with 120 code-point overlap. Never split a short fenced code block; split an oversized code block by complete lines, except that an individual line over budget is split by Unicode code points into bounded nonempty chunks that all retain the same source line range. Build `searchBody` from normalized lower-case tokens plus deterministic adjacent Han bigrams so Chinese queries do not depend on whitespace tokenization.
 
 - [ ] **Step 4: Run invariants and commit**
 

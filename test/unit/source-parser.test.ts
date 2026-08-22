@@ -93,6 +93,32 @@ describe("parseSource", () => {
       .rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
   });
 
+  it("applies the 128 KiB limit to normalized Markdown bytes for every M1 source kind", async () => {
+    const limit = 128 * 1024;
+
+    await expect(parseSource({
+      kind: "text",
+      content: `!${"a".repeat(limit - 1)}`,
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    await expect(parseSource({
+      kind: "markdown",
+      content: "a".repeat(limit),
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+    await expect(parseSource({
+      kind: "code",
+      content: "a".repeat(limit),
+    })).rejects.toMatchObject({ code: "SOURCE_INVALID", status: 400 });
+
+    await expect(parseSource({
+      kind: "markdown",
+      content: `${"a".repeat(limit - 1)}\n`,
+    })).resolves.toMatchObject({ normalizedMarkdown: `${"a".repeat(limit - 1)}\n` });
+    await expect(parseSource({
+      kind: "code",
+      content: `${"a".repeat(limit - 9)}\n`,
+    })).resolves.toMatchObject({ parserVersion: "m1-v1" });
+  });
+
   it.each([
     ["NUL", "before\0after"],
     ["unpaired high surrogate", "before\ud800after"],

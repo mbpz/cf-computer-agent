@@ -27,6 +27,13 @@ function normalizeSql(sql: string): string {
   return sql.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+async function queryPlan(sql: string, bindings: unknown[]): Promise<string> {
+  const rows = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+    .bind(...bindings)
+    .all<{ detail: string }>();
+  return rows.results.map(({ detail }) => detail).join("\n");
+}
+
 async function expectTableSchema(
   name: string,
   expectedColumns: string[],
@@ -481,6 +488,22 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "updated_at", desc: 0 },
       { name: "submission_id", desc: 0 },
     ]);
+    await expectIndex("jobs", "jobs_recoverable_scan", [
+      { name: "kind", desc: 0 },
+      { name: "available_at", desc: 0 },
+      { name: "id", desc: 0 },
+    ], {
+      partial: 1,
+      sqlFragment: "WHERE state IN ('pending', 'running', 'failed_retryable')",
+    });
+    await expectIndex("tags", "tags_active_page", [
+      { name: "space_id", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "id", desc: 1 },
+    ], {
+      partial: 1,
+      sqlFragment: "WHERE status = 'active'",
+    });
     await expectIndex("submissions", "submissions_owner_page", [
       { name: "submitter_id", desc: 0 },
       { name: "created_at", desc: 1 },
@@ -769,5 +792,111 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(
       env.DB.prepare("SELECT count(*) AS count FROM submissions").first(),
     ).resolves.toEqual({ count: 3 });
+  });
+
+  it("uses selective no-sort indexes for recovery jobs and active Tag keyset pages at scale shape", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const timestamp = "2026-08-21T03:04:05.006Z";
+    await env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 500
+       )
+       INSERT INTO jobs (
+         id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+       )
+       SELECT printf('completed-job-%04d', value), 'index_revision', printf('completed-revision-%04d', value),
+         'completed', 1, ?, NULL, ?, ?
+       FROM sequence`,
+    ).bind(timestamp, timestamp, timestamp).run();
+    await env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 500
+       )
+       INSERT INTO tags (id, space_id, slug, name, status, created_at, updated_at)
+       SELECT printf('active-tag-%04d', value), 'default', printf('active-tag-%04d', value),
+         printf('Active Tag %04d', value), 'active', ?, ?
+       FROM sequence`,
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare("ANALYZE").run();
+
+    const jobsPlan = await queryPlan(
+      `SELECT resource_id FROM jobs
+       WHERE kind = 'index_revision' AND state IN ('pending', 'running', 'failed_retryable')
+       ORDER BY available_at ASC, id ASC LIMIT ?`,
+      [20],
+    );
+    const tagsPlan = await queryPlan(
+      `SELECT t.id, t.space_id, t.slug, t.name, t.status, t.created_at, t.updated_at
+       FROM tags t
+       WHERE t.space_id = ? AND t.status = 'active'
+         AND EXISTS (
+           SELECT 1 FROM spaces s
+           WHERE s.id = t.space_id AND s.status = 'active' AND s.kind != 'legacy'
+         )
+         AND (t.created_at < ? OR (t.created_at = ? AND t.id < ?))
+       ORDER BY t.created_at DESC, t.id DESC LIMIT ?`,
+      ["default", timestamp, timestamp, "active-tag-9999", 51],
+    );
+
+    expect(jobsPlan).toContain("jobs_recoverable_scan");
+    expect(jobsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(tagsPlan).toContain("tags_active_page");
+    expect(tagsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+  });
+
+  it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
+    const priorMigrations = MIGRATIONS.slice(0, 2);
+    await applyD1Migrations(env.DB, priorMigrations);
+    const timestamp = "2026-08-21T02:03:04.005Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-guard', 'github:guard', 'guard@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    for (const [id, status] of [
+      ["legacy-draft", "draft"],
+      ["legacy-pending", "review_pending"],
+      ["legacy-rejected", "rejected"],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO submissions (
+          id, submitter_id, requested_space_id, requested_collection_id, kind, status,
+          title, content, created_at, updated_at
+        ) VALUES (?, 'member-guard', 'default', NULL, 'text', ?, ?, ?, ?, ?)`,
+      ).bind(id, status, id, `bytes:${id}`, timestamp, timestamp).run();
+    }
+
+    await expect(applyD1Migrations(env.DB, MIGRATIONS)).rejects.toThrow();
+    await expect(env.DB.prepare(
+      "SELECT id, status, content FROM submissions ORDER BY id",
+    ).all()).resolves.toMatchObject({
+      results: [
+        { id: "legacy-draft", status: "draft", content: "bytes:legacy-draft" },
+        { id: "legacy-pending", status: "review_pending", content: "bytes:legacy-pending" },
+        { id: "legacy-rejected", status: "rejected", content: "bytes:legacy-rejected" },
+      ],
+    });
+    await expect(env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE name IN ('sources', 'submissions_legacy') ORDER BY name",
+    ).all()).resolves.toMatchObject({ results: [] });
+
+    await env.DB.prepare(
+      "UPDATE submissions SET status = 'rejected', updated_at = ? WHERE id = 'legacy-pending' AND status = 'review_pending'",
+    ).bind(timestamp).run();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+
+    await expect(env.DB.prepare(
+      `SELECT count(*) AS count
+       FROM submissions s
+       LEFT JOIN source_versions sv ON sv.submission_id = s.id
+       WHERE s.status = 'review_pending' AND sv.id IS NULL`,
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare(
+      "SELECT id, status, content, idempotency_key FROM submissions ORDER BY id",
+    ).all()).resolves.toMatchObject({
+      results: [
+        { id: "legacy-draft", status: "draft", content: "bytes:legacy-draft", idempotency_key: null },
+        { id: "legacy-pending", status: "rejected", content: "bytes:legacy-pending", idempotency_key: null },
+        { id: "legacy-rejected", status: "rejected", content: "bytes:legacy-rejected", idempotency_key: null },
+      ],
+    });
   });
 });

@@ -180,6 +180,19 @@ describe("PublicationService", () => {
     expect(content.commits).toHaveLength(0);
   });
 
+  it("rejects a legacy normalized-oversize SourceVersion before creating a publication intent", async () => {
+    const fixture = await publicationFixture();
+    const oversized = `${"a".repeat(128 * 1024)}\n`;
+    fixture.intent.sourceVersion.content = oversized;
+    fixture.intent.sourceVersion.contentSha256 = await sha256(oversized);
+    fixture.intent.contentSha256 = fixture.intent.sourceVersion.contentSha256;
+
+    await expect(fixture.service.publish(reviewer, "submission-1", publishInput))
+      .rejects.toMatchObject({ code: "PUBLICATION_CONTENT_MISMATCH", status: 409 });
+    expect(fixture.events).toEqual(["validate-target"]);
+    expect(fixture.commits).toHaveLength(0);
+  });
+
   it("maps a target invalidated between validation and intent creation to the public target error", async () => {
     const fixture = await publicationFixture({ createIntentTargetFailure: true });
     await expect(fixture.service.publish(reviewer, "submission-1", publishInput))
@@ -477,4 +490,9 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     get finalizeCount() { return finalizeCount; },
     get indexCount() { return indexCount; },
   };
+}
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

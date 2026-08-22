@@ -96,6 +96,34 @@ export function reviewTagLoadMoreModel(value: unknown): Readonly<{
   accessibleName: "Load more Tags in the requested Space";
   disabled: boolean;
 }>;
+export type OptionPageResource = "spaces" | "collections" | "tags";
+export interface OptionPageItem { id: string; name: string }
+export interface OptionPageState {
+  items: Array<Readonly<OptionPageItem>>;
+  nextCursor?: string;
+  pending: boolean;
+  loaded: boolean;
+  error: string;
+}
+export interface OptionPageController {
+  loadInitial(): Promise<void>;
+  loadMore(): Promise<void>;
+  snapshot(): Readonly<OptionPageState>;
+}
+export function createOptionPageController(options: {
+  resource: OptionPageResource;
+  spaceId?: string;
+  writableOnly?: boolean;
+  owns: () => boolean;
+  request: (path: string) => Promise<unknown>;
+  onChange: (state: Readonly<OptionPageState>) => void;
+}): OptionPageController;
+export function optionLoadMoreModel(value: unknown, label: string): Readonly<{
+  visible: boolean;
+  label: string;
+  accessibleName: string;
+  disabled: boolean;
+}>;
 
 export interface KnowledgeListViewItem {
   id: string;

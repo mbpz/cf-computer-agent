@@ -109,6 +109,9 @@ describe("workspace assets", () => {
     expect(source).toContain("closeOpenDialogs");
     expect(source.match(/closeOpenDialogs\(\)/gu)?.length).toBeGreaterThanOrEqual(3);
     expect(source).toContain("createMutationController");
+    expect(source).toContain("createOptionPageController");
+    expect(source).toContain("createPagedOptionControl");
+    expect(source).toContain("Load more ${safeLabel} options");
   });
 
   it("ships responsive reader, review-dialog, focus, and reduced-motion styles", async () => {

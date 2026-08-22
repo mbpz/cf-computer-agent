@@ -6,6 +6,7 @@ import {
   citedAnswerModel,
   createLogoutController,
   createMutationController,
+  createOptionPageController,
   createOwnedActionController,
   createOperationGuard,
   createReviewTagController,
@@ -16,6 +17,7 @@ import {
   knowledgeReaderModel,
   knowledgeReaderRequest,
   knowledgeSearchModel,
+  optionLoadMoreModel,
   publishRequest,
   reviewPreviewModel,
   reviewTagLoadMoreModel,
@@ -327,31 +329,66 @@ async function renderHome(generation) {
   ]), generation)) return;
 }
 
-async function loadSpaces() { return (await api("/api/spaces?limit=50")).items; }
-async function loadCollections(spaceId) {
-  if (!spaceId) return [];
-  return (await api(`/api/spaces/${encodeURIComponent(spaceId)}/collections?limit=50`)).items
-    .filter((collection) => collection.status === "active");
-}
-async function loadTags(spaceId) {
-  if (!spaceId) return [];
-  return (await api(`/api/spaces/${encodeURIComponent(spaceId)}/tags?limit=50`)).tags;
-}
 function replaceOptions(select, options, emptyLabel) {
   select.replaceChildren(element("option", { value: "", text: emptyLabel }), ...options);
 }
 
+function createPagedOptionControl({ resource, spaceId, writableOnly = false, owner, owns, label, fieldLabel, emptyLabel, required = false, onState }) {
+  const select = element("select", { ...(required ? { required: "" } : {}) });
+  const more = element("button", { className: "secondary", type: "button" });
+  const status = element("p", { className: "muted", role: "status", "aria-live": "polite" });
+  const root = element("div", { className: "stack" }, [fieldLabel ? field(fieldLabel, select) : select, more, status]);
+  const stillOwns = () => ownsMutation(owner) && (!owns || owns());
+  const controller = createOptionPageController({
+    resource,
+    spaceId,
+    writableOnly,
+    owns: stillOwns,
+    request: api,
+    onChange(state) {
+      if (!stillOwns()) return;
+      const selected = select.value;
+      const options = state.items.map((item) => element("option", { value: item.id, text: item.name }));
+      select.replaceChildren(...(emptyLabel === undefined ? [] : [element("option", { value: "", text: emptyLabel })]), ...options);
+      if ([...select.options].some((option) => option.value === selected)) select.value = selected;
+      select.disabled = state.pending && !state.loaded;
+      const model = optionLoadMoreModel(state, label);
+      more.hidden = !model.visible;
+      more.disabled = model.disabled;
+      more.textContent = model.label;
+      more.setAttribute("aria-label", model.accessibleName);
+      status.textContent = state.error;
+      status.hidden = !state.error;
+      onState?.(state);
+    },
+  });
+  more.addEventListener("click", () => { void controller.loadMore(); });
+  return Object.freeze({ root, select, controller });
+}
+
 async function renderSubmit(generation) {
-  const spaces = await loadSpaces();
-  const activeSpaces = spaces.filter((space) => space.status === "active" && space.kind === "shared" && !space.readOnly);
+  const owner = routeGuard.owner(generation, "/submit");
+  let submitButton;
+  const spaceControl = createPagedOptionControl({
+    resource: "spaces",
+    writableOnly: true,
+    owner,
+    label: "Spaces",
+    fieldLabel: "Target Space",
+    required: true,
+    onState: (state) => { if (submitButton) submitButton.disabled = state.items.length === 0; },
+  });
+  await spaceControl.controller.loadInitial();
   const title = element("input", { name: "title", required: "", maxlength: "200", autocomplete: "off" });
   const kind = element("select", { name: "kind" }, ["text", "markdown", "code"].map((value) => element("option", { value, text: value })));
-  const space = element("select", { name: "space", required: "" }, activeSpaces.map((value) => element("option", { value: value.id, text: value.name })));
-  const collection = element("select", { name: "collection" });
+  const space = spaceControl.select;
+  space.name = "space";
+  const collectionSlot = element("div", { className: "stack" });
+  let collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: "No collection" })]);
+  collectionSlot.replaceChildren(field("Collection (optional)", collection));
   const language = element("select", { name: "language" }, ["", "bash", "css", "go", "html", "javascript", "json", "markdown", "python", "rust", "sql", "typescript", "yaml"].map((value) => element("option", { value, text: value || "Plain / auto" })));
   const content = element("textarea", { name: "content", required: "", maxlength: String(128 * 1024), placeholder: "Enter plain text, safe Markdown, or code…" });
-  const owner = routeGuard.owner(generation, "/submit");
-  const submitButton = element("button", { className: "primary", type: "submit", text: "Submit for review", disabled: activeSpaces.length ? undefined : "" });
+  submitButton = element("button", { className: "primary", type: "submit", text: "Submit for review", disabled: spaceControl.controller.snapshot().items.length ? undefined : "" });
   const requestKey = idempotencyKey();
   let form;
   const mutation = createMutationController(
@@ -382,21 +419,35 @@ async function renderSubmit(generation) {
       (error) => validationSummary(form, safeErrorMessage(error)),
     );
   } }, [
-    field("Title", title), field("Content type", kind), field("Target Space", space), field("Collection (optional)", collection),
+    field("Title", title), field("Content type", kind), spaceControl.root, collectionSlot,
     field("Code language (optional)", language), field("Content", content), submitButton,
   ]);
-  const collectionOperations = createOperationGuard();
-  const updateCollections = () => runLatestOperation(
-    collectionOperations,
-    () => loadCollections(space.value),
-    (items) => { if (ownsMutation(owner)) replaceOptions(collection, items.map((value) => element("option", { value: value.id, text: value.name })), "No collection"); },
-    (error) => { if (ownsMutation(owner)) validationSummary(form, safeErrorMessage(error, "Could not load collections.")); },
-    () => ownsMutation(owner),
-  );
+  let collectionGeneration = 0;
+  const updateCollections = async () => {
+    collectionGeneration += 1;
+    const fixedGeneration = collectionGeneration;
+    collection = element("select", { name: "collection", disabled: "" }, [element("option", { value: "", text: "No collection" })]);
+    collectionSlot.replaceChildren(field("Collection (optional)", collection));
+    if (!space.value) return;
+    const control = createPagedOptionControl({
+      resource: "collections",
+      spaceId: space.value,
+      owner,
+      owns: () => fixedGeneration === collectionGeneration,
+      label: "Collections",
+      fieldLabel: "Collection (optional)",
+      emptyLabel: "No collection",
+    });
+    collection = control.select;
+    collection.name = "collection";
+    collectionSlot.replaceChildren(control.root);
+    await control.controller.loadInitial();
+  };
   space.addEventListener("change", () => { void updateCollections(); });
-  if (activeSpaces.length) await updateCollections();
+  if (spaceControl.controller.snapshot().items.length) await updateCollections();
+  const spaceState = spaceControl.controller.snapshot();
   replaceOutlet(page("Submit knowledge", "Idempotent submission keeps retries safe. Identity, role, paths, hashes, sources, and citations are never accepted from this form.", [
-    card("New submission", [activeSpaces.length ? form : empty("No active shared Space accepts submissions.")]),
+    card("New submission", [spaceState.items.length || spaceState.nextCursor ? form : empty("No active shared Space accepts submissions.")]),
   ]), generation);
 }
 function field(label, control) { return element("label", { text: label }, [control]); }
@@ -429,15 +480,17 @@ async function renderKnowledge(generation) {
 }
 
 async function renderSearch(generation) {
-  const spaces = (await loadSpaces()).filter((space) => space.status === "active" && space.kind === "shared");
-  const query = element("input", { type: "search", required: "", maxlength: "200", placeholder: "Search published knowledge", "aria-label": "Search query" });
-  const space = element("select", {}, [element("option", { value: "", text: "All Spaces" }), ...spaces.map((value) => element("option", { value: value.id, text: value.name }))]);
-  const collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
-  const tag = element("select", { disabled: "" }, [element("option", { value: "", text: "All Tags" })]);
-  const results = element("div", { className: "stack", "aria-live": "polite" });
   const owner = routeGuard.owner(generation, "/search");
+  const spaceControl = createPagedOptionControl({ resource: "spaces", owner, label: "Spaces", fieldLabel: "Space", emptyLabel: "All Spaces" });
+  await spaceControl.controller.loadInitial();
+  const query = element("input", { type: "search", required: "", maxlength: "200", placeholder: "Search published knowledge", "aria-label": "Search query" });
+  const space = spaceControl.select;
+  let collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
+  let tag = element("select", { disabled: "" }, [element("option", { value: "", text: "All Tags" })]);
+  const collectionSlot = element("div", { className: "stack" }, [field("Collection", collection)]);
+  const tagSlot = element("div", { className: "stack" }, [field("Tag", tag)]);
+  const results = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
-  const filterOperations = createOperationGuard();
   let currentItems = [];
   let currentCursor;
   let currentFilters;
@@ -467,18 +520,29 @@ async function renderSearch(generation) {
     currentItems = [];
     currentCursor = undefined;
     void search(undefined, false);
-  } }, [field("Query", query), field("Space", space), field("Collection", collection), field("Tag", tag), element("button", { className: "primary", type: "submit", text: "Search" })]);
-  const updateDependentFilters = () => runLatestOperation(filterOperations, async () => {
-    if (!space.value) return { collections: [], tags: [] };
-    const [collections, tags] = await Promise.all([loadCollections(space.value), loadTags(space.value)]);
-    return { collections, tags };
-  }, ({ collections, tags }) => {
-    if (!ownsMutation(owner)) return;
-    replaceOptions(collection, collections.map((value) => element("option", { value: value.id, text: value.name })), "All Collections");
-    replaceOptions(tag, tags.map((value) => element("option", { value: value.id, text: value.name })), "All Tags");
-    collection.disabled = !space.value;
-    tag.disabled = !space.value;
-  }, (error) => { if (ownsMutation(owner)) results.replaceChildren(routeStateNode("error", safeErrorMessage(error, "Could not load filters."))); }, () => ownsMutation(owner));
+  } }, [field("Query", query), spaceControl.root, collectionSlot, tagSlot, element("button", { className: "primary", type: "submit", text: "Search" })]);
+  let filterGeneration = 0;
+  const updateDependentFilters = async () => {
+    filterGeneration += 1;
+    const fixedGeneration = filterGeneration;
+    collection = element("select", { disabled: "" }, [element("option", { value: "", text: "All Collections" })]);
+    tag = element("select", { disabled: "" }, [element("option", { value: "", text: "All Tags" })]);
+    collectionSlot.replaceChildren(field("Collection", collection));
+    tagSlot.replaceChildren(field("Tag", tag));
+    if (!space.value) return;
+    const ownsFilter = () => fixedGeneration === filterGeneration;
+    const collectionControl = createPagedOptionControl({
+      resource: "collections", spaceId: space.value, owner, owns: ownsFilter, label: "Collections", fieldLabel: "Collection", emptyLabel: "All Collections",
+    });
+    const tagControl = createPagedOptionControl({
+      resource: "tags", spaceId: space.value, owner, owns: ownsFilter, label: "Tags", fieldLabel: "Tag", emptyLabel: "All Tags",
+    });
+    collection = collectionControl.select;
+    tag = tagControl.select;
+    collectionSlot.replaceChildren(collectionControl.root);
+    tagSlot.replaceChildren(tagControl.root);
+    await Promise.all([collectionControl.controller.loadInitial(), tagControl.controller.loadInitial()]);
+  };
   space.addEventListener("change", () => { void updateDependentFilters(); });
   replaceOutlet(page("Search", "FTS search is permission-scoped and links every result to its exact Revision and Chunk.", [card("Search filters", [form]), card("Results", [results])]), generation);
 }

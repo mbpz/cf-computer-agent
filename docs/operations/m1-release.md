@@ -58,7 +58,7 @@ The reviewed migration provenance is immutable for this candidate:
 | --- | --- |
 | `0001_phase1_control_plane.sql` | `3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929` |
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
-| `0003_m1_knowledge_loop.sql` | `17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d` |
+| `0003_m1_knowledge_loop.sql` | `8d19e4bc328a13e324b027b54fd4a0b91581461f2f10b9f738f39c4f4e20778d` |
 
 `verify:m1:migrations` hard-codes the three reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
@@ -90,7 +90,7 @@ rtk npm audit --omit=dev
 rtk git diff --check
 ```
 
-Record exact counts and command exit status. `test:m1` includes the release/probe contract tests, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report nonzero retrieval/answer/refusal denominators, Recall@5 at least 0.85, citation precision 1, citation recall 1, citation location rate 1, exact per-case answer/refusal outcomes, zero wrong citations, and zero permission leaks. The partial-match refusal case follows the same production AND/token-coverage contract; it is not evidence of a semantic low-relevance threshold.
+Record exact counts and command exit status. `test:m1` includes the release/probe contract tests, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report 20 expected retrieval citations, 16 required/returned answer citations, 16 answer cases, 7 refusals, one denial, Recall@5 at least 0.85, citation precision 1, citation recall 1, citation location rate 1, exact per-case answer/refusal outcomes, zero wrong citations, and zero permission leaks. Four Tag-exclusive cases must also make the gate fail when Tag indexing is disabled. The partial-match refusal case follows the same production AND/token-coverage contract; it is not evidence of a semantic low-relevance threshold.
 
 ## 4. Inspect migration `0003` and preservation evidence
 
@@ -106,6 +106,9 @@ rtk chmod 700 "$M1_LEDGER_DIR"
 M1_LEDGER_FILE="$M1_LEDGER_DIR/before-0003.json"
 : > "$M1_LEDGER_FILE"
 rtk chmod 600 "$M1_LEDGER_FILE"
+M1_PENDING_FILE="$M1_LEDGER_DIR/legacy-pending.json"
+: > "$M1_PENDING_FILE"
+rtk chmod 600 "$M1_PENDING_FILE"
 ```
 
 M1 evidence command: `pre-ledger-capture`
@@ -123,9 +126,28 @@ M1 evidence command: `pre-ledger-verification`
 rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"
 ```
 
+M1 evidence command: `legacy-pending-capture`
+```bash
+rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT count(*) AS legacy_review_pending_without_source_versions FROM submissions WHERE status = 'review_pending'" --json > "$M1_PENDING_FILE"
+```
+
+```bash
+M1_PENDING_STATUS=$?
+test "$M1_PENDING_STATUS" -eq 0 || exit "$M1_PENDING_STATUS"
+```
+
+M1 evidence command: `legacy-pending-verification`
+```bash
+rtk npm run verify:m1:migrations -- --legacy-pending "$M1_PENDING_FILE"
+```
+
+Migration `0003` deliberately aborts before its first schema change if any pre-M1 `review_pending` Submission remains. Those rows have no immutable SourceVersion, so copying them into the M1 queue would create queued records that preview and publication cannot read.
+
+If this verifier reports a nonzero count, stop. In a separately approved, reviewed D1 change, resolve each identified row individually to `rejected` while preserving its title/content bytes and append a same-transaction system audit event recording only the Submission ID and reason code `m1_legacy_pending_guard`; never bulk-convert, delete, or fabricate a SourceVersion. If the source is still wanted, resubmit it through the M1 API after migration with a new idempotency key. After all rows are resolved, rerun the zero-count capture, take a new pre-migration export because D1 changed, and restart this runbook from candidate authorization. Draft and already-rejected legacy rows remain byte-preserved by the migration.
+
 Confirm all of the following in review:
 
-- the submissions table copy preserves all legacy rows before the legacy table is dropped;
+- the fail-closed legacy-pending guard reports zero before any schema change, and the submissions table copy preserves all remaining draft/rejected legacy rows before the legacy table is dropped;
 - `PRAGMA foreign_key_check` and the upgrade-preservation Workerd cases pass;
 - the actual Wrangler `d1_migrations` ledger contains exactly `0001_phase1_control_plane.sql`, then `0002_github_auth.sql`, with no missing, renamed, reordered, or extra row;
 - the local reviewed set contains exactly those two files plus pending `0003_m1_knowledge_loop.sql`;
@@ -164,12 +186,12 @@ rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"
 ```
 
 ```bash
-rtk rm -f "$M1_LEDGER_DIR/before-0003.json" "$M1_LEDGER_DIR/after-0003.json"
+rtk rm -f "$M1_LEDGER_DIR/before-0003.json" "$M1_LEDGER_DIR/after-0003.json" "$M1_LEDGER_DIR/legacy-pending.json"
 rtk rmdir "$M1_LEDGER_DIR"
-unset M1_LEDGER_FILE M1_LEDGER_DIR M1_LEDGER_STATUS
+unset M1_LEDGER_FILE M1_PENDING_FILE M1_LEDGER_DIR M1_LEDGER_STATUS M1_PENDING_STATUS
 ```
 
-The post-apply verifier requires exactly `0001_phase1_control_plane.sql`, `0002_github_auth.sql`, and `0003_m1_knowledge_loop.sql`, in that order, with no missing or extra row. Record only the date and verifier pass line; the commands then remove only the two explicitly named temporary ledger JSON files and their dedicated temporary directory. A failed apply or unexpected ledger blocks upload/deploy investigation; never repair it by deleting schema or data.
+The post-apply verifier requires exactly `0001_phase1_control_plane.sql`, `0002_github_auth.sql`, and `0003_m1_knowledge_loop.sql`, in that order, with no missing or extra row. Record only the date and verifier pass line; the commands then remove only the three explicitly named temporary JSON files and their dedicated temporary directory. A failed apply or unexpected ledger blocks upload/deploy investigation; never repair it by deleting schema or data.
 
 ## 6. Upload one reviewed version with the complete secret bundle
 
@@ -185,8 +207,12 @@ rtk chmod 600 "$M1_SECRETS_FILE"
 
 cleanup_m1_secret_bundle() {
   unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
-  rtk rm -f "$M1_SECRETS_FILE"
-  rtk rmdir "$M1_SECRETS_DIR"
+  M1_SECRET_CLEANUP_STATUS=0
+  rtk rm -f -- "$M1_SECRETS_FILE" || M1_SECRET_CLEANUP_STATUS=$?
+  test ! -e "$M1_SECRETS_FILE" || M1_SECRET_CLEANUP_STATUS=1
+  rtk rmdir -- "$M1_SECRETS_DIR" || M1_SECRET_CLEANUP_STATUS=$?
+  test ! -e "$M1_SECRETS_DIR" || M1_SECRET_CLEANUP_STATUS=1
+  return "$M1_SECRET_CLEANUP_STATUS"
 }
 trap cleanup_m1_secret_bundle EXIT HUP INT TERM
 
@@ -227,12 +253,15 @@ rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --me
 
 ```bash
 M1_UPLOAD_STATUS=$?
-cleanup_m1_secret_bundle
+M1_CLEANUP_STATUS=0
+cleanup_m1_secret_bundle || M1_CLEANUP_STATUS=$?
+test "$M1_UPLOAD_STATUS" -eq 0 || exit "$M1_UPLOAD_STATUS"
+test "$M1_CLEANUP_STATUS" -eq 0 || exit "$M1_CLEANUP_STATUS"
 trap - EXIT HUP INT TERM
-test "$M1_UPLOAD_STATUS" -eq 0
+unset M1_UPLOAD_STATUS M1_CLEANUP_STATUS M1_SECRET_CLEANUP_STATUS
 ```
 
-This must be the single candidate upload. Do not use `wrangler secret put`, `wrangler versions secret bulk`, plain `wrangler deploy`, or `npm run deploy`; those paths can separate reviewed code from the complete secret-bearing version.
+This must be the single candidate upload. The stage succeeds only after the protected secret file and its dedicated directory are both absent. Any removal error or remaining protected path fails the stage while the EXIT trap stays armed for one safe retry; do not report an upload success until cleanup succeeds. Do not use `wrangler secret put`, `wrangler versions secret bulk`, plain `wrangler deploy`, or `npm run deploy`; those paths can separate reviewed code from the complete secret-bearing version.
 
 ## 7. Inspect the exact uploaded version
 
@@ -413,11 +442,13 @@ The following local evidence must stay green for every candidate:
 | Exact automation rejection probe | `scripts/automation-probe.mjs`, `scripts/automation-probe.test.mjs`, `rtk npm run test:ops:m1` |
 | Migration byte/ledger provenance | `scripts/verify-m1-migrations.mjs`, `scripts/m1-release-contract.test.mjs`, `rtk npm run verify:m1:migrations -- --files` |
 | D1 schema upgrade/preservation | `test/worker/migrations.test.ts` |
+| Selective Job/Tag query plans | `test/worker/migrations.test.ts` real scale-shape `EXPLAIN QUERY PLAN` assertions |
 | Ambiguous DO response and stable replay | `test/unit/publication-service.test.ts`, `test/worker/m1-publication.test.ts` |
 | D1 finalization batch rollback | `test/worker/m1-publication.test.ts` |
 | Failed FTS remains readable and recovers | `test/unit/publication-service.test.ts`, `test/worker/m1-publication.test.ts`, `test/worker/m1-library.test.ts` |
 | Permission-scoped list/search/citation | `test/unit/library-service.test.ts`, `test/worker/m1-library.test.ts`, `test/worker/m1-api.test.ts` |
 | Default/max limits and keyset cursors | `test/unit/pagination.test.ts`, `test/worker/spaces.test.ts`, `test/worker/submissions.test.ts`, `test/worker/members.test.ts`, `test/worker/m1-api.test.ts`, `test/worker/m1-publication.test.ts` |
+| Explicit bounded resource option paging | `test/unit/workspace-ui.test.ts` |
 | Bounded AI context/provider-free refusal | `test/unit/cited-answer-service.test.ts`, `test/unit/m1-evaluation.test.ts` |
 
 These tests establish deterministic structural bounds suitable for D1/Workers Free operation. They do not establish current Cloudflare account quota, billing state, provider availability, remote D1 cost, or production recovery. Those values stay unchecked in the evidence template until collected from the authorized deployment.

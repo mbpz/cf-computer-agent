@@ -98,7 +98,9 @@ async function exactStatus(step, expectedStatus, request) {
   const status = response.status;
   await response.body?.cancel().catch(() => undefined);
   const duration = elapsed(started);
-  if (status !== expectedStatus) throw new ProbeFailure(step, status, requestId, duration);
+  if (status !== expectedStatus || !/^sha256-[0-9a-f]{12}$/.test(requestId)) {
+    throw new ProbeFailure(step, status, requestId, duration);
+  }
   console.log(formatResult("pass", step, status, requestId, duration));
 }
 

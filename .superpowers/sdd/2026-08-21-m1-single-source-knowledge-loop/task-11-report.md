@@ -101,8 +101,8 @@ The corpus covers Chinese, English, code identifiers, title, Tag, body, no resul
 The gate passed these assertions:
 
 - fixed IDs/case count `= 24`;
-- expected retrieval citations `= 20`, required answer citations `= 20`, returned citations `= 20`;
-- answer-expected cases `= 20`, refusal-expected cases `= 3`, denied cases `= 1`;
+- expected retrieval citations `= 20`, required answer citations `= 16`, returned citations `= 16`;
+- answer-expected cases `= 16`, refusal-expected cases `= 7`, denied cases `= 1`;
 - Recall@5 `= 1` (gate minimum `0.85`);
 - citation precision `= 1`;
 - citation recall `= 1`;
@@ -113,7 +113,7 @@ The gate passed these assertions:
 - wrong citations `= 0`;
 - permission leaks `= 0`.
 
-The `no-result`, `partial-match-refusal`, and contributor `admin_only` cases return no evidence and never call the provider. The disabled principal is denied before retrieval/provider use. The degraded case remains readable and cited. The injection source is serialized as inert data and the provider-authored answer cannot reproduce `EXFILTRATE` or `SYSTEM_OVERRIDE`.
+The `no-result`, `partial-match-refusal`, contributor `admin_only`, and four Tag-exclusive retrieval-only cases return no answer evidence and never call the provider. Removing Tag indexing makes all four Tag cases miss, drops Recall@5 below the gate, and creates four explicit per-case failures. The disabled principal is denied before retrieval/provider use. The degraded case remains readable and cited. The injection source is serialized as inert data and the provider-authored answer cannot reproduce `EXFILTRATE` or `SYSTEM_OVERRIDE`.
 
 This is a deterministic local gate, not a remote D1 ranking, semantic-support, real-provider, billing, or production permission claim.
 
@@ -123,19 +123,19 @@ The M1 runbook:
 
 - requires a restricted remote D1 export before migration;
 - pins and locally verifies the reviewed SHA-256 bytes of migrations `0001`, `0002`, and `0003` before any remote action;
-- proves hash verification, before/after ledger capture and verification, forward migration apply, version upload/ID precondition/inspect/deploy, invalid `401`, and valid M1-admin `403` from 12 exact named blocks, each containing one exact physical command line and no raw-HTML context;
+- proves hash verification, before/after ledger capture and verification, the zero-legacy-pending preflight, forward migration apply, version upload/ID precondition/inspect/deploy, invalid `401`, and valid M1-admin `403` from 14 exact named blocks, each containing one exact physical command line and no raw-HTML context;
 - queries Wrangler's actual `d1_migrations` table and requires the exact two-name pre-apply and three-name post-apply ledger, with no missing, renamed, reordered, or extra state;
 - runs `test:m1`, the full gate, audit, and diff checks before remote change;
 - reads all of `0003`, requires upgrade/FK preservation evidence, and applies it only forward;
 - preserves applied `0001`/`0002`, GitHub OAuth identities, D1 sessions, `KnowledgeBase`, DO `v1`, VFS/index/journal data, and existing bindings/routes;
-- constructs one complete seven-secret JSON bundle outside the repository using hidden reads, `set +x`, restrictive permissions, and cleanup traps;
+- constructs one complete seven-secret JSON bundle outside the repository using hidden reads, `set +x`, restrictive permissions, and cleanup traps; upload-stage success requires the protected file and directory to be absent, while a cleanup failure fails the stage and leaves the EXIT trap armed for a safe retry;
 - forbids `secret put`, `versions secret bulk`, plain deploy, npm deploy, Wrangler rollback, reverse migration, D1/DO deletion, and old Access-era builds;
 - scans shell fences by the first info-string word with ASCII case ignored and rejects every CommonMark raw-HTML block form outside fences;
 - uploads with `versions upload --secrets-file ... --strict`, inspects the exact ID/bindings/routes, and deploys only the quoted `${M1_VERSION_ID}@100%` argument with separate authorization;
 - captures the exact upload ID through shell input, rejects an empty `M1_VERSION_ID`, and quotes the ID in current `versions view` and `versions deploy` syntax;
 - keeps every production checkbox in the template unchecked;
 - records request IDs without source/answer bodies, cookies, OAuth codes, headers, secrets, callback URLs, or provider bodies;
-- runs separately recorded one-request stages, first exact invalid-signature health `401`, then exact valid-signature M1 recovery-route `403`, with fresh timestamp/nonce/HMAC, no redirect/retry/body logging, and redacted request IDs/credentials;
+- runs separately recorded one-request stages, first exact invalid-signature health `401`, then exact valid-signature M1 recovery-route `403`, with fresh timestamp/nonce/HMAC, no redirect/retry/body logging, and only request IDs matching `sha256-[0-9a-f]{12}`; missing, malformed, or reflected IDs fail without exposing credentials;
 - requires a normal, non-destructive cross-activation read;
 - records remote D1 `rows_read`/`rows_written` for bounded synthetic list/search operations; and
 - allows rollback only to an inspected forward-compatible Worker that reads the current `0003` schema and preserved DO state.
@@ -192,10 +192,10 @@ Task 11 compared the plan's ranges to the current checklist instead of bulk-chec
   - `found 0 vulnerabilities`.
 - `rtk git diff --check` passed.
 - `rtk npm run verify:m1:migrations -- --files` passed with `migration-files count=3`.
-- `rtk npm run verify:m1:docs` passed with `m1-runbook evidence_blocks=12` and `m1-truth atoms=76 checked=53 unchecked=23 gates=1 unchecked_items=24`.
+- `rtk npm run verify:m1:docs` passed with `m1-runbook evidence_blocks=14` and `m1-truth atoms=76 checked=53 unchecked=23 gates=1 unchecked_items=24`.
 - Local `rtk npx --no-install wrangler versions view --help` and `versions deploy --help` confirmed the installed Wrangler 4.119.0 positional forms `view <version-id>` and `deploy [version-id@percentage]`; no provider request was made.
 - Local Markdown link check passed for README, Roadmap, Checklist, M1 runbook, and evidence template.
-- Runbook command-policy check passed: 12 visible evidence labels each bind to one exact top-level physical `bash`/`zsh` command in the required release order; raw HTML, shell comments, prose, nested fences, continued arguments, heredocs, and compound wrappers cannot satisfy them; first-info-word/continuation-normalized executable fences contain no migration-list, secret put/bulk, plain deploy, npm deploy, Wrangler rollback, reverse/restore, or destructive D1 command.
+- Runbook command-policy check passed: 14 visible evidence labels each bind to one exact top-level physical `bash`/`zsh` command in the required release order; raw HTML, shell comments, prose, nested fences, continued arguments, heredocs, and compound wrappers cannot satisfy them; first-info-word/continuation-normalized executable fences contain no migration-list, secret put/bulk, plain deploy, npm deploy, Wrangler rollback, reverse/restore, or destructive D1 command.
 - Package-script check passed: all required M1 slices are present and the full gate remains additive.
 - Secret-pattern scan returned no matches.
 - Acceptance static check passed: exactly 23 P0/M1 atoms plus one unchecked `GATE-M1` remain, for 24 unchecked items total including the gate; the production evidence template contains no checked box.
