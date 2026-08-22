@@ -185,3 +185,41 @@ Production/contracts: `migrations/0004_m1_gate_completion.sql`, `src/library/rep
 Evidence: `test/worker/m1-library.test.ts`, `test/worker/m1-publication.test.ts`, `test/worker/migrations.test.ts`, and this report.
 
 The only remaining search-plan concern is the explicitly accepted dynamic BM25 ORDER BY temp B-tree. Hosted `rows_read` evidence is still required before release.
+
+## Fix round 2 addendum: degraded Collection scope, alias-safe plans, and status guard mapping
+
+No schema, migration hash, remote resource, checklist state, cursor policy, or hosted evidence changed in this round.
+
+### RED/GREEN
+
+Focused RED was observed before production edits:
+
+1. An upgrade-shaped shared `search_degraded` item in a disabled Collection made an unfiltered contributor search return `degraded: true` instead of `false`.
+2. The previous EXPLAIN regex accepted `SCAN k`, `SCAN r`, `SCAN c`, and other production aliases because it checked only base table names.
+3. Combined Collection `status: disabled` plus absent, self, descendant-cycle, or disabled parent updates each surfaced raw `D1_ERROR: malformed JSON` instead of the stable `invalid_parent` repository conflict.
+
+Focused GREEN:
+
+```text
+rtk npx vitest run test/worker/m1-library.test.ts test/worker/spaces.test.ts test/unit/library-service.test.ts
+3 files passed; 77 tests passed
+
+rtk npm run check
+types:check passed
+typecheck passed
+smoke: 37 passed
+unit: 568 passed
+worker: 271 passed
+dry-run build passed
+```
+
+### Corrective evidence
+
+- `hasDegraded()` now uses the same authoritative nullable Collection rule as ranked search: no Collection, or an active Collection in the Knowledge Item's current Space. The disabled-Collection regression proves it cannot affect unfiltered degradation, then proves reactivation resets the existing Job to `pending`, remains nonsearchable, and becomes searchable only after bounded reindex completion.
+- The 10,000-Revision D1 gate parses every EQP detail. It permits exactly one expected FTS virtual-table MATCH scan, bounded `requested_tag`/constant-row CTE scans, selective relational `SEARCH ... USING ...` lookups, and the controller-approved `USE TEMP B-TREE FOR ORDER BY`. Every other `SCAN` alias and every other temporary plan is rejected.
+- A literal mutation probe replaces indexed operations with `SCAN k`, `SCAN r`, `SCAN c`, `SCAN current_index_job`, `SCAN s`, `SCAN active_collection`, and `SCAN selected_tag`; every mutation fails the validator.
+- The stricter validator exposed `USE TEMP B-TREE FOR GROUP BY` in Tag AND. AND now emits at most eight bound correlated membership `EXISTS` clauses over the `(revision_id, tag_id)` primary index. Exact AND/OR results remain unchanged, and the only accepted temp plan is the published BM25 metadata ORDER BY exception.
+- Collection status batches use a dedicated, recognizable constraint guard. Known guard failure re-runs authoritative parent/Space classification and returns the stable repository conflict; unrelated D1 failures are propagated unchanged.
+- Four real D1 parent-conflict cases assert full rollback of Collection metadata, Knowledge Item status, Job state, both FTS corpora, and audit insertion. Existing successful audit and duplicate-audit rollback tests remain green.
+
+The remaining concern is unchanged: Task 10 / `OPS-015` must capture hosted D1 `rows_read` for the approved dynamic ORDER BY temp sort before release.

@@ -1240,6 +1240,52 @@ describe("M1 permission-scoped library", () => {
     await expect(service.search(admin, { query: "readable", limit: 20 })).resolves.toMatchObject({ degraded: true });
   });
 
+  it("excludes upgrade-shaped degraded knowledge in a disabled Collection until bounded reindex", async () => {
+    const spaces = new SpacesRepository(env.DB);
+    await spaces.createCollection({
+      id: "collection-degraded-disabled", spaceId: "default", parentId: null,
+      name: "Disabled degraded", description: "", status: "disabled", position: 4,
+      createdAt: now, updatedAt: now,
+    });
+    await seedKnowledge({
+      id: "knowledge-disabled-degraded", revisionId: "revision-disabled-degraded",
+      title: "Disabled degraded", visibility: "shared", searchStatus: "search_degraded",
+      body: "disableddegradedterm", index: false,
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE knowledge_items SET collection_id = 'collection-degraded-disabled' WHERE id = 'knowledge-disabled-degraded'",
+      ),
+      env.DB.prepare(
+        `INSERT INTO jobs (
+           id, kind, resource_id, state, attempts, available_at, last_error_code,
+           created_at, updated_at, lease_token, lease_expires_at
+         ) VALUES ('job-disabled-degraded', 'index_revision', 'revision-disabled-degraded',
+           'failed_retryable', 1, ?, 'FTS_INDEX_FAILED', ?, ?, NULL, NULL)`,
+      ).bind(now, now, now),
+    ]);
+    const service = serviceWithContent();
+
+    await expect(service.search(contributor, { query: "disableddegradedterm" }))
+      .resolves.toEqual({ items: [], degraded: false });
+
+    await spaces.updateCollection("collection-degraded-disabled", {
+      status: "active", updatedAt: "2026-08-22T00:01:00.000Z",
+    });
+    await expect(service.search(contributor, { query: "disableddegradedterm" }))
+      .resolves.toEqual({ items: [], degraded: false });
+    await expect(indexActivityState("knowledge-disabled-degraded")).resolves.toEqual({
+      searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
+    });
+    await expect(new PublicationRepository(env.DB).processIndexJob("revision-disabled-degraded"))
+      .resolves.toBe("indexed");
+    await expect(service.search(contributor, { query: "disableddegradedterm" }))
+      .resolves.toMatchObject({
+        degraded: false,
+        items: [expect.objectContaining({ knowledgeItemId: "knowledge-disabled-degraded" })],
+      });
+  });
+
   it("returns inert bounded excerpts and reauthorizes current citations without leaking old chunks", async () => {
     await seedKnowledge({
       id: "knowledge-citation",
@@ -1332,7 +1378,7 @@ describe("M1 permission-scoped library", () => {
     ]);
     const andPlan = await explain(sharedSearchSql[2]!, [
       "member-1", "contributor", "\"planterm\"", "default",
-      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 2, 21,
+      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
     ]);
     const orPlan = await explain(sharedSearchSql[3]!, [
       "member-1", "contributor", "\"planterm\"", "default",
@@ -1341,21 +1387,41 @@ describe("M1 permission-scoped library", () => {
     const adminPlan = await explain(adminSearchSql[0]!, [
       "admin-1", "admin", "\"planterm\"", "default", 51,
     ]);
-    expect(andPlan).toContain("revision_tags_tag_revision");
+    expect(andPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(andPlan).toContain("sqlite_autoindex_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_tags_1");
     expect(collectionPlan).toContain("knowledge_items_collection_reindex");
     for (const plan of [collectionPlan, andPlan, orPlan]) {
-      expect(plan).toContain("SCAN chunks_fts_shared VIRTUAL TABLE INDEX");
+      assertSelectiveSearchPlan(plan.split("\n"), "chunks_fts_shared");
       expect(plan).toMatch(/knowledge_items_(?:current_revision_index_status|collection_reindex)/u);
-      expect(plan).toContain("USE TEMP B-TREE FOR ORDER BY");
-      expect(plan).not.toMatch(/SCAN (?:knowledge_items|revisions|chunks|jobs|spaces|collections|tags|revision_tags)(?:\s|$)/u);
     }
-    expect(adminPlan).toContain("SCAN chunks_fts VIRTUAL TABLE INDEX");
+    assertSelectiveSearchPlan(adminPlan.split("\n"), "chunks_fts");
     expect(adminPlan).toContain("knowledge_items_current_revision_index_status");
-    expect(adminPlan).toContain("USE TEMP B-TREE FOR ORDER BY");
-    expect(adminPlan).not.toMatch(/SCAN (?:knowledge_items|revisions|chunks|jobs|spaces|collections|tags|revision_tags)(?:\s|$)/u);
+  });
+
+  it("rejects full relational alias scans in search EXPLAIN plans", () => {
+    const indexedPlan = [
+      "SCAN chunks_fts_shared VIRTUAL TABLE INDEX 0:M6",
+      "SEARCH c USING INTEGER PRIMARY KEY (rowid=?)",
+      "SEARCH r USING INDEX sqlite_autoindex_revisions_1 (id=?)",
+      "SEARCH k USING INDEX knowledge_items_current_revision_index_status (current_revision_id=?)",
+      "SEARCH current_index_job USING INDEX sqlite_autoindex_jobs_2 (kind=? AND resource_id=?)",
+      "SEARCH s USING INDEX sqlite_autoindex_spaces_1 (id=?)",
+      "SEARCH active_collection USING INDEX sqlite_autoindex_collections_1 (id=?) LEFT-JOIN",
+      "SEARCH members USING INDEX sqlite_autoindex_members_1 (id=?)",
+      "USE TEMP B-TREE FOR ORDER BY",
+    ];
+    expect(() => assertSelectiveSearchPlan(indexedPlan, "chunks_fts_shared")).not.toThrow();
+
+    for (const alias of ["k", "r", "c", "current_index_job", "s", "active_collection", "selected_tag"]) {
+      const mutated = indexedPlan.map((detail) => detail.startsWith(`SEARCH ${alias} `)
+        ? `SCAN ${alias}`
+        : detail);
+      if (!mutated.includes(`SCAN ${alias}`)) mutated.push(`SCAN ${alias}`);
+      expect(() => assertSelectiveSearchPlan(mutated, "chunks_fts_shared"))
+        .toThrow(`Unexpected relational scan: SCAN ${alias}`);
+    }
   });
 
   it("lets only D1-authorized stored path/hash values reach the real published-content reader", async () => {
@@ -1859,6 +1925,29 @@ async function explain(sql: string, bindings: unknown[]): Promise<string> {
   const rows = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`)
     .bind(...bindings).all<{ detail: string }>();
   return rows.results.map(({ detail }) => detail).join("\n");
+}
+
+function assertSelectiveSearchPlan(details: readonly string[], corpus: "chunks_fts" | "chunks_fts_shared"): void {
+  const expectedFtsScan = `SCAN ${corpus} VIRTUAL TABLE INDEX`;
+  const ftsScans = details.filter((detail) => detail.startsWith(expectedFtsScan));
+  if (ftsScans.length !== 1) throw new Error("Expected exactly one FTS MATCH scan");
+  for (const detail of details) {
+    if (detail.startsWith("SCAN ")
+      && !detail.startsWith(expectedFtsScan)
+      && detail !== "SCAN CONSTANT ROW"
+      && detail !== "SCAN requested_tag") {
+      throw new Error(`Unexpected relational scan: ${detail}`);
+    }
+    if (detail.startsWith("USE TEMP B-TREE") && detail !== "USE TEMP B-TREE FOR ORDER BY") {
+      throw new Error(`Unexpected temporary plan: ${detail}`);
+    }
+  }
+  for (const alias of ["c", "r", "k", "current_index_job", "s", "active_collection", "members"]) {
+    if (!details.some((detail) => detail.startsWith(`SEARCH ${alias} USING `))) {
+      throw new Error(`Missing selective lookup: ${alias}`);
+    }
+  }
+  if (!details.includes("USE TEMP B-TREE FOR ORDER BY")) throw new Error("Missing approved BM25 sort");
 }
 
 async function rejectedAppError(promise: Promise<unknown>): Promise<{

@@ -198,10 +198,134 @@ describe("Spaces D1 control plane", () => {
     await expect(service.updateCollection("update-collection", { name: "Changed", status: "disabled" }, "member-admin")).rejects.toThrow();
     await expect(repository.findCollectionById("update-collection")).resolves.toMatchObject({ name: "Direct", status: "active" });
   });
+
+  it.each([
+    ["absent", "missing-parent"],
+    ["self", "status-target"],
+    ["cycle", "status-child"],
+    ["disabled", "status-disabled-parent"],
+  ] as const)("maps combined status plus %s parent conflicts and rolls back every side effect", async (caseName, parentId) => {
+    const timestamp = "2026-08-22T00:00:00.000Z";
+    const audit = new AuditRepository(env.DB);
+    const repository = new SpacesRepository(env.DB, audit);
+    await repository.createCollection(collectionInput({ id: "status-target", updatedAt: timestamp }));
+    await repository.createCollection(collectionInput({
+      id: "status-child", parentId: "status-target", position: 1, updatedAt: timestamp,
+    }));
+    await repository.createCollection(collectionInput({
+      id: "status-disabled-parent", position: 2, updatedAt: timestamp,
+    }));
+    await repository.updateCollection("status-disabled-parent", {
+      status: "disabled", updatedAt: "2026-08-22T00:00:01.000Z",
+    });
+    await seedSearchableCollectionItem("status-target", timestamp);
+
+    await expect(repository.updateCollectionWithAudit("status-target", {
+      status: "disabled", parentId, updatedAt: "2026-08-22T00:01:00.000Z",
+    }, {
+      id: `status-conflict-${caseName}`, actorKind: "member", actorId: "status-member",
+      action: "collection.updated", resourceType: "collection", resourceId: "status-target",
+      metadata: { spaceId: "default", previousStatus: "active", newStatus: "disabled" },
+      createdAt: "2026-08-22T00:01:00.000Z",
+    })).rejects.toMatchObject({ kind: "invalid_parent" });
+
+    await expect(repository.findCollectionById("status-target")).resolves.toMatchObject({
+      parentId: null, status: "active", updatedAt: timestamp,
+    });
+    await expect(searchableCollectionState()).resolves.toEqual({
+      searchStatus: "indexed", jobState: "completed", adminRows: 1, sharedRows: 1,
+    });
+    await expect(audit.listAudit({ limit: 20 }, "collection.updated"))
+      .resolves.toMatchObject({ items: [] });
+  });
+
+  it("propagates unrelated Collection status batch failures unchanged", async () => {
+    const timestamp = "2026-08-22T00:00:00.000Z";
+    await new SpacesRepository(env.DB).createCollection(collectionInput({
+      id: "unrelated-failure-target", updatedAt: timestamp,
+    }));
+    const injected = new Error("injected unrelated D1 failure");
+    const failingDb = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") return async () => { throw injected; };
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const repository = new SpacesRepository(failingDb, new AuditRepository(failingDb));
+
+    await expect(repository.updateCollectionWithAudit("unrelated-failure-target", {
+      status: "disabled", updatedAt: "2026-08-22T00:01:00.000Z",
+    }, {
+      id: "unrelated-failure-audit", actorKind: "member", actorId: "member",
+      action: "collection.updated", resourceType: "collection", resourceId: "unrelated-failure-target",
+      metadata: { spaceId: "default", previousStatus: "active", newStatus: "disabled" },
+      createdAt: "2026-08-22T00:01:00.000Z",
+    })).rejects.toBe(injected);
+    await expect(new SpacesRepository(env.DB).findCollectionById("unrelated-failure-target"))
+      .resolves.toMatchObject({ status: "active", updatedAt: timestamp });
+  });
 });
 
 function collectionInput(overrides: Partial<{
   id: string; spaceId: string; parentId: string | null; name: string; description: string; status: "active" | "disabled"; position: number; createdAt: string; updatedAt: string;
 }> = {}) {
   return { id: "direct", spaceId: "default", parentId: null, name: "Direct", description: "", status: "active" as const, position: 0, createdAt: "2026-08-12T00:00:00.000Z", updatedAt: "2026-08-12T00:00:00.000Z", ...overrides };
+}
+
+async function seedSearchableCollectionItem(collectionId: string, timestamp: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('status-member', 'github:status-member', 'status@example.test', 'admin', 'active', ?, ?)",
+    ).bind(timestamp, timestamp),
+    env.DB.prepare(
+      "INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, created_at, updated_at) VALUES ('status-submission', 'status-member', 'default', ?, 'markdown', 'published', 'Status', 'status body', ?, ?)",
+    ).bind(collectionId, timestamp, timestamp),
+    env.DB.prepare(
+      "INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('status-source', 'status-member', 'default', ?, 'markdown', 'Status', ?, ?)",
+    ).bind(collectionId, timestamp, timestamp),
+    env.DB.prepare(
+      "INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('status-version', 'status-source', 'status-submission', 1, 'status body', 'status-hash', 'm1-v1', ?)",
+    ).bind(timestamp),
+    env.DB.prepare(
+      "INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('status-item', 'default', ?, NULL, 'active', 'indexed', ?, ?)",
+    ).bind(collectionId, timestamp, timestamp),
+    env.DB.prepare(
+      "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('status-revision', 'status-item', 'status-version', '/status.md', 'status-hash', 'Status', '[]', 'shared', 'status-member', ?)",
+    ).bind(timestamp),
+    env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'status-revision' WHERE id = 'status-item'"),
+    env.DB.prepare(
+      "INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field) VALUES ('status-chunk', 'status-revision', 0, '[]', 1, 1, 'status body', 'Status', '', 'status body', 'body')",
+    ),
+    env.DB.prepare(
+      "INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, created_at, updated_at) VALUES ('status-job', 'index_revision', 'status-revision', 'completed', 1, ?, ?, ?)",
+    ).bind(timestamp, timestamp, timestamp),
+    env.DB.prepare(
+      "INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, 'Status', '', '', search_body, '' FROM chunks WHERE id = 'status-chunk'",
+    ),
+    env.DB.prepare(
+      "INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, 'Status', '', '', search_body, '' FROM chunks WHERE id = 'status-chunk'",
+    ),
+  ]);
+}
+
+async function searchableCollectionState(): Promise<{
+  searchStatus: string; jobState: string; adminRows: number; sharedRows: number;
+}> {
+  const [state, admin, shared] = await Promise.all([
+    env.DB.prepare(
+      "SELECT k.search_status, j.state AS job_state FROM knowledge_items k JOIN jobs j ON j.resource_id = k.current_revision_id WHERE k.id = 'status-item'",
+    ).first<{ search_status: string; job_state: string }>(),
+    env.DB.prepare("SELECT count(*) AS count FROM chunks_fts WHERE chunk_id = 'status-chunk'")
+      .first<{ count: number }>(),
+    env.DB.prepare("SELECT count(*) AS count FROM chunks_fts_shared WHERE chunk_id = 'status-chunk'")
+      .first<{ count: number }>(),
+  ]);
+  if (!state) throw new Error("missing searchable Collection state");
+  return {
+    searchStatus: state.search_status,
+    jobState: state.job_state,
+    adminRows: admin?.count ?? -1,
+    sharedRows: shared?.count ?? -1,
+  };
 }

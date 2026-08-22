@@ -95,11 +95,20 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     const current = await this.findCollectionById(id); if (!current) return null;
     const next = { ...current, ...defined(input) };
     const update = this.prepareCycleSafeCollectionUpdate(id, next, input.updatedAt);
-    const result = current.status === next.status
-      ? await update.run()
-      : (await this.db.batch([
-        ...this.prepareCollectionSearchInvalidation(id, input.updatedAt), update, this.changeGuard(),
-      ])).at(-2)!;
+    let result: D1Result<unknown>;
+    if (current.status === next.status) result = await update.run();
+    else {
+      try {
+        result = (await this.db.batch([
+          ...this.prepareCollectionSearchInvalidation(id, input.updatedAt),
+          update,
+          this.collectionChangeGuard(),
+        ])).at(-2)!;
+      } catch (error) {
+        if (!isCollectionChangeGuardFailure(error)) throw error;
+        throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
+      }
+    }
     if (!result.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
     return { ...next, updatedAt: input.updatedAt };
   }
@@ -111,14 +120,20 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     const invalidation = current.status === next.status
       ? []
       : this.prepareCollectionSearchInvalidation(id, input.updatedAt);
-    const results = await this.db.batch([
-      ...invalidation,
-      this.prepareUpdateCollection(id, current, next, input.updatedAt),
-      ...(invalidation.length > 0 ? [this.changeGuard()] : []),
-      this.audit.prepareResourceWriteAudit(audit, { table: "collections", id }),
-    ]);
+    let results: D1Result<unknown>[];
+    try {
+      results = await this.db.batch([
+        ...invalidation,
+        this.prepareUpdateCollection(id, current, next, input.updatedAt),
+        this.audit.prepareResourceWriteAudit(audit, { table: "collections", id }),
+        ...(invalidation.length > 0 ? [this.collectionChangeGuard()] : []),
+      ]);
+    } catch (error) {
+      if (!isCollectionChangeGuardFailure(error)) throw error;
+      throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
+    }
     if (!results[invalidation.length]?.meta.changes) throw await this.classifyBlockedCollectionWrite(current.spaceId, next.parentId);
-    if (results.at(-1)?.meta.changes !== 1) throw new Error("Collection audit write did not persist");
+    if (results.at(invalidation.length + 1)?.meta.changes !== 1) throw new Error("Collection audit write did not persist");
     return { ...next, updatedAt: input.updatedAt };
   }
   async listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage> {
@@ -171,6 +186,15 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
       "SELECT CASE WHEN changes() = 1 THEN 1 ELSE json_extract('space-change-guard', '$') END AS ok",
     );
   }
+  private collectionChangeGuard(): D1PreparedStatement {
+    return this.db.prepare(
+      `INSERT INTO collections (
+         id, space_id, parent_id, name, description, status, position, created_at, updated_at
+       )
+       SELECT '__collection_status_change_guard__', NULL, NULL, '', '', 'active', 0, '', ''
+       WHERE changes() != 1`,
+    );
+  }
   private prepareUpdateSpace(id: string, current: Space, next: Space, updatedAt: string): D1PreparedStatement {
     return this.db.prepare("UPDATE spaces SET slug = ?, name = ?, description = ?, status = ?, position = ?, updated_at = ? WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND updated_at = ?")
       .bind(next.slug, next.name, next.description, next.status, next.position, updatedAt, id, current.updatedAt);
@@ -209,6 +233,7 @@ const collectionSelect = "SELECT id, space_id, parent_id, name, description, sta
 const defined = <T extends object>(value: T): T => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 function throwKnownSpaceConflict(error: unknown): never { if (error instanceof SpacesRepositoryConflictError) throw error; if (isSlugConflict(error)) throw new SpacesRepositoryConflictError("slug"); throw error; }
 function isSlugConflict(error: unknown): boolean { return error instanceof Error && ["UNIQUE constraint failed: spaces.slug", "D1_ERROR: UNIQUE constraint failed: spaces.slug: SQLITE_CONSTRAINT", "D1_ERROR: UNIQUE constraint failed: spaces.slug: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)"].includes(error.message); }
+function isCollectionChangeGuardFailure(error: unknown): boolean { return error instanceof Error && error.message.includes("NOT NULL constraint failed: collections.space_id"); }
 function page<T extends { position: number; id: string }>(items: T[], limit: number): { items: T[]; nextCursor?: string } { const result = items.slice(0, limit); return { items: result, ...(items.length > limit ? { nextCursor: encodePageCursor({ sort: result.at(-1)!.position, id: result.at(-1)!.id }) } : {}) }; }
 function mapSpace(row: SpaceRow | null): Space | null { return row ? mapSpaceRow(row) : null; }
 function mapSpaceRow(row: SpaceRow): Space { return { id: row.id, slug: row.slug, name: row.name, description: row.description, kind: row.kind, status: row.status, position: row.position, readOnly: row.read_only === 1, createdAt: row.created_at, updatedAt: row.updated_at }; }

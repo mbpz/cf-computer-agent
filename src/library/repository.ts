@@ -447,7 +447,11 @@ export class LibraryRepository implements LibraryRepositoryPort {
        JOIN knowledge_items k
        JOIN revisions r ON r.id = k.current_revision_id
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+       LEFT JOIN collections active_collection
+         ON active_collection.id = k.collection_id
+           AND active_collection.space_id = k.space_id AND active_collection.status = 'active'
        WHERE k.status = 'active' AND k.search_status = 'search_degraded'
+         AND (k.collection_id IS NULL OR active_collection.id IS NOT NULL)
          AND (r.visibility = 'shared' OR am.role = 'admin')
          ${selected.sql}
        LIMIT 1`,
@@ -480,12 +484,10 @@ function searchFilterSql(
     SELECT 1 FROM revision_tags selected_tag
     WHERE selected_tag.revision_id = ${revisionAlias}.id
       AND selected_tag.tag_id IN (${placeholders})
-  )` : `${revisionAlias}.id IN (
-    SELECT selected_tag.revision_id FROM revision_tags selected_tag
-    WHERE selected_tag.tag_id IN (${placeholders})
-    GROUP BY selected_tag.revision_id
-    HAVING count(DISTINCT selected_tag.tag_id) = ?
-  )`;
+  )` : filters.tagIds.map(() => `EXISTS (
+    SELECT 1 FROM revision_tags selected_tag
+    WHERE selected_tag.revision_id = ${revisionAlias}.id AND selected_tag.tag_id = ?
+  )`).join(" AND ");
   return {
     sql: `${base.sql} AND ${validTags} AND ${membership}`,
     bindings: [
@@ -493,7 +495,6 @@ function searchFilterSql(
       ...filters.tagIds,
       filters.spaceId,
       ...filters.tagIds,
-      ...(filters.tagMode === "and" ? [filters.tagIds.length] : []),
     ],
   };
 }
