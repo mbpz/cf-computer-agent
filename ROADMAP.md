@@ -1,6 +1,6 @@
 # Memory Garden Roadmap
 
-更新时间：2026-08-21
+更新时间：2026-08-22
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
@@ -58,6 +58,8 @@
 
 实施计划：[M1 单来源可信知识闭环实施计划](./docs/superpowers/plans/2026-08-21-m1-single-source-knowledge-loop.md)
 
+当前状态：M1 核心闭环代码、固定评测和 Workerd 纵向旅程已在本地实现；[生产发布手册](./docs/operations/m1-release.md) 与[证据模板](./docs/operations/evidence/m1-release-template.md)已就绪。Checklist 仍有未满足的 P0/M1 细项；远程 `0003` migration、精确版本部署、浏览器 OAuth/M1 旅程、D1 成本和跨激活证据也均未执行，`GATE-M1` 保持未勾选。
+
 范围：
 
 - Source、SourceVersion、KnowledgeItem、Revision、Chunk、Citation 的最小权威模型。
@@ -70,9 +72,9 @@
 退出标准：
 
 - [ ] 一条来源的完整纵向旅程在 workerd 和生产环境通过。
-- [ ] contributor 无法读取 admin_only、他人草稿或历史不可见版本。
-- [ ] 每个答案引用能回读到当前用户可见的精确 Chunk/位置。
-- [ ] Workers AI 不可用时录入、审核、阅读和 FTS 搜索仍可用。
+- [x] contributor 无法读取 admin_only、他人草稿或历史不可见版本；状态：L/W，生产拒绝证据待归档。
+- [x] 每个答案引用能回读到当前用户可见的精确 Chunk/位置；状态：L/W，生产 request ID 待归档。
+- [x] Workers AI 不可用时录入、审核、阅读和 FTS 搜索仍可用；状态：L/W，真实 Provider/额度故障证据待归档。
 
 ## M2 — 多格式与可观测摄取
 

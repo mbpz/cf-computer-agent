@@ -2,6 +2,8 @@
 
 一个使用 GitHub OAuth 登录、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
 
+M1 的文本/Markdown/代码可信知识核心闭环已完成本地与 Workerd 实现验证：Submission 经确定性解析、分块、管理员审核后形成不可变 Revision，D1 FTS5 提供权限内检索，阅读器与引用问答重新授权并定位到精确 Chunk。当前 Checklist 中仍有超出该核心纵向切片的 P0/M1 细项未勾选；生产 `0003` migration、版本部署、浏览器旅程和 D1 成本证据也尚未执行或归档，因此 `GATE-M1` 仍未完成。
+
 ## 产品演进文档
 
 - [AI 知识操作系统设计规格](./docs/superpowers/specs/2026-08-21-ai-knowledge-system-design.md)：当前产品、权限、架构、免费层和里程碑权威定义。
@@ -37,11 +39,12 @@ Browser UI → GitHub OAuth → Worker API → D1 control plane
 
 ```bash
 npm install
+rtk npm run test:m1
 rtk npm run check
 rtk npm run dev
 ```
 
-`rtk npm run check` 只验证生成类型、TypeScript、单元测试、workerd 集成测试和 Wrangler dry build。它不会请求远程 Workers AI、不会验证已部署 Durable Object 的持久性，也不构成生产域名或 Provider 成熟度证据。
+`rtk npm run test:m1` 是固定的 parser/chunker/publication/library/citation/API/UI/evaluation 门禁；其中 24 条评测语料使用确定性本地 fake，不请求 Provider。`rtk npm run check` 继续包含全部 smoke、unit、Workerd 测试、生成类型、TypeScript 和 Wrangler dry build，不会被 M1 子门禁替代。两者都不会验证已部署 Durable Object 的持久性、生产域名或 Provider 成熟度。
 
 本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、七项配置、密钥生成、D1、版本上传、部署和故障复盘统一见 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
 
@@ -49,12 +52,13 @@ rtk npm run dev
 
 ## 部署
 
-首次部署前必须完整执行 [生产核心运维手册](./docs/operations/production-environment-handbook.md)：创建 OAuth App，应用 D1 migration，上传包含完整七项 Secret 的候选版本，检查精确版本后再部署并完成浏览器与 signed-smoke 验证。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
+首次部署前必须完整执行 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。M1 发布还必须使用 [M1 精确发布手册](./docs/operations/m1-release.md) 和其 [生产证据模板](./docs/operations/evidence/m1-release-template.md)：D1 导出、完整本地门禁、检查并前向应用 `0003`、上传包含完整七项 Secret 的候选版本、检查精确版本后再部署，最后完成 OAuth/session、M1 浏览器旅程、权限拒绝、signed automation、跨激活读取和 D1 成本证据。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
 
 ## API
 
 - `GET /api/session`（GitHub OAuth 会话成员）
 - `GET /api/spaces`、`POST /api/submissions`、`GET /api/submissions/mine`（GitHub OAuth 会话成员）
+- `GET /api/knowledge`、`GET /api/knowledge/search`、`GET /api/knowledge/:id`、`GET /api/knowledge/citations/:id`、`POST /api/knowledge/chat`（active member，服务端权限范围）
 - `/api/admin/*`（仅 active admin）
 - `GET /api/health`、`GET /api/notes`、`POST /api/notes`、`GET /api/search?q=...`、`POST /api/chat`（legacy；自动化只可使用这些路径）
 
@@ -84,4 +88,4 @@ Smoke 只验证 automation 可用的 health、创建、列表、检索和带来�
 
 ## 数据与隐私
 
-这是单组织、5–20 人私有知识库设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。操作者已于 2026-08-21 确认自定义域 GitHub OAuth 登录成功，但成功 callback 的正式脱敏证据、signed automation、disabled contributor、workers.dev 关闭状态与 Durable Object 跨激活恢复仍需归档；不要据此宣称生产成熟度。当前版本没有完整附件管线、正式知识审核发布、批量导出或恢复能力；正式导入不可替代的重要资料前应等待 Roadmap M7。
+这是单组织、5–20 人私有知识库设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。操作者已于 2026-08-21 确认自定义域 GitHub OAuth 登录成功，但成功 callback 的正式脱敏证据、signed automation、disabled contributor、workers.dev 关闭状态、Durable Object 跨激活恢复以及完整 M1 生产旅程仍需归档；不要据此宣称生产成熟度。M1 审核发布链路目前只有本地/Workerd 证据；完整附件管线、批量导出和新环境恢复仍未实现，正式导入不可替代的重要资料前应等待 Roadmap M7。
