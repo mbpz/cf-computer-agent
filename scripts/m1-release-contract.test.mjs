@@ -170,6 +170,18 @@ test("pins the reviewed bytes of all four forward migrations", async () => {
   assert.match(result.output, /^\[pass\] migration-files count=4$/mu);
 });
 
+test("fails closed when an unexpected local migration file is present", async () => {
+  const extraMigration = new URL("../migrations/0005_unreviewed.sql", import.meta.url);
+  try {
+    await writeFile(extraMigration, "SELECT 1;\n", { mode: 0o600 });
+    const result = await runVerifier(["--files"]);
+    assert.equal(result.code, 1, result.output);
+    assert.match(result.output, /^\[fail\] migration-files$/mu);
+  } finally {
+    await rm(extraMigration, { force: true });
+  }
+});
+
 test("accepts only the exact pre-0004 and post-0004 Wrangler ledger states", async () => {
   const names = expectedMigrations.map(([name]) => name);
   await withLedger(ledger(names.slice(0, 3)), async (path) => {

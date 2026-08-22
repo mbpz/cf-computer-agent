@@ -1,4 +1,5 @@
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
+import type { CodeSourceMetadata, ParserSchemaVersion } from "../sources/types";
 
 export type SearchMatchedField = "title" | "summary" | "tags" | "body" | "code";
 
@@ -64,6 +65,11 @@ export interface RevisionDetail {
   id: string;
   knowledgeItemId: string;
   sourceVersionId: string;
+  reviewerId: string;
+  sourceVersionOrdinal: number | null;
+  parserSchemaVersion: ParserSchemaVersion | null;
+  codeMetadata: CodeSourceMetadata | null;
+  indexStatus: SearchStatus;
   title: string;
   tagIds: string[];
   visibility: KnowledgeVisibility;

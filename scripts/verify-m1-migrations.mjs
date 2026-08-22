@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 
 const migrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
@@ -11,6 +11,12 @@ const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
 
 async function verifyFiles() {
+  const expectedNames = migrations.map(([name]) => name);
+  const actualNames = (await readdir(new URL("migrations/", repositoryRoot))).sort();
+  if (actualNames.length !== expectedNames.length
+    || actualNames.some((name, index) => name !== expectedNames[index])) {
+    throw new Error("Local migration files do not match the reviewed state");
+  }
   for (const [name, expectedHash] of migrations) {
     const bytes = await readFile(new URL(`migrations/${name}`, repositoryRoot));
     const actualHash = createHash("sha256").update(bytes).digest("hex");

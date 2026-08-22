@@ -44,7 +44,15 @@ describe("LibraryService", () => {
     ]);
     expect(detail).toMatchObject({
       id: "knowledge-1",
-      currentRevision: { id: "revision-1", markdown: "# Trusted\n" },
+      currentRevision: {
+        id: "revision-1",
+        markdown: "# Trusted\n",
+        reviewerId: "admin-1",
+        sourceVersionOrdinal: null,
+        parserSchemaVersion: null,
+        codeMetadata: null,
+        indexStatus: "indexed",
+      },
     });
     expect(detail).not.toHaveProperty("normalizedPath");
     expect(detail.currentRevision).not.toHaveProperty("contentSha256");
