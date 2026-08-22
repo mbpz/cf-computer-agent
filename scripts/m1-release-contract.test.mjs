@@ -206,8 +206,107 @@ test("runbook contract rejects executable forbidden commands but ignores illustr
     });
   }
 
-  const illustrative = `${runbook}\nIllustration only: ${forbiddenRunbookCommands.join("; ")}\n<!-- ${forbiddenRunbookCommands.join("\n")} -->\n\`\`\`bash\n${forbiddenRunbookCommands.map((command) => `# ${command}`).join("\n")}\n\`\`\`\n\`\`\`sh\n${forbiddenRunbookCommands.join("\n")}\n\`\`\`\n`;
+  const illustrative = `${runbook}\nIllustration only: ${forbiddenRunbookCommands.join("; ")}\n\`\`\`bash\n${forbiddenRunbookCommands.map((command) => `# ${command}`).join("\n")}\n\`\`\`\n\`\`\`sh\n${forbiddenRunbookCommands.join("\n")}\n\`\`\`\n`;
   await withTextFile("m1-runbook-illustrative-", illustrative, async (path) => {
+    const result = await runDocsVerifier(["--runbook", path]);
+    assert.equal(result.code, 0, result.output);
+  });
+});
+
+test("runbook contract scans the first info-string word with ASCII-insensitive shell names", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const forbidden = "rtk npx wrangler deploy";
+  const openings = [
+    "```bash title=release",
+    "```zsh linenums",
+    "```BASH",
+    "```ZsH title=release",
+    "```   bash title=release",
+    "~~~\tzSh\tlinenums",
+  ];
+  for (const opening of openings) {
+    const marker = opening[0];
+    const length = opening.match(/^[`~]+/u)?.[0].length ?? 3;
+    const closing = marker.repeat(length);
+    const fixture = `${runbook}\n${opening}\n${forbidden}\n${closing}\n`;
+    await withTextFile("m1-runbook-info-string-", fixture, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, `${opening}\n${result.output}`);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+});
+
+test("mandatory evidence fences retain bare lowercase shell info strings", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const probe = "rtk npm run probe:automation:invalid";
+  const block = evidenceBlock("invalid-signature-probe", probe);
+  const openings = ["```bash title=release", "```BASH", "```   bash"];
+  assert.ok(runbook.includes(block));
+  for (const opening of openings) {
+    const mutation = runbook.replace(block, block.replace("```bash", opening));
+    await withTextFile("m1-runbook-mandatory-info-", mutation, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, `${opening}\n${result.output}`);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+});
+
+test("runbook contract rejects all CommonMark raw HTML block types", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const block = evidenceBlock("invalid-signature-probe", "rtk npm run probe:automation:invalid");
+  const contexts = [
+    ["script", `<script>\n${block}\n</script>`],
+    ["pre", `<pre>\n${block}\n</pre>`],
+    ["style", `<style>\n${block}\n</style>`],
+    ["textarea", `<textarea>\n${block}\n</textarea>`],
+    ["comment", `<!--\n${block}\n-->`],
+    ["processing", `<?release\n${block}\n?>`],
+    ["declaration", `<!RELEASE\n${block}\n>`],
+    ["cdata", `<![CDATA[\n${block}\n]]>`],
+    ["block-tag", `<details>\n${block}\n</details>`],
+    ["representative-block-tag", `<div class="release">\n${block}\n</div>`],
+    ["complete-tag", `<release-proof>\n${block}\n</release-proof>`],
+  ];
+  assert.ok(runbook.includes(block));
+  for (const [label, wrapped] of contexts) {
+    const mutation = runbook.replace(block, wrapped);
+    await withTextFile("m1-runbook-raw-html-type-", mutation, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, `${label}\n${result.output}`);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+});
+
+test("every required block fails when nested in disallowed raw HTML", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const wrappers = [
+    (block) => `<script>\n${block}\n</script>`,
+    (block) => `<details>\n${block}\n</details>`,
+    (block) => `<!--\n${block}\n-->`,
+    (block) => `<div>\n${block}\n</div>`,
+    (block) => `<release-proof>\n${block}\n</release-proof>`,
+  ];
+  for (const [id, command] of requiredEvidenceBlocks) {
+    const block = evidenceBlock(id, command);
+    assert.ok(runbook.includes(block), id);
+    for (const wrap of wrappers) {
+      const mutation = runbook.replace(block, wrap(block));
+      await withTextFile("m1-runbook-required-raw-html-", mutation, async (path) => {
+        const result = await runDocsVerifier(["--runbook", path]);
+        assert.equal(result.code, 1, `${id}\n${result.output}`);
+        assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+      });
+    }
+  }
+});
+
+test("angle prose and shell comparisons do not become raw HTML", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const benign = `${runbook}\nA prose comparison keeps 3 < 5 and 8 > 2; the literal \`<M1_VERSION_ID>\` is not a tag.\n\n\`\`\`bash\nif [[ "alpha" < "beta" && "omega" > "beta" ]]; then\n  printf '%s\\n' '<details>'\nfi\n\`\`\`\n`;
+  await withTextFile("m1-runbook-angle-prose-", benign, async (path) => {
     const result = await runDocsVerifier(["--runbook", path]);
     assert.equal(result.code, 0, result.output);
   });

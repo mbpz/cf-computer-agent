@@ -14,7 +14,8 @@ Scoped commits:
 - review-round hardening: `010142004036139b38b2512098a224035680c221` (`fix: harden M1 release evidence gates`);
 - review-round 2 executable-document and count-truth hardening: `1f44cfe26be8665e583cf29ca70bbb477216b58b` (`fix: make M1 document gates executable`);
 - review-round 3 exact evidence-block and continuation hardening: `21992851ded782784dcc166d4c42d7c074ff658e` (`fix: harden M1 evidence command ordering`);
-- review-round 4 CommonMark, token-continuation, and version-ID hardening: this scoped follow-up commit.
+- review-round 4 CommonMark, token-continuation, and version-ID hardening: `328e4a1e3567f9b1a9ef3727285793976a4cf2a3` (`fix: parse M1 release evidence structurally`);
+- review-round 5 info-string and raw-HTML fail-closed hardening: this scoped follow-up commit.
 
 ## Files
 
@@ -22,7 +23,7 @@ Scoped commits:
 - Added `test/unit/m1-evaluation.test.ts`: corpus coverage, Recall@5/citation precision/recall/location/permission gates, positive denominator checks, exact per-case answer/refusal/citation/location assertions, zero-answer regression, and explicit degraded/no-result/partial-match-refusal/disabled/admin-only/injection outcomes.
 - Added `scripts/automation-probe.mjs` and `scripts/automation-probe.test.mjs`: separately invokable, exact one-request invalid-signature health `401` and fresh valid-signature M1 admin `403` stages, their ordered combined mode, redirect/network/status fail-closed behavior, and secret/request-ID redaction.
 - Added `scripts/verify-m1-migrations.mjs` and `scripts/m1-release-contract.test.mjs`: pinned SHA-256 verification and exact Wrangler `d1_migrations` pre/post ledger contracts.
-- Added `scripts/verify-m1-docs.mjs`: exact named single-line evidence-block validation, CommonMark fence structure, shell-accurate continuation removal for forbidden-command scanning, and derived checklist/report truth validation. HTML comments, shell comments, prose, nested fences, heredoc bodies, continued arguments, and non-`bash`/`zsh` fences cannot satisfy evidence requirements.
+- Added `scripts/verify-m1-docs.mjs`: exact named single-line evidence-block validation, CommonMark fence structure, first-word ASCII-insensitive shell-language scanning, shell-accurate continuation removal, fail-closed raw-HTML rejection outside fences, and derived checklist/report truth validation. HTML, shell comments, prose, nested fences, heredoc bodies, continued arguments, and non-shell fences cannot satisfy evidence requirements.
 - Added `docs/operations/m1-release.md`: exact D1 export → local gate → `0003` inspection/apply → complete-secret upload → exact-version inspection/deploy → OAuth/M1/bad-automation/cross-activation/cost evidence → forward-compatible rollback sequence.
 - Added `docs/operations/evidence/m1-release-template.md`: entirely unchecked production evidence record with version/request-ID, D1 cost, current free-tier, recovery, and rollback placeholders.
 - Added `test:m1`, `test:ops:m1`, `probe:automation`, the two single-stage probe commands, `verify:m1:migrations`, and `verify:m1:docs` in `package.json`; the global `check` runs the automation/migration/document contract tests through `test:smoke` and the evaluator through `test:unit`.
@@ -87,6 +88,12 @@ This was the missing-feature RED, not a syntax or assertion failure.
 - GREEN: the focused release contract passed 14/14 after applying shell backslash-newline deletion, parsing top-level CommonMark backtick/tilde fences with matching character/length and up to three spaces of indentation, requiring one entire exact command line per mandatory block, and replacing version placeholders with a safely read/exported `M1_VERSION_ID`, an explicit nonempty precondition, and quoted arguments.
 - Mutation proof inserts backslash-newline at every internal character boundary of every forbidden command token; wraps required execution in `if false`, a function, command substitution, braces, and a compound command; nests it in an outer four-backtick fence; and checks all 12 exact lines with `bash -n` and `zsh -n` using harmless environment placeholders without executing them.
 
+### Review-round 5 RED → GREEN
+
+- RED: the focused release contract retained 15 passing tests and failed 4 reviewed behaviors: `bash title=release` bypassed the forbidden scan, whitespace-normalized mandatory info was accepted, a mandatory-looking block inside `<script>` counted, and every required block could count inside raw HTML.
+- GREEN: the focused release contract passed 19/19 after treating the first whitespace-delimited info word as the language with explicit ASCII-insensitive `bash`/`zsh` matching, retaining bare lowercase info for mandatory blocks, and rejecting raw HTML block starts outside CommonMark fences before evidence discovery.
+- Mutation proof covers suffixed/case/space/tab shell info strings; all type-1 tags (`script`, `pre`, `style`, `textarea`); comments, processing instructions, declarations, CDATA, block tags, and complete tags; and all 12 required blocks wrapped independently in `script`, `details`, an HTML comment, `div`, and a complete custom tag. Prose comparisons and HTML-looking text inside a shell fence remain valid controls.
+
 ## Evaluation contract
 
 The corpus covers Chinese, English, code identifiers, title, Tag, body, no result, a partial-match refusal under the real AND/token-coverage contract, contributor/admin visibility, disabled member, prompt injection, exact citation location, and degraded-but-readable search. It includes 24 cases (more than the required 20). It does **not** claim a calibrated semantic low-relevance threshold; `CHAT-008` remains unchecked.
@@ -116,13 +123,14 @@ The M1 runbook:
 
 - requires a restricted remote D1 export before migration;
 - pins and locally verifies the reviewed SHA-256 bytes of migrations `0001`, `0002`, and `0003` before any remote action;
-- proves hash verification, before/after ledger capture and verification, forward migration apply, version upload/ID precondition/inspect/deploy, invalid `401`, and valid M1-admin `403` from 12 exact named blocks, each containing one exact physical command line;
+- proves hash verification, before/after ledger capture and verification, forward migration apply, version upload/ID precondition/inspect/deploy, invalid `401`, and valid M1-admin `403` from 12 exact named blocks, each containing one exact physical command line and no raw-HTML context;
 - queries Wrangler's actual `d1_migrations` table and requires the exact two-name pre-apply and three-name post-apply ledger, with no missing, renamed, reordered, or extra state;
 - runs `test:m1`, the full gate, audit, and diff checks before remote change;
 - reads all of `0003`, requires upgrade/FK preservation evidence, and applies it only forward;
 - preserves applied `0001`/`0002`, GitHub OAuth identities, D1 sessions, `KnowledgeBase`, DO `v1`, VFS/index/journal data, and existing bindings/routes;
 - constructs one complete seven-secret JSON bundle outside the repository using hidden reads, `set +x`, restrictive permissions, and cleanup traps;
 - forbids `secret put`, `versions secret bulk`, plain deploy, npm deploy, Wrangler rollback, reverse migration, D1/DO deletion, and old Access-era builds;
+- scans shell fences by the first info-string word with ASCII case ignored and rejects every CommonMark raw-HTML block form outside fences;
 - uploads with `versions upload --secrets-file ... --strict`, inspects the exact ID/bindings/routes, and deploys only the quoted `${M1_VERSION_ID}@100%` argument with separate authorization;
 - captures the exact upload ID through shell input, rejects an empty `M1_VERSION_ID`, and quotes the ID in current `versions view` and `versions deploy` syntax;
 - keeps every production checkbox in the template unchecked;
@@ -166,16 +174,16 @@ Task 11 compared the plan's ranges to the current checklist instead of bulk-chec
   - passed 1 file / 4 tests.
 - Focused operational contract gate:
   - `rtk node --test scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs`
-  - passed 20/20 tests.
+  - passed 25/25 tests.
 - Final M1 gate:
   - `rtk npm run test:m1`
-  - passed 20/20 operational contracts plus 12 files / 264 Vitest tests.
+  - passed 25/25 operational contracts plus 12 files / 264 Vitest tests.
 - `rtk npm run typecheck` passed.
 - Final repository gate:
   - `rtk npm run check`
   - generated types current;
   - TypeScript passed;
-  - smoke/operational contracts passed 28/28;
+  - smoke/operational contracts passed 33/33;
   - unit passed 447/447 across 26 files;
   - Workerd passed 215/215 across 12 files;
   - Wrangler dry-run passed with unchanged `KNOWLEDGE`, `DB`, `AI`, `ASSETS`, and local configuration bindings.
@@ -187,7 +195,7 @@ Task 11 compared the plan's ranges to the current checklist instead of bulk-chec
 - `rtk npm run verify:m1:docs` passed with `m1-runbook evidence_blocks=12` and `m1-truth atoms=76 checked=53 unchecked=23 gates=1 unchecked_items=24`.
 - Local `rtk npx --no-install wrangler versions view --help` and `versions deploy --help` confirmed the installed Wrangler 4.119.0 positional forms `view <version-id>` and `deploy [version-id@percentage]`; no provider request was made.
 - Local Markdown link check passed for README, Roadmap, Checklist, M1 runbook, and evidence template.
-- Runbook command-policy check passed: 12 visible evidence labels each bind to one exact top-level physical `bash`/`zsh` command in the required release order; comments/prose/nested fences/continued arguments/heredocs/compound wrappers cannot satisfy them; shell-normalized executable fences contain no migration-list, secret put/bulk, plain deploy, npm deploy, Wrangler rollback, reverse/restore, or destructive D1 command.
+- Runbook command-policy check passed: 12 visible evidence labels each bind to one exact top-level physical `bash`/`zsh` command in the required release order; raw HTML, shell comments, prose, nested fences, continued arguments, heredocs, and compound wrappers cannot satisfy them; first-info-word/continuation-normalized executable fences contain no migration-list, secret put/bulk, plain deploy, npm deploy, Wrangler rollback, reverse/restore, or destructive D1 command.
 - Package-script check passed: all required M1 slices are present and the full gate remains additive.
 - Secret-pattern scan returned no matches.
 - Acceptance static check passed: exactly 23 P0/M1 atoms plus one unchecked `GATE-M1` remain, for 24 unchecked items total including the gate; the production evidence template contains no checked box.

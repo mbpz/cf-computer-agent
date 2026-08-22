@@ -44,7 +44,7 @@ M1 evidence command: `migration-hash-verification`
 rtk npm run verify:m1:migrations -- --files
 ```
 
-The `M1 evidence command` label identifies an exact, tested, single-line release evidence block. Do not combine it with another command, continuation, pipe, heredoc, or shell expression.
+The `M1 evidence command` label identifies an exact, tested, single-line release evidence block. Mandatory blocks use a bare lowercase `bash` or `zsh` info string. For the forbidden-command scan, the first whitespace-delimited info-string word is the language and ASCII case is ignored, so `BASH title=release` is executable shell. Do not combine a mandatory line with another command, continuation, pipe, heredoc, or shell expression. Raw HTML blocks are forbidden everywhere outside fenced code; use Markdown prose instead.
 
 ```bash
 rtk git status --short

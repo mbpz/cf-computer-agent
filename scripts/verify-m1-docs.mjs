@@ -28,10 +28,22 @@ const forbiddenCommands = [
   /\brtk\s+npx\s+wrangler\s+d1\s+time-travel\s+restore(?:\s|$)/iu,
   /\brtk\s+npx\s+wrangler\s+d1\s+execute\b[^\n]*\b(?:DELETE|DROP|TRUNCATE)\b/iu,
 ];
+const htmlBlockTags = new Set([
+  "address", "article", "aside", "base", "basefont", "blockquote", "body", "caption",
+  "center", "col", "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt",
+  "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2",
+  "h3", "h4", "h5", "h6", "head", "header", "hr", "html", "iframe", "legend", "li",
+  "link", "main", "menu", "menuitem", "nav", "noframes", "ol", "optgroup", "option", "p",
+  "param", "search", "section", "summary", "table", "tbody", "td", "tfoot", "th", "thead",
+  "title", "tr", "track", "ul",
+]);
+const completeOpenTag = /^<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t"'=<>`]+|'[^']*'|"[^"]*"))?)*[ \t]*\/?>[ \t]*$/u;
+const completeClosingTag = /^<\/[A-Za-z][A-Za-z0-9-]*[ \t]*>[ \t]*$/u;
 
 async function verifyRunbook(path) {
-  const markdown = removeHtmlComments(await readFile(path, "utf8"));
+  const markdown = await readFile(path, "utf8");
   const fences = commonMarkFences(markdown);
+  rejectRawHtmlBlocks(markdown, fences);
   const evidence = exactEvidenceBlocks(markdown, fences);
   if (evidence.length !== requiredEvidenceBlocks.length
     || evidence.some((block, index) => block.id !== requiredEvidenceBlocks[index][0]
@@ -39,7 +51,7 @@ async function verifyRunbook(path) {
     throw new Error("M1 evidence blocks are missing, malformed, duplicated, or out of order");
   }
 
-  for (const fence of fences.filter(({ info }) => info === "bash" || info === "zsh")) {
+  for (const fence of fences.filter(({ language }) => language === "bash" || language === "zsh")) {
     const withoutCommentLines = fence.content
       .filter((line) => !/^\s*#/u.test(line))
       .join("\n");
@@ -54,11 +66,7 @@ async function verifyRunbook(path) {
 function exactEvidenceBlocks(markdown, fences) {
   const lines = markdown.split(/\r?\n/u);
   const fenceByStart = new Map(fences.map((fence) => [fence.start, fence]));
-  const fencedLines = new Set(fences.flatMap((fence) => {
-    const covered = [];
-    for (let line = fence.start; line <= fence.end; line += 1) covered.push(line);
-    return covered;
-  }));
+  const fencedLines = coveredFenceLines(fences);
   const blocks = [];
   for (let index = 0; index < lines.length; index += 1) {
     if (fencedLines.has(index)) continue;
@@ -66,7 +74,7 @@ function exactEvidenceBlocks(markdown, fences) {
     if (!marker) continue;
     const fence = fenceByStart.get(index + 1);
     if (!fence
-      || (fence.info !== "bash" && fence.info !== "zsh")
+      || (fence.rawInfo !== "bash" && fence.rawInfo !== "zsh")
       || fence.content.length !== 1) {
       throw new Error("M1 evidence block must be one top-level exact physical shell command line");
     }
@@ -93,7 +101,8 @@ function commonMarkFences(markdown) {
         character: opening[2][0],
         length: opening[2].length,
         start: index,
-        info: opening[3].trim(),
+        rawInfo: opening[3],
+        language: infoLanguage(opening[3]),
         content: [],
       };
       continue;
@@ -112,18 +121,41 @@ function commonMarkFences(markdown) {
   return fences;
 }
 
-function removeHtmlComments(markdown) {
-  let result = "";
-  let cursor = 0;
-  while (cursor < markdown.length) {
-    const start = markdown.indexOf("<!--", cursor);
-    if (start < 0) return result + markdown.slice(cursor);
-    result += markdown.slice(cursor, start);
-    const end = markdown.indexOf("-->", start + 4);
-    if (end < 0) throw new Error("Unclosed HTML comment");
-    cursor = end + 3;
+function infoLanguage(rawInfo) {
+  const [firstWord = ""] = rawInfo.trim().split(/[ \t]+/u);
+  return firstWord.replace(/[A-Z]/gu, (character) => character.toLowerCase());
+}
+
+function coveredFenceLines(fences) {
+  return new Set(fences.flatMap((fence) => {
+    const covered = [];
+    for (let line = fence.start; line <= fence.end; line += 1) covered.push(line);
+    return covered;
+  }));
+}
+
+function rejectRawHtmlBlocks(markdown, fences) {
+  const fencedLines = coveredFenceLines(fences);
+  const lines = markdown.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!fencedLines.has(index) && isRawHtmlBlockStart(lines[index])) {
+      throw new Error("Raw HTML blocks are forbidden in the M1 release runbook");
+    }
   }
-  return result;
+}
+
+function isRawHtmlBlockStart(line) {
+  const candidate = /^( {0,3})(\S.*)$/u.exec(line)?.[2];
+  if (!candidate || candidate[0] !== "<") return false;
+  if (/^<(?:script|pre|style|textarea)(?=[\t >]|$)/iu.test(candidate)) return true;
+  if (candidate.startsWith("<!--")
+    || candidate.startsWith("<?")
+    || /^<![A-Za-z]/u.test(candidate)
+    || candidate.startsWith("<![CDATA[")) return true;
+
+  const blockTag = /^<\/?([A-Za-z][A-Za-z0-9-]*)(?=[\t />]|$)/u.exec(candidate)?.[1];
+  if (blockTag && htmlBlockTags.has(blockTag.toLowerCase())) return true;
+  return completeOpenTag.test(candidate) || completeClosingTag.test(candidate);
 }
 
 async function verifyTruth(checklist, report) {
