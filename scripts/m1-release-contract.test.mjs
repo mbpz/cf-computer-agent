@@ -14,6 +14,13 @@ const packagePath = new URL("../package.json", import.meta.url);
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
 const checklistPath = new URL("../docs/product/ai-knowledge-base-checklist.md", import.meta.url);
 const reportPath = new URL("../.superpowers/sdd/2026-08-22-m1-gate-completion/task-9-report.md", import.meta.url);
+const requiredM1Suites = [
+  "test/unit/audit.test.ts",
+  "test/unit/index-document.test.ts",
+  "test/unit/search-policy.test.ts",
+  "test/unit/markdown-renderer.test.ts",
+  "test/unit/evidence-confidence.test.ts",
+];
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
@@ -46,6 +53,11 @@ const forbiddenRunbookCommands = [
   "rtk npx wrangler d1 time-travel restore memory-garden-control-plane --timestamp 2026-08-21T00:00:00Z",
   'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "DELETE FROM submissions"',
 ];
+
+function missingRequiredM1Suites(command) {
+  const tokens = command.split(/\s+/u);
+  return requiredM1Suites.filter((suite) => !tokens.includes(suite));
+}
 
 function evidenceBlock(id, command) {
   return `M1 evidence command: \`${id}\`\n\`\`\`bash\n${command}\n\`\`\``;
@@ -269,8 +281,19 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
   assert.equal(packageJson.scripts["probe:automation:invalid"], "node scripts/automation-probe.mjs --invalid-health");
   assert.equal(packageJson.scripts["probe:automation:admin-forbidden"], "node scripts/automation-probe.mjs --admin-forbidden");
   assert.match(packageJson.scripts["test:m1"], /npm run test:ops:m1/u);
+  assert.deepEqual(missingRequiredM1Suites(packageJson.scripts["test:m1"]), []);
   assert.match(packageJson.scripts["test:smoke"], /automation-probe\.test\.mjs/u);
   assert.ok(runbook.includes("Reviewed SHA-256"));
+});
+
+test("test:m1 fails its suite contract when any direct production evidence suite is omitted", async () => {
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  const command = packageJson.scripts["test:m1"];
+  for (const suite of requiredM1Suites) {
+    const mutated = command.replace(suite, "");
+    assert.notEqual(mutated, command);
+    assert.deepEqual(missingRequiredM1Suites(mutated), [suite]);
+  }
 });
 
 test("secret cleanup failure fails the release stage and leaves the EXIT trap armed", async () => {

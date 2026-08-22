@@ -318,7 +318,7 @@
 
 ## EVAL — 质量评测
 
-M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、28 条独立 parser 用例和中英文强/弱证据信心语料，并报告非零精确分母。评测计算 Recall@5、citation precision/recall/location、逐例答案/拒答/拒绝契约、错误引用和权限泄露；Tag 索引及 28 个完成功能见证均有独立 mutation 使其精确断言失败。这不替代 M4/M5 的语义、同义词、表格、冲突和生产评测验收。
+M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从独立 fixture 导出的 34 条 parser 用例和中英文强/弱证据信心语料，并报告非零精确分母。评测计算 Recall@5、citation precision/recall/location、逐例答案/拒答/拒绝契约、错误引用和权限泄露。`test:m1` 契约直接包含 audit、index document、search policy、Markdown renderer 和 evidence confidence 等生产入口套件，删除任一必需套件会使发布契约失败。这不替代 M4/M5 的语义、同义词、表格、冲突和生产评测验收。
 
 - [x] `EVAL-001` P0/M1 解析 fixture 规范；状态：L/W；验收：输入字节、期望 Markdown、行数、warning、错误码和 metadata 由独立 fixture 定义，不调用生产 helper。证据：`test/fixtures/m1-parser-cases.ts`；命令：`rtk npm run test:m1`。
 - [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。

@@ -32,18 +32,7 @@ export const M1_LOCAL_ATOM_IDS = Object.freeze([
 ] as const);
 export const M1_REMOTE_ATOM_IDS = Object.freeze(["OPS-015"] as const);
 
-export const M1_ACCEPTANCE_FEATURES = Object.freeze([
-  "fatal-decode", "code-metadata", "metadata-audit", "target-validation",
-  "visibility-expansion", "resubmission", "fts-title", "fts-summary", "fts-tags",
-  "fts-body", "fts-code", "current-switch", "index-status", "ranking",
-  "matched-fields", "highlights", "tag-and", "tag-or", "markdown-sanitization",
-  "revision-metadata", "download-visibility", "chat-all", "chat-space",
-  "chat-collection", "chat-items", "chat-confidence", "submission-status-filter",
-  "translation-keys",
-] as const);
-
 export const M1_ACCEPTANCE_DENOMINATORS = Object.freeze({
-  parserCases: 28,
   retrievalCases: 24,
   answerCases: 16,
   refusalCases: 7,
@@ -57,12 +46,6 @@ export const M1_ACCEPTANCE_DENOMINATORS = Object.freeze({
   localAtoms: M1_LOCAL_ATOM_IDS.length,
   remoteAtoms: M1_REMOTE_ATOM_IDS.length,
 });
-
-export function assertM1AcceptanceFeatures(outcomes: Readonly<Record<string, boolean>>): void {
-  for (const feature of M1_ACCEPTANCE_FEATURES) {
-    if (outcomes[feature] !== true) throw new Error(`M1 acceptance feature failed: ${feature}`);
-  }
-}
 
 export const M1_FENCE_FIELD_EXPECTATIONS = Object.freeze([
   Object.freeze({

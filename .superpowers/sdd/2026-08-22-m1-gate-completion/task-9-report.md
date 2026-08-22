@@ -8,7 +8,7 @@ This is **M1 implementation complete; remote verification pending**. No remote c
 
 ## Fixed evaluation denominators
 
-- Parser: 28 independent byte/metadata cases.
+- Parser: 34 independent byte/metadata cases, derived directly from `m1ParserCases` with a drift regression.
 - Retrieval: 24 labelled cases; 20 required retrieval citations.
 - Answer/refusal/denial: 16 / 7 / 1.
 - Languages: 8 Chinese/English risk-surface cases.
@@ -16,7 +16,7 @@ This is **M1 implementation complete; remote verification pending**. No remote c
 - Authorization/ranking/rendering: 8 download authorization cases, 4 ranking cases, and 5 highlight-safety cases.
 - Atom outcomes: 23 local passed; one remote-only atom pending.
 
-Each of the 28 acceptance-feature witnesses has an independent mutation that fails its named per-case assertion. `test:m1` also executes the production modules through focused unit and real D1/FTS5/DO Workerd suites; the manifest is not used as a replacement for those tests.
+The synthetic boolean witness manifest was removed. `test:m1` directly executes the relevant production functions through focused unit and real D1/FTS5/DO Workerd suites. Its executable release contract requires the audit, index-document, search-policy, Markdown-renderer, and evidence-confidence suites and proves omission of each one fails independently.
 
 ## Deferred-minor reconciliation
 
@@ -36,12 +36,21 @@ It requires reviewed production `rows_read`/`rows_written` rows for bounded list
 
 ## Verification evidence
 
-- `rtk npm run test:m1`: PASS — 29 operations contracts, 13 i18n contracts, and 15 Vitest files / 477 tests; migration/docs/i18n verifiers passed first.
+- `rtk npm run test:m1`: PASS after fix round 1 — 30 operations contracts, 13 i18n contracts, and 20 Vitest files / 551 tests; migration/docs/i18n verifiers passed first.
 - `rtk npm run verify:m1:migrations -- --files`: PASS — four exact reviewed files, including unchanged `0004` SHA-256 `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb`.
 - `rtk npm run verify:m1:docs`: PASS — 14 executable evidence blocks; 76 atoms = 75 checked + 1 unchecked; gate unchecked.
 - `rtk npm run verify:i18n`: PASS — 349 keys, 45 placeholders, six checked UI files, TypeScript AST and DOM hard-copy gate.
-- `rtk npm run check`: PASS — 37 smoke/contracts, 611 unit tests, 289 Workerd tests, generated types, TypeScript, vendored dependency digests, and Wrangler dry-run build.
+- `rtk npm run check`: PASS after fix round 1 — 38 smoke/contracts, 610 unit tests, 289 Workerd tests, generated types, TypeScript, vendored dependency digests, and Wrangler dry-run build.
 - `rtk npm audit --omit=dev --offline`: PASS — zero runtime vulnerabilities.
 - `rtk git diff --check`: PASS.
 
 The Workerd run emitted the pre-existing deliberate invalid-journal fail-closed diagnostics and local AI-binding warnings; all commands exited zero. Runtime dependency audit uses the offline lockfile and makes no registry request.
+
+## Fix round 1
+
+- RED: the executable release contract failed when it first required `test/unit/audit.test.ts`; the prior `test:m1` command omitted all five newly required direct production suites.
+- Removed the synthetic boolean acceptance witness and its self-fulfilling mutation test.
+- Parser cardinality now comes directly from `m1ParserCases`; the regression requires the current independent fixture length of 34, so fixture drift cannot leave a stale evaluation denominator silently green.
+- `test:m1` now directly runs audit, index-document, search-policy, Markdown-renderer, and evidence-confidence suites. Its release contract tokenizes the command and independently proves omission of each required suite fails.
+- Focused GREEN: 23 release-contract tests and six Vitest files / 82 tests.
+- Complete GREEN: 30 operations contracts, 13 i18n contracts, 20 Vitest files / 551 tests; full repository counts are recorded above.

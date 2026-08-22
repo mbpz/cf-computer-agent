@@ -7,35 +7,27 @@ import {
   summarizeM1Evaluation,
   M1_EVIDENCE_CONFIDENCE_CASES,
   M1_ACCEPTANCE_DENOMINATORS,
-  M1_ACCEPTANCE_FEATURES,
   M1_LOCAL_ATOM_IDS,
   M1_REMOTE_ATOM_IDS,
-  assertM1AcceptanceFeatures,
 } from "../fixtures/m1-evaluation";
+import { m1ParserCases } from "../fixtures/m1-parser-cases";
 import { EVIDENCE_CONFIDENCE_THRESHOLD } from "../../src/ai/evidence-confidence";
 
 describe("M1 fixed knowledge-loop evaluation", () => {
   it("reports exact nonzero local acceptance denominators and all 24 atom outcomes", () => {
     expect(M1_ACCEPTANCE_DENOMINATORS).toEqual({
-      parserCases: 28, retrievalCases: 24, answerCases: 16, refusalCases: 7,
+      retrievalCases: 24, answerCases: 16, refusalCases: 7,
       denialCases: 1, languageCases: 8, requiredCitations: 16, returnedCitations: 16,
       downloadAuthorizationCases: 8, rankingCases: 4, highlightSafetyCases: 5,
       localAtoms: 23, remoteAtoms: 1,
     });
     expect(Object.values(M1_ACCEPTANCE_DENOMINATORS).every((count) => count > 0)).toBe(true);
+    expect(m1ParserCases).toHaveLength(34);
     expect(M1_LOCAL_ATOM_IDS).toHaveLength(23);
     expect(M1_REMOTE_ATOM_IDS).toEqual(["OPS-015"]);
     expect(new Set([...M1_LOCAL_ATOM_IDS, ...M1_REMOTE_ATOM_IDS])).toHaveLength(24);
   });
 
-  it("fails an exact per-feature assertion for every independent acceptance mutation", () => {
-    const passing = Object.fromEntries(M1_ACCEPTANCE_FEATURES.map((feature) => [feature, true]));
-    expect(() => assertM1AcceptanceFeatures(passing)).not.toThrow();
-    for (const feature of M1_ACCEPTANCE_FEATURES) {
-      expect(() => assertM1AcceptanceFeatures({ ...passing, [feature]: false }))
-        .toThrow(`M1 acceptance feature failed: ${feature}`);
-    }
-  });
   it("keeps at least twenty hand-labelled cases across the required risk surfaces", () => {
     const coverage = new Set(M1_EVALUATION_CASES.flatMap((entry) => entry.coverage));
 
