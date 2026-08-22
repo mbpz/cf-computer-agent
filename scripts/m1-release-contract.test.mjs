@@ -8,18 +8,46 @@ import test from "node:test";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const verifierPath = new URL("./verify-m1-migrations.mjs", import.meta.url).pathname;
+const docsVerifierPath = new URL("./verify-m1-docs.mjs", import.meta.url).pathname;
 const runbookPath = new URL("../docs/operations/m1-release.md", import.meta.url);
 const packagePath = new URL("../package.json", import.meta.url);
 const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
+const checklistPath = new URL("../docs/product/ai-knowledge-base-checklist.md", import.meta.url);
+const reportPath = new URL("../.superpowers/sdd/2026-08-21-m1-single-source-knowledge-loop/task-11-report.md", import.meta.url);
 const expectedMigrations = [
   ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d"],
 ];
+const requiredRunbookCommands = [
+  "M1_MIGRATION_0001_SHA256='3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929'",
+  "M1_MIGRATION_0002_SHA256='b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1'",
+  "M1_MIGRATION_0003_SHA256='17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d'",
+  "rtk npm run verify:m1:migrations -- --files",
+  'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"',
+  'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"',
+  'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"',
+  "rtk npm run probe:automation",
+];
 
 function runVerifier(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [verifierPath, ...args], {
+      cwd: repositoryRoot,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { output += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code, output }));
+  });
+}
+
+function runDocsVerifier(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [docsVerifierPath, ...args], {
       cwd: repositoryRoot,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -49,6 +77,17 @@ async function withLedger(value, callback) {
   const path = join(directory, "ledger.json");
   try {
     await writeFile(path, JSON.stringify(value), { mode: 0o600 });
+    return await callback(path);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function withTextFile(prefix, value, callback) {
+  const directory = await mkdtemp(join(tmpdir(), prefix));
+  const path = join(directory, "fixture.md");
+  try {
+    await writeFile(path, value, { mode: 0o600 });
     return await callback(path);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -102,24 +141,93 @@ test("fails closed on missing, renamed, extra, reordered, or malformed ledger ro
   }
 });
 
-test("runbook hard-codes provenance and queries the actual D1 migration ledger", async () => {
+test("runbook executable contract proves provenance, ledger, and probe commands", async () => {
   const [runbook, packageJson, wrangler] = await Promise.all([
     readFile(runbookPath, "utf8"),
     readFile(packagePath, "utf8").then(JSON.parse),
     readFile(wranglerPath, "utf8").then(JSON.parse),
   ]);
-  for (const [name, hash] of expectedMigrations) {
-    assert.match(runbook, new RegExp(`${name.replaceAll(".", "\\.")}[^\\n]*${hash}`, "u"));
-  }
-  assert.match(runbook, /rtk npm run verify:m1:migrations -- --files/u);
-  assert.match(runbook, /rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "\$M1_LEDGER_FILE"/u);
-  assert.match(runbook, /rtk npm run verify:m1:migrations -- --ledger-before "\$M1_LEDGER_FILE"/u);
-  assert.match(runbook, /rtk npm run verify:m1:migrations -- --ledger-after "\$M1_LEDGER_FILE"/u);
-  assert.doesNotMatch(runbook, /d1 migrations list/u);
+  const verified = await runDocsVerifier(["--runbook", runbookPath.pathname]);
+  assert.equal(verified.code, 0, verified.output);
+  assert.match(verified.output, /^\[pass\] m1-runbook executable_commands=\d+$/mu);
   assert.equal(wrangler.d1_databases[0].database_name, "memory-garden-control-plane");
   assert.equal(wrangler.d1_databases[0].migrations_dir, "migrations");
   assert.equal(wrangler.d1_databases[0].migrations_table, undefined);
   assert.equal(packageJson.scripts["verify:m1:migrations"], "node scripts/verify-m1-migrations.mjs");
+  assert.equal(packageJson.scripts["verify:m1:docs"], "node scripts/verify-m1-docs.mjs --all");
   assert.match(packageJson.scripts["test:m1"], /npm run test:ops:m1/u);
   assert.match(packageJson.scripts["test:smoke"], /automation-probe\.test\.mjs/u);
+  assert.ok(runbook.includes("Reviewed SHA-256"));
+});
+
+test("runbook contract does not accept required commands moved into HTML or shell comments", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  for (const command of requiredRunbookCommands) {
+    assert.ok(runbook.includes(command), `fixture missing required command: ${command}`);
+    for (const commented of [`# ${command}`, `<!-- ${command} -->`]) {
+      const mutated = runbook.replaceAll(command, commented);
+      assert.notEqual(mutated, runbook);
+      await withTextFile("m1-runbook-comment-", mutated, async (path) => {
+        const result = await runDocsVerifier(["--runbook", path]);
+        assert.equal(result.code, 1, `${commented}\n${result.output}`);
+        assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+      });
+    }
+  }
+});
+
+test("runbook contract rejects executable forbidden commands but ignores illustrations", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const forbidden = [
+    "rtk npx wrangler d1 migrations list memory-garden-control-plane --remote",
+    "rtk npx wrangler secret put AUTOMATION_SECRET",
+    "rtk npx wrangler versions secret bulk secrets.json",
+    "rtk npx wrangler deploy",
+    "rtk npm run deploy",
+    "rtk npx wrangler rollback",
+  ];
+  for (const command of forbidden) {
+    await withTextFile("m1-runbook-forbidden-", `${runbook}\n\`\`\`bash\n${command}\n\`\`\`\n`, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, `${command}\n${result.output}`);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+
+  const illustrative = `${runbook}\nIllustration only: ${forbidden.join("; ")}\n<!-- ${forbidden.join("\n")} -->\n\`\`\`bash\n${forbidden.map((command) => `# ${command}`).join("\n")}\n\`\`\`\n\`\`\`sh\n${forbidden.join("\n")}\n\`\`\`\n`;
+  await withTextFile("m1-runbook-illustrative-", illustrative, async (path) => {
+    const result = await runDocsVerifier(["--runbook", path]);
+    assert.equal(result.code, 0, result.output);
+  });
+});
+
+test("derives exact M1 atom and gate truth and verifies report list cardinality", async () => {
+  const baseline = await runDocsVerifier(["--truth", checklistPath.pathname, reportPath.pathname]);
+  assert.equal(baseline.code, 0, baseline.output);
+  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=53 unchecked=23 gates=1 unchecked_items=24$/mu);
+
+  const [checklist, report] = await Promise.all([
+    readFile(checklistPath, "utf8"),
+    readFile(reportPath, "utf8"),
+  ]);
+  const reportMutations = [
+    report.replace("53 checked + 23 unchecked", "53 checked + 24 unchecked"),
+    report.replace("- `OPS-015`.", ""),
+  ];
+  for (const mutatedReport of reportMutations) {
+    assert.notEqual(mutatedReport, report);
+    await withTextFile("m1-report-truth-", mutatedReport, async (path) => {
+      const result = await runDocsVerifier(["--truth", checklistPath.pathname, path]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] m1-truth$/mu);
+    });
+  }
+
+  const mutatedChecklist = checklist.replace("- [ ] `OPS-015` P0/M1", "- [x] `OPS-015` P0/M1");
+  assert.notEqual(mutatedChecklist, checklist);
+  await withTextFile("m1-checklist-truth-", mutatedChecklist, async (path) => {
+    const result = await runDocsVerifier(["--truth", path, reportPath.pathname]);
+    assert.equal(result.code, 1, result.output);
+    assert.match(result.output, /^\[fail\] m1-truth$/mu);
+  });
 });

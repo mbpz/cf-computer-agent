@@ -20,7 +20,8 @@
     "check": "npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
-    "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs"
+    "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs",
+    "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all"
   },
   "dependencies": {
     "@cloudflare/computer": "0.1.1"

@@ -40,6 +40,9 @@ Do not silently reinterpret these acceptance statements or check them from adjac
 Before any remote command, record the operator approval, candidate commit, working-tree state, production Worker name, D1 database name, and custom domain.
 
 ```bash
+M1_MIGRATION_0001_SHA256='3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929'
+M1_MIGRATION_0002_SHA256='b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1'
+M1_MIGRATION_0003_SHA256='17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d'
 rtk npm run verify:m1:migrations -- --files
 rtk git status --short
 rtk git rev-parse HEAD
@@ -54,7 +57,7 @@ The reviewed migration provenance is immutable for this candidate:
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
 | `0003_m1_knowledge_loop.sql` | `17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d` |
 
-The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
+The three shell assignments make the reviewed values explicit in the executable release block; `verify:m1:migrations` independently compares those same reviewed values with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
 ## 2. Export D1 before migration
 
