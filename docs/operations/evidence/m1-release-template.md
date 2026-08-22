@@ -103,9 +103,9 @@ No secret value, JSON bundle path, or terminal transcript containing hidden inpu
 
 | Check | Status | Version ID | Redacted output/request IDs |
 | --- | --- | --- | --- |
-| `rtk npm run probe:automation`: random wrong HMAC `GET /api/health` exactly `401` | [ ] pending | `<pending>` | `[pass] invalid-signature-health status=401 request_id=sha256-<12hex> elapsed_ms=<integer>` |
+| `rtk npm run probe:automation:invalid`: random wrong HMAC `GET /api/health` exactly `401` | [ ] pending | `<pending>` | `[pass] invalid-signature-health status=401 request_id=sha256-<12hex> elapsed_ms=<integer>` |
+| `rtk npm run probe:automation:admin-forbidden`: valid fresh HMAC `POST /api/admin/publications/recover` exactly `403` | [ ] pending | `<pending>` | `[pass] automation-admin-forbidden status=403 request_id=sha256-<12hex> elapsed_ms=<integer>` |
 | Valid HMAC plus `APP_TOKEN` smoke passes | [ ] pending | `<pending>` | `<pending>` |
-| Same probe: valid fresh HMAC `POST /api/admin/publications/recover` exactly `403` | [ ] pending | `<pending>` | `[pass] automation-admin-forbidden status=403 request_id=sha256-<12hex> elapsed_ms=<integer>` |
 
 ## Cross-activation published read
 

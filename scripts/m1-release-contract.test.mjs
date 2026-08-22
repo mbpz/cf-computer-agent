@@ -19,16 +19,23 @@ const expectedMigrations = [
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d"],
 ];
-const requiredRunbookCommands = [
-  "M1_MIGRATION_0001_SHA256='3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929'",
-  "M1_MIGRATION_0002_SHA256='b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1'",
-  "M1_MIGRATION_0003_SHA256='17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d'",
-  "rtk npm run verify:m1:migrations -- --files",
-  'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"',
-  'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"',
-  'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"',
-  "rtk npm run probe:automation",
+const requiredEvidenceBlocks = [
+  ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
+  ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
+  ["pre-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"'],
+  ["migration-apply", "rtk npm run db:migrate:remote"],
+  ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
+  ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],
+  ["version-upload", 'rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --message "M1 trusted knowledge release candidate"'],
+  ["version-inspect", "rtk npx wrangler versions view <M1_VERSION_ID>"],
+  ["version-deploy", "rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes"],
+  ["invalid-signature-probe", "rtk npm run probe:automation:invalid"],
+  ["admin-forbidden-probe", "rtk npm run probe:automation:admin-forbidden"],
 ];
+
+function evidenceBlock(id, command) {
+  return `M1 evidence command: \`${id}\`\n\`\`\`bash\n${command}\n\`\`\``;
+}
 
 function runVerifier(args) {
   return new Promise((resolve, reject) => {
@@ -149,12 +156,14 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
   ]);
   const verified = await runDocsVerifier(["--runbook", runbookPath.pathname]);
   assert.equal(verified.code, 0, verified.output);
-  assert.match(verified.output, /^\[pass\] m1-runbook executable_commands=\d+$/mu);
+  assert.match(verified.output, /^\[pass\] m1-runbook evidence_blocks=11$/mu);
   assert.equal(wrangler.d1_databases[0].database_name, "memory-garden-control-plane");
   assert.equal(wrangler.d1_databases[0].migrations_dir, "migrations");
   assert.equal(wrangler.d1_databases[0].migrations_table, undefined);
   assert.equal(packageJson.scripts["verify:m1:migrations"], "node scripts/verify-m1-migrations.mjs");
   assert.equal(packageJson.scripts["verify:m1:docs"], "node scripts/verify-m1-docs.mjs --all");
+  assert.equal(packageJson.scripts["probe:automation:invalid"], "node scripts/automation-probe.mjs --invalid-health");
+  assert.equal(packageJson.scripts["probe:automation:admin-forbidden"], "node scripts/automation-probe.mjs --admin-forbidden");
   assert.match(packageJson.scripts["test:m1"], /npm run test:ops:m1/u);
   assert.match(packageJson.scripts["test:smoke"], /automation-probe\.test\.mjs/u);
   assert.ok(runbook.includes("Reviewed SHA-256"));
@@ -162,7 +171,7 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
 
 test("runbook contract does not accept required commands moved into HTML or shell comments", async () => {
   const runbook = await readFile(runbookPath, "utf8");
-  for (const command of requiredRunbookCommands) {
+  for (const [, command] of requiredEvidenceBlocks) {
     assert.ok(runbook.includes(command), `fixture missing required command: ${command}`);
     for (const commented of [`# ${command}`, `<!-- ${command} -->`]) {
       const mutated = runbook.replaceAll(command, commented);
@@ -198,6 +207,50 @@ test("runbook contract rejects executable forbidden commands but ignores illustr
   await withTextFile("m1-runbook-illustrative-", illustrative, async (path) => {
     const result = await runDocsVerifier(["--runbook", path]);
     assert.equal(result.code, 0, result.output);
+  });
+});
+
+test("runbook contract rejects required commands hidden in shell constructs", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const probe = "rtk npm run probe:automation:invalid";
+  const mutations = [
+    runbook.replace(probe, ["printf '%s\\n' \\", `  ${probe}`].join("\n")),
+    runbook.replace(probe, `rtk cat <<'M1_PROBE'\n${probe}\nM1_PROBE`),
+  ];
+  for (const mutated of mutations) {
+    assert.notEqual(mutated, runbook);
+    await withTextFile("m1-runbook-shell-construct-", mutated, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+});
+
+test("runbook contract normalizes continuations before rejecting forbidden commands", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const splitDeploy = ["rtk npx wrangler \\", "  deploy"].join("\n");
+  const mutation = `${runbook}\n\`\`\`bash\n${splitDeploy}\n\`\`\`\n`;
+  await withTextFile("m1-runbook-split-forbidden-", mutation, async (path) => {
+    const result = await runDocsVerifier(["--runbook", path]);
+    assert.equal(result.code, 1, result.output);
+    assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+  });
+});
+
+test("runbook contract rejects a probe moved before migration verification", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const probeBlock = evidenceBlock("invalid-signature-probe", "rtk npm run probe:automation:invalid");
+  const verifierBlock = evidenceBlock("migration-hash-verification", "rtk npm run verify:m1:migrations -- --files");
+  assert.ok(runbook.includes(probeBlock));
+  assert.ok(runbook.includes(verifierBlock));
+  const withoutProbe = runbook.replace(probeBlock, "");
+  const mutation = withoutProbe.replace(verifierBlock, `${probeBlock}\n\n${verifierBlock}`);
+  assert.notEqual(mutation, runbook);
+  await withTextFile("m1-runbook-order-", mutation, async (path) => {
+    const result = await runDocsVerifier(["--runbook", path]);
+    assert.equal(result.code, 1, result.output);
+    assert.match(result.output, /^\[fail\] m1-runbook$/mu);
   });
 });
 

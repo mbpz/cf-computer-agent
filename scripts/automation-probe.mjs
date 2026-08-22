@@ -5,6 +5,7 @@ const baseUrl = process.env.MEMORY_GARDEN_BASE_URL;
 const token = process.env.APP_TOKEN;
 const automationClientId = process.env.AUTOMATION_CLIENT_ID;
 const automationSecret = process.env.AUTOMATION_SECRET;
+const mode = process.argv[2] ?? "--all";
 const timeoutMs = 20_000;
 const recoveryBody = Buffer.from('{"limit":1}');
 let origin;
@@ -20,6 +21,9 @@ class ProbeFailure extends Error {
 }
 
 async function run() {
+  if (!["--all", "--invalid-health", "--admin-forbidden"].includes(mode)) {
+    throw new Error("Invalid probe mode");
+  }
   if (!baseUrl || !automationClientId || !automationSecret || !token) {
     throw new Error("Invalid probe configuration");
   }
@@ -36,21 +40,25 @@ async function run() {
     throw new Error("Invalid probe configuration");
   }
 
-  let invalidSecret = randomBytes(32).toString("base64url");
-  while (invalidSecret === automationSecret) invalidSecret = randomBytes(32).toString("base64url");
-  await exactStatus(
-    "invalid-signature-health",
-    401,
-    () => signedRequest("/api/health", invalidSecret),
-  );
-  await exactStatus(
-    "automation-admin-forbidden",
-    403,
-    () => signedRequest("/api/admin/publications/recover", automationSecret, {
-      method: "POST",
-      body: recoveryBody,
-    }),
-  );
+  if (mode === "--all" || mode === "--invalid-health") {
+    let invalidSecret = randomBytes(32).toString("base64url");
+    while (invalidSecret === automationSecret) invalidSecret = randomBytes(32).toString("base64url");
+    await exactStatus(
+      "invalid-signature-health",
+      401,
+      () => signedRequest("/api/health", invalidSecret),
+    );
+  }
+  if (mode === "--all" || mode === "--admin-forbidden") {
+    await exactStatus(
+      "automation-admin-forbidden",
+      403,
+      () => signedRequest("/api/admin/publications/recover", automationSecret, {
+        method: "POST",
+        body: recoveryBody,
+      }),
+    );
+  }
 }
 
 async function signedRequest(path, signingSecret, init = {}) {

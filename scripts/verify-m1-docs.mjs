@@ -4,70 +4,103 @@ const repositoryRoot = new URL("../", import.meta.url);
 const runbookPath = new URL("docs/operations/m1-release.md", repositoryRoot);
 const checklistPath = new URL("docs/product/ai-knowledge-base-checklist.md", repositoryRoot);
 const reportPath = new URL(".superpowers/sdd/2026-08-21-m1-single-source-knowledge-loop/task-11-report.md", repositoryRoot);
-const requiredCommands = [
-  {
-    line: "M1_MIGRATION_0001_SHA256='3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929'",
-    count: 1,
-  },
-  {
-    line: "M1_MIGRATION_0002_SHA256='b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1'",
-    count: 1,
-  },
-  {
-    line: "M1_MIGRATION_0003_SHA256='17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d'",
-    count: 1,
-  },
-  { line: "rtk npm run verify:m1:migrations -- --files", count: 2 },
-  {
-    line: 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"',
-    count: 2,
-  },
-  { line: 'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"', count: 1 },
-  { line: 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"', count: 1 },
-  { line: "rtk npm run probe:automation", count: 1 },
+const requiredEvidenceBlocks = [
+  ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
+  ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
+  ["pre-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"'],
+  ["migration-apply", "rtk npm run db:migrate:remote"],
+  ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
+  ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],
+  ["version-upload", 'rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --message "M1 trusted knowledge release candidate"'],
+  ["version-inspect", "rtk npx wrangler versions view <M1_VERSION_ID>"],
+  ["version-deploy", "rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes"],
+  ["invalid-signature-probe", "rtk npm run probe:automation:invalid"],
+  ["admin-forbidden-probe", "rtk npm run probe:automation:admin-forbidden"],
 ];
 const forbiddenCommands = [
-  /^rtk npx wrangler d1 migrations list(?:\s|$)/u,
-  /^rtk npx wrangler secret put(?:\s|$)/u,
-  /^rtk npx wrangler versions secret bulk(?:\s|$)/u,
-  /^rtk npx wrangler deploy(?:\s|$)/u,
-  /^rtk npm run deploy(?:\s|$)/u,
-  /^rtk npx wrangler rollback(?:\s|$)/u,
-  /^rtk npx wrangler d1 execute\b.*\b(?:DELETE|DROP|TRUNCATE)\b/iu,
+  /\brtk\s+npx\s+wrangler\s+d1\s+migrations\s+list(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+secret\s+put(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+versions\s+secret\s+bulk(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+deploy(?:\s|$)/iu,
+  /\brtk\s+npm\s+run\s+deploy(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+rollback(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+d1\s+time-travel\s+restore(?:\s|$)/iu,
+  /\brtk\s+npx\s+wrangler\s+d1\s+execute\b[^\n]*\b(?:DELETE|DROP|TRUNCATE)\b/iu,
 ];
 
 async function verifyRunbook(path) {
-  const commands = executableCommands(await readFile(path, "utf8"));
-  for (const requirement of requiredCommands) {
-    if (commands.filter((line) => line === requirement.line).length !== requirement.count) {
-      throw new Error("Required executable command is missing or duplicated");
+  const markdown = removeHtmlComments(await readFile(path, "utf8"));
+  const evidence = exactEvidenceBlocks(markdown);
+  if (evidence.length !== requiredEvidenceBlocks.length
+    || evidence.some((block, index) => block.id !== requiredEvidenceBlocks[index][0]
+      || block.command !== requiredEvidenceBlocks[index][1])) {
+    throw new Error("M1 evidence blocks are missing, malformed, duplicated, or out of order");
+  }
+
+  for (const body of executableFenceBodies(markdown)) {
+    const withoutCommentLines = body.split(/\r?\n/u)
+      .filter((line) => !/^\s*#/u.test(line))
+      .join("\n");
+    const normalized = withoutCommentLines.replace(/\\\r?\n[ \t]*/gu, " ");
+    if (forbiddenCommands.some((pattern) => pattern.test(normalized))) {
+      throw new Error("Forbidden executable command found");
     }
   }
-  if (commands.some((line) => forbiddenCommands.some((pattern) => pattern.test(line)))) {
-    throw new Error("Forbidden executable command found");
-  }
+  console.log(`[pass] m1-runbook evidence_blocks=${evidence.length}`);
+}
 
-  const hashPositions = requiredCommands.slice(0, 3).map(({ line }) => commands.indexOf(line));
-  const firstFileVerifier = commands.indexOf(requiredCommands[3].line);
-  const whoami = commands.indexOf("rtk npx wrangler whoami");
-  if (hashPositions.some((position) => position < 0 || position >= firstFileVerifier)
-    || firstFileVerifier < 0
-    || whoami < 0
-    || firstFileVerifier >= whoami) {
-    throw new Error("Migration provenance is not verified before remote identity inspection");
+function exactEvidenceBlocks(markdown) {
+  const lines = markdown.split(/\r?\n/u);
+  const blocks = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const marker = /^M1 evidence command: `([a-z0-9-]+)`$/u.exec(lines[index]);
+    if (!marker) continue;
+    if (lines[index + 1] !== "```bash" || lines[index + 3] !== "```") {
+      throw new Error("M1 evidence block must be one exact physical bash command line");
+    }
+    const command = lines[index + 2];
+    if (!command || /^\s*#/u.test(command)) {
+      throw new Error("M1 evidence block command is missing");
+    }
+    blocks.push({ id: marker[1], command });
+    index += 3;
   }
+  return blocks;
+}
 
-  const ledgerQuery = requiredCommands[4].line;
-  const firstLedgerQuery = commands.indexOf(ledgerQuery);
-  const secondLedgerQuery = commands.lastIndexOf(ledgerQuery);
-  const beforeVerifier = commands.indexOf(requiredCommands[5].line);
-  const afterVerifier = commands.indexOf(requiredCommands[6].line);
-  if (!(firstLedgerQuery < beforeVerifier
-    && beforeVerifier < secondLedgerQuery
-    && secondLedgerQuery < afterVerifier)) {
-    throw new Error("Migration ledger queries and verifiers are out of order");
+function executableFenceBodies(markdown) {
+  const lines = markdown.split(/\r?\n/u);
+  const bodies = [];
+  let fence = null;
+  for (const line of lines) {
+    if (fence === null) {
+      const opening = /^(`{3,})[ \t]*(bash|zsh)[ \t]*$/u.exec(line);
+      if (opening) fence = { delimiter: opening[1], lines: [] };
+      continue;
+    }
+    if (line === fence.delimiter) {
+      bodies.push(fence.lines.join("\n"));
+      fence = null;
+      continue;
+    }
+    fence.lines.push(line);
   }
-  console.log(`[pass] m1-runbook executable_commands=${commands.length}`);
+  if (fence !== null) throw new Error("Unclosed executable Markdown fence");
+  return bodies;
+}
+
+function removeHtmlComments(markdown) {
+  let result = "";
+  let cursor = 0;
+  while (cursor < markdown.length) {
+    const start = markdown.indexOf("<!--", cursor);
+    if (start < 0) return result + markdown.slice(cursor);
+    result += markdown.slice(cursor, start);
+    const end = markdown.indexOf("-->", start + 4);
+    if (end < 0) throw new Error("Unclosed HTML comment");
+    cursor = end + 3;
+  }
+  return result;
 }
 
 async function verifyTruth(checklist, report) {
@@ -108,83 +141,6 @@ async function verifyTruth(checklist, report) {
     throw new Error("M1 report unchecked atom list does not match the checklist");
   }
   console.log(`[pass] m1-truth atoms=${atoms.length} checked=${checked.length} unchecked=${unchecked.length} gates=${gates.length} unchecked_items=${unchecked.length + gates.length}`);
-}
-
-function executableCommands(markdown) {
-  const lines = removeHtmlComments(markdown).split(/\r?\n/u);
-  const commands = [];
-  let fence = null;
-  for (const line of lines) {
-    if (fence === null) {
-      const opening = /^\s*(`{3,}|~{3,})([^`~]*)$/u.exec(line);
-      if (!opening) continue;
-      const language = opening[2].trim();
-      fence = {
-        marker: opening[1][0],
-        minimumLength: opening[1].length,
-        executable: language === "bash" || language === "zsh",
-      };
-      continue;
-    }
-    const trimmed = line.trim();
-    if (trimmed.length >= fence.minimumLength
-      && [...trimmed].every((character) => character === fence.marker)) {
-      fence = null;
-      continue;
-    }
-    if (!fence.executable) continue;
-    const command = stripShellComment(line).trim();
-    if (command.length > 0) commands.push(command);
-  }
-  if (fence !== null) throw new Error("Unclosed Markdown fence");
-  return commands;
-}
-
-function removeHtmlComments(markdown) {
-  let result = "";
-  let cursor = 0;
-  while (cursor < markdown.length) {
-    const start = markdown.indexOf("<!--", cursor);
-    if (start < 0) return result + markdown.slice(cursor);
-    result += markdown.slice(cursor, start);
-    const end = markdown.indexOf("-->", start + 4);
-    if (end < 0) throw new Error("Unclosed HTML comment");
-    cursor = end + 3;
-  }
-  return result;
-}
-
-function stripShellComment(line) {
-  let singleQuoted = false;
-  let doubleQuoted = false;
-  let escaped = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\" && !singleQuoted) {
-      escaped = true;
-      continue;
-    }
-    if (character === "'" && !doubleQuoted) {
-      singleQuoted = !singleQuoted;
-      continue;
-    }
-    if (character === '"' && !singleQuoted) {
-      doubleQuoted = !doubleQuoted;
-      continue;
-    }
-    const previous = index === 0 ? "" : line[index - 1];
-    if (character === "#"
-      && !singleQuoted
-      && !doubleQuoted
-      && (index === 0 || /[\s;&|()]/u.test(previous))) {
-      return line.slice(0, index);
-    }
-  }
-  return line;
 }
 
 try {

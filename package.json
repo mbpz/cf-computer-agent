@@ -20,6 +20,8 @@
     "check": "npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
+    "probe:automation:invalid": "node scripts/automation-probe.mjs --invalid-health",
+    "probe:automation:admin-forbidden": "node scripts/automation-probe.mjs --admin-forbidden",
     "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs",
     "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all"
   },

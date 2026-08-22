@@ -16,9 +16,9 @@ function redactedRequestId(value) {
   return `sha256-${createHash("sha256").update(value).digest("hex").slice(0, 12)}`;
 }
 
-function runProbe(baseUrl, overrides = {}) {
+function runProbe(baseUrl, overrides = {}, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [probePath], {
+    const child = spawn(process.execPath, [probePath, ...args], {
       env: {
         ...process.env,
         MEMORY_GARDEN_BASE_URL: baseUrl,
@@ -104,6 +104,28 @@ test("makes exactly one invalid health request and one valid M1 admin request", 
     assert.doesNotMatch(result.output, /bad-hmac-id|admin-denied-id/u);
     assert.doesNotMatch(result.output, /probe-client-id|probe-valid-secret|probe-app-token|response-body-must-not-be-logged|\{"limit":1\}/u);
   } finally { await server.close(); }
+});
+
+test("supports one-request ordered evidence stages", async () => {
+  const invalidServer = await startProbeServer([401], ["bad-hmac-id"]);
+  try {
+    const invalid = await runProbe(invalidServer.baseUrl, {}, ["--invalid-health"]);
+    assert.equal(invalid.code, 0, invalid.output);
+    assert.equal(invalidServer.requests.length, 1);
+    assert.equal(invalidServer.requests[0].url, "/api/health");
+    assert.match(invalid.output, /^\[pass\] invalid-signature-health status=401 /mu);
+    assert.doesNotMatch(invalid.output, /automation-admin-forbidden/u);
+  } finally { await invalidServer.close(); }
+
+  const adminServer = await startProbeServer([403], ["admin-denied-id"]);
+  try {
+    const admin = await runProbe(adminServer.baseUrl, {}, ["--admin-forbidden"]);
+    assert.equal(admin.code, 0, admin.output);
+    assert.equal(adminServer.requests.length, 1);
+    assert.equal(adminServer.requests[0].url, "/api/admin/publications/recover");
+    assert.match(admin.output, /^\[pass\] automation-admin-forbidden status=403 /mu);
+    assert.doesNotMatch(admin.output, /invalid-signature-health/u);
+  } finally { await adminServer.close(); }
 });
 
 test("fails after the one health request on every status except exactly 401", async () => {

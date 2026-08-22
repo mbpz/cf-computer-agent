@@ -39,11 +39,14 @@ Do not silently reinterpret these acceptance statements or check them from adjac
 
 Before any remote command, record the operator approval, candidate commit, working-tree state, production Worker name, D1 database name, and custom domain.
 
+M1 evidence command: `migration-hash-verification`
 ```bash
-M1_MIGRATION_0001_SHA256='3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929'
-M1_MIGRATION_0002_SHA256='b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1'
-M1_MIGRATION_0003_SHA256='17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d'
 rtk npm run verify:m1:migrations -- --files
+```
+
+The `M1 evidence command` label identifies an exact, tested, single-line release evidence block. Do not combine it with another command, continuation, pipe, heredoc, or shell expression.
+
+```bash
 rtk git status --short
 rtk git rev-parse HEAD
 rtk npx wrangler whoami
@@ -57,7 +60,7 @@ The reviewed migration provenance is immutable for this candidate:
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
 | `0003_m1_knowledge_loop.sql` | `17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d` |
 
-The three shell assignments make the reviewed values explicit in the executable release block; `verify:m1:migrations` independently compares those same reviewed values with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
+`verify:m1:migrations` hard-codes the three reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
 ## 2. Export D1 before migration
 
@@ -97,17 +100,26 @@ Read the entire migration and its upgrade tests before any remote apply:
 rtk sed -n '1,260p' migrations/0003_m1_knowledge_loop.sql
 rtk npx vitest run test/worker/migrations.test.ts
 rtk git log -1 -- migrations/0003_m1_knowledge_loop.sql
-rtk npm run verify:m1:migrations -- --files
-
 set +x
 M1_LEDGER_DIR="$(rtk mktemp -d -t memory-garden-m1-ledger.XXXXXX)"
 rtk chmod 700 "$M1_LEDGER_DIR"
 M1_LEDGER_FILE="$M1_LEDGER_DIR/before-0003.json"
 : > "$M1_LEDGER_FILE"
 rtk chmod 600 "$M1_LEDGER_FILE"
+```
+
+M1 evidence command: `pre-ledger-capture`
+```bash
 rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"
+```
+
+```bash
 M1_LEDGER_STATUS=$?
 test "$M1_LEDGER_STATUS" -eq 0 || exit "$M1_LEDGER_STATUS"
+```
+
+M1 evidence command: `pre-ledger-verification`
+```bash
 rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"
 ```
 
@@ -125,15 +137,33 @@ The verifier fails closed if `0003` is already applied or if any unexpected ledg
 
 With separate migration approval:
 
+M1 evidence command: `migration-apply`
 ```bash
 rtk npm run db:migrate:remote
+```
+
+```bash
 M1_LEDGER_FILE="$M1_LEDGER_DIR/after-0003.json"
 : > "$M1_LEDGER_FILE"
 rtk chmod 600 "$M1_LEDGER_FILE"
+```
+
+M1 evidence command: `post-ledger-capture`
+```bash
 rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"
+```
+
+```bash
 M1_LEDGER_STATUS=$?
 test "$M1_LEDGER_STATUS" -eq 0 || exit "$M1_LEDGER_STATUS"
+```
+
+M1 evidence command: `post-ledger-verification`
+```bash
 rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"
+```
+
+```bash
 rtk rm -f "$M1_LEDGER_DIR/before-0003.json" "$M1_LEDGER_DIR/after-0003.json"
 rtk rmdir "$M1_LEDGER_DIR"
 unset M1_LEDGER_FILE M1_LEDGER_DIR M1_LEDGER_STATUS
@@ -188,8 +218,14 @@ rtk node -e '
 M1_SERIALIZE_STATUS=$?
 unset GITHUB_OAUTH_CLIENT_ID GITHUB_OAUTH_CLIENT_SECRET BOOTSTRAP_ADMIN_EMAIL ALLOWED_MEMBER_EMAILS AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN
 test "$M1_SERIALIZE_STATUS" -eq 0 || exit "$M1_SERIALIZE_STATUS"
+```
 
+M1 evidence command: `version-upload`
+```bash
 rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --message "M1 trusted knowledge release candidate"
+```
+
+```bash
 M1_UPLOAD_STATUS=$?
 cleanup_m1_secret_bundle
 trap - EXIT HUP INT TERM
@@ -202,8 +238,12 @@ This must be the single candidate upload. Do not use `wrangler secret put`, `wra
 
 Record the returned ID as `<M1_VERSION_ID>`. The version is not serving traffic yet.
 
+M1 evidence command: `version-inspect`
 ```bash
 rtk npx wrangler versions view <M1_VERSION_ID>
+```
+
+```bash
 rtk npx wrangler versions list
 rtk npx wrangler deployments status
 ```
@@ -223,8 +263,12 @@ Any mismatch blocks deployment. Do not remove `--strict` or patch remote setting
 
 With separate deployment approval:
 
+M1 evidence command: `version-deploy`
 ```bash
 rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes
+```
+
+```bash
 rtk npx wrangler deployments status
 ```
 
@@ -255,7 +299,20 @@ read -rs "AUTOMATION_SECRET?AUTOMATION_SECRET: "; printf '\n'
 read -rs "APP_TOKEN?APP_TOKEN: "; printf '\n'
 export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
 export AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL
-rtk npm run probe:automation
+```
+
+Run the invalid-signature stage first. It makes exactly one request and accepts only `401`.
+
+M1 evidence command: `invalid-signature-probe`
+```bash
+rtk npm run probe:automation:invalid
+```
+
+Only after that pass, run the valid signed M1-admin stage. It makes exactly one request and accepts only `403`.
+
+M1 evidence command: `admin-forbidden-probe`
+```bash
+rtk npm run probe:automation:admin-forbidden
 ```
 
 The exact successful output shape to archive is:
