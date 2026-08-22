@@ -26,9 +26,11 @@ Task 11 compared the plan ranges to the current atomic checklist. The core verti
 | `IDX-001`, `IDX-002`, `IDX-004`, `IDX-006` | full title/summary/tag/body/code schema acceptance; revision/trash FTS synchronization; production D1 fixed-set weight/ranking evidence; visible failed index state |
 | `SRCH-002`, `SRCH-003`, `SRCH-004`, `SRCH-007` | production D1 ranking set; matched-field explanation; actual safe highlight; bounded multi-Tag AND/OR semantics |
 | `READ-003`, `READ-009` | semantic safe Markdown rendering rather than inert raw display; visible reviewer/source-version Revision information |
-| `CHAT-002` | explicit all/Space/Collection/selected-source scope contract |
+| `PAR-001` | independent fatal UTF-8 parser contract is not implemented; current inputs are already-decoded strings |
+| `CHAT-002`, `CHAT-008` | explicit all/Space/Collection/selected-source scope contract; calibrated semantic low-relevance threshold/refusal evidence |
 | `COL-001` | My Submissions status filter in addition to owner-only bounded pagination |
 | `AUTH-015` | original-download visibility path in addition to list/search/citation |
+| `EVAL-001`, `EVAL-002` | independent expected-parser fixture matrix, including fatal UTF-8 and the exact Markdown/text/code malicious/empty/oversize corpus |
 | `OPS-015` | remote synthetic D1 `rows_read`/`rows_written` evidence |
 
 Do not silently reinterpret these acceptance statements or check them from adjacent tests. Resolve them in separately planned product slices, then rerun this release sequence.
@@ -38,12 +40,21 @@ Do not silently reinterpret these acceptance statements or check them from adjac
 Before any remote command, record the operator approval, candidate commit, working-tree state, production Worker name, D1 database name, and custom domain.
 
 ```bash
+rtk npm run verify:m1:migrations -- --files
 rtk git status --short
 rtk git rev-parse HEAD
 rtk npx wrangler whoami
 ```
 
-Stop if the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
+The reviewed migration provenance is immutable for this candidate:
+
+| File | Reviewed SHA-256 |
+| --- | --- |
+| `0001_phase1_control_plane.sql` | `3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929` |
+| `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
+| `0003_m1_knowledge_loop.sql` | `17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d` |
+
+The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
 ## 2. Export D1 before migration
 
@@ -73,7 +84,7 @@ rtk npm audit --omit=dev
 rtk git diff --check
 ```
 
-Record exact counts and command exit status. `test:m1` includes parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report Recall@5 at least 0.85, citation precision 1, citation location rate 1, zero wrong citations, and zero permission leaks.
+Record exact counts and command exit status. `test:m1` includes the release/probe contract tests, parser, chunker, publication/recovery, library/search, cited answer, HTTP API, workspace UI, and the fixed 24-case M1 evaluation. The evaluation uses deterministic in-memory D1/provider adapters and must report nonzero retrieval/answer/refusal denominators, Recall@5 at least 0.85, citation precision 1, citation recall 1, citation location rate 1, exact per-case answer/refusal outcomes, zero wrong citations, and zero permission leaks. The partial-match refusal case follows the same production AND/token-coverage contract; it is not evidence of a semantic low-relevance threshold.
 
 ## 4. Inspect migration `0003` and preservation evidence
 
@@ -83,18 +94,29 @@ Read the entire migration and its upgrade tests before any remote apply:
 rtk sed -n '1,260p' migrations/0003_m1_knowledge_loop.sql
 rtk npx vitest run test/worker/migrations.test.ts
 rtk git log -1 -- migrations/0003_m1_knowledge_loop.sql
-rtk npx wrangler d1 migrations list memory-garden-control-plane --remote
+rtk npm run verify:m1:migrations -- --files
+
+set +x
+M1_LEDGER_DIR="$(rtk mktemp -d -t memory-garden-m1-ledger.XXXXXX)"
+rtk chmod 700 "$M1_LEDGER_DIR"
+M1_LEDGER_FILE="$M1_LEDGER_DIR/before-0003.json"
+: > "$M1_LEDGER_FILE"
+rtk chmod 600 "$M1_LEDGER_FILE"
+rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"
+M1_LEDGER_STATUS=$?
+test "$M1_LEDGER_STATUS" -eq 0 || exit "$M1_LEDGER_STATUS"
+rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"
 ```
 
 Confirm all of the following in review:
 
 - the submissions table copy preserves all legacy rows before the legacy table is dropped;
 - `PRAGMA foreign_key_check` and the upgrade-preservation Workerd cases pass;
-- `0001` and `0002` remain applied and unchanged;
-- `0003` is the only pending M1 migration;
+- the actual Wrangler `d1_migrations` ledger contains exactly `0001_phase1_control_plane.sql`, then `0002_github_auth.sql`, with no missing, renamed, reordered, or extra row;
+- the local reviewed set contains exactly those two files plus pending `0003_m1_knowledge_loop.sql`;
 - `KnowledgeBase`, Durable Object migration tag `v1`, existing VFS paths, note journal, GitHub identities, sessions, and automation credentials are not migrated or reset.
 
-If `0003` is already listed as applied, do not edit or replay its SQL directly. Investigate the release state and stop.
+The verifier fails closed if `0003` is already applied or if any unexpected ledger state exists. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
 
 ## 5. Apply the remote migration
 
@@ -102,10 +124,19 @@ With separate migration approval:
 
 ```bash
 rtk npm run db:migrate:remote
-rtk npx wrangler d1 migrations list memory-garden-control-plane --remote
+M1_LEDGER_FILE="$M1_LEDGER_DIR/after-0003.json"
+: > "$M1_LEDGER_FILE"
+rtk chmod 600 "$M1_LEDGER_FILE"
+rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"
+M1_LEDGER_STATUS=$?
+test "$M1_LEDGER_STATUS" -eq 0 || exit "$M1_LEDGER_STATUS"
+rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"
+rtk rm -f "$M1_LEDGER_DIR/before-0003.json" "$M1_LEDGER_DIR/after-0003.json"
+rtk rmdir "$M1_LEDGER_DIR"
+unset M1_LEDGER_FILE M1_LEDGER_DIR M1_LEDGER_STATUS
 ```
 
-Record the date and migration-list result without row contents. A failed apply blocks upload/deploy investigation; never repair it by deleting schema or data.
+The post-apply verifier requires exactly `0001_phase1_control_plane.sql`, `0002_github_auth.sql`, and `0003_m1_knowledge_loop.sql`, in that order, with no missing or extra row. Record only the date and verifier pass line; the commands then remove only the two explicitly named temporary ledger JSON files and their dedicated temporary directory. A failed apply or unexpected ledger blocks upload/deploy investigation; never repair it by deleting schema or data.
 
 ## 6. Upload one reviewed version with the complete secret bundle
 
@@ -210,36 +241,35 @@ Use fresh browser sessions at `https://memory.crgmhrc.asia`; never paste or repl
 
 Do not store source or answer bodies in evidence. Record version ID and redacted request IDs for submit, duplicate replay, preview, publish, list/search, reader, citation, chat, forbidden visibility, disabled session, and logout.
 
-## 10. Verify bad and valid signed automation
+## 10. Verify bad signature, valid forbidden M1 access, and legacy automation
 
-First prove a wrong HMAC secret is rejected without exposing the real secret. The smoke stops at the first `401`; a zero exit is a release failure.
+Read the approved credentials once with shell tracing disabled. The dedicated probe generates its own random wrong HMAC secret, makes exactly one signed `GET /api/health` and requires exactly `401`, then makes exactly one freshly signed `POST /api/admin/publications/recover` with body `{"limit":1}` and requires exactly `403`. It follows no redirect, retries nothing, reads/logs no response body, hashes valid request IDs to a 12-hex evidence token, and fails on every network/TLS/redirect/other-status outcome.
 
 ```bash
 set +x
 read -r "AUTOMATION_CLIENT_ID?AUTOMATION_CLIENT_ID: "
+read -rs "AUTOMATION_SECRET?AUTOMATION_SECRET: "; printf '\n'
 read -rs "APP_TOKEN?APP_TOKEN: "; printf '\n'
-M1_BAD_AUTOMATION_SECRET="$(rtk openssl rand -base64 48)"
-export AUTOMATION_CLIENT_ID APP_TOKEN
-export AUTOMATION_SECRET="$M1_BAD_AUTOMATION_SECRET"
 export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
-if rtk npm run smoke; then
-  unset AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL M1_BAD_AUTOMATION_SECRET
-  printf 'unexpected bad-signature success\n'
-  exit 1
-fi
-unset AUTOMATION_SECRET M1_BAD_AUTOMATION_SECRET
+export AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL
+rtk npm run probe:automation
 ```
 
-Then read the approved real automation secret and run the existing signed smoke:
+The exact successful output shape to archive is:
+
+```text
+[pass] invalid-signature-health status=401 request_id=sha256-<12hex> elapsed_ms=<integer>
+[pass] automation-admin-forbidden status=403 request_id=sha256-<12hex> elapsed_ms=<integer>
+```
+
+Then run the existing valid legacy automation smoke with the same approved credentials:
 
 ```bash
-read -rs "AUTOMATION_SECRET?AUTOMATION_SECRET: "; printf '\n'
-export AUTOMATION_SECRET
 rtk npm run smoke
 unset AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL
 ```
 
-Archive only the script's step/status/request-ID/elapsed output. Automation remains limited to legacy health/notes/search/chat and never calls an M1 admin route.
+Archive only the scripts' step/status/redacted-request-ID/elapsed output. The `403` proves valid automation remains limited to legacy health/notes/search/chat and cannot call the selected M1 administrative recovery route.
 
 ## 11. Verify a normal cross-activation read
 
@@ -305,6 +335,8 @@ The following local evidence must stay green for every candidate:
 | Boundary | Local evidence |
 | --- | --- |
 | Fixed M1 quality gate | `test/fixtures/m1-evaluation.ts`, `test/unit/m1-evaluation.test.ts`, `rtk npm run test:m1` |
+| Exact automation rejection probe | `scripts/automation-probe.mjs`, `scripts/automation-probe.test.mjs`, `rtk npm run test:ops:m1` |
+| Migration byte/ledger provenance | `scripts/verify-m1-migrations.mjs`, `scripts/m1-release-contract.test.mjs`, `rtk npm run verify:m1:migrations -- --files` |
 | D1 schema upgrade/preservation | `test/worker/migrations.test.ts` |
 | Ambiguous DO response and stable replay | `test/unit/publication-service.test.ts`, `test/worker/m1-publication.test.ts` |
 | D1 finalization batch rollback | `test/worker/m1-publication.test.ts` |

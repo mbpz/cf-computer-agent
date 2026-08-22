@@ -42,10 +42,12 @@ Current default decision: **M1 local acceptance pending; remote verification pen
 | --- | --- | --- |
 | Pre-release remote export completed | [ ] pending | date `<pending>`; bytes `<pending>`; SHA-256 `<pending>` |
 | Export stored outside repository with restricted access | [ ] pending | restricted reference `<pending>` |
-| `0001` and `0002` unchanged/applied | [ ] pending | migration-list reference `<pending>` |
+| Reviewed `0001`/`0002`/`0003` SHA-256 verifier | [ ] pending | `rtk npm run verify:m1:migrations -- --files`; exact pass output `<pending>` |
+| Pre-apply `d1_migrations` ledger exact | [ ] pending | `rtk npm run verify:m1:migrations -- --ledger-before "$M1_LEDGER_FILE"`; exact names/pass `<pending>` |
 | `0003_m1_knowledge_loop.sql` reviewed in full | [ ] pending | reviewer `<pending>` |
 | Local upgrade preservation and FK checks passed | [ ] pending | command/count `<pending>` |
 | Remote `0003` applied once | [ ] pending | date/result `<pending>` |
+| Post-apply `d1_migrations` ledger exact | [ ] pending | `rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"`; exact names/pass `<pending>` |
 | `KnowledgeBase` class and DO migration tag `v1` preserved | [ ] pending | inspected version reference `<pending>` |
 
 Never attach the export or row contents. Never mark a reverse migration, table deletion, or Durable Object reset as rollback evidence.
@@ -55,7 +57,8 @@ Never attach the export or row contents. Never mark a reverse migration, table d
 | Command | Status | Exact evidence |
 | --- | --- | --- |
 | `rtk npm run test:m1` | [ ] pending | files/tests/duration `<pending>` |
-| Fixed evaluation | [ ] pending | cases `<pending>`; Recall@5 `<pending>`; citation precision `<pending>`; location `<pending>`; wrong citations `<pending>`; permission leaks `<pending>` |
+| Fixed evaluation | [ ] pending | cases `<pending>`; retrieval/answer/refusal denominators `<pending>`; Recall@5 `<pending>`; citation precision `<pending>`; citation recall `<pending>`; location `<pending>`; per-case outcomes `<pending>`; wrong citations `<pending>`; permission leaks `<pending>` |
+| Local automation probe contracts | [ ] pending | `rtk npm run test:ops:m1`; tests/count `<pending>` |
 | `rtk npm run typecheck` | [ ] pending | exit/result `<pending>` |
 | `rtk npm run check` | [ ] pending | smoke/unit/Workerd counts and dry-run bindings `<pending>` |
 | `rtk npm audit --omit=dev` | [ ] pending | vulnerabilities `<pending>` |
@@ -100,9 +103,9 @@ No secret value, JSON bundle path, or terminal transcript containing hidden inpu
 
 | Check | Status | Version ID | Redacted output/request IDs |
 | --- | --- | --- | --- |
-| Random wrong HMAC secret rejected | [ ] pending | `<pending>` | `<pending>` |
+| `rtk npm run probe:automation`: random wrong HMAC `GET /api/health` exactly `401` | [ ] pending | `<pending>` | `[pass] invalid-signature-health status=401 request_id=sha256-<12hex> elapsed_ms=<integer>` |
 | Valid HMAC plus `APP_TOKEN` smoke passes | [ ] pending | `<pending>` | `<pending>` |
-| Automation M1 admin route remains forbidden | [ ] pending | `<pending>` | `<pending>` |
+| Same probe: valid fresh HMAC `POST /api/admin/publications/recover` exactly `403` | [ ] pending | `<pending>` | `[pass] automation-admin-forbidden status=403 request_id=sha256-<12hex> elapsed_ms=<integer>` |
 
 ## Cross-activation published read
 

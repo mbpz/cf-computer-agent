@@ -62,7 +62,7 @@
 
 ## PAR — 文档解析
 
-- [x] `PAR-001` P0/M1 确定性纯文本解析；状态：L；验收：UTF-8 fatal decode 和换行规范化。
+- [ ] `PAR-001` P0/M1 确定性纯文本解析；状态：L；验收：UTF-8 fatal decode 和换行规范化。当前仅覆盖已解码字符串和换行规范化，尚无独立 fatal UTF-8 输入契约。
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
 - [x] `PAR-003` P0/M1 代码解析；状态：L；验收：语言、行号和代码块不被自然语言清洗破坏。
 - [ ] `PAR-004` P0/M2 Parser 接口和版本；验收：同输入/版本可重放且输出 schema 固定。
@@ -201,7 +201,7 @@
 - [x] `CHAT-005` P0/M1 不可信来源序列化；状态：L/W；验收：JSON/结构分隔，文档指令不执行。
 - [x] `CHAT-006` P0/M1 系统提示边界；状态：L/W；验收：来源是 inert data、禁止越权工具。
 - [x] `CHAT-007` P0/M1 无来源拒答；状态：L/W；验收：不调用或不采信模型常识回答私有问题。
-- [x] `CHAT-008` P0/M1 低相关拒答；状态：L/W/D；验收：低于阈值提示改问或扩大范围。
+- [ ] `CHAT-008` P0/M1 低相关拒答；状态：L/W/D；验收：低于阈值提示改问或扩大范围。当前固定评测覆盖真实 AND/token coverage 下的部分匹配无结果拒答，尚无校准后的语义低分阈值证据。
 - [x] `CHAT-009` P0/M1 稳定 citation ID；状态：L/W；验收：绑定 revision/chunk/location。
 - [x] `CHAT-010` P0/M1 句级引用格式；状态：L/W；验收：每个来源性断言附 citation ID。
 - [x] `CHAT-011` P0/M1 引用只来自上下文；状态：L/W；验收：模型伪造 ID 被删除或失败。
@@ -314,10 +314,10 @@
 
 ## EVAL — 质量评测
 
-M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、低相关、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/location、错误引用和权限泄露。该本地 harness 不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
+M1 Task 11 已增加 24 条 provider-free 固定查询，覆盖中英文、代码标识、标题/Tag/正文、无结果、真实 AND/token coverage 下的部分匹配拒答、admin_only、disabled、Prompt injection、降级和引用定位，并计算 Recall@5、citation precision/recall/location、逐例答案/拒答契约、错误引用和权限泄露。当前生产检索没有已校准的语义低分阈值，因此该 harness 不声称完成低相关评测，也不替代下列 M4/M5 更完整的语义、同义词、表格、冲突和生产评测验收。
 
-- [x] `EVAL-001` P0/M1 解析 fixture 规范；状态：L；验收：输入、期望结构、位置和 warning 独立定义。
-- [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L；验收：正常/空/超限/恶意。
+- [ ] `EVAL-001` P0/M1 解析 fixture 规范；状态：L；验收：输入、期望结构、位置和 warning 独立定义。当前解析测试未形成独立的期望矩阵。
+- [ ] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L；验收：正常/空/超限/恶意。当前缺少包含 fatal UTF-8 的精确独立语料契约。
 - [ ] `EVAL-003` P0/M2 每种文件格式解析集；验收：正常/损坏/空/超限。
 - [ ] `EVAL-004` P0/M2 Chunk golden set；验收：heading/table/code/location 期望手工给定。
 - [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。

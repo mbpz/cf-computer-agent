@@ -1,0 +1,82 @@
+import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+
+const migrations = [
+  ["0001_phase1_control_plane.sql", "3218f4f3d7a285eb3ee9a4f3a07efa6136c350cc3956564759dbed18f180a929"],
+  ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
+  ["0003_m1_knowledge_loop.sql", "17d8ee1f49a0c87d40851a47f70d492617ed0972daeff54becad21a88af57f1d"],
+];
+const repositoryRoot = new URL("../", import.meta.url);
+const maxLedgerBytes = 64 * 1024;
+
+async function verifyFiles() {
+  for (const [name, expectedHash] of migrations) {
+    const bytes = await readFile(new URL(`migrations/${name}`, repositoryRoot));
+    const actualHash = createHash("sha256").update(bytes).digest("hex");
+    if (actualHash !== expectedHash) throw new Error("Migration checksum mismatch");
+  }
+  console.log(`[pass] migration-files count=${migrations.length}`);
+}
+
+async function verifyLedger(phase, path) {
+  if (!path) throw new Error("Missing ledger path");
+  const information = await stat(path);
+  if (!information.isFile() || information.size <= 0 || information.size > maxLedgerBytes) {
+    throw new Error("Invalid ledger file");
+  }
+  const parsed = JSON.parse(await readFile(path, "utf8"));
+  if (!Array.isArray(parsed) || parsed.length !== 1 || !isRecord(parsed[0])) {
+    throw new Error("Invalid Wrangler ledger result");
+  }
+  const result = parsed[0];
+  if (result.success !== true || !Array.isArray(result.results)) {
+    throw new Error("Unsuccessful Wrangler ledger result");
+  }
+  const expectedNames = migrations
+    .slice(0, phase === "before" ? 2 : 3)
+    .map(([name]) => name);
+  const names = result.results.map((row, index) => {
+    if (!isRecord(row)
+      || !hasExactKeys(row, ["applied_at", "id", "name"])
+      || row.id !== index + 1
+      || typeof row.name !== "string"
+      || typeof row.applied_at !== "string"
+      || row.applied_at.length === 0) {
+      throw new Error("Invalid migration ledger row");
+    }
+    return row.name;
+  });
+  if (names.length !== expectedNames.length
+    || names.some((name, index) => name !== expectedNames[index])) {
+    throw new Error("Migration ledger does not match the reviewed state");
+  }
+  console.log(`[pass] migration-ledger phase=${phase} names=${names.join(",")}`);
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(value, keys) {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+try {
+  const [mode, path, ...extra] = process.argv.slice(2);
+  if (extra.length > 0) throw new Error("Unexpected arguments");
+  if (mode === "--files" && path === undefined) {
+    await verifyFiles();
+  } else if (mode === "--ledger-before" && path !== undefined) {
+    await verifyLedger("before", path);
+  } else if (mode === "--ledger-after" && path !== undefined) {
+    await verifyLedger("after", path);
+  } else {
+    throw new Error("Invalid verifier mode");
+  }
+} catch {
+  const mode = process.argv[2] === "--files" ? "migration-files" : "migration-ledger";
+  console.error(`[fail] ${mode}`);
+  process.exitCode = 1;
+}

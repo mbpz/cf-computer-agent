@@ -28,7 +28,7 @@ export type M1EvaluationCoverage =
   | "tag"
   | "body"
   | "no-result"
-  | "low-relevance"
+  | "partial-match-refusal"
   | "admin-only"
   | "disabled-user"
   | "prompt-injection"
@@ -62,9 +62,9 @@ export interface M1EvaluationCase {
   expectedRetrievalCitationIds: string[];
   expectedAnswerCitationIds: string[];
   forbiddenCitationIds: string[];
+  expectedOutcome: "answer" | "refusal" | "denied";
   degraded?: boolean;
   disabled?: boolean;
-  lowRelevance?: boolean;
 }
 
 export interface M1EvaluationCaseResult {
@@ -85,9 +85,16 @@ export interface M1EvaluationReport {
   metrics: {
     recallAt5: number;
     citationPrecision: number;
+    citationRecall: number;
     citationLocationRate: number;
     wrongCitations: number;
     permissionLeaks: number;
+    expectedOutcomeFailures: number;
+    expectedRetrievalCitations: number;
+    requiredAnswerCitations: number;
+    returnedCitations: number;
+    answerExpectedCases: number;
+    expectedRefusals: number;
   };
   cases: M1EvaluationCaseResult[];
 }
@@ -108,9 +115,9 @@ const DOCUMENTS: EvaluationDocument[] = [
   }),
   document({
     id: "knowledge-permissions",
-    title: "权限治理手册",
+    title: "权限治理",
     tags: ["权限", "治理", "访问控制"],
-    body: "访问控制要求贡献者只能读取共享知识。每次读取都会重新校验成员状态。",
+    body: "访问控制。共享知识。贡献者只能读取共享知识。每次读取都会重新校验成员状态。",
     headingPath: ["权限治理", "读取边界"],
     startLine: 20,
     locationWitness: "贡献者只能读取共享知识",
@@ -128,7 +135,7 @@ const DOCUMENTS: EvaluationDocument[] = [
     id: "knowledge-citations",
     title: "Markdown citation guide",
     tags: ["markdown", "citations"],
-    body: "Citation links preserve the heading path and exact source lines. 引用定位会回读相同的 Revision 和 Chunk。",
+    body: "Citation links preserve the heading path and exact source lines. 引用定位。引用定位会回读相同的 Revision 和 Chunk。",
     headingPath: ["Citations", "Exact locations"],
     startLine: 40,
     locationWitness: "exact source lines",
@@ -197,6 +204,7 @@ export const M1_EVALUATION_CASES: M1EvaluationCase[] = [
     expectedRetrievalCitationIds: [],
     expectedAnswerCitationIds: [],
     forbiddenCitationIds: [CITATIONS["knowledge-admin"]!],
+    expectedOutcome: "refusal",
   },
   evaluationCase("admin-only-admin", "secret rotation", ADMIN, ["english", "admin-only", "citation-location"], "knowledge-admin"),
   {
@@ -207,6 +215,7 @@ export const M1_EVALUATION_CASES: M1EvaluationCase[] = [
     expectedRetrievalCitationIds: [],
     expectedAnswerCitationIds: [],
     forbiddenCitationIds: ALL_CITATIONS,
+    expectedOutcome: "denied",
     disabled: true,
   },
   {
@@ -217,16 +226,17 @@ export const M1_EVALUATION_CASES: M1EvaluationCase[] = [
     expectedRetrievalCitationIds: [],
     expectedAnswerCitationIds: [],
     forbiddenCitationIds: [CITATIONS["knowledge-admin"]!],
+    expectedOutcome: "refusal",
   },
   {
-    id: "low-relevance",
+    id: "partial-match-refusal",
     query: "launch quantum",
     scope: CONTRIBUTOR,
-    coverage: ["english", "low-relevance"],
-    expectedRetrievalCitationIds: [CITATIONS["knowledge-launch"]!],
+    coverage: ["english", "no-result", "partial-match-refusal"],
+    expectedRetrievalCitationIds: [],
     expectedAnswerCitationIds: [],
     forbiddenCitationIds: [CITATIONS["knowledge-admin"]!],
-    lowRelevance: true,
+    expectedOutcome: "refusal",
   },
 ];
 
@@ -289,26 +299,83 @@ export async function runM1Evaluation(): Promise<M1EvaluationReport> {
     });
   }
 
-  const expectedRetrievals = M1_EVALUATION_CASES.flatMap((entry) => entry.expectedRetrievalCitationIds);
-  const recalled = M1_EVALUATION_CASES.reduce((total, entry, index) => {
-    const retrieved = new Set(cases[index]!.retrievedCitationIds.slice(0, 5));
-    return total + entry.expectedRetrievalCitationIds.filter((citation) => retrieved.has(citation)).length;
-  }, 0);
+  return summarizeM1Evaluation(M1_EVALUATION_CASES, cases);
+}
+
+export function summarizeM1Evaluation(
+  evaluations: M1EvaluationCase[],
+  cases: M1EvaluationCaseResult[],
+): M1EvaluationReport {
+  const resultsById = new Map(cases.map((entry) => [entry.id, entry]));
+  if (resultsById.size !== cases.length || cases.length !== evaluations.length) {
+    throw new Error("M1 evaluation cases and results must have the same unique IDs");
+  }
+
+  const expectedRetrievals = evaluations.flatMap((entry) => entry.expectedRetrievalCitationIds);
+  const requiredAnswers = evaluations.flatMap((entry) => entry.expectedAnswerCitationIds);
   const returned = cases.flatMap((entry) => entry.returnedCitationIds);
   const wrong = cases.flatMap((entry) => entry.wrongCitationIds);
-  const located = cases.flatMap((entry) => entry.locatedCitationIds);
   const leaks = cases.flatMap((entry) => entry.leakedCitationIds);
+  const answerExpectedCases = evaluations.filter((entry) => entry.expectedOutcome === "answer").length;
+  const expectedRefusals = evaluations.filter((entry) => entry.expectedOutcome === "refusal").length;
+  let recalled = 0;
+  let answered = 0;
+  let located = 0;
+  let expectedOutcomeFailures = 0;
+
+  for (const evaluation of evaluations) {
+    const result = resultsById.get(evaluation.id);
+    if (!result) throw new Error(`Missing M1 evaluation result: ${evaluation.id}`);
+    const retrieved = new Set(result.retrievedCitationIds.slice(0, 5));
+    const returnedSet = new Set(result.returnedCitationIds);
+    const locatedSet = new Set(result.locatedCitationIds);
+    recalled += evaluation.expectedRetrievalCitationIds.filter((citation) => retrieved.has(citation)).length;
+    answered += evaluation.expectedAnswerCitationIds.filter((citation) => returnedSet.has(citation)).length;
+    located += evaluation.expectedAnswerCitationIds.filter((citation) => locatedSet.has(citation)).length;
+
+    const exactReturned = sameValues(result.returnedCitationIds, evaluation.expectedAnswerCitationIds);
+    const exactLocated = sameValues(result.locatedCitationIds, evaluation.expectedAnswerCitationIds);
+    const outcomeMatches = evaluation.expectedOutcome === "answer"
+      ? !result.denied && !result.noEvidence && result.providerCalled && exactReturned && exactLocated
+      : evaluation.expectedOutcome === "refusal"
+        ? !result.denied && result.noEvidence && !result.providerCalled && result.returnedCitationIds.length === 0
+        : result.denied && !result.providerCalled && result.returnedCitationIds.length === 0;
+    if (!outcomeMatches) expectedOutcomeFailures += 1;
+  }
 
   return {
     metrics: {
-      recallAt5: ratio(recalled, expectedRetrievals.length),
-      citationPrecision: ratio(returned.length - wrong.length, returned.length),
-      citationLocationRate: ratio(located.length, returned.length),
+      recallAt5: ratioFailClosed(recalled, expectedRetrievals.length),
+      citationPrecision: ratioFailClosed(returned.length - wrong.length, returned.length),
+      citationRecall: ratioFailClosed(answered, requiredAnswers.length),
+      citationLocationRate: ratioFailClosed(located, requiredAnswers.length),
       wrongCitations: wrong.length,
       permissionLeaks: leaks.length,
+      expectedOutcomeFailures,
+      expectedRetrievalCitations: expectedRetrievals.length,
+      requiredAnswerCitations: requiredAnswers.length,
+      returnedCitations: returned.length,
+      answerExpectedCases,
+      expectedRefusals,
     },
     cases,
   };
+}
+
+export function assertM1EvaluationGate(report: M1EvaluationReport): void {
+  const { metrics } = report;
+  if (metrics.expectedRetrievalCitations <= 0) throw new Error("M1 evaluation has no retrieval denominator");
+  if (metrics.requiredAnswerCitations <= 0 || metrics.answerExpectedCases <= 0) {
+    throw new Error("M1 evaluation has no answer denominator");
+  }
+  if (metrics.expectedRefusals <= 0) throw new Error("M1 evaluation has no expected refusal cases");
+  if (metrics.recallAt5 < 0.85) throw new Error("M1 retrieval recall gate failed");
+  if (metrics.citationPrecision !== 1) throw new Error("M1 citation precision gate failed");
+  if (metrics.citationRecall !== 1) throw new Error("M1 citation recall gate failed");
+  if (metrics.citationLocationRate !== 1) throw new Error("M1 citation location gate failed");
+  if (metrics.wrongCitations !== 0) throw new Error("M1 wrong citation gate failed");
+  if (metrics.permissionLeaks !== 0) throw new Error("M1 permission isolation gate failed");
+  if (metrics.expectedOutcomeFailures !== 0) throw new Error("M1 per-case outcome gate failed");
 }
 
 class EvaluationRepository implements LibraryRepositoryPort {
@@ -335,9 +402,7 @@ class EvaluationRepository implements LibraryRepositoryPort {
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {
     const visible = DOCUMENTS.filter((entry) => entry.visibility === "shared" || scope.role === "admin");
-    const matched = this.evaluation.lowRelevance
-      ? visible.filter((entry) => entry.id === "knowledge-launch")
-      : visible.filter((entry) => matchesAllTerms(entry, request.termKeys));
+    const matched = visible.filter((entry) => matchesAllTerms(entry, request.termKeys));
     const items = matched
       .map((entry) => toSearchHit(entry, request.termKeys))
       .sort((left, right) => left.score - right.score || left.chunkId.localeCompare(right.chunkId))
@@ -444,6 +509,7 @@ function evaluationCase(
     expectedRetrievalCitationIds: [citation],
     expectedAnswerCitationIds: [citation],
     forbiddenCitationIds: scope.role === "contributor" ? [CITATIONS["knowledge-admin"]!] : [],
+    expectedOutcome: "answer",
   };
 }
 
@@ -486,8 +552,18 @@ function toSearchHit(entry: EvaluationDocument, termKeys: string[]): SearchHit {
   };
 }
 
-function ratio(numerator: number, denominator: number): number {
-  return denominator === 0 ? 1 : numerator / denominator;
+function ratioFailClosed(numerator: number, denominator: number): number {
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function sameValues(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const actual = new Set(left);
+  const expected = new Set(right);
+  return actual.size === left.length
+    && expected.size === right.length
+    && actual.size === expected.size
+    && [...actual].every((value) => expected.has(value));
 }
 
 function isForbidden(error: unknown): boolean {

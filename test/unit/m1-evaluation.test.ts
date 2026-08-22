@@ -1,15 +1,42 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertM1EvaluationGate,
   M1_EVALUATION_CASES,
   runM1Evaluation,
+  summarizeM1Evaluation,
 } from "../fixtures/m1-evaluation";
 
 describe("M1 fixed knowledge-loop evaluation", () => {
   it("keeps at least twenty hand-labelled cases across the required risk surfaces", () => {
     const coverage = new Set(M1_EVALUATION_CASES.flatMap((entry) => entry.coverage));
 
-    expect(M1_EVALUATION_CASES.length).toBeGreaterThanOrEqual(20);
+    expect(M1_EVALUATION_CASES.map((entry) => entry.id)).toEqual([
+      "english-title",
+      "english-body",
+      "english-tag",
+      "rollback-body",
+      "english-normalization",
+      "chinese-title",
+      "chinese-body",
+      "chinese-tag",
+      "code-camel",
+      "code-constant",
+      "code-underscore",
+      "code-tag",
+      "markdown-title",
+      "citation-location",
+      "citation-heading",
+      "chinese-location",
+      "degraded-readable",
+      "prompt-injection",
+      "inert-source",
+      "admin-only-contributor",
+      "admin-only-admin",
+      "disabled-user",
+      "no-result",
+      "partial-match-refusal",
+    ]);
     for (const required of [
       "chinese",
       "english",
@@ -18,7 +45,7 @@ describe("M1 fixed knowledge-loop evaluation", () => {
       "tag",
       "body",
       "no-result",
-      "low-relevance",
+      "partial-match-refusal",
       "admin-only",
       "disabled-user",
       "prompt-injection",
@@ -34,9 +61,82 @@ describe("M1 fixed knowledge-loop evaluation", () => {
 
     expect(report.metrics.recallAt5).toBeGreaterThanOrEqual(0.85);
     expect(report.metrics.citationPrecision).toBe(1);
+    expect(report.metrics.citationRecall).toBe(1);
     expect(report.metrics.citationLocationRate).toBe(1);
     expect(report.metrics.wrongCitations).toBe(0);
     expect(report.metrics.permissionLeaks).toBe(0);
+    expect(report.metrics.expectedRetrievalCitations).toBeGreaterThan(0);
+    expect(report.metrics.requiredAnswerCitations).toBeGreaterThan(0);
+    expect(report.metrics.returnedCitations).toBeGreaterThan(0);
+    expect(report.metrics.answerExpectedCases).toBeGreaterThan(0);
+    expect(report.metrics.expectedRefusals).toBeGreaterThan(0);
+    expect(report.metrics).toMatchObject({
+      expectedRetrievalCitations: 20,
+      requiredAnswerCitations: 20,
+      returnedCitations: 20,
+      answerExpectedCases: 20,
+      expectedRefusals: 3,
+      expectedOutcomeFailures: 0,
+    });
+    expect(() => assertM1EvaluationGate(report)).not.toThrow();
+  });
+
+  it("requires every answer citation and fails closed when answers disappear", async () => {
+    const report = await runM1Evaluation();
+    const answerCitationMismatches = M1_EVALUATION_CASES
+      .filter((entry) => entry.expectedOutcome === "answer")
+      .filter((entry) => {
+        const result = report.cases.find((candidate) => candidate.id === entry.id);
+        return JSON.stringify(result?.returnedCitationIds) !== JSON.stringify(entry.expectedAnswerCitationIds)
+          || JSON.stringify(result?.locatedCitationIds) !== JSON.stringify(entry.expectedAnswerCitationIds);
+      })
+      .map((entry) => ({
+        id: entry.id,
+        result: report.cases.find((candidate) => candidate.id === entry.id),
+      }));
+    expect(answerCitationMismatches).toEqual([]);
+
+    for (const evaluation of M1_EVALUATION_CASES) {
+      const result = report.cases.find((entry) => entry.id === evaluation.id);
+      expect(result, evaluation.id).toBeDefined();
+      if (evaluation.expectedOutcome === "answer") {
+        expect(result?.returnedCitationIds, evaluation.id).toEqual(evaluation.expectedAnswerCitationIds);
+        expect(result?.locatedCitationIds, evaluation.id).toEqual(evaluation.expectedAnswerCitationIds);
+        expect(result?.providerCalled, evaluation.id).toBe(true);
+        expect(result?.noEvidence, evaluation.id).toBe(false);
+      } else if (evaluation.expectedOutcome === "refusal") {
+        expect(result?.returnedCitationIds, evaluation.id).toEqual([]);
+        expect(result?.providerCalled, evaluation.id).toBe(false);
+        expect(result?.noEvidence, evaluation.id).toBe(true);
+        expect(result?.denied, evaluation.id).toBe(false);
+      } else {
+        expect(result?.returnedCitationIds, evaluation.id).toEqual([]);
+        expect(result?.providerCalled, evaluation.id).toBe(false);
+        expect(result?.denied, evaluation.id).toBe(true);
+      }
+    }
+
+    const zeroAnswerCases = report.cases.map((entry) => ({
+      ...entry,
+      answer: "",
+      noEvidence: true,
+      returnedCitationIds: [],
+      locatedCitationIds: [],
+      wrongCitationIds: [],
+    }));
+    const zeroAnswerReport = summarizeM1Evaluation(M1_EVALUATION_CASES, zeroAnswerCases);
+
+    expect(zeroAnswerReport.metrics.citationPrecision).toBe(0);
+    expect(zeroAnswerReport.metrics.citationRecall).toBe(0);
+    expect(zeroAnswerReport.metrics.citationLocationRate).toBe(0);
+    expect(() => assertM1EvaluationGate(zeroAnswerReport)).toThrow(/citation (?:precision|recall)/u);
+
+    const emptyReport = summarizeM1Evaluation([], []);
+    expect(emptyReport.metrics.recallAt5).toBe(0);
+    expect(emptyReport.metrics.citationPrecision).toBe(0);
+    expect(emptyReport.metrics.citationRecall).toBe(0);
+    expect(emptyReport.metrics.citationLocationRate).toBe(0);
+    expect(() => assertM1EvaluationGate(emptyReport)).toThrow(/denominator/u);
   });
 
   it("records retrieval, degraded, denial, no-evidence, and injection outcomes explicitly", async () => {
@@ -55,10 +155,11 @@ describe("M1 fixed knowledge-loop evaluation", () => {
       retrievedCitationIds: [],
       returnedCitationIds: [],
     });
-    expect(result("low-relevance")).toMatchObject({
+    expect(result("partial-match-refusal")).toMatchObject({
       denied: false,
       noEvidence: true,
       providerCalled: false,
+      retrievedCitationIds: [],
       returnedCitationIds: [],
     });
     expect(result("disabled-user")).toMatchObject({
