@@ -236,11 +236,22 @@ This must be the single candidate upload. Do not use `wrangler secret put`, `wra
 
 ## 7. Inspect the exact uploaded version
 
-Record the returned ID as `<M1_VERSION_ID>`. The version is not serving traffic yet.
+Copy the exact version ID returned by the successful upload into the current shell. The version is not serving traffic yet. This input is an identifier, not a secret, but do not derive it from `versions list` or inspect a different version.
+
+```bash
+printf '%s' 'M1_VERSION_ID from the exact upload output: '
+IFS= read -r M1_VERSION_ID
+export M1_VERSION_ID
+```
+
+M1 evidence command: `version-id-precondition`
+```bash
+test -n "${M1_VERSION_ID:-}"
+```
 
 M1 evidence command: `version-inspect`
 ```bash
-rtk npx wrangler versions view <M1_VERSION_ID>
+rtk npx wrangler versions view "${M1_VERSION_ID}"
 ```
 
 ```bash
@@ -265,14 +276,14 @@ With separate deployment approval:
 
 M1 evidence command: `version-deploy`
 ```bash
-rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes
+rtk npx wrangler versions deploy "${M1_VERSION_ID}@100%" --yes
 ```
 
 ```bash
 rtk npx wrangler deployments status
 ```
 
-Confirm the deployed version ID is exactly `<M1_VERSION_ID>` before beginning production validation.
+Confirm the deployed version ID is exactly `${M1_VERSION_ID}` before beginning production validation.
 
 ## 9. Run the browser M1 journey on the custom domain
 
@@ -376,13 +387,17 @@ Before selecting a target, prove it reads the current D1 schema and current Dura
 rtk npm run test:m1
 rtk npm run check
 rtk npx wrangler versions upload --strict --message "M1 forward-compatible emergency rollback"
-rtk npx wrangler versions view <M1_EMERGENCY_VERSION_ID>
+printf '%s' 'M1_EMERGENCY_VERSION_ID from the exact upload output: '
+IFS= read -r M1_EMERGENCY_VERSION_ID
+export M1_EMERGENCY_VERSION_ID
+test -n "${M1_EMERGENCY_VERSION_ID:-}"
+rtk npx wrangler versions view "${M1_EMERGENCY_VERSION_ID}"
 ```
 
 The emergency upload must preserve the already configured complete secret set. If a complete secret bundle must be changed, use the protected seven-secret JSON workflow above; never use a plain deploy, secret bulk, or per-secret deploy. With separate authorization, deploy only the inspected ID:
 
 ```bash
-rtk npx wrangler versions deploy <M1_EMERGENCY_VERSION_ID>@100% --yes
+rtk npx wrangler versions deploy "${M1_EMERGENCY_VERSION_ID}@100%" --yes
 rtk npx wrangler deployments status
 ```
 

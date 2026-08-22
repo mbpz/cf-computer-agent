@@ -12,8 +12,9 @@ const requiredEvidenceBlocks = [
   ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],
   ["version-upload", 'rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --message "M1 trusted knowledge release candidate"'],
-  ["version-inspect", "rtk npx wrangler versions view <M1_VERSION_ID>"],
-  ["version-deploy", "rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes"],
+  ["version-id-precondition", 'test -n "${M1_VERSION_ID:-}"'],
+  ["version-inspect", 'rtk npx wrangler versions view "${M1_VERSION_ID}"'],
+  ["version-deploy", 'rtk npx wrangler versions deploy "${M1_VERSION_ID}@100%" --yes'],
   ["invalid-signature-probe", "rtk npm run probe:automation:invalid"],
   ["admin-forbidden-probe", "rtk npm run probe:automation:admin-forbidden"],
 ];
@@ -30,18 +31,19 @@ const forbiddenCommands = [
 
 async function verifyRunbook(path) {
   const markdown = removeHtmlComments(await readFile(path, "utf8"));
-  const evidence = exactEvidenceBlocks(markdown);
+  const fences = commonMarkFences(markdown);
+  const evidence = exactEvidenceBlocks(markdown, fences);
   if (evidence.length !== requiredEvidenceBlocks.length
     || evidence.some((block, index) => block.id !== requiredEvidenceBlocks[index][0]
       || block.command !== requiredEvidenceBlocks[index][1])) {
     throw new Error("M1 evidence blocks are missing, malformed, duplicated, or out of order");
   }
 
-  for (const body of executableFenceBodies(markdown)) {
-    const withoutCommentLines = body.split(/\r?\n/u)
+  for (const fence of fences.filter(({ info }) => info === "bash" || info === "zsh")) {
+    const withoutCommentLines = fence.content
       .filter((line) => !/^\s*#/u.test(line))
       .join("\n");
-    const normalized = withoutCommentLines.replace(/\\\r?\n[ \t]*/gu, " ");
+    const normalized = withoutCommentLines.replace(/\\\r?\n/gu, "");
     if (forbiddenCommands.some((pattern) => pattern.test(normalized))) {
       throw new Error("Forbidden executable command found");
     }
@@ -49,44 +51,65 @@ async function verifyRunbook(path) {
   console.log(`[pass] m1-runbook evidence_blocks=${evidence.length}`);
 }
 
-function exactEvidenceBlocks(markdown) {
+function exactEvidenceBlocks(markdown, fences) {
   const lines = markdown.split(/\r?\n/u);
+  const fenceByStart = new Map(fences.map((fence) => [fence.start, fence]));
+  const fencedLines = new Set(fences.flatMap((fence) => {
+    const covered = [];
+    for (let line = fence.start; line <= fence.end; line += 1) covered.push(line);
+    return covered;
+  }));
   const blocks = [];
   for (let index = 0; index < lines.length; index += 1) {
+    if (fencedLines.has(index)) continue;
     const marker = /^M1 evidence command: `([a-z0-9-]+)`$/u.exec(lines[index]);
     if (!marker) continue;
-    if (lines[index + 1] !== "```bash" || lines[index + 3] !== "```") {
-      throw new Error("M1 evidence block must be one exact physical bash command line");
+    const fence = fenceByStart.get(index + 1);
+    if (!fence
+      || (fence.info !== "bash" && fence.info !== "zsh")
+      || fence.content.length !== 1) {
+      throw new Error("M1 evidence block must be one top-level exact physical shell command line");
     }
-    const command = lines[index + 2];
+    const [command] = fence.content;
     if (!command || /^\s*#/u.test(command)) {
       throw new Error("M1 evidence block command is missing");
     }
     blocks.push({ id: marker[1], command });
-    index += 3;
+    index = fence.end;
   }
   return blocks;
 }
 
-function executableFenceBodies(markdown) {
+function commonMarkFences(markdown) {
   const lines = markdown.split(/\r?\n/u);
-  const bodies = [];
+  const fences = [];
   let fence = null;
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     if (fence === null) {
-      const opening = /^(`{3,})[ \t]*(bash|zsh)[ \t]*$/u.exec(line);
-      if (opening) fence = { delimiter: opening[1], lines: [] };
+      const opening = /^( {0,3})(`{3,}|~{3,})(.*)$/u.exec(line);
+      if (!opening || (opening[2][0] === "`" && opening[3].includes("`"))) continue;
+      fence = {
+        character: opening[2][0],
+        length: opening[2].length,
+        start: index,
+        info: opening[3].trim(),
+        content: [],
+      };
       continue;
     }
-    if (line === fence.delimiter) {
-      bodies.push(fence.lines.join("\n"));
+    const closing = /^( {0,3})(`{3,}|~{3,})[ \t]*$/u.exec(line);
+    if (closing
+      && closing[2][0] === fence.character
+      && closing[2].length >= fence.length) {
+      fences.push({ ...fence, end: index });
       fence = null;
       continue;
     }
-    fence.lines.push(line);
+    fence.content.push(line);
   }
-  if (fence !== null) throw new Error("Unclosed executable Markdown fence");
-  return bodies;
+  if (fence !== null) throw new Error("Unclosed Markdown fence");
+  return fences;
 }
 
 function removeHtmlComments(markdown) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,10 +27,21 @@ const requiredEvidenceBlocks = [
   ["post-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
   ["post-ledger-verification", 'rtk npm run verify:m1:migrations -- --ledger-after "$M1_LEDGER_FILE"'],
   ["version-upload", 'rtk npx wrangler versions upload --secrets-file "$M1_SECRETS_FILE" --strict --message "M1 trusted knowledge release candidate"'],
-  ["version-inspect", "rtk npx wrangler versions view <M1_VERSION_ID>"],
-  ["version-deploy", "rtk npx wrangler versions deploy <M1_VERSION_ID>@100% --yes"],
+  ["version-id-precondition", 'test -n "${M1_VERSION_ID:-}"'],
+  ["version-inspect", 'rtk npx wrangler versions view "${M1_VERSION_ID}"'],
+  ["version-deploy", 'rtk npx wrangler versions deploy "${M1_VERSION_ID}@100%" --yes'],
   ["invalid-signature-probe", "rtk npm run probe:automation:invalid"],
   ["admin-forbidden-probe", "rtk npm run probe:automation:admin-forbidden"],
+];
+const forbiddenRunbookCommands = [
+  "rtk npx wrangler d1 migrations list memory-garden-control-plane --remote",
+  "rtk npx wrangler secret put AUTOMATION_SECRET",
+  "rtk npx wrangler versions secret bulk secrets.json",
+  "rtk npx wrangler deploy",
+  "rtk npm run deploy",
+  "rtk npx wrangler rollback",
+  "rtk npx wrangler d1 time-travel restore memory-garden-control-plane --timestamp 2026-08-21T00:00:00Z",
+  'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "DELETE FROM submissions"',
 ];
 
 function evidenceBlock(id, command) {
@@ -156,7 +167,7 @@ test("runbook executable contract proves provenance, ledger, and probe commands"
   ]);
   const verified = await runDocsVerifier(["--runbook", runbookPath.pathname]);
   assert.equal(verified.code, 0, verified.output);
-  assert.match(verified.output, /^\[pass\] m1-runbook evidence_blocks=11$/mu);
+  assert.match(verified.output, /^\[pass\] m1-runbook evidence_blocks=12$/mu);
   assert.equal(wrangler.d1_databases[0].database_name, "memory-garden-control-plane");
   assert.equal(wrangler.d1_databases[0].migrations_dir, "migrations");
   assert.equal(wrangler.d1_databases[0].migrations_table, undefined);
@@ -187,15 +198,7 @@ test("runbook contract does not accept required commands moved into HTML or shel
 
 test("runbook contract rejects executable forbidden commands but ignores illustrations", async () => {
   const runbook = await readFile(runbookPath, "utf8");
-  const forbidden = [
-    "rtk npx wrangler d1 migrations list memory-garden-control-plane --remote",
-    "rtk npx wrangler secret put AUTOMATION_SECRET",
-    "rtk npx wrangler versions secret bulk secrets.json",
-    "rtk npx wrangler deploy",
-    "rtk npm run deploy",
-    "rtk npx wrangler rollback",
-  ];
-  for (const command of forbidden) {
+  for (const command of forbiddenRunbookCommands) {
     await withTextFile("m1-runbook-forbidden-", `${runbook}\n\`\`\`bash\n${command}\n\`\`\`\n`, async (path) => {
       const result = await runDocsVerifier(["--runbook", path]);
       assert.equal(result.code, 1, `${command}\n${result.output}`);
@@ -203,11 +206,44 @@ test("runbook contract rejects executable forbidden commands but ignores illustr
     });
   }
 
-  const illustrative = `${runbook}\nIllustration only: ${forbidden.join("; ")}\n<!-- ${forbidden.join("\n")} -->\n\`\`\`bash\n${forbidden.map((command) => `# ${command}`).join("\n")}\n\`\`\`\n\`\`\`sh\n${forbidden.join("\n")}\n\`\`\`\n`;
+  const illustrative = `${runbook}\nIllustration only: ${forbiddenRunbookCommands.join("; ")}\n<!-- ${forbiddenRunbookCommands.join("\n")} -->\n\`\`\`bash\n${forbiddenRunbookCommands.map((command) => `# ${command}`).join("\n")}\n\`\`\`\n\`\`\`sh\n${forbiddenRunbookCommands.join("\n")}\n\`\`\`\n`;
   await withTextFile("m1-runbook-illustrative-", illustrative, async (path) => {
     const result = await runDocsVerifier(["--runbook", path]);
     assert.equal(result.code, 0, result.output);
   });
+});
+
+test("runbook contract removes shell continuations at every forbidden token boundary", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  for (const command of forbiddenRunbookCommands) {
+    for (const token of command.matchAll(/\S+/gu)) {
+      for (let offset = 1; offset < token[0].length; offset += 1) {
+        const boundary = token.index + offset;
+        const split = `${command.slice(0, boundary)}\\\n${command.slice(boundary)}`;
+        await withTextFile("m1-runbook-token-split-", `${runbook}\n\`\`\`bash\n${split}\n\`\`\`\n`, async (path) => {
+          const result = await runDocsVerifier(["--runbook", path]);
+          assert.equal(result.code, 1, `${split}\n${result.output}`);
+          assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+        });
+      }
+    }
+  }
+});
+
+test("runbook contract recognizes indented backtick and tilde executable fences", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const forbidden = "rtk npx wrangler deploy";
+  const fixtures = [
+    `${runbook}\n   \`\`\`bash\n${forbidden}\n   \`\`\`\n`,
+    `${runbook}\n  ~~~~zsh\n${forbidden}\n  ~~~~\n`,
+  ];
+  for (const fixture of fixtures) {
+    await withTextFile("m1-runbook-indented-fence-", fixture, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
 });
 
 test("runbook contract rejects required commands hidden in shell constructs", async () => {
@@ -224,6 +260,52 @@ test("runbook contract rejects required commands hidden in shell constructs", as
       assert.equal(result.code, 1, result.output);
       assert.match(result.output, /^\[fail\] m1-runbook$/mu);
     });
+  }
+});
+
+test("runbook contract requires a top-level fence containing only the exact command", async () => {
+  const runbook = await readFile(runbookPath, "utf8");
+  const probe = "rtk npm run probe:automation:invalid";
+  const block = evidenceBlock("invalid-signature-probe", probe);
+  const replacements = [
+    evidenceBlock("invalid-signature-probe", `if false; then\n  ${probe}\nfi`),
+    evidenceBlock("invalid-signature-probe", `run_probe() {\n  ${probe}\n}`),
+    evidenceBlock("invalid-signature-probe", `result="$(\n  ${probe}\n)"`),
+    evidenceBlock("invalid-signature-probe", `{ ${probe}; }`),
+    evidenceBlock("invalid-signature-probe", `true && ${probe}`),
+    ["  ````text", block, "  ````"].join("\n"),
+  ];
+  assert.ok(runbook.includes(block));
+  for (const replacement of replacements) {
+    const mutation = runbook.replace(block, replacement);
+    assert.notEqual(mutation, runbook);
+    await withTextFile("m1-runbook-exact-fence-", mutation, async (path) => {
+      const result = await runDocsVerifier(["--runbook", path]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] m1-runbook$/mu);
+    });
+  }
+});
+
+test("every required command is placeholder-free syntax in bash and zsh", () => {
+  const environment = {
+    ...process.env,
+    M1_LEDGER_FILE: "/tmp/m1-ledger.json",
+    M1_SECRETS_FILE: "/tmp/m1-secrets.json",
+    M1_VERSION_ID: "00000000-0000-0000-0000-000000000000",
+  };
+  for (const [, command] of requiredEvidenceBlocks) {
+    assert.doesNotMatch(command, /<M1_[A-Z_]+>/u, command);
+    for (const shell of ["bash", "zsh"]) {
+      const parsed = spawnSync(shell, ["-n"], {
+        env: environment,
+        input: `${command}\n`,
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      assert.equal(parsed.error, undefined, `${shell}: ${command}`);
+      assert.equal(parsed.status, 0, `${shell}: ${command}\n${parsed.stderr}`);
+    }
   }
 });
 

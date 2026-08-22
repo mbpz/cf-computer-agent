@@ -71,6 +71,7 @@ The fixed evaluator is provider-free. Do not enter a Workers AI key, account tok
 | Check | Status | Evidence |
 | --- | --- | --- |
 | One `versions upload --strict` candidate | [ ] pending | uploaded version `<pending>` |
+| Exact upload ID captured as nonempty `M1_VERSION_ID` | [ ] pending | `test -n "${M1_VERSION_ID:-}"`; exact ID `<pending>` |
 | Complete seven-secret **names** present | [ ] pending | names-only inspection `<pending>` |
 | `DB` binding exact | [ ] pending | `<pending>` |
 | `KNOWLEDGE` / `KnowledgeBase` / `v1` exact | [ ] pending | `<pending>` |
