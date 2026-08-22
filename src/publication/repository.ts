@@ -545,8 +545,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
         return visibleIndexStatus(job);
       }
       if (job?.lease_token !== leaseToken) return job ? visibleIndexStatus(job) : "pending";
-      await this.markIndexFailure(revisionId, timestamp, leaseToken);
+      const marked = await this.markIndexFailure(revisionId, timestamp, leaseToken);
       job = await this.findIndexJob(revisionId);
+      if (!marked) return job ? visibleIndexStatus(job) : "pending";
       return job ? visibleIndexStatus(job) : "search_degraded";
     }
   }
@@ -746,8 +747,47 @@ export class PublicationRepository implements PublicationRepositoryPort {
     ).bind(revisionId).first<IndexJobRow>();
   }
 
-  private async markIndexFailure(revisionId: string, timestamp: string, leaseToken: string): Promise<void> {
+  private async markIndexFailure(
+    revisionId: string,
+    timestamp: string,
+    leaseToken: string,
+  ): Promise<boolean> {
+    const rowids = await this.chunkRowidsForRevision(revisionId);
+    try {
+      await this.commitIndexFailure(revisionId, timestamp, leaseToken, rowids);
+      return true;
+    } catch (error) {
+      const current = await this.findIndexJob(revisionId);
+      if (!current || current.state !== "running" || current.lease_token !== leaseToken) return false;
+      try {
+        await this.db.prepare("SELECT rowid FROM chunks_fts WHERE rowid = ? LIMIT 1")
+          .bind(rowids[0] ?? 0).first();
+      } catch {
+        await this.commitIndexFailure(revisionId, timestamp, leaseToken, []);
+        return true;
+      }
+      throw error;
+    }
+  }
+
+  private async commitIndexFailure(
+    revisionId: string,
+    timestamp: string,
+    leaseToken: string,
+    rowids: readonly number[],
+  ): Promise<void> {
     await this.db.batch([
+      this.indexLeaseGuard(revisionId, leaseToken),
+      ...rowids.map((rowid) => this.prepareDeleteIndexRowForLease(rowid, revisionId, leaseToken)),
+      this.db.prepare(
+        `UPDATE knowledge_items SET search_status = 'search_degraded', updated_at = ?
+         WHERE current_revision_id = ? AND status = 'active'
+           AND EXISTS (
+             SELECT 1 FROM jobs
+             WHERE kind = 'index_revision' AND resource_id = ?
+               AND state = 'running' AND lease_token = ?
+           )`,
+      ).bind(timestamp, revisionId, revisionId, leaseToken),
       this.db.prepare(
         `UPDATE jobs SET
            state = CASE WHEN attempts >= ? THEN 'failed_terminal' ELSE 'failed_retryable' END,
@@ -756,17 +796,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
          WHERE kind = 'index_revision' AND resource_id = ? AND state = 'running' AND lease_token = ?`,
       ).bind(MAX_INDEX_ATTEMPTS, timestamp, timestamp, revisionId, leaseToken),
       this.changeGuard(),
-      this.db.prepare(
-        `UPDATE knowledge_items SET search_status = 'search_degraded', updated_at = ?
-         WHERE current_revision_id = ? AND status = 'active'`,
-      ).bind(timestamp, revisionId),
     ]);
-    try {
-      const rowids = await this.chunkRowidsForRevision(revisionId);
-      if (rowids.length > 0) await this.db.batch(rowids.map((rowid) => this.prepareDeleteIndexRow(rowid)));
-    } catch {
-      // The index itself may be unavailable; the authoritative Job state is durable.
-    }
   }
 
   private async completeRemovedIndexJob(
@@ -828,6 +858,31 @@ export class PublicationRepository implements PublicationRepositoryPort {
 
   private prepareDeleteIndexRow(rowid: number): D1PreparedStatement {
     return this.db.prepare("DELETE FROM chunks_fts WHERE rowid = ?").bind(rowid);
+  }
+
+  private prepareDeleteIndexRowForLease(
+    rowid: number,
+    revisionId: string,
+    leaseToken: string,
+  ): D1PreparedStatement {
+    return this.db.prepare(
+      `DELETE FROM chunks_fts WHERE rowid = ?
+       AND EXISTS (
+         SELECT 1 FROM jobs
+         WHERE kind = 'index_revision' AND resource_id = ?
+           AND state = 'running' AND lease_token = ?
+       )`,
+    ).bind(rowid, revisionId, leaseToken);
+  }
+
+  private indexLeaseGuard(revisionId: string, leaseToken: string): D1PreparedStatement {
+    return this.db.prepare(
+      `SELECT CASE WHEN EXISTS (
+         SELECT 1 FROM jobs
+         WHERE kind = 'index_revision' AND resource_id = ?
+           AND state = 'running' AND lease_token = ?
+       ) THEN 1 ELSE json_extract('index-lease-guard', '$') END AS ok`,
+    ).bind(revisionId, leaseToken);
   }
 
   private changeGuard(): D1PreparedStatement {

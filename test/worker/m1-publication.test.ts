@@ -1091,6 +1091,166 @@ describe("M1 publication control plane", () => {
     await expect(indexRowidMismatches("knowledge-index-lease-winner")).resolves.toEqual([]);
   });
 
+  it("does not let a failed claimant clean up rows written by its retry successor", async () => {
+    await seedReviewPendingSubmission("submission-index-failure-successor");
+    const seed = repositoryWithIds(
+      "knowledge-index-failure-successor", "revision-index-failure-successor",
+    );
+    await finalizeWithoutIndex(seed, "submission-index-failure-successor");
+    let batchCall = 0;
+    let successorStatus: string | undefined;
+    const db = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            batchCall += 1;
+            if (batchCall === 1) throw new Error("injected index replacement failure");
+            const result = await target.batch(statements);
+            if (batchCall === 2) {
+              successorStatus = await new PublicationRepository(env.DB, {
+                now: () => new Date(now),
+                leaseToken: () => "retry-successor",
+              }).processIndexJob("revision-index-failure-successor");
+            }
+            return result;
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const predecessor = new PublicationRepository(db, {
+      now: () => new Date(now),
+      leaseToken: () => "failed-predecessor",
+    });
+
+    await expect(predecessor.processIndexJob("revision-index-failure-successor"))
+      .resolves.toBe("indexed");
+    expect(successorStatus).toBe("indexed");
+    await expect(env.DB.prepare(
+      `SELECT j.state, j.attempts, j.lease_token, j.last_error_code, k.search_status
+       FROM jobs j JOIN revisions r ON r.id = j.resource_id
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       WHERE j.resource_id = ? LIMIT 1`,
+    ).bind("revision-index-failure-successor").first()).resolves.toEqual({
+      state: "completed",
+      attempts: 2,
+      lease_token: null,
+      last_error_code: null,
+      search_status: "indexed",
+    });
+    await expect(indexedChunkIds("knowledge-index-failure-successor")).resolves.toEqual([
+      "revision-index-failure-successor-chunk-0", "revision-index-failure-successor-chunk-1",
+    ]);
+    await expect(indexRowidMismatches("knowledge-index-failure-successor")).resolves.toEqual([]);
+  });
+
+  it("atomically removes partial rows and releases the lease on a normal index failure", async () => {
+    await seedReviewPendingSubmission("submission-index-failure-cleanup");
+    const seed = repositoryWithIds("knowledge-index-failure-cleanup", "revision-index-failure-cleanup");
+    await finalizeWithoutIndex(seed, "submission-index-failure-cleanup");
+    await seedPartialIndexRows("revision-index-failure-cleanup");
+    let failReplacement = true;
+    const db = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            if (failReplacement) {
+              failReplacement = false;
+              throw new Error("injected index replacement failure");
+            }
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    await expect(new PublicationRepository(db, {
+      now: () => new Date(now),
+      leaseToken: () => "normal-failure-owner",
+    }).processIndexJob("revision-index-failure-cleanup")).resolves.toBe("search_degraded");
+    await expect(env.DB.prepare(
+      `SELECT j.state, j.attempts, j.lease_token, j.last_error_code, k.search_status
+       FROM jobs j JOIN revisions r ON r.id = j.resource_id
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       WHERE j.resource_id = ? LIMIT 1`,
+    ).bind("revision-index-failure-cleanup").first()).resolves.toEqual({
+      state: "failed_retryable",
+      attempts: 1,
+      lease_token: null,
+      last_error_code: "FTS_INDEX_FAILED",
+      search_status: "search_degraded",
+    });
+    await expect(indexedChunkIds("knowledge-index-failure-cleanup")).resolves.toEqual([]);
+  });
+
+  it("changes nothing when an expired failure claimant loses its token before cleanup", async () => {
+    await seedReviewPendingSubmission("submission-index-failure-expired");
+    const seed = repositoryWithIds("knowledge-index-failure-expired", "revision-index-failure-expired");
+    await finalizeWithoutIndex(seed, "submission-index-failure-expired");
+    await seedPartialIndexRows("revision-index-failure-expired");
+    let batchCall = 0;
+    const db = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            batchCall += 1;
+            if (batchCall === 1) throw new Error("injected index replacement failure");
+            if (batchCall === 2) {
+              await env.DB.prepare(
+                `UPDATE jobs SET lease_expires_at = ?, available_at = ?
+                 WHERE kind = 'index_revision' AND resource_id = ?
+                   AND state = 'running' AND lease_token = 'expired-predecessor'`,
+              ).bind(
+                "2026-08-21T23:59:59.000Z",
+                "2026-08-21T23:59:59.000Z",
+                "revision-index-failure-expired",
+              ).run();
+              await env.DB.prepare(
+                `UPDATE jobs SET state = 'running', attempts = attempts + 1,
+                   lease_token = 'successor-holding', lease_expires_at = ?, available_at = ?
+                 WHERE kind = 'index_revision' AND resource_id = ?
+                   AND state = 'running' AND lease_token = 'expired-predecessor'
+                   AND lease_expires_at <= ?`,
+              ).bind(
+                "2026-08-22T00:01:00.000Z",
+                "2026-08-22T00:01:00.000Z",
+                "revision-index-failure-expired",
+                now,
+              ).run();
+            }
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, property, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    await expect(new PublicationRepository(db, {
+      now: () => new Date(now),
+      leaseToken: () => "expired-predecessor",
+    }).processIndexJob("revision-index-failure-expired")).resolves.toBe("pending");
+    await expect(env.DB.prepare(
+      `SELECT j.state, j.attempts, j.lease_token, j.last_error_code, k.search_status
+       FROM jobs j JOIN revisions r ON r.id = j.resource_id
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id
+       WHERE j.resource_id = ? LIMIT 1`,
+    ).bind("revision-index-failure-expired").first()).resolves.toEqual({
+      state: "running",
+      attempts: 2,
+      lease_token: "successor-holding",
+      last_error_code: null,
+      search_status: "pending",
+    });
+    await expect(indexedChunkIds("knowledge-index-failure-expired")).resolves.toEqual([
+      "revision-index-failure-expired-chunk-0", "revision-index-failure-expired-chunk-1",
+    ]);
+    await expect(indexRowidMismatches("knowledge-index-failure-expired")).resolves.toEqual([]);
+  });
+
   it("recovers an actual DO write whose response was lost before D1 left pending_content", async () => {
     const source = await seedReviewPendingSubmission("submission-do-response-loss");
     const repository = repositoryWithIds("knowledge-do-response-loss", "revision-do-response-loss");
@@ -1496,6 +1656,14 @@ async function indexRowidMismatches(knowledgeItemId: string): Promise<string[]> 
      ORDER BY f.chunk_id ASC LIMIT ?`,
   ).bind(knowledgeItemId, 257).all<{ chunk_id: string }>();
   return rows.results.map((row) => row.chunk_id);
+}
+
+async function seedPartialIndexRows(revisionId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+     SELECT rowid, id, 'partial', '', '', search_body, ''
+     FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT 256`,
+  ).bind(revisionId).run();
 }
 
 function paragraphDocument(count: number): string {
