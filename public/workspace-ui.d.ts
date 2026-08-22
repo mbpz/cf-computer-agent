@@ -12,6 +12,10 @@ export interface OperationGuard {
   isCurrent(value: number): boolean;
 }
 export function createOperationGuard(): OperationGuard;
+export interface ReplaceableOwner {
+  claim(): () => boolean;
+}
+export function createReplaceableOwner(owns: () => boolean): ReplaceableOwner;
 export function runLatestOperation<T>(
   guard: OperationGuard,
   operation: () => Promise<T>,

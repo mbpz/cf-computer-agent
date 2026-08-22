@@ -513,6 +513,46 @@ describe("M1 publication control plane", () => {
     });
   });
 
+  it.each([
+    ["reviewer", "reviewer_id", "member-1"],
+    ["bounded title", "title", "Drifted title"],
+    ["over-limit title", "title", "x".repeat(201)],
+    ["Space", "space_id", null],
+    ["Collection", "collection_id", null],
+    ["visibility", "visibility", "admin_only"],
+    ["canonical Tags", "tags_json", '["tag-a"]'],
+    ["visibility reason", "visibility_reason_code", "admin_visibility_expansion"],
+  ] as const)("rejects a final D1 %s intent drift after the repository precheck", async (
+    _label, column, driftedValue,
+  ) => {
+    const submissionId = "submission-final-intent-drift";
+    await seedReviewPendingSubmission(submissionId);
+    const boundary = repositoryWithBatchMutation(
+      "knowledge-final-intent-drift", "revision-final-intent-drift",
+    );
+    const intent = await boundary.repository.createOrReadIntent(
+      submissionId, adminReviewer.id, publicationInput,
+    );
+    const receipt = await durableContentCommitter().commit({
+      spaceId: intent.spaceId,
+      knowledgeItemId: intent.knowledgeItemId,
+      revisionId: intent.revisionId,
+      contentSha256: intent.contentSha256,
+      markdown: intent.sourceVersion.content,
+    });
+    await boundary.repository.markContentWritten(intent.submissionId, receipt);
+    boundary.mutateBeforeBatch(async () => {
+      await env.DB.prepare(`UPDATE publication_intents SET ${column} = ? WHERE submission_id = ?`)
+        .bind(driftedValue, submissionId).run();
+    });
+
+    await expect(boundary.repository.finalize(intent, chunksFor(intent))).rejects.toThrow();
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "review_pending", intentState: "content_written", currentRevisionId: null,
+      revisionCount: 0, reviewCount: 0, chunkCount: 0, auditCount: 0, jobState: null,
+    });
+  });
+
   it("converges concurrent publishers on one intent, revision, current pointer, FTS set, and audit", async () => {
     await seedReviewPendingSubmission("submission-concurrent");
     const first = new PublicationService(
@@ -1013,6 +1053,35 @@ function repositoryWithIds(knowledgeItemId: string, revisionId: string): Publica
     id: () => ids.shift() || crypto.randomUUID(),
     now: () => new Date(now),
   });
+}
+
+function repositoryWithBatchMutation(knowledgeItemId: string, revisionId: string): {
+  repository: PublicationRepository;
+  mutateBeforeBatch(mutation: () => Promise<void>): void;
+} {
+  let pendingMutation: (() => Promise<void>) | undefined;
+  const db = new Proxy(env.DB, {
+    get(target, property) {
+      if (property === "batch") {
+        return async (statements: D1PreparedStatement[]) => {
+          const mutation = pendingMutation;
+          pendingMutation = undefined;
+          if (mutation) await mutation();
+          return target.batch(statements);
+        };
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const ids = [knowledgeItemId, revisionId];
+  return {
+    repository: new PublicationRepository(db, {
+      id: () => ids.shift() || crypto.randomUUID(),
+      now: () => new Date(now),
+    }),
+    mutateBeforeBatch(mutation) { pendingMutation = mutation; },
+  };
 }
 
 function durableContentCommitter() {

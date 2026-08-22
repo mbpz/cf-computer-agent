@@ -148,6 +148,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
            FROM submissions prior
            WHERE prior.id = ? AND prior.submitter_id = ? AND prior.status = 'revision_requested'
              AND (prior.idempotency_key IS NULL OR prior.idempotency_key != ?)
+             AND (prior.requested_visibility = 'shared' OR ? = 'admin_only')
              AND EXISTS (
                SELECT 1 FROM spaces target
                WHERE target.id = ? AND target.kind != 'legacy' AND target.read_only = 0 AND target.status = 'active'
@@ -161,6 +162,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
           submission.requestedVisibility, submission.kind, submission.title, submission.content,
           submission.idempotencyKey, submission.createdAt, submission.updatedAt,
           submission.supersedesSubmissionId, submission.submitterId, submission.idempotencyKey,
+          submission.requestedVisibility,
           submission.requestedSpaceId, submission.requestedCollectionId,
           submission.requestedCollectionId, submission.requestedSpaceId,
         ),

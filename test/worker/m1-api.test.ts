@@ -378,6 +378,25 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expectApiError(memberApi("other", `/api/submissions/${priorId}/resubmit`, {
       method: "POST", headers: { "idempotency-key": "other-resubmit-key" }, body: "{not-json",
     }), 404, "SUBMISSION_NOT_FOUND");
+    const beforeWidening = await resubmissionSideEffectCounts(priorId);
+    const wideningInit = {
+      method: "POST",
+      headers: { "idempotency-key": "owner-widening-key1" },
+      body: JSON.stringify({
+        requestedVisibility: "shared", kind: "markdown", title: "Widened", content: "# Widened\n",
+      }),
+    };
+    const [firstWidening, concurrentWidening, forgedWidening] = await Promise.all([
+      memberApi("contributor", `/api/submissions/${priorId}/resubmit`, wideningInit),
+      memberApi("contributor", `/api/submissions/${priorId}/resubmit`, wideningInit),
+      memberApi("other", `/api/submissions/${priorId}/resubmit`, {
+        ...wideningInit, headers: { "idempotency-key": "forged-widening-key" },
+      }),
+    ]);
+    await expectApiError(Promise.resolve(firstWidening), 400, "SUBMISSION_VISIBILITY_EXPANSION_FORBIDDEN");
+    await expectApiError(Promise.resolve(concurrentWidening), 400, "SUBMISSION_VISIBILITY_EXPANSION_FORBIDDEN");
+    await expectApiError(Promise.resolve(forgedWidening), 404, "SUBMISSION_NOT_FOUND");
+    await expect(resubmissionSideEffectCounts(priorId)).resolves.toEqual(beforeWidening);
     const resubmitInit = {
       method: "POST",
       headers: { "idempotency-key": "owner-resubmit-key" },
@@ -851,6 +870,30 @@ async function memberApi(subject: string, path: string, init?: RequestInit): Pro
     headers.set("origin", APP_CONFIG.canonicalOrigin);
   }
   return execute(request(path, { ...init, headers }));
+}
+
+async function resubmissionSideEffectCounts(priorSubmissionId: string): Promise<{
+  submissions: number; sources: number; versions: number; audits: number;
+}> {
+  const row = await env.DB.prepare(
+    `SELECT
+       (SELECT count(*) FROM submissions child WHERE child.supersedes_submission_id = ?) AS submissions,
+       (SELECT count(*) FROM sources source WHERE source.id IN (
+         SELECT version.source_id FROM source_versions version
+         JOIN submissions child ON child.id = version.submission_id
+         WHERE child.supersedes_submission_id = ?
+       )) AS sources,
+       (SELECT count(*) FROM source_versions version
+         JOIN submissions child ON child.id = version.submission_id
+         WHERE child.supersedes_submission_id = ?) AS versions,
+       (SELECT count(*) FROM audit_events
+         WHERE action = 'submission.resubmitted'
+           AND json_extract(metadata, '$.supersedesSubmissionId') = ?) AS audits`,
+  ).bind(priorSubmissionId, priorSubmissionId, priorSubmissionId, priorSubmissionId).first<{
+    submissions: number; sources: number; versions: number; audits: number;
+  }>();
+  if (!row) throw new Error("missing resubmission side-effect counts");
+  return row;
 }
 
 async function rawMemberApi(subject: string, path: string, init?: RequestInit): Promise<Response> {

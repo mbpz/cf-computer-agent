@@ -10,6 +10,7 @@ import {
   createOptionPageController,
   createOwnedActionController,
   createOperationGuard,
+  createReplaceableOwner,
   createReviewTagController,
   createRouteGuard,
   drawerStateForViewport,
@@ -794,10 +795,12 @@ async function renderReviewSubmission(generation, submissionId) {
     }));
     tags.replaceChildren(...nodes);
   };
+  const tagOwnership = createReplaceableOwner(() => ownsMutation(owner));
   const resetTagController = () => {
+    const controllerOwns = tagOwnership.claim();
     tagController = createReviewTagController({
       spaceId: finalSpace.value,
-      owns: () => ownsMutation(owner),
+      owns: controllerOwns,
       request: (path) => api(path),
       onChange: renderTags,
     });

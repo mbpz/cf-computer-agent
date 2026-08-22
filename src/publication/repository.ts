@@ -308,6 +308,12 @@ export class PublicationRepository implements PublicationRepositoryPort {
              WHERE pi.submission_id = submissions.id AND pi.revision_id = ?
                AND pi.knowledge_item_id = ? AND pi.state = 'content_written'
                AND pi.normalized_path = ? AND pi.content_sha256 = ?
+               AND pi.reviewer_id = ?
+               AND pi.title = ? AND length(pi.title) BETWEEN 1 AND 200
+               AND length(CAST(pi.title AS BLOB)) <= 512
+               AND pi.space_id = ? AND pi.collection_id IS ?
+               AND pi.visibility = ? AND pi.tags_json = ?
+               AND pi.visibility_reason_code IS ?
            )
            AND EXISTS (
              SELECT 1 FROM spaces target
@@ -329,6 +335,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
       ).bind(
         timestamp, current.submissionId,
         current.revisionId, current.knowledgeItemId, current.normalizedPath, current.contentSha256,
+        current.reviewerId, current.title, current.spaceId, current.collectionId,
+        current.visibility, JSON.stringify(current.tagIds), current.visibilityReasonCode ?? null,
         current.spaceId, current.collectionId, current.collectionId, current.spaceId,
         current.reviewerId, current.visibilityReasonCode ?? null,
         current.visibility, current.visibilityReasonCode ?? null,

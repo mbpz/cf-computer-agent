@@ -17,6 +17,17 @@ export function createOperationGuard() {
   });
 }
 
+export function createReplaceableOwner(owns) {
+  let generation = 0;
+  return Object.freeze({
+    claim() {
+      generation += 1;
+      const claimedGeneration = generation;
+      return () => claimedGeneration === generation && owns();
+    },
+  });
+}
+
 export async function runLatestOperation(guard, operation, onSuccess, onError, owns = () => true) {
   if (!owns()) return;
   const generation = guard.begin();

@@ -108,6 +108,13 @@ export class SubmissionsService {
     const stablePriorId = requireResourceId(priorSubmissionId);
     const prior = await this.repository.findResubmittable(memberId, stablePriorId);
     if (!prior) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    if (prior.requestedVisibility === "admin_only" && input.requestedVisibility === "shared") {
+      throw new AppError(
+        "SUBMISSION_VISIBILITY_EXPANSION_FORBIDDEN",
+        "A resubmission cannot expand the requested visibility",
+        400,
+      );
+    }
     requireIdempotencyKey(idempotencyKey);
     const content = resolveSourceContent({
       requestedSpaceId: input.requestedSpaceId ?? prior.requestedSpaceId,

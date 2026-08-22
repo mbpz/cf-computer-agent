@@ -300,6 +300,51 @@ describe("submissions D1 control plane", () => {
       .resolves.toEqual({ status: "revision_requested" });
   });
 
+  it("rejects admin-only visibility widening at the authoritative resubmission insert boundary", async () => {
+    const prior = await createService("private-prior").createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", requestedVisibility: "admin_only", kind: "text",
+      title: "Prior", content: "Prior body", idempotencyKey: "private-prior-key1",
+    });
+    const priorId = prior.submission!.id;
+    await env.DB.prepare("UPDATE submissions SET status = 'revision_requested' WHERE id = ?").bind(priorId).run();
+    const repository = new SubmissionsRepository(env.DB, new AuditRepository(env.DB));
+    const submission = {
+      ...submissionInput("widened-resubmission"), idempotencyKey: "widened-resubmit-key",
+      requestedVisibility: "shared" as const, supersedesSubmissionId: priorId,
+      title: "Widened", content: "Widened body",
+    };
+
+    await expect(repository.createResubmissionWithSourceVersion({
+      submission,
+      source: {
+        id: "widened-source", ownerId: "member-a", spaceId: "default", collectionId: null,
+        kind: "text", title: "Widened", createdAt: now, updatedAt: now,
+      },
+      sourceVersion: {
+        id: "widened-version", sourceId: "widened-source", submissionId: submission.id, ordinal: 1,
+        content: "Widened body", contentSha256: "e".repeat(64), parserVersion: "m1-v1",
+        parserSchemaVersion: "m1-v2", sourceIdentitySha256: "f".repeat(64),
+        codeMetadata: null, createdAt: now,
+      },
+      audit: {
+        id: "widened-audit", actorKind: "member", actorId: "member-a",
+        action: "submission.resubmitted", resourceType: "submission", resourceId: submission.id,
+        metadata: {
+          supersedesSubmissionId: priorId, requestedSpaceId: "default", requestedVisibility: "shared",
+        },
+        createdAt: now,
+      },
+    })).rejects.toThrow();
+
+    await expect(env.DB.prepare(
+      `SELECT
+         (SELECT count(*) FROM submissions WHERE id = 'widened-resubmission') AS submissions,
+         (SELECT count(*) FROM sources WHERE id = 'widened-source') AS sources,
+         (SELECT count(*) FROM source_versions WHERE id = 'widened-version') AS versions,
+         (SELECT count(*) FROM audit_events WHERE id = 'widened-audit') AS audits`,
+    ).first()).resolves.toEqual({ submissions: 0, sources: 0, versions: 0, audits: 0 });
+  });
+
 });
 
 const now = "2026-08-13T00:00:00.000Z";

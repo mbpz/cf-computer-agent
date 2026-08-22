@@ -164,6 +164,25 @@ describe("SubmissionsService", () => {
     });
   });
 
+  it("rejects an owner attempt to widen an admin-only resubmission before parsing or persistence", async () => {
+    const repository = new FakeSubmissionsRepository();
+    repository.prior = {
+      id: "submission-old", submitterId: "member-a", requestedSpaceId: "default",
+      requestedCollectionId: null, requestedVisibility: "admin_only", kind: "markdown",
+      status: "revision_requested", title: "Old title", content: "Old body",
+      createdAt: "2026-08-12T00:00:00.000Z", updatedAt: "2026-08-13T00:00:00.000Z",
+    } as Submission;
+    const service = serviceFor(repository);
+
+    await expect(service.resubmit("member-a", "submission-old", {
+      requestedVisibility: "shared", kind: "markdown", title: "Revised title",
+      contentBase64: "not canonical base64",
+    }, "new-resubmit-key1")).rejects.toMatchObject({
+      code: "SUBMISSION_VISIBILITY_EXPANSION_FORBIDDEN", status: 400,
+    });
+    expect(repository.resubmission).toBeUndefined();
+  });
+
   it("authorizes the prior owner/state before parsing resubmission input", async () => {
     const repository = new FakeSubmissionsRepository();
     const service = serviceFor(repository);

@@ -548,6 +548,51 @@ describe("M1 trusted knowledge view models", () => {
     expect(changes).toBe(changesBeforeNavigation);
   });
 
+  it("invalidates an old Space tag controller before its late response can repaint or enter publication", async () => {
+    const ownerFactory = (workspaceUi as typeof workspaceUi & {
+      createReplaceableOwner?: (owns: () => boolean) => {
+        claim(): () => boolean;
+      };
+    }).createReplaceableOwner;
+    expect(ownerFactory).toBeTypeOf("function");
+    if (!ownerFactory) return;
+
+    const ownership = ownerFactory(() => true);
+    const oldResponse = deferred<{ tags: ReturnType<typeof tagFixture>[] }>();
+    const rendered: string[] = [];
+    const oldController = createReviewTagController({
+      spaceId: "space-old",
+      owns: ownership.claim(),
+      request: async () => oldResponse.promise,
+      onChange: (state) => rendered.push(`old:${state.items.map((tag) => tag.id).join(",")}`),
+    });
+    const oldLoad = oldController.loadInitial();
+    const newController = createReviewTagController({
+      spaceId: "space-new",
+      owns: ownership.claim(),
+      request: async () => ({ tags: [tagFixture("tag-new", "active", "space-new")] }),
+      onChange: (state) => rendered.push(`new:${state.items.map((tag) => tag.id).join(",")}`),
+    });
+    await newController.loadInitial();
+    newController.select("tag-new", true);
+
+    oldResponse.resolve({ tags: [tagFixture("tag-old", "active", "space-old")] });
+    await oldLoad;
+    oldController.select("tag-old", true);
+    const request = publishRequest("submission-1", {
+      title: "Reviewed", visibility: "shared", spaceId: "space-new", collectionId: null,
+      tagIds: newController.snapshot().items.filter((tag) => tag.selected).map((tag) => tag.id),
+    });
+
+    expect(rendered).not.toContain("old:tag-old");
+    expect(newController.snapshot().items).toEqual([
+      { id: "tag-new", name: "Tag tag-new", selected: true },
+    ]);
+    expect(JSON.parse(String(request.init.body))).toMatchObject({
+      spaceId: "space-new", tagIds: ["tag-new"],
+    });
+  });
+
   it("retains loaded Tags and selections when a scoped cursor is rejected", async () => {
     let requests = 0;
     const controller = createReviewTagController({
