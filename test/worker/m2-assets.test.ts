@@ -15,12 +15,12 @@ beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, MIGRATIONS);
   const members = new MembersRepository(env.DB);
-  for (const id of ["asset-owner", "asset-other"]) {
+  for (const id of ["asset-owner", "asset-other", "asset-admin"]) {
     const member = await members.insert({
       id,
       identitySubject: `github:${id}`,
       email: `${id}@example.test`,
-      role: "contributor",
+      role: id === "asset-admin" ? "admin" : "contributor",
       status: "active",
       createdAt: now,
       updatedAt: now,
@@ -160,6 +160,43 @@ describe("M2 asset upload boundary", () => {
     const replay = await memberApi("asset-other", `/api/assets?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor!)}`);
     expect(replay.status).toBe(400);
     await expect(replay.json()).resolves.toMatchObject({ error: { code: "PAGE_INVALID" } });
+  });
+
+  it("lets an administrator inspect the parse queue, preview parsed content, and retry a failed job", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "application/pdf", "x-asset-name": "broken.pdf", "idempotency-key": "admin-asset-1" },
+      body: "pdf-bytes",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    const contributorList = await memberApi("asset-owner", "/api/admin/assets");
+    expect(contributorList.status).toBe(403);
+
+    const adminList = await memberApi("asset-admin", "/api/admin/assets?status=queued&limit=20");
+    expect(adminList.status).toBe(200);
+    await expect(adminList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "queued" } }] });
+
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_retryable&limit=20");
+    await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_retryable" } }] });
+
+    const retry = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/retry`, { method: "POST" });
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({ job: { status: "queued", attempts: 0 } });
+
+    const previewBefore = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/parsed`);
+    expect(previewBefore.status).toBe(409);
+
+    const readyUpload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "ready.txt", "idempotency-key": "admin-asset-ready" },
+      body: "admin preview",
+    });
+    const ready = await readyUpload.json<{ asset: { id: string } }>();
+    await memberApi("asset-owner", `/api/assets/${ready.asset.id}`, { method: "POST" });
+    const previewAfter = await memberApi("asset-admin", `/api/admin/assets/${ready.asset.id}/parsed`);
+    expect(previewAfter.status).toBe(200);
+    await expect(previewAfter.text()).resolves.toContain("admin preview");
   });
 });
 

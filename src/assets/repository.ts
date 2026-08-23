@@ -40,18 +40,27 @@ export class AssetsRepository implements AssetRepositoryPort {
   }
 
   async listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage> {
+    return this.listPage("a.owner_id = ?", [ownerId], request);
+  }
+
+  async listAll(request: AssetPageRepositoryRequest): Promise<AssetPage> {
+    return this.listPage("1 = 1", [], request);
+  }
+
+  private async listPage(where: string, values: unknown[], request: AssetPageRepositoryRequest): Promise<AssetPage> {
     const cursor = request.cursor ? decodeAssetCursor(request.cursor, request.cursorKey) : undefined;
     const cursorSql = cursor ? " AND (a.created_at < ? OR (a.created_at = ? AND a.id < ?))" : "";
     const cursorValues = cursor ? [new Date(cursor.sort).toISOString(), new Date(cursor.sort).toISOString(), cursor.id] : [];
+    const statusSql = request.status ? " AND j.status = ?" : "";
     const rows = await this.db.prepare(
       `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
               a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
               j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
               j.created_at AS job_created_at, j.updated_at AS job_updated_at
        FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
-       WHERE a.owner_id = ?${cursorSql}
+       WHERE ${where}${statusSql}${cursorSql}
        ORDER BY a.created_at DESC, a.id DESC LIMIT ?`,
-    ).bind(ownerId, ...cursorValues, request.limit + 1).all<AssetRow>();
+    ).bind(...values, ...(request.status ? [request.status] : []), ...cursorValues, request.limit + 1).all<AssetRow>();
     const items = rows.results.slice(0, request.limit).map(mapRow);
     const last = items.at(-1);
     return {
@@ -60,6 +69,14 @@ export class AssetsRepository implements AssetRepositoryPort {
         nextCursor: encodeOpaqueCursor({ v: 2, sort: Date.parse(last.asset.createdAt), id: last.asset.id, key: request.cursorKey }),
       } : {}),
     };
+  }
+
+  async resetParseJob(assetId: string, now: string): Promise<boolean> {
+    const result = await this.db.batch([
+      this.db.prepare("UPDATE parse_jobs SET status = 'queued', attempts = 0, last_error_code = NULL, updated_at = ? WHERE asset_id = ? AND status IN ('failed_retryable', 'failed_terminal')").bind(now, assetId),
+      this.db.prepare("UPDATE assets SET status = 'ready', updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM parse_jobs WHERE asset_id = ? AND status IN ('failed_retryable', 'failed_terminal'))").bind(now, assetId, assetId),
+    ]);
+    return result[0]?.meta.changes === 1;
   }
 
   async listProcessable(limit: number): Promise<string[]> {

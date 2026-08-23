@@ -1,4 +1,5 @@
 import type { AuditRepository } from "../audit/repository";
+import type { AssetDownloadVariant, AssetService } from "../assets/service";
 import { auditActions } from "../audit/types";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
@@ -14,6 +15,7 @@ import type { SubmissionsService } from "../submissions/service";
 import type { TagsService } from "../tags/service";
 
 export interface AdminRouteServices {
+  assets: AssetService;
   audit: AuditRepository;
   members: MembersService;
   memberRecords: MembersRepository;
@@ -29,6 +31,47 @@ export async function routeAdminApi(
   principal: Principal,
   services: AdminRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/admin/assets") {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const status = requireEnumFilter(url, "status", ["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"] as const);
+    return jsonResponse(await services.assets.listAdmin({
+      ...pageRequest(url),
+      ...(status === undefined ? {} : { status }),
+    }), 200, context.requestId);
+  }
+
+  const assetPreview = /^\/api\/admin\/assets\/([^/]+)\/(parsed|original)$/.exec(url.pathname);
+  if (assetPreview) {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const result = await services.assets.downloadAdmin(
+      decodePathId(assetPreview[1]!),
+      assetPreview[2] as AssetDownloadVariant,
+    );
+    return new Response(result.body, {
+      status: 200,
+      headers: {
+        "cache-control": "private, no-store",
+        "content-disposition": `inline; filename="${result.filename.replace(/["\\\r\n]/gu, "_")}"`,
+        "content-type": result.contentType,
+        "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-request-id": context.requestId,
+      },
+    });
+  }
+
+  const assetRetry = /^\/api\/admin\/assets\/([^/]+)\/retry$/.exec(url.pathname);
+  if (assetRetry) {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    return jsonResponse(await services.assets.retry(decodePathId(assetRetry[1]!)), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/submissions") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

@@ -35,4 +35,5 @@ export interface AssetWithJob {
 export type AssetPage = Page<AssetWithJob>;
 export interface AssetPageRepositoryRequest extends PageRequest {
   cursorKey: string;
+  status?: ParseJobStatus;
 }

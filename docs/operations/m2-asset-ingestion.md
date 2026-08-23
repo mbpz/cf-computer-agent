@@ -49,6 +49,16 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 提交页的“我的原件”区域调用 `GET /api/assets?limit=20&cursor=<opaque>` 展示自己的历史原件、文件大小、创建时间、解析状态和可用下载动作。cursor 绑定成员 scope；跨成员重放返回 `PAGE_INVALID`，不会扩大可见范围。
 
+## M2-8 管理员治理接口
+
+管理员可使用 `submission:read-all` 能力查看全局 ParseJob 状态：
+
+- `GET /api/admin/assets?status=<queued|processing|succeeded|failed_retryable|failed_terminal>&limit=20` 查看有界队列。
+- `GET /api/admin/assets/<assetId>/original` 或 `/parsed` 查看私有原件/解析结果；响应不生成公开 URL。
+- `POST /api/admin/assets/<assetId>/retry` 将失败任务安全重置为 `queued` 并清零 attempts；正在处理的任务拒绝并发重试，已成功任务保持幂等返回。
+
+贡献者访问这些接口统一返回 403。管理员重试只改变 D1 状态，实际解析仍由手动 owner 处理或 Cron 扫描完成。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

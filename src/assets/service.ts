@@ -2,7 +2,7 @@ import { AppError } from "../http";
 import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import type { ParseSourceInput } from "../sources/types";
-import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
+import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
   findByIdempotency(ownerId: string, idempotencyKey: string): Promise<AssetWithJob | null>;
@@ -10,6 +10,8 @@ export interface AssetRepositoryPort {
   findOwned(ownerId: string, assetId: string): Promise<AssetWithJob | null>;
   findById(assetId: string): Promise<AssetWithJob | null>;
   listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage>;
+  listAll(request: AssetPageRepositoryRequest): Promise<AssetPage>;
+  resetParseJob(assetId: string, now: string): Promise<boolean>;
   listProcessable(limit: number): Promise<string[]>;
   claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
   markParseSucceeded(assetId: string, now: string): Promise<void>;
@@ -137,8 +139,37 @@ export class AssetService {
     });
   }
 
+  async listAdmin(request: { limit?: number; cursor?: string; status?: ParseJobStatus } = {}): Promise<AssetPage> {
+    const page = parsePageRequest(request.limit, request.cursor);
+    return this.repository.listAll({
+      ...page,
+      ...(request.status === undefined ? {} : { status: request.status }),
+      cursorKey: await deriveCursorScopeKey("all-assets", { status: request.status ?? null, sort: "created_at-desc-id-desc" }),
+    });
+  }
+
+  async retry(assetId: string): Promise<AssetWithJob> {
+    const current = await this.repository.findById(assetId);
+    if (!current) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
+    if (current.job.status === "processing") throw new AppError("ASSET_RETRY_CONFLICT", "Asset is already being processed", 409, true);
+    if (current.job.status === "succeeded") return current;
+    const changed = await this.repository.resetParseJob(assetId, this.now().toISOString());
+    if (!changed) throw new AppError("ASSET_RETRY_CONFLICT", "Asset cannot be retried in its current state", 409, true);
+    return (await this.repository.findById(assetId)) || current;
+  }
+
+  async downloadAdmin(assetId: string, variant: AssetDownloadVariant): Promise<AssetDownload> {
+    const current = await this.repository.findById(assetId);
+    if (!current) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
+    return this.downloadRecord(current, variant);
+  }
+
   async download(ownerId: string, assetId: string, variant: AssetDownloadVariant): Promise<AssetDownload> {
     const owned = await this.getOwned(ownerId, assetId);
+    return this.downloadRecord(owned, variant);
+  }
+
+  private async downloadRecord(owned: AssetWithJob, variant: AssetDownloadVariant): Promise<AssetDownload> {
     if (variant === "parsed" && owned.job.status !== "succeeded") {
       throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
     }

@@ -51,6 +51,21 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
         .slice(0, request.limit);
       return { items };
     },
+    async listAll(request: { limit: number }) {
+      const items = store.assets
+        .map((asset) => ({ asset, job: store.jobs.find((item) => item.assetId === asset.id)! }))
+        .slice(0, request.limit);
+      return { items };
+    },
+    async resetParseJob(assetId: string, now: string) {
+      const job = store.jobs.find((item) => item.assetId === assetId);
+      if (!job || !["failed_retryable", "failed_terminal"].includes(job.status)) return false;
+      job.status = "queued";
+      job.attempts = 0;
+      job.lastErrorCode = null;
+      job.updatedAt = now;
+      return true;
+    },
   };
   return store;
 }
