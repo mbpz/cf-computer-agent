@@ -73,6 +73,18 @@ describe("asset upload UI contract", () => {
     });
   });
 
+  it("explains terminal parse failures without exposing an undefined error", () => {
+    expect(assetUploadResultModel({
+      asset: { id: "asset-empty", originalName: "empty.md", status: "ready" },
+      job: { id: "job-empty", status: "failed_terminal", lastErrorCode: "SOURCE_EMPTY" },
+    })).toMatchObject({
+      kind: "updated",
+      jobStatus: "failed_terminal",
+      lastErrorCode: "SOURCE_EMPTY",
+      message: "The parsed source is empty.",
+    });
+  });
+
   it("fails closed when the API does not return a usable asset job", () => {
     expect(assetUploadResultModel({ asset: { id: "asset-1" }, job: {} })).toEqual({
       kind: "error",
@@ -115,6 +127,16 @@ describe("asset upload UI contract", () => {
       items: [{ id: "asset-1", originalName: "guide.pdf", jobStatus: "queued", parsedHref: "" }],
     });
     expect(assetListModel({ items: [{ asset: { id: "asset-2" }, job: { status: "succeeded" } }] }).items[0]).not.toHaveProperty("undefined");
+  });
+
+  it("keeps a localized failure reason in asset history", () => {
+    expect(assetListModel({
+      items: [{ asset: { id: "asset-3", originalName: "empty.md" }, job: { status: "failed_terminal", lastErrorCode: "SOURCE_EMPTY" } }],
+    }).items[0]).toMatchObject({
+      jobStatus: "failed_terminal",
+      lastErrorCode: "SOURCE_EMPTY",
+      failureMessage: "The parsed source is empty.",
+    });
   });
 });
 

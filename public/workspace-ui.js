@@ -8,6 +8,16 @@ export function configureWorkspaceI18n(nextTranslate) {
 
 function t(key, values) { return translate(key, values); }
 
+const assetFailureMessageKeys = Object.freeze({
+  ASSET_CONTENT_INVALID: "ERROR_ASSET_CONTENT_INVALID",
+  ASSET_PARSER_UNSUPPORTED: "ERROR_ASSET_PARSER_UNSUPPORTED",
+  SOURCE_EMPTY: "ERROR_ASSET_CONTENT_EMPTY",
+  SOURCE_TOO_LARGE: "ERROR_ASSET_CONTENT_TOO_LARGE",
+  ASSET_ORIGINAL_MISSING: "ERROR_ASSET_ORIGINAL_MISSING",
+  ASSET_AI_PARSE_FAILED: "ERROR_ASSET_AI_PARSE_FAILED",
+  ASSET_PARSE_RETRYABLE: "SUBMIT_ASSET_RETRYABLE",
+});
+
 export function createRouteGuard() {
   let generation = 0;
   return Object.freeze({
@@ -853,6 +863,7 @@ export function assetUploadResultModel(value) {
   const assetId = safeString(asset.id);
   const jobId = safeString(job.id);
   const jobStatus = safeString(job.status);
+  const lastErrorCode = safeString(job.lastErrorCode);
   const messageKeys = Object.freeze({
     queued: "SUBMIT_ASSET_QUEUED",
     processing: "SUBMIT_ASSET_PROCESSING",
@@ -872,7 +883,10 @@ export function assetUploadResultModel(value) {
     assetId,
     jobId,
     jobStatus,
-    message: t(messageKeys[jobStatus]),
+    ...(lastErrorCode ? { lastErrorCode } : {}),
+    message: jobStatus.startsWith("failed") && assetFailureMessageKeys[lastErrorCode]
+      ? t(assetFailureMessageKeys[lastErrorCode])
+      : t(messageKeys[jobStatus]),
     originalHref: `/api/assets/${encodeURIComponent(assetId)}/original`,
     ...(jobStatus === "succeeded"
       ? { parsedHref: `/api/assets/${encodeURIComponent(assetId)}/parsed` }
@@ -897,6 +911,9 @@ export function assetListModel(value) {
       jobStatus: jobStatus || "unknown",
       attempts: typeof job.attempts === "number" && Number.isSafeInteger(job.attempts) ? job.attempts : 0,
       lastErrorCode: safeString(job.lastErrorCode),
+      failureMessage: jobStatus.startsWith("failed") && assetFailureMessageKeys[safeString(job.lastErrorCode)]
+        ? t(assetFailureMessageKeys[safeString(job.lastErrorCode)])
+        : "",
       originalHref: id ? `/api/assets/${encodeURIComponent(id)}/original` : "",
       parsedHref: id && jobStatus === "succeeded" ? `/api/assets/${encodeURIComponent(id)}/parsed` : "",
     });

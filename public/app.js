@@ -1225,7 +1225,8 @@ async function renderMySubmissions(generation) {
   renderItems();
   const assetRows = list(assetHistory.items, (asset) => item(
     asset.originalName,
-    localized(() => `${assetJobStatusLabel(asset.jobStatus)} · ${formatBytes(asset.byteSize)} · ${formatDate(asset.createdAt)}`),
+    localized(() => [assetJobStatusLabel(asset.jobStatus), asset.failureMessage, formatBytes(asset.byteSize), formatDate(asset.createdAt)]
+      .filter(Boolean).join(" · ")),
     compactChildren(
       element("div", { className: "actions" }, [
         element("a", { href: asset.originalHref, className: "download-link", download: "", text: t("SUBMIT_ASSET_DOWNLOAD_ORIGINAL") }),

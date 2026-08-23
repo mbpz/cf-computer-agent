@@ -68,6 +68,10 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 前端显示本地化错误，不会创建可见资产或解析任务。纯文本、Markdown、CSV、JSON 和 allowlist
 代码扩展名继续按文本路径处理；未知扩展名不借助扩展名猜测类型，而由既有的 allowlist 与内容大小校验决定是否接受。
 
+## M2-11 解析失败原因
+
+解析任务失败时，D1 中的 `parse_jobs.last_error_code` 会保留稳定错误码，提交页和“我的原件”列表将其转换为中英文提示：空内容使用 `SOURCE_EMPTY`，超限使用 `SOURCE_TOO_LARGE`，损坏的 UTF-8 使用 `ASSET_CONTENT_INVALID`，不支持的解析器使用 `ASSET_PARSER_UNSUPPORTED`，原件缺失使用 `ASSET_ORIGINAL_MISSING`。未知错误仍显示通用失败提示，不把内部异常文本暴露给用户。该切片只改善状态可见性；每种格式的成功、损坏、空、伪造 MIME 和超限 fixture 仍由后续支持矩阵逐项验收。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
