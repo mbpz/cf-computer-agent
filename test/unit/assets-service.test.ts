@@ -247,4 +247,57 @@ describe("AssetService", () => {
     await expect(service.processDue(1)).resolves.toEqual({ attempted: 1, succeeded: 1 });
     expect((await service.getOwned("member-1", "asset-1")).job.status).toBe("succeeded");
   });
+
+  it("downloads an owned original with its stored media type", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-download" });
+    await service.create({
+      ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "download-key",
+    });
+
+    const result = await service.download("member-1", "asset-download", "original");
+
+    expect(new TextDecoder().decode(result.body)).toBe("pdf-bytes");
+    expect(result.contentType).toBe("application/pdf");
+    expect(result.filename).toBe("guide.pdf");
+  });
+
+  it("downloads a parsed result only after the job succeeds", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-parsed" });
+    await service.create({
+      ownerId: "member-1", originalName: "notes.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("notes").buffer, idempotencyKey: "parsed-key",
+    });
+
+    await expect(service.download("member-1", "asset-parsed", "parsed"))
+      .rejects.toMatchObject({ code: "ASSET_RESULT_NOT_READY", status: 409, retryable: true });
+
+    await service.process("member-1", "asset-parsed");
+    const result = await service.download("member-1", "asset-parsed", "parsed");
+
+    expect(result.contentType).toBe("text/markdown; charset=utf-8");
+    expect(result.filename).toBe("notes.md");
+    expect(new TextDecoder().decode(result.body)).toContain("notes");
+  });
+
+  it("does not reveal another owner's original or a missing parsed object", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-private" });
+    await service.create({
+      ownerId: "member-1", originalName: "notes.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("notes").buffer, idempotencyKey: "private-key",
+    });
+
+    await expect(service.download("member-2", "asset-private", "original"))
+      .rejects.toMatchObject({ code: "ASSET_NOT_FOUND", status: 404 });
+    await service.process("member-1", "asset-private");
+    originals.objects.delete("parsed/asset-private.md");
+    await expect(service.download("member-1", "asset-private", "parsed"))
+      .rejects.toMatchObject({ code: "ASSET_RESULT_MISSING", status: 503, retryable: true });
+  });
 });

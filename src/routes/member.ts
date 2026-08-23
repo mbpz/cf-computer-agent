@@ -43,6 +43,19 @@ export async function routeMemberApi(
   }
 
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
+  const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);
+  if (assetDownload) {
+    requireCapability(principal, "submission:read-own");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const result = await services.assets.download(
+      member.memberId,
+      decodePathId(assetDownload[1]!),
+      assetDownload[2] as "original" | "parsed",
+    );
+    return assetDownloadResponse(result, context.requestId);
+  }
   if (asset) {
     requireCapability(principal, "submission:read-own");
     const member = requireMember(principal);
@@ -171,6 +184,26 @@ export async function routeMemberApi(
   }
 
   return undefined;
+}
+
+function assetDownloadResponse(
+  result: { body: ArrayBuffer; contentType: string; filename: string },
+  requestId: string,
+): Response {
+  const encoded = encodeURIComponent(result.filename);
+  const ascii = result.filename.replace(/[^\x20-\x7e]/gu, "_").replace(/["\\]/gu, "_") || "asset";
+  return new Response(result.body, {
+    status: 200,
+    headers: {
+      "cache-control": "private, no-store",
+      "content-disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`,
+      "content-type": result.contentType,
+      "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-request-id": requestId,
+    },
+  });
 }
 
 export function pageRequest(url: URL): PageRequest {

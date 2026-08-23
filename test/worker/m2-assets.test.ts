@@ -112,6 +112,35 @@ describe("M2 asset upload boundary", () => {
     });
     await expect(env.ORIGINALS.get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
   });
+
+  it("downloads only the owner's original and completed parsed result", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "notes.txt", "idempotency-key": "asset-download-1" },
+      body: "download me",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+
+    const original = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/original`);
+    expect(original.status).toBe(200);
+    expect(original.headers.get("content-type")).toContain("text/plain");
+    expect(original.headers.get("content-disposition")).toContain("notes.txt");
+    await expect(original.text()).resolves.toBe("download me");
+
+    const notReady = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/parsed`);
+    expect(notReady.status).toBe(409);
+    await expect(notReady.json()).resolves.toMatchObject({ error: { code: "ASSET_RESULT_NOT_READY", retryable: true } });
+
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    const parsed = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/parsed`);
+    expect(parsed.status).toBe(200);
+    expect(parsed.headers.get("content-type")).toContain("text/markdown");
+    expect(parsed.headers.get("content-disposition")).toContain("notes.md");
+    await expect(parsed.text()).resolves.toContain("download me");
+
+    const hidden = await memberApi("asset-other", `/api/assets/${uploaded.asset.id}/original`);
+    expect(hidden.status).toBe(404);
+  });
 });
 
 async function memberApi(memberId: string, path: string, init: RequestInit = {}): Promise<Response> {

@@ -141,6 +141,8 @@ export const zhCN = Object.freeze({
   SUBMIT_ASSET_RETRYABLE: "解析失败，将自动重试。",
   SUBMIT_ASSET_FAILED: "解析失败，需要进一步处理。",
   SUBMIT_ASSET_STATUS_UNAVAILABLE: "暂时无法获取原件处理状态。",
+  SUBMIT_ASSET_DOWNLOAD_ORIGINAL: "下载原件",
+  SUBMIT_ASSET_DOWNLOAD_PARSED: "下载解析后的 Markdown",
   LIBRARY_TITLE: "知识库",
   LIBRARY_DESCRIPTION: "浏览当前账号有权查看的每个知识条目的最新修订。",
   LIBRARY_PUBLISHED: "已发布知识",
@@ -386,6 +388,8 @@ export const zhCN = Object.freeze({
   ERROR_ASSET_AI_PARSE_FAILED: "富文档转换暂时不可用。",
   ERROR_ASSET_PERSISTENCE_UNAVAILABLE: "原件暂时无法保存，请重试。",
   ERROR_ASSET_NOT_FOUND: "找不到该原件。",
+  ERROR_ASSET_RESULT_NOT_READY: "解析结果尚未准备好。",
+  ERROR_ASSET_RESULT_MISSING: "解析结果暂时不可用。",
   ERROR_UNKNOWN_CODE: "操作失败（{code}），请重试。",
   INTERPOLATION_TEST: "你好，{name}",
 });

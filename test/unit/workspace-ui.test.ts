@@ -38,6 +38,7 @@ const {
   assetUploadRequest,
   assetUploadResultModel,
   assetProcessRequest,
+  assetDownloadRequest,
   runLatestOperation,
   submissionResultModel,
 } = workspaceUi;
@@ -67,6 +68,7 @@ describe("asset upload UI contract", () => {
       jobId: "job-1",
       jobStatus: "queued",
       message: "Asset uploaded; parsing is queued.",
+      originalHref: "/api/assets/asset-1/original",
     });
   });
 
@@ -82,6 +84,24 @@ describe("asset upload UI contract", () => {
     expect(assetProcessRequest("asset/1")).toEqual({
       path: "/api/assets/asset%2F1",
       init: { method: "POST" },
+    });
+  });
+
+  it("builds private original and parsed download links without exposing object keys", () => {
+    expect(assetDownloadRequest("asset/1", "original")).toEqual({
+      path: "/api/assets/asset%2F1/original",
+      init: { method: "GET" },
+    });
+    expect(assetDownloadRequest("asset/1", "parsed")).toEqual({
+      path: "/api/assets/asset%2F1/parsed",
+      init: { method: "GET" },
+    });
+    expect(assetUploadResultModel({
+      asset: { id: "asset-1", originalName: "guide.pdf", status: "ready" },
+      job: { id: "job-1", status: "succeeded" },
+    })).toMatchObject({
+      originalHref: "/api/assets/asset-1/original",
+      parsedHref: "/api/assets/asset-1/parsed",
     });
   });
 });

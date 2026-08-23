@@ -141,6 +141,8 @@ export const en = Object.freeze({
   SUBMIT_ASSET_RETRYABLE: "Parsing will be retried.",
   SUBMIT_ASSET_FAILED: "Parsing failed and needs attention.",
   SUBMIT_ASSET_STATUS_UNAVAILABLE: "Asset processing status is unavailable.",
+  SUBMIT_ASSET_DOWNLOAD_ORIGINAL: "Download original",
+  SUBMIT_ASSET_DOWNLOAD_PARSED: "Download parsed Markdown",
   LIBRARY_TITLE: "Library",
   LIBRARY_DESCRIPTION: "Browse the permission-filtered current Revision for every visible Knowledge Item.",
   LIBRARY_PUBLISHED: "Published knowledge",
@@ -386,6 +388,8 @@ export const en = Object.freeze({
   ERROR_ASSET_AI_PARSE_FAILED: "Rich document conversion is temporarily unavailable.",
   ERROR_ASSET_PERSISTENCE_UNAVAILABLE: "The original could not be stored. Try again.",
   ERROR_ASSET_NOT_FOUND: "The original was not found.",
+  ERROR_ASSET_RESULT_NOT_READY: "The parsed result is not ready yet.",
+  ERROR_ASSET_RESULT_MISSING: "The parsed result is temporarily unavailable.",
   ERROR_UNKNOWN_CODE: "The operation failed ({code}). Try again.",
   INTERPOLATION_TEST: "Hello, {name}",
 });

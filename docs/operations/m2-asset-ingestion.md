@@ -38,6 +38,15 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 上传后点击“开始解析”会触发同一资产的 owner-scoped `POST /api/assets/<assetId>`。Worker 还配置了每 5 分钟一次的 Cron 扫描，自动领取最多 3 个 `queued/failed_retryable` 任务；手动触发和 Cron 使用同一协调器。当前解析器直接处理纯文本、Markdown、CSV、JSON 和 allowlist 代码扩展名；PDF、Office、HTML/XML 和图片在 `env.AI.toMarkdown` 可用时走 Markdown Conversion，再经过本地安全 parser；AI 不可用时任务保留为 `failed_retryable`，不会伪造解析结果。成功结果写入私有 R2 `parsed/<assetId>.md`，D1 任务进入 `succeeded`；非法内容进入 `failed_terminal`，临时 R2/D1/AI 故障最多允许 3 次领取。
 
+## M2-6 下载与状态
+
+登录成员可通过 `GET /api/assets/<assetId>` 查看自己的资产与 ParseJob 状态；原件和解析结果均不生成公开 URL：
+
+- `GET /api/assets/<assetId>/original` 下载私有 R2 原件。
+- `GET /api/assets/<assetId>/parsed` 下载解析后的 Markdown；仅当任务为 `succeeded` 时可用，否则返回可重试的 `ASSET_RESULT_NOT_READY`。
+
+两个下载接口都执行成员 owner 校验，其他成员统一得到 `ASSET_NOT_FOUND`，并返回 `private, no-store` 与 `nosniff` 响应头。原件或已成功任务对应的 R2 对象缺失时不会返回空文件，而是返回可重试错误，便于后续孤儿回收与补偿流程接入。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
@@ -60,5 +69,5 @@ rtk npx wrangler deploy --dry-run
 - PDF/DOCX/PPTX/Excel/OCR 解析；
 - Queue 唤醒、定时孤儿回收和 PDF/Office/图片解析适配仍未包含在本切片；当前仅使用免费 Cron 扫描重试。
 - 管理员解析预览；
-- 原件下载、公开 URL、批量上传；
+- 公开 URL、批量上传；
 - R2 容量预警与断路器。

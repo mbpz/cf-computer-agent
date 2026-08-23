@@ -39,6 +39,14 @@ export interface AssetUploadInput {
   idempotencyKey: string;
 }
 
+export type AssetDownloadVariant = "original" | "parsed";
+
+export interface AssetDownload {
+  body: ArrayBuffer;
+  contentType: string;
+  filename: string;
+}
+
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const allowedTypes = new Set([
   "text/plain", "text/markdown", "text/csv", "text/html", "application/pdf",
@@ -117,6 +125,28 @@ export class AssetService {
     const result = await this.repository.findOwned(ownerId, assetId);
     if (!result) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
     return result;
+  }
+
+  async download(ownerId: string, assetId: string, variant: AssetDownloadVariant): Promise<AssetDownload> {
+    const owned = await this.getOwned(ownerId, assetId);
+    if (variant === "parsed" && owned.job.status !== "succeeded") {
+      throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
+    }
+    const key = variant === "original" ? owned.asset.objectKey : `parsed/${owned.asset.id}.md`;
+    const object = await this.originals.get(key);
+    if (!object) {
+      throw new AppError(
+        variant === "original" ? "ASSET_ORIGINAL_MISSING" : "ASSET_RESULT_MISSING",
+        "Asset content is temporarily unavailable",
+        503,
+        true,
+      );
+    }
+    return {
+      body: await object.arrayBuffer(),
+      contentType: variant === "original" ? owned.asset.contentType : "text/markdown; charset=utf-8",
+      filename: variant === "original" ? owned.asset.originalName : parsedFilename(owned.asset.originalName),
+    };
   }
 
   async process(ownerId: string, assetId: string): Promise<AssetWithJob> {
@@ -235,6 +265,11 @@ function isRichAsset(asset: AssetRecord): boolean {
     || asset.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     || asset.contentType === "application/vnd.ms-excel"
     || asset.contentType === "application/vnd.ms-powerpoint";
+}
+
+function parsedFilename(originalName: string): string {
+  const base = originalName.replace(/\.[^.]*$/u, "").trim() || "asset";
+  return `${base.slice(0, 180)}.md`;
 }
 
 function validateInput(input: AssetUploadInput, maxBytes: number): void {

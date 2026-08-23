@@ -208,6 +208,8 @@ const apiErrorKeys = Object.freeze({
   ASSET_AI_PARSE_FAILED: "ERROR_ASSET_AI_PARSE_FAILED",
   ASSET_PERSISTENCE_UNAVAILABLE: "ERROR_ASSET_PERSISTENCE_UNAVAILABLE",
   ASSET_NOT_FOUND: "ERROR_ASSET_NOT_FOUND",
+  ASSET_RESULT_NOT_READY: "ERROR_ASSET_RESULT_NOT_READY",
+  ASSET_RESULT_MISSING: "ERROR_ASSET_RESULT_MISSING",
 });
 const submissionStatusKeys = Object.freeze({
   review_pending: "SUBMISSION_STATUS_REVIEW_PENDING",
@@ -698,15 +700,35 @@ async function renderSubmit(generation) {
   const assetButton = element("button", { className: "secondary", type: "button", text: t("SUBMIT_ASSET_UPLOAD") });
   const processButton = element("button", { className: "primary", type: "button", text: t("SUBMIT_ASSET_PROCESS"), hidden: "" });
   const assetStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
+  const assetDownloads = element("div", { className: "actions", "aria-live": "polite" });
   const assetPanel = element("div", { className: "asset-upload-panel" }, [
     element("p", { className: "muted", text: t("SUBMIT_ASSET_HELP") }),
     field(t("SUBMIT_ASSET_FILE"), assetInput),
     assetButton,
     processButton,
     assetStatus,
+    assetDownloads,
   ]);
   const assetRequestKey = idempotencyKey();
   let uploadedAssetId = "";
+  const updateAssetDownloads = (outcome) => {
+    assetDownloads.replaceChildren();
+    if (!outcome?.originalHref) return;
+    assetDownloads.append(element("a", {
+      className: "download-link",
+      href: outcome.originalHref,
+      download: "",
+      text: t("SUBMIT_ASSET_DOWNLOAD_ORIGINAL"),
+    }));
+    if (outcome.parsedHref) {
+      assetDownloads.append(element("a", {
+        className: "download-link",
+        href: outcome.parsedHref,
+        download: "",
+        text: t("SUBMIT_ASSET_DOWNLOAD_PARSED"),
+      }));
+    }
+  };
   assetButton.addEventListener("click", () => {
     const file = assetInput.files?.[0];
     if (!file) {
@@ -721,6 +743,7 @@ async function renderSubmit(generation) {
       translationBindings.text(assetStatus, outcome.message);
       assetStatus.dataset.state = outcome.kind;
       uploadedAssetId = outcome.assetId || "";
+      updateAssetDownloads(outcome);
       processButton.hidden = !uploadedAssetId || outcome.kind === "error";
     }).catch((error) => {
       translationBindings.text(assetStatus, safeErrorMessage(error, t("SUBMIT_ASSET_UPLOAD_ERROR")));
@@ -737,6 +760,7 @@ async function renderSubmit(generation) {
       const outcome = assetUploadResultModel(result);
       translationBindings.text(assetStatus, outcome.message);
       assetStatus.dataset.state = outcome.kind;
+      updateAssetDownloads(outcome);
     }).catch((error) => {
       translationBindings.text(assetStatus, safeErrorMessage(error, t("SUBMIT_ASSET_UPLOAD_ERROR")));
       assetStatus.dataset.state = "error";

@@ -873,6 +873,10 @@ export function assetUploadResultModel(value) {
     jobId,
     jobStatus,
     message: t(messageKeys[jobStatus]),
+    originalHref: `/api/assets/${encodeURIComponent(assetId)}/original`,
+    ...(jobStatus === "succeeded"
+      ? { parsedHref: `/api/assets/${encodeURIComponent(assetId)}/parsed` }
+      : {}),
   });
 }
 
@@ -880,6 +884,14 @@ export function assetProcessRequest(assetId) {
   return Object.freeze({
     path: `/api/assets/${encodeURIComponent(safeString(assetId))}`,
     init: Object.freeze({ method: "POST" }),
+  });
+}
+
+export function assetDownloadRequest(assetId, variant) {
+  const safeVariant = variant === "parsed" ? "parsed" : "original";
+  return Object.freeze({
+    path: `/api/assets/${encodeURIComponent(safeString(assetId))}/${safeVariant}`,
+    init: Object.freeze({ method: "GET" }),
   });
 }
 

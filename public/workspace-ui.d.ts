@@ -383,10 +383,16 @@ export function assetUploadResultModel(value: unknown): Readonly<{
   jobId?: string;
   jobStatus?: "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal";
   message: string;
+  originalHref?: string;
+  parsedHref?: string;
 }>;
 export function assetProcessRequest(assetId: string): Readonly<{
   path: string;
   init: Readonly<{ method: "POST" }>;
+}>;
+export function assetDownloadRequest(assetId: string, variant: "original" | "parsed"): Readonly<{
+  path: string;
+  init: Readonly<{ method: "GET" }>;
 }>;
 export function resubmissionRequest(priorSubmissionId: string, value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
 export function publishRequest(submissionId: string, value: unknown): Readonly<BrowserApiRequest>;
