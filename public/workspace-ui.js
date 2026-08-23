@@ -150,6 +150,29 @@ export function shellPresentationModel() {
   });
 }
 
+/**
+ * Stable UI contract for the Cloudflare-inspired workbench layer.
+ * Keeping this model separate from page rendering makes the visual system
+ * testable without coupling tests to browser layout measurements.
+ */
+export function designSystemModel() {
+  return Object.freeze({
+    name: "cloudflare-workbench",
+    density: "comfortable",
+    breakpoints: Object.freeze({ tablet: 960, mobile: 760 }),
+    primitives: Object.freeze([
+      "shell",
+      "topbar",
+      "navigation",
+      "page-header",
+      "content",
+      "context-rail",
+      "state",
+    ]),
+    reducedMotion: true,
+  });
+}
+
 export function contentLayoutModel(contextVisible) {
   return Object.freeze({ className: contextVisible ? "content-layout has-context" : "content-layout full-width" });
 }

@@ -1,0 +1,235 @@
+/*
+ * Memory Garden workbench layer
+ *
+ * This is intentionally a small override layer on top of styles.css. It lets
+ * us evolve the visual system without coupling page renderers to a framework
+ * or changing the Worker/API boundary.
+ */
+
+:root {
+  --background: #0b0e12;
+  --background-raised: #11161c;
+  --surface: #151b22;
+  --surface-raised: #1b232c;
+  --surface-hover: #232d38;
+  --border: #2b3541;
+  --border-strong: #465365;
+  --ink: #f5f7fa;
+  --muted: #a8b2be;
+  --faint: #788596;
+  --accent: #f6821f;
+  --accent-strong: #ff9b4a;
+  --accent-ink: #1f1208;
+  --danger: #ffb4ab;
+  --warning: #f3cf82;
+  --shadow: 0 14px 32px rgb(0 0 0 / .18);
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 9px;
+}
+
+body {
+  background: var(--background);
+}
+
+.sidebar {
+  gap: 28px;
+  padding: 22px 14px 18px;
+  background: #10151b;
+}
+
+.brand {
+  gap: 5px;
+  padding: 0 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-name {
+  font-size: 20px;
+  letter-spacing: -.025em;
+}
+
+.nav-group {
+  gap: 3px;
+}
+
+.nav-group-label {
+  margin-bottom: 7px;
+  color: var(--faint);
+}
+
+.nav-link {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+
+.nav-link:hover {
+  transform: none;
+}
+
+.nav-link[aria-current="page"] {
+  border-color: #5b4028;
+  background: #2b2118;
+  box-shadow: inset 2px 0 0 var(--accent);
+  color: #fff4e9;
+}
+
+.topbar {
+  min-height: 64px;
+  padding: 10px clamp(18px, 3vw, 42px);
+  background: rgb(11 14 18 / .92);
+  box-shadow: 0 1px 0 rgb(255 255 255 / .02);
+}
+
+.topbar-context strong {
+  font-size: 13px;
+}
+
+.topbar-utilities {
+  gap: 8px;
+}
+
+.session-summary {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.language-control select,
+.logout-button,
+.icon-button {
+  min-height: 34px;
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+main {
+  width: min(1440px, 100%);
+  padding: clamp(26px, 4vw, 48px);
+}
+
+.status-region {
+  margin-bottom: 14px;
+}
+
+.notice {
+  margin-bottom: 0;
+  border-radius: 6px;
+}
+
+.page-header {
+  gap: 7px;
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+}
+
+.page-heading-row {
+  align-items: center;
+}
+
+h1 {
+  max-width: 780px;
+  font-size: clamp(28px, 3.4vw, 42px);
+  letter-spacing: -.045em;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+.content-layout {
+  gap: 18px;
+}
+
+.context-panel,
+.card,
+.reader-outline,
+.reader-sources {
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.context-panel {
+  padding: 16px;
+  background: var(--surface);
+}
+
+.card {
+  padding: 18px;
+  background: var(--surface);
+}
+
+.page-grid,
+.review-grid {
+  gap: 12px;
+}
+
+.item {
+  gap: 6px;
+  padding: 14px;
+  border-radius: 6px;
+  background: #12171d;
+  transition: border-color .14s ease, background .14s ease;
+}
+
+.item:hover {
+  transform: none;
+  background: var(--surface-hover);
+}
+
+input,
+select,
+textarea {
+  border-radius: 5px;
+}
+
+button.primary,
+.login-action {
+  border-radius: 5px;
+}
+
+button.primary:hover,
+.login-action:hover,
+button.secondary:hover {
+  transform: none;
+}
+
+button.secondary,
+button.danger {
+  border-radius: 5px;
+}
+
+.empty-state,
+.page-state,
+.route-state {
+  border-radius: 6px;
+}
+
+.markdown-body {
+  border-radius: 6px;
+  background: #10151a;
+}
+
+.table-wrap {
+  border-radius: 6px;
+}
+
+th {
+  background: #11161c;
+}
+
+th,
+td {
+  padding: 11px 12px;
+}
+
+@media (max-width: 760px) {
+  main {
+    padding: 24px 16px 40px;
+  }
+
+  .topbar {
+    padding-inline: 14px;
+  }
+}

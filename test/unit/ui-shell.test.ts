@@ -6,11 +6,22 @@ import {
   contentLayoutModel,
   displayDate,
   displayValue,
+  designSystemModel,
   shellPresentationModel,
   shellControlsModel,
 } from "../../public/workspace-ui.js";
 
 describe("workspace shell", () => {
+  it("publishes the Cloudflare-inspired workbench design contract", () => {
+    expect(designSystemModel()).toEqual({
+      name: "cloudflare-workbench",
+      density: "comfortable",
+      breakpoints: { tablet: 960, mobile: 760 },
+      primitives: ["shell", "topbar", "navigation", "page-header", "content", "context-rail", "state"],
+      reducedMotion: true,
+    });
+  });
+
   it("publishes the mature workbench presentation contract", () => {
     expect(shellPresentationModel()).toEqual({
       theme: "ink-garden",

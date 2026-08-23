@@ -71,6 +71,15 @@ export function shellPresentationModel(): Readonly<{
   navigation: "grouped";
   context: "secondary";
 }>;
+export function designSystemModel(): Readonly<{
+  name: "cloudflare-workbench";
+  density: "comfortable";
+  breakpoints: Readonly<{ tablet: 960; mobile: 760 }>;
+  primitives: ReadonlyArray<
+    "shell" | "topbar" | "navigation" | "page-header" | "content" | "context-rail" | "state"
+  >;
+  reducedMotion: true;
+}>;
 export function contentLayoutModel(contextVisible: boolean): Readonly<{
   className: "content-layout has-context" | "content-layout full-width";
 }>;

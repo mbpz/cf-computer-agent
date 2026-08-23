@@ -30,12 +30,14 @@ describe("workspace assets", () => {
     expect(page.headers.get("content-security-policy")).toContain("default-src 'self'");
     expect(page.headers.get("x-request-id")).toBeTruthy();
     expect(html).toContain('id="app-shell"');
+    expect(html).toContain('data-ui-system="cloudflare-workbench"');
     expect(html).toContain('id="primary-navigation"');
     expect(html).toContain('id="language-select"');
     expect(html).toContain('data-i18n="SHELL_LOADING_TITLE"');
     expect(html).toContain('src="/app.js"');
     expect(html).toContain('src="/vendor/markdown-it.min.js"');
     expect(html).toContain('src="/vendor/purify.min.js"');
+    expect(html).toContain('href="/ui/workbench.css"');
     expect(html.indexOf('src="/vendor/markdown-it.min.js"')).toBeLessThan(html.indexOf('src="/app.js"'));
     expect(html.indexOf('src="/vendor/purify.min.js"')).toBeLessThan(html.indexOf('src="/app.js"'));
     expect(html).not.toMatch(/(?:cdn|unpkg|jsdelivr|cdnjs)\./iu);
