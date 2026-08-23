@@ -408,6 +408,8 @@ export const zhCN = Object.freeze({
   ERROR_ASSET_TYPE_MISMATCH: "文件类型与扩展名不匹配。",
   ERROR_ASSET_CAPACITY_LIMIT: "原件存储空间已满，回收空间后再试。",
   ERROR_ASSET_CAPACITY_UNAVAILABLE: "暂时无法获取原件存储容量，请重试。",
+  ERROR_ASSET_ORPHAN_REQUEST_INVALID: "孤儿对象请求无效。",
+  ERROR_ASSET_ORPHAN_STORAGE_UNAVAILABLE: "暂时无法访问孤儿对象存储，请重试。",
   ERROR_ASSET_CONTENT_INVALID: "文件编码无效。",
   ERROR_ASSET_PARSER_UNSUPPORTED: "暂不支持自动解析此文件。",
   ERROR_ASSET_CONTENT_EMPTY: "解析后的内容为空。",

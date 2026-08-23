@@ -14,6 +14,7 @@ export interface AssetRepositoryPort {
   resetParseJob(assetId: string, now: string): Promise<boolean>;
   listProcessable(limit: number): Promise<string[]>;
   sumByteSize(): Promise<number>;
+  isObjectKeyReferenced(objectKey: string): Promise<boolean>;
   claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
   markParseSucceeded(assetId: string, now: string): Promise<void>;
   markParseFailed(assetId: string, now: string, code: string, terminal: boolean): Promise<void>;
@@ -24,6 +25,7 @@ export interface AssetServiceOptions {
   now?: () => Date;
   maxBytes?: number;
   maxTotalBytes?: number;
+  orphanGraceMs?: number;
   markdownConverter?: AssetMarkdownConverter;
 }
 
@@ -53,8 +55,23 @@ export interface AssetDownload {
   filename: string;
 }
 
+export type AssetOrphanPrefix = "staging/" | "parsed/";
+
+export interface AssetOrphanCandidate {
+  key: string;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface AssetOrphanPage {
+  items: AssetOrphanCandidate[];
+  scanned: number;
+  truncated: boolean;
+}
+
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES = 9 * 1024 * 1024 * 1024;
+const DEFAULT_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 const allowedTypes = new Set([
   "text/plain", "text/markdown", "text/csv", "text/html", "application/pdf",
   "application/json", "application/xml", "application/rtf",
@@ -83,6 +100,7 @@ export class AssetService {
   private readonly now: () => Date;
   private readonly maxBytes: number;
   private readonly maxTotalBytes: number;
+  private readonly orphanGraceMs: number;
   private readonly markdownConverter?: AssetMarkdownConverter;
 
   constructor(
@@ -94,6 +112,7 @@ export class AssetService {
     this.now = options.now || (() => new Date());
     this.maxBytes = options.maxBytes || DEFAULT_MAX_BYTES;
     this.maxTotalBytes = options.maxTotalBytes || DEFAULT_MAX_TOTAL_BYTES;
+    this.orphanGraceMs = options.orphanGraceMs ?? DEFAULT_ORPHAN_GRACE_MS;
     this.markdownConverter = typeof options.markdownConverter?.toMarkdown === "function"
       ? options.markdownConverter
       : undefined;
@@ -173,6 +192,83 @@ export class AssetService {
       ...(request.status === undefined ? {} : { status: request.status }),
       cursorKey: await deriveCursorScopeKey("all-assets", { status: request.status ?? null, sort: "created_at-desc-id-desc" }),
     });
+  }
+
+  async previewOrphans(request: { prefix?: AssetOrphanPrefix; limit?: number } = {}): Promise<AssetOrphanPage> {
+    const prefix = request.prefix === undefined ? "staging/" : request.prefix;
+    if (prefix !== "staging/" && prefix !== "parsed/") {
+      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    }
+    const limit = Number.isSafeInteger(request.limit)
+      ? Math.max(1, Math.min(50, request.limit as number))
+      : 20;
+    let listed: R2Objects;
+    try {
+      listed = await this.originals.list({ prefix, limit: limit + 1 });
+    } catch {
+      throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
+    }
+    const cutoff = this.now().getTime() - this.orphanGraceMs;
+    const items: AssetOrphanCandidate[] = [];
+    for (const object of listed.objects) {
+      const uploadedAt = object.uploaded;
+      if (!(uploadedAt instanceof Date) || !Number.isFinite(uploadedAt.getTime()) || uploadedAt.getTime() > cutoff) continue;
+      let referenced: boolean;
+      try {
+        referenced = await this.repository.isObjectKeyReferenced(object.key);
+      } catch {
+        throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
+      }
+      if (referenced) continue;
+      items.push({ key: object.key, size: object.size, uploadedAt: uploadedAt.toISOString() });
+      if (items.length >= limit) break;
+    }
+    return {
+      items,
+      scanned: listed.objects.length,
+      truncated: listed.truncated === true || listed.objects.length > limit,
+    };
+  }
+
+  async reclaimOrphans(keys: string[]): Promise<{ deleted: string[]; skipped: string[] }> {
+    if (!Array.isArray(keys) || keys.length > 50 || keys.some((key) => typeof key !== "string")) {
+      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    }
+    const cutoff = this.now().getTime() - this.orphanGraceMs;
+    const deleted: string[] = [];
+    const skipped: string[] = [];
+    const seen = new Set<string>();
+    for (const key of keys) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!isOrphanKey(key)) {
+        skipped.push(key);
+        continue;
+      }
+      let object: R2Object | null;
+      let referenced: boolean;
+      try {
+        object = await this.originals.head(key);
+        if (!object || !(object.uploaded instanceof Date) || !Number.isFinite(object.uploaded.getTime()) || object.uploaded.getTime() > cutoff) {
+          skipped.push(key);
+          continue;
+        }
+        referenced = await this.repository.isObjectKeyReferenced(key);
+      } catch {
+        throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
+      }
+      if (referenced) {
+        skipped.push(key);
+        continue;
+      }
+      try {
+        await this.originals.delete(key);
+      } catch {
+        throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
+      }
+      deleted.push(key);
+    }
+    return { deleted, skipped };
   }
 
   async retry(assetId: string): Promise<AssetWithJob> {
@@ -367,6 +463,13 @@ function validateBinarySignature(asset: AssetRecord, bytes: ArrayBuffer): void {
 function parsedFilename(originalName: string): string {
   const base = originalName.replace(/\.[^.]*$/u, "").trim() || "asset";
   return `${base.slice(0, 180)}.md`;
+}
+
+function isOrphanKey(key: string): boolean {
+  return key.length > 0 && key.length <= 512
+    && (key.startsWith("staging/") || key.startsWith("parsed/"))
+    && !key.includes("..")
+    && !/[\u0000-\u001f\u007f]/u.test(key);
 }
 
 function validateInput(input: AssetUploadInput, maxBytes: number): void {

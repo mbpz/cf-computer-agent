@@ -227,6 +227,27 @@ describe("M2 asset upload boundary", () => {
     expect(previewAfter.status).toBe(200);
     await expect(previewAfter.text()).resolves.toContain("admin preview");
   });
+
+  it("keeps orphan preview/reclaim admin-only and validates bounded requests", async () => {
+    const contributor = await memberApi("asset-owner", "/api/admin/assets/orphans");
+    expect(contributor.status).toBe(403);
+
+    const invalidPrefix = await memberApi("asset-admin", "/api/admin/assets/orphans?prefix=unknown");
+    expect(invalidPrefix.status).toBe(400);
+    await expect(invalidPrefix.json()).resolves.toMatchObject({ error: { code: "ASSET_ORPHAN_REQUEST_INVALID" } });
+
+    const preview = await memberApi("asset-admin", "/api/admin/assets/orphans?prefix=staging&limit=1");
+    expect(preview.status).toBe(200);
+    await expect(preview.json()).resolves.toMatchObject({ items: [], scanned: expect.any(Number), truncated: expect.any(Boolean) });
+
+    const reclaim = await memberApi("asset-admin", "/api/admin/assets/orphans/reclaim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keys: ["staging/not-present"] }),
+    });
+    expect(reclaim.status).toBe(200);
+    await expect(reclaim.json()).resolves.toEqual({ deleted: [], skipped: ["staging/not-present"] });
+  });
 });
 
 async function memberApi(memberId: string, path: string, init: RequestInit = {}): Promise<Response> {

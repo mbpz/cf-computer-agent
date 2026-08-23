@@ -41,6 +41,39 @@ export async function routeAdminApi(
     }), 200, context.requestId);
   }
 
+  if (url.pathname === "/api/admin/assets/orphans") {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const prefix = url.searchParams.get("prefix");
+    if (prefix !== null && prefix !== "staging" && prefix !== "parsed") {
+      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    }
+    const rawLimit = url.searchParams.get("limit");
+    const limit = rawLimit === null ? undefined : Number(rawLimit);
+    if (rawLimit !== null && (!Number.isSafeInteger(limit) || (limit as number) < 1 || (limit as number) > 50)) {
+      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    }
+    return jsonResponse(await services.assets.previewOrphans({
+      ...(prefix === null ? {} : { prefix: `${prefix}/` as "staging/" | "parsed/" }),
+      ...(limit === undefined ? {} : { limit }),
+    }), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/admin/assets/orphans/reclaim") {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["keys"],
+      "ASSET_ORPHAN_REQUEST_INVALID",
+    );
+    if (!Array.isArray(input.keys) || input.keys.length > 50 || input.keys.some((key) => typeof key !== "string")) {
+      throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
+    }
+    return jsonResponse(await services.assets.reclaimOrphans(input.keys as string[]), 200, context.requestId);
+  }
+
   const assetPreview = /^\/api\/admin\/assets\/([^/]+)\/(parsed|original)$/.exec(url.pathname);
   if (assetPreview) {
     requireCapability(principal, "submission:read-all");

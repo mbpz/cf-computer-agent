@@ -88,6 +88,17 @@ PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markd
 
 上传前会读取 D1 `assets.byte_size` 的累计值，默认将 9 GiB 作为应用层停止写入阈值；超过阈值返回可重试的 `507 ASSET_CAPACITY_LIMIT`，不会写入 R2。容量查询失败返回 `503 ASSET_CAPACITY_UNAVAILABLE`，同样 fail-closed；同一成员的幂等重放先返回已有资产，不会因容量变化破坏重放语义。单文件 10 MiB 限制仍独立生效。R2 写入后 D1 双写失败的补偿删除保持不变，所有容量和补偿测试均使用本地 fake/Workerd，未执行生产 bucket 扫描或删除。
 
+## M2-16 孤儿对象预览与安全回收
+
+管理员可先读取候选，再显式提交回收；接口默认只读，不提供 Cron 自动删除：
+
+- `GET /api/admin/assets/orphans?prefix=staging|parsed&limit=20` 扫描指定前缀，`limit` 最大 50。未传 `prefix` 时只扫描 `staging/`。
+- `POST /api/admin/assets/orphans/reclaim`，JSON body 为 `{ "keys": ["staging/<key>"] }`，一次最多 50 个 key。
+
+候选必须同时满足：R2 `uploaded` 早于默认 24 小时 grace period、D1 没有原件引用（`staging/`）或成功解析任务引用（`parsed/`），并且 key 位于受控前缀。回收接口会重新执行 R2 `head`、grace period 和 D1 引用检查；对象不存在、过新或已重新被引用时只进入 `skipped`，不会删除。R2/D1 检查故障 fail-closed 为可重试的 `503 ASSET_ORPHAN_STORAGE_UNAVAILABLE`。
+
+这组接口只适合人工确认后的低频治理，不声称完成生产扫描或删除；生产执行前应先保存 D1 备份、记录候选列表和脱敏 request ID。当前验证使用 local fake/Workerd，未扫描或删除生产 R2。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
@@ -108,7 +119,7 @@ rtk npx wrangler deploy --dry-run
 ## 明确不在本切片
 
 - PDF/DOCX/PPTX/Excel/OCR 解析；
-- Queue 唤醒、定时孤儿回收和 PDF/Office/图片解析适配仍未包含在本切片；当前仅使用免费 Cron 扫描重试。
+- Queue 唤醒、Cron 自动孤儿回收和 PDF/Office/图片解析适配仍未包含在本切片；当前仅使用免费 Cron 扫描重试，孤儿治理仅提供人工预览与显式回收。
 - 管理员解析预览；
 - 公开 URL、批量上传；
 - R2 容量预警与断路器。

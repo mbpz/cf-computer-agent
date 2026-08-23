@@ -43,6 +43,11 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
     async sumByteSize() {
       return store.assets.reduce((total, item) => total + item.byteSize, 0);
     },
+    async isObjectKeyReferenced(objectKey: string) {
+      if (store.assets.some((item) => item.objectKey === objectKey)) return true;
+      const match = /^parsed\/(.+)\.md$/u.exec(objectKey);
+      return Boolean(match && store.jobs.some((item) => item.assetId === match[1] && item.status === "succeeded"));
+    },
     async findById(assetId: string) {
       const asset = store.assets.find((item) => item.id === assetId);
       return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
@@ -86,6 +91,44 @@ function bucket() {
     },
     delete: async (key: string) => { objects.delete(key); },
   } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer> };
+}
+
+function orphanBucket() {
+  const objects = new Map<string, ArrayBuffer>();
+  const uploaded = new Map<string, Date>();
+  const current = () => new Date("2026-08-23T00:00:00.000Z");
+  return {
+    objects,
+    add: (key: string, value: string, uploadedAt: string) => {
+      objects.set(key, new TextEncoder().encode(value).buffer);
+      uploaded.set(key, new Date(uploadedAt));
+    },
+    put: async (key: string, body: ArrayBuffer | string) => {
+      objects.set(key, typeof body === "string" ? new TextEncoder().encode(body).buffer : body);
+      uploaded.set(key, current());
+    },
+    get: async (key: string) => {
+      const body = objects.get(key);
+      return body ? { arrayBuffer: async () => body } : null;
+    },
+    head: async (key: string) => {
+      const body = objects.get(key);
+      const date = uploaded.get(key);
+      return body && date ? { key, size: body.byteLength, uploaded: date } : null;
+    },
+    list: async ({ prefix = "", limit = 1000 }: { prefix?: string; limit?: number } = {}) => {
+      const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).sort();
+      const selected = keys.slice(0, limit);
+      return {
+        objects: selected.map((key) => ({ key, size: objects.get(key)!.byteLength, uploaded: uploaded.get(key)! })),
+        truncated: keys.length > selected.length,
+      };
+    },
+    delete: async (key: string) => {
+      objects.delete(key);
+      uploaded.delete(key);
+    },
+  } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer>; add: (key: string, value: string, uploadedAt: string) => void };
 }
 
 describe("AssetService", () => {
@@ -157,6 +200,31 @@ describe("AssetService", () => {
       ownerId: "member-1", originalName: "new.txt", contentType: "text/plain",
       bytes: new TextEncoder().encode("1234").buffer, idempotencyKey: "capacity-new",
     })).rejects.toMatchObject({ code: "ASSET_CAPACITY_LIMIT", status: 507, retryable: true });
+  });
+
+  it("previews and explicitly reclaims only aged unreferenced R2 objects", async () => {
+    const db = repository();
+    const originals = orphanBucket();
+    const service = new AssetService(originals, db, {
+      id: () => "asset-1",
+      now: () => new Date("2026-08-23T00:00:00.000Z"),
+      orphanGraceMs: 24 * 60 * 60 * 1000,
+    });
+    await service.create({
+      ownerId: "member-1", originalName: "kept.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("kept").buffer, idempotencyKey: "orphan-kept",
+    });
+    originals.add("staging/orphan-old", "orphan", "2026-08-20T00:00:00.000Z");
+    originals.add("staging/orphan-new", "new", "2026-08-22T12:00:00.000Z");
+
+    const preview = await service.previewOrphans({ prefix: "staging/", limit: 10 });
+
+    expect(preview.items).toEqual([{ key: "staging/orphan-old", size: 6, uploadedAt: "2026-08-20T00:00:00.000Z" }]);
+    const reclaimed = await service.reclaimOrphans(preview.items.map((item) => item.key));
+    expect(reclaimed).toEqual({ deleted: ["staging/orphan-old"], skipped: [] });
+    expect(originals.objects.has("staging/orphan-old")).toBe(false);
+    expect(originals.objects.has("staging/asset-1")).toBe(true);
+    expect(originals.objects.has("staging/orphan-new")).toBe(true);
   });
 
   it.each([

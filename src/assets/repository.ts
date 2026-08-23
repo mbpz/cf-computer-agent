@@ -93,6 +93,19 @@ export class AssetsRepository implements AssetRepositoryPort {
     return row?.total_bytes ?? 0;
   }
 
+  async isObjectKeyReferenced(objectKey: string): Promise<boolean> {
+    if (objectKey.startsWith("parsed/")) {
+      const assetId = objectKey.slice("parsed/".length).replace(/\.md$/u, "");
+      if (!assetId) return false;
+      const row = await this.db.prepare(
+        "SELECT 1 AS present FROM assets a JOIN parse_jobs j ON j.asset_id = a.id WHERE a.id = ? AND j.status = 'succeeded' LIMIT 1",
+      ).bind(assetId).first<{ present: number }>();
+      return Boolean(row);
+    }
+    const row = await this.db.prepare("SELECT 1 AS present FROM assets WHERE object_key = ? LIMIT 1").bind(objectKey).first<{ present: number }>();
+    return Boolean(row);
+  }
+
   async claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null> {
     const result = await this.db.prepare(
       `UPDATE parse_jobs
