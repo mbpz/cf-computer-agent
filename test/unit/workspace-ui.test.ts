@@ -37,6 +37,7 @@ const {
   submissionRequest,
   assetUploadRequest,
   assetUploadResultModel,
+  assetProcessRequest,
   runLatestOperation,
   submissionResultModel,
 } = workspaceUi;
@@ -74,6 +75,13 @@ describe("asset upload UI contract", () => {
       kind: "error",
       assetId: "asset-1",
       message: "Asset processing status is unavailable.",
+    });
+  });
+
+  it("builds an owner-scoped parse trigger with an encoded asset id", () => {
+    expect(assetProcessRequest("asset/1")).toEqual({
+      path: "/api/assets/asset%2F1",
+      init: { method: "POST" },
     });
   });
 });

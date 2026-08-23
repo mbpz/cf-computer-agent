@@ -384,6 +384,10 @@ export function assetUploadResultModel(value: unknown): Readonly<{
   jobStatus?: "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal";
   message: string;
 }>;
+export function assetProcessRequest(assetId: string): Readonly<{
+  path: string;
+  init: Readonly<{ method: "POST" }>;
+}>;
 export function resubmissionRequest(priorSubmissionId: string, value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
 export function publishRequest(submissionId: string, value: unknown): Readonly<BrowserApiRequest>;
 export function chatRequest(value: unknown): Readonly<BrowserApiRequest>;

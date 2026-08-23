@@ -94,6 +94,24 @@ describe("M2 asset upload boundary", () => {
     });
     expect(oversized.status).toBe(413);
   });
+
+  it("processes a text original and exposes the succeeded parse state", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "notes.txt", "idempotency-key": "asset-parse-1" },
+      body: "hello *world*",
+    });
+    const uploaded = await upload.json<{ asset: { id: string }; job: { status: string } }>();
+    expect(uploaded.job.status).toBe("queued");
+
+    const processed = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    expect(processed.status).toBe(200);
+    await expect(processed.json()).resolves.toMatchObject({
+      asset: { id: uploaded.asset.id, status: "ready" },
+      job: { status: "succeeded", attempts: 1, lastErrorCode: null },
+    });
+    await expect(env.ORIGINALS.get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
+  });
 });
 
 async function memberApi(memberId: string, path: string, init: RequestInit = {}): Promise<Response> {

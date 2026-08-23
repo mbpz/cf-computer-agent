@@ -19,6 +19,24 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
       const asset = store.assets.find((item) => item.ownerId === ownerId && item.id === assetId);
       return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
     },
+    async claimParseJob(assetId: string, _now: string) {
+      const job = store.jobs.find((item) => item.assetId === assetId);
+      if (!job || !["queued", "failed_retryable"].includes(job.status) || job.attempts >= 3) return null;
+      job.status = "processing";
+      job.attempts += 1;
+      return job;
+    },
+    async markParseSucceeded(assetId: string, now: string) {
+      const job = store.jobs.find((item) => item.assetId === assetId)!;
+      job.status = "succeeded";
+      job.updatedAt = now;
+    },
+    async markParseFailed(assetId: string, now: string, code: string, terminal: boolean) {
+      const job = store.jobs.find((item) => item.assetId === assetId)!;
+      job.status = terminal ? "failed_terminal" : "failed_retryable";
+      job.lastErrorCode = code;
+      job.updatedAt = now;
+    },
   };
   return store;
 }
@@ -27,7 +45,13 @@ function bucket() {
   const objects = new Map<string, ArrayBuffer>();
   return {
     objects,
-    put: async (key: string, body: ArrayBuffer) => { objects.set(key, body); },
+    put: async (key: string, body: ArrayBuffer | string) => {
+      objects.set(key, typeof body === "string" ? new TextEncoder().encode(body).buffer : body);
+    },
+    get: async (key: string) => {
+      const body = objects.get(key);
+      return body ? { arrayBuffer: async () => body } : null;
+    },
     delete: async (key: string) => { objects.delete(key); },
   } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer> };
 }
@@ -111,5 +135,53 @@ describe("AssetService", () => {
       bytes: new TextEncoder().encode("body").buffer, idempotencyKey: "key",
     })).rejects.toMatchObject({ code: "ASSET_PERSISTENCE_UNAVAILABLE", status: 503, retryable: true });
     expect(originals.objects.size).toBe(0);
+  });
+
+  it("parses a text original into a private Markdown object and completes its job", async () => {
+    let sequence = 0;
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      id: () => `asset-${++sequence}`,
+      now: () => new Date("2026-08-23T00:00:00.000Z"),
+    });
+    await service.create({
+      ownerId: "member-1", originalName: "notes.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("hello *world*").buffer, idempotencyKey: "parse-key",
+    });
+
+    const result = await service.process("member-1", "asset-1");
+
+    expect(result.job).toMatchObject({ status: "succeeded", attempts: 1, lastErrorCode: null });
+    expect(new TextDecoder().decode(originals.objects.get("parsed/asset-1.md"))).toContain("hello \\*world\\*");
+  });
+
+  it("marks an unsupported original as a terminal parse failure", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db);
+    const created = await service.create({
+      ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_PARSER_UNSUPPORTED" });
+    expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
+  });
+
+  it("marks malformed UTF-8 text as a terminal parse failure", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db);
+    const created = await service.create({
+      ownerId: "member-1", originalName: "broken.txt", contentType: "text/plain",
+      bytes: new Uint8Array([0xc3, 0x28]).buffer, idempotencyKey: "broken-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_CONTENT_INVALID" });
   });
 });

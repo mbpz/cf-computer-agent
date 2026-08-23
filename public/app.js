@@ -5,6 +5,7 @@ import {
   anonymousShellState,
   accountPresentationModel,
   appendPage,
+  assetProcessRequest,
   assetUploadRequest,
   assetUploadResultModel,
   chatRequest,
@@ -203,6 +204,7 @@ const apiErrorKeys = Object.freeze({
   ASSET_TOO_LARGE: "ERROR_ASSET_TOO_LARGE",
   ASSET_NAME_INVALID: "ERROR_ASSET_NAME_INVALID",
   ASSET_TYPE_UNSUPPORTED: "ERROR_ASSET_TYPE_UNSUPPORTED",
+  ASSET_CONTENT_INVALID: "ERROR_ASSET_CONTENT_INVALID",
   ASSET_PERSISTENCE_UNAVAILABLE: "ERROR_ASSET_PERSISTENCE_UNAVAILABLE",
   ASSET_NOT_FOUND: "ERROR_ASSET_NOT_FOUND",
 });
@@ -693,14 +695,17 @@ async function renderSubmit(generation) {
     accept: ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.json,.xml,.rtf,.png,.jpg,.jpeg,.gif,.webp",
   });
   const assetButton = element("button", { className: "secondary", type: "button", text: t("SUBMIT_ASSET_UPLOAD") });
+  const processButton = element("button", { className: "primary", type: "button", text: t("SUBMIT_ASSET_PROCESS"), hidden: "" });
   const assetStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
   const assetPanel = element("div", { className: "asset-upload-panel" }, [
     element("p", { className: "muted", text: t("SUBMIT_ASSET_HELP") }),
     field(t("SUBMIT_ASSET_FILE"), assetInput),
     assetButton,
+    processButton,
     assetStatus,
   ]);
   const assetRequestKey = idempotencyKey();
+  let uploadedAssetId = "";
   assetButton.addEventListener("click", () => {
     const file = assetInput.files?.[0];
     if (!file) {
@@ -714,11 +719,28 @@ async function renderSubmit(generation) {
       const outcome = assetUploadResultModel(result);
       translationBindings.text(assetStatus, outcome.message);
       assetStatus.dataset.state = outcome.kind;
+      uploadedAssetId = outcome.assetId || "";
+      processButton.hidden = !uploadedAssetId || outcome.kind === "error";
     }).catch((error) => {
       translationBindings.text(assetStatus, safeErrorMessage(error, t("SUBMIT_ASSET_UPLOAD_ERROR")));
       assetStatus.dataset.state = "error";
     }).finally(() => {
       setPending(assetButton, false, t("SUBMIT_ASSET_UPLOAD_PENDING"), t("SUBMIT_ASSET_UPLOAD"));
+    });
+  });
+  processButton.addEventListener("click", () => {
+    if (!uploadedAssetId) return;
+    const request = assetProcessRequest(uploadedAssetId);
+    setPending(processButton, true, t("SUBMIT_ASSET_PROCESS_PENDING"), t("SUBMIT_ASSET_PROCESS"));
+    void api(request.path, request.init).then((result) => {
+      const outcome = assetUploadResultModel(result);
+      translationBindings.text(assetStatus, outcome.message);
+      assetStatus.dataset.state = outcome.kind;
+    }).catch((error) => {
+      translationBindings.text(assetStatus, safeErrorMessage(error, t("SUBMIT_ASSET_UPLOAD_ERROR")));
+      assetStatus.dataset.state = "error";
+    }).finally(() => {
+      setPending(processButton, false, t("SUBMIT_ASSET_PROCESS_PENDING"), t("SUBMIT_ASSET_PROCESS"));
     });
   });
   replaceOutlet(page(t("SUBMIT_TITLE"), t("SUBMIT_DESCRIPTION"), [

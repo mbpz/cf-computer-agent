@@ -1,10 +1,15 @@
 import { AppError } from "../http";
+import { parseSource } from "../sources/parser";
+import type { ParseSourceInput } from "../sources/types";
 import type { AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
 
 export interface AssetRepositoryPort {
   findByIdempotency(ownerId: string, idempotencyKey: string): Promise<AssetWithJob | null>;
   insertAssetWithJob(asset: AssetRecord, job: ParseJobRecord): Promise<void>;
   findOwned(ownerId: string, assetId: string): Promise<AssetWithJob | null>;
+  claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
+  markParseSucceeded(assetId: string, now: string): Promise<void>;
+  markParseFailed(assetId: string, now: string, code: string, terminal: boolean): Promise<void>;
 }
 
 export interface AssetServiceOptions {
@@ -95,6 +100,65 @@ export class AssetService {
     const result = await this.repository.findOwned(ownerId, assetId);
     if (!result) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
     return result;
+  }
+
+  async process(ownerId: string, assetId: string): Promise<AssetWithJob> {
+    const current = await this.getOwned(ownerId, assetId);
+    if (current.job.status === "succeeded" || current.job.status === "failed_terminal") return current;
+    const now = this.now().toISOString();
+    const claimed = await this.repository.claimParseJob(assetId, now);
+    if (!claimed) return (await this.repository.findOwned(ownerId, assetId)) || current;
+
+    const parsedKey = `parsed/${assetId}.md`;
+    try {
+      const original = await this.originals.get(current.asset.objectKey);
+      if (!original) throw new AppError("ASSET_ORIGINAL_MISSING", "Original asset is missing", 422);
+      const input = parseInputForAsset(current.asset, await original.arrayBuffer());
+      if (!input) throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
+      const parsed = await parseSource(input);
+      await this.originals.put(parsedKey, parsed.normalizedMarkdown, {
+        httpMetadata: { contentType: "text/markdown; charset=utf-8" },
+        customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },
+      });
+      await this.repository.markParseSucceeded(assetId, now);
+    } catch (error) {
+      await this.originals.delete(parsedKey).catch(() => undefined);
+      const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
+      const terminal = error instanceof AppError && [
+        "ASSET_ORIGINAL_MISSING", "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
+      ].includes(error.code);
+      await this.repository.markParseFailed(assetId, now, code, terminal);
+    }
+    return (await this.repository.findOwned(ownerId, assetId)) || current;
+  }
+}
+
+function parseInputForAsset(asset: AssetRecord, bytes: ArrayBuffer): ParseSourceInput | null {
+  const extension = asset.originalName.toLowerCase().split(".").at(-1) || "";
+  const languages: Record<string, string> = {
+    js: "javascript", mjs: "javascript", cjs: "javascript", ts: "typescript", mts: "typescript",
+    py: "python", go: "go", rs: "rust", java: "java", sql: "sql", json: "json", yaml: "yaml", yml: "yaml", sh: "shell",
+  };
+  if (asset.contentType === "text/markdown" || extension === "md" || extension === "markdown") {
+    const content = decodeUtf8(bytes);
+    return { kind: "markdown", content };
+  }
+  if (asset.contentType === "application/json" || languages[extension]) {
+    const content = decodeUtf8(bytes);
+    return { kind: "code", content, language: languages[extension] || "json", fileLabel: asset.originalName, lineBaseline: 1 };
+  }
+  if (asset.contentType === "text/plain" || asset.contentType === "text/csv") {
+    const content = decodeUtf8(bytes);
+    return { kind: "text", content };
+  }
+  return null;
+}
+
+function decodeUtf8(bytes: ArrayBuffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new AppError("ASSET_CONTENT_INVALID", "Asset content encoding is invalid", 422);
   }
 }
 

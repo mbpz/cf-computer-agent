@@ -32,6 +32,38 @@ export class AssetsRepository implements AssetRepositoryPort {
     return this.find("a.owner_id = ? AND a.id = ?", [ownerId, assetId]);
   }
 
+  async claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null> {
+    const result = await this.db.prepare(
+      `UPDATE parse_jobs
+       SET status = 'processing', attempts = attempts + 1, updated_at = ?
+       WHERE asset_id = ? AND status IN ('queued', 'failed_retryable') AND attempts < 3`,
+    ).bind(now, assetId).run();
+    if (!result.meta.changes) return null;
+    const row = await this.db.prepare(
+      `SELECT id, asset_id, status, attempts, last_error_code, created_at, updated_at FROM parse_jobs WHERE asset_id = ?`,
+    ).bind(assetId).first<ParseJobRecord & { asset_id: string; created_at: string; updated_at: string; last_error_code: string | null }>();
+    return row ? {
+      id: row.id, assetId: row.asset_id, status: row.status, attempts: row.attempts,
+      lastErrorCode: row.last_error_code, createdAt: row.created_at, updatedAt: row.updated_at,
+    } : null;
+  }
+
+  async markParseSucceeded(assetId: string, now: string): Promise<void> {
+    await this.db.batch([
+      this.db.prepare("UPDATE parse_jobs SET status = 'succeeded', last_error_code = NULL, updated_at = ? WHERE asset_id = ? AND status = 'processing'").bind(now, assetId),
+      this.db.prepare("UPDATE assets SET updated_at = ? WHERE id = ?").bind(now, assetId),
+    ]);
+  }
+
+  async markParseFailed(assetId: string, now: string, code: string, terminal: boolean): Promise<void> {
+    await this.db.batch([
+      this.db.prepare("UPDATE parse_jobs SET status = ?, last_error_code = ?, updated_at = ? WHERE asset_id = ? AND status = 'processing'")
+        .bind(terminal ? "failed_terminal" : "failed_retryable", code, now, assetId),
+      this.db.prepare("UPDATE assets SET status = ?, updated_at = ? WHERE id = ?")
+        .bind(terminal ? "failed" : "ready", now, assetId),
+    ]);
+  }
+
   private async find(where: string, values: unknown[]): Promise<AssetWithJob | null> {
     const row = await this.db.prepare(
       `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,

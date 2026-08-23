@@ -876,6 +876,13 @@ export function assetUploadResultModel(value) {
   });
 }
 
+export function assetProcessRequest(assetId) {
+  return Object.freeze({
+    path: `/api/assets/${encodeURIComponent(safeString(assetId))}`,
+    init: Object.freeze({ method: "POST" }),
+  });
+}
+
 export function publishRequest(submissionId, value) {
   const input = safeRecord(value);
   return Object.freeze({

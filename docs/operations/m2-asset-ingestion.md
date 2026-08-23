@@ -1,6 +1,6 @@
-# M2-1/M2-2 原件、解析任务与上传入口最小切片
+# M2-1/M2-2/M2-3 原件、解析任务与上传入口最小切片
 
-本切片建立私有 R2 原件、D1 解析任务状态和提交页上传入口，不执行解析、不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
+本切片建立私有 R2 原件、D1 解析任务状态、提交页上传入口和文本类原件解析，不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
 
 ## 数据流
 
@@ -36,6 +36,8 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 浏览器入口位于登录后的“提交”页面“上传原件”卡片；失败时保留在当前页面并显示可重试错误，不会创建一条假提交。
 
+上传后点击“开始解析”会触发同一资产的 owner-scoped `POST /api/assets/<assetId>`。当前解析器只处理纯文本、Markdown、CSV、JSON 和 allowlist 代码扩展名，成功结果写入私有 R2 `parsed/<assetId>.md`，D1 任务进入 `succeeded`。PDF、Office、图片等格式会进入 `failed_terminal`，不会伪造解析结果；临时 R2/D1 故障进入 `failed_retryable`，最多允许 3 次领取。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
@@ -56,7 +58,7 @@ rtk npx wrangler deploy --dry-run
 ## 明确不在本切片
 
 - PDF/DOCX/PPTX/Excel/OCR 解析；
-- Queue 唤醒、重试 worker 和定时孤儿回收；
+- Queue 唤醒、自动重试 worker 和定时孤儿回收；
 - 管理员解析预览；
 - 原件下载、公开 URL、批量上传；
 - R2 容量预警与断路器。

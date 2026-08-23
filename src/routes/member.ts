@@ -45,9 +45,13 @@ export async function routeMemberApi(
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
   if (asset) {
     requireCapability(principal, "submission:read-own");
-    if (request.method !== "GET") return methodNotAllowed("GET", context);
     const member = requireMember(principal);
     requireNoQuery(url);
+    if (request.method === "POST") {
+      requireCapability(principal, "submission:create");
+      return jsonResponse(await services.assets.process(member.memberId, decodePathId(asset[1]!)), 200, context.requestId);
+    }
+    if (request.method !== "GET") return methodNotAllowed("GET, POST", context);
     return jsonResponse(await services.assets.getOwned(member.memberId, decodePathId(asset[1]!)), 200, context.requestId);
   }
 
