@@ -27,6 +27,7 @@ const expectedMigrations = [
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
   ["0004_m1_gate_completion.sql", "ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb"],
+  ["0005_m2_asset_ingestion.sql", "49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -173,14 +174,14 @@ ${postUpload}
   }
 }
 
-test("pins the reviewed bytes of all four forward migrations", async () => {
+test("pins the reviewed bytes of all five forward migrations", async () => {
   for (const [name, expectedHash] of expectedMigrations) {
     const bytes = await readFile(new URL(`../migrations/${name}`, import.meta.url));
     assert.equal(createHash("sha256").update(bytes).digest("hex"), expectedHash, name);
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=4$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=5$/mu);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {
@@ -195,17 +196,22 @@ test("fails closed when an unexpected local migration file is present", async ()
   }
 });
 
-test("accepts only the exact pre-0004 and post-0004 Wrangler ledger states", async () => {
+test("accepts only the exact pre-0004, post-0004, or post-0005 Wrangler ledger states", async () => {
   const names = expectedMigrations.map(([name]) => name);
   await withLedger(ledger(names.slice(0, 3)), async (path) => {
     const result = await runVerifier(["--ledger-before", path]);
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /^\[pass\] migration-ledger phase=before names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql$/mu);
   });
-  await withLedger(ledger(names), async (path) => {
+  await withLedger(ledger(names.slice(0, 4)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /^\[pass\] migration-ledger phase=after names=0001_phase1_control_plane.sql,0002_github_auth.sql,0003_m1_knowledge_loop.sql,0004_m1_gate_completion.sql$/mu);
+  });
+  await withLedger(ledger(names), async (path) => {
+    const result = await runVerifier(["--ledger-after", path]);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /0005_m2_asset_ingestion.sql$/mu);
   });
 });
 

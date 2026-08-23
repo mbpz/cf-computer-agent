@@ -1,4 +1,6 @@
 import { AnswerService } from "./ai/answer-service";
+import { AssetsRepository } from "./assets/repository";
+import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
@@ -113,9 +115,11 @@ function createRequestServices(
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
+  const assets = new AssetService(env.ORIGINALS, new AssetsRepository(env.DB));
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(env.AI),
+    assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
     citedAnswers: new CitedAnswerService(env.AI),

@@ -1,7 +1,8 @@
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
-import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
+import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, readBoundedBodyBytes, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
+import type { AssetService } from "../assets/service";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
@@ -9,6 +10,7 @@ import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } fr
 import type { TagsService } from "../tags/service";
 
 export interface MemberRouteServices {
+  assets: AssetService;
   spaces: SpacesService;
   submissions: SubmissionsService;
   tags: TagsService;
@@ -21,6 +23,34 @@ export async function routeMemberApi(
   principal: Principal,
   services: MemberRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/assets") {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const idempotencyKey = request.headers.get("idempotency-key") || "";
+    const originalName = request.headers.get("x-asset-name") || "";
+    const contentType = request.headers.get("content-type") || "";
+    const bytes = await readBoundedBodyBytes(request, APP_CONFIG.maxAssetBytes, "ASSET_TOO_LARGE", "Asset exceeds the upload limit");
+    const result = await services.assets.create({
+      ownerId: member.memberId,
+      originalName,
+      contentType,
+      bytes: bytes.slice().buffer,
+      idempotencyKey,
+    });
+    return jsonResponse(result, 201, context.requestId);
+  }
+
+  const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
+  if (asset) {
+    requireCapability(principal, "submission:read-own");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    return jsonResponse(await services.assets.getOwned(member.memberId, decodePathId(asset[1]!)), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/spaces") {
     requireMember(principal);
     if (request.method !== "GET") return methodNotAllowed("GET", context);

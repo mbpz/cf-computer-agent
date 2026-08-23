@@ -108,10 +108,15 @@ function isJsonContentType(value: string | null): boolean {
   return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
 }
 
-export async function readBoundedBodyBytes(request: Request, maxBytes: number): Promise<Uint8Array> {
+export async function readBoundedBodyBytes(
+  request: Request,
+  maxBytes: number,
+  errorCode = "REQUEST_TOO_LARGE",
+  errorMessage = "Request exceeds the JSON body limit",
+): Promise<Uint8Array> {
   const contentLength = request.headers.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
-    throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
+    throw new AppError(errorCode, errorMessage, 413);
   }
 
   if (!request.body) return new Uint8Array();
@@ -124,7 +129,7 @@ export async function readBoundedBodyBytes(request: Request, maxBytes: number): 
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maxBytes) throw new AppError("REQUEST_TOO_LARGE", "Request exceeds the JSON body limit", 413);
+      if (total > maxBytes) throw new AppError(errorCode, errorMessage, 413);
       chunks.push(value);
     }
   } finally {

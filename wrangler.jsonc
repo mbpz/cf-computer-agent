@@ -21,6 +21,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "ORIGINALS",
+      "bucket_name": "memory-garden-originals"
+    }
+  ],
   "durable_objects": {
     "bindings": [{ "name": "KNOWLEDGE", "class_name": "KnowledgeBase" }]
   },

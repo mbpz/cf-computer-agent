@@ -80,6 +80,8 @@
 
 目标：安全接收常见文件并让每一步处理状态可见、可重试、可降级。
 
+当前进度：M2-1 原件与任务状态最小切片已在本地/Workerd 完成；生产 R2 bucket、0005 migration 和部署仍需单独授权与远程证据。
+
 范围：
 
 - 私有 R2 Standard 原件、staging/final/quarantine、浏览器直传和孤儿回收。

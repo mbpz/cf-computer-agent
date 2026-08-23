@@ -6,6 +6,7 @@ const migrations = [
   ["0002_github_auth.sql", "b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1"],
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
   ["0004_m1_gate_completion.sql", "ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb"],
+  ["0005_m2_asset_ingestion.sql", "49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
@@ -39,9 +40,9 @@ async function verifyLedger(phase, path) {
   if (result.success !== true || !Array.isArray(result.results)) {
     throw new Error("Unsuccessful Wrangler ledger result");
   }
-  const expectedNames = migrations
-    .slice(0, phase === "before" ? 3 : 4)
-    .map(([name]) => name);
+  const expectedNames = phase === "before"
+    ? [migrations.slice(0, 3).map(([name]) => name)]
+    : [migrations.slice(0, 4).map(([name]) => name), migrations.map(([name]) => name)];
   const names = result.results.map((row, index) => {
     if (!isRecord(row)
       || !hasExactKeys(row, ["applied_at", "id", "name"])
@@ -53,8 +54,9 @@ async function verifyLedger(phase, path) {
     }
     return row.name;
   });
-  if (names.length !== expectedNames.length
-    || names.some((name, index) => name !== expectedNames[index])) {
+  const matches = expectedNames.some((candidate) => candidate.length === names.length
+    && candidate.every((name, index) => name === names[index]));
+  if (!matches) {
     throw new Error("Migration ledger does not match the reviewed state");
   }
   console.log(`[pass] migration-ledger phase=${phase} names=${names.join(",")}`);
