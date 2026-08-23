@@ -5,6 +5,7 @@ import {
   anonymousShellState,
   accountPresentationModel,
   appendPage,
+  assetListModel,
   assetProcessRequest,
   assetUploadRequest,
   assetUploadResultModel,
@@ -217,6 +218,13 @@ const submissionStatusKeys = Object.freeze({
   rejected: "SUBMISSION_STATUS_REJECTED",
   revision_requested: "SUBMISSION_STATUS_REVISION_REQUESTED",
 });
+const assetJobStatusKeys = Object.freeze({
+  queued: "ASSET_STATUS_QUEUED",
+  processing: "ASSET_STATUS_PROCESSING",
+  succeeded: "ASSET_STATUS_SUCCEEDED",
+  failed_retryable: "ASSET_STATUS_RETRYABLE",
+  failed_terminal: "ASSET_STATUS_FAILED",
+});
 const controllerErrorKeys = Object.freeze({
   REVIEW_TAGS_LOAD_MORE_FAILED: "REVIEW_TAGS_LOAD_MORE_FAILED",
   REVIEW_TAGS_LOAD_FAILED: "REVIEW_TAGS_LOAD_FAILED",
@@ -395,6 +403,15 @@ function kindLabel(value) {
 }
 function submissionStatusLabel(value) {
   return submissionStatusKeys[value] ? t(submissionStatusKeys[value]) : t("COMMON_STATUS_UNKNOWN");
+}
+function assetJobStatusLabel(value) {
+  return assetJobStatusKeys[value] ? t(assetJobStatusKeys[value]) : t("COMMON_STATUS_UNKNOWN");
+}
+function formatBytes(value) {
+  if (!Number.isSafeInteger(value) || value < 0) return t("COMMON_VALUE_UNAVAILABLE");
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 function searchStatusLabel(value) {
   return t({
@@ -1126,6 +1143,7 @@ async function renderMySubmissions(generation) {
   const requestedStatus = new URL(window.location.href).searchParams.get("status");
   let status = ["review_pending", "published", "rejected", "revision_requested"].includes(requestedStatus) ? requestedStatus : "";
   let data = await api(mySubmissionsPath(status));
+  const assetHistory = assetListModel(await api("/api/assets?limit=20").catch(() => ({ items: [] })));
   let items = data.items;
   let cursor = data.nextCursor;
   const region = element("div", { className: "stack", "aria-live": "polite" });
@@ -1202,9 +1220,24 @@ async function renderMySubmissions(generation) {
     }, () => ownsMutation(owner));
   });
   renderItems();
+  const assetRows = list(assetHistory.items, (asset) => item(
+    asset.originalName,
+    localized(() => `${assetJobStatusLabel(asset.jobStatus)} · ${formatBytes(asset.byteSize)} · ${formatDate(asset.createdAt)}`),
+    compactChildren(
+      element("div", { className: "actions" }, [
+        element("a", { href: asset.originalHref, className: "download-link", download: "", text: t("SUBMIT_ASSET_DOWNLOAD_ORIGINAL") }),
+        asset.parsedHref
+          ? element("a", { href: asset.parsedHref, className: "download-link", download: "", text: t("SUBMIT_ASSET_DOWNLOAD_PARSED") })
+          : undefined,
+      ]),
+    ),
+  ), t("MY_ASSETS_EMPTY"));
   replaceOutlet(page(t("MY_SUBMISSIONS_TITLE"), t("MY_SUBMISSIONS_DESCRIPTION"), [card(t("MY_SUBMISSIONS_HISTORY"), [
     field(t("MY_SUBMISSIONS_FILTER_LABEL"), statusFilter),
     region,
+  ]), card(t("MY_ASSETS_TITLE"), [
+    element("p", { className: "muted", text: t("MY_ASSETS_DESCRIPTION") }),
+    assetRows,
   ])]), generation);
 }
 

@@ -24,9 +24,14 @@ export async function routeMemberApi(
   services: MemberRouteServices,
 ): Promise<Response | undefined> {
   if (url.pathname === "/api/assets") {
-    requireCapability(principal, "submission:create");
-    if (request.method !== "POST") return methodNotAllowed("POST", context);
     const member = requireMember(principal);
+    if (request.method === "GET") {
+      requireCapability(principal, "submission:read-own");
+      requireExactQuery(url, ["limit", "cursor"]);
+      return jsonResponse(await services.assets.listOwned(member.memberId, pageRequest(url)), 200, context.requestId);
+    }
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     requireNoQuery(url);
     const idempotencyKey = request.headers.get("idempotency-key") || "";
     const originalName = request.headers.get("x-asset-name") || "";

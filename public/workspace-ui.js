@@ -880,6 +880,32 @@ export function assetUploadResultModel(value) {
   });
 }
 
+export function assetListModel(value) {
+  const input = safeRecord(value);
+  const items = safeArray(input.items).map((entry) => {
+    const record = safeRecord(entry);
+    const asset = safeRecord(record.asset);
+    const job = safeRecord(record.job);
+    const id = safeString(asset.id);
+    const jobStatus = safeString(job.status);
+    return Object.freeze({
+      id,
+      originalName: safeString(asset.originalName) || t("COMMON_VALUE_UNAVAILABLE"),
+      contentType: safeString(asset.contentType) || t("COMMON_VALUE_UNAVAILABLE"),
+      byteSize: typeof asset.byteSize === "number" && Number.isSafeInteger(asset.byteSize) ? asset.byteSize : null,
+      createdAt: safeString(asset.createdAt),
+      jobStatus: jobStatus || "unknown",
+      attempts: typeof job.attempts === "number" && Number.isSafeInteger(job.attempts) ? job.attempts : 0,
+      originalHref: id ? `/api/assets/${encodeURIComponent(id)}/original` : "",
+      parsedHref: id && jobStatus === "succeeded" ? `/api/assets/${encodeURIComponent(id)}/parsed` : "",
+    });
+  }).filter((item) => item.id);
+  return Object.freeze({
+    items: Object.freeze(items),
+    nextCursor: safeString(input.nextCursor) || "",
+  });
+}
+
 export function assetProcessRequest(assetId) {
   return Object.freeze({
     path: `/api/assets/${encodeURIComponent(safeString(assetId))}`,

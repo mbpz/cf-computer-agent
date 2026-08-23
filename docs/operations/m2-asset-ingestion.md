@@ -47,6 +47,8 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 两个下载接口都执行成员 owner 校验，其他成员统一得到 `ASSET_NOT_FOUND`，并返回 `private, no-store` 与 `nosniff` 响应头。原件或已成功任务对应的 R2 对象缺失时不会返回空文件，而是返回可重试错误，便于后续孤儿回收与补偿流程接入。
 
+提交页的“我的原件”区域调用 `GET /api/assets?limit=20&cursor=<opaque>` 展示自己的历史原件、文件大小、创建时间、解析状态和可用下载动作。cursor 绑定成员 scope；跨成员重放返回 `PAGE_INVALID`，不会扩大可见范围。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

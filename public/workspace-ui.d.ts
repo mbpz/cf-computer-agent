@@ -386,6 +386,20 @@ export function assetUploadResultModel(value: unknown): Readonly<{
   originalHref?: string;
   parsedHref?: string;
 }>;
+export function assetListModel(value: unknown): Readonly<{
+  items: ReadonlyArray<Readonly<{
+    id: string;
+    originalName: string;
+    contentType: string;
+    byteSize: number | null;
+    createdAt: string;
+    jobStatus: string;
+    attempts: number;
+    originalHref: string;
+    parsedHref: string;
+  }>>;
+  nextCursor: string;
+}>;
 export function assetProcessRequest(assetId: string): Readonly<{
   path: string;
   init: Readonly<{ method: "POST" }>;

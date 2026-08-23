@@ -44,6 +44,13 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
       const asset = store.assets.find((item) => item.id === assetId);
       return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
     },
+    async listOwned(ownerId: string, request: { limit: number }) {
+      const items = store.assets
+        .filter((item) => item.ownerId === ownerId)
+        .map((asset) => ({ asset, job: store.jobs.find((item) => item.assetId === asset.id)! }))
+        .slice(0, request.limit);
+      return { items };
+    },
   };
   return store;
 }
@@ -299,5 +306,25 @@ describe("AssetService", () => {
     originals.objects.delete("parsed/asset-private.md");
     await expect(service.download("member-1", "asset-private", "parsed"))
       .rejects.toMatchObject({ code: "ASSET_RESULT_MISSING", status: 503, retryable: true });
+  });
+
+  it("lists only the owner's assets with bounded pagination", async () => {
+    let sequence = 0;
+    const db = repository();
+    const service = new AssetService(bucket(), db, { id: () => `asset-list-${++sequence}` });
+    for (const name of ["one.txt", "two.txt", "other.txt"]) {
+      await service.create({
+        ownerId: name === "other.txt" ? "member-2" : "member-1",
+        originalName: name,
+        contentType: "text/plain",
+        bytes: new TextEncoder().encode(name).buffer,
+        idempotencyKey: name,
+      });
+    }
+
+    const result = await service.listOwned("member-1", { limit: 1 });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.asset.ownerId).toBe("member-1");
   });
 });

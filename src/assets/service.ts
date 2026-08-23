@@ -1,13 +1,15 @@
 import { AppError } from "../http";
+import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import type { ParseSourceInput } from "../sources/types";
-import type { AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
+import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
 
 export interface AssetRepositoryPort {
   findByIdempotency(ownerId: string, idempotencyKey: string): Promise<AssetWithJob | null>;
   insertAssetWithJob(asset: AssetRecord, job: ParseJobRecord): Promise<void>;
   findOwned(ownerId: string, assetId: string): Promise<AssetWithJob | null>;
   findById(assetId: string): Promise<AssetWithJob | null>;
+  listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage>;
   listProcessable(limit: number): Promise<string[]>;
   claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
   markParseSucceeded(assetId: string, now: string): Promise<void>;
@@ -125,6 +127,14 @@ export class AssetService {
     const result = await this.repository.findOwned(ownerId, assetId);
     if (!result) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
     return result;
+  }
+
+  async listOwned(ownerId: string, request: { limit?: number; cursor?: string } = {}): Promise<AssetPage> {
+    const page = parsePageRequest(request.limit, request.cursor);
+    return this.repository.listOwned(ownerId, {
+      ...page,
+      cursorKey: await deriveCursorScopeKey("own-assets", { memberId: ownerId, sort: "created_at-desc-id-desc" }),
+    });
   }
 
   async download(ownerId: string, assetId: string, variant: AssetDownloadVariant): Promise<AssetDownload> {

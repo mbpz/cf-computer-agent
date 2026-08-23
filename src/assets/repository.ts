@@ -1,4 +1,7 @@
 import type { AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
+import { AppError } from "../http";
+import { decodeOpaqueCursor, encodeOpaqueCursor } from "../pagination";
+import type { AssetPage, AssetPageRepositoryRequest } from "./types";
 import type { AssetRepositoryPort } from "./service";
 
 type AssetRow = {
@@ -34,6 +37,29 @@ export class AssetsRepository implements AssetRepositoryPort {
 
   async findById(assetId: string): Promise<AssetWithJob | null> {
     return this.find("a.id = ?", [assetId]);
+  }
+
+  async listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage> {
+    const cursor = request.cursor ? decodeAssetCursor(request.cursor, request.cursorKey) : undefined;
+    const cursorSql = cursor ? " AND (a.created_at < ? OR (a.created_at = ? AND a.id < ?))" : "";
+    const cursorValues = cursor ? [new Date(cursor.sort).toISOString(), new Date(cursor.sort).toISOString(), cursor.id] : [];
+    const rows = await this.db.prepare(
+      `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
+              a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
+              j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
+              j.created_at AS job_created_at, j.updated_at AS job_updated_at
+       FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
+       WHERE a.owner_id = ?${cursorSql}
+       ORDER BY a.created_at DESC, a.id DESC LIMIT ?`,
+    ).bind(ownerId, ...cursorValues, request.limit + 1).all<AssetRow>();
+    const items = rows.results.slice(0, request.limit).map(mapRow);
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? {
+        nextCursor: encodeOpaqueCursor({ v: 2, sort: Date.parse(last.asset.createdAt), id: last.asset.id, key: request.cursorKey }),
+      } : {}),
+    };
   }
 
   async listProcessable(limit: number): Promise<string[]> {
@@ -87,6 +113,23 @@ export class AssetsRepository implements AssetRepositoryPort {
     ).bind(...values).first<AssetRow>();
     return row ? mapRow(row) : null;
   }
+}
+
+function decodeAssetCursor(cursor: string, cursorKey: string): { sort: number; id: string } {
+  let record: Record<string, unknown>;
+  try {
+    const value = decodeOpaqueCursor(cursor);
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
+    record = value as Record<string, unknown>;
+    if (Object.keys(record).length !== 4 || record.v !== 2
+      || typeof record.sort !== "number" || !Number.isSafeInteger(record.sort) || record.sort < 0
+      || typeof record.id !== "string" || record.id.length === 0) throw new Error();
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  }
+  if (record.key !== cursorKey) throw new AppError("PAGE_INVALID", "Page cursor does not match the requested scope", 400);
+  return { sort: record.sort as number, id: record.id as string };
 }
 
 function mapRow(row: AssetRow): AssetWithJob {

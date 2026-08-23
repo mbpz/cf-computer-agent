@@ -80,7 +80,7 @@
 
 目标：安全接收常见文件并让每一步处理状态可见、可重试、可降级。
 
-当前进度：M2-1 原件与任务状态、M2-2 提交页上传入口、M2-3 文本类原件解析状态推进、M2-4 免费 Cron 自动扫描、M2-5 可选 Workers AI Markdown Conversion、M2-6 owner-scoped 原件/解析结果下载已在本地/Workerd 完成；生产 R2 bucket、0005 migration 和部署仍需单独授权与远程证据。
+当前进度：M2-1 原件与任务状态、M2-2 提交页上传入口、M2-3 文本类原件解析状态推进、M2-4 免费 Cron 自动扫描、M2-5 可选 Workers AI Markdown Conversion、M2-6 owner-scoped 原件/解析结果下载、M2-7 “我的原件” owner-scoped 分页历史已在本地/Workerd 完成；生产 R2 bucket、0005 migration 和部署仍需单独授权与远程证据。
 
 范围：
 

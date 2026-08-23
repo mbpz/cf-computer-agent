@@ -141,6 +141,26 @@ describe("M2 asset upload boundary", () => {
     const hidden = await memberApi("asset-other", `/api/assets/${uploaded.asset.id}/original`);
     expect(hidden.status).toBe(404);
   });
+
+  it("lists owner-scoped assets with an opaque cursor and rejects cross-owner replay", async () => {
+    for (const [name, key] of [["one.txt", "asset-list-1"], ["two.txt", "asset-list-2"]]) {
+      await memberApi("asset-owner", "/api/assets", {
+        method: "POST",
+        headers: { "content-type": "text/plain", "x-asset-name": name, "idempotency-key": key },
+        body: name,
+      });
+    }
+    const first = await memberApi("asset-owner", "/api/assets?limit=1");
+    expect(first.status).toBe(200);
+    const firstBody = await first.json<{ items: Array<{ asset: { ownerId: string } }>; nextCursor?: string }>();
+    expect(firstBody.items).toHaveLength(1);
+    expect(firstBody.items[0]?.asset.ownerId).toBe("asset-owner");
+    expect(firstBody.nextCursor).toBeTruthy();
+
+    const replay = await memberApi("asset-other", `/api/assets?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor!)}`);
+    expect(replay.status).toBe(400);
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "PAGE_INVALID" } });
+  });
 });
 
 async function memberApi(memberId: string, path: string, init: RequestInit = {}): Promise<Response> {

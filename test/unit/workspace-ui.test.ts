@@ -37,6 +37,7 @@ const {
   submissionRequest,
   assetUploadRequest,
   assetUploadResultModel,
+  assetListModel,
   assetProcessRequest,
   assetDownloadRequest,
   runLatestOperation,
@@ -103,6 +104,17 @@ describe("asset upload UI contract", () => {
       originalHref: "/api/assets/asset-1/original",
       parsedHref: "/api/assets/asset-1/parsed",
     });
+  });
+
+  it("normalizes asset history without rendering undefined values", () => {
+    expect(assetListModel({
+      items: [{ asset: { id: "asset-1", originalName: "guide.pdf", contentType: "application/pdf", createdAt: "2026-08-23T00:00:00.000Z" }, job: { status: "queued" } }],
+      nextCursor: "next",
+    })).toMatchObject({
+      nextCursor: "next",
+      items: [{ id: "asset-1", originalName: "guide.pdf", jobStatus: "queued", parsedHref: "" }],
+    });
+    expect(assetListModel({ items: [{ asset: { id: "asset-2" }, job: { status: "succeeded" } }] }).items[0]).not.toHaveProperty("undefined");
   });
 });
 
