@@ -112,6 +112,12 @@ PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markd
 
 当前本地/Workerd 验证覆盖每种签名、损坏文件、空结果、超限结果、转换器故障和原件恢复重试；真实 Office/PDF/图片样本、生产 AI 可用性和生产 R2 仍需单独证据。
 
+## M2-18 失败矩阵与中断上传补偿
+
+M2 的单元矩阵现在对每种二进制/富内容格式分别覆盖：成功转换、伪造 MIME、损坏签名、转换结果为空、转换结果超限和转换器不可用。转换器不可用只进入 `failed_retryable`；空/超限/签名错误进入稳定的 `failed_terminal`，并确保不存在 `parsed/<assetId>.md` 半成品。
+
+上传中断仍采用 R2→D1 顺序和补偿删除：R2 写入成功但 D1 双写失败时，Worker 删除刚写入的 `staging/<assetId>`，不产生可见 D1 asset/job；若补偿删除自身失败，则由 M2-16 的人工预览/回收流程发现，默认 grace period 和二次引用检查仍然生效。该路径已用 fake R2 和 Workerd 验证，未宣称生产故障注入证据。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

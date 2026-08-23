@@ -131,6 +131,23 @@ function orphanBucket() {
   } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer>; add: (key: string, value: string, uploadedAt: string) => void };
 }
 
+const richFormatMatrix = [
+  ["guide.pdf", "application/pdf", Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d])],
+  ["photo.png", "image/png", Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+  ["photo.jpg", "image/jpeg", Uint8Array.from([0xff, 0xd8, 0xff])],
+  ["photo.gif", "image/gif", new TextEncoder().encode("GIF89a")],
+  ["photo.webp", "image/webp", Uint8Array.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])],
+  ["guide.doc", "application/msword", Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])],
+  ["guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+  ["sheet.xls", "application/vnd.ms-excel", Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])],
+  ["sheet.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+  ["deck.ppt", "application/vnd.ms-powerpoint", Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])],
+  ["deck.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+  ["document.odt", "application/vnd.oasis.opendocument.text", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+  ["workbook.ods", "application/vnd.oasis.opendocument.spreadsheet", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+  ["workbook.numbers", "application/vnd.apple.numbers", Uint8Array.from([0x50, 0x4b, 0x03, 0x04])],
+] as const;
+
 describe("AssetService", () => {
   it("stores a bounded private object and queues exactly one parse job", async () => {
     let sequence = 0;
@@ -233,6 +250,10 @@ describe("AssetService", () => {
     ["guide.pdf", "text/plain", "ASSET_TYPE_MISMATCH", 415],
     ["photo.png", "image/jpeg", "ASSET_TYPE_MISMATCH", 415],
     ["deck.pptx", "application/pdf", "ASSET_TYPE_MISMATCH", 415],
+    ["guide.doc", "text/plain", "ASSET_TYPE_MISMATCH", 415],
+    ["document.odt", "application/pdf", "ASSET_TYPE_MISMATCH", 415],
+    ["workbook.ods", "text/plain", "ASSET_TYPE_MISMATCH", 415],
+    ["workbook.numbers", "text/plain", "ASSET_TYPE_MISMATCH", 415],
   ])("rejects invalid upload metadata %s", async (originalName, contentType, code, status) => {
     const service = new AssetService(bucket(), repository());
     await expect(service.create({
@@ -309,6 +330,41 @@ describe("AssetService", () => {
     const converted = originals.objects.get(`parsed/${created.asset.id}.md`);
     expect(converted).toBeDefined();
     expect(new TextDecoder().decode(converted)).toContain("# Converted PDF");
+  });
+
+  it.each(richFormatMatrix)("marks an empty conversion terminal for %s", async (originalName, contentType, payload) => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { return { format: "markdown", data: "\n  \n" }; } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName, contentType,
+      bytes: payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+      idempotencyKey: `empty-${originalName}`,
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "SOURCE_EMPTY" });
+    expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
+  });
+
+  it.each(richFormatMatrix)("keeps conversion provider failure retryable for %s", async (originalName, contentType, payload) => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { throw new Error("provider unavailable"); } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName, contentType,
+      bytes: payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength),
+      idempotencyKey: `retry-${originalName}`,
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_AI_PARSE_FAILED" });
   });
 
   it.each([
