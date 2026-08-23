@@ -395,6 +395,7 @@ export function assetListModel(value: unknown): Readonly<{
     createdAt: string;
     jobStatus: string;
     attempts: number;
+    lastErrorCode: string;
     originalHref: string;
     parsedHref: string;
   }>>;

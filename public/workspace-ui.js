@@ -896,6 +896,7 @@ export function assetListModel(value) {
       createdAt: safeString(asset.createdAt),
       jobStatus: jobStatus || "unknown",
       attempts: typeof job.attempts === "number" && Number.isSafeInteger(job.attempts) ? job.attempts : 0,
+      lastErrorCode: safeString(job.lastErrorCode),
       originalHref: id ? `/api/assets/${encodeURIComponent(id)}/original` : "",
       parsedHref: id && jobStatus === "succeeded" ? `/api/assets/${encodeURIComponent(id)}/parsed` : "",
     });

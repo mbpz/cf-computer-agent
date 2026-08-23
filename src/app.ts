@@ -90,7 +90,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
 const workspaceRoutes = new Set([
   "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-  "/admin", "/admin/submissions", "/admin/members", "/admin/spaces", "/admin/audit",
+  "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {

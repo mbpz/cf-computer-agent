@@ -12,6 +12,7 @@ const memberItems = Object.freeze([
 const adminItems = Object.freeze([
   { href: "/admin", labelKey: "NAV_ADMINISTRATION", group: "admin", capability: "submission:read-all" },
   { href: "/admin/submissions", labelKey: "NAV_REVIEW_QUEUE", group: "admin", capability: "knowledge:review" },
+  { href: "/admin/assets", labelKey: "NAV_ASSET_QUEUE", group: "admin", capability: "submission:read-all" },
   { href: "/admin/members", labelKey: "NAV_MEMBERS", group: "admin", capability: "member:manage" },
   { href: "/admin/spaces", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },
   { href: "/admin/audit", labelKey: "NAV_AUDIT", group: "admin", capability: "audit:read" },

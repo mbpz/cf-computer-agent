@@ -63,7 +63,7 @@ describe("workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
-  it.each(["/submit", "/knowledge", "/admin/members"])("serves the shell for the known deep link %s", async (path) => {
+  it.each(["/submit", "/knowledge", "/admin/assets", "/admin/members"])("serves the shell for the known deep link %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
 
     expect(response.status).toBe(200);

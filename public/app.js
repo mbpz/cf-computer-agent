@@ -94,6 +94,7 @@ const routes = Object.freeze({
   "/my-submissions": renderMySubmissions,
   "/admin": renderAdminDashboard,
   "/admin/submissions": renderPendingSubmissions,
+  "/admin/assets": renderAdminAssets,
   "/admin/members": renderMembers,
   "/admin/spaces": renderSpaces,
   "/admin/audit": renderAudit,
@@ -332,7 +333,8 @@ function renderNavigation() {
 function isNavigationCurrent(href, pathname) {
   return href === pathname
     || (href === "/knowledge" && pathname.startsWith("/knowledge/"))
-    || (href === "/admin/submissions" && pathname.startsWith("/admin/submissions/"));
+  || (href === "/admin/submissions" && pathname.startsWith("/admin/submissions/"))
+  || (href === "/admin/assets" && pathname.startsWith("/admin/assets"));
 }
 
 function requiredCapability(path) {
@@ -1373,6 +1375,69 @@ async function renderAdminDashboard(generation) {
   ]), generation);
 }
 function metricCard(title, value, label, href) { return card(title, [element("p", { text: displayValue(value) }), routeLink(label, href)]); }
+
+async function renderAdminAssets(generation) {
+  const owner = routeGuard.owner(generation, "/admin/assets");
+  const url = new URL(window.location.href);
+  let status = ["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"].includes(url.searchParams.get("status"))
+    ? url.searchParams.get("status")
+    : "";
+  const filter = element("select", { "aria-label": t("ADMIN_ASSET_FILTER_LABEL") }, [
+    element("option", { value: "", text: t("ADMIN_ASSET_FILTER_ALL") }),
+    ...["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"].map((value) => element("option", {
+      value,
+      text: assetJobStatusLabel(value),
+    })),
+  ]);
+  filter.value = status;
+  const region = element("div", { className: "stack", "aria-live": "polite" });
+  const operations = createOperationGuard();
+  const load = async () => {
+    const response = await api(adminAssetsPath(status));
+    const model = assetListModel(response);
+    const rows = list(model.items, (asset) => {
+      const actions = [
+        element("a", { href: `/api/admin/assets/${encodeURIComponent(asset.id)}/original`, className: "download-link", target: "_blank", rel: "noreferrer", text: t("ADMIN_ASSET_OPEN_ORIGINAL") }),
+        asset.parsedHref
+          ? element("a", { href: `/api/admin/assets/${encodeURIComponent(asset.id)}/parsed`, className: "download-link", target: "_blank", rel: "noreferrer", text: t("ADMIN_ASSET_OPEN_PARSED") })
+          : undefined,
+      ];
+      if (asset.jobStatus === "failed_retryable" || asset.jobStatus === "failed_terminal") {
+        const retry = element("button", { className: "secondary", type: "button", text: t("ADMIN_ASSET_RETRY") });
+        const mutation = createMutationController(
+          () => ownsMutation(owner),
+          (pending) => setPending(retry, pending, t("ADMIN_ASSET_RETRYING"), t("ADMIN_ASSET_RETRY")),
+        );
+        retry.addEventListener("click", () => void mutation.run(
+          () => api(`/api/admin/assets/${encodeURIComponent(asset.id)}/retry`, { method: "POST" }),
+          () => { setStatus(t("ADMIN_ASSET_RETRIED"), "success"); void load(); },
+          (error) => setStatus(safeErrorMessage(error), "error"),
+        ));
+        actions.push(retry);
+      }
+      if (asset.lastErrorCode) actions.push(element("span", { className: "item-meta", text: t("ADMIN_ASSET_ERROR_CODE", { code: asset.lastErrorCode }) }));
+      return item(asset.originalName, localized(() => `${assetJobStatusLabel(asset.jobStatus)} · ${formatBytes(asset.byteSize)} · ${formatDate(asset.createdAt)}`), actions);
+    }, t("ADMIN_ASSET_EMPTY"));
+    region.replaceChildren(rows);
+  };
+  filter.addEventListener("change", () => {
+    status = filter.value;
+    const next = new URL(window.location.href);
+    if (status) next.searchParams.set("status", status);
+    else next.searchParams.delete("status");
+    history.replaceState({}, "", `${next.pathname}${next.search}`);
+    region.replaceChildren(routeStateNode("loading", t("SHELL_LOADING_BODY")));
+    void runLatestOperation(operations, load, () => undefined, (error) => region.replaceChildren(routeStateNode("error", safeErrorMessage(error))), () => ownsMutation(owner));
+  });
+  await load();
+  replaceOutlet(page(t("ADMIN_ASSET_QUEUE_TITLE"), t("ADMIN_ASSET_QUEUE_DESCRIPTION"), [card(t("ADMIN_ASSET_QUEUE_TITLE"), [filter, region])]), generation);
+}
+
+function adminAssetsPath(status) {
+  const query = new URLSearchParams({ limit: "50" });
+  if (status) query.set("status", status);
+  return `/api/admin/assets?${query.toString()}`;
+}
 
 async function renderPendingSubmissions(generation) {
   const owner = routeGuard.owner(generation, "/admin/submissions");

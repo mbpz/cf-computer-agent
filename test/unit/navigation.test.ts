@@ -16,17 +16,17 @@ describe("navigationForSession", () => {
     ]);
   });
 
-  it("adds all five administration destinations for an administrator", () => {
+  it("adds all six administration destinations for an administrator", () => {
     const navigation = navigationForSession({
       member: { id: "member-1", email: "admin@example.test", role: "admin" },
       capabilities: ["legacy:read", "legacy:write", "submission:create", "submission:read-own", "submission:read-all", "member:manage", "space:manage", "audit:read", "knowledge:read", "knowledge:review"],
     });
 
     expect(navigation.filter((item) => item.group === "admin").map((item) => item.href)).toEqual([
-      "/admin", "/admin/submissions", "/admin/members", "/admin/spaces", "/admin/audit",
+      "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit",
     ]);
     expect(navigation.filter((item) => item.group === "admin").map((item) => item.label)).toEqual([
-      "Administration", "Review Queue", "Members", "Spaces", "Audit",
+      "Administration", "Review Queue", "Asset Queue", "Members", "Spaces", "Audit",
     ]);
   });
 
