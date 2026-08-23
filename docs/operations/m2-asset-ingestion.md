@@ -76,6 +76,10 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markdown 转换器前会检查最小文件签名。扩展名和 MIME 正确但文件头损坏时，任务进入 `failed_terminal`，错误码为 `ASSET_CONTENT_INVALID`，不会调用 AI 转换器，也不会生成解析结果。单元矩阵覆盖每种签名的成功路径，以及 PDF 损坏路径；完整的真实文件样本、空文件、超限和 AI 配额故障仍需在后续验收中补齐。
 
+## M2-13 失败恢复矩阵
+
+解析结果为空或超过 128 KiB 时，任务进入 `failed_terminal`，分别记录 `SOURCE_EMPTY` 或 `SOURCE_TOO_LARGE`；非法 UTF-8、损坏二进制和不支持的解析器也保持终态失败。Workers AI 转换器异常仍进入 `failed_retryable`。R2 原件暂时缺失同样进入 `failed_retryable`，原件恢复后可以再次领取并成功写入唯一的 `parsed/<assetId>.md`。Workerd 回归覆盖“删除原件→失败→恢复原件→重试成功”的完整流程；Cron/管理员重试仍受最多 3 次领取限制。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

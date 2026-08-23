@@ -253,7 +253,7 @@ export class AssetService {
       await this.originals.delete(parsedKey).catch(() => undefined);
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
-        "ASSET_ORIGINAL_MISSING", "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
+        "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }

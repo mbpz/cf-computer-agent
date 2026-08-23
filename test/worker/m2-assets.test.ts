@@ -121,6 +121,27 @@ describe("M2 asset upload boundary", () => {
     await expect(env.ORIGINALS.get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
   });
 
+  it("keeps a missing original retryable and recovers after the object returns", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "recover.txt", "idempotency-key": "asset-recover-1" },
+      body: "recover me",
+    });
+    const uploaded = await upload.json<{ asset: { id: string; objectKey: string } }>();
+    await env.ORIGINALS.delete(uploaded.asset.objectKey);
+
+    const missing = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    expect(missing.status).toBe(200);
+    await expect(missing.json()).resolves.toMatchObject({
+      job: { status: "failed_retryable", lastErrorCode: "ASSET_ORIGINAL_MISSING" },
+    });
+
+    await env.ORIGINALS.put(uploaded.asset.objectKey, "recover me", { httpMetadata: { contentType: "text/plain" } });
+    const recovered = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    expect(recovered.status).toBe(200);
+    await expect(recovered.json()).resolves.toMatchObject({ job: { status: "succeeded", lastErrorCode: null } });
+  });
+
   it("downloads only the owner's original and completed parsed result", async () => {
     const upload = await memberApi("asset-owner", "/api/assets", {
       method: "POST",

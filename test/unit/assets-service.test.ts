@@ -292,6 +292,38 @@ describe("AssetService", () => {
     expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_AI_PARSE_FAILED" });
   });
 
+  it("marks an empty rich conversion as a terminal source failure", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { return { format: "markdown", data: "\n  \n" }; } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "empty.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "empty-rich-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "SOURCE_EMPTY" });
+  });
+
+  it("marks an oversized rich conversion as a terminal source failure", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { return { format: "markdown", data: "x".repeat(128 * 1024) }; } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "large.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "large-rich-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "SOURCE_TOO_LARGE" });
+  });
+
   it("marks malformed UTF-8 text as a terminal parse failure", async () => {
     const db = repository();
     const originals = bucket();
@@ -304,6 +336,21 @@ describe("AssetService", () => {
     const result = await service.process("member-1", created.asset.id);
 
     expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_CONTENT_INVALID" });
+  });
+
+  it("keeps a missing R2 original retryable", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-missing-original" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "notes.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("recover me").buffer, idempotencyKey: "missing-original-key",
+    });
+    originals.objects.delete(created.asset.objectKey);
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_ORIGINAL_MISSING" });
   });
 
   it("automatically processes only the bounded set of due parse jobs", async () => {
