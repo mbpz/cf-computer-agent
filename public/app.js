@@ -161,8 +161,8 @@ function page(title, description, children = []) {
   ]);
 }
 
-function card(title, children = []) {
-  return element("section", { className: "card" }, [element("h2", { text: title }), ...children]);
+function card(title, children = [], className = "card") {
+  return element("section", { className }, [element("h2", { text: title }), ...children]);
 }
 
 function empty(message) { return element("div", { className: "empty-state", text: message }); }
@@ -788,7 +788,7 @@ async function renderSearch(generation) {
     await Promise.all([collectionControl.controller.loadInitial(), tagControl.controller.loadInitial()]);
   };
   space.addEventListener("change", () => { void updateDependentFilters(); });
-  replaceOutlet(page(t("SEARCH_TITLE"), t("SEARCH_DESCRIPTION"), [card(t("SEARCH_FILTERS"), [form]), card(t("SEARCH_RESULTS"), [results])]), generation);
+  replaceOutlet(page(t("SEARCH_TITLE"), t("SEARCH_DESCRIPTION"), [card(t("SEARCH_FILTERS"), [form], "card search-panel"), card(t("SEARCH_RESULTS"), [results], "card search-results-panel")]), generation);
 }
 
 async function renderAgent(generation) {
@@ -1024,7 +1024,7 @@ async function renderAgent(generation) {
     submitButton,
   ]);
   updateScopeState();
-  replaceOutlet(page(t("AGENT_TITLE"), t("AGENT_DESCRIPTION"), [card(t("AGENT_GROUNDED_QUESTION"), [form, answer])]), generation);
+  replaceOutlet(page(t("AGENT_TITLE"), t("AGENT_DESCRIPTION"), [card(t("AGENT_GROUNDED_QUESTION"), [form, answer], "card agent-panel")]), generation);
 }
 
 async function renderMySubmissions(generation) {
