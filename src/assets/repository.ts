@@ -32,6 +32,19 @@ export class AssetsRepository implements AssetRepositoryPort {
     return this.find("a.owner_id = ? AND a.id = ?", [ownerId, assetId]);
   }
 
+  async findById(assetId: string): Promise<AssetWithJob | null> {
+    return this.find("a.id = ?", [assetId]);
+  }
+
+  async listProcessable(limit: number): Promise<string[]> {
+    const result = await this.db.prepare(
+      `SELECT asset_id FROM parse_jobs
+       WHERE status IN ('queued', 'failed_retryable') AND attempts < 3
+       ORDER BY updated_at ASC, id ASC LIMIT ?`,
+    ).bind(limit).all<{ asset_id: string }>();
+    return result.results.map((row) => row.asset_id);
+  }
+
   async claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null> {
     const result = await this.db.prepare(
       `UPDATE parse_jobs

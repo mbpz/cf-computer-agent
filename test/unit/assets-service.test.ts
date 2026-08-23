@@ -37,6 +37,13 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
       job.lastErrorCode = code;
       job.updatedAt = now;
     },
+    async listProcessable(_limit: number) {
+      return store.jobs.filter((item) => ["queued", "failed_retryable"].includes(item.status) && item.attempts < 3).map((item) => item.assetId);
+    },
+    async findById(assetId: string) {
+      const asset = store.assets.find((item) => item.id === assetId);
+      return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
+    },
   };
   return store;
 }
@@ -183,5 +190,22 @@ describe("AssetService", () => {
     const result = await service.process("member-1", created.asset.id);
 
     expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_CONTENT_INVALID" });
+  });
+
+  it("automatically processes only the bounded set of due parse jobs", async () => {
+    let sequence = 0;
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      id: () => `asset-${++sequence}`,
+      now: () => new Date("2026-08-23T00:00:00.000Z"),
+    });
+    await service.create({
+      ownerId: "member-1", originalName: "notes.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("scheduled").buffer, idempotencyKey: "scheduled-key",
+    });
+
+    await expect(service.processDue(1)).resolves.toEqual({ attempted: 1, succeeded: 1 });
+    expect((await service.getOwned("member-1", "asset-1")).job.status).toBe("succeeded");
   });
 });

@@ -7,6 +7,8 @@ export interface AssetRepositoryPort {
   findByIdempotency(ownerId: string, idempotencyKey: string): Promise<AssetWithJob | null>;
   insertAssetWithJob(asset: AssetRecord, job: ParseJobRecord): Promise<void>;
   findOwned(ownerId: string, assetId: string): Promise<AssetWithJob | null>;
+  findById(assetId: string): Promise<AssetWithJob | null>;
+  listProcessable(limit: number): Promise<string[]>;
   claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
   markParseSucceeded(assetId: string, now: string): Promise<void>;
   markParseFailed(assetId: string, now: string, code: string, terminal: boolean): Promise<void>;
@@ -103,11 +105,35 @@ export class AssetService {
   }
 
   async process(ownerId: string, assetId: string): Promise<AssetWithJob> {
-    const current = await this.getOwned(ownerId, assetId);
+    return this.processRecord(await this.getOwned(ownerId, assetId));
+  }
+
+  async processDue(limit = 10): Promise<{ attempted: number; succeeded: number }> {
+    const boundedLimit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(20, limit)) : 10;
+    const assetIds = await this.repository.listProcessable(boundedLimit);
+    let succeeded = 0;
+    for (const assetId of assetIds) {
+      try {
+        const result = await this.processSystem(assetId);
+        if (result?.job.status === "succeeded") succeeded += 1;
+      } catch {
+        // A single broken asset must not prevent the bounded sweep from continuing.
+      }
+    }
+    return { attempted: assetIds.length, succeeded };
+  }
+
+  private async processSystem(assetId: string): Promise<AssetWithJob | null> {
+    const current = await this.repository.findById(assetId);
+    return current ? this.processRecord(current) : null;
+  }
+
+  private async processRecord(current: AssetWithJob): Promise<AssetWithJob> {
     if (current.job.status === "succeeded" || current.job.status === "failed_terminal") return current;
+    const assetId = current.asset.id;
     const now = this.now().toISOString();
     const claimed = await this.repository.claimParseJob(assetId, now);
-    if (!claimed) return (await this.repository.findOwned(ownerId, assetId)) || current;
+    if (!claimed) return (await this.repository.findById(assetId)) || current;
 
     const parsedKey = `parsed/${assetId}.md`;
     try {
@@ -129,7 +155,7 @@ export class AssetService {
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
-    return (await this.repository.findOwned(ownerId, assetId)) || current;
+    return (await this.repository.findById(current.asset.id)) || current;
   }
 }
 

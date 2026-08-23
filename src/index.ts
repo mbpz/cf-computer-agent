@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { getWorkspace, type DurableObjectStorageLike, withWorkspace } from "@cloudflare/computer";
 import { createApp } from "./app";
+import { AssetsRepository } from "./assets/repository";
+import { AssetService } from "./assets/service";
 import { APP_CONFIG } from "./config";
 import { AppError } from "./http";
 import { persistPublishedContent, validatePublishedContentInput } from "./knowledge/published-content";
@@ -183,4 +185,12 @@ function disposeWorkspace(workspace: Awaited<ReturnType<typeof getWorkspace>>): 
   if (typeof dispose === "function") dispose.call(workspace);
 }
 
-export default createApp();
+const app = createApp();
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB)).processDue(3);
+    console.log("asset parse sweep complete", result);
+  },
+};
