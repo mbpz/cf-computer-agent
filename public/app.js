@@ -623,7 +623,7 @@ async function renderSubmit(generation) {
     () => ownsMutation(owner),
     (pending) => setPending(submitButton, pending, t("SUBMIT_PENDING"), t("SUBMIT_ACTION")),
   );
-  form = element("form", { className: "stack", onsubmit: (event) => {
+  form = element("form", { className: "stack submission-form", onsubmit: (event) => {
     event.preventDefault();
     form.querySelector(".validation-summary")?.remove();
     const request = submissionRequest({
@@ -1165,7 +1165,7 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
     ] : []),
   ]);
   const body = element("article", { className: "reader-body", "aria-label": t("READER_BODY_ARIA") }, [
-    element("div", { className: "actions" }, [
+    element("div", { className: "actions reader-toolbar" }, [
       visibilityBadge(model.visibility),
       element("span", { className: "badge", text: t("READER_REVISION_LABEL", () => ({
         revisionId: model.revisionId,

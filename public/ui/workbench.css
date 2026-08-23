@@ -303,6 +303,35 @@ main {
   gap: 8px;
 }
 
+.reader-toolbar {
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.reader-toolbar .badge,
+.reader-toolbar .download-link {
+  min-height: 30px;
+}
+
+.reader-body .reader-metadata {
+  margin-top: 16px;
+}
+
+.submission-form {
+  max-width: 820px;
+}
+
+.submission-form > label,
+.submission-form > .stack {
+  padding-bottom: 2px;
+}
+
+.submission-form textarea {
+  min-height: 280px;
+  font: 14px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 h1 {
   max-width: 780px;
   font-size: clamp(28px, 3.4vw, 42px);
