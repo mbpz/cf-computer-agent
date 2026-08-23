@@ -13,6 +13,7 @@ export interface AssetRepositoryPort {
   listAll(request: AssetPageRepositoryRequest): Promise<AssetPage>;
   resetParseJob(assetId: string, now: string): Promise<boolean>;
   listProcessable(limit: number): Promise<string[]>;
+  sumByteSize(): Promise<number>;
   claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null>;
   markParseSucceeded(assetId: string, now: string): Promise<void>;
   markParseFailed(assetId: string, now: string, code: string, terminal: boolean): Promise<void>;
@@ -22,6 +23,7 @@ export interface AssetServiceOptions {
   id?: () => string;
   now?: () => Date;
   maxBytes?: number;
+  maxTotalBytes?: number;
   markdownConverter?: AssetMarkdownConverter;
 }
 
@@ -52,6 +54,7 @@ export interface AssetDownload {
 }
 
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 9 * 1024 * 1024 * 1024;
 const allowedTypes = new Set([
   "text/plain", "text/markdown", "text/csv", "text/html", "application/pdf",
   "application/json", "application/xml", "application/rtf",
@@ -79,6 +82,7 @@ export class AssetService {
   private readonly id: () => string;
   private readonly now: () => Date;
   private readonly maxBytes: number;
+  private readonly maxTotalBytes: number;
   private readonly markdownConverter?: AssetMarkdownConverter;
 
   constructor(
@@ -89,6 +93,7 @@ export class AssetService {
     this.id = options.id || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
     this.maxBytes = options.maxBytes || DEFAULT_MAX_BYTES;
+    this.maxTotalBytes = options.maxTotalBytes || DEFAULT_MAX_TOTAL_BYTES;
     this.markdownConverter = typeof options.markdownConverter?.toMarkdown === "function"
       ? options.markdownConverter
       : undefined;
@@ -98,6 +103,15 @@ export class AssetService {
     validateInput(input, this.maxBytes);
     const replay = await this.repository.findByIdempotency(input.ownerId, input.idempotencyKey);
     if (replay) return replay;
+    let trackedBytes: number;
+    try {
+      trackedBytes = await this.repository.sumByteSize();
+    } catch {
+      throw new AppError("ASSET_CAPACITY_UNAVAILABLE", "Asset capacity is temporarily unavailable", 503, true);
+    }
+    if (!Number.isSafeInteger(trackedBytes) || trackedBytes < 0 || trackedBytes + input.bytes.byteLength > this.maxTotalBytes) {
+      throw new AppError("ASSET_CAPACITY_LIMIT", "Asset storage capacity has been reached", 507, true);
+    }
 
     const id = this.id();
     const now = this.now().toISOString();

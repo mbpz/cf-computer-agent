@@ -88,6 +88,11 @@ export class AssetsRepository implements AssetRepositoryPort {
     return result.results.map((row) => row.asset_id);
   }
 
+  async sumByteSize(): Promise<number> {
+    const row = await this.db.prepare("SELECT COALESCE(SUM(byte_size), 0) AS total_bytes FROM assets").first<{ total_bytes: number }>();
+    return row?.total_bytes ?? 0;
+  }
+
   async claimParseJob(assetId: string, now: string): Promise<ParseJobRecord | null> {
     const result = await this.db.prepare(
       `UPDATE parse_jobs

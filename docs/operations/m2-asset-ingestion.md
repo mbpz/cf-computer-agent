@@ -84,6 +84,10 @@ PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markd
 
 管理员资产队列每一行显示当前解析状态、已领取尝试次数、最后更新时间和稳定错误原因。`failed_retryable` 与 `failed_terminal` 仍分别支持筛选；重试操作会清零尝试次数并回到 `queued`，按钮在请求期间禁用，完成后刷新队列。未知错误码不直接展示内部异常文本，只显示通用失败状态。Workerd 回归验证 AI 失败任务的 `attempts=1`、错误码和管理员重试后的 `attempts=0`。
 
+## M2-15 容量断路器与双写补偿
+
+上传前会读取 D1 `assets.byte_size` 的累计值，默认将 9 GiB 作为应用层停止写入阈值；超过阈值返回可重试的 `507 ASSET_CAPACITY_LIMIT`，不会写入 R2。容量查询失败返回 `503 ASSET_CAPACITY_UNAVAILABLE`，同样 fail-closed；同一成员的幂等重放先返回已有资产，不会因容量变化破坏重放语义。单文件 10 MiB 限制仍独立生效。R2 写入后 D1 双写失败的补偿删除保持不变，所有容量和补偿测试均使用本地 fake/Workerd，未执行生产 bucket 扫描或删除。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

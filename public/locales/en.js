@@ -406,6 +406,8 @@ export const en = Object.freeze({
   ERROR_ASSET_NAME_INVALID: "The file name is not supported.",
   ERROR_ASSET_TYPE_UNSUPPORTED: "This file type is not supported yet.",
   ERROR_ASSET_TYPE_MISMATCH: "The file type does not match its extension.",
+  ERROR_ASSET_CAPACITY_LIMIT: "Asset storage is full. Try again after space is reclaimed.",
+  ERROR_ASSET_CAPACITY_UNAVAILABLE: "Asset storage capacity is temporarily unavailable.",
   ERROR_ASSET_CONTENT_INVALID: "The file encoding is invalid.",
   ERROR_ASSET_PARSER_UNSUPPORTED: "This file cannot be parsed automatically yet.",
   ERROR_ASSET_CONTENT_EMPTY: "The parsed source is empty.",

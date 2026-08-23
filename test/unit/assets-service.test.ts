@@ -40,6 +40,9 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
     async listProcessable(_limit: number) {
       return store.jobs.filter((item) => ["queued", "failed_retryable"].includes(item.status) && item.attempts < 3).map((item) => item.assetId);
     },
+    async sumByteSize() {
+      return store.assets.reduce((total, item) => total + item.byteSize, 0);
+    },
     async findById(assetId: string) {
       const asset = store.assets.find((item) => item.id === assetId);
       return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
@@ -140,6 +143,20 @@ describe("AssetService", () => {
       ownerId: "member-1", originalName: "empty.txt", contentType: "text/plain",
       bytes: new ArrayBuffer(0), idempotencyKey: "key",
     })).rejects.toMatchObject({ code: "ASSET_EMPTY", status: 400 });
+  });
+
+  it("rejects a new upload when tracked asset capacity is exhausted", async () => {
+    const db = repository();
+    const service = new AssetService(bucket(), db, { maxTotalBytes: 10 });
+    await service.create({
+      ownerId: "member-1", originalName: "existing.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("12345678").buffer, idempotencyKey: "capacity-existing",
+    });
+
+    await expect(service.create({
+      ownerId: "member-1", originalName: "new.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("1234").buffer, idempotencyKey: "capacity-new",
+    })).rejects.toMatchObject({ code: "ASSET_CAPACITY_LIMIT", status: 507, retryable: true });
   });
 
   it.each([

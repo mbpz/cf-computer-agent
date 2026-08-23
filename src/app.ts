@@ -116,6 +116,7 @@ function createRequestServices(
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
   const assets = new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
+    maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
     markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
   });
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
