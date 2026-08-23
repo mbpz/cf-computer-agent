@@ -141,13 +141,27 @@ export function shellControlsModel() {
   return Object.freeze({ placement: "topbar-right", mobile: "topbar-right" });
 }
 
+export function shellPresentationModel() {
+  return Object.freeze({
+    theme: "ink-garden",
+    density: "comfortable",
+    navigation: "grouped",
+    context: "secondary",
+  });
+}
+
+export function contentLayoutModel(contextVisible) {
+  return Object.freeze({ className: contextVisible ? "content-layout has-context" : "content-layout full-width" });
+}
+
 export function contextualPanelModel(items) {
+  const unavailable = t("COMMON_VALUE_UNAVAILABLE");
   const normalized = safeArray(items)
     .map((item) => ({
       label: displayValue(item?.label),
       value: displayValue(item?.value),
     }))
-    .filter((item) => item.label !== "—" && item.value !== "—")
+    .filter((item) => item.label !== unavailable && item.value !== unavailable)
     .map((item) => Object.freeze(item));
   return Object.freeze({ visible: normalized.length > 0, items: Object.freeze(normalized) });
 }
@@ -1154,13 +1168,13 @@ function safeString(value) {
   return typeof value === "string" ? value : "";
 }
 
-export function displayValue(value, fallback = "—") {
+export function displayValue(value, fallback = t("COMMON_VALUE_UNAVAILABLE")) {
   if (typeof value === "string") return value.trim() || fallback;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return fallback;
 }
 
-export function displayDate(value, locale = "en-US", fallback = "—") {
+export function displayDate(value, locale = "en-US", fallback = t("COMMON_VALUE_UNAVAILABLE")) {
   const candidate = displayValue(value, "");
   if (!candidate) return fallback;
   const date = new Date(candidate);

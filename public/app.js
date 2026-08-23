@@ -21,6 +21,7 @@ import {
   createReviewTagController,
   createRouteGuard,
   compactChildren,
+  contentLayoutModel,
   contextualPanelModel,
   displayDate,
   displayValue,
@@ -37,6 +38,7 @@ import {
   reviewTagLoadMoreModel,
   reviewTargetModel,
   sessionBootstrapState,
+  shellPresentationModel,
   submissionRequest,
   submissionResultModel,
   runLatestOperation,
@@ -60,6 +62,8 @@ const drawerToggle = byId("drawer-toggle");
 const sidebar = byId("sidebar");
 const logoutButton = byId("logout-button");
 const languageSelect = byId("language-select");
+const shellPresentation = shellPresentationModel();
+for (const [key, value] of Object.entries(shellPresentation)) shell.dataset[key] = value;
 const routeGuard = createRouteGuard();
 const mobileViewport = window.matchMedia("(max-width: 760px)");
 let session;
@@ -135,7 +139,7 @@ function page(title, description, children = []) {
         element("div", {}, [element("h1", { text: title, tabindex: "-1" }), element("p", { className: "muted", text: description })]),
       ]),
     ]),
-    element("div", { className: "content-layout" }, [
+    element("div", { className: contentLayoutModel(context.visible).className }, [
       element("section", { className: "content-primary" }, children),
       element("aside", {
         className: "context-panel",
@@ -346,7 +350,7 @@ function routeLink(label, href) { return element("a", { href, "data-route": "", 
 function list(items, itemRenderer, emptyText) { return items.length ? element("ul", { className: "item-list" }, items.map(itemRenderer)) : empty(emptyText); }
 function item(title, meta, extra = []) {
   const safeTitle = typeof title === "string" || typeof title === "number" ? displayValue(title) : t("COMMON_VALUE_UNAVAILABLE");
-  const safeMeta = meta === undefined || meta === null ? "—" : meta;
+  const safeMeta = meta === undefined || meta === null ? t("COMMON_VALUE_UNAVAILABLE") : meta;
   return element("li", { className: "item" }, [element("h3", { text: safeTitle }), element("p", { className: "item-meta", text: safeMeta }), ...extra]);
 }
 function formatDate(value) { return displayDate(value, i18n.locale); }
@@ -372,7 +376,12 @@ function lineLabel(startLine, endLine) {
     ? { line: startLine }
     : { start: startLine, end: endLine });
 }
-function documentLabel(headingPath) { return Array.isArray(headingPath) && headingPath.length ? headingPath.map((value) => displayValue(value)).filter((value) => value !== "—").join(" › ") || t("COMMON_DOCUMENT") : t("COMMON_DOCUMENT"); }
+function documentLabel(headingPath) {
+  const unavailable = t("COMMON_VALUE_UNAVAILABLE");
+  return Array.isArray(headingPath) && headingPath.length
+    ? headingPath.map((value) => displayValue(value)).filter((value) => value !== unavailable).join(" › ") || t("COMMON_DOCUMENT")
+    : t("COMMON_DOCUMENT");
+}
 function searchLocation(hit) {
   return localized(() => `${documentLabel(hit.headingPath)} · ${lineLabel(hit.startLine, hit.endLine)}`);
 }

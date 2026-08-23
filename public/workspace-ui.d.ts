@@ -65,6 +65,15 @@ export function anonymousShellState(): Readonly<{
   drawer: ReturnType<typeof drawerState>;
 }>;
 export function shellControlsModel(): Readonly<{ placement: "topbar-right"; mobile: "topbar-right" }>;
+export function shellPresentationModel(): Readonly<{
+  theme: "ink-garden";
+  density: "comfortable";
+  navigation: "grouped";
+  context: "secondary";
+}>;
+export function contentLayoutModel(contextVisible: boolean): Readonly<{
+  className: "content-layout has-context" | "content-layout full-width";
+}>;
 export function contextualPanelModel(items: unknown): Readonly<{
   visible: boolean;
   items: ReadonlyArray<Readonly<{ label: string; value: string }>>;

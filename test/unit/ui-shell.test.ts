@@ -3,12 +3,23 @@ import { describe, expect, it } from "vitest";
 import {
   contextualPanelModel,
   compactChildren,
+  contentLayoutModel,
   displayDate,
   displayValue,
+  shellPresentationModel,
   shellControlsModel,
 } from "../../public/workspace-ui.js";
 
 describe("workspace shell", () => {
+  it("publishes the mature workbench presentation contract", () => {
+    expect(shellPresentationModel()).toEqual({
+      theme: "ink-garden",
+      density: "comfortable",
+      navigation: "grouped",
+      context: "secondary",
+    });
+  });
+
   it("keeps session controls in the top-right utility cluster", () => {
     expect(shellControlsModel()).toEqual({ placement: "topbar-right", mobile: "topbar-right" });
   });
@@ -20,6 +31,11 @@ describe("workspace shell", () => {
       items: [{ label: "Status", value: "Ready" }],
     });
   });
+
+  it("lets pages reclaim the context rail when there is no context", () => {
+    expect(contentLayoutModel(false)).toEqual({ className: "content-layout full-width" });
+    expect(contentLayoutModel(true)).toEqual({ className: "content-layout has-context" });
+  });
 });
 
 describe("display boundaries", () => {
@@ -29,13 +45,13 @@ describe("display boundaries", () => {
   });
 
   it.each([undefined, null, "", "   "]) ("renders %s as a localized-safe placeholder", (value) => {
-    expect(displayValue(value)).toBe("—");
+    expect(displayValue(value)).toBe("Not provided");
   });
 
   it("preserves meaningful values without leaking object coercion", () => {
     expect(displayValue("  Ready  ")).toBe("Ready");
     expect(displayValue(42)).toBe("42");
-    expect(displayValue({})).toBe("—");
+    expect(displayValue({})).toBe("Not provided");
   });
 
   it("normalizes whitespace-only context entries", () => {
@@ -46,7 +62,7 @@ describe("display boundaries", () => {
   });
 
   it("renders invalid dates as a placeholder", () => {
-    expect(displayDate(undefined)).toBe("—");
-    expect(displayDate("not-a-date")).toBe("—");
+    expect(displayDate(undefined)).toBe("Not provided");
+    expect(displayDate("not-a-date")).toBe("Not provided");
   });
 });

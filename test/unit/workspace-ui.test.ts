@@ -458,7 +458,7 @@ describe("M1 trusted knowledge view models", () => {
       nextCursor: "next-page",
       items: [{
         title: "Runbook",
-        location: "Launch › Rollback · lines 7–11",
+        location: "Launch › Rollback · lines 7-11",
         citationHref: "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
         matchedFields: ["title", "code"],
         matchedFieldLabels: ["Title", "Code"],
@@ -557,7 +557,7 @@ describe("M1 trusted knowledge view models", () => {
           heading: "Launch › Rollback",
           startLine: 4,
           endLine: 7,
-          lineLabel: "lines 4–7",
+          lineLabel: "lines 4-7",
           excerpt: "Never execute <img onerror=alert(1)>",
         },
       ],
@@ -956,9 +956,9 @@ describe("M1 trusted knowledge view models", () => {
       indexStatus: "indexed",
       downloadHref: "/api/knowledge/knowledge-1/revisions/revision-current/download",
       focusedChunkId: "chunk-1",
-      outline: [{ label: "Launch", lineLabel: "lines 1–3", focused: true }],
+      outline: [{ label: "Launch", lineLabel: "lines 1-3", focused: true }],
       sources: [{
-        label: "Launch · lines 1–3",
+        label: "Launch · lines 1-3",
         href: "/knowledge/knowledge-1?revision=revision-current&chunk=chunk-1",
       }],
     });
@@ -1001,7 +1001,7 @@ describe("M1 trusted knowledge view models", () => {
     });
 
     expect(model.sources).toEqual([expect.objectContaining({
-      accessibleName: "Open citation 1: Runbook, Launch, lines 2–4",
+      accessibleName: "Open citation 1: Runbook, Launch, lines 2-4",
       href: "/knowledge/knowledge-1?revision=revision-1&chunk=chunk-1",
     })]);
     expect(JSON.stringify(model)).not.toMatch(/workspace\/secret|secret-hash/);
