@@ -23,6 +23,7 @@ import {
   compactChildren,
   contentLayoutModel,
   contextualPanelModel,
+  dashboardMetricsModel,
   displayDate,
   displayValue,
   drawerStateForViewport,
@@ -346,12 +347,29 @@ async function renderRoute() {
   }
 }
 
-function routeLink(label, href) { return element("a", { href, "data-route": "", className: "nav-link", text: label }); }
+function routeLink(label, href, className = "nav-link") { return element("a", { href, "data-route": "", className, text: label }); }
 function list(items, itemRenderer, emptyText) { return items.length ? element("ul", { className: "item-list" }, items.map(itemRenderer)) : empty(emptyText); }
 function item(title, meta, extra = []) {
   const safeTitle = typeof title === "string" || typeof title === "number" ? displayValue(title) : t("COMMON_VALUE_UNAVAILABLE");
   const safeMeta = meta === undefined || meta === null ? t("COMMON_VALUE_UNAVAILABLE") : meta;
   return element("li", { className: "item" }, [element("h3", { text: safeTitle }), element("p", { className: "item-meta", text: safeMeta }), ...extra]);
+}
+function libraryRow(entry) {
+  const title = displayValue(entry?.title);
+  return element("li", { className: "library-row" }, [
+    element("div", { className: "library-row-main" }, [
+      element("div", { className: "library-row-title" }, [
+        element("h3", { text: title }),
+        visibilityBadge(entry?.visibility),
+      ]),
+      element("p", { className: "item-meta", text: localized(() => `${searchStatusLabel(entry?.searchStatus)} · ${formatDate(entry?.updatedAt)}`) }),
+    ]),
+    element("div", { className: "library-row-meta" }, [
+      element("span", { className: "badge", text: t("COMMON_DOCUMENT") }),
+      element("span", { className: "item-meta", text: localized(() => `${t("COMMON_REVISION")} ${displayValue(entry?.revisionId)}`) }),
+    ]),
+    routeLink(t("LIBRARY_READ_ITEM", { title }), entry?.href || "/knowledge", "route-action secondary-link"),
+  ]);
 }
 function formatDate(value) { return displayDate(value, i18n.locale); }
 function visibilityLabel(value) { return t(value === "admin_only" ? "COMMON_VISIBILITY_ADMIN_ONLY" : "COMMON_VISIBILITY_SHARED"); }
@@ -491,13 +509,41 @@ function openReviewDialog({ title, description, confirmLabel, danger = false, ow
 
 async function renderHome(generation) {
   const submissions = await api("/api/submissions/mine?limit=5");
+  const metrics = dashboardMetricsModel(submissions.items);
+  const metric = (label, value, tone = "") => element("div", { className: `metric ${tone}` }, [
+    element("dt", { text: label }),
+    element("dd", { text: String(value) }),
+  ]);
   if (replaceOutlet(page(t("HOME_TITLE"), t("HOME_DESCRIPTION"), [
+    element("section", { className: "dashboard-hero" }, [
+      element("div", { className: "dashboard-hero-copy" }, [
+        element("p", { className: "eyebrow", text: t("HOME_OVERVIEW_LABEL") }),
+        element("h2", { text: t("HOME_QUICK_START") }),
+        element("p", { className: "muted", text: t("HOME_OVERVIEW_BODY") }),
+      ]),
+      element("div", { className: "actions" }, [
+        routeLink(t("HOME_START_SUBMISSION"), "/submit", "route-action primary-link"),
+        routeLink(t("SEARCH_ACTION"), "/search", "route-action secondary-link"),
+        routeLink(t("HOME_ASK_AGENT"), "/agent", "route-action secondary-link"),
+      ]),
+    ]),
+    element("dl", { className: "metric-strip" }, [
+      metric(t("HOME_TOTAL_SUBMISSIONS"), metrics.total),
+      metric(t("HOME_PENDING_SUBMISSIONS"), metrics.pending, "metric-warning"),
+      metric(t("HOME_PUBLISHED_SUBMISSIONS"), metrics.published, "metric-success"),
+      metric(t("HOME_NEEDS_REVISION"), metrics.needsRevision, "metric-danger"),
+    ]),
     element("div", { className: "page-grid" }, [
+      card(t("HOME_RECENT_SUBMISSIONS"), [list(submissions.items, (submission) => item(submission.title, localized(() => `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`)), t("HOME_NO_SUBMISSIONS"))]),
       card(t("HOME_QUICK_START"), [
         element("p", { text: t("HOME_QUICK_START_BODY") }),
-        element("div", { className: "actions" }, [routeLink(t("HOME_SUBMIT_KNOWLEDGE"), "/submit"), routeLink(t("SEARCH_ACTION"), "/search"), routeLink(t("HOME_ASK_AGENT"), "/agent")]),
+        element("div", { className: "workflow-list" }, [
+          element("div", { className: "workflow-step" }, [element("span", { className: "workflow-index", text: "01" }), element("span", { text: t("HOME_START_SUBMISSION") })]),
+          element("div", { className: "workflow-step" }, [element("span", { className: "workflow-index", text: "02" }), element("span", { text: t("NAV_REVIEW_QUEUE") })]),
+          element("div", { className: "workflow-step" }, [element("span", { className: "workflow-index", text: "03" }), element("span", { text: t("NAV_LIBRARY") })]),
+        ]),
+        routeLink(t("HOME_VIEW_ALL_SUBMISSIONS"), "/my-submissions", "route-action secondary-link"),
       ]),
-      card(t("HOME_RECENT_SUBMISSIONS"), [list(submissions.items, (submission) => item(submission.title, localized(() => `${kindLabel(submission.kind)} · ${submissionStatusLabel(submission.status)} · ${formatDate(submission.createdAt)}`)), t("HOME_NO_SUBMISSIONS"))]),
     ]),
   ]), generation)) return;
 }
@@ -643,9 +689,9 @@ async function renderKnowledge(generation) {
   const region = element("div", { className: "stack", "aria-live": "polite" });
   const operations = createOperationGuard();
   const renderItems = () => {
-    const rows = list(items, (entry) => item(entry.title, localized(() => `${visibilityLabel(entry.visibility)} · ${searchStatusLabel(entry.searchStatus)} · ${formatDate(entry.updatedAt)}`), [
-      element("div", { className: "actions" }, [visibilityBadge(entry.visibility), routeLink(t("LIBRARY_READ_ITEM", { title: displayValue(entry.title) }), entry.href)]),
-    ]), t("LIBRARY_EMPTY"));
+    const rows = items.length
+      ? element("ul", { className: "library-list" }, items.map(libraryRow))
+      : empty(t("LIBRARY_EMPTY"));
     const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
       void runLatestOperation(operations, () => api(knowledgeQuery("/api/knowledge", { limit: 20, cursor })), (data) => {

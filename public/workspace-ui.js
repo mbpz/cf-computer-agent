@@ -173,6 +173,16 @@ export function designSystemModel() {
   });
 }
 
+export function dashboardMetricsModel(items) {
+  const records = safeArray(items).filter((item) => item && typeof item === "object");
+  return Object.freeze({
+    total: records.length,
+    pending: records.filter((item) => item.status === "review_pending").length,
+    published: records.filter((item) => item.status === "published").length,
+    needsRevision: records.filter((item) => item.status === "revision_requested").length,
+  });
+}
+
 export function contentLayoutModel(contextVisible) {
   return Object.freeze({ className: contextVisible ? "content-layout has-context" : "content-layout full-width" });
 }

@@ -7,11 +7,23 @@ import {
   displayDate,
   displayValue,
   designSystemModel,
+  dashboardMetricsModel,
   shellPresentationModel,
   shellControlsModel,
 } from "../../public/workspace-ui.js";
 
 describe("workspace shell", () => {
+  it("derives dashboard metrics from safe submission data", () => {
+    expect(dashboardMetricsModel([
+      { status: "review_pending" },
+      { status: "published" },
+      { status: "published" },
+      { status: "revision_requested" },
+      null,
+    ])).toEqual({ total: 4, pending: 1, published: 2, needsRevision: 1 });
+    expect(dashboardMetricsModel(undefined)).toEqual({ total: 0, pending: 0, published: 0, needsRevision: 0 });
+  });
+
   it("publishes the Cloudflare-inspired workbench design contract", () => {
     expect(designSystemModel()).toEqual({
       name: "cloudflare-workbench",

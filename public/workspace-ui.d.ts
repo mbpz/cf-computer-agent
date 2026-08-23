@@ -80,6 +80,12 @@ export function designSystemModel(): Readonly<{
   >;
   reducedMotion: true;
 }>;
+export function dashboardMetricsModel(items: unknown): Readonly<{
+  total: number;
+  pending: number;
+  published: number;
+  needsRevision: number;
+}>;
 export function contentLayoutModel(contextVisible: boolean): Readonly<{
   className: "content-layout has-context" | "content-layout full-width";
 }>;
