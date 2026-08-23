@@ -3,6 +3,7 @@ import { navigationForSession } from "/navigation.js";
 import { renderSafeMarkdown } from "/markdown-renderer.js";
 import {
   anonymousShellState,
+  accountPresentationModel,
   appendPage,
   chatRequest,
   chatScopeControlsModel,
@@ -63,6 +64,7 @@ const drawerToggle = byId("drawer-toggle");
 const sidebar = byId("sidebar");
 const logoutButton = byId("logout-button");
 const languageSelect = byId("language-select");
+const sessionAvatar = byId("session-avatar");
 const shellPresentation = shellPresentationModel();
 for (const [key, value] of Object.entries(shellPresentation)) shell.dataset[key] = value;
 const routeGuard = createRouteGuard();
@@ -1661,6 +1663,8 @@ function renderAnonymous() {
   setStatus(t("ANONYMOUS_STATUS"));
   byId("primary-navigation").replaceChildren();
   translationBindings.text(byId("session-summary"), t("SESSION_SIGN_IN_HINT"));
+  sessionAvatar.hidden = true;
+  sessionAvatar.replaceChildren();
   logoutButton.hidden = true;
   logoutButton.disabled = true;
   drawerToggle.hidden = true;
@@ -1674,8 +1678,12 @@ function renderAnonymous() {
 
 function renderSessionSummary() {
   if (!session) return;
+  const account = accountPresentationModel(session);
+  sessionAvatar.hidden = !account.visible;
+  if (account.visible) sessionAvatar.replaceChildren(document.createTextNode(account.initials));
+  else sessionAvatar.replaceChildren();
   translationBindings.text(byId("session-summary"), t("SESSION_SUMMARY", {
-    email: displayValue(session.member?.email, t("COMMON_VALUE_UNAVAILABLE")),
+    email: displayValue(account.email, t("COMMON_VALUE_UNAVAILABLE")),
     role: memberRoleLabel(session.member?.role),
   }));
 }

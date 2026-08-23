@@ -95,6 +95,32 @@ body {
   gap: 8px;
 }
 
+.account-cluster {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-avatar {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #754a25;
+  border-radius: 50%;
+  background: #2b2118;
+  color: #ffd7ad;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.session-avatar[hidden] {
+  display: none;
+}
+
 .session-summary {
   color: var(--faint);
   font-size: 11px;

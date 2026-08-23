@@ -177,6 +177,7 @@ code { overflow-wrap: anywhere; }
   .topbar { align-items: flex-start; flex-wrap: wrap; }
   .topbar-context { order: 3; width: 100%; }
   .topbar-utilities { margin-left: auto; }
+  .account-cluster { max-width: 48vw; }
   .session-summary { max-width: 42vw; }
   .content-layout, .page-grid, .page-grid.wide-left, .review-grid, .filter-grid, .reader-grid { grid-template-columns: 1fr; }
   .reader-sources { grid-column: auto; }

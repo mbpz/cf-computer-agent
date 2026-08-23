@@ -65,6 +65,12 @@ export function anonymousShellState(): Readonly<{
   drawer: ReturnType<typeof drawerState>;
 }>;
 export function shellControlsModel(): Readonly<{ placement: "topbar-right"; mobile: "topbar-right" }>;
+export function accountPresentationModel(session?: unknown): Readonly<{
+  visible: boolean;
+  email: string;
+  initials: string;
+  role: string;
+}>;
 export function shellPresentationModel(): Readonly<{
   theme: "ink-garden";
   density: "comfortable";

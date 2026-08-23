@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
+  accountPresentationModel,
   contextualPanelModel,
   compactChildren,
   contentLayoutModel,
@@ -13,6 +14,21 @@ import {
 } from "../../public/workspace-ui.js";
 
 describe("workspace shell", () => {
+  it("derives a safe account badge from a partial authenticated session", () => {
+    expect(accountPresentationModel({ member: { email: "  ada.lovelace@example.test ", role: "admin" } })).toEqual({
+      visible: true,
+      email: "ada.lovelace@example.test",
+      initials: "AL",
+      role: "admin",
+    });
+    expect(accountPresentationModel({ member: { email: undefined } })).toEqual({
+      visible: false,
+      email: "",
+      initials: "?",
+      role: "",
+    });
+  });
+
   it("derives dashboard metrics from safe submission data", () => {
     expect(dashboardMetricsModel([
       { status: "review_pending" },

@@ -141,6 +141,24 @@ export function shellControlsModel() {
   return Object.freeze({ placement: "topbar-right", mobile: "topbar-right" });
 }
 
+/** Keep account chrome deterministic when a session is partial or anonymous. */
+export function accountPresentationModel(session) {
+  const email = safeString(session?.member?.email).trim();
+  const localPart = email.split("@", 1)[0] || "";
+  const initials = localPart
+    .split(/[._-]+/u)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+  return Object.freeze({
+    visible: Boolean(email),
+    email,
+    initials,
+    role: safeString(session?.member?.role).trim(),
+  });
+}
+
 export function shellPresentationModel() {
   return Object.freeze({
     theme: "ink-garden",
