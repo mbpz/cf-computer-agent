@@ -39,7 +39,7 @@ describe("M2 asset upload boundary", () => {
         "x-asset-name": "guide.pdf",
         "idempotency-key": "asset-upload-1",
       },
-      body: "pdf-bytes",
+      body: "%PDF-1.7\n",
     });
 
     expect(response.status).toBe(201);
@@ -56,7 +56,7 @@ describe("M2 asset upload boundary", () => {
     expect(body.uploadUrl).toBeUndefined();
     const object = await env.ORIGINALS.get(body.asset.objectKey);
     expect(object).not.toBeNull();
-    await expect(object!.text()).resolves.toBe("pdf-bytes");
+    await expect(object!.text()).resolves.toBe("%PDF-1.7\n");
 
     const status = await memberApi("asset-owner", `/api/assets/${encodeURIComponent(body.asset.id)}`);
     expect(status.status).toBe(200);
@@ -174,7 +174,7 @@ describe("M2 asset upload boundary", () => {
     const upload = await memberApi("asset-owner", "/api/assets", {
       method: "POST",
       headers: { "content-type": "application/pdf", "x-asset-name": "broken.pdf", "idempotency-key": "admin-asset-1" },
-      body: "pdf-bytes",
+      body: "%PDF-1.7\n",
     });
     const uploaded = await upload.json<{ asset: { id: string } }>();
     const contributorList = await memberApi("asset-owner", "/api/admin/assets");

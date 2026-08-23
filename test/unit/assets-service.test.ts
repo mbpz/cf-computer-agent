@@ -99,7 +99,7 @@ describe("AssetService", () => {
       ownerId: "member-1",
       originalName: "guide.pdf",
       contentType: "application/pdf",
-      bytes: new TextEncoder().encode("pdf-bytes").buffer,
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer,
       idempotencyKey: "upload-key-1",
     });
 
@@ -194,7 +194,7 @@ describe("AssetService", () => {
     const service = new AssetService(originals, db);
     const created = await service.create({
       ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
-      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-key",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "pdf-key",
     });
 
     const result = await service.process("member-1", created.asset.id);
@@ -215,7 +215,7 @@ describe("AssetService", () => {
     });
     const created = await service.create({
       ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
-      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-convert-key",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "pdf-convert-key",
     });
 
     const result = await service.process("member-1", created.asset.id);
@@ -226,6 +226,56 @@ describe("AssetService", () => {
     expect(new TextDecoder().decode(converted)).toContain("# Converted PDF");
   });
 
+  it.each([
+    ["guide.pdf", "application/pdf", [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a]],
+    ["photo.png", "image/png", [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+    ["photo.jpg", "image/jpeg", [0xff, 0xd8, 0xff, 0xe0]],
+    ["photo.gif", "image/gif", [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
+    ["photo.webp", "image/webp", [0x52, 0x49, 0x46, 0x46, 0x31, 0x32, 0x33, 0x34, 0x57, 0x45, 0x42, 0x50]],
+    ["guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", [0x50, 0x4b, 0x03, 0x04]],
+    ["sheet.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", [0x50, 0x4b, 0x03, 0x04]],
+    ["deck.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", [0x50, 0x4b, 0x03, 0x04]],
+    ["sheet.xls", "application/vnd.ms-excel", [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
+    ["deck.ppt", "application/vnd.ms-powerpoint", [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
+  ])("accepts a valid binary signature for %s", async (originalName, contentType, payload) => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { return { format: "markdown", data: "# Converted\n" }; } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName, contentType,
+      bytes: Uint8Array.from(payload).buffer, idempotencyKey: `matrix-${originalName}`,
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "succeeded", lastErrorCode: null });
+  });
+
+  it("rejects a corrupt PDF before invoking rich conversion", async () => {
+    const db = repository();
+    const originals = bucket();
+    let conversions = 0;
+    const service = new AssetService(originals, db, {
+      markdownConverter: {
+        async toMarkdown() {
+          conversions += 1;
+          return { format: "markdown", data: "# Should not run\n" };
+        },
+      },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "broken.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("not a PDF").buffer, idempotencyKey: "corrupt-pdf-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_CONTENT_INVALID" });
+    expect(conversions).toBe(0);
+  });
+
   it("keeps a rich conversion provider failure retryable", async () => {
     const db = repository();
     const originals = bucket();
@@ -234,7 +284,7 @@ describe("AssetService", () => {
     });
     const created = await service.create({
       ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
-      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-failure-key",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "pdf-failure-key",
     });
 
     const result = await service.process("member-1", created.asset.id);
@@ -279,12 +329,12 @@ describe("AssetService", () => {
     const service = new AssetService(originals, db, { id: () => "asset-download" });
     await service.create({
       ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
-      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "download-key",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "download-key",
     });
 
     const result = await service.download("member-1", "asset-download", "original");
 
-    expect(new TextDecoder().decode(result.body)).toBe("pdf-bytes");
+    expect(new TextDecoder().decode(result.body)).toBe("%PDF-1.7\n");
     expect(result.contentType).toBe("application/pdf");
     expect(result.filename).toBe("guide.pdf");
   });

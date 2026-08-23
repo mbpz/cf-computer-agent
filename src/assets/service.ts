@@ -239,6 +239,7 @@ export class AssetService {
       const original = await this.originals.get(current.asset.objectKey);
       if (!original) throw new AppError("ASSET_ORIGINAL_MISSING", "Original asset is missing", 422);
       const bytes = await original.arrayBuffer();
+      validateBinarySignature(current.asset, bytes);
       const input = parseInputForAsset(current.asset, bytes);
       const parsed = input
         ? await parseSource(input)
@@ -319,6 +320,34 @@ function isRichAsset(asset: AssetRecord): boolean {
     || asset.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     || asset.contentType === "application/vnd.ms-excel"
     || asset.contentType === "application/vnd.ms-powerpoint";
+}
+
+function validateBinarySignature(asset: AssetRecord, bytes: ArrayBuffer): void {
+  const value = new Uint8Array(bytes);
+  const startsWith = (...signature: number[]) => signature.every((byte, index) => value[index] === byte);
+  const asciiAt = (offset: number, text: string) => [...text].every((character, index) => value[offset + index] === character.charCodeAt(0));
+  const isZip = startsWith(0x50, 0x4b, 0x03, 0x04) || startsWith(0x50, 0x4b, 0x05, 0x06) || startsWith(0x50, 0x4b, 0x07, 0x08);
+  const isOle = startsWith(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+  const valid = asset.contentType === "application/pdf"
+    ? asciiAt(0, "%PDF-")
+    : asset.contentType === "image/png"
+      ? startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
+      : asset.contentType === "image/jpeg"
+        ? startsWith(0xff, 0xd8, 0xff)
+        : asset.contentType === "image/gif"
+          ? asciiAt(0, "GIF87a") || asciiAt(0, "GIF89a")
+          : asset.contentType === "image/webp"
+            ? asciiAt(0, "RIFF") && asciiAt(8, "WEBP")
+            : [
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ].includes(asset.contentType)
+              ? isZip
+              : asset.contentType === "application/vnd.ms-excel" || asset.contentType === "application/vnd.ms-powerpoint"
+                ? isOle
+                : true;
+  if (!valid) throw new AppError("ASSET_CONTENT_INVALID", "Asset content is invalid", 422);
 }
 
 function parsedFilename(originalName: string): string {
