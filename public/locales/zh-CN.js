@@ -282,6 +282,7 @@ export const zhCN = Object.freeze({
   ADMIN_ASSET_RETRIED: "解析任务已重新排队。",
   ADMIN_ASSET_EMPTY: "没有符合该解析状态的原件。",
   ADMIN_ASSET_ERROR_CODE: "错误：{code}",
+  ADMIN_ASSET_ATTEMPTS: "尝试次数：{count}",
   ADMIN_ASSET_OPEN_ORIGINAL: "打开原件",
   ADMIN_ASSET_OPEN_PARSED: "打开解析后的 Markdown",
   ADMIN_OPEN_AUDIT: "打开审计",

@@ -282,6 +282,7 @@ export const en = Object.freeze({
   ADMIN_ASSET_RETRIED: "Parse job queued for retry.",
   ADMIN_ASSET_EMPTY: "No assets match this parse state.",
   ADMIN_ASSET_ERROR_CODE: "Error: {code}",
+  ADMIN_ASSET_ATTEMPTS: "Attempts: {count}",
   ADMIN_ASSET_OPEN_ORIGINAL: "Open original",
   ADMIN_ASSET_OPEN_PARSED: "Open parsed Markdown",
   ADMIN_OPEN_AUDIT: "Open audit",

@@ -1418,7 +1418,12 @@ async function renderAdminAssets(generation) {
         actions.push(retry);
       }
       if (asset.lastErrorCode) actions.push(element("span", { className: "item-meta", text: t("ADMIN_ASSET_ERROR_CODE", { code: asset.lastErrorCode }) }));
-      return item(asset.originalName, localized(() => `${assetJobStatusLabel(asset.jobStatus)} · ${formatBytes(asset.byteSize)} · ${formatDate(asset.createdAt)}`), actions);
+      return item(asset.originalName, localized(() => [
+        assetJobStatusLabel(asset.jobStatus),
+        t("ADMIN_ASSET_ATTEMPTS", { count: asset.attempts }),
+        asset.failureMessage,
+        formatDate(asset.updatedAt || asset.createdAt),
+      ].filter(Boolean).join(" · ")), actions);
     }, t("ADMIN_ASSET_EMPTY"));
     region.replaceChildren(rows);
   };

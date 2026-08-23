@@ -138,6 +138,18 @@ describe("asset upload UI contract", () => {
       failureMessage: "The parsed source is empty.",
     });
   });
+
+  it("normalizes admin queue attempts and last update time", () => {
+    expect(assetListModel({
+      items: [{ asset: { id: "asset-4", originalName: "retry.txt" }, job: {
+        status: "failed_retryable", attempts: 2, updatedAt: "2026-08-23T01:02:03.000Z", lastErrorCode: "ASSET_AI_PARSE_FAILED",
+      } }],
+    }).items[0]).toMatchObject({
+      attempts: 2,
+      updatedAt: "2026-08-23T01:02:03.000Z",
+      lastErrorCode: "ASSET_AI_PARSE_FAILED",
+    });
+  });
 });
 
 describe("createRouteGuard", () => {

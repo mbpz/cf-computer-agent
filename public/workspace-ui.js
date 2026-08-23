@@ -910,6 +910,7 @@ export function assetListModel(value) {
       createdAt: safeString(asset.createdAt),
       jobStatus: jobStatus || "unknown",
       attempts: typeof job.attempts === "number" && Number.isSafeInteger(job.attempts) ? job.attempts : 0,
+      updatedAt: safeString(job.updatedAt),
       lastErrorCode: safeString(job.lastErrorCode),
       failureMessage: jobStatus.startsWith("failed") && assetFailureMessageKeys[safeString(job.lastErrorCode)]
         ? t(assetFailureMessageKeys[safeString(job.lastErrorCode)])

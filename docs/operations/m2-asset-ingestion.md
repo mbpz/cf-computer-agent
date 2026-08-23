@@ -80,6 +80,10 @@ PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markd
 
 解析结果为空或超过 128 KiB 时，任务进入 `failed_terminal`，分别记录 `SOURCE_EMPTY` 或 `SOURCE_TOO_LARGE`；非法 UTF-8、损坏二进制和不支持的解析器也保持终态失败。Workers AI 转换器异常仍进入 `failed_retryable`。R2 原件暂时缺失同样进入 `failed_retryable`，原件恢复后可以再次领取并成功写入唯一的 `parsed/<assetId>.md`。Workerd 回归覆盖“删除原件→失败→恢复原件→重试成功”的完整流程；Cron/管理员重试仍受最多 3 次领取限制。
 
+## M2-14 管理员任务可观测性
+
+管理员资产队列每一行显示当前解析状态、已领取尝试次数、最后更新时间和稳定错误原因。`failed_retryable` 与 `failed_terminal` 仍分别支持筛选；重试操作会清零尝试次数并回到 `queued`，按钮在请求期间禁用，完成后刷新队列。未知错误码不直接展示内部异常文本，只显示通用失败状态。Workerd 回归验证 AI 失败任务的 `attempts=1`、错误码和管理员重试后的 `attempts=0`。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
