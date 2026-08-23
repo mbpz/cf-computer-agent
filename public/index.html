@@ -16,21 +16,25 @@
           <a href="/" data-route class="brand-name">Memory Garden</a>
         </div>
         <nav id="primary-navigation" aria-label="Primary navigation" data-i18n-aria-label="SHELL_PRIMARY_NAVIGATION"></nav>
-        <div class="sidebar-footer">
-          <label class="language-control">
-            <span data-i18n="SHELL_LANGUAGE_LABEL">Language</span>
-            <select id="language-select" aria-label="Language" data-i18n-aria-label="SHELL_LANGUAGE_LABEL">
-              <option value="en" data-i18n="SHELL_LANGUAGE_EN">English</option>
-              <option value="zh-CN" data-i18n="SHELL_LANGUAGE_ZH_CN">简体中文</option>
-            </select>
-          </label>
-          <button id="logout-button" class="logout-button" type="button" hidden data-i18n="SHELL_LOGOUT">Log out</button>
-        </div>
       </aside>
       <div class="app-frame">
         <header class="topbar">
           <button id="drawer-toggle" class="icon-button" type="button" aria-expanded="false" aria-controls="sidebar" data-i18n="SHELL_OPEN_NAVIGATION">Open navigation</button>
-          <div id="session-summary" class="session-summary" aria-live="polite" data-i18n="SHELL_SESSION_CHECKING">Checking sign-in status…</div>
+          <div class="topbar-context">
+            <span class="eyebrow" data-i18n="APP_BRAND_EYEBROW">PRIVATE KNOWLEDGE WORKSPACE</span>
+            <strong id="topbar-page-title" data-i18n="SHELL_SESSION_CHECKING">Checking sign-in status…</strong>
+          </div>
+          <div class="topbar-utilities">
+            <div id="session-summary" class="session-summary" aria-live="polite" data-i18n="SHELL_SESSION_CHECKING">Checking sign-in status…</div>
+            <label class="language-control">
+              <span class="sr-only" data-i18n="SHELL_LANGUAGE_LABEL">Language</span>
+              <select id="language-select" aria-label="Language" data-i18n-aria-label="SHELL_LANGUAGE_LABEL">
+                <option value="en" data-i18n="SHELL_LANGUAGE_EN">English</option>
+                <option value="zh-CN" data-i18n="SHELL_LANGUAGE_ZH_CN">简体中文</option>
+              </select>
+            </label>
+            <button id="logout-button" class="logout-button" type="button" hidden data-i18n="SHELL_LOGOUT">Log out</button>
+          </div>
         </header>
         <main id="main-content" tabindex="-1">
           <div id="status-region" class="status-region" aria-live="polite"></div>

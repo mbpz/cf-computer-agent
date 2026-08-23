@@ -64,6 +64,13 @@ export function anonymousShellState(): Readonly<{
   statusMessage: "";
   drawer: ReturnType<typeof drawerState>;
 }>;
+export function shellControlsModel(): Readonly<{ placement: "topbar-right"; mobile: "topbar-right" }>;
+export function contextualPanelModel(items: unknown): Readonly<{
+  visible: boolean;
+  items: ReadonlyArray<Readonly<{ label: string; value: string }>>;
+}>;
+export function displayValue(value: unknown, fallback?: string): string;
+export function displayDate(value: unknown, locale?: string, fallback?: string): string;
 export function sessionBootstrapState(
   status: number,
   session?: BrowserSession,

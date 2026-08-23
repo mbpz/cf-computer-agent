@@ -137,6 +137,21 @@ export function anonymousShellState() {
   });
 }
 
+export function shellControlsModel() {
+  return Object.freeze({ placement: "topbar-right", mobile: "topbar-right" });
+}
+
+export function contextualPanelModel(items) {
+  const normalized = safeArray(items)
+    .map((item) => ({
+      label: displayValue(item?.label),
+      value: displayValue(item?.value),
+    }))
+    .filter((item) => item.label !== "—" && item.value !== "—")
+    .map((item) => Object.freeze(item));
+  return Object.freeze({ visible: normalized.length > 0, items: Object.freeze(normalized) });
+}
+
 export function sessionBootstrapState(status, session) {
   if (status === 401) return Object.freeze({ kind: "anonymous" });
   if (status >= 200 && status < 300 && session?.member && Array.isArray(session.capabilities)) {
@@ -1133,6 +1148,20 @@ function safeRecord(value) {
 
 function safeString(value) {
   return typeof value === "string" ? value : "";
+}
+
+export function displayValue(value, fallback = "—") {
+  if (typeof value === "string") return value.trim() || fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+export function displayDate(value, locale = "en-US", fallback = "—") {
+  const candidate = displayValue(value, "");
+  if (!candidate) return fallback;
+  const date = new Date(candidate);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function escapeHtml(value) {

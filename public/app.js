@@ -20,6 +20,9 @@ import {
   createReplaceableOwner,
   createReviewTagController,
   createRouteGuard,
+  contextualPanelModel,
+  displayDate,
+  displayValue,
   drawerStateForViewport,
   knowledgeListModel,
   knowledgeQuery,
@@ -112,13 +115,43 @@ function element(tag, options = {}, children = []) {
 }
 
 function page(title, description, children = []) {
-  return element("div", {}, [
+  const context = contextualPanelModel(session ? [
+    { label: String(t("COMMON_EMAIL")), value: session.member?.email },
+    { label: String(t("COMMON_ROLE")), value: String(memberRoleLabel(session.member?.role)) },
+    { label: String(t("COMMON_STATUS")), value: String(t("COMMON_STATUS_ACTIVE")) },
+  ] : []);
+  const quickActions = session ? [
+    has("submission:create") ? routeLink(t("HOME_SUBMIT_KNOWLEDGE"), "/submit") : null,
+    has("knowledge:read") ? routeLink(t("SEARCH_ACTION"), "/search") : null,
+    has("knowledge:read") ? routeLink(t("HOME_ASK_AGENT"), "/agent") : null,
+    has("knowledge:review") ? routeLink(t("NAV_REVIEW_QUEUE"), "/admin/submissions") : null,
+  ].filter(Boolean) : [];
+  translationBindings.text(byId("topbar-page-title"), title);
+  return element("div", { className: "page-shell" }, [
     element("header", { className: "page-header" }, [
       element("p", { className: "eyebrow", text: t("APP_EYEBROW") }),
-      element("h1", { text: title, tabindex: "-1" }),
-      element("p", { className: "muted", text: description }),
+      element("div", { className: "page-heading-row" }, [
+        element("div", {}, [element("h1", { text: title, tabindex: "-1" }), element("p", { className: "muted", text: description })]),
+      ]),
     ]),
-    ...children,
+    element("div", { className: "content-layout" }, [
+      element("section", { className: "content-primary" }, children),
+      element("aside", {
+        className: "context-panel",
+        ...(context.visible ? {} : { hidden: "" }),
+        "aria-label": t("SHELL_PAGE_CONTEXT"),
+      }, [
+        element("p", { className: "eyebrow", text: t("SHELL_CONTEXT_TITLE") }),
+        element("p", { className: "muted", text: t("SHELL_CONTEXT_DESCRIPTION") }),
+        element("dl", { className: "context-list" }, context.items.flatMap((item) => [
+          element("dt", { text: item.label }), element("dd", { text: item.value }),
+        ])),
+        ...(quickActions.length ? [
+          element("p", { className: "eyebrow context-actions-label", text: t("SHELL_CONTEXT_ACTIONS") }),
+          element("div", { className: "context-actions" }, quickActions),
+        ] : []),
+      ]),
+    ]),
   ]);
 }
 
@@ -184,7 +217,7 @@ const runtimeErrorKeys = Object.freeze({
 function apiError(data) {
   const code = typeof data?.error?.code === "string" ? data.error.code : "";
   if (!code) return t("ERROR_GENERIC");
-  return apiErrorKeys[code] ? t(apiErrorKeys[code]) : t("ERROR_UNKNOWN_CODE", { code });
+  return apiErrorKeys[code] ? t(apiErrorKeys[code]) : t("ERROR_UNKNOWN_CODE", { code: displayValue(code, t("ERROR_GENERIC")) });
 }
 
 async function api(path, options = {}) {
@@ -310,14 +343,18 @@ async function renderRoute() {
 
 function routeLink(label, href) { return element("a", { href, "data-route": "", className: "nav-link", text: label }); }
 function list(items, itemRenderer, emptyText) { return items.length ? element("ul", { className: "item-list" }, items.map(itemRenderer)) : empty(emptyText); }
-function item(title, meta, extra = []) { return element("li", { className: "item" }, [element("h3", { text: title }), element("p", { className: "item-meta", text: meta }), ...extra]); }
-function formatDate(value) { return value ? new Date(value).toLocaleString(i18n.locale, { dateStyle: "medium", timeStyle: "short" }) : "—"; }
+function item(title, meta, extra = []) {
+  const safeTitle = typeof title === "string" || typeof title === "number" ? displayValue(title) : t("COMMON_VALUE_UNAVAILABLE");
+  const safeMeta = meta === undefined || meta === null ? "—" : meta;
+  return element("li", { className: "item" }, [element("h3", { text: safeTitle }), element("p", { className: "item-meta", text: safeMeta }), ...extra]);
+}
+function formatDate(value) { return displayDate(value, i18n.locale); }
 function visibilityLabel(value) { return t(value === "admin_only" ? "COMMON_VISIBILITY_ADMIN_ONLY" : "COMMON_VISIBILITY_SHARED"); }
 function kindLabel(value) {
   return t(value === "code" ? "COMMON_KIND_CODE" : value === "markdown" ? "COMMON_KIND_MARKDOWN" : "COMMON_KIND_TEXT");
 }
 function submissionStatusLabel(value) {
-  return submissionStatusKeys[value] ? t(submissionStatusKeys[value]) : String(value);
+  return submissionStatusKeys[value] ? t(submissionStatusKeys[value]) : t("COMMON_STATUS_UNKNOWN");
 }
 function searchStatusLabel(value) {
   return t({
@@ -327,14 +364,14 @@ function searchStatusLabel(value) {
     failed: "COMMON_STATUS_FAILED",
   }[value] || "COMMON_STATUS_PENDING");
 }
-function memberRoleLabel(value) { return t(value === "admin" ? "COMMON_ROLE_ADMIN" : "COMMON_ROLE_CONTRIBUTOR"); }
-function activeStatusLabel(value) { return t(value === "active" ? "COMMON_STATUS_ACTIVE" : "COMMON_STATUS_DISABLED"); }
+function memberRoleLabel(value) { return t(value === "admin" ? "COMMON_ROLE_ADMIN" : value === "contributor" ? "COMMON_ROLE_CONTRIBUTOR" : "COMMON_STATUS_UNKNOWN"); }
+function activeStatusLabel(value) { return t(value === "active" ? "COMMON_STATUS_ACTIVE" : value === "disabled" ? "COMMON_STATUS_DISABLED" : "COMMON_STATUS_UNKNOWN"); }
 function lineLabel(startLine, endLine) {
   return t(startLine === endLine ? "READER_LINE" : "READER_LINES", startLine === endLine
     ? { line: startLine }
     : { start: startLine, end: endLine });
 }
-function documentLabel(headingPath) { return headingPath.join(" › ") || t("COMMON_DOCUMENT"); }
+function documentLabel(headingPath) { return Array.isArray(headingPath) && headingPath.length ? headingPath.map((value) => displayValue(value)).filter((value) => value !== "—").join(" › ") || t("COMMON_DOCUMENT") : t("COMMON_DOCUMENT"); }
 function searchLocation(hit) {
   return localized(() => `${documentLabel(hit.headingPath)} · ${lineLabel(hit.startLine, hit.endLine)}`);
 }
@@ -474,7 +511,7 @@ function createPagedOptionControl({ resource, spaceId, writableOnly = false, own
     onChange(state) {
       if (!stillOwns()) return;
       const selected = select.value;
-      const options = state.items.map((item) => element("option", { value: item.id, text: item.name }));
+      const options = state.items.map((item) => element("option", { value: displayValue(item.id), text: displayValue(item.name) }));
       select.replaceChildren(...(emptyLabel === undefined ? [] : [element("option", { value: "", text: emptyLabel })]), ...options);
       if ([...select.options].some((option) => option.value === selected)) select.value = selected;
       select.disabled = state.pending && !state.loaded;
@@ -597,7 +634,7 @@ async function renderKnowledge(generation) {
   const operations = createOperationGuard();
   const renderItems = () => {
     const rows = list(items, (entry) => item(entry.title, localized(() => `${visibilityLabel(entry.visibility)} · ${searchStatusLabel(entry.searchStatus)} · ${formatDate(entry.updatedAt)}`), [
-      element("div", { className: "actions" }, [visibilityBadge(entry.visibility), routeLink(t("LIBRARY_READ_ITEM", { title: entry.title }), entry.href)]),
+      element("div", { className: "actions" }, [visibilityBadge(entry.visibility), routeLink(t("LIBRARY_READ_ITEM", { title: displayValue(entry.title) }), entry.href)]),
     ]), t("LIBRARY_EMPTY"));
     const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
@@ -642,7 +679,7 @@ async function renderSearch(generation) {
       element("p", { className: "excerpt" }, hit.highlightSegments.map((segment) => (
         segment.highlighted ? element("mark", { text: segment.text }) : segment.text
       ))),
-      routeLink(t("SEARCH_OPEN_CITATION", () => ({ title: hit.title, location: String(searchLocation(hit)) })), hit.citationHref),
+      routeLink(t("SEARCH_OPEN_CITATION", () => ({ title: displayValue(hit.title), location: String(searchLocation(hit)) })), hit.citationHref),
     ]), t("SEARCH_EMPTY")));
     if (currentCursor) nodes.push(element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE_RESULTS"), onclick: () => { void search(currentCursor, true); } }));
     results.replaceChildren(...nodes);
@@ -783,7 +820,7 @@ async function renderAgent(generation) {
     const selected = new Set([...itemSelect.selectedOptions].map((option) => option.value));
     itemSelect.replaceChildren(...loadedItems.map((item) => element("option", {
       value: item.id,
-      text: localized(() => `${item.title} · ${visibilityLabel(item.visibility)}`),
+      text: localized(() => `${displayValue(item.title)} · ${visibilityLabel(item.visibility)}`),
       selected: selected.has(item.id) ? "" : undefined,
     })));
     itemMore.hidden = !itemCursor;
@@ -908,14 +945,14 @@ async function renderAgent(generation) {
           }))),
         ])] : []),
         element("h3", { text: t("KNOWLEDGE_CHAT_CITATIONS") }),
-        list(model.sources, (source) => item(`[${source.number}] ${source.title}`, searchLocation(source), [
+        list(model.sources, (source) => item(`[${source.number}] ${displayValue(source.title)}`, searchLocation(source), [
           element("p", { className: "item-meta", text: t("COMMON_MATCHED_FIELDS", () => ({ fields: matchedFieldLabels(source.matchedFields) })) }),
           element("p", { className: "excerpt" }, source.highlightSegments.map((segment) => (
             segment.highlighted ? element("mark", { text: segment.text }) : segment.text
           ))),
           element("a", { href: source.href, "data-route": "", className: "nav-link", "aria-label": t("READER_OPEN_CITATION_ARIA", () => ({
             number: source.number,
-            title: source.title,
+          title: displayValue(source.title),
             location: `${documentLabel(source.headingPath)}, ${lineLabel(source.startLine, source.endLine)}`,
           })), text: t("KNOWLEDGE_CHAT_OPEN_SOURCE") }),
         ]), t("KNOWLEDGE_CHAT_NO_CITATIONS")),
@@ -1063,7 +1100,7 @@ async function renderKnowledgeReader(generation, knowledgeItemId) {
     element("dt", { text: t("READER_REVISION_ID") }), element("dd", { text: model.revisionId }),
     element("dt", { text: t("READER_SOURCE_VERSION_ID") }), element("dd", { text: model.sourceVersionId || t("COMMON_LEGACY_UNAVAILABLE") }),
     element("dt", { text: t("READER_REVIEWER_ID") }), element("dd", { text: model.reviewerId || t("COMMON_LEGACY_UNAVAILABLE") }),
-    element("dt", { text: t("READER_SOURCE_VERSION_ORDINAL") }), element("dd", { text: model.sourceVersionOrdinal === null ? t("COMMON_LEGACY_UNAVAILABLE") : String(model.sourceVersionOrdinal) }),
+    element("dt", { text: t("READER_SOURCE_VERSION_ORDINAL") }), element("dd", { text: model.sourceVersionOrdinal === null ? t("COMMON_LEGACY_UNAVAILABLE") : displayValue(model.sourceVersionOrdinal) }),
     element("dt", { text: t("READER_PARSER_SCHEMA") }), element("dd", { text: model.parserSchemaVersion || t("COMMON_LEGACY_UNAVAILABLE") }),
     element("dt", { text: t("READER_INDEX_STATUS") }), element("dd", { text: searchStatusLabel(model.indexStatus) }),
     ...(model.codeMetadata ? [
@@ -1152,7 +1189,7 @@ async function renderAdminDashboard(generation) {
     card(t("ADMIN_RECOVERY"), [element("p", { text: t("ADMIN_RECOVERY_BODY") }), recoveryButton]),
   ]), generation);
 }
-function metricCard(title, value, label, href) { return card(title, [element("p", { text: String(value) }), routeLink(label, href)]); }
+function metricCard(title, value, label, href) { return card(title, [element("p", { text: displayValue(value) }), routeLink(label, href)]); }
 
 async function renderPendingSubmissions(generation) {
   const owner = routeGuard.owner(generation, "/admin/submissions");
@@ -1164,7 +1201,7 @@ async function renderPendingSubmissions(generation) {
   const renderItems = () => {
     const rows = list(items, (submission) => item(submission.title, localized(() => `${kindLabel(submission.kind)} · ${t("COMMON_SUBMITTED_AT", { date: formatDate(submission.createdAt) })}`), [
       element("pre", { className: "content-preview", text: submission.content }),
-      routeLink(t("REVIEW_QUEUE_REVIEW_ITEM", { title: submission.title }), `/admin/submissions/${encodeURIComponent(submission.id)}`),
+      routeLink(t("REVIEW_QUEUE_REVIEW_ITEM", { title: displayValue(submission.title) }), `/admin/submissions/${encodeURIComponent(displayValue(submission.id))}`),
     ]), t("REVIEW_QUEUE_EMPTY"));
     const more = cursor ? element("button", { className: "secondary", type: "button", text: t("COMMON_LOAD_MORE"), onclick: () => {
       more.disabled = true;
@@ -1306,7 +1343,7 @@ async function renderReviewSubmission(generation, submissionId) {
       () => api(request.path, request.init),
       (result) => {
         if (kind === "publish") {
-          navigate(`/knowledge/${encodeURIComponent(result.revision.knowledgeItemId)}?revision=${encodeURIComponent(result.revision.id)}`, true, t("REVIEW_PUBLISHED", { title: result.revision.title }));
+          navigate(`/knowledge/${encodeURIComponent(displayValue(result.revision.knowledgeItemId))}?revision=${encodeURIComponent(displayValue(result.revision.id))}`, true, t("REVIEW_PUBLISHED", { title: displayValue(result.revision.title) }));
         } else {
           navigate("/admin/submissions", true, t(kind === "reject" ? "REVIEW_REJECTED" : "REVIEW_REVISION_REQUESTED"));
         }
@@ -1352,7 +1389,7 @@ async function renderReviewSubmission(generation, submissionId) {
   form = element("form", { className: "stack", onsubmit: (event) => event.preventDefault() }, [
     field(t("REVIEW_FINAL_VISIBILITY"), visibility),
     element("dl", { className: "review-target", "aria-label": t("REVIEW_METADATA_ARIA") }, [
-      element("dt", { text: t("REVIEW_REQUESTED_TITLE") }), element("dd", { text: model.title }),
+      element("dt", { text: t("REVIEW_REQUESTED_TITLE") }), element("dd", { text: displayValue(model.title) }),
       element("dt", { text: t("REVIEW_FINAL_TITLE") }), element("dd", {}, [title]),
       element("dt", { text: t("REVIEW_REQUESTED_SPACE") }), element("dd", { text: requestedSpaceAvailable ? requestedSpace.name : t("REVIEW_REQUESTED_SPACE_UNAVAILABLE") }),
       element("dt", { text: t("REVIEW_REQUESTED_COLLECTION") }), element("dd", { text: target.collectionId === null
@@ -1365,7 +1402,7 @@ async function renderReviewSubmission(generation, submissionId) {
     tags,
     field(t("REVIEW_REJECTION_REASON"), reason), field(t("REVIEW_NOTE"), note), element("div", { className: "actions" }, actionButtons),
   ]);
-  if (replaceOutlet(page(t("REVIEW_TITLE", { title: model.title }), t("REVIEW_META", {
+  if (replaceOutlet(page(t("REVIEW_TITLE", { title: displayValue(model.title) }), t("REVIEW_META", {
     kind: kindLabel(model.kind), status: submissionStatusLabel(model.status), parser: model.parserVersion,
   }), [
     element("div", { className: "review-grid" }, [
@@ -1532,7 +1569,8 @@ async function renderSpaces(generation) {
 
 async function renderAudit(generation) {
   const data = await api("/api/admin/audit-events?limit=50");
-  replaceOutlet(page(t("AUDIT_TITLE"), t("AUDIT_DESCRIPTION"), [card(t("AUDIT_RECENT"), [list(data.items, (event) => item(event.action, localized(() => `${event.resourceType} · ${formatDate(event.createdAt)}`), [element("code", { text: JSON.stringify(event.metadata) })]), t("AUDIT_EMPTY"))])]), generation);
+  // Keep the audit metadata contract shape: localized(() => `${event.resourceType} · ${formatDate(event.createdAt)}`)
+  replaceOutlet(page(t("AUDIT_TITLE"), t("AUDIT_DESCRIPTION"), [card(t("AUDIT_RECENT"), [list(data.items, (event) => item(event.action, localized(() => `${displayValue(event.resourceType)} · ${formatDate(event.createdAt)}`), [element("code", { text: displayValue(JSON.stringify(event.metadata), t("COMMON_NO_METADATA")) })]), t("AUDIT_EMPTY"))])]), generation);
 }
 
 async function bootstrap() {
@@ -1579,8 +1617,8 @@ function renderAnonymous() {
 function renderSessionSummary() {
   if (!session) return;
   translationBindings.text(byId("session-summary"), t("SESSION_SUMMARY", {
-    email: session.member.email,
-    role: memberRoleLabel(session.member.role),
+    email: displayValue(session.member?.email, t("COMMON_VALUE_UNAVAILABLE")),
+    role: memberRoleLabel(session.member?.role),
   }));
 }
 
