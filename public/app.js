@@ -1641,6 +1641,7 @@ async function bootstrap() {
     renderSessionSummary();
     logoutButton.hidden = false;
     logoutButton.disabled = false;
+    drawerToggle.hidden = false;
     drawerToggle.disabled = false;
     setDrawer(false);
     shell.dataset.ready = "true";
@@ -1662,6 +1663,7 @@ function renderAnonymous() {
   translationBindings.text(byId("session-summary"), t("SESSION_SIGN_IN_HINT"));
   logoutButton.hidden = true;
   logoutButton.disabled = true;
+  drawerToggle.hidden = true;
   drawerToggle.disabled = true;
   applyDrawerState(state.drawer);
   shell.dataset.ready = "false";

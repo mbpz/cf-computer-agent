@@ -32,6 +32,10 @@ body {
   background: var(--background);
 }
 
+.icon-button[hidden] {
+  display: none !important;
+}
+
 .sidebar {
   gap: 28px;
   padding: 22px 14px 18px;
@@ -435,6 +439,11 @@ h1 {
   max-width: 780px;
   font-size: clamp(28px, 3.4vw, 42px);
   letter-spacing: -.045em;
+}
+
+h1:focus-visible {
+  outline: 0;
+  box-shadow: 0 2px 0 var(--accent);
 }
 
 h2 {
