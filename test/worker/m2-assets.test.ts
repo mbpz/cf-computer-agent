@@ -93,6 +93,14 @@ describe("M2 asset upload boundary", () => {
       body: new Uint8Array(APP_CONFIG.maxAssetBytes + 1),
     });
     expect(oversized.status).toBe(413);
+
+    const forgedMime = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "forged.pdf", "idempotency-key": "asset-upload-forged-mime" },
+      body: "not a PDF",
+    });
+    expect(forgedMime.status).toBe(415);
+    await expect(forgedMime.json()).resolves.toMatchObject({ error: { code: "ASSET_TYPE_MISMATCH" } });
   });
 
   it("processes a text original and exposes the succeeded parse state", async () => {

@@ -145,6 +145,9 @@ describe("AssetService", () => {
   it.each([
     ["bad/name.txt", "text/plain", "ASSET_NAME_INVALID", 400],
     ["notes.bin", "application/x-unknown", "ASSET_TYPE_UNSUPPORTED", 415],
+    ["guide.pdf", "text/plain", "ASSET_TYPE_MISMATCH", 415],
+    ["photo.png", "image/jpeg", "ASSET_TYPE_MISMATCH", 415],
+    ["deck.pptx", "application/pdf", "ASSET_TYPE_MISMATCH", 415],
   ])("rejects invalid upload metadata %s", async (originalName, contentType, code, status) => {
     const service = new AssetService(bucket(), repository());
     await expect(service.create({

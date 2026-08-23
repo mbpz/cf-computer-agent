@@ -404,6 +404,7 @@ export const zhCN = Object.freeze({
   ERROR_ASSET_TOO_LARGE: "文件超过 10 MiB 上传限制。",
   ERROR_ASSET_NAME_INVALID: "文件名不受支持。",
   ERROR_ASSET_TYPE_UNSUPPORTED: "暂不支持此文件类型。",
+  ERROR_ASSET_TYPE_MISMATCH: "文件类型与扩展名不匹配。",
   ERROR_ASSET_CONTENT_INVALID: "文件编码无效。",
   ERROR_ASSET_AI_PARSE_FAILED: "富文档转换暂时不可用。",
   ERROR_ASSET_PERSISTENCE_UNAVAILABLE: "原件暂时无法保存，请重试。",

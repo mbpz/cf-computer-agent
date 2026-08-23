@@ -59,6 +59,15 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 贡献者访问这些接口统一返回 403。管理员重试只改变 D1 状态，实际解析仍由手动 owner 处理或 Cron 扫描完成。
 
+## M2-10 强类型文件校验
+
+对于 PDF、图片和 Office 等强类型文件，上传入口会同时校验文件扩展名与声明的
+`Content-Type`。例如 `.pdf` 必须声明 `application/pdf`，`.png` 必须声明
+`image/png`，`.docx`、`.xlsx`、`.pptx` 也分别绑定对应的 Office MIME 类型。
+扩展名与 MIME 不一致时，Worker 在写入 R2 或 D1 任务前返回 `415 ASSET_TYPE_MISMATCH`，
+前端显示本地化错误，不会创建可见资产或解析任务。纯文本、Markdown、CSV、JSON 和 allowlist
+代码扩展名继续按文本路径处理；未知扩展名不借助扩展名猜测类型，而由既有的 allowlist 与内容大小校验决定是否接受。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

@@ -61,6 +61,19 @@ const allowedTypes = new Set([
   "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
   "image/png", "image/jpeg", "image/gif", "image/webp",
 ]);
+const binaryExtensionTypes: Readonly<Record<string, string>> = Object.freeze({
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  ppt: "application/vnd.ms-powerpoint",
+});
 
 export class AssetService {
   private readonly id: () => string;
@@ -328,6 +341,11 @@ function validateInput(input: AssetUploadInput, maxBytes: number): void {
   }
   if (!allowedTypes.has(normalizeContentType(input.contentType))) {
     throw new AppError("ASSET_TYPE_UNSUPPORTED", "Asset type is not supported", 415);
+  }
+  const extension = input.originalName.toLowerCase().split(".").at(-1) || "";
+  const expectedType = binaryExtensionTypes[extension];
+  if (expectedType && expectedType !== normalizeContentType(input.contentType)) {
+    throw new AppError("ASSET_TYPE_MISMATCH", "Asset type does not match its file extension", 415);
   }
 }
 
