@@ -577,7 +577,7 @@ test("runbook contract rejects a probe moved before migration verification", asy
 test("derives exact M1 atom and gate truth and verifies report list cardinality", async () => {
   const baseline = await runDocsVerifier(["--truth", checklistPath.pathname, reportPath.pathname]);
   assert.equal(baseline.code, 0, baseline.output);
-  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=76 unchecked=0 gates=1 unchecked_items=1$/mu);
+  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=76 unchecked=0 gates=1 unchecked_items=0$/mu);
 
   const [checklist, report] = await Promise.all([
     readFile(checklistPath, "utf8"),

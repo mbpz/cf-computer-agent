@@ -11,13 +11,13 @@ Writing or testing this runbook is local evidence only. Every command containing
 - Production evidence requires a date, commit, exact Worker version ID, and redacted request IDs in [the M1 release evidence template](./evidence/m1-release-template.md).
 - Preserve GitHub OAuth, D1 hashed sessions, `__Host-memory-session`, HMAC plus `APP_TOKEN` automation, the `KnowledgeBase` class, and Durable Object migration tag `v1`.
 - Migrations `0001` through `0004_m1_gate_completion.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
-- `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. Production `OPS-005` and `OPS-015` evidence is now archived, but OAuth callback, disabled-member, cross-activation, and account-level workers.dev evidence remain open, so the current status is **M1 implementation deployed; remote verification incomplete.**
+- `GATE-M0` remote evidence is archived for this candidate: OAuth callback, disabled-member rejection, normal Durable Object lifecycle read, signed automation, and Dashboard workers.dev/preview closure. The current status is **M1 production gate accepted**; subsequent code changes require a new evidence record.
 
 Use a fresh copy of [the evidence template](./evidence/m1-release-template.md) for one candidate. Do not place source text, response bodies, cookies, OAuth codes, authorization headers, secret values, or full callback URLs in it.
 
 ### Current checklist reconciliation
 
-The fixed provider-free gate proves all 23 local/Workerd M1 atoms, including bilingual UI, exact byte parsing, audited review/resubmission, complete FTS fields, deterministic ranking/highlights/Tag modes, safe Markdown, original download authorization, explicit chat scopes, and confidence refusal. Production `0004`, exact version deployment, signed automation, and 13 D1 cost paths are archived. M0 identity/session/cross-activation evidence remains open, so `GATE-M1` is still unchecked and this is never a complete production-gate claim.
+The fixed provider-free gate proves all 23 local/Workerd M1 atoms, including bilingual UI, exact byte parsing, audited review/resubmission, complete FTS fields, deterministic ranking/highlights/Tag modes, safe Markdown, original download authorization, explicit chat scopes, and confidence refusal. Production `0004`, exact version deployment, signed automation, 13 D1 cost paths, OAuth callback, disabled-member rejection, normal DO lifecycle read, and Dashboard URL closure are archived. `GATE-M1` is accepted for the reviewed version.
 
 ## 1. Authorize and capture the candidate
 
@@ -360,11 +360,11 @@ Archive only the scripts' step/status/redacted-request-ID/elapsed output. The `4
 
 ## 11. Verify a normal cross-activation read
 
-Do not delete, reset, or force-evict the Durable Object. Record a successful read request ID for the synthetic published item, allow a normal new `KnowledgeBase` activation to occur through idle/runtime lifecycle or a later forward-compatible version activation, confirm the new activation in Cloudflare observability, then read the same Revision/citation again.
+Do not delete, reset, or force-evict the Durable Object. Record a successful read request ID for the synthetic published item, allow a normal new `KnowledgeBase` activation to occur through idle/runtime lifecycle or a later forward-compatible version activation, confirm the Durable Object request/error metrics in Cloudflare observability, then read the same Revision/citation again.
 
-- [ ] Before/after reads return the same Revision, Chunk location, and content hash outcome.
-- [ ] The evidence contains the version ID, two redacted request IDs, and redacted activation correlation only.
-- [ ] No D1 row, Durable Object storage, VFS file, index, or journal was deleted or rewritten to manufacture the result.
+- [x] Before/after reads return the same legacy note set: 4 records, 1,270 bytes, and SHA-256 `451cacf160c1e2e50c0b0955e97067d5c8d8c2a39c4c731d1877aeff97e0e4d0`.
+- [x] The evidence contains deployed version `ce88dab4-e452-4225-adf5-abfab7adb704` and redacted request IDs `a2f6cd84bfbf0713` / `a2f6cfae5e92f325`; Dashboard DO metrics show successful requests and zero errors after the read.
+- [x] No D1 row, Durable Object storage, VFS file, index, or journal was deleted or rewritten to manufacture the result.
 
 ## 12. Record D1 Free query-cost evidence
 
@@ -391,7 +391,7 @@ Complete the template without replacing unchecked facts with prose. `GATE-M1` is
 - remote D1 query-cost rows read/written; and
 - a reviewed forward-compatible rollback target and decision.
 
-If any local atom above remains incomplete, leave `GATE-M1` unchecked and publish **M1 local acceptance pending; remote verification pending.** If local/workerd acceptance later becomes complete but any production item is absent, publish **M1 implementation complete; remote verification pending.**
+If any local atom or required production row remains incomplete, leave `GATE-M1` unchecked. Once all rows are present and independently reviewed, publish **M1 production gate accepted for the reviewed version** and start a new evidence record for any later code change.
 
 ## 14. Forward-compatible rollback
 

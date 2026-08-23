@@ -294,14 +294,14 @@
 ## AUTH — 身份、角色和授权
 
 - [x] `AUTH-001` P0/M0 GitHub OAuth start；状态：R；证据：2026-08-21，生产 `/auth/github` 302，version `3bd2985e-487c-4fc0-bcb8-31c1f00967ca`，request ID `a9d1e5602fd999e4c48a314167a77a5e`。
-- [x] `AUTH-002` P0/M0 state + PKCE S256 callback；状态：L/W；生产成功由操作员确认，但缺少完整 R 证据记录。
+- [x] `AUTH-002` P0/M0 state + PKCE S256 callback；状态：L/W/R；生产 callback request ID `a2f6d391fdf2ddbf`、302→首页 200、登录后 `/api/session` 200，版本 `ce88dab4-e452-4225-adf5-abfab7adb704`。
 - [x] `AUTH-003` P0/M0 GitHub primary+verified 邮箱；状态：L/W；生产管理员已登录，但缺少完整 R 证据记录。
 - [x] `AUTH-004` P0/M0 allowlist；状态：L/W；远程非 allowlist 拒绝仍需单独证据。
 - [x] `AUTH-005` P0/M0 bootstrap admin；状态：L/W；生产管理员已建立，但缺少完整 R 证据记录。
 - [x] `AUTH-006` P0/M0 D1 哈希 Session；状态：L/W；生产存储细节不导出。
 - [x] `AUTH-007` P0/M0 `__Host-memory-session` Cookie；状态：L/W；生产登录成功但 Cookie 安全属性未单独归档。
 - [x] `AUTH-008` P0/M0 admin/contributor capability matrix；状态：L/W。
-- [x] `AUTH-009` P0/M0 disabled member fail-closed；状态：L/W；远程待证据。
+- [x] `AUTH-009` P0/M0 disabled member fail-closed；状态：L/W/R；临时 evidence contributor 经真实 admin PATCH 后 session 返回 403 `MEMBER_DISABLED`，request ID `a2f620ffd82284b2`，临时记录已清理。
 - [x] `AUTH-010` P0/M0 automation HMAC + APP_TOKEN；状态：L/W；远程 signed smoke 待证据。
 - [x] `AUTH-011` P0/M0 浏览器会话与 automation credential 分流；状态：L/W；会话有效、无效或过期时都不回退为 automation。
 - [x] `AUTH-012` P0/M0 automation 非管理员；状态：L/W。
@@ -346,8 +346,8 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-003` P0/M0 Secret bundle 单版本发布；状态：L；远程流程已由操作员执行；M1 本地合同要求受保护临时文件/目录均已删除才算 stage 成功，清理失败保留 EXIT trap 并使 stage 失败。
 - [x] `OPS-004` P0/M0 append-only D1 migrations；状态：L/R；0001/0002 已由操作员应用。
 - [x] `OPS-005` P0/M0 signed automation 远程 smoke 证据；状态：R；证据：`docs/operations/evidence/m1-release-2026-08-23.md`，custom domain health/create/list/search/chat 通过，错误签名 401、admin automation 403。
-- [ ] `OPS-006` P0/M0 disabled contributor 远程证据；验收：真实 GitHub session 被拒绝。
-- [ ] `OPS-007` P0/M0 DO 跨远程激活证据；验收：激活前后读取一致。
+- [x] `OPS-006` P0/M0 disabled contributor 远程证据；验收：真实 session 在禁用后返回 403 `MEMBER_DISABLED`；request ID `a2f620ffd82284b2`。
+- [x] `OPS-007` P0/M0 DO 跨远程激活证据；验收：正常空闲生命周期前后 `/api/notes` 返回同一 4 条记录、1,270 bytes 和 SHA-256；request IDs `a2f6cd84bfbf0713` / `a2f6cfae5e92f325`。
 - [ ] `OPS-008` P0/M2 R2 Bucket 配置；验收：Standard/private/CORS/生命周期和 binding。
 - [ ] `OPS-009` P0/M2 R2 用量账本；验收：8/9 GB 阈值和 Dashboard 对账。
 - [ ] `OPS-010` P0/M2 Queue 配置；验收：consumer、重试、DLQ/替代扫描和 24h 约束。
@@ -374,11 +374,11 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ### M0
 
-- [ ] `GATE-M0` 补齐成功 OAuth callback、signed smoke、disabled contributor、workers.dev 关闭状态和 DO 跨激活远程证据；M1 预检记录见 `docs/operations/evidence/m1-preflight.md`（远程项均 pending）。
+- [x] `GATE-M0` 成功 OAuth callback、signed smoke、disabled contributor、workers.dev/preview Dashboard 关闭状态和 DO 正常生命周期读取证据均已归档；见 `docs/operations/evidence/m1-release-2026-08-23.md`。
 
 ### M1
 
-- [ ] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。当前：本地/Workerd 纵向旅程、生产 version ID、signed automation 和 D1 成本证据已归档；GitHub callback、disabled contributor、DO 跨激活和 workers.dev 账户级证据仍待补齐，见 `docs/operations/evidence/m1-release-2026-08-23.md`。
+- [x] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。生产 `0004`、version ID、signed automation、D1 成本和四项最终 M0 远程证据均已归档；见 `docs/operations/evidence/m1-release-2026-08-23.md`。
 
 ### M2
 

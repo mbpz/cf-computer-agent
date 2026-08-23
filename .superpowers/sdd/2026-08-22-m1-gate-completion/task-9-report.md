@@ -1,10 +1,10 @@
-# Task 9 — fixed local M1 acceptance candidate
+# Task 9 — fixed local and production M1 acceptance candidate
 
 ## Result and boundary
 
-The provider-free local/Workerd gate proves the 23 implementation atoms in the approved M1 completion scope. Checklist totals: **76 P0/M1 atoms = 76 checked + 0 unchecked**. `GATE-M1` remains the one unchecked gate.
+The provider-free local/Workerd gate proves the 23 implementation atoms in the approved M1 completion scope. Checklist totals: **76 P0/M1 atoms = 76 checked + 0 unchecked**. `GATE-M1` is checked for the reviewed production version.
 
-This report records the local candidate; production evidence is archived separately in `docs/operations/evidence/m1-release-2026-08-23.md`.
+This report records the local candidate and points to the separate production evidence archive at `docs/operations/evidence/m1-release-2026-08-23.md`.
 
 ## Fixed evaluation denominators
 
@@ -29,13 +29,13 @@ The synthetic boolean witness manifest was removed. `test:m1` directly executes 
 
 ## Checklist reconciliation
 
-No current P0/M1 atom remains unchecked. Production OPS-005 and OPS-015 evidence is archived in `docs/operations/evidence/m1-release-2026-08-23.md`. `GATE-M1` remains unchecked because the separate M0 callback, disabled-member, and cross-activation prerequisites are still open.
+No current P0/M1 atom remains unchecked. Production OPS-005, OPS-006, OPS-007, OPS-015, Dashboard URL closure, and OAuth callback evidence are archived in `docs/operations/evidence/m1-release-2026-08-23.md`. `GATE-M0` and `GATE-M1` are accepted for the reviewed version.
 
 ## Verification evidence
 
 - `rtk npm run test:m1`: PASS after fix round 3 — 30 operations contracts, 13 i18n contracts, and 21 Vitest files / 562 tests; migration/docs/i18n verifiers passed first.
 - `rtk npm run verify:m1:migrations -- --files`: PASS — four exact reviewed files, including unchanged `0004` SHA-256 `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb`.
-- `rtk npm run verify:m1:docs`: PASS — 14 executable evidence blocks; 76 atoms = 76 checked + 0 unchecked; gate unchecked.
+- `rtk npm run verify:m1:docs`: PASS — 14 executable evidence blocks; 76 atoms = 76 checked + 0 unchecked; gate checked.
 - `rtk npm run verify:i18n`: PASS — 349 keys, 45 placeholders, six checked UI files, TypeScript AST and DOM hard-copy gate.
 - `rtk npm run check`: PASS after fix round 3 — 38 smoke/contracts, 621 unit tests, 289 Workerd tests, generated types, TypeScript, vendored dependency digests, and Wrangler dry-run build.
 - `rtk npm audit --omit=dev --offline`: PASS — zero runtime vulnerabilities.

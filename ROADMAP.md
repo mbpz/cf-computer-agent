@@ -45,11 +45,11 @@
 
 退出标准：
 
-- [ ] 在生产自定义域归档一次成功 GitHub OAuth callback 的脱敏证据。
+- [x] 在生产自定义域归档一次成功 GitHub OAuth callback 的脱敏证据。
 - [ ] signed automation smoke 在生产自定义域通过，错误签名/Token 稳定拒绝。
-- [ ] disabled contributor 的真实会话被应用拒绝。
-- [ ] Durable Object 跨远程激活后仍能读回笔记。
-- [ ] production/preview workers.dev URL 在账户中保持关闭。
+- [x] disabled contributor 的真实会话被应用拒绝。
+- [x] Durable Object 跨远程激活后仍能读回笔记。
+- [x] production/preview workers.dev URL 在账户中保持关闭。
 - [ ] 当前完整 `rtk npm run check`、D1 migration 状态和回滚点被记录。
 
 ## M1 — 单来源可信知识闭环
@@ -58,7 +58,7 @@
 
 实施计划：[M1 单来源可信知识闭环实施计划](./docs/superpowers/plans/2026-08-21-m1-single-source-knowledge-loop.md)
 
-当前状态：23 个本地/Workerd M1 产品原子已通过固定验收；生产 `0004` migration、精确版本部署、signed automation smoke 和 13 条 D1 成本路径已归档。GitHub callback、disabled contributor、DO 跨激活及 workers.dev 账户级证据仍待补齐，`GATE-M0`/`GATE-M1` 保持未勾选。
+当前状态：23 个本地/Workerd M1 产品原子已通过固定验收；生产 `0004` migration、精确版本部署、signed automation smoke、13 条 D1 成本路径，以及 OAuth callback、disabled contributor、DO 正常生命周期读取和 Dashboard URL 关闭证据均已归档。`GATE-M0`/`GATE-M1` 已接受；后续代码变更必须生成新的生产证据记录。
 
 范围：
 

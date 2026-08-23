@@ -106,9 +106,9 @@ Create `m1-preflight.md` with this exact evidence table and leave unchecked remo
 | Local full gate | command, date, commit, counts | pending execution |
 | OAuth callback | date, version ID, redacted request ID | pending evidence archive |
 | Signed automation | success and bad-signature request IDs | pending remote run |
-| Disabled contributor | rejected session request ID | pending remote run |
-| DO reactivation | before/after read request IDs | pending remote run |
-| workers.dev | production and preview disabled screenshot/export | pending evidence archive |
+| Disabled contributor | rejected session request ID | archived in `docs/operations/evidence/m1-release-2026-08-23.md` |
+| DO reactivation | before/after read request IDs | archived in `docs/operations/evidence/m1-release-2026-08-23.md` |
+| workers.dev | production and preview disabled screenshot/export | Dashboard switches archived in `docs/operations/evidence/m1-release-2026-08-23.md` |
 ```
 
 - [ ] **Step 4: Add explicit M1 capabilities and deny-first route stubs**
@@ -947,7 +947,7 @@ Expected: all tests pass, Wrangler dry-run lists existing bindings without route
 
 - [ ] **Step 6: Update status truthfully and commit**
 
-Mark only L/W atoms complete. Keep `GATE-M1` unchecked until the remote runbook has a date, deployed version ID, and redacted request IDs for the complete production journey.
+Mark only L/W atoms complete until the remote runbook has a date, deployed version ID, and redacted request IDs for the complete production journey. That remote evidence is now archived for the reviewed version; the checklist records `GATE-M1` as accepted.
 
 Commit:
 
