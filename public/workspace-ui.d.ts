@@ -368,6 +368,22 @@ export interface BrowserApiRequest {
   init: Readonly<{ method: "POST"; headers?: Readonly<Record<string, string>>; body: string }>;
 }
 export function submissionRequest(value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
+export interface AssetUploadRequest {
+  path: "/api/assets";
+  init: Readonly<{
+    method: "POST";
+    headers: Readonly<Record<string, string>>;
+    body: unknown;
+  }>;
+}
+export function assetUploadRequest(value: unknown, idempotencyKey: string): Readonly<AssetUploadRequest>;
+export function assetUploadResultModel(value: unknown): Readonly<{
+  kind: "queued" | "updated" | "error";
+  assetId?: string;
+  jobId?: string;
+  jobStatus?: "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal";
+  message: string;
+}>;
 export function resubmissionRequest(priorSubmissionId: string, value: unknown, idempotencyKey: string): Readonly<BrowserApiRequest>;
 export function publishRequest(submissionId: string, value: unknown): Readonly<BrowserApiRequest>;
 export function chatRequest(value: unknown): Readonly<BrowserApiRequest>;

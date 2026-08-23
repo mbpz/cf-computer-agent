@@ -362,6 +362,26 @@ main {
   font: 14px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
+.asset-upload-panel {
+  display: grid;
+  gap: 14px;
+  max-width: 820px;
+  padding: 4px;
+}
+
+.asset-upload-panel input[type="file"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / .03);
+}
+
+.asset-upload-panel [data-state="queued"],
+.asset-upload-panel [data-state="updated"] { color: var(--success); }
+
+.asset-upload-panel [data-state="error"] { color: var(--danger); }
+
 .search-panel {
   background: #12181e;
 }

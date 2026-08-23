@@ -828,6 +828,54 @@ export function submissionRequest(value, idempotencyKey) {
   });
 }
 
+/** Build the raw-binary request used by the private R2 originals flow. */
+export function assetUploadRequest(value, idempotencyKey) {
+  const file = safeRecord(value);
+  const contentType = safeString(file.type).split(";", 1)[0].trim().toLowerCase() || "application/octet-stream";
+  return Object.freeze({
+    path: "/api/assets",
+    init: Object.freeze({
+      method: "POST",
+      headers: Object.freeze({
+        "Content-Type": contentType,
+        "Idempotency-Key": safeString(idempotencyKey),
+        "X-Asset-Name": safeString(file.name),
+      }),
+      body: value,
+    }),
+  });
+}
+
+export function assetUploadResultModel(value) {
+  const input = safeRecord(value);
+  const asset = safeRecord(input.asset);
+  const job = safeRecord(input.job);
+  const assetId = safeString(asset.id);
+  const jobId = safeString(job.id);
+  const jobStatus = safeString(job.status);
+  const messageKeys = Object.freeze({
+    queued: "SUBMIT_ASSET_QUEUED",
+    processing: "SUBMIT_ASSET_PROCESSING",
+    succeeded: "SUBMIT_ASSET_READY",
+    failed_retryable: "SUBMIT_ASSET_RETRYABLE",
+    failed_terminal: "SUBMIT_ASSET_FAILED",
+  });
+  if (!assetId || !jobId || !messageKeys[jobStatus]) {
+    return Object.freeze({
+      kind: "error",
+      ...(assetId ? { assetId } : {}),
+      message: t("SUBMIT_ASSET_STATUS_UNAVAILABLE"),
+    });
+  }
+  return Object.freeze({
+    kind: jobStatus === "queued" ? "queued" : "updated",
+    assetId,
+    jobId,
+    jobStatus,
+    message: t(messageKeys[jobStatus]),
+  });
+}
+
 export function publishRequest(submissionId, value) {
   const input = safeRecord(value);
   return Object.freeze({

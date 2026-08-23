@@ -35,9 +35,48 @@ const {
   routeState,
   sessionBootstrapState,
   submissionRequest,
+  assetUploadRequest,
+  assetUploadResultModel,
   runLatestOperation,
   submissionResultModel,
 } = workspaceUi;
+
+describe("asset upload UI contract", () => {
+  it("builds a binary upload request without JSON-wrapping the file", () => {
+    const file = { name: "guide.pdf", type: "application/pdf", size: 1234 };
+    const request = assetUploadRequest(file, "asset-upload-key");
+
+    expect(request.path).toBe("/api/assets");
+    expect(request.init.method).toBe("POST");
+    expect(request.init.body).toBe(file);
+    expect(request.init.headers).toEqual({
+      "Content-Type": "application/pdf",
+      "Idempotency-Key": "asset-upload-key",
+      "X-Asset-Name": "guide.pdf",
+    });
+  });
+
+  it("maps a queued parse job to a stable localized status model", () => {
+    expect(assetUploadResultModel({
+      asset: { id: "asset-1", originalName: "guide.pdf", status: "ready" },
+      job: { id: "job-1", status: "queued" },
+    })).toEqual({
+      kind: "queued",
+      assetId: "asset-1",
+      jobId: "job-1",
+      jobStatus: "queued",
+      message: "Asset uploaded; parsing is queued.",
+    });
+  });
+
+  it("fails closed when the API does not return a usable asset job", () => {
+    expect(assetUploadResultModel({ asset: { id: "asset-1" }, job: {} })).toEqual({
+      kind: "error",
+      assetId: "asset-1",
+      message: "Asset processing status is unavailable.",
+    });
+  });
+});
 
 describe("createRouteGuard", () => {
   it("rejects an older route completion after newer navigation begins", () => {

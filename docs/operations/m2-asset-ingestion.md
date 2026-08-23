@@ -1,18 +1,21 @@
-# M2-1 原件与解析任务最小切片
+# M2-1/M2-2 原件、解析任务与上传入口最小切片
 
-本切片只建立私有 R2 原件和 D1 解析任务状态，不执行解析、不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
+本切片建立私有 R2 原件、D1 解析任务状态和提交页上传入口，不执行解析、不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
 
 ## 数据流
 
 ```text
 成员会话
-  → POST /api/assets
+  → 提交页选择原件
+  → POST /api/assets（原始二进制）
   → R2 memory-garden-originals/staging/<assetId>
   → D1 assets(status=ready) + parse_jobs(status=queued)
   → GET /api/assets/<assetId>（仅原提交成员）
 ```
 
 写入顺序是 R2 后 D1。D1 批写失败时 Worker 删除刚写入的对象，避免孤儿原件。请求使用 `Idempotency-Key`，同一成员重放会返回已有记录。
+
+提交页上传成功后只展示 D1 返回的真实任务状态（首个状态为 `queued`），不会把上传成功误报为解析完成。当前支持常见 PDF、Office、文本、结构化文本和图片 MIME；选择文件后浏览器直接把原始文件 body 发送到 Worker，Worker 再写入 R2。
 
 ## 本地验证
 
@@ -30,6 +33,8 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 - `Idempotency-Key` 必须存在；
 - 原始 body 非空且不超过 10 MiB；
 - 响应只包含 asset/job metadata，不包含下载 URL。
+
+浏览器入口位于登录后的“提交”页面“上传原件”卡片；失败时保留在当前页面并显示可重试错误，不会创建一条假提交。
 
 ## 生产资源准备
 
