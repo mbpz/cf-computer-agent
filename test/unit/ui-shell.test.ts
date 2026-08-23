@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   contextualPanelModel,
+  compactChildren,
   displayDate,
   displayValue,
   shellControlsModel,
@@ -22,6 +23,11 @@ describe("workspace shell", () => {
 });
 
 describe("display boundaries", () => {
+  it("does not turn absent optional controls into visible text nodes", () => {
+    const row = {};
+    expect(compactChildren(row, undefined, null)).toEqual([row]);
+  });
+
   it.each([undefined, null, "", "   "]) ("renders %s as a localized-safe placeholder", (value) => {
     expect(displayValue(value)).toBe("—");
   });

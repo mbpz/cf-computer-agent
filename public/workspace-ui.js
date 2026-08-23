@@ -152,6 +152,10 @@ export function contextualPanelModel(items) {
   return Object.freeze({ visible: normalized.length > 0, items: Object.freeze(normalized) });
 }
 
+export function compactChildren(...children) {
+  return children.filter(Boolean);
+}
+
 export function sessionBootstrapState(status, session) {
   if (status === 401) return Object.freeze({ kind: "anonymous" });
   if (status >= 200 && status < 300 && session?.member && Array.isArray(session.capabilities)) {

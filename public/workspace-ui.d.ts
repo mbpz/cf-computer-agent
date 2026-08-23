@@ -69,6 +69,7 @@ export function contextualPanelModel(items: unknown): Readonly<{
   visible: boolean;
   items: ReadonlyArray<Readonly<{ label: string; value: string }>>;
 }>;
+export function compactChildren<T>(...children: Array<T | null | undefined | false>): T[];
 export function displayValue(value: unknown, fallback?: string): string;
 export function displayDate(value: unknown, locale?: string, fallback?: string): string;
 export function sessionBootstrapState(

@@ -20,6 +20,7 @@ import {
   createReplaceableOwner,
   createReviewTagController,
   createRouteGuard,
+  compactChildren,
   contextualPanelModel,
   displayDate,
   displayValue,
@@ -646,7 +647,7 @@ async function renderKnowledge(generation) {
         renderItems();
       }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
-    region.replaceChildren(rows, more);
+    region.replaceChildren(...compactChildren(rows, more));
   };
   renderItems();
   replaceOutlet(page(t("LIBRARY_TITLE"), t("LIBRARY_DESCRIPTION"), [card(t("LIBRARY_PUBLISHED"), [region])]), generation);
@@ -1023,7 +1024,7 @@ async function renderMySubmissions(generation) {
         renderItems();
       }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
-    region.replaceChildren(rows, more);
+    region.replaceChildren(...compactChildren(rows, more));
   };
   const statusFilter = element("select", { "aria-label": t("MY_SUBMISSIONS_FILTER_LABEL") }, [
     element("option", { value: "", text: t("MY_SUBMISSIONS_FILTER_ALL") }),
@@ -1212,7 +1213,7 @@ async function renderPendingSubmissions(generation) {
         renderItems();
       }, (error) => { if (ownsMutation(owner)) region.replaceChildren(rows, routeStateNode("error", safeErrorMessage(error))); }, () => ownsMutation(owner));
     } }) : undefined;
-    region.replaceChildren(rows, more);
+    region.replaceChildren(...compactChildren(rows, more));
   };
   renderItems();
   replaceOutlet(page(t("REVIEW_QUEUE_TITLE"), t("REVIEW_QUEUE_DESCRIPTION"), [card(t("SUBMISSION_STATUS_REVIEW_PENDING"), [region])]), generation);
