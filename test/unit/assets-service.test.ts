@@ -29,6 +29,7 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
     async markParseSucceeded(assetId: string, now: string) {
       const job = store.jobs.find((item) => item.assetId === assetId)!;
       job.status = "succeeded";
+      job.lastErrorCode = null;
       job.updatedAt = now;
     },
     async markParseFailed(assetId: string, now: string, code: string, terminal: boolean) {
@@ -435,6 +436,34 @@ describe("AssetService", () => {
     const result = await service.process("member-1", created.asset.id);
 
     expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_AI_PARSE_FAILED" });
+  });
+
+  it("reclaims a retryable AI failure on the next bounded sweep after recovery", async () => {
+    const db = repository();
+    const originals = bucket();
+    let available = false;
+    const service = new AssetService(originals, db, {
+      id: (() => { let sequence = 0; return () => `asset-recovery-${++sequence}`; })(),
+      markdownConverter: {
+        async toMarkdown() {
+          if (!available) throw new Error("provider unavailable");
+          return { format: "markdown", data: "# recovered\n" };
+        },
+      },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "recover.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "ai-recovery-key",
+    });
+
+    const first = await service.process("member-1", created.asset.id);
+    expect(first.job).toMatchObject({ status: "failed_retryable", attempts: 1, lastErrorCode: "ASSET_AI_PARSE_FAILED" });
+
+    available = true;
+    await expect(service.processDue(1)).resolves.toEqual({ attempted: 1, succeeded: 1 });
+    await expect(service.getOwned("member-1", created.asset.id)).resolves.toMatchObject({
+      job: { status: "succeeded", attempts: 2, lastErrorCode: null },
+    });
   });
 
   it("marks an empty rich conversion as a terminal source failure", async () => {

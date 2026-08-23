@@ -118,6 +118,10 @@ M2 的单元矩阵现在对每种二进制/富内容格式分别覆盖：成功�
 
 上传中断仍采用 R2→D1 顺序和补偿删除：R2 写入成功但 D1 双写失败时，Worker 删除刚写入的 `staging/<assetId>`，不产生可见 D1 asset/job；若补偿删除自身失败，则由 M2-16 的人工预览/回收流程发现，默认 grace period 和二次引用检查仍然生效。该路径已用 fake R2 和 Workerd 验证，未宣称生产故障注入证据。
 
+## M2-19 解析恢复与有界重投
+
+Workers AI 或临时 R2 故障只把任务置为 `failed_retryable`，保留 `last_error_code` 和 attempts；Cron 每 5 分钟调用同一 `processDue(3)` 协调器，最多领取有界任务，不会因单个失败中断整个扫描。管理员手动 retry 会清零 attempts 并回到 `queued`，恢复后的下一次 Cron/手动处理可以幂等写入唯一解析对象并清理错误码。单元回归覆盖“AI 首次不可用→D1 可重试→下一次有界扫描恢复成功”的完整路径。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：
