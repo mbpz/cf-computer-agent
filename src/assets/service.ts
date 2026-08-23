@@ -78,7 +78,9 @@ const allowedTypes = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+  "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+  "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.apple.numbers",
   "image/png", "image/jpeg", "image/gif", "image/webp",
 ]);
 const binaryExtensionTypes: Readonly<Record<string, string>> = Object.freeze({
@@ -89,10 +91,14 @@ const binaryExtensionTypes: Readonly<Record<string, string>> = Object.freeze({
   gif: "image/gif",
   webp: "image/webp",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   xls: "application/vnd.ms-excel",
   ppt: "application/vnd.ms-powerpoint",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  numbers: "application/vnd.apple.numbers",
 });
 
 export class AssetService {
@@ -428,8 +434,12 @@ function isRichAsset(asset: AssetRecord): boolean {
     || asset.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     || asset.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     || asset.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    || asset.contentType === "application/msword"
     || asset.contentType === "application/vnd.ms-excel"
-    || asset.contentType === "application/vnd.ms-powerpoint";
+    || asset.contentType === "application/vnd.ms-powerpoint"
+    || asset.contentType === "application/vnd.oasis.opendocument.text"
+    || asset.contentType === "application/vnd.oasis.opendocument.spreadsheet"
+    || asset.contentType === "application/vnd.apple.numbers";
 }
 
 function validateBinarySignature(asset: AssetRecord, bytes: ArrayBuffer): void {
@@ -454,9 +464,15 @@ function validateBinarySignature(asset: AssetRecord, bytes: ArrayBuffer): void {
               "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ].includes(asset.contentType)
               ? isZip
-              : asset.contentType === "application/vnd.ms-excel" || asset.contentType === "application/vnd.ms-powerpoint"
+              : asset.contentType === "application/msword"
+                || asset.contentType === "application/vnd.ms-excel"
+                || asset.contentType === "application/vnd.ms-powerpoint"
                 ? isOle
-                : true;
+                : asset.contentType === "application/vnd.oasis.opendocument.text"
+                  || asset.contentType === "application/vnd.oasis.opendocument.spreadsheet"
+                  || asset.contentType === "application/vnd.apple.numbers"
+                  ? isZip
+                  : true;
   if (!valid) throw new AppError("ASSET_CONTENT_INVALID", "Asset content is invalid", 422);
 }
 

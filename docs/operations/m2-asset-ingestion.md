@@ -99,6 +99,19 @@ PDF、PNG、JPEG、GIF、WebP、Office OOXML 和旧版 OLE 文件在进入 Markd
 
 这组接口只适合人工确认后的低频治理，不声称完成生产扫描或删除；生产执行前应先保存 D1 备份、记录候选列表和脱敏 request ID。当前验证使用 local fake/Workerd，未扫描或删除生产 R2。
 
+## M2-17 格式支持矩阵与解析降级
+
+当前 Worker 的格式入口和最小签名矩阵覆盖：PDF、PNG/JPEG/GIF/WebP、DOC/DOCX、XLS/XLSX、PPT/PPTX、ODT、ODS、Numbers，以及纯文本、Markdown、CSV、JSON、HTML/XML 和 allowlist 代码文件。DOC/旧版 Office 使用 OLE 签名；OOXML、ODT、ODS、Numbers 使用 ZIP 签名；PDF 与图片使用对应 magic bytes。扩展名/MIME/签名不一致时在 R2/D1 双写前拒绝或在任务领取时进入 `ASSET_CONTENT_INVALID` 终态。
+
+解析降级保持可观测且幂等：
+
+- 纯文本、Markdown、CSV、JSON、代码直接走本地 parser，成功写入 `parsed/<assetId>.md`。
+- PDF、Office、ODT/ODS/Numbers、HTML/XML 和图片优先调用 `toMarkdown`；转换器返回 `markdown` 或 `text` 才继续本地 parser。
+- 转换器不可用或抛出异常记录 `ASSET_AI_PARSE_FAILED`，任务为 `failed_retryable`，不生成伪造结果。
+- 转换结果为空、超过 128 KiB、非法 UTF-8 或本地 parser 拒绝时记录稳定终态错误（如 `SOURCE_EMPTY`、`SOURCE_TOO_LARGE`、`ASSET_CONTENT_INVALID`）。
+
+当前本地/Workerd 验证覆盖每种签名、损坏文件、空结果、超限结果、转换器故障和原件恢复重试；真实 Office/PDF/图片样本、生产 AI 可用性和生产 R2 仍需单独证据。
+
 ## 生产资源准备
 
 首次生产部署前，管理员需确认 R2 bucket 已存在：

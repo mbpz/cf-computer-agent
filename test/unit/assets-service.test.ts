@@ -318,10 +318,14 @@ describe("AssetService", () => {
     ["photo.gif", "image/gif", [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
     ["photo.webp", "image/webp", [0x52, 0x49, 0x46, 0x46, 0x31, 0x32, 0x33, 0x34, 0x57, 0x45, 0x42, 0x50]],
     ["guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", [0x50, 0x4b, 0x03, 0x04]],
+    ["guide.doc", "application/msword", [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
     ["sheet.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", [0x50, 0x4b, 0x03, 0x04]],
     ["deck.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", [0x50, 0x4b, 0x03, 0x04]],
     ["sheet.xls", "application/vnd.ms-excel", [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
     ["deck.ppt", "application/vnd.ms-powerpoint", [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
+    ["document.odt", "application/vnd.oasis.opendocument.text", [0x50, 0x4b, 0x03, 0x04]],
+    ["workbook.ods", "application/vnd.oasis.opendocument.spreadsheet", [0x50, 0x4b, 0x03, 0x04]],
+    ["workbook.numbers", "application/vnd.apple.numbers", [0x50, 0x4b, 0x03, 0x04]],
   ])("accepts a valid binary signature for %s", async (originalName, contentType, payload) => {
     const db = repository();
     const originals = bucket();
