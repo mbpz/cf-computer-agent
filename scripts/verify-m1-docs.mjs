@@ -173,16 +173,16 @@ async function verifyTruth(checklist, report) {
   const gates = [...checklistText.matchAll(/^- \[([ x])\] `GATE-M1`(?:\s|$)/gmu)];
   if (atoms.length !== 76
     || atomIds.size !== atoms.length
-    || checked.length !== 75
-    || unchecked.length !== 1
+    || checked.length !== 76
+    || unchecked.length !== 0
     || gates.length !== 1
     || gates[0][1] !== " ") {
     throw new Error("M1 checklist counts do not match the reviewed truth");
   }
 
-  const summary = "Checklist totals: **76 P0/M1 atoms = 75 checked + 1 unchecked**. `GATE-M1` is one additional unchecked gate, so **2 items are unchecked including the gate**.";
+  const summary = "Checklist totals: **76 P0/M1 atoms = 76 checked + 0 unchecked**. `GATE-M1` remains the one unchecked gate.";
   if (!reportText.includes(summary)
-    || !reportText.includes("One current P0/M1 atom remains unchecked")) {
+    || !reportText.includes("No current P0/M1 atom remains unchecked")) {
     throw new Error("M1 report count wording is stale");
   }
   const sectionStart = reportText.indexOf("## Checklist reconciliation");

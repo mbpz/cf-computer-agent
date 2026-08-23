@@ -345,7 +345,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-002` P0/M0 GitHub OAuth 生产部署手册；状态：I/L；证据：`docs/operations/production-environment-handbook.md`。
 - [x] `OPS-003` P0/M0 Secret bundle 单版本发布；状态：L；远程流程已由操作员执行；M1 本地合同要求受保护临时文件/目录均已删除才算 stage 成功，清理失败保留 EXIT trap 并使 stage 失败。
 - [x] `OPS-004` P0/M0 append-only D1 migrations；状态：L/R；0001/0002 已由操作员应用。
-- [ ] `OPS-005` P0/M0 signed automation 远程 smoke 证据；验收：自定义域、脱敏 request ID。
+- [x] `OPS-005` P0/M0 signed automation 远程 smoke 证据；状态：R；证据：`docs/operations/evidence/m1-release-2026-08-23.md`，custom domain health/create/list/search/chat 通过，错误签名 401、admin automation 403。
 - [ ] `OPS-006` P0/M0 disabled contributor 远程证据；验收：真实 GitHub session 被拒绝。
 - [ ] `OPS-007` P0/M0 DO 跨远程激活证据；验收：激活前后读取一致。
 - [ ] `OPS-008` P0/M2 R2 Bucket 配置；验收：Standard/private/CORS/生命周期和 binding。
@@ -355,7 +355,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `OPS-012` P0/M4 Vectorize index 配置；验收：384 维、metadata indexes、binding 和 rebuild。
 - [ ] `OPS-013` P0/M4 Vectorize 用量断路器；验收：80% 后停止普通向量。
 - [ ] `OPS-014` P0/M2 Workers AI 日额度策略；验收：优先级、deferred_quota 和次日恢复。
-- [ ] `OPS-015` P0/M1 D1 query 成本证据；验收：关键列表/搜索记录 rows_read/written。
+- [x] `OPS-015` P0/M1 D1 query 成本证据；状态：R；证据：`docs/operations/evidence/m1-release-2026-08-23.md`，13 个有界生产只读路径记录 returned rows、rows_read、rows_written。
 - [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界；Submit/Search 的 Space/Collection/Tag 第 51 项仅由可访问的显式 Load more 获取，去重、single-flight 且抑制 stale scope 结果。
 - [ ] `OPS-017` P0/M7 全量导出；验收：manifest、metadata、Revision、原件和引用映射。
 - [ ] `OPS-018` P0/M7 增量导出；验收：基于稳定 cursor/checkpoint，无漏项。
@@ -378,7 +378,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ### M1
 
-- [ ] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。当前：本地/Workerd 纵向旅程和固定评测已通过；生产 version ID、完整 request ID、D1 成本及当前未勾选的 P0/M1 原子项仍待补齐，证据模板见 `docs/operations/evidence/m1-release-template.md`。
+- [ ] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。当前：本地/Workerd 纵向旅程、生产 version ID、signed automation 和 D1 成本证据已归档；GitHub callback、disabled contributor、DO 跨激活和 workers.dev 账户级证据仍待补齐，见 `docs/operations/evidence/m1-release-2026-08-23.md`。
 
 ### M2
 

@@ -577,15 +577,15 @@ test("runbook contract rejects a probe moved before migration verification", asy
 test("derives exact M1 atom and gate truth and verifies report list cardinality", async () => {
   const baseline = await runDocsVerifier(["--truth", checklistPath.pathname, reportPath.pathname]);
   assert.equal(baseline.code, 0, baseline.output);
-  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=75 unchecked=1 gates=1 unchecked_items=2$/mu);
+  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=76 unchecked=0 gates=1 unchecked_items=1$/mu);
 
   const [checklist, report] = await Promise.all([
     readFile(checklistPath, "utf8"),
     readFile(reportPath, "utf8"),
   ]);
   const reportMutations = [
-    report.replace("75 checked + 1 unchecked", "75 checked + 2 unchecked"),
-    report.replace("- `OPS-015`.", ""),
+    report.replace("76 checked + 0 unchecked", "76 checked + 1 unchecked"),
+    report.replace("No current P0/M1 atom remains unchecked", "One current P0/M1 atom remains unchecked"),
   ];
   for (const mutatedReport of reportMutations) {
     assert.notEqual(mutatedReport, report);
@@ -596,7 +596,7 @@ test("derives exact M1 atom and gate truth and verifies report list cardinality"
     });
   }
 
-  const mutatedChecklist = checklist.replace("- [ ] `OPS-015` P0/M1", "- [x] `OPS-015` P0/M1");
+  const mutatedChecklist = checklist.replace("- [x] `OPS-015` P0/M1", "- [ ] `OPS-015` P0/M1");
   assert.notEqual(mutatedChecklist, checklist);
   await withTextFile("m1-checklist-truth-", mutatedChecklist, async (path) => {
     const result = await runDocsVerifier(["--truth", path, reportPath.pathname]);

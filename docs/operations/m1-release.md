@@ -11,13 +11,13 @@ Writing or testing this runbook is local evidence only. Every command containing
 - Production evidence requires a date, commit, exact Worker version ID, and redacted request IDs in [the M1 release evidence template](./evidence/m1-release-template.md).
 - Preserve GitHub OAuth, D1 hashed sessions, `__Host-memory-session`, HMAC plus `APP_TOKEN` automation, the `KnowledgeBase` class, and Durable Object migration tag `v1`.
 - Migrations `0001` through `0004_m1_gate_completion.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
-- `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. The only unchecked product atom is production-only `OPS-015`, so the current status is **M1 implementation complete; remote verification pending.**
+- `GATE-M0` must have its missing remote evidence archived before a production M1 completion claim. Production `OPS-005` and `OPS-015` evidence is now archived, but OAuth callback, disabled-member, cross-activation, and account-level workers.dev evidence remain open, so the current status is **M1 implementation deployed; remote verification incomplete.**
 
 Use a fresh copy of [the evidence template](./evidence/m1-release-template.md) for one candidate. Do not place source text, response bodies, cookies, OAuth codes, authorization headers, secret values, or full callback URLs in it.
 
 ### Current checklist reconciliation
 
-The fixed provider-free gate now proves all 23 local/Workerd M1 atoms, including bilingual UI, exact byte parsing, audited review/resubmission, complete FTS fields, deterministic ranking/highlights/Tag modes, safe Markdown, original download authorization, explicit chat scopes, and confidence refusal. Only `OPS-015` remains unchecked because it requires reviewed production `rows_read`/`rows_written` values. `GATE-M1` also remains unchecked. This is **M1 implementation complete; remote verification pending**, never a production claim.
+The fixed provider-free gate proves all 23 local/Workerd M1 atoms, including bilingual UI, exact byte parsing, audited review/resubmission, complete FTS fields, deterministic ranking/highlights/Tag modes, safe Markdown, original download authorization, explicit chat scopes, and confidence refusal. Production `0004`, exact version deployment, signed automation, and 13 D1 cost paths are archived. M0 identity/session/cross-activation evidence remains open, so `GATE-M1` is still unchecked and this is never a complete production-gate claim.
 
 ## 1. Authorize and capture the candidate
 
