@@ -383,6 +383,7 @@ export const zhCN = Object.freeze({
   ERROR_ASSET_NAME_INVALID: "文件名不受支持。",
   ERROR_ASSET_TYPE_UNSUPPORTED: "暂不支持此文件类型。",
   ERROR_ASSET_CONTENT_INVALID: "文件编码无效。",
+  ERROR_ASSET_AI_PARSE_FAILED: "富文档转换暂时不可用。",
   ERROR_ASSET_PERSISTENCE_UNAVAILABLE: "原件暂时无法保存，请重试。",
   ERROR_ASSET_NOT_FOUND: "找不到该原件。",
   ERROR_UNKNOWN_CODE: "操作失败（{code}），请重试。",

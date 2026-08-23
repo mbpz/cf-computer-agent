@@ -36,7 +36,7 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 浏览器入口位于登录后的“提交”页面“上传原件”卡片；失败时保留在当前页面并显示可重试错误，不会创建一条假提交。
 
-上传后点击“开始解析”会触发同一资产的 owner-scoped `POST /api/assets/<assetId>`。Worker 还配置了每 5 分钟一次的 Cron 扫描，自动领取最多 3 个 `queued/failed_retryable` 任务；手动触发和 Cron 使用同一协调器。当前解析器只处理纯文本、Markdown、CSV、JSON 和 allowlist 代码扩展名，成功结果写入私有 R2 `parsed/<assetId>.md`，D1 任务进入 `succeeded`。PDF、Office、图片等格式会进入 `failed_terminal`，不会伪造解析结果；临时 R2/D1 故障进入 `failed_retryable`，最多允许 3 次领取。
+上传后点击“开始解析”会触发同一资产的 owner-scoped `POST /api/assets/<assetId>`。Worker 还配置了每 5 分钟一次的 Cron 扫描，自动领取最多 3 个 `queued/failed_retryable` 任务；手动触发和 Cron 使用同一协调器。当前解析器直接处理纯文本、Markdown、CSV、JSON 和 allowlist 代码扩展名；PDF、Office、HTML/XML 和图片在 `env.AI.toMarkdown` 可用时走 Markdown Conversion，再经过本地安全 parser；AI 不可用时任务保留为 `failed_retryable`，不会伪造解析结果。成功结果写入私有 R2 `parsed/<assetId>.md`，D1 任务进入 `succeeded`；非法内容进入 `failed_terminal`，临时 R2/D1/AI 故障最多允许 3 次领取。
 
 ## 生产资源准备
 

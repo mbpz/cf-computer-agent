@@ -178,6 +178,45 @@ describe("AssetService", () => {
     expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
   });
 
+  it("uses a local Markdown conversion provider for rich originals", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: {
+        async toMarkdown() {
+          return { format: "markdown", data: "# Converted PDF\\n\\nReadable content\\n" };
+        },
+      },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-convert-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "succeeded", lastErrorCode: null });
+    const converted = originals.objects.get(`parsed/${created.asset.id}.md`);
+    expect(converted).toBeDefined();
+    expect(new TextDecoder().decode(converted)).toContain("# Converted PDF");
+  });
+
+  it("keeps a rich conversion provider failure retryable", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      markdownConverter: { async toMarkdown() { throw new Error("provider unavailable"); } },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "guide.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("pdf-bytes").buffer, idempotencyKey: "pdf-failure-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_AI_PARSE_FAILED" });
+  });
+
   it("marks malformed UTF-8 text as a terminal parse failure", async () => {
     const db = repository();
     const originals = bucket();

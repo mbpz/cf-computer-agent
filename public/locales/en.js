@@ -383,6 +383,7 @@ export const en = Object.freeze({
   ERROR_ASSET_NAME_INVALID: "The file name is not supported.",
   ERROR_ASSET_TYPE_UNSUPPORTED: "This file type is not supported yet.",
   ERROR_ASSET_CONTENT_INVALID: "The file encoding is invalid.",
+  ERROR_ASSET_AI_PARSE_FAILED: "Rich document conversion is temporarily unavailable.",
   ERROR_ASSET_PERSISTENCE_UNAVAILABLE: "The original could not be stored. Try again.",
   ERROR_ASSET_NOT_FOUND: "The original was not found.",
   ERROR_UNKNOWN_CODE: "The operation failed ({code}). Try again.",

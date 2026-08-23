@@ -18,6 +18,17 @@ export interface AssetServiceOptions {
   id?: () => string;
   now?: () => Date;
   maxBytes?: number;
+  markdownConverter?: AssetMarkdownConverter;
+}
+
+export interface AssetMarkdownConverter {
+  toMarkdown(input: { name: string; blob: Blob }): Promise<AssetMarkdownConversionResult | AssetMarkdownConversionResult[]>;
+}
+
+export interface AssetMarkdownConversionResult {
+  format: "markdown" | "text" | "error" | string;
+  data?: string;
+  error?: string;
 }
 
 export interface AssetUploadInput {
@@ -43,6 +54,7 @@ export class AssetService {
   private readonly id: () => string;
   private readonly now: () => Date;
   private readonly maxBytes: number;
+  private readonly markdownConverter?: AssetMarkdownConverter;
 
   constructor(
     private readonly originals: R2Bucket,
@@ -52,6 +64,9 @@ export class AssetService {
     this.id = options.id || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
     this.maxBytes = options.maxBytes || DEFAULT_MAX_BYTES;
+    this.markdownConverter = typeof options.markdownConverter?.toMarkdown === "function"
+      ? options.markdownConverter
+      : undefined;
   }
 
   async create(input: AssetUploadInput): Promise<AssetWithJob> {
@@ -139,9 +154,11 @@ export class AssetService {
     try {
       const original = await this.originals.get(current.asset.objectKey);
       if (!original) throw new AppError("ASSET_ORIGINAL_MISSING", "Original asset is missing", 422);
-      const input = parseInputForAsset(current.asset, await original.arrayBuffer());
-      if (!input) throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
-      const parsed = await parseSource(input);
+      const bytes = await original.arrayBuffer();
+      const input = parseInputForAsset(current.asset, bytes);
+      const parsed = input
+        ? await parseSource(input)
+        : await this.parseRichAsset(current.asset, bytes);
       await this.originals.put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },
@@ -156,6 +173,26 @@ export class AssetService {
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
     return (await this.repository.findById(current.asset.id)) || current;
+  }
+
+  private async parseRichAsset(asset: AssetRecord, bytes: ArrayBuffer) {
+    if (!this.markdownConverter || !isRichAsset(asset)) {
+      throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
+    }
+    let converted: AssetMarkdownConversionResult | AssetMarkdownConversionResult[];
+    try {
+      converted = await this.markdownConverter.toMarkdown({
+        name: asset.originalName,
+        blob: new Blob([bytes], { type: asset.contentType }),
+      });
+    } catch {
+      throw new AppError("ASSET_AI_PARSE_FAILED", "Rich asset conversion is temporarily unavailable", 503, true);
+    }
+    const result = Array.isArray(converted) ? converted[0] : converted;
+    if (!result || (result.format !== "markdown" && result.format !== "text") || typeof result.data !== "string") {
+      throw new AppError("ASSET_AI_PARSE_FAILED", "Rich asset conversion failed", 422, true);
+    }
+    return parseSource({ kind: "markdown", content: result.data });
   }
 }
 
@@ -186,6 +223,18 @@ function decodeUtf8(bytes: ArrayBuffer): string {
   } catch {
     throw new AppError("ASSET_CONTENT_INVALID", "Asset content encoding is invalid", 422);
   }
+}
+
+function isRichAsset(asset: AssetRecord): boolean {
+  return asset.contentType === "application/pdf"
+    || asset.contentType === "text/html"
+    || asset.contentType === "application/xml"
+    || asset.contentType.startsWith("image/")
+    || asset.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    || asset.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    || asset.contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    || asset.contentType === "application/vnd.ms-excel"
+    || asset.contentType === "application/vnd.ms-powerpoint";
 }
 
 function validateInput(input: AssetUploadInput, maxBytes: number): void {

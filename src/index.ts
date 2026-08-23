@@ -190,7 +190,9 @@ const app = createApp();
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB)).processDue(3);
+    const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
+      markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
+    }).processDue(3);
     console.log("asset parse sweep complete", result);
   },
 };

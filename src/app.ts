@@ -115,7 +115,9 @@ function createRequestServices(
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
-  const assets = new AssetService(env.ORIGINALS, new AssetsRepository(env.DB));
+  const assets = new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
+    markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
+  });
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(env.AI),
