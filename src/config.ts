@@ -54,5 +54,12 @@ export const APP_CONFIG = {
   imageModel: "@cf/llava-hf/llava-1.5-7b-hf",
   maxDocxParseBytes: 4 * 1024 * 1024,
   maxDocxXmlBytes: 2 * 1024 * 1024,
+  maxXlsxParseBytes: 4 * 1024 * 1024,
+  maxXlsxXmlBytes: 2 * 1024 * 1024,
+  maxXlsxEntries: 256,
+  maxXlsxSheets: 50,
+  maxXlsxCells: 50_000,
+  maxXlsxRows: 100_000,
+  maxXlsxColumns: 16_384,
   model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
 } as const;
