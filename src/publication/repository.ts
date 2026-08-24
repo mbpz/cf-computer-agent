@@ -461,10 +461,6 @@ export class PublicationRepository implements PublicationRepositoryPort {
     if (!target || target.previous_revision_id === null) {
       throw new PublicationRepositoryConflictError("rollback_target_invalid");
     }
-    if (target.previous_revision_id === revisionId) {
-      return { ...(await this.requireRevision(revisionId)), previousRevisionId: revisionId };
-    }
-
     const timestamp = this.now().toISOString();
     const audit: CreateAuditEvent = {
       id: `rollback-${knowledgeItemId}-${revisionId}`,
@@ -478,6 +474,16 @@ export class PublicationRepository implements PublicationRepositoryPort {
     };
     try {
       await this.db.batch([
+        this.db.prepare(
+          `INSERT INTO jobs (
+             id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+           ) SELECT ?, 'index_revision', ?, 'pending', 0, ?, NULL, ?, ?
+           WHERE NOT EXISTS (
+             SELECT 1 FROM jobs WHERE kind = 'index_revision' AND resource_id = ?
+           )`
+        ).bind(
+          `index-${revisionId}`, revisionId, timestamp, timestamp, timestamp, revisionId,
+        ),
         this.db.prepare(
           `UPDATE knowledge_items SET current_revision_id = ?, search_status = 'pending', updated_at = ?
            WHERE id = ? AND current_revision_id = ? AND status = 'active'

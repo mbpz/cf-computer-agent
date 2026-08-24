@@ -437,6 +437,12 @@ describe("M1 publication control plane", () => {
       action: "knowledge.rolled_back",
       metadata: JSON.stringify({ fromRevisionId: "revision-rollback-next", toRevisionId: "revision-rollback-base" }),
     });
+    await expect(service.rollback(
+      adminReviewer, "knowledge-rollback-m3", "revision-rollback-base",
+    )).resolves.toMatchObject({ id: "revision-rollback-base", searchStatus: "indexed" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM audit_events WHERE action = 'knowledge.rolled_back'",
+    ).first()).resolves.toEqual({ count: 1 });
   });
 
   it("rolls back the pointer and index schedule atomically when the audit write fails", async () => {
