@@ -11,6 +11,7 @@ import { recoverXmlMarkdown } from "./xml";
 import { recoverOpenDocumentMarkdown } from "./odf";
 import { recoverPptxMarkdown } from "./pptx";
 import { assertReadableParsedMarkdown } from "./empty";
+import { classifyAssetParseFailure } from "./errors";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -411,15 +412,7 @@ export class AssetService {
       await this.repository.markParseSucceeded(assetId, now);
     } catch (error) {
       await this.requireStorage().delete(parsedKey).catch(() => undefined);
-      const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
-      const terminal = error instanceof AppError && [
-        "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
-        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED", "ASSET_DOCX_TOO_LARGE", "ASSET_DOCX_PARSE_UNSUPPORTED", "ASSET_DOCX_EMPTY", "ASSET_XLSX_TOO_LARGE", "ASSET_XLSX_PARSE_UNSUPPORTED", "ASSET_XLSX_EMPTY", "ASSET_CSV_TOO_LARGE", "ASSET_CSV_PARSE_UNSUPPORTED", "ASSET_CSV_EMPTY",
-        "ASSET_HTML_TOO_LARGE", "ASSET_HTML_OUTPUT_TOO_LARGE", "ASSET_HTML_EMPTY",
-        "ASSET_XML_TOO_LARGE", "ASSET_XML_OUTPUT_TOO_LARGE", "ASSET_XML_EMPTY", "ASSET_XML_PARSE_UNSUPPORTED",
-        "ASSET_ODF_TOO_LARGE", "ASSET_ODF_OUTPUT_TOO_LARGE", "ASSET_ODF_EMPTY", "ASSET_ODF_PARSE_UNSUPPORTED", "ASSET_NUMBERS_PARSE_UNSUPPORTED",
-        "ASSET_PPTX_TOO_LARGE", "ASSET_PPTX_OUTPUT_TOO_LARGE", "ASSET_PPTX_EMPTY", "ASSET_PPTX_PARSE_UNSUPPORTED",
-      ].includes(error.code);
+      const { code, terminal } = classifyAssetParseFailure(error);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
     return (await this.repository.findById(current.asset.id)) || current;
