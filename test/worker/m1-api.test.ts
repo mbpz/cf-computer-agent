@@ -346,6 +346,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/submission/publish", "GET", "POST"],
       ["/api/admin/submissions/submission/reject", "GET", "POST"],
       ["/api/admin/submissions/submission/request-revision", "GET", "POST"],
+      ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
       ["/api/admin/publications/recover", "GET", "POST"],
       ["/api/admin/tags", "GET", "POST"],
       ["/api/spaces/default/tags", "POST", "GET"],
@@ -381,6 +382,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/submission/publish", {}],
       ["/api/admin/submissions/submission/reject", {}],
       ["/api/admin/submissions/submission/request-revision", {}],
+      ["/api/admin/knowledge/knowledge-1/rollback", { revisionId: "revision-1" }],
       ["/api/admin/publications/recover", {}],
       ["/api/admin/tags", {}],
     ] as const) {
@@ -389,6 +391,11 @@ describe("M1 API authorization and request boundaries", () => {
         body: JSON.stringify(body),
       }), 403, "FORBIDDEN");
     }
+
+    await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/rollback", {
+      method: "POST",
+      body: JSON.stringify({ revisionId: "revision-absent" }),
+    }), 400, "ROLLBACK_TARGET_INVALID");
 
     await expectApiError(memberApi("contributor", "/api/knowledge?unknown=x"), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&q=latency"), 400, "LIBRARY_REQUEST_INVALID");

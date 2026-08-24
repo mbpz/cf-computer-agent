@@ -9,6 +9,7 @@ import type {
   PublicationIntent,
   PublicationRepositoryPort,
   PublishedRevision,
+  RollbackResult,
   PublishSubmissionInput,
   RejectionReasonCode,
   ReviewDecision,
@@ -22,7 +23,9 @@ export type PublicationRepositoryConflictKind =
   | "submission_not_pending"
   | "intent_mismatch"
   | "receipt_mismatch"
-  | "decision_conflict";
+  | "decision_conflict"
+  | "rollback_target_invalid"
+  | "rollback_conflict";
 
 export class PublicationRepositoryConflictError extends Error {
   constructor(readonly kind: PublicationRepositoryConflictKind) {
@@ -442,6 +445,78 @@ export class PublicationRepository implements PublicationRepositoryPort {
       throw error;
     }
     return this.requireRevision(current.revisionId);
+  }
+
+  async rollback(
+    knowledgeItemId: string,
+    revisionId: string,
+    reviewerId: string,
+  ): Promise<RollbackResult> {
+    const target = await this.db.prepare(
+      `SELECT k.current_revision_id AS previous_revision_id
+       FROM knowledge_items k
+       JOIN revisions target ON target.id = ? AND target.knowledge_item_id = k.id
+       WHERE k.id = ? AND k.status = 'active' LIMIT 1`,
+    ).bind(revisionId, knowledgeItemId).first<{ previous_revision_id: string | null }>();
+    if (!target || target.previous_revision_id === null) {
+      throw new PublicationRepositoryConflictError("rollback_target_invalid");
+    }
+    if (target.previous_revision_id === revisionId) {
+      return { ...(await this.requireRevision(revisionId)), previousRevisionId: revisionId };
+    }
+
+    const timestamp = this.now().toISOString();
+    const audit: CreateAuditEvent = {
+      id: `rollback-${knowledgeItemId}-${revisionId}`,
+      actorKind: "member",
+      actorId: reviewerId,
+      action: "knowledge.rolled_back",
+      resourceType: "knowledge",
+      resourceId: knowledgeItemId,
+      metadata: { fromRevisionId: target.previous_revision_id, toRevisionId: revisionId },
+      createdAt: timestamp,
+    };
+    try {
+      await this.db.batch([
+        this.db.prepare(
+          `UPDATE knowledge_items SET current_revision_id = ?, search_status = 'pending', updated_at = ?
+           WHERE id = ? AND current_revision_id = ? AND status = 'active'
+             AND EXISTS (SELECT 1 FROM revisions target WHERE target.id = ? AND target.knowledge_item_id = ?)`
+        ).bind(revisionId, timestamp, knowledgeItemId, target.previous_revision_id, revisionId, knowledgeItemId),
+        this.db.prepare(
+          `INSERT INTO audit_events (
+             id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at
+           ) SELECT ?, 'member', ?, 'knowledge.rolled_back', 'knowledge', ?, ?, ?
+           WHERE changes() = 1`
+        ).bind(
+          audit.id, reviewerId, knowledgeItemId, JSON.stringify(audit.metadata), timestamp,
+        ),
+        this.db.prepare(
+          `UPDATE jobs SET state = 'pending', attempts = 0, available_at = ?,
+             last_error_code = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+           WHERE kind = 'index_revision' AND resource_id = ? AND state != 'pending'
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND current_revision_id = ? AND updated_at = ?
+             )`
+        ).bind(timestamp, timestamp, revisionId, knowledgeItemId, revisionId, timestamp),
+      ]);
+    } catch (error) {
+      const current = await this.db.prepare(
+        "SELECT current_revision_id FROM knowledge_items WHERE id = ? LIMIT 1",
+      ).bind(knowledgeItemId).first<{ current_revision_id: string | null }>();
+      if (current?.current_revision_id === revisionId) {
+        return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.previous_revision_id };
+      }
+      throw error;
+    }
+    const current = await this.db.prepare(
+      "SELECT current_revision_id FROM knowledge_items WHERE id = ? LIMIT 1",
+    ).bind(knowledgeItemId).first<{ current_revision_id: string | null }>();
+    if (current?.current_revision_id !== revisionId) {
+      throw new PublicationRepositoryConflictError("rollback_conflict");
+    }
+    return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.previous_revision_id };
   }
 
   async processIndexJob(revisionId: string): Promise<SearchStatus> {

@@ -7,6 +7,7 @@ import type {
   PublicationRepositoryPort,
   PublishSubmissionInput,
   PublishedRevision,
+  PublicationReviewer,
   ReviewDecision,
   ReviewSubmissionSnapshot,
 } from "../../src/publication/types";
@@ -23,6 +24,40 @@ const publishInput: PublishSubmissionInput = {
 };
 
 describe("PublicationService", () => {
+  it("requires an active administrator to rollback a knowledge item revision", async () => {
+    const revision: PublishedRevision = {
+      id: "revision-previous",
+      knowledgeItemId: "knowledge-1",
+      sourceVersionId: "source-version-previous",
+      normalizedPath: "/workspace/published/default/knowledge-1/revision-previous.md",
+      contentSha256: "a".repeat(64),
+      title: "Previous",
+      tagIds: [],
+      visibility: "shared",
+      publishedBy: "admin-1",
+      publishedAt: "2026-08-22T00:00:00.000Z",
+      searchStatus: "pending",
+    };
+    const repository = {
+      async rollback() { return revision; },
+      async processIndexJob() { return "indexed" as const; },
+    };
+    const service = new PublicationService(
+      repository as never,
+      { commit: async () => ({ path: "", contentSha256: "", bytes: 0 }) },
+    );
+
+    await expect((service as unknown as {
+      rollback(reviewer: PublicationReviewer, knowledgeItemId: string, revisionId: string): Promise<PublishedRevision>;
+    }).rollback(reviewer, "knowledge-1", "revision-previous")).resolves.toMatchObject({
+      id: "revision-previous", searchStatus: "indexed",
+    });
+    await expect((service as unknown as {
+      rollback(reviewer: PublicationReviewer, knowledgeItemId: string, revisionId: string): Promise<PublishedRevision>;
+    }).rollback({ ...reviewer, role: "contributor" } as PublicationReviewer, "knowledge-1", "revision-previous"))
+      .rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
   it.each([
     ["splitting", "markdown", `# Split\n\n${"x".repeat(1_350)}\n`],
     ["heading-only", "markdown", "# Only heading\n"],
@@ -537,6 +572,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
       if (options.finalizeResponseLoss && !finalizeResponseLost) { finalizeResponseLost = true; throw new Error("finalize response lost"); }
       return { ...revision, visibility: intent.visibility };
     },
+    async rollback() { return { ...revision, previousRevisionId: revision.id }; },
     async processIndexJob() { events.push("process-index"); indexCount += 1; revision.searchStatus = "indexed"; return "indexed"; },
     async reject(_submissionId, _reviewerId, input) {
       if (options.decisionConflict) throw Object.assign(new Error("decision conflict"), { kind: "decision_conflict" });

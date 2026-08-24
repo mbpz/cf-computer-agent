@@ -403,6 +403,73 @@ describe("M1 publication control plane", () => {
     await expect(indexedChunkIds("knowledge-switch")).resolves.toEqual([]);
   });
 
+  it("rolls back only the current pointer, preserves immutable history, reindexes, and audits", async () => {
+    await seedReviewPendingSubmission("submission-rollback-m3");
+    const repository = repositoryWithIds("knowledge-rollback-m3", "revision-rollback-base");
+    const service = new PublicationService(repository, durableContentCommitter());
+    await service.publish(adminReviewer, "submission-rollback-m3", publicationInput);
+
+    const replacement = await parseSource({ kind: "markdown", content: "# Later\n\nLater revision marker.\n" });
+    await seedReplacementIndexRevision(
+      "knowledge-rollback-m3", "revision-rollback-next", replacement.normalizedMarkdown, replacement.contentSha256,
+    );
+    await expect(repository.processIndexJob("revision-rollback-next")).resolves.toBe("indexed");
+    await expect(indexedChunkIds("knowledge-rollback-m3")).resolves.toEqual(["revision-rollback-next-chunk-0"]);
+
+    const [firstRollback, secondRollback] = await Promise.all([
+      service.rollback(adminReviewer, "knowledge-rollback-m3", "revision-rollback-base"),
+      service.rollback(adminReviewer, "knowledge-rollback-m3", "revision-rollback-base"),
+    ]);
+    expect(firstRollback).toMatchObject({ id: "revision-rollback-base", previousRevisionId: "revision-rollback-next", searchStatus: "indexed" });
+    expect(secondRollback).toMatchObject({ id: "revision-rollback-base", searchStatus: expect.stringMatching(/^(?:pending|indexed)$/u) });
+    await expect(env.DB.prepare(
+      "SELECT current_revision_id FROM knowledge_items WHERE id = 'knowledge-rollback-m3'",
+    ).first()).resolves.toEqual({ current_revision_id: "revision-rollback-base" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = 'knowledge-rollback-m3'",
+    ).first()).resolves.toEqual({ count: 2 });
+    await expect(indexedChunkIds("knowledge-rollback-m3")).resolves.toEqual([
+      "revision-rollback-base-chunk-0", "revision-rollback-base-chunk-1",
+    ]);
+    await expect(env.DB.prepare(
+      "SELECT action, metadata FROM audit_events WHERE action = 'knowledge.rolled_back'",
+    ).first()).resolves.toEqual({
+      action: "knowledge.rolled_back",
+      metadata: JSON.stringify({ fromRevisionId: "revision-rollback-next", toRevisionId: "revision-rollback-base" }),
+    });
+  });
+
+  it("rolls back the pointer and index schedule atomically when the audit write fails", async () => {
+    await seedReviewPendingSubmission("submission-rollback-failure");
+    const repository = repositoryWithIds("knowledge-rollback-failure", "revision-rollback-failure-base");
+    const service = new PublicationService(repository, durableContentCommitter());
+    await service.publish(adminReviewer, "submission-rollback-failure", publicationInput);
+    const replacement = await parseSource({ kind: "markdown", content: "# Later\n\nFailure rollback marker.\n" });
+    await seedReplacementIndexRevision(
+      "knowledge-rollback-failure", "revision-rollback-failure-next", replacement.normalizedMarkdown, replacement.contentSha256,
+    );
+    await expect(repository.processIndexJob("revision-rollback-failure-next")).resolves.toBe("indexed");
+    await env.DB.prepare(
+      `INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at)
+       VALUES (?, 'member', ?, 'knowledge.rolled_back', 'knowledge', ?, ?, ?)`,
+    ).bind(
+      "rollback-knowledge-rollback-failure-revision-rollback-failure-base", adminReviewer.id,
+      "knowledge-rollback-failure", JSON.stringify({ fromRevisionId: "other", toRevisionId: "other" }), now,
+    ).run();
+
+    await expect(service.rollback(
+      adminReviewer, "knowledge-rollback-failure", "revision-rollback-failure-base",
+    )).rejects.toThrow();
+    await expect(env.DB.prepare(
+      "SELECT current_revision_id, search_status FROM knowledge_items WHERE id = ?",
+    ).bind("knowledge-rollback-failure").first()).resolves.toEqual({
+      current_revision_id: "revision-rollback-failure-next", search_status: "indexed",
+    });
+    await expect(env.DB.prepare(
+      "SELECT state FROM jobs WHERE resource_id = ?",
+    ).bind("revision-rollback-failure-base").first()).resolves.toEqual({ state: "completed" });
+  });
+
   it("publishes an audited final metadata patch to another active Space without mutating requested metadata", async () => {
     await seedReviewPendingSubmission("submission-metadata-patch");
     await env.DB.batch([

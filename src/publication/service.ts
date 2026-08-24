@@ -107,6 +107,30 @@ export class PublicationService {
     }
   }
 
+  async rollback(
+    reviewer: PublicationReviewer,
+    knowledgeItemId: string,
+    revisionId: string,
+  ): Promise<PublishedRevision> {
+    requireActiveAdmin(reviewer);
+    const itemId = requireId(knowledgeItemId);
+    const targetRevisionId = requireId(revisionId);
+    let result;
+    try {
+      result = await this.repository.rollback(itemId, targetRevisionId, reviewer.id);
+    } catch (error) {
+      if (isRepositoryConflict(error, "rollback_target_invalid")) {
+        throw new AppError("ROLLBACK_TARGET_INVALID", "Revision does not belong to an active knowledge item", 400);
+      }
+      if (isRepositoryConflict(error, "rollback_conflict")) {
+        throw new AppError("ROLLBACK_STATE_CONFLICT", "Knowledge item changed during rollback", 409);
+      }
+      throw error;
+    }
+    const searchStatus = await this.repository.processIndexJob(result.id);
+    return { ...result, searchStatus };
+  }
+
   async recoverPending(limit: number): Promise<PublicationRecoveryResult> {
     const boundedLimit = normalizeRecoveryLimit(limit);
     const result: PublicationRecoveryResult = {

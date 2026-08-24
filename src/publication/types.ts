@@ -104,6 +104,10 @@ export interface PublishedRevision {
   searchStatus: SearchStatus;
 }
 
+export interface RollbackResult extends PublishedRevision {
+  previousRevisionId: string;
+}
+
 export type RejectionReasonCode = "not_relevant" | "duplicate" | "unsafe";
 
 export interface ReviewDecision {
@@ -128,6 +132,7 @@ export interface PublicationRepositoryPort {
   markContentWritten(submissionId: string, receipt: PublishedContentReceipt): Promise<void>;
   markIntentFailedTerminal(submissionId: string): Promise<void>;
   finalize(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision>;
+  rollback(knowledgeItemId: string, revisionId: string, reviewerId: string): Promise<RollbackResult>;
   processIndexJob(revisionId: string): Promise<SearchStatus>;
   reject(
     submissionId: string,

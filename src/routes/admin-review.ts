@@ -27,7 +27,8 @@ export async function routeAdminReviewApi(
 ): Promise<Response | undefined> {
   const reviewNamespace = url.pathname === "/api/admin/publications/recover"
     || url.pathname.startsWith("/api/admin/publications/")
-    || url.pathname.startsWith("/api/admin/submissions/");
+    || url.pathname.startsWith("/api/admin/submissions/")
+    || url.pathname.startsWith("/api/admin/knowledge/");
   if (!reviewNamespace) return undefined;
 
   requireCapability(principal, "knowledge:review");
@@ -47,6 +48,24 @@ export async function routeAdminReviewApi(
       200,
       context.requestId,
     );
+  }
+
+  const rollback = /^\/api\/admin\/knowledge\/([^/]+)\/rollback$/.exec(url.pathname);
+  if (rollback) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["revisionId"],
+      "ROLLBACK_REQUEST_INVALID",
+    );
+    const revision = await services.publication.rollback(
+      reviewerDto(reviewer),
+      decodePathId(rollback[1]!),
+      stringValue(input.revisionId),
+    );
+    return jsonResponse({ revision: publishedRevisionDto(revision) }, 200, context.requestId);
   }
 
   const publish = /^\/api\/admin\/submissions\/([^/]+)\/publish$/.exec(url.pathname);

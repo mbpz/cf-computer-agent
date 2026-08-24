@@ -40,6 +40,7 @@ describe("audit input validation", () => {
       requestedVisibility: "admin_only",
     }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "admin_only" }],
+    ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1" }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
       id: `audit-${action}`,
@@ -86,6 +87,7 @@ describe("audit input validation", () => {
     }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", tags: ["private"] }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", content: "private markdown" }],
+    ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1", content: "private markdown" }],
   ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
     expect(() => assertAuditEventInput({
       id: "audit-sensitive",

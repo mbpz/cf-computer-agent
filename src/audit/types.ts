@@ -31,6 +31,7 @@ export interface AuditActionMap {
     requestedCollectionId?: string; requestedVisibility: "shared" | "admin_only";
   } };
   "knowledge.published": { resourceType: "knowledge"; metadata: { submissionId: string; revisionId: string; visibility: "shared" | "admin_only" } };
+  "knowledge.rolled_back": { resourceType: "knowledge"; metadata: { fromRevisionId: string; toRevisionId: string } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -49,6 +50,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "review.visibility_expanded",
   "submission.resubmitted",
   "knowledge.published",
+  "knowledge.rolled_back",
 ]);
 
 export type CreateAuditEvent = {
@@ -224,6 +226,13 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
         revisionId: metadata.revisionId,
         visibility: metadata.visibility,
       });
+    }
+    case "knowledge.rolled_back": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["fromRevisionId", "toRevisionId"]));
+      if (!isBoundedId(metadata.fromRevisionId) || !isBoundedId(metadata.toRevisionId)
+        || metadata.fromRevisionId === metadata.toRevisionId) throw invalidMetadata();
+      return safeMetadata({ fromRevisionId: metadata.fromRevisionId, toRevisionId: metadata.toRevisionId });
     }
     default:
       throw new TypeError("Audit action is invalid");
