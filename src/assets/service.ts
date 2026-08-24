@@ -10,6 +10,7 @@ import { recoverHtmlMarkdown } from "./html";
 import { recoverXmlMarkdown } from "./xml";
 import { recoverOpenDocumentMarkdown } from "./odf";
 import { recoverPptxMarkdown } from "./pptx";
+import { assertReadableParsedMarkdown } from "./empty";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -402,6 +403,7 @@ export class AssetService {
       const parsed = input
         ? await parseSource(input)
         : await this.parseRichAsset(current.asset, bytes);
+      assertReadableParsedMarkdown(parsed.normalizedMarkdown);
       await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },
