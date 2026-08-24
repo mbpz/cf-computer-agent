@@ -79,6 +79,16 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
     const { submission, source, sourceVersion, audit } = input;
     assertSourceCreationBinding(input);
+    const rejectedReplay = await this.findRejectedByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
+    if (rejectedReplay) {
+      const candidate = await this.sources.findDuplicateCandidate(
+        sourceVersion.contentSha256, submission.submitterId, submission.requestedSpaceId,
+      );
+      if (candidate && sameDuplicateSubmission(rejectedReplay, input)) {
+        return { submission: rejectedReplay, source: null, sourceVersion: null, duplicateCandidate: candidate };
+      }
+      throw new SubmissionsRepositoryConflictError("idempotency_conflict");
+    }
     const replay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
     if (replay) return exactReplayOrThrow(replay, input);
 
@@ -121,7 +131,43 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
       const duplicateCandidate = await this.sources.findDuplicateCandidate(
         sourceVersion.contentSha256, submission.submitterId, submission.requestedSpaceId,
       );
-      if (duplicateCandidate) return { submission: null, source: null, sourceVersion: null, duplicateCandidate };
+      if (duplicateCandidate) {
+        const rejected: PersistedSubmission = { ...submission, status: "rejected" };
+        const duplicateAudit: CreateAuditEvent = {
+          id: this.auditId(), actorKind: "member", actorId: submission.submitterId,
+          action: "submission.rejected", resourceType: "submission", resourceId: submission.id,
+          metadata: { reasonCode: "duplicate" }, createdAt: submission.updatedAt,
+        };
+        assertSubmissionAuditBinding(rejected, duplicateAudit);
+        let duplicateWrites: D1Result[];
+        try {
+          duplicateWrites = await this.db.batch([
+            this.db.prepare(
+              `INSERT INTO submissions (
+                id, submitter_id, requested_space_id, requested_collection_id, requested_visibility,
+                kind, status, title, content, idempotency_key, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, 'rejected', ?, ?, ?, ?, ?)`,
+            ).bind(
+              rejected.id, rejected.submitterId, rejected.requestedSpaceId, rejected.requestedCollectionId,
+              rejected.requestedVisibility, rejected.kind, rejected.title, rejected.content,
+              rejected.idempotencyKey, rejected.createdAt, rejected.updatedAt,
+            ),
+            this.audit.prepareWriteAudit(duplicateAudit),
+          ]);
+        } catch (error) {
+          const winner = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
+          if (winner) return exactReplayOrThrow(winner, input);
+          const rejectedReplay = await this.findRejectedByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
+          if (rejectedReplay && sameDuplicateSubmission(rejectedReplay, input)) {
+            return { submission: rejectedReplay, source: null, sourceVersion: null, duplicateCandidate };
+          }
+          throw error;
+        }
+        if (duplicateWrites[0]?.meta.changes !== 1 || duplicateWrites[1]?.meta.changes !== 1) {
+          throw new Error("Duplicate submission audit did not persist");
+        }
+        return { submission: publicSubmission(rejected), source: null, sourceVersion: null, duplicateCandidate };
+      }
       throw new Error("Submission creation did not persist");
     }
     if (results[1]?.meta.changes !== 1 || results[2]?.meta.changes !== 1 || results[3]?.meta.changes !== 1) {
@@ -242,6 +288,15 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     return row ? mapCreationRow(row) : null;
   }
 
+  private async findRejectedByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<Submission | null> {
+    const row = await this.db.prepare(
+      `${submissionSelect} WHERE submitter_id = ? AND idempotency_key = ? AND status = 'rejected' LIMIT 1`,
+    ).bind(submitterId, idempotencyKey).first<SubmissionRow>();
+    return row ? mapSubmissionRow(row) : null;
+  }
+
+  private auditId(): string { return crypto.randomUUID(); }
+
   private async isTargetValid(spaceId: string, collectionId: string | null): Promise<boolean> {
     const row = await this.db.prepare(
       `SELECT 1 AS valid FROM spaces
@@ -357,6 +412,15 @@ function exactReplayOrThrow(existing: SubmissionCreateResult, input: CreateSubmi
   }
   return existing;
 }
+function sameDuplicateSubmission(existing: Submission, input: CreateSubmissionWithSourceVersion): boolean {
+  return existing.submitterId === input.submission.submitterId
+    && existing.requestedSpaceId === input.submission.requestedSpaceId
+    && existing.requestedCollectionId === input.submission.requestedCollectionId
+    && existing.requestedVisibility === input.submission.requestedVisibility
+    && existing.kind === input.submission.kind
+    && existing.title === input.submission.title
+    && existing.content === input.submission.content;
+}
 function assertSourceCreationBinding(input: CreateSubmissionWithSourceVersion): void {
   const { submission, source, sourceVersion, audit } = input;
   assertSubmissionAuditBinding(submission, audit);
@@ -383,6 +447,12 @@ function assertSubmissionAuditBinding(submission: CreateSubmission, audit: Creat
       || audit.metadata.requestedSpaceId !== submission.requestedSpaceId
       || audit.metadata.requestedCollectionId !== (submission.requestedCollectionId ?? undefined)
       || audit.metadata.requestedVisibility !== submission.requestedVisibility) {
+      throw new TypeError("Submission audit binding is invalid");
+    }
+    return;
+  }
+  if (submission.status === "rejected") {
+    if (audit.action !== "submission.rejected" || audit.metadata.reasonCode !== "duplicate") {
       throw new TypeError("Submission audit binding is invalid");
     }
     return;

@@ -119,7 +119,7 @@
 - [x] `GOV-011` P0/M1 并发发布串行化；状态：L/W；验收：同 Item 只产生一个 current Revision。
 - [x] `GOV-012` P0/M1 发布 journal/恢复；状态：L/W/D；验收：任一写入边界失败后可幂等恢复。
 - [x] `GOV-013` P0/M1 索引失败降级；状态：L/W/D；验收：Revision 仍可读且标 search_degraded。
-- [ ] `GOV-014` P0/M3 重复关联；验收：不创建重复 Item，保留 Submission 审计。
+- [x] `GOV-014` P0/M3 重复关联；状态：L/W；验收：相同成员、同一 Space 的相同规范化内容不创建第二个 Source/SourceVersion/Knowledge Item，记录 `rejected` Submission 与 allowlisted `submission.rejected(reasonCode=duplicate)` 审计；同幂等键可重放，跨成员/Space 不误判。证据：`src/submissions/repository.ts`、`src/submissions/types.ts`、`src/routes/member.ts`、`test/worker/submissions.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/submissions.test.ts test/worker/m1-api.test.ts -t "duplicate|idempotency"`。
 - [ ] `GOV-015` P1/M3 新 Revision；验收：旧 Revision 不变，current 原子切换。
 - [x] `GOV-016` P1/M3 Revision 回滚；状态：L/W；验收：管理员只能原子切换 current，旧 Revision 保持不变；重置目标索引任务并写入 allowlisted `knowledge.rolled_back` 审计。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts`。
 - [x] `GOV-017` P0/M3 回收站；状态：L/W；验收：管理员专属软删除、默认读路径隐藏、不可变 Revision 保留；30 天保留期与最终清理由 `GOV-019` 承接。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts test/worker/m1-api.test.ts`。

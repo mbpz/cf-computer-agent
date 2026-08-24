@@ -139,7 +139,7 @@ export async function routeMemberApi(
     return jsonResponse({
       submission: result.submission,
       duplicateCandidate: result.duplicateCandidate,
-    }, result.submission ? 201 : 200, context.requestId);
+    }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
   }
 
   const resubmit = /^\/api\/submissions\/([^/]+)\/resubmit$/.exec(url.pathname);

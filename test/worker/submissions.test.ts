@@ -264,7 +264,7 @@ describe("submissions D1 control plane", () => {
     await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
   });
 
-  it("returns a duplicate candidate for a different key and creates no second source version", async () => {
+  it("returns a duplicate candidate, preserves a rejected Submission audit, and creates no second source version", async () => {
     const service = createService();
     const first = await service.createWithSourceVersion("member-a", {
       requestedSpaceId: "default", kind: "markdown", title: "First", content: "# Same  \r\n", idempotencyKey: "duplicate-key-001",
@@ -273,18 +273,30 @@ describe("submissions D1 control plane", () => {
       requestedSpaceId: "default", kind: "markdown", title: "Second", content: "# Same\n", idempotencyKey: "duplicate-key-002",
     });
 
-    expect(duplicate).toEqual({
-      submission: null,
-      source: null,
-      sourceVersion: null,
-      duplicateCandidate: {
-        submissionId: first.submission!.id,
-        sourceId: first.source!.id,
-        sourceVersionId: first.sourceVersion!.id,
-      },
+    expect(duplicate.submission).toMatchObject({
+      status: "rejected",
+      submitterId: "member-a",
+      title: "Second",
     });
-    await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
-    await expect(env.DB.prepare("SELECT status FROM submissions").first()).resolves.toEqual({ status: "review_pending" });
+    expect(duplicate.source).toBeNull();
+    expect(duplicate.sourceVersion).toBeNull();
+    expect(duplicate.duplicateCandidate).toEqual({
+      submissionId: first.submission!.id,
+      sourceId: first.source!.id,
+      sourceVersionId: first.sourceVersion!.id,
+    });
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 1, sourceVersions: 1, audits: 2 });
+    await expect(env.DB.prepare("SELECT status FROM submissions WHERE id = ?").bind(duplicate.submission!.id).first()).resolves.toEqual({ status: "rejected" });
+    await expect(env.DB.prepare("SELECT action, resource_id, metadata FROM audit_events WHERE resource_id = ?").bind(duplicate.submission!.id).first()).resolves.toMatchObject({
+      action: "submission.rejected",
+      resource_id: duplicate.submission!.id,
+      metadata: JSON.stringify({ reasonCode: "duplicate" }),
+    });
+    const replay = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Second", content: "# Same\n", idempotencyKey: "duplicate-key-002",
+    });
+    expect(replay).toEqual(duplicate);
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 1, sourceVersions: 1, audits: 2 });
   });
 
   it("does not expose or block on a different member's same-hash source", async () => {

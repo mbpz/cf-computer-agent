@@ -24,7 +24,7 @@ export interface Submission {
 export type CreateSubmission = Submission;
 export type SubmissionCreateResult =
   | { submission: Submission; source: Source; sourceVersion: SourceVersion; duplicateCandidate: null }
-  | { submission: null; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate };
+  | { submission: Submission; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate };
 export type SubmissionPage = Page<Submission>;
 export interface SubmissionPageRequest {
   limit?: number;

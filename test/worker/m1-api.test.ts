@@ -650,6 +650,27 @@ describe("M1 trusted knowledge HTTP journey", () => {
     ).first()).resolves.toEqual({ submissions: 1, versions: 1 });
   });
 
+  it("records same-member duplicate content as a rejected Submission audit without a second SourceVersion", async () => {
+    const first = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Canonical runbook", content: "# Same  \r\n",
+    }, "duplicate-api-key-01");
+    expect(first.response.status).toBe(201);
+    const duplicate = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Another title", content: "# Same\n",
+    }, "duplicate-api-key-02");
+    expect(duplicate.response.status).toBe(200);
+    expect(duplicate.body).toMatchObject({
+      submission: { status: "rejected", title: "Another title" },
+      duplicateCandidate: { submissionId: first.body.submission.id },
+    });
+    await expect(env.DB.prepare(
+      `SELECT
+         (SELECT count(*) FROM submissions) AS submissions,
+         (SELECT count(*) FROM source_versions) AS versions,
+         (SELECT count(*) FROM audit_events WHERE action = 'submission.rejected') AS rejected_audits`,
+    ).first()).resolves.toEqual({ submissions: 2, versions: 1, rejected_audits: 1 });
+  });
+
   it("submits, reviews, publishes, lists, reads, searches, answers, and preserves citation history", async () => {
     const created = await createSubmission("contributor", {
       requestedSpaceId: "default",
