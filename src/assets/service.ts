@@ -7,6 +7,7 @@ import { recoverDocxMarkdown } from "./docx";
 import { recoverXlsxMarkdown } from "./xlsx";
 import { recoverCsvMarkdown } from "./csv";
 import { recoverHtmlMarkdown } from "./html";
+import { recoverXmlMarkdown } from "./xml";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -411,6 +412,7 @@ export class AssetService {
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
         "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED", "ASSET_DOCX_TOO_LARGE", "ASSET_DOCX_PARSE_UNSUPPORTED", "ASSET_DOCX_EMPTY", "ASSET_XLSX_TOO_LARGE", "ASSET_XLSX_PARSE_UNSUPPORTED", "ASSET_XLSX_EMPTY", "ASSET_CSV_TOO_LARGE", "ASSET_CSV_PARSE_UNSUPPORTED", "ASSET_CSV_EMPTY",
         "ASSET_HTML_TOO_LARGE", "ASSET_HTML_OUTPUT_TOO_LARGE", "ASSET_HTML_EMPTY",
+        "ASSET_XML_TOO_LARGE", "ASSET_XML_OUTPUT_TOO_LARGE", "ASSET_XML_EMPTY", "ASSET_XML_PARSE_UNSUPPORTED",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -438,6 +440,9 @@ export class AssetService {
     }
     if (asset.contentType === "text/html" && !converter) {
       return parseSource({ kind: "markdown", content: recoverHtmlMarkdown(bytes).markdown });
+    }
+    if ((asset.contentType === "application/xml" || asset.contentType === "text/xml") && !converter) {
+      return parseSource({ kind: "markdown", content: recoverXmlMarkdown(bytes).markdown });
     }
     if (!converter) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
@@ -494,6 +499,7 @@ function isRichAsset(asset: AssetRecord): boolean {
     || asset.contentType === "text/csv"
     || asset.contentType === "text/html"
     || asset.contentType === "application/xml"
+    || asset.contentType === "text/xml"
     || asset.contentType.startsWith("image/")
     || asset.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     || asset.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

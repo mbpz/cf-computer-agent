@@ -5,6 +5,7 @@ import { recoverDocxMarkdown } from "./docx";
 import { recoverXlsxMarkdown } from "./xlsx";
 import { recoverCsvMarkdown } from "./csv";
 import { recoverHtmlMarkdown } from "./html";
+import { recoverXmlMarkdown } from "./xml";
 import type { AssetMarkdownConversionResult, AssetMarkdownConverter } from "./service";
 
 export interface WorkersAiRunner {
@@ -65,6 +66,9 @@ export class WorkersAiMarkdownConverter implements AssetMarkdownConverter {
     }
     if (contentType === "text/html") {
       return { format: "markdown", data: recoverHtmlMarkdown(await input.blob.arrayBuffer()).markdown };
+    }
+    if (contentType === "application/xml" || contentType === "text/xml") {
+      return { format: "markdown", data: recoverXmlMarkdown(await input.blob.arrayBuffer()).markdown };
     }
     if (!TEXT_INPUT_TYPES.has(contentType)) {
       throw new AppError("ASSET_AI_PARSE_UNSUPPORTED", "This rich format needs a dedicated parser", 422);

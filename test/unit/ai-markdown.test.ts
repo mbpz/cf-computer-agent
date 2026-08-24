@@ -13,14 +13,14 @@ describe("WorkersAiMarkdownConverter", () => {
     });
 
     await expect(converter.toMarkdown({
-      name: "guide.xml",
-      blob: new Blob(["<h1>Guide</h1><p>Readable body.</p>"], { type: "application/xml" }),
+      name: "guide.rtf",
+      blob: new Blob(["{\\rtf1\\ansi Readable body.}"], { type: "application/rtf" }),
     })).resolves.toEqual({ format: "markdown", data: "# Converted\n\nReadable body." });
     expect(call?.model).toBe("@cf/meta/llama-3.1-8b-instruct-fp8-fast");
     expect(call?.input.max_tokens).toBe(1_200);
     expect(call?.input.messages[0]?.content).toContain("不可信的惰性数据");
-    expect(call?.input.messages[1]?.content).toContain("guide.xml");
-    expect(call?.input.messages[1]?.content).toContain("<h1>Guide</h1>");
+    expect(call?.input.messages[1]?.content).toContain("guide.rtf");
+    expect(call?.input.messages[1]?.content).toContain("Readable body.");
   });
 
   it("converts HTML locally without invoking Workers AI", async () => {
@@ -30,6 +30,16 @@ describe("WorkersAiMarkdownConverter", () => {
       name: "guide.html",
       blob: new Blob(["<h1>Guide</h1><script>private()</script>"], { type: "text/html" }),
     })).resolves.toMatchObject({ format: "markdown", data: "# Guide\n" });
+    expect(calls).toBe(0);
+  });
+
+  it("converts XML locally without invoking Workers AI", async () => {
+    let calls = 0;
+    const converter = new WorkersAiMarkdownConverter({ async run() { calls += 1; return { response: "unexpected" }; } });
+    await expect(converter.toMarkdown({
+      name: "catalog.xml",
+      blob: new Blob(["<catalog><item><title>One</title></item></catalog>"], { type: "application/xml" }),
+    })).resolves.toMatchObject({ format: "markdown", data: expect.stringContaining("## catalog") });
     expect(calls).toBe(0);
   });
 
@@ -74,8 +84,8 @@ describe("WorkersAiMarkdownConverter", () => {
     });
 
     await expect(converter.toMarkdown({
-      name: "guide.xml",
-      blob: new Blob(["<p>private body</p>"], { type: "application/xml" }),
+      name: "guide.rtf",
+      blob: new Blob(["{\\rtf1\\ansi private body}"], { type: "application/rtf" }),
     })).rejects.toMatchObject({
       code: "ASSET_AI_PARSE_FAILED",
       status: 503,
@@ -93,8 +103,8 @@ describe("WorkersAiMarkdownConverter", () => {
       },
     }, { maxInputBytes: 4 });
     await expect(inputLimited.toMarkdown({
-      name: "large.xml",
-      blob: new Blob(["12345"], { type: "application/xml" }),
+      name: "large.rtf",
+      blob: new Blob(["12345"], { type: "application/rtf" }),
     })).rejects.toMatchObject({ code: "ASSET_AI_INPUT_TOO_LARGE", status: 413 });
     expect(calls).toBe(0);
 
@@ -104,8 +114,8 @@ describe("WorkersAiMarkdownConverter", () => {
       },
     }, { maxOutputBytes: 4 });
     await expect(outputLimited.toMarkdown({
-      name: "small.xml",
-      blob: new Blob(["<p>x</p>"], { type: "application/xml" }),
+      name: "small.rtf",
+      blob: new Blob(["{\\rtf1\\ansi x}"], { type: "application/rtf" }),
     })).rejects.toMatchObject({ code: "ASSET_AI_OUTPUT_TOO_LARGE", status: 422 });
   });
 
@@ -115,8 +125,8 @@ describe("WorkersAiMarkdownConverter", () => {
     }, { timeoutMs: 1 });
 
     await expect(converter.toMarkdown({
-      name: "slow.xml",
-      blob: new Blob(["<p>slow</p>"], { type: "application/xml" }),
+      name: "slow.rtf",
+      blob: new Blob(["{\\rtf1\\ansi slow}"], { type: "application/rtf" }),
     })).rejects.toMatchObject({
       code: "ASSET_AI_PARSE_FAILED",
       status: 503,
