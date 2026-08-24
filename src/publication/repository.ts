@@ -1,6 +1,8 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import { APP_CONFIG } from "../config";
+import { AppError } from "../http";
+import { decodeOpaqueCursor, encodeOpaqueCursor, type Page, type PageRequest } from "../pagination";
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import type { PublishedContentReceipt } from "../knowledge/types";
 import type { ChunkDraft } from "../sources/chunker";
@@ -8,6 +10,8 @@ import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import type {
   PublicationIntent,
   PublicationRepositoryPort,
+  GovernedKnowledgeItem,
+  KnowledgeVisibility,
   PublishedRevision,
   RollbackResult,
   PublishSubmissionInput,
@@ -25,7 +29,9 @@ export type PublicationRepositoryConflictKind =
   | "receipt_mismatch"
   | "decision_conflict"
   | "rollback_target_invalid"
-  | "rollback_conflict";
+  | "rollback_conflict"
+  | "lifecycle_target_invalid"
+  | "lifecycle_conflict";
 
 export class PublicationRepositoryConflictError extends Error {
   constructor(readonly kind: PublicationRepositoryConflictKind) {
@@ -523,6 +529,137 @@ export class PublicationRepository implements PublicationRepositoryPort {
       throw new PublicationRepositoryConflictError("rollback_conflict");
     }
     return { ...(await this.requireRevision(revisionId)), previousRevisionId: target.previous_revision_id };
+  }
+
+  async trash(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem> {
+    return this.changeLifecycle(knowledgeItemId, reviewerId, "trash");
+  }
+
+  async restore(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem> {
+    return this.changeLifecycle(knowledgeItemId, reviewerId, "restore");
+  }
+
+  async listTrashed(request: PageRequest): Promise<Page<GovernedKnowledgeItem>> {
+    const cursor = request.cursor === undefined ? undefined : decodeTrashCursor(request.cursor);
+    const cursorSql = cursor === undefined ? "" : "AND (k.updated_at < ? OR (k.updated_at = ? AND k.id < ?))";
+    const rows = await this.db.prepare(
+      `SELECT k.id, k.space_id, k.collection_id, k.current_revision_id AS revision_id,
+         r.title, r.visibility, r.published_at, k.status, k.search_status, k.updated_at
+       FROM knowledge_items k
+       JOIN revisions r ON r.id = k.current_revision_id AND r.knowledge_item_id = k.id
+       WHERE k.status = 'trashed' ${cursorSql}
+       ORDER BY k.updated_at DESC, k.id DESC LIMIT ?`,
+    ).bind(
+      ...(cursor === undefined ? [] : [cursor.updatedAt, cursor.updatedAt, cursor.id]),
+      request.limit + 1,
+    ).all<{
+      id: string; space_id: string; collection_id: string | null; revision_id: string;
+      title: string; visibility: KnowledgeVisibility; published_at: string;
+      status: "active" | "trashed"; search_status: SearchStatus; updated_at: string;
+    }>();
+    const items = rows.results.slice(0, request.limit).map((row) => governedItemFromRow(row));
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? {
+        nextCursor: encodeOpaqueCursor({
+          v: 1, key: "governed-trash-v1", updatedAt: last.updatedAt, id: last.id,
+        }),
+      } : {}),
+    };
+  }
+
+  private async changeLifecycle(
+    knowledgeItemId: string,
+    reviewerId: string,
+    operation: "trash" | "restore",
+  ): Promise<GovernedKnowledgeItem> {
+    const current = await this.findGovernedItem(knowledgeItemId);
+    if (!current || current.revisionId.length === 0
+      || (operation === "trash" && current.status !== "active")
+      || (operation === "restore" && current.status !== "trashed")) {
+      throw new PublicationRepositoryConflictError("lifecycle_target_invalid");
+    }
+    const nextStatus = operation === "trash" ? "trashed" : "active";
+    if (current.status === nextStatus) return current;
+    const timestamp = this.now().toISOString();
+    const audit: CreateAuditEvent = operation === "trash"
+      ? {
+        id: `trash-${this.id()}`,
+        actorKind: "member",
+        actorId: reviewerId,
+        action: "knowledge.trashed",
+        resourceType: "knowledge",
+        resourceId: knowledgeItemId,
+        metadata: { currentRevisionId: current.revisionId },
+        createdAt: timestamp,
+      }
+      : {
+        id: `restore-${this.id()}`,
+        actorKind: "member",
+        actorId: reviewerId,
+        action: "knowledge.restored",
+        resourceType: "knowledge",
+        resourceId: knowledgeItemId,
+        metadata: { currentRevisionId: current.revisionId },
+        createdAt: timestamp,
+      };
+    try {
+      await this.db.batch([
+        this.db.prepare(
+          `INSERT INTO jobs (
+             id, kind, resource_id, state, attempts, available_at, last_error_code, created_at, updated_at
+           ) SELECT ?, 'index_revision', ?, 'pending', 0, ?, NULL, ?, ?
+           WHERE NOT EXISTS (
+             SELECT 1 FROM jobs WHERE kind = 'index_revision' AND resource_id = ?
+           )`
+        ).bind(`index-${current.revisionId}`, current.revisionId, timestamp, timestamp, timestamp, current.revisionId),
+        this.db.prepare(
+          `UPDATE knowledge_items SET status = ?, search_status = 'pending', updated_at = ?
+           WHERE id = ? AND status = ? AND current_revision_id = ?`
+        ).bind(nextStatus, timestamp, knowledgeItemId, current.status, current.revisionId),
+        this.db.prepare(
+          `INSERT INTO audit_events (
+             id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at
+           ) SELECT ?, 'member', ?, ?, 'knowledge', ?, ?, ?
+           WHERE changes() = 1`
+        ).bind(
+          audit.id, reviewerId, audit.action, knowledgeItemId, JSON.stringify(audit.metadata), timestamp,
+        ),
+        this.db.prepare(
+          `UPDATE jobs SET state = 'pending', attempts = 0, available_at = ?,
+             last_error_code = NULL, lease_token = NULL, lease_expires_at = NULL, updated_at = ?
+           WHERE kind = 'index_revision' AND resource_id = ? AND state != 'pending'
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = ? AND current_revision_id = ? AND updated_at = ?
+             )`
+        ).bind(timestamp, timestamp, current.revisionId, knowledgeItemId, nextStatus, current.revisionId, timestamp),
+      ]);
+    } catch (error) {
+      const afterFailure = await this.findGovernedItem(knowledgeItemId);
+      if (afterFailure?.status === nextStatus) return afterFailure;
+      throw error;
+    }
+    const after = await this.findGovernedItem(knowledgeItemId);
+    if (!after || after.status !== nextStatus) throw new PublicationRepositoryConflictError("lifecycle_conflict");
+    return after;
+  }
+
+  private async findGovernedItem(knowledgeItemId: string): Promise<GovernedKnowledgeItem | null> {
+    const row = await this.db.prepare(
+      `SELECT k.id, k.space_id, k.collection_id, k.current_revision_id AS revision_id,
+         r.title, r.visibility, r.published_at, k.status, k.search_status, k.updated_at
+       FROM knowledge_items k
+       JOIN revisions r ON r.id = k.current_revision_id AND r.knowledge_item_id = k.id
+       WHERE k.id = ? LIMIT 1`,
+    ).bind(knowledgeItemId).first<{
+      id: string; space_id: string; collection_id: string | null; revision_id: string;
+      title: string; visibility: KnowledgeVisibility; published_at: string;
+      status: "active" | "trashed"; search_status: SearchStatus; updated_at: string;
+    }>();
+    if (!row) return null;
+    return governedItemFromRow(row);
   }
 
   async processIndexJob(revisionId: string): Promise<SearchStatus> {
@@ -1162,6 +1299,49 @@ function parseStringArray(value: string): string[] {
     throw new Error("Publication tag snapshot is invalid");
   }
   return [...parsed];
+}
+
+type GovernedItemRow = {
+  id: string;
+  space_id: string;
+  collection_id: string | null;
+  revision_id: string;
+  title: string;
+  visibility: KnowledgeVisibility;
+  published_at: string;
+  status: "active" | "trashed";
+  search_status: SearchStatus;
+  updated_at: string;
+};
+
+function governedItemFromRow(row: GovernedItemRow): GovernedKnowledgeItem {
+  return {
+    id: row.id,
+    spaceId: row.space_id,
+    collectionId: row.collection_id,
+    revisionId: row.revision_id,
+    title: row.title,
+    visibility: row.visibility,
+    publishedAt: row.published_at,
+    status: row.status,
+    searchStatus: row.search_status,
+    updatedAt: row.updated_at,
+  };
+}
+
+function decodeTrashCursor(value: string): { updatedAt: string; id: string } {
+  try {
+    const decoded = decodeOpaqueCursor(value);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    const record = decoded as Record<string, unknown>;
+    if (record.v !== 1 || record.key !== "governed-trash-v1"
+      || typeof record.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T/u.test(record.updatedAt)
+      || typeof record.id !== "string" || !SAFE_PATH_SEGMENT.test(record.id)
+      || encodeOpaqueCursor(decoded) !== value) throw new Error();
+    return { updatedAt: record.updatedAt, id: record.id };
+  } catch {
+    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  }
 }
 
 function activeTagsCondition(count: number): string {

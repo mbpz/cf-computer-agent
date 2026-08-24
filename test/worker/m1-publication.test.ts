@@ -286,6 +286,54 @@ describe("M1 publication control plane", () => {
     }
   });
 
+  it("soft-deletes a published item without deleting its immutable Revision", async () => {
+    await seedReviewPendingSubmission("submission-trash-m3");
+    const repository = repositoryWithIds("knowledge-trash-m3", "revision-trash-m3");
+    const service = new PublicationService(repository, durableContentCommitter());
+    await service.publish(adminReviewer, "submission-trash-m3", publicationInput);
+
+    const trashed = await (service as unknown as {
+      trash(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<unknown>;
+    }).trash(adminReviewer, "knowledge-trash-m3");
+    expect(trashed).toMatchObject({ id: "knowledge-trash-m3", status: "trashed" });
+    await expect(env.DB.prepare(
+      "SELECT status, current_revision_id FROM knowledge_items WHERE id = ?",
+    ).bind("knowledge-trash-m3").first()).resolves.toEqual({
+      status: "trashed", current_revision_id: "revision-trash-m3",
+    });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = ?",
+    ).bind("knowledge-trash-m3").first()).resolves.toEqual({ count: 1 });
+    const trashPage = await service.listTrashed(adminReviewer, { limit: 20 });
+    expect(trashPage.items).toEqual([expect.objectContaining({ id: "knowledge-trash-m3", status: "trashed" })]);
+    await expect(service.listTrashed({ ...adminReviewer, role: "contributor" }, { limit: 20 })).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+
+    const restored = await (service as unknown as {
+      restore(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<unknown>;
+    }).restore(adminReviewer, "knowledge-trash-m3");
+    expect(restored).toMatchObject({ id: "knowledge-trash-m3", status: "active", searchStatus: "indexed" });
+    await expect(indexedChunkIds("knowledge-trash-m3")).resolves.toEqual(["revision-trash-m3-chunk-0", "revision-trash-m3-chunk-1"]);
+    await expect(env.DB.prepare(
+      "SELECT action, metadata FROM audit_events WHERE resource_id = 'knowledge-trash-m3' AND action IN ('knowledge.trashed', 'knowledge.restored') ORDER BY created_at, id",
+    ).all()).resolves.toMatchObject({ results: expect.arrayContaining([
+      { action: "knowledge.trashed", metadata: JSON.stringify({ currentRevisionId: "revision-trash-m3" }) },
+      { action: "knowledge.restored", metadata: JSON.stringify({ currentRevisionId: "revision-trash-m3" }) },
+    ]) });
+    await expect(service.listTrashed(adminReviewer, { limit: 20 })).resolves.toEqual({ items: [] });
+
+    // A second trash/restore cycle must get fresh audit IDs while remaining idempotent per transition.
+    await expect(service.trash(adminReviewer, "knowledge-trash-m3")).resolves.toMatchObject({ status: "trashed" });
+    await expect(service.restore(adminReviewer, "knowledge-trash-m3")).resolves.toMatchObject({ status: "active", searchStatus: "indexed" });
+    await expect(env.DB.prepare(
+      "SELECT action FROM audit_events WHERE resource_id = 'knowledge-trash-m3' AND action IN ('knowledge.trashed', 'knowledge.restored')",
+    ).all()).resolves.toMatchObject({ results: expect.arrayContaining([
+      { action: "knowledge.trashed" },
+      { action: "knowledge.trashed" },
+      { action: "knowledge.restored" },
+      { action: "knowledge.restored" },
+    ]) });
+  });
+
   it("writes complete deterministic FTS fields and keeps fenced code out of prose", async () => {
     const prose = `${"😀".repeat(238)} tail prose marker`;
     const parsed = await parseSource({

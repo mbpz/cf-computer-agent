@@ -12,7 +12,7 @@ import {
 import type { Principal } from "../identity/principal";
 import type { PublicationService } from "../publication/service";
 import type { PublishedRevision, ReviewPreview } from "../publication/types";
-import { strictRecord, stringValue } from "./member";
+import { pageRequest, strictRecord, stringValue } from "./member";
 
 export interface AdminReviewRouteServices {
   publication: PublicationService;
@@ -48,6 +48,34 @@ export async function routeAdminReviewApi(
       200,
       context.requestId,
     );
+  }
+
+  if (url.pathname === "/api/admin/knowledge/trash") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const reviewer = requireAdminMember(principal);
+    return jsonResponse(
+      await services.publication.listTrashed(reviewerDto(reviewer), pageRequest(url)),
+      200,
+      context.requestId,
+    );
+  }
+
+  const trash = /^\/api\/admin\/knowledge\/([^/]+)\/trash$/.exec(url.pathname);
+  if (trash) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const item = await services.publication.trash(reviewerDto(reviewer), decodePathId(trash[1]!));
+    return jsonResponse({ knowledge: item }, 200, context.requestId);
+  }
+
+  const restore = /^\/api\/admin\/knowledge\/([^/]+)\/restore$/.exec(url.pathname);
+  if (restore) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const item = await services.publication.restore(reviewerDto(reviewer), decodePathId(restore[1]!));
+    return jsonResponse({ knowledge: item }, 200, context.requestId);
   }
 
   const rollback = /^\/api\/admin\/knowledge\/([^/]+)\/rollback$/.exec(url.pathname);

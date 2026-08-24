@@ -122,8 +122,8 @@
 - [ ] `GOV-014` P0/M3 重复关联；验收：不创建重复 Item，保留 Submission 审计。
 - [ ] `GOV-015` P1/M3 新 Revision；验收：旧 Revision 不变，current 原子切换。
 - [x] `GOV-016` P1/M3 Revision 回滚；状态：L/W；验收：管理员只能原子切换 current，旧 Revision 保持不变；重置目标索引任务并写入 allowlisted `knowledge.rolled_back` 审计。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts`。
-- [ ] `GOV-017` P0/M3 回收站；验收：默认 30 天、所有读路径隐藏或标记。
-- [ ] `GOV-018` P0/M3 恢复；验收：恢复权限、current Revision 和索引任务一致。
+- [x] `GOV-017` P0/M3 回收站；状态：L/W；验收：管理员专属软删除、默认读路径隐藏、不可变 Revision 保留；30 天保留期与最终清理由 `GOV-019` 承接。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts test/worker/m1-api.test.ts`。
+- [x] `GOV-018` P0/M3 恢复；状态：L/W；验收：仅 active admin 可恢复，current Revision 不变，索引任务幂等重置并恢复可检索性；证据同 `GOV-017`。
 - [ ] `GOV-019` P0/M3 最终清理顺序；验收：派生数据先删、权威数据最后、保留墓碑审计。
 - [ ] `GOV-020` P1/M3 敏感信息提示；验收：只给 admin 建议，不自动改变可见性。
 - [ ] `GOV-021` P1/M3 批量审核；验收：逐项权限/状态校验，部分失败清晰报告。

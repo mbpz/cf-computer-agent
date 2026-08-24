@@ -1,6 +1,7 @@
 import { AppError } from "../http";
 import { chunkDocument } from "../sources/chunker";
 import { hasSemanticSourceContent, MAX_REVISION_CHUNKS } from "../sources/limits";
+import { parsePageRequest, type PageRequest } from "../pagination";
 import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
@@ -8,6 +9,8 @@ import type {
   PublicationRecoveryResult,
   PublicationRepositoryPort,
   PublicationReviewer,
+  GovernedKnowledgeItem,
+  GovernedKnowledgePage,
   PublishedContentCommitter,
   PublishedRevision,
   PublishSubmissionInput,
@@ -129,6 +132,44 @@ export class PublicationService {
     }
     const searchStatus = await this.repository.processIndexJob(result.id);
     return { ...result, searchStatus };
+  }
+
+  async trash(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<GovernedKnowledgeItem> {
+    requireActiveAdmin(reviewer);
+    return this.changeLifecycle(reviewer.id, requireId(knowledgeItemId), "trash");
+  }
+
+  async restore(reviewer: PublicationReviewer, knowledgeItemId: string): Promise<GovernedKnowledgeItem> {
+    requireActiveAdmin(reviewer);
+    return this.changeLifecycle(reviewer.id, requireId(knowledgeItemId), "restore");
+  }
+
+  async listTrashed(reviewer: PublicationReviewer, request: PageRequest = { limit: 20 }): Promise<GovernedKnowledgePage> {
+    requireActiveAdmin(reviewer);
+    return this.repository.listTrashed(parsePageRequest(request.limit, request.cursor));
+  }
+
+  private async changeLifecycle(
+    reviewerId: string,
+    knowledgeItemId: string,
+    operation: "trash" | "restore",
+  ): Promise<GovernedKnowledgeItem> {
+    let item;
+    try {
+      item = operation === "trash"
+        ? await this.repository.trash(knowledgeItemId, reviewerId)
+        : await this.repository.restore(knowledgeItemId, reviewerId);
+    } catch (error) {
+      if (isRepositoryConflict(error, "lifecycle_target_invalid")) {
+        throw new AppError("KNOWLEDGE_LIFECYCLE_TARGET_INVALID", "Knowledge item lifecycle state is invalid", 400);
+      }
+      if (isRepositoryConflict(error, "lifecycle_conflict")) {
+        throw new AppError("KNOWLEDGE_LIFECYCLE_CONFLICT", "Knowledge item changed during lifecycle update", 409);
+      }
+      throw error;
+    }
+    const searchStatus = await this.repository.processIndexJob(item.revisionId);
+    return { ...item, searchStatus };
   }
 
   async recoverPending(limit: number): Promise<PublicationRecoveryResult> {

@@ -41,6 +41,8 @@ describe("audit input validation", () => {
     }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "admin_only" }],
     ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1" }],
+    ["knowledge.trashed", "knowledge", { currentRevisionId: "revision-1" }],
+    ["knowledge.restored", "knowledge", { currentRevisionId: "revision-1" }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
       id: `audit-${action}`,
@@ -88,6 +90,8 @@ describe("audit input validation", () => {
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", tags: ["private"] }],
     ["knowledge.published", "knowledge", { submissionId: "submission-1", revisionId: "revision-1", visibility: "shared", content: "private markdown" }],
     ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1", content: "private markdown" }],
+    ["knowledge.trashed", "knowledge", { currentRevisionId: "revision-1", content: "private markdown" }],
+    ["knowledge.restored", "knowledge", { currentRevisionId: "revision-1", jwt: "private-token" }],
   ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
     expect(() => assertAuditEventInput({
       id: "audit-sensitive",

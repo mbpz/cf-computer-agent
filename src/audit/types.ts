@@ -32,6 +32,8 @@ export interface AuditActionMap {
   } };
   "knowledge.published": { resourceType: "knowledge"; metadata: { submissionId: string; revisionId: string; visibility: "shared" | "admin_only" } };
   "knowledge.rolled_back": { resourceType: "knowledge"; metadata: { fromRevisionId: string; toRevisionId: string } };
+  "knowledge.trashed": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
+  "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -51,6 +53,8 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "submission.resubmitted",
   "knowledge.published",
   "knowledge.rolled_back",
+  "knowledge.trashed",
+  "knowledge.restored",
 ]);
 
 export type CreateAuditEvent = {
@@ -233,6 +237,13 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       if (!isBoundedId(metadata.fromRevisionId) || !isBoundedId(metadata.toRevisionId)
         || metadata.fromRevisionId === metadata.toRevisionId) throw invalidMetadata();
       return safeMetadata({ fromRevisionId: metadata.fromRevisionId, toRevisionId: metadata.toRevisionId });
+    }
+    case "knowledge.trashed":
+    case "knowledge.restored": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["currentRevisionId"]));
+      if (!isBoundedId(metadata.currentRevisionId)) throw invalidMetadata();
+      return safeMetadata({ currentRevisionId: metadata.currentRevisionId });
     }
     default:
       throw new TypeError("Audit action is invalid");

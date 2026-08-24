@@ -3,6 +3,7 @@ import type { MemberRole, MemberStatus } from "../members/types";
 import type { ChunkDraft } from "../sources/chunker";
 import type { SourceVersion } from "../sources/types";
 import type { SubmissionKind } from "../submissions/types";
+import type { Page, PageRequest } from "../pagination";
 
 export type KnowledgeVisibility = "shared" | "admin_only";
 export type PublicationIntentState = "pending_content" | "content_written" | "completed" | "failed_terminal";
@@ -108,6 +109,21 @@ export interface RollbackResult extends PublishedRevision {
   previousRevisionId: string;
 }
 
+export interface GovernedKnowledgeItem {
+  id: string;
+  spaceId: string;
+  collectionId: string | null;
+  revisionId: string;
+  title: string;
+  visibility: KnowledgeVisibility;
+  publishedAt: string;
+  status: "active" | "trashed";
+  searchStatus: SearchStatus;
+  updatedAt: string;
+}
+
+export type GovernedKnowledgePage = Page<GovernedKnowledgeItem>;
+
 export type RejectionReasonCode = "not_relevant" | "duplicate" | "unsafe";
 
 export interface ReviewDecision {
@@ -133,6 +149,9 @@ export interface PublicationRepositoryPort {
   markIntentFailedTerminal(submissionId: string): Promise<void>;
   finalize(intent: PublicationIntent, chunks: ChunkDraft[]): Promise<PublishedRevision>;
   rollback(knowledgeItemId: string, revisionId: string, reviewerId: string): Promise<RollbackResult>;
+  trash(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
+  restore(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
+  listTrashed(request: PageRequest): Promise<GovernedKnowledgePage>;
   processIndexJob(revisionId: string): Promise<SearchStatus>;
   reject(
     submissionId: string,
