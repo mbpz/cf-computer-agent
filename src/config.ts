@@ -41,5 +41,9 @@ export const APP_CONFIG = {
   maxSourceExcerptChars: 1_200,
   maxContextChars: 8_000,
   maxAnswerTokens: 700,
+  maxAiMarkdownInputBytes: 256 * 1024,
+  maxAiMarkdownOutputBytes: 128 * 1024,
+  maxAiMarkdownTokens: 1_200,
+  aiMarkdownTimeoutMs: 5_000,
   model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
 } as const;

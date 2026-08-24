@@ -66,7 +66,7 @@
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
 - [x] `PAR-003` P0/M1 代码解析；状态：L；验收：语言、行号和代码块不被自然语言清洗破坏。
 - [x] `PAR-004` P0/M2 Parser 接口和版本；状态：L/W；验收：显式 `SOURCE_PARSER_CONTRACT` 固定 `m1-v1`/`m1-v2` 与八字段输出 schema，`sourceParser.parse` 作为稳定入口，同输入可确定性重放。证据：`src/sources/parser.ts`、`src/sources/types.ts`、`test/unit/source-parser.test.ts`；命令：`rtk npx vitest run test/unit/source-parser.test.ts -t "frozen versioned contract"`。
-- [ ] `PAR-005` P0/M2 Workers AI toMarkdown 适配器；验收：有界输入/输出和稳定错误映射。
+- [x] `PAR-005` P0/M2 Workers AI toMarkdown 适配器；状态：L/W；验收：仅对 `text/html`、XML、RTF 等文本型富格式调用 Workers AI；输入 256 KiB、输出 128 KiB、1,200 tokens、5 秒超时均有界；二进制 PDF/Office/图片在专用解析器完成前稳定返回 `ASSET_AI_PARSE_UNSUPPORTED`；供应商异常、超时和超限映射为不泄露正文的稳定错误。未配置 R2 时仍保持文本录入路径可用。证据：`src/assets/ai-markdown.ts`、`src/assets/service.ts`、`test/unit/ai-markdown.test.ts`；命令：`rtk npx vitest run test/unit/ai-markdown.test.ts`。
 - [ ] `PAR-006` P0/M2 PDF 页码恢复；验收：每个段落关联页码或明确 unknown。
 - [ ] `PAR-007` P0/M2 图片 OCR/描述；验收：原图保留，低置信结果标 warning。
 - [ ] `PAR-008` P0/M2 DOCX 标题/段落/表格；验收：结构顺序可回读。

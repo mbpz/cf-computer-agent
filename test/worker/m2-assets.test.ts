@@ -226,8 +226,8 @@ describe("M2 asset upload boundary", () => {
     await expect(adminList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "queued" } }] });
 
     await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
-    const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_retryable&limit=20");
-    await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_retryable", attempts: 1, lastErrorCode: "ASSET_AI_PARSE_FAILED" } }] });
+    const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_terminal&limit=20");
+    await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_terminal", attempts: 1, lastErrorCode: "ASSET_AI_PARSE_UNSUPPORTED" } }] });
 
     const retry = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/retry`, { method: "POST" });
     expect(retry.status).toBe(200);

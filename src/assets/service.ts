@@ -399,6 +399,7 @@ export class AssetService {
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
+        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -415,7 +416,8 @@ export class AssetService {
         name: asset.originalName,
         blob: new Blob([bytes], { type: asset.contentType }),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof AppError) throw error;
       throw new AppError("ASSET_AI_PARSE_FAILED", "Rich asset conversion is temporarily unavailable", 503, true);
     }
     const result = Array.isArray(converted) ? converted[0] : converted;
