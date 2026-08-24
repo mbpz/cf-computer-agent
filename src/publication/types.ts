@@ -4,6 +4,7 @@ import type { ChunkDraft } from "../sources/chunker";
 import type { SourceVersion } from "../sources/types";
 import type { SubmissionKind } from "../submissions/types";
 import type { Page, PageRequest } from "../pagination";
+import type { SensitiveAdvice } from "./sensitive-advisor";
 
 export type KnowledgeVisibility = "shared" | "admin_only";
 export type PublicationIntentState = "pending_content" | "content_written" | "completed" | "failed_terminal";
@@ -70,6 +71,7 @@ export interface ReviewChunkPreview {
 
 export interface ReviewPreview extends ReviewSubmissionSnapshot {
   chunks: ReviewChunkPreview[];
+  safety: SensitiveAdvice;
 }
 
 export interface PublicationIntent {

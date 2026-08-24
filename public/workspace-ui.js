@@ -613,6 +613,15 @@ export function reviewPreviewModel(value) {
   const warnings = [t("REVIEW_WARNING_INERT")];
   if (chunks.length === 0) warnings.push(t("REVIEW_WARNING_NO_CHUNK"));
   if (sourceVersion.parserVersion !== "m1-v1") warnings.push(t("REVIEW_WARNING_PARSER"));
+  const safety = safeRecord(preview.safety);
+  const safetyFindings = safeArray(safety.findings).map((candidate) => {
+    const finding = safeRecord(candidate);
+    const code = finding.code === "credential" || finding.code === "private_key" || finding.code === "internal_endpoint"
+      ? finding.code : "";
+    const severity = finding.severity === "high" || finding.severity === "medium" ? finding.severity : "";
+    const line = safeLine(finding.line);
+    return code && severity ? Object.freeze({ code, severity, line }) : null;
+  }).filter(Boolean);
   return Object.freeze({
     submissionId: safeString(preview.submissionId),
     status: safeString(preview.status),
@@ -625,6 +634,10 @@ export function reviewPreviewModel(value) {
     normalizedMarkdown: content,
     parserVersion: safeString(sourceVersion.parserVersion),
     chunks,
+    safety: Object.freeze({
+      status: safety.status === "advisory" && safetyFindings.length > 0 ? "advisory" : "clear",
+      findings: Object.freeze(safetyFindings),
+    }),
     warnings,
   });
 }

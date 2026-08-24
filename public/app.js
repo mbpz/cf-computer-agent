@@ -252,6 +252,11 @@ const reviewWarningKeys = Object.freeze({
   REVIEW_WARNING_NO_CHUNK: "REVIEW_WARNING_NO_CHUNK",
   REVIEW_WARNING_PARSER: "REVIEW_WARNING_PARSER",
 });
+const reviewSafetyKeys = Object.freeze({
+  credential: "REVIEW_SAFETY_CREDENTIAL",
+  private_key: "REVIEW_SAFETY_PRIVATE_KEY",
+  internal_endpoint: "REVIEW_SAFETY_INTERNAL_ENDPOINT",
+});
 const runtimeErrorKeys = Object.freeze({
   LOGOUT_FAILED: "SHELL_LOGOUT_ERROR",
   MARKDOWN_RENDERER_UNAVAILABLE: "ERROR_MARKDOWN_RENDERER_UNAVAILABLE",
@@ -1506,6 +1511,22 @@ async function renderReviewSubmission(generation, submissionId) {
   const warningKeys = ["REVIEW_WARNING_INERT"];
   if (model.chunks.length === 0) warningKeys.push("REVIEW_WARNING_NO_CHUNK");
   if (model.parserVersion !== "m1-v1") warningKeys.push("REVIEW_WARNING_PARSER");
+  const safetyFindings = model.safety.findings.map((finding) => element("li", {
+    className: "item",
+    text: t(reviewSafetyKeys[finding.code] || "REVIEW_SAFETY_UNKNOWN", {
+      line: String(finding.line),
+      severity: t(finding.severity === "high" ? "REVIEW_SAFETY_HIGH" : "REVIEW_SAFETY_MEDIUM"),
+    }),
+  }));
+  const safetyCard = card(t("REVIEW_SAFETY_TITLE"), [
+    element("p", {
+      className: model.safety.status === "advisory" ? "status warning" : "muted",
+      text: t(model.safety.status === "advisory" ? "REVIEW_SAFETY_ADVISORY" : "REVIEW_SAFETY_CLEAR"),
+    }),
+    model.safety.status === "advisory"
+      ? element("ul", { className: "list" }, safetyFindings)
+      : null,
+  ].filter(Boolean));
   const title = element("input", { required: "", maxlength: "200", value: model.title });
   const visibility = element("select", {}, [
     element("option", { value: "shared", text: t("COMMON_VISIBILITY_SHARED") }),
@@ -1689,6 +1710,7 @@ async function renderReviewSubmission(generation, submissionId) {
       }, t("REVIEW_NO_CHUNKS"))]),
       card(t("REVIEW_WARNINGS"), [list(warningKeys, (key) => element("li", { className: "item", text: t(reviewWarningKeys[key]) }), t("REVIEW_NO_WARNINGS"))]),
     ]),
+    safetyCard,
     card(t("REVIEW_DECISION"), [form]),
   ]), generation)) {
     void tagController.loadInitial();

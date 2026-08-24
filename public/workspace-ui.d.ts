@@ -294,6 +294,14 @@ export interface ReviewPreviewViewModel {
     lineLabel: string;
     excerpt: string;
   }>>;
+  safety: Readonly<{
+    status: "clear" | "advisory";
+    findings: Array<Readonly<{
+      code: "credential" | "private_key" | "internal_endpoint";
+      severity: "high" | "medium";
+      line: number;
+    }>>;
+  }>;
   warnings: string[];
 }
 export function reviewPreviewModel(value: unknown): Readonly<ReviewPreviewViewModel>;

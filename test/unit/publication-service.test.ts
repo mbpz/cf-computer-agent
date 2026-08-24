@@ -89,6 +89,19 @@ describe("PublicationService", () => {
     if (_case === "absolute-lines") expect(preview.chunks.at(-1)).toMatchObject({ startLine: 7, endLine: 7 });
   });
 
+  it("returns admin-only sensitive advice without changing requested visibility", async () => {
+    const fixture = await publicationFixture();
+    fixture.preview.rawContent = "部署说明：Authorization: Bearer ghp_1234567890abcdefghijklmnop";
+
+    const preview = await fixture.service.preview(reviewer, "submission-1");
+    expect(preview.safety).toMatchObject({
+      status: "advisory",
+      findings: [expect.objectContaining({ code: "credential", severity: "high" })],
+    });
+    expect(JSON.stringify(preview.safety)).not.toContain("ghp_1234567890abcdefghijklmnop");
+    await expect(fixture.service.publish(reviewer, "submission-1", publishInput)).resolves.toMatchObject({ visibility: "shared" });
+  });
+
   it("moves a stable intent through content, atomic finalization, and a separate index job", async () => {
     const fixture = await publicationFixture();
     const result = await fixture.service.publish(reviewer, "submission-1", publishInput);

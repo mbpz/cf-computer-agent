@@ -449,6 +449,35 @@ describe("M1 API authorization and request boundaries", () => {
 });
 
 describe("M1 trusted knowledge HTTP journey", () => {
+  it("shows sensitive advisories only in the admin review preview", async () => {
+    const token = `ghp_${"a".repeat(32)}`;
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default",
+      kind: "text",
+      title: "Deployment note",
+      content: `Authorization: Bearer ${token}`,
+    }, "sensitive-advisory-key1");
+    expect(created.response.status).toBe(201);
+
+    const adminPreview = await memberApi("admin", `/api/admin/submissions/${created.body.submission.id}`);
+    expect(adminPreview.status).toBe(200);
+    const adminBody = await adminPreview.json<{ preview: { safety: { status: string; findings: Array<{ code: string; severity: string; line: number }> } } }>();
+    expect(adminBody.preview.safety).toMatchObject({
+      status: "advisory",
+      findings: [{ code: "credential", severity: "high", line: 2 }],
+    });
+    expect(JSON.stringify(adminBody.preview.safety)).not.toContain(token);
+
+    await expectApiError(
+      memberApi("contributor", `/api/admin/submissions/${created.body.submission.id}`),
+      403,
+      "FORBIDDEN",
+    );
+    await expect(env.DB.prepare("SELECT status, requested_visibility FROM submissions WHERE id = ?")
+      .bind(created.body.submission.id).first())
+      .resolves.toEqual({ status: "review_pending", requested_visibility: "shared" });
+  });
+
   it("keeps requested admin-only visibility authoritative and requires expansion confirmation", async () => {
     const created = await memberApi("contributor", "/api/submissions", {
       method: "POST",
@@ -605,6 +634,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
         submitterId: "member-contributor",
         rawContent: "# Launch  \r\n\r\nLaunch latency is under 50ms.   \r\n",
         sourceVersion: { content: "# Launch\n\nLaunch latency is under 50ms.\n" },
+        safety: { status: "clear", findings: [] },
         chunks: chunkDocument({
           normalizedMarkdown: "# Launch\n\nLaunch latency is under 50ms.\n",
           kind: "markdown",

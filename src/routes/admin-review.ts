@@ -222,6 +222,10 @@ function reviewPreviewDto(preview: ReviewPreview) {
       content: preview.sourceVersion.content,
       parserVersion: preview.sourceVersion.parserVersion,
     },
+    safety: {
+      status: preview.safety.status,
+      findings: preview.safety.findings.map((finding) => ({ ...finding })),
+    },
     chunks: preview.chunks.map((chunk) => ({
       headingPath: [...chunk.headingPath],
       startLine: chunk.startLine,

@@ -3,6 +3,7 @@ import { chunkDocument } from "../sources/chunker";
 import { hasSemanticSourceContent, MAX_REVISION_CHUNKS } from "../sources/limits";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import type { PublishedContentRemover } from "../knowledge/types";
+import { analyzeSensitiveContent } from "./sensitive-advisor";
 import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
@@ -43,7 +44,11 @@ export class PublicationService {
     const preview = await this.repository.getPreview(requireId(submissionId));
     if (!preview) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
     const chunks = await validatedPublicationChunks(preview);
-    return { ...preview, chunks: reviewChunkPreviews(chunks) };
+    return {
+      ...preview,
+      chunks: reviewChunkPreviews(chunks),
+      safety: analyzeSensitiveContent(`${preview.title}\n${preview.rawContent}`),
+    };
   }
 
   async publish(

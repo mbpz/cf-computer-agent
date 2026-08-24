@@ -650,6 +650,10 @@ describe("M1 trusted knowledge view models", () => {
         contentSha256: "must-not-leak",
         normalizedPath: "/workspace/private.md",
       },
+      safety: {
+        status: "advisory",
+        findings: [{ code: "credential", severity: "high", line: 2, messageKey: "publication.safety.credential", value: "must-not-leak" }],
+      },
       chunks: [{
         headingPath: ["Launch", "Rollback"],
         startLine: 4,
@@ -665,6 +669,10 @@ describe("M1 trusted knowledge view models", () => {
       title: "<script>Unsafe title</script>",
       rawInput: "# Launch  \r\n\r\n## Rollback   \r\n",
       normalizedMarkdown: expect.stringContaining("## Rollback"),
+      safety: {
+        status: "advisory",
+        findings: [{ code: "credential", severity: "high", line: 2 }],
+      },
       chunks: [
         {
           heading: "Launch › Rollback",
@@ -677,6 +685,9 @@ describe("M1 trusted knowledge view models", () => {
     });
     expect(model.warnings).toContain("Preview is inert text; Markdown and HTML are never executed.");
     expect(JSON.stringify(model)).not.toMatch(/must-not-leak|chunk-secret|workspace\/private|chunk-private/);
+
+    const malformed = reviewPreviewModel({ safety: { status: "advisory", findings: [{ code: "forged", severity: "high", line: "x" }] } });
+    expect(malformed.safety).toEqual({ status: "clear", findings: [] });
   });
 
   it("uses the exact preview target summary without consulting generic paginated lists", () => {
