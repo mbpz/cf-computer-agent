@@ -65,5 +65,7 @@ export const APP_CONFIG = {
   maxCsvRows: 50_000,
   maxCsvColumns: 256,
   maxCsvFieldChars: 32_768,
+  maxHtmlParseBytes: 256 * 1024,
+  maxHtmlOutputBytes: 128 * 1024,
   model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
 } as const;
