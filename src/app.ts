@@ -1,6 +1,7 @@
 import { AnswerService } from "./ai/answer-service";
 import { AssetsRepository } from "./assets/repository";
 import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
+import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
 import { AuditRepository } from "./audit/repository";
@@ -124,6 +125,7 @@ function createRequestServices(
     {
       maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
+      imageConverter: new WorkersAiImageConverter(env.AI),
     },
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);

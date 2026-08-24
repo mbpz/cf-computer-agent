@@ -28,6 +28,7 @@ export interface AssetServiceOptions {
   maxTotalBytes?: number;
   orphanGraceMs?: number;
   markdownConverter?: AssetMarkdownConverter;
+  imageConverter?: AssetMarkdownConverter;
 }
 
 export interface AssetMarkdownConverter {
@@ -109,6 +110,7 @@ export class AssetService {
   private readonly maxTotalBytes: number;
   private readonly orphanGraceMs: number;
   private readonly markdownConverter?: AssetMarkdownConverter;
+  private readonly imageConverter?: AssetMarkdownConverter;
 
   constructor(
     private readonly originals: R2Bucket | undefined,
@@ -122,6 +124,9 @@ export class AssetService {
     this.orphanGraceMs = options.orphanGraceMs ?? DEFAULT_ORPHAN_GRACE_MS;
     this.markdownConverter = typeof options.markdownConverter?.toMarkdown === "function"
       ? options.markdownConverter
+      : undefined;
+    this.imageConverter = typeof options.imageConverter?.toMarkdown === "function"
+      ? options.imageConverter
       : undefined;
   }
 
@@ -400,7 +405,7 @@ export class AssetService {
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
-        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED",
+        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -411,15 +416,18 @@ export class AssetService {
     if (!isRichAsset(asset)) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
     }
-    if (asset.contentType === "application/pdf" && !this.markdownConverter) {
+    const converter = asset.contentType.startsWith("image/")
+      ? this.imageConverter ?? this.markdownConverter
+      : this.markdownConverter;
+    if (asset.contentType === "application/pdf" && !converter) {
       return parseSource({ kind: "markdown", content: recoverPdfMarkdown(bytes).markdown });
     }
-    if (!this.markdownConverter) {
+    if (!converter) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
     }
     let converted: AssetMarkdownConversionResult | AssetMarkdownConversionResult[];
     try {
-      converted = await this.markdownConverter.toMarkdown({
+      converted = await converter.toMarkdown({
         name: asset.originalName,
         blob: new Blob([bytes], { type: asset.contentType }),
       });

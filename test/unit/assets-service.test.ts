@@ -167,6 +167,29 @@ describe("AssetService", () => {
     expect(parsed && new TextDecoder().decode(parsed)).toContain("## Page 1\n\nPage one text");
   });
 
+  it("persists a visible low-confidence warning for image OCR", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      imageConverter: {
+        async toMarkdown() {
+          return { format: "markdown", data: "> Warning: OCR confidence is low (40%).\n\nDetected label\n" };
+        },
+      },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "label.png", contentType: "image/png",
+      bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer,
+      idempotencyKey: "image-warning-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "succeeded", lastErrorCode: null });
+    const parsed = originals.objects.get(`parsed/${created.asset.id}.md`);
+    expect(parsed && new TextDecoder().decode(parsed)).toContain("OCR confidence is low");
+  });
+
   it("fails closed without R2 and does not create a D1 asset", async () => {
     const db = repository();
     const service = new AssetService(undefined, db);

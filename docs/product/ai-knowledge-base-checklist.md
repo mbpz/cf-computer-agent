@@ -68,7 +68,7 @@
 - [x] `PAR-004` P0/M2 Parser 接口和版本；状态：L/W；验收：显式 `SOURCE_PARSER_CONTRACT` 固定 `m1-v1`/`m1-v2` 与八字段输出 schema，`sourceParser.parse` 作为稳定入口，同输入可确定性重放。证据：`src/sources/parser.ts`、`src/sources/types.ts`、`test/unit/source-parser.test.ts`；命令：`rtk npx vitest run test/unit/source-parser.test.ts -t "frozen versioned contract"`。
 - [x] `PAR-005` P0/M2 Workers AI toMarkdown 适配器；状态：L/W；验收：仅对 `text/html`、XML、RTF 等文本型富格式调用 Workers AI；输入 256 KiB、输出 128 KiB、1,200 tokens、5 秒超时均有界；二进制 PDF/Office/图片在专用解析器完成前稳定返回 `ASSET_AI_PARSE_UNSUPPORTED`；供应商异常、超时和超限映射为不泄露正文的稳定错误。未配置 R2 时仍保持文本录入路径可用。证据：`src/assets/ai-markdown.ts`、`src/assets/service.ts`、`test/unit/ai-markdown.test.ts`；命令：`rtk npx vitest run test/unit/ai-markdown.test.ts`。
 - [x] `PAR-006` P0/M2 PDF 页码恢复；状态：L/W；验收：在无第三方/付费解析器的边界内恢复未压缩 PDF 文本流，按页生成稳定 `Page N` Markdown 路径；无可恢复文本的页显式标记 `Page unknown` 并写入 `PDF_TEXT_UNAVAILABLE` warning；损坏、页结构不支持和 2 MiB 以上输入稳定终止，不持久化原始二进制。证据：`src/assets/pdf-pages.ts`、`src/assets/service.ts`、`test/unit/pdf-pages.test.ts`、`test/unit/assets-service.test.ts`；命令：`rtk npx vitest run test/unit/pdf-pages.test.ts test/unit/assets-service.test.ts`。
-- [ ] `PAR-007` P0/M2 图片 OCR/描述；验收：原图保留，低置信结果标 warning。
+- [x] `PAR-007` P0/M2 图片 OCR/描述；状态：L/W；验收：PNG/JPEG/GIF/WebP 通过 Workers AI LLaVA 有界提取文字/结构描述；输入 4 MiB、输出 32 KiB、5 秒超时；模型输出按 0..1 置信度归一化，低于 0.75 在解析 Markdown 中写入可见 warning；不支持媒体、供应商失败和超限稳定映射，原始图片仍只保留在受控对象存储，不进入日志。证据：`src/assets/ai-image.ts`、`src/assets/service.ts`、`test/unit/ai-image.test.ts`、`test/unit/assets-service.test.ts`；命令：`rtk npx vitest run test/unit/ai-image.test.ts test/unit/assets-service.test.ts`。
 - [ ] `PAR-008` P0/M2 DOCX 标题/段落/表格；验收：结构顺序可回读。
 - [ ] `PAR-009` P0/M2 Excel sheet/cell range；验收：每个表块关联 sheet 和范围。
 - [ ] `PAR-010` P0/M2 CSV 表头/行范围；验收：编码、分隔符和超宽表格有界。

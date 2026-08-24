@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { getWorkspace, type DurableObjectStorageLike, withWorkspace } from "@cloudflare/computer";
 import { createApp } from "./app";
 import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
+import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetsRepository } from "./assets/repository";
 import { AssetService } from "./assets/service";
 import { APP_CONFIG } from "./config";
@@ -215,6 +216,7 @@ export default {
     }
     const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
+      imageConverter: new WorkersAiImageConverter(env.AI),
     }).processDue(3);
     console.log("asset parse sweep complete", result);
   },

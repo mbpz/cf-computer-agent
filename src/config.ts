@@ -47,5 +47,10 @@ export const APP_CONFIG = {
   aiMarkdownTimeoutMs: 5_000,
   maxPdfParseBytes: 2 * 1024 * 1024,
   maxPdfPages: 100,
+  maxImageAiInputBytes: 4 * 1024 * 1024,
+  maxImageAiOutputBytes: 32 * 1024,
+  imageAiTimeoutMs: 5_000,
+  imageConfidenceThreshold: 0.75,
+  imageModel: "@cf/llava-hf/llava-1.5-7b-hf",
   model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
 } as const;
