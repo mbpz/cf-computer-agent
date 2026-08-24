@@ -33,8 +33,8 @@ describe("WorkersAiMarkdownConverter", () => {
     });
 
     await expect(converter.toMarkdown({
-      name: "guide.docx",
-      blob: new Blob(["PK\u0003\u0004"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+      name: "sheet.xlsx",
+      blob: new Blob(["PK\u0003\u0004"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
     })).rejects.toMatchObject({ code: "ASSET_AI_PARSE_UNSUPPORTED", status: 422 });
     expect(calls).toBe(0);
   });

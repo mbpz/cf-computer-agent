@@ -3,6 +3,7 @@ import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import type { ParseSourceInput } from "../sources/types";
 import { recoverPdfMarkdown } from "./pdf-pages";
+import { recoverDocxMarkdown } from "./docx";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -405,7 +406,7 @@ export class AssetService {
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
-        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED",
+        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED", "ASSET_DOCX_TOO_LARGE", "ASSET_DOCX_PARSE_UNSUPPORTED", "ASSET_DOCX_EMPTY",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -421,6 +422,9 @@ export class AssetService {
       : this.markdownConverter;
     if (asset.contentType === "application/pdf" && !converter) {
       return parseSource({ kind: "markdown", content: recoverPdfMarkdown(bytes).markdown });
+    }
+    if (asset.contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && !converter) {
+      return parseSource({ kind: "markdown", content: (await recoverDocxMarkdown(bytes)).markdown });
     }
     if (!converter) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
