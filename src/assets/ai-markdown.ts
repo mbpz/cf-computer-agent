@@ -6,6 +6,7 @@ import { recoverXlsxMarkdown } from "./xlsx";
 import { recoverCsvMarkdown } from "./csv";
 import { recoverHtmlMarkdown } from "./html";
 import { recoverXmlMarkdown } from "./xml";
+import { recoverOpenDocumentMarkdown } from "./odf";
 import type { AssetMarkdownConversionResult, AssetMarkdownConverter } from "./service";
 
 export interface WorkersAiRunner {
@@ -69,6 +70,15 @@ export class WorkersAiMarkdownConverter implements AssetMarkdownConverter {
     }
     if (contentType === "application/xml" || contentType === "text/xml") {
       return { format: "markdown", data: recoverXmlMarkdown(await input.blob.arrayBuffer()).markdown };
+    }
+    if (contentType === "application/vnd.oasis.opendocument.text") {
+      return { format: "markdown", data: (await recoverOpenDocumentMarkdown(await input.blob.arrayBuffer(), "odt")).markdown };
+    }
+    if (contentType === "application/vnd.oasis.opendocument.spreadsheet") {
+      return { format: "markdown", data: (await recoverOpenDocumentMarkdown(await input.blob.arrayBuffer(), "ods")).markdown };
+    }
+    if (contentType === "application/vnd.apple.numbers") {
+      return { format: "markdown", data: (await recoverOpenDocumentMarkdown(await input.blob.arrayBuffer(), "numbers")).markdown };
     }
     if (!TEXT_INPUT_TYPES.has(contentType)) {
       throw new AppError("ASSET_AI_PARSE_UNSUPPORTED", "This rich format needs a dedicated parser", 422);
