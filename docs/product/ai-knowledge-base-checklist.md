@@ -65,7 +65,7 @@
 - [x] `PAR-001` P0/M1 确定性纯文本解析；状态：L/W；验收：canonical base64 字节先经 UTF-8 fatal decode，再确定性规范化为 LF；无效字节拒绝且不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
 - [x] `PAR-003` P0/M1 代码解析；状态：L；验收：语言、行号和代码块不被自然语言清洗破坏。
-- [ ] `PAR-004` P0/M2 Parser 接口和版本；验收：同输入/版本可重放且输出 schema 固定。
+- [x] `PAR-004` P0/M2 Parser 接口和版本；状态：L/W；验收：显式 `SOURCE_PARSER_CONTRACT` 固定 `m1-v1`/`m1-v2` 与八字段输出 schema，`sourceParser.parse` 作为稳定入口，同输入可确定性重放。证据：`src/sources/parser.ts`、`src/sources/types.ts`、`test/unit/source-parser.test.ts`；命令：`rtk npx vitest run test/unit/source-parser.test.ts -t "frozen versioned contract"`。
 - [ ] `PAR-005` P0/M2 Workers AI toMarkdown 适配器；验收：有界输入/输出和稳定错误映射。
 - [ ] `PAR-006` P0/M2 PDF 页码恢复；验收：每个段落关联页码或明确 unknown。
 - [ ] `PAR-007` P0/M2 图片 OCR/描述；验收：原图保留，低置信结果标 warning。

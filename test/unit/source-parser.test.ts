@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { parseSource } from "../../src/sources/parser";
+import { parseSource, SOURCE_PARSER_CONTRACT, sourceParser } from "../../src/sources/parser";
 import { decodeSourceBytes } from "../../src/sources/decoder";
 import { m1ParserCases } from "../fixtures/m1-parser-cases";
 
 describe("parseSource", () => {
+  it("exposes a frozen versioned contract and replays the same output schema", async () => {
+    expect(SOURCE_PARSER_CONTRACT).toEqual({
+      parserVersion: "m1-v1",
+      parserSchemaVersion: "m1-v2",
+      outputFields: [
+        "normalizedMarkdown", "contentSha256", "parserVersion", "parserSchemaVersion",
+        "sourceIdentitySha256", "warnings", "codeMetadata", "lineCount",
+      ],
+    });
+    expect(Object.isFrozen(SOURCE_PARSER_CONTRACT)).toBe(true);
+    const input = { kind: "markdown" as const, content: "# Stable\r\n\r\nBody\n" };
+    const first = await sourceParser.parse(input);
+    const replay = await sourceParser.parse(input);
+    expect(replay).toEqual(first);
+    expect(Object.keys(first).sort()).toEqual([...SOURCE_PARSER_CONTRACT.outputFields].sort());
+  });
+
   it.each(m1ParserCases.filter((fixture) => fixture.expected.ok))(
     "normalizes independent byte fixture $id with M1-v2 metadata",
     async (fixture) => {

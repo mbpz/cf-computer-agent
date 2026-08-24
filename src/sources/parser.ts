@@ -3,8 +3,16 @@ import { hasSemanticSourceContent } from "./limits";
 import type { ParsedSource, ParseSourceInput } from "./types";
 
 const maxSourceBytes = 128 * 1024;
-const parserVersion = "m1-v1" as const;
-const parserSchemaVersion = "m1-v2" as const;
+export const SOURCE_PARSER_CONTRACT = Object.freeze({
+  parserVersion: "m1-v1" as const,
+  parserSchemaVersion: "m1-v2" as const,
+  outputFields: Object.freeze([
+    "normalizedMarkdown", "contentSha256", "parserVersion", "parserSchemaVersion",
+    "sourceIdentitySha256", "warnings", "codeMetadata", "lineCount",
+  ] as const),
+});
+const parserVersion = SOURCE_PARSER_CONTRACT.parserVersion;
+const parserSchemaVersion = SOURCE_PARSER_CONTRACT.parserSchemaVersion;
 const allowedLanguages = new Set([
   "plaintext", "javascript", "typescript", "python", "go", "rust", "java", "sql", "json", "yaml", "shell",
 ]);
@@ -36,6 +44,13 @@ export async function parseSource(input: ParseSourceInput): Promise<ParsedSource
     lineCount: countLines(normalizedMarkdown),
   };
 }
+
+export interface SourceParserPort {
+  parse(input: ParseSourceInput): Promise<ParsedSource>;
+}
+
+/** Stable parser entry point for replay workers and future format adapters. */
+export const sourceParser: SourceParserPort = Object.freeze({ parse: parseSource });
 
 function assertParseInput(input: ParseSourceInput): void {
   if (!input || !isSourceKind(input.kind) || typeof input.content !== "string"
