@@ -1,4 +1,6 @@
 import { AppError } from "../http";
+import type { AuditRepository } from "../audit/repository";
+import type { CreateAuditEvent } from "../audit/types";
 import type { PublishedContentReader } from "../knowledge/types";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
 import { normalizeSearchQuery } from "./lexical";
@@ -36,10 +38,13 @@ export interface CitationLookup {
   chunkId: string;
 }
 
+type AuditWriter = Pick<AuditRepository, "writeAudit">;
+
 export class LibraryService {
   constructor(
     private readonly repository: LibraryRepositoryPort,
     private readonly content: PublishedContentReader,
+    private readonly audit?: AuditWriter,
   ) {}
 
   async list(scope: LibraryScope, request: KnowledgePageRequest = {}): Promise<KnowledgePage> {
@@ -98,6 +103,19 @@ export class LibraryService {
     const record = await this.repository.findRevision(scope, knowledgeItemId, revisionId);
     if (!record) throw knowledgeNotFound();
     const markdown = await this.content.read(record.normalizedPath, record.contentSha256);
+    if (this.audit) {
+      const audit: CreateAuditEvent = {
+        id: `download-${crypto.randomUUID()}`,
+        actorKind: "member",
+        actorId: scope.memberId,
+        action: "knowledge.downloaded",
+        resourceType: "knowledge",
+        resourceId: record.id,
+        metadata: { revisionId: record.revisionId },
+        createdAt: new Date().toISOString(),
+      };
+      await this.audit.writeAudit(audit);
+    }
     return {
       markdown,
       filename: attachmentFilename(record.codeMetadata?.fileLabel || record.title),

@@ -133,7 +133,7 @@ function createRequestServices(
     audit,
     citedAnswers: new CitedAnswerService(env.AI),
     knowledge: new KnowledgeService(legacyRepository),
-    library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader),
+    library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
     legacyRepository,
     memberRecords,
     members,

@@ -766,6 +766,14 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(downloadResponse.headers.get("x-evil")).toBeNull();
     expectSecurityHeaders(downloadResponse, "download-request-id");
     await expect(downloadResponse.text()).resolves.toBe("# Launch\n\nLaunch latency is under 50ms.\n");
+    await expect(env.DB.prepare(
+      "SELECT action, resource_type, resource_id, metadata FROM audit_events WHERE action = 'knowledge.downloaded'",
+    ).first()).resolves.toMatchObject({
+      action: "knowledge.downloaded",
+      resource_type: "knowledge",
+      resource_id: published.revision.knowledgeItemId,
+      metadata: JSON.stringify({ revisionId: published.revision.id }),
+    });
 
     const searchResponse = await memberApi("contributor", "/api/knowledge/search?q=launch%20latency&limit=20");
     expect(searchResponse.status).toBe(200);

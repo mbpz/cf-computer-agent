@@ -86,6 +86,25 @@ describe("LibraryService", () => {
     await expect(service.readCitation(contributor, citationId)).rejects.toEqual(notFoundError());
   });
 
+  it("writes a redacted knowledge.downloaded audit after authorized content delivery", async () => {
+    const record = revisionRecord();
+    const audits: unknown[] = [];
+    const repository = repositoryFixture({ async findRevision() { return record; } });
+    const service = new LibraryService(repository, {
+      async read() { return "# Downloaded\n"; },
+    }, {
+      async writeAudit(input: unknown) { audits.push(input); return input as never; },
+    } as never);
+
+    await expect(service.download(contributor, "knowledge-1", "revision-1"))
+      .resolves.toEqual({ markdown: "# Downloaded\n", filename: "Trusted title.md" });
+    expect(audits).toEqual([expect.objectContaining({
+      actorKind: "member", actorId: "member-1", action: "knowledge.downloaded",
+      resourceType: "knowledge", resourceId: "knowledge-1", metadata: { revisionId: "revision-1" },
+    })]);
+    expect(JSON.stringify(audits)).not.toMatch(/content|markdown|normalizedPath|contentSha256|secret/i);
+  });
+
   it("rejects a stale or forged member scope before any resource lookup", async () => {
     const calls: string[] = [];
     const repository = repositoryFixture({

@@ -31,6 +31,7 @@ export interface AuditActionMap {
     requestedCollectionId?: string; requestedVisibility: "shared" | "admin_only";
   } };
   "knowledge.published": { resourceType: "knowledge"; metadata: { submissionId: string; revisionId: string; visibility: "shared" | "admin_only" } };
+  "knowledge.downloaded": { resourceType: "knowledge"; metadata: { revisionId: string } };
   "knowledge.rolled_back": { resourceType: "knowledge"; metadata: { fromRevisionId: string; toRevisionId: string } };
   "knowledge.trashed": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
@@ -53,6 +54,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "review.visibility_expanded",
   "submission.resubmitted",
   "knowledge.published",
+  "knowledge.downloaded",
   "knowledge.rolled_back",
   "knowledge.trashed",
   "knowledge.restored",
@@ -232,6 +234,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
         revisionId: metadata.revisionId,
         visibility: metadata.visibility,
       });
+    }
+    case "knowledge.downloaded": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["revisionId"]));
+      if (!isBoundedId(metadata.revisionId)) throw invalidMetadata();
+      return safeMetadata({ revisionId: metadata.revisionId });
     }
     case "knowledge.rolled_back": {
       assertResourceType(resourceType, "knowledge");
