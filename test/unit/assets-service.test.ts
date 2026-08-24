@@ -497,6 +497,40 @@ describe("AssetService", () => {
     expect(result.job).toMatchObject({ status: "failed_retryable", lastErrorCode: "ASSET_AI_PARSE_FAILED" });
   });
 
+  it("times out a slow conversion, cleans the parsed artifact, and retries idempotently", async () => {
+    const db = repository();
+    const originals = bucket();
+    let available = false;
+    const service = new AssetService(originals, db, {
+      id: () => "asset-timeout",
+      parseTimeoutMs: 5,
+      markdownConverter: {
+        async toMarkdown() {
+          if (!available) await new Promise((resolve) => setTimeout(resolve, 20));
+          return { format: "markdown", data: "# recovered\n" };
+        },
+      },
+    });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "slow.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "timeout-key",
+    });
+    originals.objects.set(`parsed/${created.asset.id}.md`, new TextEncoder().encode("stale output").buffer);
+
+    const timedOut = await service.process("member-1", created.asset.id);
+    expect(timedOut.job).toMatchObject({ status: "failed_retryable", attempts: 1, lastErrorCode: "ASSET_PARSE_TIMEOUT" });
+    expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
+
+    available = true;
+    await expect(service.retry(created.asset.id)).resolves.toMatchObject({
+      job: { status: "queued", attempts: 0, lastErrorCode: null },
+    });
+    const recovered = await service.process("member-1", created.asset.id);
+    expect(recovered.job).toMatchObject({ status: "succeeded", attempts: 1, lastErrorCode: null });
+    expect(new TextDecoder().decode(originals.objects.get(`parsed/${created.asset.id}.md`))).toContain("# recovered");
+    expect(originals.objects.size).toBe(2);
+  });
+
   it("reclaims a retryable AI failure on the next bounded sweep after recovery", async () => {
     const db = repository();
     const originals = bucket();

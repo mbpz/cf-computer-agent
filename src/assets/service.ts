@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { APP_CONFIG } from "../config";
 import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import type { ParseSourceInput } from "../sources/types";
@@ -38,6 +39,7 @@ export interface AssetServiceOptions {
   orphanGraceMs?: number;
   markdownConverter?: AssetMarkdownConverter;
   imageConverter?: AssetMarkdownConverter;
+  parseTimeoutMs?: number;
 }
 
 export interface AssetMarkdownConverter {
@@ -120,6 +122,7 @@ export class AssetService {
   private readonly orphanGraceMs: number;
   private readonly markdownConverter?: AssetMarkdownConverter;
   private readonly imageConverter?: AssetMarkdownConverter;
+  private readonly parseTimeoutMs: number;
 
   constructor(
     private readonly originals: R2Bucket | undefined,
@@ -137,6 +140,9 @@ export class AssetService {
     this.imageConverter = typeof options.imageConverter?.toMarkdown === "function"
       ? options.imageConverter
       : undefined;
+    this.parseTimeoutMs = Number.isFinite(options.parseTimeoutMs) && (options.parseTimeoutMs as number) > 0
+      ? Math.floor(options.parseTimeoutMs as number)
+      : APP_CONFIG.assetParseTimeoutMs;
   }
 
   /**
@@ -401,9 +407,10 @@ export class AssetService {
       const bytes = await original.arrayBuffer();
       validateBinarySignature(current.asset, bytes);
       const input = parseInputForAsset(current.asset, bytes);
-      const parsed = input
-        ? await parseSource(input)
-        : await this.parseRichAsset(current.asset, bytes);
+      const parsed = await withAssetParseTimeout(
+        input ? parseSource(input) : this.parseRichAsset(current.asset, bytes),
+        this.parseTimeoutMs,
+      );
       assertReadableParsedMarkdown(parsed.normalizedMarkdown);
       await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
@@ -473,6 +480,22 @@ export class AssetService {
       throw new AppError("ASSET_AI_PARSE_FAILED", "Rich asset conversion failed", 422, true);
     }
     return parseSource({ kind: "markdown", content: result.data });
+  }
+}
+
+async function withAssetParseTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new AppError("ASSET_PARSE_TIMEOUT", "Asset parsing timed out", 503, true));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 

@@ -52,6 +52,7 @@ export const APP_CONFIG = {
   imageAiTimeoutMs: 5_000,
   imageConfidenceThreshold: 0.75,
   imageModel: "@cf/llava-hf/llava-1.5-7b-hf",
+  assetParseTimeoutMs: 10_000,
   maxDocxParseBytes: 4 * 1024 * 1024,
   maxDocxXmlBytes: 2 * 1024 * 1024,
   maxXlsxParseBytes: 4 * 1024 * 1024,
