@@ -3,6 +3,7 @@ import { AppError } from "../http";
 import { recoverPdfMarkdown } from "./pdf-pages";
 import { recoverDocxMarkdown } from "./docx";
 import { recoverXlsxMarkdown } from "./xlsx";
+import { recoverCsvMarkdown } from "./csv";
 import type { AssetMarkdownConversionResult, AssetMarkdownConverter } from "./service";
 
 export interface WorkersAiRunner {
@@ -57,6 +58,9 @@ export class WorkersAiMarkdownConverter implements AssetMarkdownConverter {
     }
     if (contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
       return { format: "markdown", data: (await recoverXlsxMarkdown(await input.blob.arrayBuffer())).markdown };
+    }
+    if (contentType === "text/csv") {
+      return { format: "markdown", data: recoverCsvMarkdown(await input.blob.arrayBuffer()).markdown };
     }
     if (!TEXT_INPUT_TYPES.has(contentType)) {
       throw new AppError("ASSET_AI_PARSE_UNSUPPORTED", "This rich format needs a dedicated parser", 422);

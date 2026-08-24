@@ -5,6 +5,7 @@ import type { ParseSourceInput } from "../sources/types";
 import { recoverPdfMarkdown } from "./pdf-pages";
 import { recoverDocxMarkdown } from "./docx";
 import { recoverXlsxMarkdown } from "./xlsx";
+import { recoverCsvMarkdown } from "./csv";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -407,7 +408,7 @@ export class AssetService {
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
-        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED", "ASSET_DOCX_TOO_LARGE", "ASSET_DOCX_PARSE_UNSUPPORTED", "ASSET_DOCX_EMPTY", "ASSET_XLSX_TOO_LARGE", "ASSET_XLSX_PARSE_UNSUPPORTED", "ASSET_XLSX_EMPTY",
+        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_IMAGE_PARSE_UNSUPPORTED", "ASSET_IMAGE_INPUT_TOO_LARGE", "ASSET_IMAGE_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED", "ASSET_DOCX_TOO_LARGE", "ASSET_DOCX_PARSE_UNSUPPORTED", "ASSET_DOCX_EMPTY", "ASSET_XLSX_TOO_LARGE", "ASSET_XLSX_PARSE_UNSUPPORTED", "ASSET_XLSX_EMPTY", "ASSET_CSV_TOO_LARGE", "ASSET_CSV_PARSE_UNSUPPORTED", "ASSET_CSV_EMPTY",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -429,6 +430,9 @@ export class AssetService {
     }
     if (asset.contentType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" && !converter) {
       return parseSource({ kind: "markdown", content: (await recoverXlsxMarkdown(bytes)).markdown });
+    }
+    if (asset.contentType === "text/csv" && !converter) {
+      return parseSource({ kind: "markdown", content: recoverCsvMarkdown(bytes).markdown });
     }
     if (!converter) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
@@ -465,7 +469,7 @@ function parseInputForAsset(asset: AssetRecord, bytes: ArrayBuffer): ParseSource
     const content = decodeUtf8(bytes);
     return { kind: "code", content, language: languages[extension] || "json", fileLabel: asset.originalName, lineBaseline: 1 };
   }
-  if (asset.contentType === "text/plain" || asset.contentType === "text/csv") {
+  if (asset.contentType === "text/plain") {
     const content = decodeUtf8(bytes);
     return { kind: "text", content };
   }
@@ -482,6 +486,7 @@ function decodeUtf8(bytes: ArrayBuffer): string {
 
 function isRichAsset(asset: AssetRecord): boolean {
   return asset.contentType === "application/pdf"
+    || asset.contentType === "text/csv"
     || asset.contentType === "text/html"
     || asset.contentType === "application/xml"
     || asset.contentType.startsWith("image/")
