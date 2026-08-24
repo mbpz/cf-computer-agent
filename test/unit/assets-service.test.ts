@@ -589,6 +589,8 @@ describe("AssetService", () => {
     const result = await service.process("member-1", created.asset.id);
 
     expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "SOURCE_TOO_LARGE" });
+    expect(originals.objects.has(created.asset.objectKey)).toBe(true);
+    expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
   });
 
   it("marks malformed UTF-8 text as a terminal parse failure", async () => {

@@ -29,6 +29,7 @@ export const APP_CONFIG = {
   maxAssetBytes: MAX_ASSET_BYTES,
   maxAssetTotalBytes: MAX_ASSET_TOTAL_BYTES,
   maxPublishedContentBytes: MAX_PUBLISHED_CONTENT_BYTES,
+  maxParsedAssetOutputBytes: MAX_PUBLISHED_CONTENT_BYTES,
   maxNoteMetadataBytes: MAX_NOTE_JSON_METADATA_BYTES,
   maxNoteIdBytes: MAX_NOTE_ID_BYTES,
   maxNoteTitleBytes: MAX_NOTE_TITLE_BYTES,

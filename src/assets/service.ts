@@ -11,7 +11,7 @@ import { recoverHtmlMarkdown } from "./html";
 import { recoverXmlMarkdown } from "./xml";
 import { recoverOpenDocumentMarkdown } from "./odf";
 import { recoverPptxMarkdown } from "./pptx";
-import { assertReadableParsedMarkdown } from "./empty";
+import { assertParsedMarkdownSize, assertReadableParsedMarkdown } from "./empty";
 import { classifyAssetParseFailure } from "./errors";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
@@ -412,6 +412,7 @@ export class AssetService {
         this.parseTimeoutMs,
       );
       assertReadableParsedMarkdown(parsed.normalizedMarkdown);
+      assertParsedMarkdownSize(parsed.normalizedMarkdown);
       await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },

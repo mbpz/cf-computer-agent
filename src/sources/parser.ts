@@ -1,8 +1,9 @@
 import { AppError } from "../http";
+import { APP_CONFIG } from "../config";
 import { hasSemanticSourceContent } from "./limits";
 import type { ParsedSource, ParseSourceInput } from "./types";
 
-const maxSourceBytes = 128 * 1024;
+const maxSourceBytes = APP_CONFIG.maxParsedAssetOutputBytes;
 export const SOURCE_PARSER_CONTRACT = Object.freeze({
   parserVersion: "m1-v1" as const,
   parserSchemaVersion: "m1-v2" as const,
