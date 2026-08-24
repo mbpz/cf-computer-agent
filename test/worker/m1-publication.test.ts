@@ -289,7 +289,7 @@ describe("M1 publication control plane", () => {
   it("soft-deletes a published item without deleting its immutable Revision", async () => {
     await seedReviewPendingSubmission("submission-trash-m3");
     const repository = repositoryWithIds("knowledge-trash-m3", "revision-trash-m3");
-    const service = new PublicationService(repository, durableContentCommitter());
+    const service = new PublicationService(repository, durableContentCommitter(), durableContentRemover());
     await service.publish(adminReviewer, "submission-trash-m3", publicationInput);
 
     const trashed = await (service as unknown as {
@@ -332,6 +332,90 @@ describe("M1 publication control plane", () => {
       { action: "knowledge.restored" },
       { action: "knowledge.restored" },
     ]) });
+  });
+
+  it("purges only expired trashed knowledge and leaves an audit tombstone", async () => {
+    await seedReviewPendingSubmission("submission-purge-m3");
+    const repository = repositoryWithIds("knowledge-purge-m3", "revision-purge-m3");
+    const service = new PublicationService(repository, durableContentCommitter(), durableContentRemover());
+    await service.publish(adminReviewer, "submission-purge-m3", publicationInput);
+    await service.trash(adminReviewer, "knowledge-purge-m3");
+    await env.DB.prepare("UPDATE knowledge_items SET updated_at = ? WHERE id = ?")
+      .bind("2026-07-01T00:00:00.000Z", "knowledge-purge-m3").run();
+
+    const result = await (service as unknown as {
+      purge(reviewer: PublicationReviewer, knowledgeItemId: string, now: Date): Promise<unknown>;
+    }).purge(adminReviewer, "knowledge-purge-m3", new Date("2026-08-22T00:00:00.000Z"));
+    expect(result).toMatchObject({ knowledgeItemId: "knowledge-purge-m3", status: "purged" });
+    await expect(indexedChunkIds("knowledge-purge-m3")).resolves.toEqual([]);
+    const publishedPath = "/workspace/published/default/knowledge-purge-m3/revision-purge-m3.md";
+    const contentStub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
+    await expect(contentStub.recoverWorkspace()).resolves.toMatchObject({ ok: true });
+    await expect(readWorkspacePath(contentStub, publishedPath)).rejects.toBeDefined();
+    await expect(env.DB.prepare("SELECT id FROM knowledge_items WHERE id = ?").bind("knowledge-purge-m3").first()).resolves.toBeNull();
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = ?").bind("knowledge-purge-m3").first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM source_versions WHERE submission_id = ?").bind("submission-purge-m3").first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare("SELECT content FROM submissions WHERE id = ?").bind("submission-purge-m3").first()).resolves.toEqual({ content: "" });
+    await expect(env.DB.prepare("SELECT action FROM audit_events WHERE resource_id = ? AND action = 'knowledge.purged'").bind("knowledge-purge-m3").all()).resolves.toMatchObject({ results: [{ action: "knowledge.purged" }] });
+    await expect((service as unknown as { purge(reviewer: PublicationReviewer, knowledgeItemId: string, now: Date): Promise<unknown> }).purge(adminReviewer, "knowledge-purge-m3", new Date("2026-08-22T00:00:00.000Z"))).resolves.toMatchObject({ alreadyPurged: true });
+  });
+
+  it("keeps retention and administrator boundaries fail-closed", async () => {
+    await seedReviewPendingSubmission("submission-purge-boundary");
+    const repository = repositoryWithIds("knowledge-purge-boundary", "revision-purge-boundary");
+    const service = new PublicationService(repository, durableContentCommitter(), durableContentRemover());
+    await service.publish(adminReviewer, "submission-purge-boundary", publicationInput);
+    await service.trash(adminReviewer, "knowledge-purge-boundary");
+
+    await expect((service as unknown as { purge(reviewer: PublicationReviewer, knowledgeItemId: string, now: Date): Promise<unknown> }).purge(
+      adminReviewer, "knowledge-purge-boundary", new Date("2026-08-22T00:00:00.000Z"),
+    )).rejects.toMatchObject({ code: "KNOWLEDGE_PURGE_RETENTION_ACTIVE", status: 409 });
+    await expect((service as unknown as { purge(reviewer: PublicationReviewer, knowledgeItemId: string, now: Date): Promise<unknown> }).purge(
+      { ...adminReviewer, role: "contributor" }, "knowledge-purge-boundary", new Date("2026-09-30T00:00:00.000Z"),
+    )).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
+  it("leaves D1 authoritative data intact when content cleanup fails, then retries safely", async () => {
+    await seedReviewPendingSubmission("submission-purge-retry");
+    const repository = repositoryWithIds("knowledge-purge-retry", "revision-purge-retry");
+    let fail = true;
+    const remover = { remove: async () => { if (fail) throw new Error("storage unavailable"); } };
+    const service = new PublicationService(repository, durableContentCommitter(), remover);
+    await service.publish(adminReviewer, "submission-purge-retry", publicationInput);
+    await service.trash(adminReviewer, "knowledge-purge-retry");
+    await env.DB.prepare("UPDATE knowledge_items SET updated_at = ? WHERE id = ?")
+      .bind("2026-07-01T00:00:00.000Z", "knowledge-purge-retry").run();
+
+    await expect(service.purge(adminReviewer, "knowledge-purge-retry", new Date("2026-08-22T00:00:00.000Z")))
+      .rejects.toMatchObject({ code: "KNOWLEDGE_PURGE_CONTENT_UNAVAILABLE", status: 503, retryable: true });
+    await expect(env.DB.prepare("SELECT status FROM knowledge_items WHERE id = ?").bind("knowledge-purge-retry").first()).resolves.toEqual({ status: "trashed" });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = ?").bind("knowledge-purge-retry").first()).resolves.toEqual({ count: 1 });
+
+    fail = false;
+    await expect(service.purge(adminReviewer, "knowledge-purge-retry", new Date("2026-08-22T00:00:00.000Z"))).resolves.toMatchObject({ status: "purged" });
+  });
+
+  it("does not delete derived D1 rows if the item changes between planning and finalization", async () => {
+    await seedReviewPendingSubmission("submission-purge-race");
+    const repository = repositoryWithIds("knowledge-purge-race", "revision-purge-race");
+    const remover = {
+      remove: async () => {
+        await env.DB.prepare(
+          "UPDATE knowledge_items SET status = 'active', current_revision_id = ?, updated_at = ? WHERE id = ?",
+        ).bind("revision-purge-race", now, "knowledge-purge-race").run();
+      },
+    };
+    const service = new PublicationService(repository, durableContentCommitter(), remover);
+    await service.publish(adminReviewer, "submission-purge-race", publicationInput);
+    await service.trash(adminReviewer, "knowledge-purge-race");
+    await env.DB.prepare("UPDATE knowledge_items SET updated_at = ? WHERE id = ?")
+      .bind("2026-07-01T00:00:00.000Z", "knowledge-purge-race").run();
+
+    await expect(service.purge(adminReviewer, "knowledge-purge-race", new Date("2026-08-22T00:00:00.000Z")))
+      .rejects.toMatchObject({ code: "KNOWLEDGE_PURGE_CONFLICT", status: 409 });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM chunks WHERE revision_id = ?").bind("revision-purge-race").first()).resolves.toEqual({ count: 2 });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = ?").bind("knowledge-purge-race").first()).resolves.toEqual({ count: 1 });
+    await expect(env.DB.prepare("SELECT status, current_revision_id FROM knowledge_items WHERE id = ?").bind("knowledge-purge-race").first()).resolves.toEqual({ status: "active", current_revision_id: "revision-purge-race" });
   });
 
   it("writes complete deterministic FTS fields and keeps fenced code out of prose", async () => {
@@ -1666,6 +1750,16 @@ function durableContentCommitter() {
   };
 }
 
+function durableContentRemover() {
+  return {
+    async remove(paths: readonly string[]): Promise<void> {
+      const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
+      const result = await stub.removePublishedContent({ paths: [...paths] });
+      if (!result.ok) throw new AppError(result.error.code, result.error.message, result.error.status, result.error.retryable);
+    },
+  };
+}
+
 function unwrapPublishedContent(result: RpcResult<PublishedContentReceipt>): PublishedContentReceipt {
   if (result.ok) return result.value;
   throw new AppError(result.error.code, result.error.message, result.error.status, result.error.retryable);
@@ -1790,6 +1884,15 @@ async function indexedChunkIds(knowledgeItemId: string): Promise<string[]> {
      WHERE r.knowledge_item_id = ? ORDER BY f.chunk_id ASC LIMIT ?`,
   ).bind(knowledgeItemId, 257).all<{ chunk_id: string }>();
   return rows.results.map((row) => row.chunk_id);
+}
+
+async function readWorkspacePath(stub: DurableObjectStub, path: string): Promise<string> {
+  const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
+  try {
+    return await workspace.fs.readFile(path, "utf8");
+  } finally {
+    disposeWorkspace(workspace);
+  }
 }
 
 async function indexRowidMismatches(knowledgeItemId: string): Promise<string[]> {

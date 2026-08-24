@@ -34,6 +34,7 @@ export interface AuditActionMap {
   "knowledge.rolled_back": { resourceType: "knowledge"; metadata: { fromRevisionId: string; toRevisionId: string } };
   "knowledge.trashed": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
+  "knowledge.purged": { resourceType: "knowledge"; metadata: { currentRevisionId: string; purgedRevisionCount: number } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -55,6 +56,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "knowledge.rolled_back",
   "knowledge.trashed",
   "knowledge.restored",
+  "knowledge.purged",
 ]);
 
 export type CreateAuditEvent = {
@@ -244,6 +246,20 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["currentRevisionId"]));
       if (!isBoundedId(metadata.currentRevisionId)) throw invalidMetadata();
       return safeMetadata({ currentRevisionId: metadata.currentRevisionId });
+    }
+    case "knowledge.purged": {
+      assertResourceType(resourceType, "knowledge");
+      const metadata = readPlainDataObject(input, new Set(["currentRevisionId", "purgedRevisionCount"]));
+      if (!isBoundedId(metadata.currentRevisionId)
+        || typeof metadata.purgedRevisionCount !== "number"
+        || !Number.isSafeInteger(metadata.purgedRevisionCount)
+        || metadata.purgedRevisionCount < 1 || metadata.purgedRevisionCount > 1_000) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({
+        currentRevisionId: metadata.currentRevisionId,
+        purgedRevisionCount: metadata.purgedRevisionCount,
+      });
     }
     default:
       throw new TypeError("Audit action is invalid");

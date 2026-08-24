@@ -12,6 +12,8 @@ import type {
   PublicationRepositoryPort,
   GovernedKnowledgeItem,
   KnowledgeVisibility,
+  PurgePlan,
+  PurgeResult,
   PublishedRevision,
   RollbackResult,
   PublishSubmissionInput,
@@ -31,7 +33,10 @@ export type PublicationRepositoryConflictKind =
   | "rollback_target_invalid"
   | "rollback_conflict"
   | "lifecycle_target_invalid"
-  | "lifecycle_conflict";
+  | "lifecycle_conflict"
+  | "purge_target_invalid"
+  | "purge_retention_active"
+  | "purge_conflict";
 
 export class PublicationRepositoryConflictError extends Error {
   constructor(readonly kind: PublicationRepositoryConflictKind) {
@@ -566,6 +571,159 @@ export class PublicationRepository implements PublicationRepositoryPort {
           v: 1, key: "governed-trash-v1", updatedAt: last.updatedAt, id: last.id,
         }),
       } : {}),
+    };
+  }
+
+  async preparePurge(knowledgeItemId: string, cutoff: string): Promise<PurgePlan | { alreadyPurged: true }> {
+    const item = await this.db.prepare(
+      "SELECT id, status, current_revision_id, updated_at FROM knowledge_items WHERE id = ? LIMIT 1",
+    ).bind(knowledgeItemId).first<{
+      id: string; status: "active" | "trashed"; current_revision_id: string | null; updated_at: string;
+    }>();
+    if (!item) {
+      const tombstone = await this.db.prepare(
+        "SELECT 1 AS present FROM audit_events WHERE resource_type = 'knowledge' AND resource_id = ? AND action = 'knowledge.purged' LIMIT 1",
+      ).bind(knowledgeItemId).first<{ present: number }>();
+      if (tombstone) return { alreadyPurged: true };
+      throw new PublicationRepositoryConflictError("purge_target_invalid");
+    }
+    if (item.status !== "trashed" || !item.current_revision_id) {
+      throw new PublicationRepositoryConflictError("purge_target_invalid");
+    }
+    if (item.updated_at > cutoff) throw new PublicationRepositoryConflictError("purge_retention_active");
+    const revisions = await this.db.prepare(
+      `SELECT r.id AS revision_id, r.normalized_path, r.source_version_id,
+          sv.source_id, sv.submission_id
+       FROM revisions r
+       JOIN source_versions sv ON sv.id = r.source_version_id
+       WHERE r.knowledge_item_id = ?
+       ORDER BY r.id`,
+    ).bind(knowledgeItemId).all<{
+      revision_id: string; normalized_path: string; source_version_id: string;
+      source_id: string; submission_id: string;
+    }>();
+    if (!revisions.results.some((row) => row.revision_id === item.current_revision_id)) {
+      throw new PublicationRepositoryConflictError("purge_conflict");
+    }
+    return {
+      knowledgeItemId,
+      currentRevisionId: item.current_revision_id,
+      revisionIds: revisions.results.map((row) => row.revision_id),
+      contentPaths: revisions.results.map((row) => row.normalized_path),
+      sourceVersionIds: [...new Set(revisions.results.map((row) => row.source_version_id))],
+      sourceIds: [...new Set(revisions.results.map((row) => row.source_id))],
+      submissionIds: [...new Set(revisions.results.map((row) => row.submission_id))],
+      trashedAt: item.updated_at,
+    };
+  }
+
+  async finalizePurge(plan: PurgePlan, reviewerId: string): Promise<PurgeResult> {
+    const timestamp = this.now().toISOString();
+    const auditId = `purge-${this.id()}`;
+    const revisionPlaceholders = plan.revisionIds.map(() => "?").join(", ");
+    const sourceVersionPlaceholders = plan.sourceVersionIds.map(() => "?").join(", ");
+    const sourcePlaceholders = plan.sourceIds.map(() => "?").join(", ");
+    const submissionPlaceholders = plan.submissionIds.map(() => "?").join(", ");
+    const auditMetadata = JSON.stringify({
+      currentRevisionId: plan.currentRevisionId,
+      purgedRevisionCount: plan.revisionIds.length,
+    });
+    try {
+      await this.db.batch([
+        this.db.prepare(
+          `UPDATE knowledge_items SET current_revision_id = NULL
+           WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id = ?`,
+        ).bind(plan.knowledgeItemId, plan.trashedAt, plan.currentRevisionId),
+        this.db.prepare(
+          `DELETE FROM chunks_fts
+           WHERE chunk_id IN (SELECT id FROM chunks WHERE revision_id IN (${revisionPlaceholders}))
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(...plan.revisionIds, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM chunks_fts_shared
+           WHERE chunk_id IN (SELECT id FROM chunks WHERE revision_id IN (${revisionPlaceholders}))
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(...plan.revisionIds, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM revision_tags
+           WHERE revision_id IN (${revisionPlaceholders})
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(...plan.revisionIds, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM chunks
+           WHERE revision_id IN (${revisionPlaceholders})
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(...plan.revisionIds, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM jobs
+           WHERE kind = 'index_revision' AND resource_id IN (${revisionPlaceholders})
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(...plan.revisionIds, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM revisions
+           WHERE knowledge_item_id = ?
+             AND EXISTS (
+               SELECT 1 FROM knowledge_items
+               WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL
+             )`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `DELETE FROM knowledge_items
+           WHERE id = ? AND status = 'trashed' AND updated_at = ? AND current_revision_id IS NULL`,
+        ).bind(plan.knowledgeItemId, plan.trashedAt),
+        this.db.prepare(
+          `INSERT INTO audit_events (
+             id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at
+           ) SELECT ?, 'member', ?, 'knowledge.purged', 'knowledge', ?, ?, ?
+           WHERE changes() = 1`,
+        ).bind(auditId, reviewerId, plan.knowledgeItemId, auditMetadata, timestamp),
+        this.db.prepare(
+          `DELETE FROM publication_intents
+           WHERE knowledge_item_id = ? AND NOT EXISTS (SELECT 1 FROM knowledge_items WHERE id = ?)`,
+        ).bind(plan.knowledgeItemId, plan.knowledgeItemId),
+        this.db.prepare(
+          `DELETE FROM source_versions
+           WHERE id IN (${sourceVersionPlaceholders})
+             AND NOT EXISTS (SELECT 1 FROM knowledge_items WHERE id = ?)
+             AND NOT EXISTS (SELECT 1 FROM revisions WHERE source_version_id = source_versions.id)`,
+        ).bind(...plan.sourceVersionIds, plan.knowledgeItemId),
+        this.db.prepare(
+          `DELETE FROM sources
+           WHERE id IN (${sourcePlaceholders})
+             AND NOT EXISTS (SELECT 1 FROM source_versions WHERE source_id = sources.id)`,
+        ).bind(...plan.sourceIds),
+        this.db.prepare(
+          `UPDATE submissions SET content = ''
+           WHERE id IN (${submissionPlaceholders})
+             AND NOT EXISTS (SELECT 1 FROM knowledge_items WHERE id = ?)`,
+        ).bind(...plan.submissionIds, plan.knowledgeItemId),
+      ]);
+    } catch (error) {
+      throw new PublicationRepositoryConflictError("purge_conflict");
+    }
+    const tombstone = await this.db.prepare(
+      "SELECT 1 AS present FROM audit_events WHERE id = ? AND action = 'knowledge.purged' LIMIT 1",
+    ).bind(auditId).first<{ present: number }>();
+    if (!tombstone) throw new PublicationRepositoryConflictError("purge_conflict");
+    return {
+      knowledgeItemId: plan.knowledgeItemId,
+      status: "purged",
+      purgedRevisionCount: plan.revisionIds.length,
     };
   }
 

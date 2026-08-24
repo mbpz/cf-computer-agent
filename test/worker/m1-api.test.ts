@@ -349,6 +349,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/trash", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/restore", "GET", "POST"],
+      ["/api/admin/knowledge/knowledge-1/purge", "GET", "POST"],
       ["/api/admin/knowledge/trash", "POST", "GET"],
       ["/api/admin/publications/recover", "GET", "POST"],
       ["/api/admin/tags", "GET", "POST"],
@@ -388,6 +389,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/knowledge/knowledge-1/rollback", { revisionId: "revision-1" }],
       ["/api/admin/knowledge/knowledge-1/trash", {}],
       ["/api/admin/knowledge/knowledge-1/restore", {}],
+      ["/api/admin/knowledge/knowledge-1/purge", {}],
       ["/api/admin/publications/recover", {}],
       ["/api/admin/tags", {}],
     ] as const) {
@@ -403,6 +405,7 @@ describe("M1 API authorization and request boundaries", () => {
     }), 400, "ROLLBACK_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/trash", { method: "POST" }), 400, "KNOWLEDGE_LIFECYCLE_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/restore", { method: "POST" }), 400, "KNOWLEDGE_LIFECYCLE_TARGET_INVALID");
+    await expectApiError(memberApi("admin", "/api/admin/knowledge/absent/purge", { method: "POST" }), 400, "KNOWLEDGE_PURGE_TARGET_INVALID");
     await expectApiError(memberApi("admin", "/api/admin/knowledge/trash?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
 
     await expectApiError(memberApi("contributor", "/api/knowledge?unknown=x"), 400, "LIBRARY_REQUEST_INVALID");

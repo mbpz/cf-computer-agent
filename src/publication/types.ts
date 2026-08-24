@@ -1,4 +1,4 @@
-import type { PublishedContentReceipt } from "../knowledge/types";
+import type { PublishedContentReceipt, PublishedContentRemover } from "../knowledge/types";
 import type { MemberRole, MemberStatus } from "../members/types";
 import type { ChunkDraft } from "../sources/chunker";
 import type { SourceVersion } from "../sources/types";
@@ -152,6 +152,8 @@ export interface PublicationRepositoryPort {
   trash(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
   restore(knowledgeItemId: string, reviewerId: string): Promise<GovernedKnowledgeItem>;
   listTrashed(request: PageRequest): Promise<GovernedKnowledgePage>;
+  preparePurge(knowledgeItemId: string, cutoff: string): Promise<PurgePlan | { alreadyPurged: true }>;
+  finalizePurge(plan: PurgePlan, reviewerId: string): Promise<PurgeResult>;
   processIndexJob(revisionId: string): Promise<SearchStatus>;
   reject(
     submissionId: string,
@@ -176,6 +178,26 @@ export interface PublishedContentCommitter {
     markdown: string;
   }): Promise<PublishedContentReceipt>;
 }
+
+export interface PurgePlan {
+  knowledgeItemId: string;
+  currentRevisionId: string;
+  revisionIds: string[];
+  contentPaths: string[];
+  sourceVersionIds: string[];
+  sourceIds: string[];
+  submissionIds: string[];
+  trashedAt: string;
+}
+
+export interface PurgeResult {
+  knowledgeItemId: string;
+  status: "purged";
+  purgedRevisionCount: number;
+  alreadyPurged?: boolean;
+}
+
+export type { PublishedContentRemover };
 
 export interface PublicationRecoveryFailure {
   resourceId: string;

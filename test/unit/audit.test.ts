@@ -43,6 +43,7 @@ describe("audit input validation", () => {
     ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1" }],
     ["knowledge.trashed", "knowledge", { currentRevisionId: "revision-1" }],
     ["knowledge.restored", "knowledge", { currentRevisionId: "revision-1" }],
+    ["knowledge.purged", "knowledge", { currentRevisionId: "revision-1", purgedRevisionCount: 2 }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
       id: `audit-${action}`,
@@ -92,6 +93,7 @@ describe("audit input validation", () => {
     ["knowledge.rolled_back", "knowledge", { fromRevisionId: "revision-2", toRevisionId: "revision-1", content: "private markdown" }],
     ["knowledge.trashed", "knowledge", { currentRevisionId: "revision-1", content: "private markdown" }],
     ["knowledge.restored", "knowledge", { currentRevisionId: "revision-1", jwt: "private-token" }],
+    ["knowledge.purged", "knowledge", { currentRevisionId: "revision-1", purgedRevisionCount: 2, content: "private markdown" }],
   ])("rejects extra sensitive metadata for %s", (action, resourceType, metadata) => {
     expect(() => assertAuditEventInput({
       id: "audit-sensitive",

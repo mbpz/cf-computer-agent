@@ -576,6 +576,8 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     async trash() { return { id: "knowledge-1", spaceId: "default", collectionId: "collection-1", revisionId: revision.id, title: revision.title, visibility: revision.visibility, publishedAt: revision.publishedAt, status: "trashed" as const, searchStatus: "indexed" as const, updatedAt: revision.publishedAt }; },
     async restore() { return { id: "knowledge-1", spaceId: "default", collectionId: "collection-1", revisionId: revision.id, title: revision.title, visibility: revision.visibility, publishedAt: revision.publishedAt, status: "active" as const, searchStatus: "indexed" as const, updatedAt: revision.publishedAt }; },
     async listTrashed() { return { items: [] }; },
+    async preparePurge() { return { alreadyPurged: true as const }; },
+    async finalizePurge() { return { knowledgeItemId: "knowledge-1", status: "purged" as const, purgedRevisionCount: 1 }; },
     async processIndexJob() { events.push("process-index"); indexCount += 1; revision.searchStatus = "indexed"; return "indexed"; },
     async reject(_submissionId, _reviewerId, input) {
       if (options.decisionConflict) throw Object.assign(new Error("decision conflict"), { kind: "decision_conflict" });

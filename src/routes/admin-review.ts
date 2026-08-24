@@ -78,6 +78,15 @@ export async function routeAdminReviewApi(
     return jsonResponse({ knowledge: item }, 200, context.requestId);
   }
 
+  const purge = /^\/api\/admin\/knowledge\/([^/]+)\/purge$/.exec(url.pathname);
+  if (purge) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const result = await services.publication.purge(reviewerDto(reviewer), decodePathId(purge[1]!));
+    return jsonResponse({ purge: result }, 200, context.requestId);
+  }
+
   const rollback = /^\/api\/admin\/knowledge\/([^/]+)\/rollback$/.exec(url.pathname);
   if (rollback) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);

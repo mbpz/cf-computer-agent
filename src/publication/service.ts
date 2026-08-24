@@ -2,6 +2,7 @@ import { AppError } from "../http";
 import { chunkDocument } from "../sources/chunker";
 import { hasSemanticSourceContent, MAX_REVISION_CHUNKS } from "../sources/limits";
 import { parsePageRequest, type PageRequest } from "../pagination";
+import type { PublishedContentRemover } from "../knowledge/types";
 import type { ChunkDraft } from "../sources/chunker";
 import type {
   KnowledgeVisibility,
@@ -11,6 +12,8 @@ import type {
   PublicationReviewer,
   GovernedKnowledgeItem,
   GovernedKnowledgePage,
+  PurgePlan,
+  PurgeResult,
   PublishedContentCommitter,
   PublishedRevision,
   PublishSubmissionInput,
@@ -26,11 +29,13 @@ const MAX_SOURCE_BYTES = 128 * 1024;
 const MAX_REVIEW_NOTE_BYTES = 4_000;
 const MAX_TAGS = 20;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
+export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class PublicationService {
   constructor(
     private readonly repository: PublicationRepositoryPort,
     private readonly content: PublishedContentCommitter,
+    private readonly contentRemover?: PublishedContentRemover,
   ) {}
 
   async preview(reviewer: PublicationReviewer, submissionId: string): Promise<ReviewPreview> {
@@ -147,6 +152,47 @@ export class PublicationService {
   async listTrashed(reviewer: PublicationReviewer, request: PageRequest = { limit: 20 }): Promise<GovernedKnowledgePage> {
     requireActiveAdmin(reviewer);
     return this.repository.listTrashed(parsePageRequest(request.limit, request.cursor));
+  }
+
+  async purge(
+    reviewer: PublicationReviewer,
+    knowledgeItemId: string,
+    now: Date = new Date(),
+  ): Promise<PurgeResult> {
+    requireActiveAdmin(reviewer);
+    if (!this.contentRemover) {
+      throw new AppError("KNOWLEDGE_PURGE_UNAVAILABLE", "Knowledge purge storage is unavailable", 503, true);
+    }
+    const itemId = requireId(knowledgeItemId);
+    const cutoff = new Date(now.getTime() - TRASH_RETENTION_MS).toISOString();
+    let plan: PurgePlan | { alreadyPurged: true };
+    try {
+      plan = await this.repository.preparePurge(itemId, cutoff);
+    } catch (error) {
+      if (isRepositoryConflict(error, "purge_target_invalid")) {
+        throw new AppError("KNOWLEDGE_PURGE_TARGET_INVALID", "Knowledge item is not in the recycle bin", 400);
+      }
+      if (isRepositoryConflict(error, "purge_retention_active")) {
+        throw new AppError("KNOWLEDGE_PURGE_RETENTION_ACTIVE", "Knowledge item has not reached its retention deadline", 409);
+      }
+      throw error;
+    }
+    if ("alreadyPurged" in plan) {
+      return { knowledgeItemId: itemId, status: "purged", purgedRevisionCount: 0, alreadyPurged: true };
+    }
+    try {
+      await this.contentRemover.remove(plan.contentPaths);
+    } catch {
+      throw new AppError("KNOWLEDGE_PURGE_CONTENT_UNAVAILABLE", "Published content cleanup is temporarily unavailable", 503, true);
+    }
+    try {
+      return await this.repository.finalizePurge(plan, reviewer.id);
+    } catch (error) {
+      if (isRepositoryConflict(error, "purge_conflict")) {
+        throw new AppError("KNOWLEDGE_PURGE_CONFLICT", "Knowledge item changed during cleanup", 409, true);
+      }
+      throw error;
+    }
   }
 
   private async changeLifecycle(

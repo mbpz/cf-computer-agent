@@ -124,7 +124,7 @@
 - [x] `GOV-016` P1/M3 Revision 回滚；状态：L/W；验收：管理员只能原子切换 current，旧 Revision 保持不变；重置目标索引任务并写入 allowlisted `knowledge.rolled_back` 审计。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts`。
 - [x] `GOV-017` P0/M3 回收站；状态：L/W；验收：管理员专属软删除、默认读路径隐藏、不可变 Revision 保留；30 天保留期与最终清理由 `GOV-019` 承接。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts test/worker/m1-api.test.ts`。
 - [x] `GOV-018` P0/M3 恢复；状态：L/W；验收：仅 active admin 可恢复，current Revision 不变，索引任务幂等重置并恢复可检索性；证据同 `GOV-017`。
-- [ ] `GOV-019` P0/M3 最终清理顺序；验收：派生数据先删、权威数据最后、保留墓碑审计。
+- [x] `GOV-019` P0/M3 最终清理顺序；状态：L/W；验收：管理员专属、30 天后才可清理；FTS/任务/Revision/SourceVersion/DO 正文按顺序删除，Submission 正文清空，保留无正文 `knowledge.purged` 墓碑；失败可重试且重复执行幂等。证据：`src/knowledge/published-content.ts`、`src/index.ts`、`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts -t "purges|retention|cleanup fails"`。
 - [ ] `GOV-020` P1/M3 敏感信息提示；验收：只给 admin 建议，不自动改变可见性。
 - [ ] `GOV-021` P1/M3 批量审核；验收：逐项权限/状态校验，部分失败清晰报告。
 - [ ] `GOV-022` P0/M3 发布/下载/回滚审计；验收：allowlisted metadata、无正文和凭据。

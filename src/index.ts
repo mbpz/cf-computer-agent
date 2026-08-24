@@ -5,7 +5,7 @@ import { AssetsRepository } from "./assets/repository";
 import { AssetService } from "./assets/service";
 import { APP_CONFIG } from "./config";
 import { AppError } from "./http";
-import { persistPublishedContent, validatePublishedContentInput } from "./knowledge/published-content";
+import { persistPublishedContent, removePublishedContent, validatePublishedContentInput, validatePublishedContentPaths } from "./knowledge/published-content";
 import { KnowledgeService } from "./knowledge/service";
 import type {
   CommitPublishedContentInput,
@@ -80,6 +80,24 @@ export class KnowledgeBase extends withWorkspace(
         } finally {
           disposeWorkspace(workspace);
         }
+      } catch (error) {
+        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
+        throw error;
+      }
+    });
+  }
+
+  async removePublishedContent(input: { paths: readonly string[] }): Promise<RpcResult<null>> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      try {
+        const paths = validatePublishedContentPaths(input?.paths ?? []);
+        const workspace = await getWorkspace(this);
+        try {
+          await removePublishedContent(workspace, paths);
+        } finally {
+          disposeWorkspace(workspace);
+        }
+        return { ok: true, value: null };
       } catch (error) {
         if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
         throw error;

@@ -41,6 +41,10 @@ export interface PublishedContentReader {
   read(path: string, expectedSha256: string): Promise<string>;
 }
 
+export interface PublishedContentRemover {
+  remove(paths: readonly string[]): Promise<void>;
+}
+
 export interface SearchDocument extends NoteRecord {
   content: string;
 }

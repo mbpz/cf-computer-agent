@@ -137,7 +137,7 @@ function createRequestServices(
     legacyRepository,
     memberRecords,
     members,
-    publication: new PublicationService(publicationRecords, publishedContent.committer),
+    publication: new PublicationService(publicationRecords, publishedContent.committer, publishedContent.remover),
     publishedContent,
     oauth: createGitHubOAuthClient({
       clientId: env.GITHUB_OAUTH_CLIENT_ID || "",

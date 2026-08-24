@@ -7,6 +7,7 @@ import type {
   CommitPublishedContentInput,
   PublishedContentReader,
   PublishedContentReceipt,
+  PublishedContentRemover,
 } from "./types";
 
 const SAFE_PATH_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -22,6 +23,7 @@ export interface ValidatedPublishedContent extends PublishedContentReceipt {
 export interface RequestPublishedContent {
   committer: PublishedContentCommitter;
   reader: PublishedContentReader;
+  remover: PublishedContentRemover;
   dispose(): void;
 }
 
@@ -54,12 +56,41 @@ export function createRequestPublishedContent(
         );
       },
     },
+    remover: {
+      async remove(paths) {
+        const result = await stub.removePublishedContent({ paths: [...paths] });
+        if (result.ok) return;
+        throw new AppError(
+          result.error.code,
+          result.error.message,
+          result.error.status,
+          result.error.retryable,
+        );
+      },
+    },
     reader,
     dispose() {
       disposeWorkspace(workspace);
       workspace = undefined;
     },
   };
+}
+
+export function validatePublishedContentPaths(paths: readonly string[]): string[] {
+  if (!Array.isArray(paths) || paths.length === 0 || paths.length > 256
+    || paths.some((path) => !isPublishedContentPath(path))) {
+    throw new AppError("PUBLISHED_CONTENT_PATHS_INVALID", "Published content paths are invalid", 400);
+  }
+  return [...new Set(paths)];
+}
+
+export async function removePublishedContent(
+  workspace: WorkspaceClient,
+  paths: readonly string[],
+): Promise<void> {
+  for (const path of validatePublishedContentPaths(paths)) {
+    await workspace.fs.rm(path, { force: true });
+  }
 }
 
 export async function validatePublishedContentInput(
