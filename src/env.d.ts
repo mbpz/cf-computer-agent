@@ -1,6 +1,7 @@
 declare global {
   interface Env {
-    ORIGINALS: R2Bucket;
+    /** Optional paid capability; absent in the Cloudflare-free text-only deployment. */
+    ORIGINALS?: R2Bucket;
     APP_TOKEN?: string;
     BOOTSTRAP_ADMIN_EMAIL?: string;
     GITHUB_OAUTH_CLIENT_ID?: string;

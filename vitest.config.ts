@@ -32,6 +32,9 @@ export default defineConfig({
           AUTOMATION_SECRET: "fake-automation-secret",
           ALLOW_INSECURE_LOCAL: "false",
         },
+        // Keep the existing R2 format matrix executable locally without
+        // declaring a paid R2 binding in the production Wrangler config.
+        r2Buckets: { ORIGINALS: "memory-garden-originals-test" },
       },
     }),
   ],

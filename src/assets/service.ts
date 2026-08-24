@@ -110,7 +110,7 @@ export class AssetService {
   private readonly markdownConverter?: AssetMarkdownConverter;
 
   constructor(
-    private readonly originals: R2Bucket,
+    private readonly originals: R2Bucket | undefined,
     private readonly repository: AssetRepositoryPort,
     options: AssetServiceOptions = {},
   ) {
@@ -124,7 +124,29 @@ export class AssetService {
       : undefined;
   }
 
+  /**
+   * R2 is an optional paid capability. Deployments that stay on the
+   * Cloudflare free tier run in text-only mode and must fail closed before
+   * reading a binary upload or creating any D1 metadata.
+   */
+  assertStorageEnabled(): void {
+    this.requireStorage();
+  }
+
+  private requireStorage(): R2Bucket {
+    if (!this.originals) {
+      throw new AppError(
+        "ASSET_STORAGE_NOT_CONFIGURED",
+        "Binary file storage is not enabled in this deployment",
+        503,
+        false,
+      );
+    }
+    return this.originals;
+  }
+
   async create(input: AssetUploadInput): Promise<AssetWithJob> {
+    this.assertStorageEnabled();
     validateInput(input, this.maxBytes);
     const replay = await this.repository.findByIdempotency(input.ownerId, input.idempotencyKey);
     if (replay) return replay;
@@ -164,14 +186,14 @@ export class AssetService {
       updatedAt: now,
     };
     try {
-      await this.originals.put(objectKey, input.bytes, {
+      await this.requireStorage().put(objectKey, input.bytes, {
         httpMetadata: { contentType: asset.contentType },
         customMetadata: { assetId: asset.id, state: "staging" },
       });
       await this.repository.insertAssetWithJob(asset, job);
       return { asset, job };
     } catch (error) {
-      await this.originals.delete(objectKey).catch(() => undefined);
+      await this.requireStorage().delete(objectKey).catch(() => undefined);
       if (error instanceof AppError) throw error;
       throw new AppError("ASSET_PERSISTENCE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
@@ -201,6 +223,7 @@ export class AssetService {
   }
 
   async previewOrphans(request: { prefix?: AssetOrphanPrefix; limit?: number } = {}): Promise<AssetOrphanPage> {
+    this.assertStorageEnabled();
     const prefix = request.prefix === undefined ? "staging/" : request.prefix;
     if (prefix !== "staging/" && prefix !== "parsed/") {
       throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
@@ -210,7 +233,7 @@ export class AssetService {
       : 20;
     let listed: R2Objects;
     try {
-      listed = await this.originals.list({ prefix, limit: limit + 1 });
+      listed = await this.requireStorage().list({ prefix, limit: limit + 1 });
     } catch {
       throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
@@ -237,6 +260,7 @@ export class AssetService {
   }
 
   async reclaimOrphans(keys: string[]): Promise<{ deleted: string[]; skipped: string[] }> {
+    this.assertStorageEnabled();
     if (!Array.isArray(keys) || keys.length > 50 || keys.some((key) => typeof key !== "string")) {
       throw new AppError("ASSET_ORPHAN_REQUEST_INVALID", "Orphan request is invalid", 400);
     }
@@ -254,7 +278,7 @@ export class AssetService {
       let object: R2Object | null;
       let referenced: boolean;
       try {
-        object = await this.originals.head(key);
+        object = await this.requireStorage().head(key);
         if (!object || !(object.uploaded instanceof Date) || !Number.isFinite(object.uploaded.getTime()) || object.uploaded.getTime() > cutoff) {
           skipped.push(key);
           continue;
@@ -268,7 +292,7 @@ export class AssetService {
         continue;
       }
       try {
-        await this.originals.delete(key);
+        await this.requireStorage().delete(key);
       } catch {
         throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
       }
@@ -278,6 +302,7 @@ export class AssetService {
   }
 
   async retry(assetId: string): Promise<AssetWithJob> {
+    this.assertStorageEnabled();
     const current = await this.repository.findById(assetId);
     if (!current) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
     if (current.job.status === "processing") throw new AppError("ASSET_RETRY_CONFLICT", "Asset is already being processed", 409, true);
@@ -299,11 +324,12 @@ export class AssetService {
   }
 
   private async downloadRecord(owned: AssetWithJob, variant: AssetDownloadVariant): Promise<AssetDownload> {
+    this.assertStorageEnabled();
     if (variant === "parsed" && owned.job.status !== "succeeded") {
       throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
     }
     const key = variant === "original" ? owned.asset.objectKey : `parsed/${owned.asset.id}.md`;
-    const object = await this.originals.get(key);
+    const object = await this.requireStorage().get(key);
     if (!object) {
       throw new AppError(
         variant === "original" ? "ASSET_ORIGINAL_MISSING" : "ASSET_RESULT_MISSING",
@@ -320,10 +346,12 @@ export class AssetService {
   }
 
   async process(ownerId: string, assetId: string): Promise<AssetWithJob> {
+    this.assertStorageEnabled();
     return this.processRecord(await this.getOwned(ownerId, assetId));
   }
 
   async processDue(limit = 10): Promise<{ attempted: number; succeeded: number }> {
+    if (!this.originals) return { attempted: 0, succeeded: 0 };
     const boundedLimit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(20, limit)) : 10;
     const assetIds = await this.repository.listProcessable(boundedLimit);
     let succeeded = 0;
@@ -344,6 +372,7 @@ export class AssetService {
   }
 
   private async processRecord(current: AssetWithJob): Promise<AssetWithJob> {
+    this.assertStorageEnabled();
     if (current.job.status === "succeeded" || current.job.status === "failed_terminal") return current;
     const assetId = current.asset.id;
     const now = this.now().toISOString();
@@ -352,7 +381,7 @@ export class AssetService {
 
     const parsedKey = `parsed/${assetId}.md`;
     try {
-      const original = await this.originals.get(current.asset.objectKey);
+      const original = await this.requireStorage().get(current.asset.objectKey);
       if (!original) throw new AppError("ASSET_ORIGINAL_MISSING", "Original asset is missing", 422);
       const bytes = await original.arrayBuffer();
       validateBinarySignature(current.asset, bytes);
@@ -360,13 +389,13 @@ export class AssetService {
       const parsed = input
         ? await parseSource(input)
         : await this.parseRichAsset(current.asset, bytes);
-      await this.originals.put(parsedKey, parsed.normalizedMarkdown, {
+      await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },
       });
       await this.repository.markParseSucceeded(assetId, now);
     } catch (error) {
-      await this.originals.delete(parsedKey).catch(() => undefined);
+      await this.requireStorage().delete(parsedKey).catch(() => undefined);
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",

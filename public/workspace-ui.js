@@ -9,6 +9,7 @@ export function configureWorkspaceI18n(nextTranslate) {
 function t(key, values) { return translate(key, values); }
 
 const assetFailureMessageKeys = Object.freeze({
+  ASSET_STORAGE_NOT_CONFIGURED: "ERROR_ASSET_STORAGE_NOT_CONFIGURED",
   ASSET_CONTENT_INVALID: "ERROR_ASSET_CONTENT_INVALID",
   ASSET_PARSER_UNSUPPORTED: "ERROR_ASSET_PARSER_UNSUPPORTED",
   SOURCE_EMPTY: "ERROR_ASSET_CONTENT_EMPTY",

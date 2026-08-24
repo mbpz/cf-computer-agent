@@ -150,6 +150,25 @@ const richFormatMatrix = [
 ] as const;
 
 describe("AssetService", () => {
+  it("fails closed without R2 and does not create a D1 asset", async () => {
+    const db = repository();
+    const service = new AssetService(undefined, db);
+
+    await expect(service.create({
+      ownerId: "member-1",
+      originalName: "guide.pdf",
+      contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer,
+      idempotencyKey: "no-r2-upload",
+    })).rejects.toMatchObject({
+      code: "ASSET_STORAGE_NOT_CONFIGURED",
+      status: 503,
+      retryable: false,
+    });
+    expect(db.assets).toHaveLength(0);
+    expect(db.jobs).toHaveLength(0);
+  });
+
   it("stores a bounded private object and queues exactly one parse job", async () => {
     let sequence = 0;
     const db = repository();

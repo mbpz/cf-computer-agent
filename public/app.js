@@ -60,6 +60,11 @@ const t = (key, values) => translationBindings.value(key, values);
 const localized = (render) => translationBindings.computed(render);
 configureWorkspaceI18n(translate);
 
+// The production deployment intentionally omits the paid R2 binding. Keep
+// the upload affordance visible as an honest capability notice instead of
+// allowing a browser to send a body that the Worker cannot persist.
+const BINARY_ASSETS_ENABLED = false;
+
 const byId = (id) => document.getElementById(id);
 const shell = byId("app-shell");
 const outlet = byId("page-outlet");
@@ -201,6 +206,7 @@ const apiErrorKeys = Object.freeze({
   REVIEW_INVALID: "ERROR_REVIEW_INVALID",
   TAG_INVALID: "ERROR_TAG_INVALID",
   TAG_TARGET_INVALID: "ERROR_TAG_TARGET_INVALID",
+  ASSET_STORAGE_NOT_CONFIGURED: "ERROR_ASSET_STORAGE_NOT_CONFIGURED",
   ASSET_REQUEST_INVALID: "ERROR_ASSET_REQUEST_INVALID",
   ASSET_EMPTY: "ERROR_ASSET_EMPTY",
   ASSET_TOO_LARGE: "ERROR_ASSET_TOO_LARGE",
@@ -719,14 +725,20 @@ async function renderSubmit(generation) {
   const assetInput = element("input", {
     type: "file",
     name: "asset",
+    ...(BINARY_ASSETS_ENABLED ? {} : { disabled: "" }),
     accept: ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.json,.xml,.rtf,.png,.jpg,.jpeg,.gif,.webp",
   });
-  const assetButton = element("button", { className: "secondary", type: "button", text: t("SUBMIT_ASSET_UPLOAD") });
+  const assetButton = element("button", {
+    className: "secondary",
+    type: "button",
+    text: t("SUBMIT_ASSET_UPLOAD"),
+    ...(BINARY_ASSETS_ENABLED ? {} : { disabled: "" }),
+  });
   const processButton = element("button", { className: "primary", type: "button", text: t("SUBMIT_ASSET_PROCESS"), hidden: "" });
   const assetStatus = element("p", { className: "muted", role: "status", "aria-live": "polite" });
   const assetDownloads = element("div", { className: "actions", "aria-live": "polite" });
   const assetPanel = element("div", { className: "asset-upload-panel" }, [
-    element("p", { className: "muted", text: t("SUBMIT_ASSET_HELP") }),
+    element("p", { className: "muted", text: t(BINARY_ASSETS_ENABLED ? "SUBMIT_ASSET_HELP" : "SUBMIT_ASSET_FREE_TIER_HELP") }),
     field(t("SUBMIT_ASSET_FILE"), assetInput),
     assetButton,
     processButton,

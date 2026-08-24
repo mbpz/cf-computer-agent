@@ -33,6 +33,9 @@ export async function routeMemberApi(
     requireCapability(principal, "submission:create");
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     requireNoQuery(url);
+    // Keep the free-tier text-only deployment from buffering a binary body
+    // before reporting that paid object storage is unavailable.
+    services.assets.assertStorageEnabled();
     const idempotencyKey = request.headers.get("idempotency-key") || "";
     const originalName = request.headers.get("x-asset-name") || "";
     const contentType = request.headers.get("content-type") || "";

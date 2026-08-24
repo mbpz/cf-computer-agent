@@ -31,6 +31,26 @@ beforeEach(async () => {
 });
 
 describe("M2 asset upload boundary", () => {
+  it("returns a stable free-tier error before reading or persisting a binary upload", async () => {
+    const response = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: {
+        "content-type": "application/pdf",
+        "x-asset-name": "guide.pdf",
+        "idempotency-key": "free-text-mode-upload",
+      },
+      body: "%PDF-1.7\n",
+    }, createApp({ assetStorage: null }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "ASSET_STORAGE_NOT_CONFIGURED",
+        retryable: false,
+      },
+    });
+  });
+
   it("persists a private R2 original and queued D1 parse job", async () => {
     const response = await memberApi("asset-owner", "/api/assets", {
       method: "POST",
@@ -54,7 +74,7 @@ describe("M2 asset upload boundary", () => {
     });
     expect(body.job.assetId).toBe(body.asset.id);
     expect(body.uploadUrl).toBeUndefined();
-    const object = await env.ORIGINALS.get(body.asset.objectKey);
+    const object = await testOriginals().get(body.asset.objectKey);
     expect(object).not.toBeNull();
     await expect(object!.text()).resolves.toBe("%PDF-1.7\n");
 
@@ -74,7 +94,7 @@ describe("M2 asset upload boundary", () => {
     const replay = await memberApi("asset-owner", "/api/assets", init);
     expect(replay.status).toBe(201);
     await expect(replay.json()).resolves.toEqual(firstBody);
-    await expect(env.ORIGINALS.list()).resolves.toMatchObject({ objects: [{ key: firstBody.asset.objectKey }] });
+    await expect(testOriginals().list()).resolves.toMatchObject({ objects: [{ key: firstBody.asset.objectKey }] });
 
     const hidden = await memberApi("asset-other", `/api/assets/${encodeURIComponent(firstBody.asset.id)}`);
     expect(hidden.status).toBe(404);
@@ -118,7 +138,7 @@ describe("M2 asset upload boundary", () => {
       asset: { id: uploaded.asset.id, status: "ready" },
       job: { status: "succeeded", attempts: 1, lastErrorCode: null },
     });
-    await expect(env.ORIGINALS.get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
+    await expect(testOriginals().get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
   });
 
   it("keeps a missing original retryable and recovers after the object returns", async () => {
@@ -128,7 +148,7 @@ describe("M2 asset upload boundary", () => {
       body: "recover me",
     });
     const uploaded = await upload.json<{ asset: { id: string; objectKey: string } }>();
-    await env.ORIGINALS.delete(uploaded.asset.objectKey);
+    await testOriginals().delete(uploaded.asset.objectKey);
 
     const missing = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
     expect(missing.status).toBe(200);
@@ -136,7 +156,7 @@ describe("M2 asset upload boundary", () => {
       job: { status: "failed_retryable", lastErrorCode: "ASSET_ORIGINAL_MISSING" },
     });
 
-    await env.ORIGINALS.put(uploaded.asset.objectKey, "recover me", { httpMetadata: { contentType: "text/plain" } });
+    await testOriginals().put(uploaded.asset.objectKey, "recover me", { httpMetadata: { contentType: "text/plain" } });
     const recovered = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
     expect(recovered.status).toBe(200);
     await expect(recovered.json()).resolves.toMatchObject({ job: { status: "succeeded", lastErrorCode: null } });
@@ -250,13 +270,13 @@ describe("M2 asset upload boundary", () => {
   });
 });
 
-async function memberApi(memberId: string, path: string, init: RequestInit = {}): Promise<Response> {
+async function memberApi(memberId: string, path: string, init: RequestInit = {}, app = createApp()): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("cookie", `__Host-memory-session=${sessions.get(memberId)}`);
   if (!headers.has("origin")) headers.set("origin", APP_CONFIG.canonicalOrigin);
   const request = new Request(`https://example.test${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>;
   const context = createExecutionContext();
-  const response = await createApp().fetch!(request, localEnv(), context);
+  const response = await app.fetch!(request, localEnv(), context);
   await waitOnExecutionContext(context);
   return response;
 }
@@ -270,4 +290,8 @@ function localEnv(): Env {
     AUTOMATION_SECRET: "fake-automation-secret",
     APP_TOKEN: "worker-test-token",
   } as Env;
+}
+
+function testOriginals(): R2Bucket {
+  return (env as typeof env & { ORIGINALS: R2Bucket }).ORIGINALS;
 }

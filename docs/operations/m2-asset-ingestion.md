@@ -1,6 +1,24 @@
 # M2-1/M2-2/M2-3 原件、解析任务与上传入口最小切片
 
-本切片建立私有 R2 原件、D1 解析任务状态、提交页上传入口和文本类原件解析，不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
+本切片包含两种明确部署档位：默认的**免费文本模式**不声明 R2 binding，文本、Markdown、CSV、JSON 和代码仍可通过提交页进入 D1/DO；启用 R2 订阅后才开启私有二进制原件和解析任务。两种档位都不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
+
+## 免费文本模式（当前生产默认）
+
+免费文本模式的 `wrangler.jsonc` 不包含 `r2_buckets`。Worker 创建 `AssetService` 时允许 `ORIGINALS` 缺失，并在任何会读取或写入对象的动作前返回稳定错误：
+
+```json
+{
+  "error": {
+    "code": "ASSET_STORAGE_NOT_CONFIGURED",
+    "message": "Binary file storage is not enabled in this deployment",
+    "retryable": false
+  }
+}
+```
+
+此错误在读取上传 body、创建 `assets`/`parse_jobs` D1 行之前返回；不会留下孤儿记录。`GET /api/assets` 仍可读取历史元数据，下载、解析、重试、孤儿扫描和回收在无 R2 时同样 fail-closed。Cron 会记录跳过信息，不会反复创建失败任务。
+
+免费模式的推荐入口是 `/api/submissions`，直接提交 `text`、`markdown` 或 `code`。提交页会禁用二进制选择控件并提示需要 R2 订阅；不影响知识审核、发布、搜索和问答。
 
 ## 数据流
 
@@ -15,7 +33,7 @@
 
 写入顺序是 R2 后 D1。D1 批写失败时 Worker 删除刚写入的对象，避免孤儿原件。请求使用 `Idempotency-Key`，同一成员重放会返回已有记录。
 
-提交页上传成功后只展示 D1 返回的真实任务状态（首个状态为 `queued`），不会把上传成功误报为解析完成。当前支持常见 PDF、Office、文本、结构化文本和图片 MIME；选择文件后浏览器直接把原始文件 body 发送到 Worker，Worker 再写入 R2。
+启用 R2 时，提交页上传成功后只展示 D1 返回的真实任务状态（首个状态为 `queued`），不会把上传成功误报为解析完成。当前支持常见 PDF、Office、文本、结构化文本和图片 MIME；选择文件后浏览器直接把原始文件 body 发送到 Worker，Worker 再写入 R2。
 
 ## 本地验证
 
@@ -124,7 +142,7 @@ Workers AI 或临时 R2 故障只把任务置为 `failed_retryable`，保留 `la
 
 ## 生产资源准备
 
-首次生产部署前，管理员需确认 R2 bucket 已存在：
+仅在选择 R2 档位时，管理员需确认 R2 bucket 已存在：
 
 ```bash
 rtk npx wrangler r2 bucket create memory-garden-originals
@@ -138,6 +156,8 @@ rtk npx wrangler deploy --dry-run
 ```
 
 本切片没有执行远程 bucket 创建、D1 migration 或 Worker 部署；生产执行必须单独记录日期、版本 ID、D1 ledger 和脱敏 request ID。
+
+免费文本模式部署前不运行 `wrangler r2 bucket create`，也不在配置中添加 `r2_buckets`；直接执行既有的类型检查、Worker dry-run 和版本发布流程即可。若看到 `ASSET_STORAGE_NOT_CONFIGURED`，这是预期的能力边界，不是需要重试的临时故障。
 
 ## 明确不在本切片
 

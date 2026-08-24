@@ -211,7 +211,7 @@
 | --- | --- | --- |
 | Workers | API、页面、调度 | 有界请求体/CPU/分页；超限明确失败 |
 | D1 | 控制面、权威 metadata、FTS5、任务 | 索引/keyset；只读降级；禁止无界扫描/重试 |
-| R2 Standard | 私有原件 | 8 GB 预警，9 GB 停止文件写入，文本继续 |
+| R2 Standard（可选） | 私有原件 | 默认不绑定；未启用时二进制上传 fail-closed，文本继续 |
 | Durable Objects | legacy VFS、发布/会话协调 | 保留 `KnowledgeBase` v1；按工作区/会话分片 |
 | Workers AI | 解析、回答、可选增强 | 在线回答优先；无额度时 deferred/关闭 AI |
 | Vectorize | 选择性语义召回 | 80% 容量断路器；FTS5-only 完整可用 |

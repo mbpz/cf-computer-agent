@@ -190,6 +190,10 @@ const app = createApp();
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    if (!env.ORIGINALS) {
+      console.log("asset parse sweep skipped: binary storage is not configured");
+      return;
+    }
     const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
       markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
     }).processDue(3);

@@ -35,6 +35,8 @@ import { TagsService } from "./tags/service";
 export interface AppDependencies {
   githubFetch?: typeof fetch;
   sessionDatabase?: D1Database;
+  /** Test/preview override; production uses the optional Env.ORIGINALS binding. */
+  assetStorage?: R2Bucket | null;
   oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
 }
 
@@ -115,10 +117,14 @@ function createRequestServices(
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
-  const assets = new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
-    maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
-    markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
-  });
+  const assets = new AssetService(
+    dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
+    new AssetsRepository(env.DB),
+    {
+      maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
+      markdownConverter: env.AI as unknown as import("./assets/service").AssetMarkdownConverter,
+    },
+  );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(env.AI),
