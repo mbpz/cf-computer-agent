@@ -386,6 +386,61 @@ describe("PublicationService", () => {
     expect(fixture.revisionInputs).toEqual([{ reasonCode: "needs_revision", note: "Clarify the source location" }]);
   });
 
+  it("runs bounded batch review actions independently and reports partial failures", async () => {
+    const fixture = await publicationFixture();
+    fixture.repository.reject = async (submissionId, _reviewerId, input) => {
+      if (submissionId === "submission-fail") throw new Error("missing submission");
+      fixture.rejectionInputs.push(input);
+      return {
+        submissionId, reviewerId: "admin-1", decision: "rejected", reasonCode: input.reasonCode,
+        note: input.note, title: "Submitted title", visibility: "admin_only", createdAt: "2026-08-22T00:00:00.000Z",
+      };
+    };
+    fixture.repository.requestRevision = async (submissionId, _reviewerId, input) => {
+      fixture.revisionInputs.push(input);
+      return {
+        submissionId, reviewerId: "admin-1", decision: "revision_requested", reasonCode: "needs_revision",
+        note: input.note, title: "Submitted title", visibility: "admin_only", createdAt: "2026-08-22T00:00:00.000Z",
+      };
+    };
+
+    const batchReview = (fixture.service as unknown as {
+      batchReview(reviewer: PublicationReviewer, actions: unknown[]): Promise<unknown>;
+    }).batchReview.bind(fixture.service);
+    await expect(batchReview(reviewer, [
+      { submissionId: "submission-1", action: "reject", reasonCode: "unsafe", note: "Unsafe" },
+      { submissionId: "submission-2", action: "request_revision", reasonCode: "needs_revision", note: "Clarify" },
+      { submissionId: "submission-fail", action: "reject", reasonCode: "duplicate", note: "Missing" },
+    ])).resolves.toEqual({
+      requested: 3,
+      succeeded: 2,
+      failed: 1,
+      items: [
+        { submissionId: "submission-1", action: "reject", status: "succeeded", result: expect.objectContaining({ decision: "rejected" }) },
+        { submissionId: "submission-2", action: "request_revision", status: "succeeded", result: expect.objectContaining({ decision: "revision_requested" }) },
+        { submissionId: "submission-fail", action: "reject", status: "failed", error: { code: "INTERNAL_ERROR", status: 500, retryable: true } },
+      ],
+    });
+    expect(fixture.rejectionInputs).toHaveLength(1);
+    expect(fixture.revisionInputs).toHaveLength(1);
+  });
+
+  it("rejects empty, duplicate, and oversized batch review requests before any write", async () => {
+    const fixture = await publicationFixture();
+    const batchReview = (fixture.service as unknown as {
+      batchReview(reviewer: PublicationReviewer, actions: unknown[]): Promise<unknown>;
+    }).batchReview.bind(fixture.service);
+    await expect(batchReview(reviewer, [])).rejects.toMatchObject({ code: "BATCH_REVIEW_REQUEST_INVALID", status: 400 });
+    await expect(batchReview(reviewer, [
+      { submissionId: "submission-1", action: "reject", reasonCode: "unsafe", note: "A" },
+      { submissionId: "submission-1", action: "reject", reasonCode: "unsafe", note: "B" },
+    ])).rejects.toMatchObject({ code: "BATCH_REVIEW_REQUEST_INVALID", status: 400 });
+    await expect(batchReview(reviewer, Array.from({ length: 21 }, (_, index) => ({
+      submissionId: `submission-${index}`, action: "reject", reasonCode: "unsafe", note: "A",
+    })))).rejects.toMatchObject({ code: "BATCH_REVIEW_REQUEST_INVALID", status: 400 });
+    expect(fixture.rejectionInputs).toEqual([]);
+  });
+
   it("maps repository decision races to a stable review-state conflict", async () => {
     const fixture = await publicationFixture({ decisionConflict: true });
     await expect(fixture.service.reject(reviewer, "submission-1", { reasonCode: "duplicate", note: "Already handled" }))

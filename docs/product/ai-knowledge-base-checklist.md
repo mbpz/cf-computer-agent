@@ -126,7 +126,7 @@
 - [x] `GOV-018` P0/M3 恢复；状态：L/W；验收：仅 active admin 可恢复，current Revision 不变，索引任务幂等重置并恢复可检索性；证据同 `GOV-017`。
 - [x] `GOV-019` P0/M3 最终清理顺序；状态：L/W；验收：管理员专属、30 天后才可清理；FTS/任务/Revision/SourceVersion/DO 正文按顺序删除，Submission 正文清空，保留无正文 `knowledge.purged` 墓碑；失败可重试且重复执行幂等。证据：`src/knowledge/published-content.ts`、`src/index.ts`、`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`test/worker/m1-publication.test.ts`；命令：`rtk npx vitest run test/worker/m1-publication.test.ts -t "purges|retention|cleanup fails"`。
 - [x] `GOV-020` P1/M3 敏感信息提示；状态：L/W；验收：管理员审核预览检测凭据、私钥和内部地址，仅返回类型/等级/行号提示，不记录或回显匹配值，不自动拒绝或改变可见性；贡献者不能读取审核预览。证据：`src/publication/sensitive-advisor.ts`、`src/publication/service.ts`、`src/routes/admin-review.ts`、`public/workspace-ui.js`、`test/unit/sensitive-advisor.test.ts`、`test/unit/publication-service.test.ts`、`test/unit/workspace-ui.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/sensitive-advisor.test.ts test/unit/publication-service.test.ts test/unit/workspace-ui.test.ts test/worker/m1-api.test.ts`。
-- [ ] `GOV-021` P1/M3 批量审核；验收：逐项权限/状态校验，部分失败清晰报告。
+- [x] `GOV-021` P1/M3 批量审核；状态：L/W；验收：仅 active admin 可提交最多 20 个独立发布/驳回/要求修订动作；所有动作先整体校验，执行阶段逐项权限/状态校验，单项失败不阻断其他项，返回有序成功/失败明细且发布结果脱敏。证据：`src/publication/service.ts`、`src/routes/admin-review.ts`、`src/config.ts`、`test/unit/publication-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/publication-service.test.ts test/worker/m1-api.test.ts -t "batch review"`。
 - [ ] `GOV-022` P0/M3 发布/下载/回滚审计；验收：allowlisted metadata、无正文和凭据。
 
 ## IDX — 索引

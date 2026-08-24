@@ -34,6 +34,7 @@ export const APP_CONFIG = {
   maxNoteTitleBytes: MAX_NOTE_TITLE_BYTES,
   maxNoteTagBytes: MAX_NOTE_TAG_BYTES,
   maxNoteTags: MAX_NOTE_TAGS,
+  maxBatchReviewActions: 20,
   // JSON may encode a one-byte control character as a six-byte `\\u00XX` escape.
   maxJsonRequestBytes: MAX_NOTE_BYTES * MAX_JSON_ESCAPE_BYTES_PER_INPUT_BYTE + MAX_NOTE_JSON_METADATA_BYTES,
   maxQuestionChars: 4_000,

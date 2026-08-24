@@ -139,6 +139,22 @@ export interface ReviewDecision {
   createdAt: string;
 }
 
+export type BatchReviewAction =
+  | ({ submissionId: string; action: "publish" } & PublishSubmissionInput)
+  | { submissionId: string; action: "reject"; reasonCode: RejectionReasonCode; note: string }
+  | { submissionId: string; action: "request_revision"; reasonCode: "needs_revision"; note: string };
+
+export type BatchReviewItem =
+  | { submissionId: string; action: BatchReviewAction["action"]; status: "succeeded"; result: PublishedRevision | ReviewDecision }
+  | { submissionId: string; action: BatchReviewAction["action"]; status: "failed"; error: { code: string; status: number; retryable: boolean } };
+
+export interface BatchReviewResult {
+  requested: number;
+  succeeded: number;
+  failed: number;
+  items: BatchReviewItem[];
+}
+
 export interface PublicationRepositoryPort {
   getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null>;
   validateTarget(input: PublishSubmissionInput): Promise<void>;

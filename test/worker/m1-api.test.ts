@@ -346,6 +346,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/submission/publish", "GET", "POST"],
       ["/api/admin/submissions/submission/reject", "GET", "POST"],
       ["/api/admin/submissions/submission/request-revision", "GET", "POST"],
+      ["/api/admin/submissions/batch-review", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/trash", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/restore", "GET", "POST"],
@@ -476,6 +477,52 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(env.DB.prepare("SELECT status, requested_visibility FROM submissions WHERE id = ?")
       .bind(created.body.submission.id).first())
       .resolves.toEqual({ status: "review_pending", requested_visibility: "shared" });
+  });
+
+  it("executes batch review actions independently and returns stable partial-failure details", async () => {
+    const first = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "text", title: "Batch reject", content: "reject me",
+    }, "batch-reject-key01");
+    const second = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "text", title: "Batch revise", content: "revise me",
+    }, "batch-revise-key01");
+    const third = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Batch publish", content: "# Publish me\n\nEvidence.\n",
+    }, "batch-publish-key01");
+    const response = await memberApi("admin", "/api/admin/submissions/batch-review", {
+      method: "POST",
+      body: JSON.stringify({ actions: [
+        { submissionId: first.body.submission.id, action: "reject", reasonCode: "duplicate", note: "Already known" },
+        { submissionId: second.body.submission.id, action: "request_revision", reasonCode: "needs_revision", note: "Add evidence" },
+        { submissionId: third.body.submission.id, action: "publish", title: "Batch publish", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [] },
+        { submissionId: "missing-submission", action: "reject", reasonCode: "unsafe", note: "Missing" },
+      ] }),
+    });
+    expect(response.status).toBe(200);
+    const responseBody = await response.json();
+    expect(responseBody).toMatchObject({
+      requested: 4,
+      succeeded: 3,
+      failed: 1,
+      items: [
+        { submissionId: first.body.submission.id, action: "reject", status: "succeeded", result: { decision: "rejected" } },
+        { submissionId: second.body.submission.id, action: "request_revision", status: "succeeded", result: { decision: "revision_requested" } },
+        { submissionId: third.body.submission.id, action: "publish", status: "succeeded", result: { title: "Batch publish", visibility: "shared", searchStatus: "indexed" } },
+        { submissionId: "missing-submission", action: "reject", status: "failed", error: { code: "REVIEW_STATE_CONFLICT", status: 409, retryable: false } },
+      ],
+    });
+    const batchBody = responseBody as { items: Array<{ action: string; result?: Record<string, unknown> }> };
+    expect(batchBody.items.find((item) => item.action === "publish")?.result).not.toHaveProperty("normalizedPath");
+    expect(batchBody.items.find((item) => item.action === "publish")?.result).not.toHaveProperty("contentSha256");
+
+    await expectApiError(memberApi("contributor", "/api/admin/submissions/batch-review", {
+      method: "POST",
+      body: JSON.stringify({ actions: [{ submissionId: "x", action: "reject", reasonCode: "unsafe", note: "x" }] }),
+    }), 403, "FORBIDDEN");
+    await expectApiError(memberApi("admin", "/api/admin/submissions/batch-review", {
+      method: "POST",
+      body: JSON.stringify({ actions: [{ submissionId: "x", action: "unknown", reasonCode: "unsafe", note: "x" }] }),
+    }), 400, "BATCH_REVIEW_REQUEST_INVALID");
   });
 
   it("keeps requested admin-only visibility authoritative and requires expansion confirmation", async () => {

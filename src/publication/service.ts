@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { APP_CONFIG } from "../config";
 import { chunkDocument } from "../sources/chunker";
 import { hasSemanticSourceContent, MAX_REVISION_CHUNKS } from "../sources/limits";
 import { parsePageRequest, type PageRequest } from "../pagination";
@@ -9,6 +10,8 @@ import type {
   KnowledgeVisibility,
   PublicationIntent,
   PublicationRecoveryResult,
+  BatchReviewAction,
+  BatchReviewResult,
   PublicationRepositoryPort,
   PublicationReviewer,
   GovernedKnowledgeItem,
@@ -118,6 +121,34 @@ export class PublicationService {
     } catch (error) {
       throwDecisionError(error);
     }
+  }
+
+  async batchReview(reviewer: PublicationReviewer, actions: unknown): Promise<BatchReviewResult> {
+    requireActiveAdmin(reviewer);
+    const normalized = normalizeBatchReviewActions(actions);
+    const items: BatchReviewResult["items"] = [];
+    for (const action of normalized) {
+      try {
+        const result = action.action === "publish"
+          ? await this.publish(reviewer, action.submissionId, action)
+          : action.action === "reject"
+            ? await this.reject(reviewer, action.submissionId, action)
+            : await this.requestRevision(reviewer, action.submissionId, action);
+        items.push({ submissionId: action.submissionId, action: action.action, status: "succeeded", result });
+      } catch (error) {
+        const appError = error instanceof AppError
+          ? error
+          : new AppError("INTERNAL_ERROR", "Internal error", 500, true);
+        items.push({
+          submissionId: action.submissionId,
+          action: action.action,
+          status: "failed",
+          error: { code: appError.code, status: appError.status, retryable: appError.retryable },
+        });
+      }
+    }
+    const succeeded = items.filter((item) => item.status === "succeeded").length;
+    return { requested: items.length, succeeded, failed: items.length - succeeded, items };
   }
 
   async rollback(
@@ -307,6 +338,62 @@ function requireId(value: string): string {
     throw new AppError("PUBLICATION_INPUT_INVALID", "Publication input is invalid", 400);
   }
   return value;
+}
+
+function normalizeBatchReviewActions(value: unknown): BatchReviewAction[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > APP_CONFIG.maxBatchReviewActions) {
+    throw new AppError("BATCH_REVIEW_REQUEST_INVALID", "Batch review request is invalid", 400);
+  }
+  const ids = new Set<string>();
+  return value.map((candidate) => {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) throw batchReviewInvalid();
+    const record = candidate as Record<string, unknown>;
+    const submissionId = record.submissionId;
+    if (!isBoundedId(submissionId) || ids.has(submissionId)) throw batchReviewInvalid();
+    ids.add(submissionId);
+    if (record.action === "publish") {
+      if (!hasOnlyKeys(record, ["submissionId", "action", "title", "visibility", "spaceId", "collectionId", "tagIds", "visibilityReasonCode"])) throw batchReviewInvalid();
+      try {
+        return { submissionId, action: "publish", ...normalizePublishInput({
+          title: record.title as string,
+          visibility: record.visibility as KnowledgeVisibility,
+          spaceId: record.spaceId as string,
+          collectionId: record.collectionId as string | null,
+          tagIds: record.tagIds as string[],
+          ...(record.visibilityReasonCode === undefined ? {} : { visibilityReasonCode: record.visibilityReasonCode as "admin_visibility_expansion" }),
+        }) } satisfies BatchReviewAction;
+      } catch {
+        throw batchReviewInvalid();
+      }
+    }
+    if (record.action === "reject") {
+      if (!hasOnlyKeys(record, ["submissionId", "action", "reasonCode", "note"])
+        || !isRejectionReason(record.reasonCode)) throw batchReviewInvalid();
+      try {
+        return { submissionId, action: "reject", reasonCode: record.reasonCode, note: normalizeReviewNote(record.note as string) } satisfies BatchReviewAction;
+      } catch {
+        throw batchReviewInvalid();
+      }
+    }
+    if (record.action === "request_revision") {
+      if (!hasOnlyKeys(record, ["submissionId", "action", "reasonCode", "note"])
+        || record.reasonCode !== "needs_revision") throw batchReviewInvalid();
+      try {
+        return { submissionId, action: "request_revision", reasonCode: "needs_revision", note: normalizeReviewNote(record.note as string) } satisfies BatchReviewAction;
+      } catch {
+        throw batchReviewInvalid();
+      }
+    }
+    throw batchReviewInvalid();
+  });
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(record).every((key) => allowed.includes(key));
+}
+
+function batchReviewInvalid(): AppError {
+  return new AppError("BATCH_REVIEW_REQUEST_INVALID", "Batch review request is invalid", 400);
 }
 
 function normalizePublishInput(input: PublishSubmissionInput): PublishSubmissionInput {

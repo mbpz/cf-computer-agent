@@ -60,6 +60,20 @@ export async function routeAdminReviewApi(
     );
   }
 
+  if (url.pathname === "/api/admin/submissions/batch-review") {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["actions"],
+      "BATCH_REVIEW_REQUEST_INVALID",
+    );
+    return jsonResponse(batchReviewDto(
+      await services.publication.batchReview(reviewerDto(reviewer), input.actions),
+    ), 200, context.requestId);
+  }
+
   const trash = /^\/api\/admin\/knowledge\/([^/]+)\/trash$/.exec(url.pathname);
   if (trash) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
@@ -238,6 +252,24 @@ function reviewPreviewDto(preview: ReviewPreview) {
 function publishedRevisionDto(revision: PublishedRevision) {
   const { normalizedPath: _normalizedPath, contentSha256: _contentSha256, ...safe } = revision;
   return safe;
+}
+
+function batchReviewDto(result: Awaited<ReturnType<PublicationService["batchReview"]>>) {
+  return {
+    requested: result.requested,
+    succeeded: result.succeeded,
+    failed: result.failed,
+    items: result.items.map((item) => item.status === "failed"
+      ? { submissionId: item.submissionId, action: item.action, status: item.status, error: { ...item.error } }
+      : {
+        submissionId: item.submissionId,
+        action: item.action,
+        status: item.status,
+        result: item.action === "publish"
+          ? publishedRevisionDto(item.result as PublishedRevision)
+          : item.result,
+      }),
+  };
 }
 
 function nullableString(value: unknown): string | null {
