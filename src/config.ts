@@ -45,5 +45,7 @@ export const APP_CONFIG = {
   maxAiMarkdownOutputBytes: 128 * 1024,
   maxAiMarkdownTokens: 1_200,
   aiMarkdownTimeoutMs: 5_000,
+  maxPdfParseBytes: 2 * 1024 * 1024,
+  maxPdfPages: 100,
   model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
 } as const;

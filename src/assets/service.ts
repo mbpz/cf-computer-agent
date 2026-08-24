@@ -2,6 +2,7 @@ import { AppError } from "../http";
 import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import type { ParseSourceInput } from "../sources/types";
+import { recoverPdfMarkdown } from "./pdf-pages";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -399,7 +400,7 @@ export class AssetService {
       const code = error instanceof AppError ? error.code : "ASSET_PARSE_RETRYABLE";
       const terminal = error instanceof AppError && [
         "ASSET_PARSER_UNSUPPORTED", "ASSET_CONTENT_INVALID", "SOURCE_EMPTY", "SOURCE_TOO_LARGE", "SOURCE_METADATA_INVALID",
-        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE",
+        "ASSET_AI_PARSE_UNSUPPORTED", "ASSET_AI_INPUT_TOO_LARGE", "ASSET_AI_OUTPUT_TOO_LARGE", "ASSET_PDF_TOO_LARGE", "ASSET_PDF_PARSE_UNSUPPORTED",
       ].includes(error.code);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
@@ -407,7 +408,13 @@ export class AssetService {
   }
 
   private async parseRichAsset(asset: AssetRecord, bytes: ArrayBuffer) {
-    if (!this.markdownConverter || !isRichAsset(asset)) {
+    if (!isRichAsset(asset)) {
+      throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
+    }
+    if (asset.contentType === "application/pdf" && !this.markdownConverter) {
+      return parseSource({ kind: "markdown", content: recoverPdfMarkdown(bytes).markdown });
+    }
+    if (!this.markdownConverter) {
       throw new AppError("ASSET_PARSER_UNSUPPORTED", "Asset type is not supported by this parser", 422);
     }
     let converted: AssetMarkdownConversionResult | AssetMarkdownConversionResult[];

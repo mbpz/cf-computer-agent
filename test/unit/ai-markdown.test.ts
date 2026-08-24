@@ -33,9 +33,26 @@ describe("WorkersAiMarkdownConverter", () => {
     });
 
     await expect(converter.toMarkdown({
-      name: "guide.pdf",
-      blob: new Blob(["%PDF-1.7"], { type: "application/pdf" }),
+      name: "guide.docx",
+      blob: new Blob(["PK\u0003\u0004"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
     })).rejects.toMatchObject({ code: "ASSET_AI_PARSE_UNSUPPORTED", status: 422 });
+    expect(calls).toBe(0);
+  });
+
+  it("recovers a text PDF locally without invoking the model", async () => {
+    let calls = 0;
+    const converter = new WorkersAiMarkdownConverter({
+      async run() {
+        calls += 1;
+        return { response: "unexpected" };
+      },
+    });
+    const pdf = "%PDF-1.4\n3 0 obj\n<< /Type /Page /Contents 4 0 R >>\nendobj\n4 0 obj\nstream\nBT\n(Page one) Tj\nET\nendstream\nendobj\n%%EOF";
+
+    await expect(converter.toMarkdown({
+      name: "guide.pdf",
+      blob: new Blob([pdf], { type: "application/pdf" }),
+    })).resolves.toMatchObject({ format: "markdown", data: "## Page 1\n\nPage one\n" });
     expect(calls).toBe(0);
   });
 

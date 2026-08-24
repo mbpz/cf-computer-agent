@@ -150,6 +150,23 @@ const richFormatMatrix = [
 ] as const;
 
 describe("AssetService", () => {
+  it("recovers PDF page headings without a paid parser or AI provider", async () => {
+    const pdf = `%PDF-1.4\n3 0 obj\n<< /Type /Page /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 35 >>\nstream\nBT\n(Page one text) Tj\nET\nendstream\nendobj\n%%EOF`;
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-pdf-pages" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "pages.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode(pdf).buffer, idempotencyKey: "pdf-pages-key",
+    });
+
+    const result = await service.process("member-1", created.asset.id);
+
+    expect(result.job).toMatchObject({ status: "succeeded", lastErrorCode: null });
+    const parsed = originals.objects.get(`parsed/${created.asset.id}.md`);
+    expect(parsed && new TextDecoder().decode(parsed)).toContain("## Page 1\n\nPage one text");
+  });
+
   it("fails closed without R2 and does not create a D1 asset", async () => {
     const db = repository();
     const service = new AssetService(undefined, db);
@@ -325,7 +342,7 @@ describe("AssetService", () => {
 
     const result = await service.process("member-1", created.asset.id);
 
-    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_PARSER_UNSUPPORTED" });
+    expect(result.job).toMatchObject({ status: "failed_terminal", lastErrorCode: "ASSET_PDF_PARSE_UNSUPPORTED" });
     expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
   });
 

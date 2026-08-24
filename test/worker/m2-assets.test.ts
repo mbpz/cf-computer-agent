@@ -227,7 +227,7 @@ describe("M2 asset upload boundary", () => {
 
     await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
     const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_terminal&limit=20");
-    await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_terminal", attempts: 1, lastErrorCode: "ASSET_AI_PARSE_UNSUPPORTED" } }] });
+    await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_terminal", attempts: 1, lastErrorCode: "ASSET_PDF_PARSE_UNSUPPORTED" } }] });
 
     const retry = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/retry`, { method: "POST" });
     expect(retry.status).toBe(200);

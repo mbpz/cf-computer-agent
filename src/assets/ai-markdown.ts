@@ -1,5 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { recoverPdfMarkdown } from "./pdf-pages";
 import type { AssetMarkdownConversionResult, AssetMarkdownConverter } from "./service";
 
 export interface WorkersAiRunner {
@@ -45,7 +46,11 @@ export class WorkersAiMarkdownConverter implements AssetMarkdownConverter {
   }
 
   async toMarkdown(input: { name: string; blob: Blob }): Promise<AssetMarkdownConversionResult> {
-    if (!TEXT_INPUT_TYPES.has(input.blob.type.toLowerCase())) {
+    const contentType = input.blob.type.toLowerCase();
+    if (contentType === "application/pdf") {
+      return { format: "markdown", data: recoverPdfMarkdown(await input.blob.arrayBuffer()).markdown };
+    }
+    if (!TEXT_INPUT_TYPES.has(contentType)) {
       throw new AppError("ASSET_AI_PARSE_UNSUPPORTED", "This rich format needs a dedicated parser", 422);
     }
     const bytes = await input.blob.arrayBuffer();
