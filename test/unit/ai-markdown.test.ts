@@ -53,8 +53,8 @@ describe("WorkersAiMarkdownConverter", () => {
     });
 
     await expect(converter.toMarkdown({
-      name: "slides.pptx",
-      blob: new Blob(["PK\u0003\u0004"], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }),
+      name: "slides.ppt",
+      blob: new Blob(["legacy"], { type: "application/vnd.ms-powerpoint" }),
     })).rejects.toMatchObject({ code: "ASSET_AI_PARSE_UNSUPPORTED", status: 422 });
     expect(calls).toBe(0);
   });
