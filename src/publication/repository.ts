@@ -247,10 +247,17 @@ export class PublicationRepository implements PublicationRepositoryPort {
     if (preview.status !== "review_pending") throw new PublicationRepositoryConflictError("submission_not_pending");
     await this.validateTarget(input);
 
-    const knowledgeItemId = this.id();
+    const knowledgeItemId = input.knowledgeItemId || this.id();
     const revisionId = this.id();
     if (!SAFE_PATH_SEGMENT.test(knowledgeItemId) || !SAFE_PATH_SEGMENT.test(revisionId)) {
       throw new TypeError("Publication identifiers are invalid");
+    }
+    if (input.knowledgeItemId) {
+      const existing = await this.db.prepare(
+        `SELECT id FROM knowledge_items
+         WHERE id = ? AND space_id = ? AND collection_id IS ? AND status = 'active' LIMIT 1`,
+      ).bind(input.knowledgeItemId, input.spaceId, input.collectionId).first<{ id: string }>();
+      if (!existing) throw new PublicationRepositoryConflictError("target_invalid");
     }
     const timestamp = this.now().toISOString();
     const tagsJson = JSON.stringify([...input.tagIds].sort());
@@ -413,8 +420,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
       this.db.prepare(
         `INSERT INTO knowledge_items (
           id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at
-        ) VALUES (?, ?, ?, NULL, 'active', 'pending', ?, ?)`,
-      ).bind(current.knowledgeItemId, current.spaceId, current.collectionId, timestamp, timestamp),
+        ) SELECT ?, ?, ?, NULL, 'active', 'pending', ?, ?
+          WHERE NOT EXISTS (SELECT 1 FROM knowledge_items WHERE id = ?)`,
+      ).bind(current.knowledgeItemId, current.spaceId, current.collectionId, timestamp, timestamp, current.knowledgeItemId),
       this.db.prepare(
         `INSERT INTO revisions (
           id, knowledge_item_id, source_version_id, normalized_path, content_sha256,
@@ -426,9 +434,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
         current.reviewerId, timestamp,
       ),
       this.db.prepare(
-        `UPDATE knowledge_items SET current_revision_id = ?, updated_at = ?
-         WHERE id = ? AND current_revision_id IS NULL AND status = 'active'`,
-      ).bind(current.revisionId, timestamp, current.knowledgeItemId),
+        `UPDATE knowledge_items SET current_revision_id = ?, search_status = 'pending', updated_at = ?
+         WHERE id = ? AND status = 'active'
+           AND (current_revision_id IS NULL OR current_revision_id != ?)`,
+      ).bind(current.revisionId, timestamp, current.knowledgeItemId, current.revisionId),
       this.changeGuard(),
       ...chunks.map((chunk) => this.prepareChunk(current, chunk, indexDocument.tags)),
       ...current.tagIds.map((tagId) => this.db.prepare(

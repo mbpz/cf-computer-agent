@@ -127,7 +127,7 @@ export async function routeAdminReviewApi(
     const submissionId = decodePathId(publish[1]!);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["title", "visibility", "spaceId", "collectionId", "tagIds", "visibilityReasonCode"],
+      ["title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode"],
       "PUBLICATION_REQUEST_INVALID",
     );
     const revision = await services.publication.publish(reviewerDto(reviewer), submissionId, {
@@ -136,6 +136,7 @@ export async function routeAdminReviewApi(
       spaceId: stringValue(input.spaceId),
       collectionId: nullableString(input.collectionId),
       tagIds: stringArray(input.tagIds),
+      ...(input.knowledgeItemId === undefined ? {} : { knowledgeItemId: stringValue(input.knowledgeItemId) }),
       ...(input.visibilityReasonCode === undefined ? {} : {
         visibilityReasonCode: stringValue(input.visibilityReasonCode) as "admin_visibility_expansion",
       }),

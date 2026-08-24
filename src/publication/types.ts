@@ -22,6 +22,8 @@ export interface ReviewMetadataPatch {
   collectionId: string | null;
   visibility: KnowledgeVisibility;
   tagIds: string[];
+  /** Optional existing item to update; omission creates the first Revision. */
+  knowledgeItemId?: string;
   visibilityReasonCode?: "admin_visibility_expansion";
 }
 

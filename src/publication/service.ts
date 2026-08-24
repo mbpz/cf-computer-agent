@@ -33,6 +33,7 @@ const MAX_SOURCE_BYTES = 128 * 1024;
 const MAX_REVIEW_NOTE_BYTES = 4_000;
 const MAX_TAGS = 20;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
+const SAFE_KNOWLEDGE_ITEM_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class PublicationService {
@@ -352,7 +353,7 @@ function normalizeBatchReviewActions(value: unknown): BatchReviewAction[] {
     if (!isBoundedId(submissionId) || ids.has(submissionId)) throw batchReviewInvalid();
     ids.add(submissionId);
     if (record.action === "publish") {
-      if (!hasOnlyKeys(record, ["submissionId", "action", "title", "visibility", "spaceId", "collectionId", "tagIds", "visibilityReasonCode"])) throw batchReviewInvalid();
+      if (!hasOnlyKeys(record, ["submissionId", "action", "title", "visibility", "spaceId", "collectionId", "tagIds", "knowledgeItemId", "visibilityReasonCode"])) throw batchReviewInvalid();
       try {
         return { submissionId, action: "publish", ...normalizePublishInput({
           title: record.title as string,
@@ -360,6 +361,7 @@ function normalizeBatchReviewActions(value: unknown): BatchReviewAction[] {
           spaceId: record.spaceId as string,
           collectionId: record.collectionId as string | null,
           tagIds: record.tagIds as string[],
+          ...(record.knowledgeItemId === undefined ? {} : { knowledgeItemId: record.knowledgeItemId as string }),
           ...(record.visibilityReasonCode === undefined ? {} : { visibilityReasonCode: record.visibilityReasonCode as "admin_visibility_expansion" }),
         }) } satisfies BatchReviewAction;
       } catch {
@@ -405,6 +407,8 @@ function normalizePublishInput(input: PublishSubmissionInput): PublishSubmission
     || !isVisibility(input.visibility)
     || !isBoundedId(input.spaceId)
     || (input.collectionId !== null && !isBoundedId(input.collectionId))
+    || (input.knowledgeItemId !== undefined
+      && (!isBoundedId(input.knowledgeItemId) || !SAFE_KNOWLEDGE_ITEM_ID.test(input.knowledgeItemId)))
     || !Array.isArray(input.tagIds) || input.tagIds.length > MAX_TAGS
     || input.tagIds.some((tagId) => !isBoundedId(tagId))
     || new Set(input.tagIds).size !== input.tagIds.length
@@ -415,6 +419,7 @@ function normalizePublishInput(input: PublishSubmissionInput): PublishSubmission
   return {
     title, visibility: input.visibility, spaceId: input.spaceId, collectionId: input.collectionId,
     tagIds: [...input.tagIds].sort(),
+    ...(input.knowledgeItemId === undefined ? {} : { knowledgeItemId: input.knowledgeItemId }),
     ...(input.visibilityReasonCode === undefined ? {} : { visibilityReasonCode: input.visibilityReasonCode }),
   };
 }
@@ -439,6 +444,7 @@ function assertStableIntent(
     || intent.visibility !== input.visibility
     || intent.spaceId !== input.spaceId
     || intent.collectionId !== input.collectionId
+    || (input.knowledgeItemId !== undefined && intent.knowledgeItemId !== input.knowledgeItemId)
     || intent.visibilityReasonCode !== input.visibilityReasonCode
     || !sameStrings(intent.tagIds, input.tagIds)) {
     throw new AppError("PUBLICATION_STATE_CONFLICT", "Publication intent does not match the original review", 409);

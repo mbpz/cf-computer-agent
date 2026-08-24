@@ -671,6 +671,42 @@ describe("M1 trusted knowledge HTTP journey", () => {
     ).first()).resolves.toEqual({ submissions: 2, versions: 1, rejected_audits: 1 });
   });
 
+  it("publishes an explicit update as a new immutable Revision on the existing Knowledge Item", async () => {
+    const first = await publishSubmission(
+      "contributor", "Version one", "Version one body", "shared", "revision-api-first",
+    );
+    const second = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "text", title: "Version two", content: "Version two body",
+    }, "revision-api-second");
+    const response = await memberApi("admin", `/api/admin/submissions/${second.body.submission.id}/publish`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Version two", visibility: "shared", spaceId: "default", collectionId: null, tagIds: [],
+        knowledgeItemId: first.knowledgeItemId,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const revision = await response.json<{ revision: { id: string; knowledgeItemId: string } }>();
+    expect(revision.revision).toMatchObject({ knowledgeItemId: first.knowledgeItemId });
+    expect(revision.revision.id).not.toBe(first.id);
+    await expect(env.DB.prepare(
+      `SELECT k.current_revision_id, old.title AS old_title, old.content_sha256 AS old_hash, newer.content_sha256 AS new_hash,
+         (SELECT count(*) FROM revisions WHERE knowledge_item_id = ?) AS revisions
+       FROM knowledge_items k
+       JOIN revisions old ON old.id = ?
+       JOIN revisions newer ON newer.id = k.current_revision_id
+       WHERE k.id = ?`,
+    ).bind(first.knowledgeItemId, first.id, first.knowledgeItemId).first()).resolves.toMatchObject({
+      current_revision_id: revision.revision.id,
+      old_title: "Version one",
+      revisions: 2,
+    });
+    await expect(memberApi("contributor", `/api/knowledge/${first.knowledgeItemId}`)).resolves.toHaveProperty("status", 200);
+    const historical = await memberApi("contributor", `/api/knowledge/${first.knowledgeItemId}/revisions/${first.id}`);
+    expect(historical.status).toBe(200);
+    await expect(historical.json()).resolves.toMatchObject({ revision: { id: first.id, title: "Version one", isCurrent: false } });
+  });
+
   it("submits, reviews, publishes, lists, reads, searches, answers, and preserves citation history", async () => {
     const created = await createSubmission("contributor", {
       requestedSpaceId: "default",
