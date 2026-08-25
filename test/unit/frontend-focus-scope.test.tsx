@@ -21,6 +21,12 @@ describe("modal focus scope", () => {
     expect(sheet).not.toContain('aria-modal="true"');
   });
 
+  it("does not expose a closed Dialog as an active modal", () => {
+    const dialog = renderToStaticMarkup(<Dialog><DialogContent><button type="button">OK</button></DialogContent></Dialog>);
+    expect(dialog).not.toContain('role="dialog"');
+    expect(dialog).not.toContain('aria-modal="true"');
+  });
+
   it.each([
     [0, 3, false, 1],
     [2, 3, false, 0],

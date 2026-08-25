@@ -88,7 +88,7 @@
 - [x] FE-060a 用户主流程文案接入 React locale runtime；证据：`frontend/lib/i18n.ts`、首页/知识库/搜索/Agent/提交/我的提交页面与 `frontend-locale-pages.test.tsx`，中英文渲染测试 2/2；管理员页面文案仍由 FE-060 收尾。
 - [x] FE-061 中英文 key/placeholder 静态验证；证据：`npm run test:i18n` 13/13、`npm run verify:i18n` 通过。
 - [x] FE-062 统一 button/link/input accessible name；证据：`frontend-a11y.test.tsx` 2/2 覆盖 skip link、landmarks、language、form label。
-- [ ] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点。
+- [x] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点；证据：`focus-scope.tsx` 为两类 modal 提供首焦点、Tab 循环、Escape 回调和卸载恢复，Dialog/Sheet 关闭时不输出 `aria-modal`，`frontend-focus-scope.test.tsx` 15/15（含 closed-state 回归）。
 - [x] FE-063a 增加可复用 focus scope：打开时聚焦首个可聚焦元素、Tab/Shift+Tab 循环、Escape 回调关闭、卸载恢复触发点；证据：`frontend/components/ui/focus-scope.tsx`、Dialog/Sheet data-focus-scope 标记与 `test/unit/frontend-focus-scope.test.tsx` 6/6。移动 Shell 的原生 details 打开状态接线仍由 FE-063 主项收口。
 - [x] FE-063b 接通移动导航的 controlled open、Sheet focus scope、Escape/关闭按钮与路由切换关闭；关闭时不输出 `role=dialog`/`aria-modal`，并新增 Sheet closed-state 回归。
 - [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
