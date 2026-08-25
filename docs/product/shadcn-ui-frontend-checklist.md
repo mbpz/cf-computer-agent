@@ -69,7 +69,7 @@
 - [x] FE-046a 在免费层无 R2 时提供可见但禁用的文件选择边界；证据：`frontend/components/assets/asset-dropzone.tsx`、`asset-upload-model.ts`，覆盖对象存储未启用、文件名和 10 MiB 大小校验；实际二进制上传待 R2 方案重新批准后接入。
 - [x] FE-047 展示上传、解析、失败、重试状态；证据：`asset-state.ts` 覆盖 queued/processing/ready/retryable/terminal。
 - [ ] FE-048 接入资产解析预览。
-- [x] FE-048a 管理员资产队列接入安全解析预览面板；证据：`asset-preview-model.ts`、`asset-preview-panel.tsx`，只渲染受限文本、warnings、行数和 parser schema，异常 payload fail-closed；真实 API 拉取与预览动作接线留在 FE-052/数据路由切片。
+- [x] FE-048a 管理员资产队列接入安全解析预览面板；证据：`asset-preview-model.ts`、`asset-preview-panel.tsx`、`admin-assets-data.ts`，通过 `GET /api/admin/assets/:id/preview` 拉取并归一化受限文本、warnings、行数和 parser schema，AbortController/异常 payload fail-closed。
 - [x] FE-049 重构我的提交和 resubmit；证据：`my-submissions-page.tsx` 覆盖 needs_revision 与 resubmit 入口。
 - [x] FE-049a 接入 `/api/submissions/mine`：owner-scoped opaque cursor、malformed row 过滤、取消/过期响应保护与 load-more 状态；证据：`frontend/lib/my-submissions-data.ts`、`MySubmissionsRoute`、`test/unit/frontend-my-submissions-data.test.ts`。
 

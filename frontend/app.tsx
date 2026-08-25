@@ -26,7 +26,8 @@ import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
-import { createAdminAssetsRequestController, loadAdminAssets, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
+import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
+import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -363,8 +364,10 @@ function AdminAuditRoute({ locale }: { locale: LocaleRuntime }) {
 }
 
 function AdminAssetsRoute({ locale }: { locale: LocaleRuntime }) {
-  const [assets, setAssets] = useState<AdminAsset[]>([]); const [loading, setLoading] = useState(true); const [pending, setPending] = useState<string[]>([]);
+  const [assets, setAssets] = useState<AdminAsset[]>([]); const [loading, setLoading] = useState(true); const [pending, setPending] = useState<string[]>([]); const [preview, setPreview] = useState<AssetPreviewModel | null>(null); const [previewLoading, setPreviewLoading] = useState(false); const [previewError, setPreviewError] = useState<string | undefined>(); const previewAbort = useRef<AbortController | null>(null);
   useEffect(() => { const controller = createAdminAssetsRequestController(); const request = controller.request(); void request.promise.then(({ generation, items }) => { if (controller.isCurrent(generation)) { setAssets(items); setLoading(false); } }).catch(() => setLoading(false)); return () => controller.cancel(); }, []);
   const retry = async (id: string) => { if (pending.includes(id)) return; setPending((ids) => [...ids, id]); try { await retryAdminAsset(id); const refreshed = await loadAdminAssets(); setAssets(refreshed); } finally { setPending((ids) => ids.filter((item) => item !== id)); } };
-  return <AssetQueuePage locale={locale} loading={loading} assets={assets.map((asset) => ({ ...asset, warnings: asset.warnings }))} onRetry={(id) => void retry(id)} />;
+  const showPreview = async (id: string) => { previewAbort.current?.abort(); const abort = new AbortController(); previewAbort.current = abort; setPreview(null); setPreviewError(undefined); setPreviewLoading(true); try { setPreview(await loadAdminAssetPreview(id, fetch, abort.signal)); } catch (error: unknown) { if (!(error instanceof DOMException && error.name === "AbortError")) setPreviewError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); } finally { if (previewAbort.current === abort) { previewAbort.current = null; setPreviewLoading(false); } } };
+  useEffect(() => () => previewAbort.current?.abort(), []);
+  return <AssetQueuePage locale={locale} loading={loading} assets={assets.map((asset) => ({ ...asset, warnings: asset.warnings }))} preview={preview} previewLoading={previewLoading} previewError={previewError} onRetry={(id) => void retry(id)} onPreview={(id) => void showPreview(id)} />;
 }

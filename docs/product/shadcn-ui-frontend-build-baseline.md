@@ -9,7 +9,7 @@
 - vendor lock：2 个浏览器依赖 hash 校验通过
 - smoke/operations：42/42
 - i18n contract：13/13
-- unit：82 files / 906 tests
+- unit：83 files / 908 tests
 - Worker：13 files / 297 tests
 - TypeScript 与 Wrangler types：通过
 - Wrangler dry-run：通过，读取 React Assets 与 Worker bindings
@@ -23,7 +23,7 @@
 ```text
 frontend/dist/index.html
 frontend/dist/manifest.json
-frontend/dist/assets/index-DMN4hMZc.js
+frontend/dist/assets/index-BzFr5BSG.js
 frontend/dist/assets/index-Ds4ah7bo.css
 ```
 
