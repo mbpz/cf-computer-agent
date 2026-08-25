@@ -29,7 +29,7 @@
 - [x] `SRC-007` P0/M1 Submission 幂等键；状态：L/W；验收：重放不创建第二条提交。
 - [x] `SRC-008` P1/M1 草稿保存；状态：L/W；验收：仅创建者可读取和继续编辑。证据：`src/submissions/service.ts`、`src/submissions/repository.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/submissions.test.ts test/worker/m1-api.test.ts`。
 - [x] `SRC-009` P1/M1 粘贴富文本；状态：L/W；验收：`contentFormat=rich_text` 经过有界 HTML allowlist 清洗并转规范 Markdown，脚本/事件属性和危险 HTML 不进入 Submission/SourceVersion。证据：`src/assets/html.ts`、`src/submissions/service.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/m1-api.test.ts`。
-- [ ] `SRC-010` P1/M2 文件选择器；验收：支持矩阵、大小和数量前置提示。
+- [x] `SRC-010` P1/M2 文件选择器；状态：L；验收：文件选择器声明 PDF/DOCX/PPTX/XLSX/CSV/TXT/Markdown/HTML/XML/ODT/ODS/图片矩阵，前置校验扩展名、单文件 10 MiB 上限和单次 1 文件数量上限；对象存储未启用时保持禁用。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [ ] `SRC-011` P1/M2 拖放上传；验收：键盘替代入口和相同服务端校验。
 - [ ] `SRC-012` P1/M2 批量文件队列；验收：逐文件状态、失败隔离和有限并发。
 - [ ] `SRC-013` P1/M2 剪贴板图片；验收：类型检查后进入普通 Asset 流程。

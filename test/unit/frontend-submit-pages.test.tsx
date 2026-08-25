@@ -38,5 +38,7 @@ describe("React submission and asset pages", () => {
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "", size: 1 } })).toEqual({ kind: "invalid", reason: "NAME_REQUIRED" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.pdf", size: 11 } })).toEqual({ kind: "invalid", reason: "TOO_LARGE" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.pdf", size: 10 } })).toEqual({ kind: "idle" });
+    expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.exe", size: 1 } })).toEqual({ kind: "invalid", reason: "TYPE_UNSUPPORTED" });
+    expect(assetUploadModel({ enabled: true, maxBytes: 10, files: [{ name: "a.pdf", size: 1 }, { name: "b.pdf", size: 1 }] })).toEqual({ kind: "invalid", reason: "COUNT_EXCEEDED" });
   });
 });
