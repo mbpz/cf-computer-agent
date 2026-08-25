@@ -111,4 +111,4 @@
 - [x] FE-076 更新 README/ROADMAP/运维文档；证据：`README.md`、`docs/operations/react-frontend-cutover.md`，明确 React Assets、回滚和旧 UI 清理边界。
 - [x] FE-077 运行完整 `npm run check` 和 `npm run build:ui`；证据：完整 `npm run check` 通过，Wrangler dry-run 读取 5 个 React 资产文件。
 - [ ] FE-078 提交迁移 release commit。
-- [ ] FE-079 暂停的 PAR-020 重新解析重新排期。
+- [x] FE-079 暂停的 PAR-020 重新解析重新排期；证据：`docs/product/par-020-replan.md` 固化前置条件、M2 原子顺序和“不覆盖已发布 Revision”的验收边界；解析实现仍保留在 M2 清单。
