@@ -43,7 +43,7 @@
 - [x] FE-031 实现移动 Sheet 导航；证据：Shell 移动断点导航与 `Sheet` primitives。
 - [x] FE-032 实现 Topbar、页面上下文和操作区；证据：`data-shell-topbar` 与上下文标题。
 - [x] FE-033 实现右上角 User Menu、语言和退出；证据：Shell 测试 3/3、未知值不渲染 `undefined`。
-- [ ] FE-034 实现统一 loading/empty/error/forbidden/degraded 状态。
+- [x] FE-034 实现统一 loading/empty/error/forbidden/degraded 状态；证据：`PageState` 已覆盖管理员与用户页面，FE-034a/034b 的 loading、empty、error、forbidden、degraded 回归均通过，未知值统一降级不输出 `undefined`。
 - [x] FE-034a 建立 `PageState` 原子组件并接入管理员审核、资产、审计、成员、空间列表的 empty/error 状态；证据：`frontend/components/ui/page-state.tsx`、`test/unit/frontend-page-state.test.tsx` 5/5，管理员页面回归与全量门禁通过；用户页面 loading/degraded 统一接入仍由 FE-034 主项收口。
 - [x] FE-034b 用户页面接入 `PageState`：Home、Knowledge、Search、Agent、Submit、My Submissions 统一 loading/error/empty/degraded 结构；证据：对应 `frontend/pages/*` 与 `frontend-user-read-pages.test.tsx` 7/7，TypeScript 通过；分页/取消由 FE-036a 独立覆盖。
 - [x] FE-035 实现 `apiFetch`、错误码和 request-id 显示；证据：`frontend/lib/api.ts`、`frontend/lib/session.ts`、API 测试 8/8。
