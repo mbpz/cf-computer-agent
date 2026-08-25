@@ -34,6 +34,15 @@ describe("React administrator pages", () => {
     expect(html).toContain("No title");
   });
 
+  it("renders explicit load failures instead of an empty success state", () => {
+    const assets = renderToStaticMarkup(<AssetQueuePage assets={[]} error="Unable to load assets." />);
+    const members = renderToStaticMarkup(<MembersPage members={[]} error="Unable to load members." />);
+    expect(assets).toContain("Unable to load assets.");
+    expect(assets).not.toContain("No assets");
+    expect(members).toContain("Unable to load members.");
+    expect(members).not.toContain("No members");
+  });
+
   it("renders a bounded parsed preview and rejects malformed preview payloads", () => {
     const preview = assetPreviewModel({ assetId: "asset-1", originalName: "guide.pdf", markdown: "# Guide\n\nBody", warnings: ["No title"], lineCount: 3, parserSchemaVersion: "v1" });
     const html = renderToStaticMarkup(<AssetQueuePage assets={[]} preview={preview} />);
