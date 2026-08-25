@@ -53,6 +53,8 @@ rtk npm run dev
 
 文件能力分为两个显式部署档位。当前生产档位是无需支付配置的**免费文本模式**：提交页保留原件入口说明，但会禁用二进制上传，避免产生伪造任务或半成品数据。只有在 Cloudflare 账户完成 R2 订阅后，才可恢复完整 PDF/Office/图片原件链路。详细行为、切换边界和验证命令见 [M2 原件运维手册](./docs/operations/m2-asset-ingestion.md)。
 
+M2 各格式的本地解析、固定错误码和降级边界见 [M2 格式支持与解析降级矩阵](./docs/product/m2-format-support-matrix.md)。
+
 前端已进入 React + Vite + shadcn/ui 渐进式切换阶段。当前 Worker Assets 使用 `frontend/dist`，旧 `public/` 仍作为回滚源；发布、生产 smoke、回滚和旧 UI 清理顺序见 [React 前端切换手册](./docs/operations/react-frontend-cutover.md)。
 
 ## 部署

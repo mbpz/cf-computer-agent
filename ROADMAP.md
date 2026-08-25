@@ -93,6 +93,8 @@
 - 页码、sheet/cell、slide/element、代码行位置。
 - 用户“我的提交”和管理员解析预览、warnings、重试。
 
+格式实现状态、固定错误码、免费层降级边界与本地证据命令见 [M2 格式支持与解析降级矩阵](./docs/product/m2-format-support-matrix.md)。
+
 退出标准：
 
 - [ ] 支持矩阵每种格式有成功、损坏、空内容、伪造 MIME 和超限 fixture。
