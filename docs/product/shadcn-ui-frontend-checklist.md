@@ -77,6 +77,7 @@
 ## 国际化、可访问性与响应式
 
 - [ ] FE-060 所有新文案使用 locale key。
+- [x] FE-060a 用户主流程文案接入 React locale runtime；证据：`frontend/lib/i18n.ts`、首页/知识库/搜索/Agent/提交/我的提交页面与 `frontend-locale-pages.test.tsx`，中英文渲染测试 2/2；管理员页面文案仍由 FE-060 收尾。
 - [x] FE-061 中英文 key/placeholder 静态验证；证据：`npm run test:i18n` 13/13、`npm run verify:i18n` 通过。
 - [x] FE-062 统一 button/link/input accessible name；证据：`frontend-a11y.test.tsx` 2/2 覆盖 skip link、landmarks、language、form label。
 - [ ] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点。

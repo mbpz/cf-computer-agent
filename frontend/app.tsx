@@ -15,7 +15,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { apiFetch } from "./lib/api";
-import { createLocaleRuntime } from "./lib/i18n";
+import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
 import { pageKindForPath } from "./app-routes";
 
@@ -40,41 +40,41 @@ export function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  if (sessionError) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">Sign-in required</h1><p className="mt-2 text-sm text-muted-foreground">Your session is unavailable. Sign in again to continue.</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">Continue with GitHub</a></main>;
-  if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">Loading workspace</h1><p className="mt-2 text-sm text-muted-foreground">Checking your current sign-in status.</p></main>;
+  if (sessionError) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_SIGN_IN_REQUIRED")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_SIGN_IN_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">{frontendText(locale, "APP_SIGN_IN_GITHUB")}</a></main>;
+  if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };
   const kind = pageKindForPath(pathname);
-  const page = renderPage(kind, pathname);
+  const page = renderPage(kind, pathname, locale);
   return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={() => { window.location.href = session.logoutUrl; }}>{page}</AppShell>;
 }
 
-function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string) {
+function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime) {
   switch (kind) {
-    case "home": return <HomePage state={{ kind: "ready", total: 0, pending: 0, published: 0 }} />;
-    case "knowledge": return <KnowledgeRoute />;
-    case "knowledge-reader": return <KnowledgeReaderPage revision={{ id: pathname.split("/").pop() || "", title: "Knowledge", markdown: "Loading revision…" }} renderMarkdown={(markdown) => markdown} />;
-    case "search": return <SearchPage state={{ kind: "ready", degraded: false, results: [] }} />;
-    case "agent": return <AgentPage scope="all" state={{ kind: "ready", answer: "Ask a question to search the published knowledge.", confidence: "low", citations: [] }} />;
-    case "submit": return <SubmitPage draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />;
-    case "my-submissions": return <MySubmissionsPage state={{ kind: "ready", items: [], nextCursor: null }} />;
+    case "home": return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0 }} />;
+    case "knowledge": return <KnowledgeRoute locale={locale} />;
+    case "knowledge-reader": return <KnowledgeReaderPage locale={locale} revision={{ id: pathname.split("/").pop() || "", title: frontendText(locale, "KNOWLEDGE_TITLE"), markdown: frontendText(locale, "KNOWLEDGE_READER_LOADING") }} renderMarkdown={(markdown) => markdown} />;
+    case "search": return <SearchPage locale={locale} state={{ kind: "ready", degraded: false, results: [] }} />;
+    case "agent": return <AgentPage locale={locale} scope="all" state={{ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] }} />;
+    case "submit": return <SubmitPage locale={locale} draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />;
+    case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin": return <AdminDashboardPage metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueuePage state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin-assets": return <AssetQueuePage assets={[]} />;
     case "admin-members": return <MembersPage members={[]} />;
     case "admin-spaces": return <SpacesPage spaces={[]} />;
     case "admin-audit": return <AuditPage state={{ kind: "ready", events: [], nextCursor: null }} />;
-    case "not-found": return <NotFoundPage />;
+    case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
 }
 
-function NotFoundPage() {
-  return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">Page not found</h1><p className="mt-2 text-sm text-muted-foreground">This address does not match a workspace route.</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">Return home</a></section>;
+function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
+  return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">{frontendText(locale, "PAGE_NOT_FOUND_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">{frontendText(locale, "PAGE_RETURN_HOME")}</a></section>;
 }
 
-function KnowledgeRoute() {
+function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
-  useEffect(() => { let active = true; apiFetch<{ items?: unknown[]; nextCursor?: string | null }>("/api/knowledge?limit=20").then((data) => { if (!active) return; const items = Array.isArray(data.items) ? data.items.filter((item): item is Record<string, unknown> => !!item && typeof item === "object").map((item) => ({ id: typeof item.id === "string" ? item.id : "unknown", title: typeof item.title === "string" ? item.title : undefined, summary: typeof item.summary === "string" ? item.summary : undefined, publishedAt: typeof item.publishedAt === "string" ? item.publishedAt : undefined, tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string") : [] })) : []; setState({ kind: "ready", items, nextCursor: typeof data.nextCursor === "string" ? data.nextCursor : null }); }).catch(() => { if (active) setState({ kind: "error", message: "Unable to load knowledge." }); }); return () => { active = false; }; }, []);
-  return <KnowledgePage state={state} />;
+  useEffect(() => { let active = true; apiFetch<{ items?: unknown[]; nextCursor?: string | null }>("/api/knowledge?limit=20").then((data) => { if (!active) return; const items = Array.isArray(data.items) ? data.items.filter((item): item is Record<string, unknown> => !!item && typeof item === "object").map((item) => ({ id: typeof item.id === "string" ? item.id : "unknown", title: typeof item.title === "string" ? item.title : undefined, summary: typeof item.summary === "string" ? item.summary : undefined, publishedAt: typeof item.publishedAt === "string" ? item.publishedAt : undefined, tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string") : [] })) : []; setState({ kind: "ready", items, nextCursor: typeof data.nextCursor === "string" ? data.nextCursor : null }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); }); return () => { active = false; }; }, [locale]);
+  return <KnowledgePage locale={locale} state={state} />;
 }
