@@ -12,4 +12,10 @@ describe("frontend build contract", () => {
     expect(FRONTEND_BUILD.outDir).toBe("dist");
     expect(FRONTEND_BUILD.outDir).not.toBe("../public");
   });
+
+  it("builds React assets before Wrangler validates the assets directory", () => {
+    const build = FRONTEND_BUILD.command;
+    expect(build.indexOf("npm run build:ui")).toBeGreaterThanOrEqual(0);
+    expect(build.indexOf("npm run build:ui")).toBeLessThan(build.indexOf("wrangler deploy --dry-run"));
+  });
 });

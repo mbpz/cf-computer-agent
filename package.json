@@ -20,7 +20,7 @@
     "pretest:worker": "npm run build:ui",
     "typecheck": "tsc --noEmit",
     "types:check": "wrangler types --check --env-file config/types.env",
-    "build": "wrangler deploy --dry-run",
+    "build": "npm run build:ui && wrangler deploy --dry-run",
     "check": "npm run vendor:check && npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
