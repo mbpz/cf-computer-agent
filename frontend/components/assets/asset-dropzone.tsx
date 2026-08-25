@@ -1,12 +1,13 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ASSET_PICKER_ACCEPT, assetUploadModel } from "./asset-upload-model";
 
 export function AssetDropzone({ locale, enabled = false, maxBytes = 10 * 1024 * 1024, onFile }: { locale?: LocaleRuntime; enabled?: boolean; maxBytes?: number; onFile?: (file: File) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const model = assetUploadModel({ enabled, maxBytes });
   const disabled = model.kind === "disabled";
-  return <section aria-disabled={disabled ? "true" : undefined} className="rounded-lg border border-dashed bg-muted/20 p-5">
+  return <section data-drop-target="asset" aria-disabled={disabled ? "true" : undefined} className={`rounded-lg border border-dashed bg-muted/20 p-5 ${dragging ? "ring-2 ring-primary" : ""}`} onDragEnter={(event) => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragOver={(event) => { event.preventDefault(); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDragging(false); }} onDrop={(event) => { event.preventDefault(); setDragging(false); const files = Array.from(event.dataTransfer.files); const file = files[0]; if (file && assetUploadModel({ enabled, maxBytes, files }).kind === "idle") onFile?.(file); }}>
     <h2 className="text-sm font-semibold">{frontendText(locale, "SUBMIT_ASSET_TITLE")}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{disabled ? frontendText(locale, "SUBMIT_ASSET_DISABLED") : frontendText(locale, "SUBMIT_ASSET_DROP")}</p>
     {!disabled && <p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "SUBMIT_ASSET_FORMATS")}</p>}

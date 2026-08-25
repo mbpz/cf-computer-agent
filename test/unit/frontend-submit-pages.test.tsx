@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SubmitPage } from "../../frontend/pages/submit-page";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
 import { assetStatusModel } from "../../frontend/components/assets/asset-state";
 import { assetUploadModel } from "../../frontend/components/assets/asset-upload-model";
+import { SubmitPage } from "../../frontend/pages/submit-page";
 
 describe("React submission and asset pages", () => {
   it("validates bounded text/code drafts and creates nonempty idempotency keys", () => {
@@ -40,5 +40,12 @@ describe("React submission and asset pages", () => {
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.pdf", size: 10 } })).toEqual({ kind: "idle" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.exe", size: 1 } })).toEqual({ kind: "invalid", reason: "TYPE_UNSUPPORTED" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, files: [{ name: "a.pdf", size: 1 }, { name: "b.pdf", size: 1 }] })).toEqual({ kind: "invalid", reason: "COUNT_EXCEEDED" });
+  });
+
+  it("keeps drag/drop paired with the keyboard file picker and accepted matrix", () => {
+    const html = renderToStaticMarkup(<SubmitPage draft={{ mode: "markdown", title: "Title", content: "Body" }} state={{ kind: "idle" }} />);
+    expect(html).toContain('data-drop-target="asset"');
+    expect(html).toContain('accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.html,.xml,.odt,.ods,.png,.jpg,.jpeg,.gif,.webp"');
+    expect(html).toContain('type="file"');
   });
 });
