@@ -8,6 +8,7 @@ import { MembersPage } from "../../frontend/pages/admin/members-page";
 import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { AuditPage } from "../../frontend/pages/admin/audit-page";
 import { AdminForbiddenPage } from "../../frontend/pages/admin/admin-forbidden-page";
+import { assetPreviewModel } from "../../frontend/components/assets/asset-preview-model";
 
 describe("React administrator pages", () => {
   it("renders dashboard metrics and a contributor 403 state", () => {
@@ -29,6 +30,15 @@ describe("React administrator pages", () => {
     expect(html).toContain("Retry");
     expect(html).toContain("Preview");
     expect(html).toContain("No title");
+  });
+
+  it("renders a bounded parsed preview and rejects malformed preview payloads", () => {
+    const preview = assetPreviewModel({ assetId: "asset-1", originalName: "guide.pdf", markdown: "# Guide\n\nBody", warnings: ["No title"], lineCount: 3, parserSchemaVersion: "v1" });
+    const html = renderToStaticMarkup(<AssetQueuePage assets={[]} preview={preview} />);
+    expect(html).toContain("Parsed preview");
+    expect(html).toContain("# Guide");
+    expect(html).toContain("No title");
+    expect(assetPreviewModel({ assetId: "asset-1", markdown: "secret" })).toBeNull();
   });
 
   it("renders disabled member status, spaces/collections, and bounded audit pagination", () => {

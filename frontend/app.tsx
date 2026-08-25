@@ -60,7 +60,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin": return <AdminDashboardPage metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueuePage state={{ kind: "ready", items: [], nextCursor: null }} />;
-    case "admin-assets": return <AssetQueuePage assets={[]} />;
+    case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
     case "admin-members": return <MembersPage members={[]} />;
     case "admin-spaces": return <SpacesPage spaces={[]} />;
     case "admin-audit": return <AuditPage state={{ kind: "ready", events: [], nextCursor: null }} />;

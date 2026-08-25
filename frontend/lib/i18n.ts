@@ -95,6 +95,11 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SUBMIT_ASSET_DISABLED: "File uploads are unavailable until object storage is enabled.",
     SUBMIT_ASSET_TOO_LARGE: "This file exceeds the upload limit.",
     SUBMIT_ASSET_INVALID: "Choose a file with a valid name.",
+    ADMIN_ASSET_PREVIEW_TITLE: "Parsed preview",
+    ADMIN_ASSET_PREVIEW_EMPTY: "No parsed preview is available.",
+    ADMIN_ASSET_PREVIEW_WARNINGS: "Warnings",
+    ADMIN_ASSET_PREVIEW_LINES: "Lines",
+    ADMIN_ASSET_PREVIEW_SCHEMA: "Parser schema",
   },
   "zh-CN": {
     NAV_HOME: "首页",
@@ -181,6 +186,11 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SUBMIT_ASSET_DISABLED: "启用对象存储前，文件上传不可用。",
     SUBMIT_ASSET_TOO_LARGE: "文件超过上传限制。",
     SUBMIT_ASSET_INVALID: "请选择名称有效的文件。",
+    ADMIN_ASSET_PREVIEW_TITLE: "解析预览",
+    ADMIN_ASSET_PREVIEW_EMPTY: "暂无解析预览。",
+    ADMIN_ASSET_PREVIEW_WARNINGS: "警告",
+    ADMIN_ASSET_PREVIEW_LINES: "行数",
+    ADMIN_ASSET_PREVIEW_SCHEMA: "解析器版本",
   },
 };
 
