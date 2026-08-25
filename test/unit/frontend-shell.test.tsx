@@ -45,6 +45,16 @@ describe("frontend application shell", () => {
     expect(html).not.toContain("Admin content must not render");
   });
 
+  it("applies the same guard to parameterized admin review routes", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={contributor} pathname="/admin/submissions/sub-1" locale={createLocaleRuntime()}>
+        <p>Review content must not render</p>
+      </AppShell>,
+    );
+    expect(html).toContain("403: Access denied");
+    expect(html).not.toContain("Review content must not render");
+  });
+
   it("renders admin navigation only for an admin capability set", () => {
     const html = renderToStaticMarkup(
       <AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "member:manage", "knowledge:read"] }} pathname="/admin/members" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}>

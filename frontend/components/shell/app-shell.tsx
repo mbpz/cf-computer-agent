@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
+import { matchRoute } from "../../lib/router";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -37,7 +38,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const adminRoutes = routes.filter((route) => route.group === "admin");
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
-  const access = resolveFrontendAccess({ session, requiredCapability: requiredCapability(pathname) });
+  const access = resolveFrontendAccess({ session, requiredCapability: matchRoute(pathname)?.capability ?? requiredCapability(pathname) });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
