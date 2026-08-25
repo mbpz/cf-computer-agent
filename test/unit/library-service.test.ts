@@ -460,6 +460,7 @@ function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): Libr
     async findCurrent() { return revisionRecord(); },
     async findRevision() { return revisionRecord(); },
     async listRevisionChunks() { return { items: [] }; },
+    async setChunkStatus(_scope, _knowledgeItemId, _revisionId, chunkId, status) { return { id: chunkId, status }; },
     async search() { return { items: [], degraded: false }; },
     async findCitation() { return citationRecord(); },
     ...overrides,

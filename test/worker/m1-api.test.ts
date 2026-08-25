@@ -204,7 +204,8 @@ describe("M1 API authorization and request boundaries", () => {
       `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks?limit=2`,
     );
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const previewBody = await response.json() as { items: Array<{ id: string }> };
+    expect(previewBody).toMatchObject({
       items: [
         expect.objectContaining({ body: "\\# Preview API", tokenEstimate: 4, startLine: 1, endLine: 1 }),
         expect.objectContaining({ body: "Body", tokenEstimate: 1, startLine: 3, endLine: 3 }),
@@ -214,6 +215,14 @@ describe("M1 API authorization and request boundaries", () => {
       "contributor",
       `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks`,
     ), 403, "FORBIDDEN");
+    const chunkId = previewBody.items[0]!.id;
+    const disabled = await memberApi(
+      "admin",
+      `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks/${chunkId}/status`,
+      { method: "PATCH", body: JSON.stringify({ status: "disabled" }) },
+    );
+    expect(disabled.status).toBe(200);
+    await expect(disabled.json()).resolves.toMatchObject({ chunk: { id: chunkId, status: "disabled" } });
   });
   it("authorizes capabilities before malformed or oversized bodies, query values, and resource identifiers", async () => {
     const oversized = JSON.stringify({ question: "x".repeat(APP_CONFIG.maxJsonRequestBytes + 1) });
@@ -370,6 +379,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/batch-review", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks", "POST", "GET"],
+      ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks/chunk-1/status", "GET", "PATCH"],
       ["/api/admin/knowledge/knowledge-1/trash", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/restore", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/purge", "GET", "POST"],

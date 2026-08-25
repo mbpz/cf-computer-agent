@@ -170,6 +170,65 @@ describe("M1 permission-scoped library", () => {
       .rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 
+  it("disables and rebuilds a chunk index without changing its source or revision", async () => {
+    await seedKnowledge({
+      id: "knowledge-chunk-status",
+      revisionId: "revision-chunk-status",
+      title: "Chunk status",
+      visibility: "shared",
+      body: "Status searchable body",
+      searchBody: "status searchable body",
+    });
+    const before = await env.DB.prepare(
+      `SELECT sv.content, sv.content_sha256, r.content_sha256, c.body, c.status
+       FROM source_versions sv
+       JOIN revisions r ON r.source_version_id = sv.id
+       JOIN chunks c ON c.revision_id = r.id
+       WHERE r.id = 'revision-chunk-status' AND c.id = 'revision-chunk-status-chunk-0'`,
+    ).first<Record<string, string>>();
+    const service = serviceWithContent();
+
+    await expect(service.setChunkStatus(
+      admin,
+      "knowledge-chunk-status",
+      "revision-chunk-status",
+      "revision-chunk-status-chunk-0",
+      "disabled",
+    )).resolves.toEqual({ id: "revision-chunk-status-chunk-0", status: "disabled" });
+    await expect(env.DB.prepare(
+      "SELECT status FROM chunks WHERE id = 'revision-chunk-status-chunk-0'",
+    ).first()).resolves.toEqual({ status: "disabled" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM chunks_fts WHERE chunk_id = 'revision-chunk-status-chunk-0'",
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM chunks_fts_shared WHERE chunk_id = 'revision-chunk-status-chunk-0'",
+    ).first()).resolves.toEqual({ count: 0 });
+    await expect(service.search(contributor, { query: "status searchable", limit: 20 })).resolves.toMatchObject({ items: [] });
+
+    await expect(service.setChunkStatus(
+      admin,
+      "knowledge-chunk-status",
+      "revision-chunk-status",
+      "revision-chunk-status-chunk-0",
+      "active",
+    )).resolves.toEqual({ id: "revision-chunk-status-chunk-0", status: "active" });
+    await expect(env.DB.prepare(
+      "SELECT count(*) AS count FROM chunks_fts_shared WHERE chunk_id = 'revision-chunk-status-chunk-0'",
+    ).first()).resolves.toEqual({ count: 1 });
+    await expect(service.search(contributor, { query: "status searchable", limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ chunkId: "revision-chunk-status-chunk-0" })],
+    });
+    const after = await env.DB.prepare(
+      `SELECT sv.content, sv.content_sha256, r.content_sha256, c.body, c.status
+       FROM source_versions sv
+       JOIN revisions r ON r.source_version_id = sv.id
+       JOIN chunks c ON c.revision_id = r.id
+       WHERE r.id = 'revision-chunk-status' AND c.id = 'revision-chunk-status-chunk-0'`,
+    ).first<Record<string, string>>();
+    expect(after).toEqual({ ...before, status: "active" });
+  });
+
   it("derives a safe failed status from the current terminal index Job while keeping knowledge readable", async () => {
     await seedKnowledge({
       id: "knowledge-terminal-index",

@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
@@ -13,6 +14,7 @@ import {
 import { buildSearchPresentation, SEARCH_POLICY } from "./search-policy";
 import type {
   ChunkPreviewPage,
+  ChunkStatusMutation,
   CitationSource,
   ChatScope,
   KnowledgeListItem,
@@ -123,6 +125,13 @@ export interface LibraryRepositoryPort {
     revisionId: string,
     request: RepositoryChunkPreviewRequest,
   ): Promise<ChunkPreviewPage>;
+  setChunkStatus(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    chunkId: string,
+    status: "active" | "disabled",
+  ): Promise<ChunkStatusMutation | null>;
 }
 
 export interface RepositoryChunkPreviewRequest extends PageRequest {
@@ -230,6 +239,7 @@ interface ChunkPreviewCursor {
 
 type ChunkPreviewRow = {
   id: string;
+  status: "active" | "disabled";
   parent_chunk_id: string | null;
   ordinal: number;
   heading_path: string;
@@ -443,6 +453,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
            instr(highlight(${searchCorpus}, 5, char(1), char(2)), char(1)) > 0 AS match_code
          FROM ${searchCorpus}
          JOIN chunks c ON c.rowid = ${searchCorpus}.rowid AND c.id = ${searchCorpus}.chunk_id
+           AND c.status = 'active'
          JOIN revisions r ON r.id = c.revision_id
          JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.current_revision_id = r.id
          JOIN jobs current_index_job
@@ -520,8 +531,9 @@ export class LibraryRepository implements LibraryRepositoryPort {
        JOIN revisions r ON r.id = ?
        JOIN knowledge_items k ON k.id = r.knowledge_item_id
        JOIN revisions current_revision ON current_revision.id = k.current_revision_id
-       JOIN chunks c ON c.revision_id = r.id AND c.id = ?
+       JOIN chunks c ON c.revision_id = r.id AND c.id = ? AND c.status = 'active'
        LEFT JOIN chunks parent ON parent.id = c.parent_chunk_id AND parent.revision_id = c.revision_id
+         AND parent.status = 'active'
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
        WHERE k.status = 'active'
          AND (r.visibility = 'shared' OR am.role = 'admin')
@@ -573,7 +585,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
          FROM members
          WHERE id = ? AND role = 'admin' AND status = 'active'
        )
-       SELECT c.id, c.parent_chunk_id, c.ordinal, c.heading_path,
+       SELECT c.id, c.status, c.parent_chunk_id, c.ordinal, c.heading_path,
          c.start_line, c.end_line, c.location_json, c.body
        FROM authorized_member am
        JOIN revisions r ON r.id = ? AND r.knowledge_item_id = ?
@@ -604,6 +616,94 @@ export class LibraryRepository implements LibraryRepositoryPort {
         }),
       } : {}),
     };
+  }
+
+  async setChunkStatus(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    chunkId: string,
+    status: "active" | "disabled",
+  ): Promise<ChunkStatusMutation | null> {
+    const row = await this.db.prepare(
+      `SELECT c.rowid AS fts_rowid, c.id, c.status, c.search_body, c.index_field,
+         r.title, r.summary, r.visibility
+       FROM chunks c
+       JOIN revisions r ON r.id = c.revision_id AND r.id = ? AND r.knowledge_item_id = ?
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.status = 'active'
+       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+       WHERE c.id = ? AND EXISTS (
+         SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active'
+       ) LIMIT 1`,
+    ).bind(revisionId, knowledgeItemId, chunkId, scope.memberId).first<{
+      fts_rowid: number; id: string; status: "active" | "disabled"; search_body: string;
+      index_field: "body" | "code"; title: string; summary: string; visibility: "shared" | "admin_only";
+    }>();
+    if (!row) return null;
+    const tags = await this.db.prepare(
+      `SELECT t.id, t.slug, t.name FROM revision_tags rt
+       JOIN tags t ON t.id = rt.tag_id AND t.status = 'active'
+       WHERE rt.revision_id = ? ORDER BY t.id ASC`,
+    ).bind(revisionId).all<IndexTag>();
+    const allChunks = await this.db.prepare(
+      `SELECT id, ordinal, heading_path, start_line, end_line, body, search_body, index_field, location_json
+       FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
+    ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<{
+      id: string; ordinal: number; heading_path: string; start_line: number; end_line: number;
+      body: string; search_body: string; index_field: "body" | "code"; location_json: string;
+    }>();
+    if (allChunks.results.length === 0 || allChunks.results.length > MAX_REVISION_CHUNKS) return null;
+    const normalizedChunks = allChunks.results.map((candidate) => ({
+      id: candidate.id,
+      ordinal: candidate.ordinal,
+      headingPath: parseStringArray(candidate.heading_path),
+      startLine: candidate.start_line,
+      endLine: candidate.end_line,
+      body: candidate.body,
+      searchBody: candidate.search_body,
+      indexField: candidate.index_field,
+      ...(parseSourceLocationJson(candidate.location_json)
+        ? { location: parseSourceLocationJson(candidate.location_json) } : {}),
+    }));
+    const document = buildIndexDocument({ id: revisionId, title: row.title }, normalizedChunks, tags.results);
+    const field = buildIndexChunkFields(normalizedChunks).find((candidate) => candidate.chunkId === row.id);
+    if (!field) return null;
+    const update = this.db.prepare(
+      `UPDATE chunks SET status = ? WHERE id = ? AND revision_id = ?
+       AND EXISTS (SELECT 1 FROM members WHERE id = ? AND role = 'admin' AND status = 'active')`,
+    ).bind(status, chunkId, revisionId, scope.memberId);
+    const deleteAdmin = this.db.prepare(
+      `DELETE FROM chunks_fts WHERE rowid IN (
+         SELECT c.rowid FROM chunks c JOIN revisions r ON r.id = c.revision_id
+         JOIN knowledge_items k ON k.id = r.knowledge_item_id
+         WHERE c.id = ? AND c.revision_id = ? AND k.id = ?
+           AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')
+       )`,
+    ).bind(chunkId, revisionId, knowledgeItemId, scope.memberId);
+    const deleteShared = this.db.prepare(
+      `DELETE FROM chunks_fts_shared WHERE rowid IN (
+         SELECT c.rowid FROM chunks c JOIN revisions r ON r.id = c.revision_id
+         JOIN knowledge_items k ON k.id = r.knowledge_item_id
+         WHERE c.id = ? AND c.revision_id = ? AND k.id = ?
+           AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')
+       )`,
+    ).bind(chunkId, revisionId, knowledgeItemId, scope.memberId);
+    const insertAdmin = this.db.prepare(
+      `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT c.rowid, c.id, ?, ?, ?, ?, ? FROM chunks c
+       WHERE c.id = ? AND c.revision_id = ? AND c.status = 'active'
+         AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')`,
+    ).bind(document.title, document.summary, document.tags, field.body, field.code, chunkId, revisionId, scope.memberId);
+    const insertShared = this.db.prepare(
+      `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+       SELECT c.rowid, c.id, ?, ?, ?, ?, ? FROM chunks c
+       JOIN revisions r ON r.id = c.revision_id AND r.visibility = 'shared'
+       WHERE c.id = ? AND c.revision_id = ? AND c.status = 'active'
+         AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')`,
+    ).bind(document.title, document.summary, document.tags, field.body, field.code, chunkId, revisionId, scope.memberId);
+    const results = await this.db.batch([update, deleteAdmin, deleteShared, insertAdmin, insertShared]);
+    if (results[0]?.meta.changes !== 1) return null;
+    return { id: row.id, status };
   }
 
   private async findAuthorizedRevision(
@@ -641,7 +741,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
        JOIN source_versions sv ON sv.id = ar.source_version_id
        LEFT JOIN reviews review
          ON review.submission_id = sv.submission_id AND review.decision = 'published'
-       LEFT JOIN chunks c ON c.revision_id = ar.revision_id
+       LEFT JOIN chunks c ON c.revision_id = ar.revision_id AND c.status = 'active'
        ORDER BY c.ordinal ASC
        LIMIT ?`,
     ).bind(
@@ -654,7 +754,12 @@ export class LibraryRepository implements LibraryRepositoryPort {
     if (rows.results.length === 0) return null;
     if (rows.results.length > MAX_REVISION_CHUNKS) throw invalidKnowledgeData();
     const first = rows.results[0]!;
-    if (first.chunk_id === null) throw invalidKnowledgeData();
+    if (first.chunk_id === null) {
+      const anyChunk = await this.db.prepare(
+        "SELECT 1 AS present FROM chunks WHERE revision_id = ? LIMIT 1",
+      ).bind(first.revision_id).first<{ present: number }>();
+      if (!anyChunk) throw invalidKnowledgeData();
+    }
     return {
       id: first.id,
       spaceId: first.space_id,
@@ -852,6 +957,7 @@ function mapChunkPreview(row: ChunkPreviewRow): ChunkPreviewPage["items"][number
   const location = parseSourceLocationJson(row.location_json);
   return {
     id: row.id,
+    status: row.status,
     ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
     ordinal: requireInteger(row.ordinal),
     headingPath: parseStringArray(row.heading_path),

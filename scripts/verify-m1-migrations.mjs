@@ -10,6 +10,7 @@ const migrations = [
   ["0006_m2_source_reparse.sql", "fd77510c130d08650de95fa28a2434158ca0a489dd292c490dfe6460c31dcaff"],
   ["0007_m2_chunk_locations.sql", "0c000b8a2da9c96120d963c290c209dc6dc18a0f42853131d0e7e551c83d50c8"],
   ["0008_m2_parent_chunks.sql", "b9f524d90e2614571178ecb63b2d3386c06ee7936b4662c49b28ca37d9ff5205"],
+  ["0009_m2_chunk_status.sql", "072d6ba8a9e0661ce5e1031b841fa8f2766f38f56eb94e41d1da22695840acff"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

@@ -62,6 +62,7 @@ export interface ChunkPreviewRequest {
 
 export interface ChunkPreview {
   id: string;
+  status: "active" | "disabled";
   parentChunkId?: string;
   ordinal: number;
   headingPath: string[];
@@ -75,6 +76,11 @@ export interface ChunkPreview {
 export interface ChunkPreviewPage {
   items: ChunkPreview[];
   nextCursor?: string;
+}
+
+export interface ChunkStatusMutation {
+  id: string;
+  status: "active" | "disabled";
 }
 
 export interface RevisionChunkLocation {

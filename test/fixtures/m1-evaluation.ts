@@ -22,6 +22,7 @@ import type {
   LibraryScope,
   SearchHit,
   SearchPage,
+  ChunkStatusMutation,
 } from "../../src/library/types";
 export { M1_SEARCH_RANKING_CASES, M1_SEARCH_RANKING_DOCUMENTS } from "./m1-search-ranking";
 export { M1_EVIDENCE_CONFIDENCE_CASES, M1_CORPUS_GROWTH_FIXTURE } from "./m1-evidence-confidence";
@@ -489,6 +490,16 @@ class EvaluationRepository implements LibraryRepositoryPort {
     _request: RepositoryChunkPreviewRequest,
   ): Promise<ChunkPreviewPage> {
     return { items: [] };
+  }
+
+  async setChunkStatus(
+    _scope: LibraryScope,
+    _knowledgeItemId: string,
+    _revisionId: string,
+    chunkId: string,
+    status: "active" | "disabled",
+  ): Promise<ChunkStatusMutation | null> {
+    return { id: chunkId, status };
   }
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {

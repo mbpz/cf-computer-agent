@@ -138,6 +138,7 @@ type IndexJobRow = {
 type IndexChunkRow = {
   id: string;
   ftsRowid: number;
+  status: "active" | "disabled";
   ordinal: number;
   heading_path: string;
   start_line: number;
@@ -898,14 +899,14 @@ export class PublicationRepository implements PublicationRepositoryPort {
       ).bind(revisionId, job.knowledge_item_id).first<IndexRevisionRow>();
       if (!revision) throw new Error("Index revision not found");
       const chunks = await this.db.prepare(
-        `SELECT rowid AS ftsRowid, id, ordinal, heading_path, start_line, end_line, body,
+        `SELECT rowid AS ftsRowid, id, status, ordinal, heading_path, start_line, end_line, body,
            search_body AS searchBody, index_field, location_json
          FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
       ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<IndexChunkRow>();
       if (chunks.results.length === 0 || chunks.results.length > MAX_REVISION_CHUNKS) {
         throw new Error("Index job has invalid chunks");
       }
-      const normalizedChunks = chunks.results.map((chunk) => ({
+      const normalizedChunks = chunks.results.filter((chunk) => chunk.status === "active").map((chunk) => ({
         id: chunk.id,
         ftsRowid: chunk.ftsRowid,
         ordinal: chunk.ordinal,

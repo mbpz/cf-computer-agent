@@ -126,6 +126,29 @@ export async function routeAdminApi(
   }
 
   const chunkPreview = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks$/.exec(url.pathname);
+  const chunkStatus = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks\/([^/]+)\/status$/.exec(url.pathname);
+  if (chunkStatus) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);
+    const member = requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["status"],
+      "CHUNK_STATUS_INVALID",
+    );
+    if (input.status !== "active" && input.status !== "disabled") {
+      throw new AppError("CHUNK_STATUS_INVALID", "Chunk status is invalid", 400);
+    }
+    const chunk = await services.library.setChunkStatus(
+      { memberId: member.memberId, role: member.role },
+      decodePathId(chunkStatus[1]!),
+      decodePathId(chunkStatus[2]!),
+      decodePathId(chunkStatus[3]!),
+      input.status,
+    );
+    return jsonResponse({ chunk }, 200, context.requestId);
+  }
   if (chunkPreview) {
     requireCapability(principal, "knowledge:review");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

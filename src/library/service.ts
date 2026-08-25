@@ -16,6 +16,7 @@ import type {
   CitationSource,
   ChunkPreviewPage,
   ChunkPreviewRequest,
+  ChunkStatusMutation,
   ChatScope,
   KnowledgeDetail,
   KnowledgePage,
@@ -113,6 +114,28 @@ export class LibraryService {
       cursorKey: await cursorKey("library-chunk-preview", scope, { knowledgeItemId, revisionId }),
     };
     return this.repository.listRevisionChunks(scope, knowledgeItemId, revisionId, repositoryRequest);
+  }
+
+  async setChunkStatus(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    chunkId: string,
+    status: "active" | "disabled",
+  ): Promise<ChunkStatusMutation> {
+    if (scope.role !== "admin") {
+      throw new AppError("FORBIDDEN", "Administrator access required", 403);
+    }
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    assertLookupId(revisionId);
+    assertLookupId(chunkId);
+    if (status !== "active" && status !== "disabled") {
+      throw new AppError("CHUNK_STATUS_INVALID", "Chunk status is invalid", 400);
+    }
+    const result = await this.repository.setChunkStatus(scope, knowledgeItemId, revisionId, chunkId, status);
+    if (!result) throw knowledgeNotFound();
+    return result;
   }
 
   async download(

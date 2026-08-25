@@ -357,6 +357,7 @@ describe("Phase 1 control-plane migrations", () => {
       "index_field:TEXT:1:'body':0",
       "location_json:TEXT:1:'{}':0",
       "parent_chunk_id:TEXT:0:NULL:0",
+      "status:TEXT:1:'active':0",
     ], [
       "CHECK(ordinal >= 0)",
       "CHECK(start_line > 0)",
@@ -562,6 +563,12 @@ describe("Phase 1 control-plane migrations", () => {
       { name: "parent_chunk_id", desc: 0 },
       { name: "revision_id", desc: 0 },
       { name: "ordinal", desc: 0 },
+    ]);
+    await expectIndex("chunks", "chunks_revision_status", [
+      { name: "revision_id", desc: 0 },
+      { name: "status", desc: 0 },
+      { name: "ordinal", desc: 0 },
+      { name: "id", desc: 0 },
     ]);
     await expectIndex("publication_intents", "publication_intents_pending", [
       { name: "state", desc: 0 },
