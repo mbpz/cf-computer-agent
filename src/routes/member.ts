@@ -51,7 +51,15 @@ export async function routeMemberApi(
   }
 
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
+  const assetPreview = /^\/api\/assets\/([^/]+)\/preview$/.exec(url.pathname);
   const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);
+  if (assetPreview) {
+    requireCapability(principal, "submission:read-own");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    return jsonResponse(await services.assets.preview(member.memberId, decodePathId(assetPreview[1]!)), 200, context.requestId);
+  }
   if (assetDownload) {
     requireCapability(principal, "submission:read-own");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

@@ -75,6 +75,13 @@ export async function routeAdminApi(
   }
 
   const assetPreview = /^\/api\/admin\/assets\/([^/]+)\/(parsed|original)$/.exec(url.pathname);
+  const assetMetadataPreview = /^\/api\/admin\/assets\/([^/]+)\/preview$/.exec(url.pathname);
+  if (assetMetadataPreview) {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(await services.assets.previewAdmin(decodePathId(assetMetadataPreview[1]!)), 200, context.requestId);
+  }
   if (assetPreview) {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

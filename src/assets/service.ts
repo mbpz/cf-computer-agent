@@ -13,6 +13,7 @@ import { recoverOpenDocumentMarkdown } from "./odf";
 import { recoverPptxMarkdown } from "./pptx";
 import { assertParsedMarkdownSize, assertReadableParsedMarkdown } from "./empty";
 import { classifyAssetParseFailure } from "./errors";
+import type { CodeSourceMetadata } from "../sources/types";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
@@ -66,6 +67,16 @@ export interface AssetDownload {
   body: ArrayBuffer;
   contentType: string;
   filename: string;
+}
+
+export interface AssetPreview {
+  assetId: string;
+  originalName: string;
+  markdown: string;
+  warnings: string[];
+  lineCount: number;
+  codeMetadata: CodeSourceMetadata | null;
+  parserSchemaVersion: string;
 }
 
 export type AssetOrphanPrefix = "staging/" | "parsed/";
@@ -344,6 +355,16 @@ export class AssetService {
     return this.downloadRecord(owned, variant);
   }
 
+  async preview(ownerId: string, assetId: string): Promise<AssetPreview> {
+    return this.previewRecord(await this.getOwned(ownerId, assetId));
+  }
+
+  async previewAdmin(assetId: string): Promise<AssetPreview> {
+    const current = await this.repository.findById(assetId);
+    if (!current) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
+    return this.previewRecord(current);
+  }
+
   private async downloadRecord(owned: AssetWithJob, variant: AssetDownloadVariant): Promise<AssetDownload> {
     this.assertStorageEnabled();
     if (variant === "parsed" && owned.job.status !== "succeeded") {
@@ -363,6 +384,25 @@ export class AssetService {
       body: await object.arrayBuffer(),
       contentType: variant === "original" ? owned.asset.contentType : "text/markdown; charset=utf-8",
       filename: variant === "original" ? owned.asset.originalName : parsedFilename(owned.asset.originalName),
+    };
+  }
+
+  private async previewRecord(owned: AssetWithJob): Promise<AssetPreview> {
+    this.assertStorageEnabled();
+    if (owned.job.status !== "succeeded") {
+      throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
+    }
+    const object = await this.requireStorage().get(`parsed/${owned.asset.id}.md`);
+    if (!object) throw new AppError("ASSET_RESULT_MISSING", "Asset content is temporarily unavailable", 503, true);
+    const markdown = new TextDecoder().decode(await object.arrayBuffer());
+    return {
+      assetId: owned.asset.id,
+      originalName: owned.asset.originalName,
+      markdown,
+      warnings: readWarnings(object.customMetadata?.warnings),
+      lineCount: readLineCount(object.customMetadata?.lineCount, markdown),
+      codeMetadata: readCodeMetadata(object.customMetadata?.codeMetadata),
+      parserSchemaVersion: readParserSchemaVersion(object.customMetadata?.parserSchemaVersion),
     };
   }
 
@@ -415,7 +455,14 @@ export class AssetService {
       assertParsedMarkdownSize(parsed.normalizedMarkdown);
       await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
-        customMetadata: { assetId, state: "parsed", parserSchemaVersion: parsed.parserSchemaVersion },
+        customMetadata: {
+          assetId,
+          state: "parsed",
+          parserSchemaVersion: parsed.parserSchemaVersion,
+          warnings: JSON.stringify(parsed.warnings.slice(0, 20).filter((warning) => typeof warning === "string").map((warning) => warning.slice(0, 256))),
+          lineCount: String(parsed.lineCount),
+          codeMetadata: JSON.stringify(parsed.codeMetadata),
+        },
       });
       await this.repository.markParseSucceeded(assetId, now);
     } catch (error) {
@@ -584,6 +631,45 @@ function validateBinarySignature(asset: AssetRecord, bytes: ArrayBuffer): void {
 function parsedFilename(originalName: string): string {
   const base = originalName.replace(/\.[^.]*$/u, "").trim() || "asset";
   return `${base.slice(0, 180)}.md`;
+}
+
+function readWarnings(raw: string | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string").slice(0, 20).map((item) => item.slice(0, 256))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLineCount(raw: string | undefined, markdown: string): number {
+  const parsed = raw === undefined ? Number.NaN : Number(raw);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 1_000_000
+    ? parsed
+    : (markdown.endsWith("\n") ? markdown.slice(0, -1) : markdown).split("\n").length;
+}
+
+function readCodeMetadata(raw: string | undefined): CodeSourceMetadata | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const record = value as Record<string, unknown>;
+    const lineBaseline = record.lineBaseline;
+    if (typeof record.language !== "string" || typeof record.fileLabel !== "string"
+      || typeof lineBaseline !== "number" || !Number.isSafeInteger(lineBaseline) || lineBaseline < 1 || lineBaseline > 1_000_000
+      || record.language.length > 32 || record.fileLabel.length > 128) return null;
+    return { language: record.language, fileLabel: record.fileLabel, lineBaseline };
+  } catch {
+    return null;
+  }
+}
+
+function readParserSchemaVersion(raw: string | undefined): string {
+  return raw === "m1-v1" || raw === "m1-v2" ? raw : "m1-v2";
 }
 
 function isOrphanKey(key: string): boolean {

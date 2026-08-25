@@ -191,6 +191,37 @@ describe("M2 asset upload boundary", () => {
     expect(hidden.status).toBe(404);
   });
 
+  it("previews normalized Markdown with parser metadata for owners and administrators", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-asset-name": "settings.json", "idempotency-key": "asset-preview-1" },
+      body: '{"enabled":true}\n',
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    const before = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/preview`);
+    expect(before.status).toBe(409);
+    await expect(before.json()).resolves.toMatchObject({ error: { code: "ASSET_RESULT_NOT_READY", retryable: true } });
+
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    const ownerPreview = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/preview`);
+    expect(ownerPreview.status).toBe(200);
+    await expect(ownerPreview.json()).resolves.toMatchObject({
+      assetId: uploaded.asset.id,
+      markdown: expect.stringContaining("```json"),
+      warnings: [],
+      lineCount: expect.any(Number),
+      codeMetadata: { language: "json", fileLabel: "settings.json", lineBaseline: 1 },
+      parserSchemaVersion: "m1-v2",
+    });
+
+    const adminPreview = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/preview`);
+    expect(adminPreview.status).toBe(200);
+    await expect(adminPreview.json()).resolves.toMatchObject({ assetId: uploaded.asset.id, markdown: expect.stringContaining("enabled") });
+
+    const hidden = await memberApi("asset-other", `/api/assets/${uploaded.asset.id}/preview`);
+    expect(hidden.status).toBe(404);
+  });
+
   it("lists owner-scoped assets with an opaque cursor and rejects cross-owner replay", async () => {
     for (const [name, key] of [["one.txt", "asset-list-1"], ["two.txt", "asset-list-2"]]) {
       await memberApi("asset-owner", "/api/assets", {
