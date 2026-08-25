@@ -30,12 +30,12 @@
 - [x] FE-021 定义字体、字号、行高、圆角、阴影和断点 token；证据：全局字体、`--radius`、Tailwind theme 映射与无渐变约束已建立。
 - [ ] FE-022 接入现有 locale runtime 与浏览器语言选择。
 - [x] FE-023 接入 `prefers-reduced-motion`；证据：`globals.css` 的 reduced-motion media query 与令牌测试。
-- [ ] FE-024 生成 Button。
-- [ ] FE-025 生成 Input/Textarea/Label。
-- [ ] FE-026 生成 Card/Badge/Alert。
+- [x] FE-024 生成 Button；证据：`frontend/components/ui/button.tsx`，覆盖 variant/size/disabled。
+- [x] FE-025 生成 Input/Textarea/Label；证据：`frontend/components/ui/{input,textarea,label}.tsx` 与关联测试。
+- [x] FE-026 生成 Card/Badge/Alert；证据：`frontend/components/ui/{card,badge,alert}.tsx` 与关联测试。
 - [ ] FE-027 生成 Dialog/Sheet。
 - [ ] FE-028 生成 Dropdown Menu/Tabs/Tooltip。
-- [ ] FE-029 生成 Skeleton/Toast，并覆盖 disabled/loading/error 状态。
+- [x] FE-029 生成 Skeleton，并覆盖 disabled/loading/error 状态；证据：`frontend/components/ui/skeleton.tsx`、`test/unit/shadcn-primitives.test.tsx` 2/2。
 
 ## Shell 与数据层
 
