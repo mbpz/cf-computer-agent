@@ -88,7 +88,7 @@
 ## 切换、清理与发布
 
 - [x] FE-070 新旧路由矩阵逐页对照；证据：`frontend/cutover-contract.ts`、路由矩阵测试 2/2，旧 Worker Shell 回归 28/28。
-- [ ] FE-071 API/权限/OAuth/Session 回归。
+- [x] FE-071 API/权限/OAuth/Session 回归；证据：`auth-boundary.ts`、API 401/403 结构化错误、Session payload 校验、contributor direct-admin 403 测试；OAuth upstream 仍由 Worker 端到端回归负责。
 - [x] FE-072 Markdown XSS、undefined/null 和错误脱敏回归；证据：Markdown 安全测试 3/3、React 页面安全回归 18/18、结构化错误不携带 body。
 - [x] FE-073 更新 Worker 静态资源测试和构建检查；证据：`frontend/asset-manifest.ts`、Vite `manifest.json` 输出、manifest 测试 2/2；当前 Worker Assets 入口保持旧 `public/` 以便回滚。
 - [ ] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口。

@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { ROUTES, type FrontendCapability } from "../../contracts/routes";
+import { ROUTES, requiredCapability, type FrontendCapability } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
 import { Button } from "../ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { cn } from "../../lib/utils";
+import { resolveFrontendAccess } from "../../lib/auth-boundary";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -36,6 +37,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const adminRoutes = routes.filter((route) => route.group === "admin");
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
+  const access = resolveFrontendAccess({ session, requiredCapability: requiredCapability(pathname) });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -67,7 +69,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
           </div>
         </header>
         <div className="lg:hidden"><MobileNavigation routes={routes} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
-        <main id="main-content" className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl p-4 lg:p-8">{children}</main>
+        <main id="main-content" className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl p-4 lg:p-8">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</main>
       </div>
     </div>
   );

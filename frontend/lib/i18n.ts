@@ -25,6 +25,8 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SHELL_GROUP_ADMIN: "Governance",
     SHELL_CONTEXT_TITLE: "At a glance",
     COMMON_VALUE_UNAVAILABLE: "Not provided",
+    PAGE_FORBIDDEN_TITLE: "403: Access denied",
+    PAGE_FORBIDDEN_DESCRIPTION: "This route requires a capability that is not present in the server-issued session.",
   },
   "zh-CN": {
     NAV_HOME: "首页",
@@ -48,6 +50,8 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     SHELL_GROUP_ADMIN: "治理",
     SHELL_CONTEXT_TITLE: "快速概览",
     COMMON_VALUE_UNAVAILABLE: "未提供",
+    PAGE_FORBIDDEN_TITLE: "403：访问被拒绝",
+    PAGE_FORBIDDEN_DESCRIPTION: "当前服务器会话没有访问此路由所需的能力。",
   },
 };
 
