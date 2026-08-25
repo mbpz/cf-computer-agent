@@ -50,6 +50,7 @@
 - [ ] FE-036 实现 cursor 分页和 request cancellation。
 - [x] FE-036a 知识库列表接入 20 条 cursor 请求、AbortController 取消旧请求、generation stale-response 防护和重复加载禁用；证据：`frontend/lib/knowledge-data.ts`、`frontend/app.tsx`、`test/unit/frontend-knowledge-data.test.ts` 2/2，用户知识页回归 5/5。
 - [ ] FE-037 实现 stale mutation owner guard。
+- [x] FE-037a 抽出 `createAsyncOwner` token 原语并接入审核详情 mutation、知识库分页请求；证据：`frontend/lib/async-owner.ts`、`review-detail-route.tsx`、`knowledge-data.ts`、`frontend-async-owner.test.ts` 2/2，相关数据/审核 focused 回归 8/8。
 - [x] FE-038 实现未知路由 404 和参数路由 contract；证据：`frontend/lib/router.ts`、路由测试 2/2；Worker fallback 仍待最终切换阶段。
 
 ## 用户页面

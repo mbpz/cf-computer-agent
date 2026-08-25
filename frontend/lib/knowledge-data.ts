@@ -1,4 +1,5 @@
 import { apiFetch, type Fetcher } from "./api";
+import { createAsyncOwner } from "./async-owner";
 
 export interface KnowledgeListItem {
   id: string;
@@ -38,20 +39,20 @@ export async function loadKnowledgePage({ cursor, requester = fetch, signal }: {
 
 export function createKnowledgeRequestController(requester: Fetcher = fetch) {
   let active: AbortController | null = null;
-  let generation = 0;
+  const owner = createAsyncOwner();
   return {
     request(cursor: string | null) {
       active?.abort();
       active = new AbortController();
-      const requestGeneration = ++generation;
+      const requestGeneration = owner.claim();
       const promise = loadKnowledgePage({ cursor, requester, signal: active.signal }).then((page) => ({ generation: requestGeneration, page }));
       return { generation: requestGeneration, promise };
     },
     isCurrent(requestGeneration: number) {
-      return requestGeneration === generation;
+      return owner.isCurrent(requestGeneration);
     },
     cancel() {
-      generation += 1;
+      owner.invalidate();
       active?.abort();
       active = null;
     },
