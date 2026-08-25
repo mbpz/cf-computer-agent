@@ -91,7 +91,7 @@
 - [x] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点；证据：`focus-scope.tsx` 为两类 modal 提供首焦点、Tab 循环、Escape 回调和卸载恢复，Dialog/Sheet 关闭时不输出 `aria-modal`，`frontend-focus-scope.test.tsx` 15/15（含 closed-state 回归）。
 - [x] FE-063a 增加可复用 focus scope：打开时聚焦首个可聚焦元素、Tab/Shift+Tab 循环、Escape 回调关闭、卸载恢复触发点；证据：`frontend/components/ui/focus-scope.tsx`、Dialog/Sheet data-focus-scope 标记与 `test/unit/frontend-focus-scope.test.tsx` 6/6。移动 Shell 的原生 details 打开状态接线仍由 FE-063 主项收口。
 - [x] FE-063b 接通移动导航的 controlled open、Sheet focus scope、Escape/关闭按钮与路由切换关闭；关闭时不输出 `role=dialog`/`aria-modal`，并新增 Sheet closed-state 回归。
-- [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
+- [x] FE-064 键盘完成导航、菜单、Tabs、表单和分页；证据：Shell 原生导航与移动 Sheet focus scope、Dropdown menu 6/6、Tabs 8/8、Pagination 3/3、Submit form/a11y 6/6；cursor 页面保留 Load more，不把 opaque cursor 转成页码。
 - [x] FE-064a 顶栏 Dropdown 接入 menu/menuitem 语义与 Escape、Home/End、Arrow 上下键盘动作；证据：`frontend/lib/menu-keyboard.ts`、`frontend/components/ui/dropdown-menu.tsx`、`test/unit/frontend-menu-keyboard.test.tsx` 6/6，Shell 回归 6/6；Tabs、表单和分页的全局矩阵仍由 FE-064 主项收口。
 - [x] FE-064b 新增 Tabs 原语：`tablist/tab/tabpanel` 语义、受控/非受控值、roving tabindex、方向键与 Home/End；证据：`frontend/components/ui/tabs.tsx`、`frontend/lib/tabs-keyboard.ts`、`test/unit/frontend-tabs.test.tsx`。
 - [x] FE-064c 新增 bounded Pagination 原语，提供 `aria-current=page`、Previous/Next disabled 边界和 page-count 上限；证据：`frontend/components/ui/pagination.tsx`、`test/unit/frontend-pagination.test.tsx`。opaque cursor 页面继续使用 Load more，不虚构页码。
