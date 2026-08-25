@@ -33,8 +33,11 @@ describe("React read-only user pages", () => {
   it("shows degraded search and citation links", () => {
     const html = renderToStaticMarkup(<SearchPage state={{ kind: "ready", degraded: true, results: [{ id: "r1", title: "Guide", snippet: "A match", href: "/knowledge/r1", matchedFields: ["body"] }] }} />);
     expect(html).toContain("Search degraded");
+    expect(html).toContain('id="knowledge-search"');
+    expect(html).toContain("Search query");
     expect(html).toContain('href="/knowledge/r1"');
     expect(html).toContain("body");
+    expect(html).not.toContain("undefined");
   });
 
   it("renders Agent scope, confidence, citations, and safe error fallback", () => {
