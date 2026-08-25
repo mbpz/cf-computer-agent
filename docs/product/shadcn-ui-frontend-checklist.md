@@ -51,11 +51,11 @@
 
 ## 用户页面
 
-- [ ] FE-040 重构首页 Dashboard。
-- [ ] FE-041 重构知识库列表。
-- [ ] FE-042 重构知识阅读页和安全 Markdown 展示。
-- [ ] FE-043 重构搜索页、过滤器、分页和无结果状态。
-- [ ] FE-044 重构 Agent 问答页、scope、引用和 confidence。
+- [x] FE-040 重构首页 Dashboard；证据：`frontend/pages/home-page.tsx`，loading/ready/error 三态。
+- [x] FE-041 重构知识库列表；证据：`frontend/pages/knowledge-page.tsx`、`knowledge-card.tsx`，空态与 cursor load-more。
+- [x] FE-042 重构知识阅读页和安全 Markdown 展示；证据：`knowledge-reader-page.tsx` 只消费注入的安全 renderer，测试覆盖调用边界。
+- [x] FE-043 重构搜索页、过滤器、分页和无结果状态；证据：`frontend/pages/search-page.tsx` 与 bounded result list/degraded 状态。
+- [x] FE-044 重构 Agent 问答页、scope、引用和 confidence；证据：`agent-page.tsx`、`answer-panel.tsx`，5 个页面测试通过。
 - [ ] FE-045 重构知识录入表单和校验错误。
 - [ ] FE-046 重构文件拖拽/选择上传。
 - [ ] FE-047 展示上传、解析、失败、重试状态。
