@@ -23,6 +23,7 @@ import { createMySubmissionsRequestController, type MySubmissionItem } from "./l
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import { loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
+import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -88,7 +89,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
     case "admin-members": return <AdminMembersRoute locale={locale} />;
     case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
-    case "admin-audit": return <AuditPage locale={locale} state={{ kind: "ready", events: [], nextCursor: null }} />;
+    case "admin-audit": return <AdminAuditRoute locale={locale} />;
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
@@ -317,4 +318,12 @@ function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[] } | { kind: "error"; message: string }>({ kind: "loading" });
   useEffect(() => { let active = true; loadAdminSpaces().then((spaces) => { if (active) setState({ kind: "ready", spaces }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale]);
   return <SpacesPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} />;
+}
+
+function AdminAuditRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; events: AdminAuditEvent[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
+  const controllerRef = useRef<ReturnType<typeof createAdminAuditRequestController> | null>(null);
+  useEffect(() => { const controller = createAdminAuditRequestController(); controllerRef.current = controller; const request = controller.request(); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", events: page.events, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE") }); }); return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale]);
+  const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, events: [...previous.events, ...page.events], nextCursor: page.nextCursor } : previous); }); };
+  return <AuditPage locale={locale} state={state} onLoadMore={loadMore} />;
 }
