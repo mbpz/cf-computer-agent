@@ -47,6 +47,7 @@
 - [x] FE-034a 建立 `PageState` 原子组件并接入管理员审核、资产、审计、成员、空间列表的 empty/error 状态；证据：`frontend/components/ui/page-state.tsx`、`test/unit/frontend-page-state.test.tsx` 5/5，管理员页面回归与全量门禁通过；用户页面 loading/degraded 统一接入仍由 FE-034 主项收口。
 - [x] FE-035 实现 `apiFetch`、错误码和 request-id 显示；证据：`frontend/lib/api.ts`、`frontend/lib/session.ts`、API 测试 8/8。
 - [ ] FE-036 实现 cursor 分页和 request cancellation。
+- [x] FE-036a 知识库列表接入 20 条 cursor 请求、AbortController 取消旧请求、generation stale-response 防护和重复加载禁用；证据：`frontend/lib/knowledge-data.ts`、`frontend/app.tsx`、`test/unit/frontend-knowledge-data.test.ts` 2/2，用户知识页回归 5/5。
 - [ ] FE-037 实现 stale mutation owner guard。
 - [x] FE-038 实现未知路由 404 和参数路由 contract；证据：`frontend/lib/router.ts`、路由测试 2/2；Worker fallback 仍待最终切换阶段。
 

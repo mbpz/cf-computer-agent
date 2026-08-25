@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
@@ -15,7 +15,7 @@ import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
-import { apiFetch } from "./lib/api";
+import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
@@ -91,7 +91,37 @@ function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
 }
 
 function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
-  useEffect(() => { let active = true; apiFetch<{ items?: unknown[]; nextCursor?: string | null }>("/api/knowledge?limit=20").then((data) => { if (!active) return; const items = Array.isArray(data.items) ? data.items.filter((item): item is Record<string, unknown> => !!item && typeof item === "object").map((item) => ({ id: typeof item.id === "string" ? item.id : "unknown", title: typeof item.title === "string" ? item.title : undefined, summary: typeof item.summary === "string" ? item.summary : undefined, publishedAt: typeof item.publishedAt === "string" ? item.publishedAt : undefined, tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string") : [] })) : []; setState({ kind: "ready", items, nextCursor: typeof data.nextCursor === "string" ? data.nextCursor : null }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); }); return () => { active = false; }; }, [locale]);
-  return <KnowledgePage locale={locale} state={state} />;
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
+  const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
+  const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
+    setState((previous) => ({
+      kind: "ready",
+      items: append && previous.kind === "ready" ? [...previous.items, ...page.items] : page.items,
+      nextCursor: page.nextCursor,
+      pending: false,
+    }));
+  }, []);
+  useEffect(() => {
+    const controller = createKnowledgeRequestController();
+    controllerRef.current = controller;
+    const first = controller.request(null);
+    void first.promise.then(({ generation, page }) => {
+      if (controller.isCurrent(generation)) mergePage(page, false);
+    }).catch((error: unknown) => {
+      if (controller.isCurrent(first.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") });
+    });
+    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [locale, mergePage]);
+  const loadMore = () => {
+    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
+    const controller = controllerRef.current;
+    const next = controller.request(state.nextCursor);
+    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
+    void next.promise.then(({ generation, page }) => {
+      if (controller.isCurrent(generation)) mergePage(page, true);
+    }).catch((error: unknown) => {
+      if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
+    });
+  };
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} />;
 }
