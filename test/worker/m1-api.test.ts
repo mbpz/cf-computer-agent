@@ -490,6 +490,9 @@ describe("M1 API authorization and request boundaries", () => {
         requestedSpaceId: "default", kind: "text", title: "Query", content: "Query body",
       }),
     }), 400, "REQUEST_QUERY_INVALID");
+    await expectApiError(memberApi("contributor", "/api/assets/from-url", {
+      method: "POST", body: JSON.stringify({ url: "http://127.0.0.1/private" }),
+    }), 400, "ASSET_URL_INVALID");
   });
 
   it("keeps drafts owner-scoped and editable until submission", async () => {

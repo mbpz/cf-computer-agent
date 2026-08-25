@@ -13,6 +13,7 @@ import { recoverOpenDocumentMarkdown } from "./odf";
 import { recoverPptxMarkdown } from "./pptx";
 import { assertParsedMarkdownSize, assertReadableParsedMarkdown } from "./empty";
 import { classifyAssetParseFailure } from "./errors";
+import { fetchUrlSnapshot } from "./url-snapshot";
 import type { CodeSourceMetadata } from "../sources/types";
 import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
@@ -41,6 +42,7 @@ export interface AssetServiceOptions {
   markdownConverter?: AssetMarkdownConverter;
   imageConverter?: AssetMarkdownConverter;
   parseTimeoutMs?: number;
+  fetch?: typeof fetch;
 }
 
 export interface AssetMarkdownConverter {
@@ -134,6 +136,7 @@ export class AssetService {
   private readonly markdownConverter?: AssetMarkdownConverter;
   private readonly imageConverter?: AssetMarkdownConverter;
   private readonly parseTimeoutMs: number;
+  private readonly fetcher: typeof fetch;
 
   constructor(
     private readonly originals: R2Bucket | undefined,
@@ -154,6 +157,7 @@ export class AssetService {
     this.parseTimeoutMs = Number.isFinite(options.parseTimeoutMs) && (options.parseTimeoutMs as number) > 0
       ? Math.floor(options.parseTimeoutMs as number)
       : APP_CONFIG.assetParseTimeoutMs;
+    this.fetcher = options.fetch || globalThis.fetch;
   }
 
   /**
@@ -229,6 +233,20 @@ export class AssetService {
       if (error instanceof AppError) throw error;
       throw new AppError("ASSET_PERSISTENCE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
+  }
+
+  async createFromUrl(ownerId: string, url: string, idempotencyKey: string): Promise<AssetWithJob> {
+    this.assertStorageEnabled();
+    const replay = await this.repository.findByIdempotency(ownerId, idempotencyKey);
+    if (replay) return replay;
+    const snapshot = await fetchUrlSnapshot(url, this.fetcher, { maxBytes: this.maxBytes, timeoutMs: 10_000 });
+    return this.create({
+      ownerId,
+      originalName: snapshot.originalName,
+      contentType: snapshot.contentType,
+      bytes: snapshot.bytes,
+      idempotencyKey,
+    });
   }
 
   async getOwned(ownerId: string, assetId: string): Promise<AssetWithJob> {

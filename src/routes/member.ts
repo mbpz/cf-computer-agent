@@ -50,6 +50,18 @@ export async function routeMemberApi(
     return jsonResponse(result, 201, context.requestId);
   }
 
+  if (url.pathname === "/api/assets/from-url") {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    services.assets.assertStorageEnabled();
+    const body = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["url"], "ASSET_URL_REQUEST_INVALID");
+    if (typeof body.url !== "string") throw new AppError("ASSET_URL_REQUEST_INVALID", "Request body is invalid", 400);
+    const result = await services.assets.createFromUrl(member.memberId, body.url, request.headers.get("idempotency-key") || "");
+    return jsonResponse(result, 201, context.requestId);
+  }
+
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
   const assetPreview = /^\/api\/assets\/([^/]+)\/preview$/.exec(url.pathname);
   const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);

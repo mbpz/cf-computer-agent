@@ -239,6 +239,18 @@ describe("AssetService", () => {
     expect(originals.objects.has("staging/asset-1")).toBe(true);
   });
 
+  it("snapshots an allowed HTTPS URL through the same asset persistence path", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, {
+      id: () => "url-asset",
+      fetch: async () => new Response("remote notes", { headers: { "content-type": "text/plain" } }),
+    });
+    const result = await service.createFromUrl("member-1", "https://example.com/notes.txt", "url-key-01");
+    expect(result.asset).toMatchObject({ originalName: "notes.txt", contentType: "text/plain", byteSize: 12 });
+    expect(new TextDecoder().decode(originals.objects.get("staging/url-asset"))).toBe("remote notes");
+  });
+
   it("replays the same asset without writing a second R2 object", async () => {
     let sequence = 0;
     const db = repository();

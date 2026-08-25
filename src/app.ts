@@ -38,6 +38,7 @@ import { SourceReparseService } from "./sources/reparse-service";
 
 export interface AppDependencies {
   githubFetch?: typeof fetch;
+  assetFetch?: typeof fetch;
   sessionDatabase?: D1Database;
   /** Test/preview override; production uses the optional Env.ORIGINALS binding. */
   assetStorage?: R2Bucket | null;
@@ -128,6 +129,7 @@ function createRequestServices(
       maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
       imageConverter: new WorkersAiImageConverter(env.AI),
+      fetch: dependencies.assetFetch,
     },
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
