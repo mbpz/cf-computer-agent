@@ -28,6 +28,7 @@ import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
+import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./components/review/review-detail-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -317,6 +318,8 @@ function MySubmissionsRoute({ locale }: { locale: LocaleRuntime }) {
 
 function ReviewQueueRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: ReviewQueueItem[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createReviewQueueRequestController> | null>(null);
   useEffect(() => {
     const controller = createReviewQueueRequestController();
@@ -332,7 +335,23 @@ function ReviewQueueRoute({ locale }: { locale: LocaleRuntime }) {
     setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
     void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, items: [...previous.items, ...page.items], nextCursor: page.nextCursor, pending: false } : previous); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous); });
   };
-  return <ReviewQueuePage locale={locale} state={state} onLoadMore={loadMore} />;
+  const review = async (id: string, action: ReviewDecision) => {
+    if (pendingId) return;
+    setPendingId(id);
+    setActionError(undefined);
+    try {
+      const publish = action === "publish"
+        ? (await loadReviewDetail(id)).publish
+        : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+      await submitReviewDecision(id, action, publish);
+      setState((previous) => previous.kind === "ready" ? { ...previous, items: previous.items.filter((item) => item.id !== id) } : previous);
+    } catch {
+      setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+    } finally {
+      setPendingId(null);
+    }
+  };
+  return <ReviewQueuePage locale={locale} state={state} pendingId={pendingId} actionError={actionError} onReview={(id, action) => void review(id, action)} onLoadMore={loadMore} />;
 }
 
 function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {

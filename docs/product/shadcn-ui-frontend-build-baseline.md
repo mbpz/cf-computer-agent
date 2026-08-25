@@ -23,7 +23,7 @@
 ```text
 frontend/dist/index.html
 frontend/dist/manifest.json
-frontend/dist/assets/index-BzFr5BSG.js
+frontend/dist/assets/index-CBGl0Qka.js
 frontend/dist/assets/index-Ds4ah7bo.css
 ```
 
