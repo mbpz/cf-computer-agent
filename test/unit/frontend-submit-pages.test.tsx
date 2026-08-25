@@ -5,6 +5,7 @@ import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
 import { assetStatusModel } from "../../frontend/components/assets/asset-state";
 import { assetUploadModel } from "../../frontend/components/assets/asset-upload-model";
+import { createAssetUploadQueue } from "../../frontend/components/assets/asset-upload-queue";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 
 describe("React submission and asset pages", () => {
@@ -47,5 +48,21 @@ describe("React submission and asset pages", () => {
     expect(html).toContain('data-drop-target="asset"');
     expect(html).toContain('accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.md,.html,.xml,.odt,.ods,.png,.jpg,.jpeg,.gif,.webp"');
     expect(html).toContain('type="file"');
+  });
+
+  it("runs a bounded batch queue with isolated failures", async () => {
+    let active = 0;
+    let peak = 0;
+    const queue = createAssetUploadQueue(["a", "b", "c", "d"], async (value) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await Promise.resolve();
+      active -= 1;
+      if (value === "b") throw new Error("bad-file");
+    }, { concurrency: 2 });
+    const result = await queue.run();
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(result.map((item) => item.status)).toEqual(["succeeded", "failed", "succeeded", "succeeded"]);
+    expect(result[1]?.error).toBe("bad-file");
   });
 });

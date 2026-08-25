@@ -31,7 +31,7 @@
 - [x] `SRC-009` P1/M1 粘贴富文本；状态：L/W；验收：`contentFormat=rich_text` 经过有界 HTML allowlist 清洗并转规范 Markdown，脚本/事件属性和危险 HTML 不进入 Submission/SourceVersion。证据：`src/assets/html.ts`、`src/submissions/service.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/m1-api.test.ts`。
 - [x] `SRC-010` P1/M2 文件选择器；状态：L；验收：文件选择器声明 PDF/DOCX/PPTX/XLSX/CSV/TXT/Markdown/HTML/XML/ODT/ODS/图片矩阵，前置校验扩展名、单文件 10 MiB 上限和单次 1 文件数量上限；对象存储未启用时保持禁用。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [x] `SRC-011` P1/M2 拖放上传；状态：L；验收：拖放目标与隐藏 file input 共用 accepted matrix/大小/数量前置校验，按钮保持键盘可用；服务端仍是唯一最终校验边界。证据：`frontend/components/assets/asset-dropzone.tsx`、`frontend/components/assets/asset-upload-model.ts`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
-- [ ] `SRC-012` P1/M2 批量文件队列；验收：逐文件状态、失败隔离和有限并发。
+- [x] `SRC-012` P1/M2 批量文件队列；状态：L；验收：文件选择/拖放统一进入逐文件 queued/processing/succeeded/failed 状态，失败只影响当前文件，默认并发上限 2、硬上限 3。证据：`frontend/components/assets/asset-upload-queue.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [ ] `SRC-013` P1/M2 剪贴板图片；验收：类型检查后进入普通 Asset 流程。
 - [ ] `SRC-014` P2/M2 文件夹导入；验收：相对路径只作显示 metadata，不进入对象键。
 - [ ] `SRC-015` P2/M2 受限 URL 快照；验收：HTTPS、SSRF 防护、大小/类型上限、固定重定向策略。
