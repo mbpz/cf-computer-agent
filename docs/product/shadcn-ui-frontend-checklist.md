@@ -13,7 +13,7 @@
 
 ## 工具链与构建
 
-- [ ] FE-010 安装 React/ReactDOM。
+- [x] FE-010 安装 React/ReactDOM；证据：`0290c83` 后续工作区，React/Vite 依赖已锁定，`test/unit/frontend-build.test.ts` 2/2、`npm run build:ui`、`npm run typecheck` 通过。
 - [ ] FE-011 安装 Vite React TypeScript 构建链。
 - [ ] FE-012 安装 Tailwind CSS v4 构建插件。
 - [ ] FE-013 安装 `clsx`、`tailwind-merge`、`class-variance-authority`。

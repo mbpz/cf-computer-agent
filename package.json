@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:ui": "vite --config vite.config.ts",
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply memory-garden-control-plane --local",
     "db:migrate:remote": "wrangler d1 migrations apply memory-garden-control-plane --remote",
@@ -27,18 +28,32 @@
     "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs",
     "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all",
     "vendor:browser": "node scripts/vendor-browser-deps.mjs",
-    "vendor:check": "node scripts/vendor-browser-deps.mjs --check"
+    "vendor:check": "node scripts/vendor-browser-deps.mjs --check",
+    "build:ui": "vite build --config vite.config.ts"
   },
   "dependencies": {
     "@cloudflare/computer": "0.1.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "dompurify": "3.4.14",
-    "markdown-it": "15.0.0"
+    "markdown-it": "15.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.3",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
     "happy-dom": "20.11.6",
+    "shadcn": "^4.19.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
+    "vite": "^8.2.2",
     "vitest": "^4.1.10",
     "wrangler": "4.119.0"
   }

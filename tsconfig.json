@@ -3,10 +3,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "lib": ["ES2022", "WebWorker"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"]
+  "include": ["src/**/*.ts", "frontend/contracts/**/*.ts", "frontend/build-contract.ts", "test/**/*.ts", "test/**/*.tsx", "worker-configuration.d.ts"]
 }
