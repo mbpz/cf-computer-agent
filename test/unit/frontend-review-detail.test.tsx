@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReviewDetailPage } from "../../frontend/pages/admin/review-detail-page";
+import { ReviewDetailRoute } from "../../frontend/pages/admin/review-detail-route";
 import { reviewDetailModel } from "../../frontend/components/review/review-detail-model";
 import { pageKindForPath } from "../../frontend/app-routes";
 
@@ -28,5 +29,11 @@ describe("React review detail boundary", () => {
     const html = renderToStaticMarkup(<ReviewDetailPage state={{ kind: "error", message: "Unavailable" }} />);
     expect(html).toContain("Unavailable");
     expect(html).not.toContain("private");
+  });
+
+  it("starts real detail routes in a bounded loading state", () => {
+    const html = renderToStaticMarkup(<ReviewDetailRoute id="sub-1" />);
+    expect(html).toContain("aria-busy");
+    expect(html).not.toContain("undefined");
   });
 });

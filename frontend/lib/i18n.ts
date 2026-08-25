@@ -111,6 +111,10 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_PUBLISH: "Publish",
     ADMIN_REVIEW_REQUEST_CHANGES: "Request changes",
     ADMIN_REVIEW_REJECT: "Reject",
+    ADMIN_REVIEW_LOAD_ERROR: "Unable to load this submission.",
+    ADMIN_REVIEW_ACTION_SUCCESS: "Review decision saved.",
+    ADMIN_REVIEW_ACTION_ERROR: "Unable to save this review decision.",
+    ADMIN_REVIEW_ACTION_PENDING: "Saving…",
   },
   "zh-CN": {
     NAV_HOME: "首页",
@@ -213,6 +217,10 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_PUBLISH: "发布",
     ADMIN_REVIEW_REQUEST_CHANGES: "要求修改",
     ADMIN_REVIEW_REJECT: "驳回",
+    ADMIN_REVIEW_LOAD_ERROR: "无法加载该提交内容。",
+    ADMIN_REVIEW_ACTION_SUCCESS: "审核决定已保存。",
+    ADMIN_REVIEW_ACTION_ERROR: "无法保存审核决定。",
+    ADMIN_REVIEW_ACTION_PENDING: "保存中…",
   },
 };
 

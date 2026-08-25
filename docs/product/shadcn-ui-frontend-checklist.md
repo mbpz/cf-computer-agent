@@ -70,6 +70,7 @@
 - [x] FE-051 重构审核队列和筛选；证据：`review-queue-page.tsx` 的 bounded queue 状态与 cursor。
 - [ ] FE-052 重构审核详情、发布、驳回、要求修改。
 - [x] FE-052a 建立参数化审核详情页与动作边界；证据：`review-detail-model.ts`、`review-detail-page.tsx`、`/admin/submissions/:id` 路由测试 21/21；覆盖 loading/error/preview/publish/request_changes/reject，真实 API mutation 接线待后续数据层切片。
+- [x] FE-052b 接通审核详情真实 GET 与审核 mutation；证据：`review-detail-data.ts`、`review-detail-route.tsx`、审核数据边界测试 7/7；覆盖预览归一化、发布、要求修改、驳回、失败提示与 terminal 状态禁用。
 - [x] FE-053 重构资产解析队列和 retry；证据：`asset-queue-page.tsx`。
 - [x] FE-054 重构解析预览、warnings、位置元数据；证据：资产页面 Preview/warnings 展示与 38 个管理员/API/资产测试。
 - [x] FE-055 重构成员管理和 disabled 状态；证据：`members-page.tsx` 的 active/disabled 切换。

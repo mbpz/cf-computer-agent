@@ -3,8 +3,7 @@ import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
-import { ReviewDetailPage } from "./pages/admin/review-detail-page";
-import { reviewDetailModel } from "./components/review/review-detail-model";
+import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
 import { AssetQueuePage } from "./pages/admin/asset-queue-page";
 import { MembersPage } from "./pages/admin/members-page";
 import { SpacesPage } from "./pages/admin/spaces-page";
@@ -77,7 +76,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin": return <AdminDashboardPage metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueuePage state={{ kind: "ready", items: [], nextCursor: null }} />;
-    case "admin-submission-detail": return <ReviewDetailPage locale={locale} state={{ kind: "ready", detail: reviewDetailModel({ id: pathname.split("/").pop() })! }} />;
+    case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
     case "admin-members": return <MembersPage members={[]} />;
     case "admin-spaces": return <SpacesPage spaces={[]} />;
