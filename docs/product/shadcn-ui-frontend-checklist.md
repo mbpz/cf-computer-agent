@@ -28,7 +28,7 @@
 
 - [x] FE-020 定义 neutral、accent、状态色和 dark mode token；证据：`frontend/styles/globals.css` 与 `test/unit/frontend-tokens.test.ts` 2/2。
 - [x] FE-021 定义字体、字号、行高、圆角、阴影和断点 token；证据：全局字体、`--radius`、Tailwind theme 映射与无渐变约束已建立。
-- [ ] FE-022 接入现有 locale runtime 与浏览器语言选择。
+- [x] FE-022 接入 locale runtime 与浏览器语言选择；证据：`frontend/lib/i18n.ts`，沿用现有 `memory-garden-locale` key，并通过现有 `test:i18n` 13/13。
 - [x] FE-023 接入 `prefers-reduced-motion`；证据：`globals.css` 的 reduced-motion media query 与令牌测试。
 - [x] FE-024 生成 Button；证据：`frontend/components/ui/button.tsx`，覆盖 variant/size/disabled。
 - [x] FE-025 生成 Input/Textarea/Label；证据：`frontend/components/ui/{input,textarea,label}.tsx` 与关联测试。
@@ -44,10 +44,10 @@
 - [ ] FE-032 实现 Topbar、面包屑和页面操作区。
 - [ ] FE-033 实现右上角 User Menu、语言和退出。
 - [ ] FE-034 实现统一 loading/empty/error/forbidden/degraded 状态。
-- [ ] FE-035 实现 `apiFetch`、错误码和 request-id 显示。
+- [x] FE-035 实现 `apiFetch`、错误码和 request-id 显示；证据：`frontend/lib/api.ts`、`frontend/lib/session.ts`、API 测试 8/8。
 - [ ] FE-036 实现 cursor 分页和 request cancellation。
 - [ ] FE-037 实现 stale mutation owner guard。
-- [ ] FE-038 实现未知路由 404 和已知 SPA fallback contract。
+- [x] FE-038 实现未知路由 404 和参数路由 contract；证据：`frontend/lib/router.ts`、路由测试 2/2；Worker fallback 仍待最终切换阶段。
 
 ## 用户页面
 
