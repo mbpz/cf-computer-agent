@@ -194,6 +194,27 @@ describe("M1 API authorization and request boundaries", () => {
       }),
     }), 400, "SOURCE_TOO_LARGE");
   });
+
+  it("exposes paginated chunk previews only to administrators", async () => {
+    const revision = await publishSubmission(
+      "contributor", "Preview API", "# Preview API\n\nBody\n", "shared", "chunk-preview-api-key1",
+    );
+    const response = await memberApi(
+      "admin",
+      `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks?limit=2`,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ body: "\\# Preview API", tokenEstimate: 4, startLine: 1, endLine: 1 }),
+        expect.objectContaining({ body: "Body", tokenEstimate: 1, startLine: 3, endLine: 3 }),
+      ],
+    });
+    await expectApiError(memberApi(
+      "contributor",
+      `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks`,
+    ), 403, "FORBIDDEN");
+  });
   it("authorizes capabilities before malformed or oversized bodies, query values, and resource identifiers", async () => {
     const oversized = JSON.stringify({ question: "x".repeat(APP_CONFIG.maxJsonRequestBytes + 1) });
 
@@ -348,6 +369,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/submission/request-revision", "GET", "POST"],
       ["/api/admin/submissions/batch-review", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
+      ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks", "POST", "GET"],
       ["/api/admin/knowledge/knowledge-1/trash", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/restore", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/purge", "GET", "POST"],

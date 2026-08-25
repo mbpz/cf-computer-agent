@@ -7,12 +7,15 @@ import { normalizeSearchQuery } from "./lexical";
 import { SEARCH_POLICY } from "./search-policy";
 import type {
   AuthorizedRevisionRecord,
+  RepositoryChunkPreviewRequest,
   LibraryRepositoryPort,
   RepositoryKnowledgePageRequest,
   RepositorySearchRequest,
 } from "./repository";
 import type {
   CitationSource,
+  ChunkPreviewPage,
+  ChunkPreviewRequest,
   ChatScope,
   KnowledgeDetail,
   KnowledgePage,
@@ -90,6 +93,26 @@ export class LibraryService {
     const record = await this.repository.findRevision(scope, knowledgeItemId, revisionId);
     if (!record) throw knowledgeNotFound();
     return this.readRevision(record);
+  }
+
+  async previewChunks(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    request: ChunkPreviewRequest = {},
+  ): Promise<ChunkPreviewPage> {
+    if (scope.role !== "admin") {
+      throw new AppError("FORBIDDEN", "Administrator access required", 403);
+    }
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    assertLookupId(revisionId);
+    const page = parsePageRequest(request.limit, request.cursor);
+    const repositoryRequest: RepositoryChunkPreviewRequest = {
+      ...page,
+      cursorKey: await cursorKey("library-chunk-preview", scope, { knowledgeItemId, revisionId }),
+    };
+    return this.repository.listRevisionChunks(scope, knowledgeItemId, revisionId, repositoryRequest);
   }
 
   async download(
@@ -335,7 +358,7 @@ function normalizeFilters(request: KnowledgePageRequest): LibraryFilters {
 }
 
 async function cursorKey(
-  kind: "library-list" | "library-search",
+  kind: "library-list" | "library-search" | "library-chunk-preview",
   scope: LibraryScope,
   value: Record<string, unknown>,
 ): Promise<string> {

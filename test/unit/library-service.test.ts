@@ -459,6 +459,7 @@ function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): Libr
     async list() { return emptyKnowledgePage; },
     async findCurrent() { return revisionRecord(); },
     async findRevision() { return revisionRecord(); },
+    async listRevisionChunks() { return { items: [] }; },
     async search() { return { items: [], degraded: false }; },
     async findCitation() { return citationRecord(); },
     ...overrides,

@@ -15,6 +15,7 @@ import type { SubmissionsService } from "../submissions/service";
 import type { TagsService } from "../tags/service";
 import type { SourceReparseService } from "../sources/reparse-service";
 import type { PublicationService } from "../publication/service";
+import type { LibraryService } from "../library/service";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -26,6 +27,7 @@ export interface AdminRouteServices {
   tags: TagsService;
   sourceReparse: SourceReparseService;
   publication: PublicationService;
+  library: LibraryService;
 }
 
 export async function routeAdminApi(
@@ -121,6 +123,20 @@ export async function routeAdminApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireEnumFilter(url, "status", ["review_pending"]);
     return jsonResponse(await services.submissions.listPending(pageRequest(url)), 200, context.requestId);
+  }
+
+  const chunkPreview = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks$/.exec(url.pathname);
+  if (chunkPreview) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requirePageQuery(url);
+    const member = requireAdminMember(principal);
+    return jsonResponse(await services.library.previewChunks(
+      { memberId: member.memberId, role: member.role },
+      decodePathId(chunkPreview[1]!),
+      decodePathId(chunkPreview[2]!),
+      pageRequest(url),
+    ), 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/tags") {
@@ -319,6 +335,17 @@ function requireEnumFilter<T extends string>(url: URL, name: string, allowed: re
   if (value === null || value === "") return undefined;
   if (!allowed.includes(value as T)) throw new AppError("FILTER_INVALID", "Filter is invalid", 400);
   return value as T;
+}
+
+function requirePageQuery(url: URL): void {
+  for (const key of url.searchParams.keys()) {
+    if (key !== "limit" && key !== "cursor") {
+      throw new AppError("PAGE_INVALID", "Pagination parameters are invalid", 400);
+    }
+    if (url.searchParams.getAll(key).length !== 1) {
+      throw new AppError("PAGE_INVALID", "Pagination parameters are invalid", 400);
+    }
+  }
 }
 
 function recordStatus(value: unknown): "active" | "disabled" | undefined {

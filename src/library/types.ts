@@ -55,6 +55,28 @@ export interface KnowledgePage {
   nextCursor?: string;
 }
 
+export interface ChunkPreviewRequest {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ChunkPreview {
+  id: string;
+  parentChunkId?: string;
+  ordinal: number;
+  headingPath: string[];
+  startLine: number;
+  endLine: number;
+  location?: SourceLocation;
+  body: string;
+  tokenEstimate: number;
+}
+
+export interface ChunkPreviewPage {
+  items: ChunkPreview[];
+  nextCursor?: string;
+}
+
 export interface RevisionChunkLocation {
   id: string;
   parentChunkId?: string;

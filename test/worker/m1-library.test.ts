@@ -130,6 +130,46 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
+  it("lets admins page chunk previews with location and a bounded token estimate", async () => {
+    await seedKnowledge({
+      id: "knowledge-preview",
+      revisionId: "revision-preview",
+      title: "Preview",
+      visibility: "shared",
+      body: "Preview body",
+      markdown: "# Preview\n\nPreview body\n",
+    });
+    await env.DB.prepare(
+      `INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body,
+        search_title, search_tags, search_body, index_field, location_json)
+       VALUES ('revision-preview-chunk-1', 'revision-preview', 1, '["Section"]', 4, 4,
+        'Second body', '', '', '', 'body', '{}')`,
+    ).run();
+    const service = serviceWithContent();
+
+    const first = await service.previewChunks(admin, "knowledge-preview", "revision-preview", { limit: 1 });
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]).toMatchObject({
+      id: "revision-preview-chunk-0",
+      ordinal: 0,
+      startLine: 3,
+      endLine: 3,
+      body: "Preview body",
+      tokenEstimate: 3,
+    });
+    expect(first.items[0]!.location).toBeUndefined();
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    const second = await service.previewChunks(admin, "knowledge-preview", "revision-preview", {
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(second.items).toMatchObject([expect.objectContaining({ id: "revision-preview-chunk-1", ordinal: 1 })]);
+    expect(second.nextCursor).toBeUndefined();
+    await expect(service.previewChunks(contributor, "knowledge-preview", "revision-preview", { limit: 1 }))
+      .rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
   it("derives a safe failed status from the current terminal index Job while keeping knowledge readable", async () => {
     await seedKnowledge({
       id: "knowledge-terminal-index",

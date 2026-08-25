@@ -12,6 +12,7 @@ import {
 } from "./lexical";
 import { buildSearchPresentation, SEARCH_POLICY } from "./search-policy";
 import type {
+  ChunkPreviewPage,
   CitationSource,
   ChatScope,
   KnowledgeListItem,
@@ -116,6 +117,16 @@ export interface LibraryRepositoryPort {
     revisionId: string,
     chunkId: string,
   ): Promise<AuthorizedCitationRecord | null>;
+  listRevisionChunks(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    request: RepositoryChunkPreviewRequest,
+  ): Promise<ChunkPreviewPage>;
+}
+
+export interface RepositoryChunkPreviewRequest extends PageRequest {
+  cursorKey: string;
 }
 
 type KnowledgeRow = {
@@ -211,6 +222,22 @@ interface StableSearchCursor {
   revisionId: string;
   chunkId: string;
 }
+
+interface ChunkPreviewCursor {
+  ordinal: number;
+  id: string;
+}
+
+type ChunkPreviewRow = {
+  id: string;
+  parent_chunk_id: string | null;
+  ordinal: number;
+  heading_path: string;
+  start_line: number;
+  end_line: number;
+  location_json: string | null;
+  body: string;
+};
 
 export class LibraryRepository implements LibraryRepositoryPort {
   constructor(private readonly db: D1Database) {}
@@ -527,6 +554,58 @@ export class LibraryRepository implements LibraryRepositoryPort {
     } : null;
   }
 
+  async listRevisionChunks(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    revisionId: string,
+    request: RepositoryChunkPreviewRequest,
+  ): Promise<ChunkPreviewPage> {
+    assertRepositoryPageRequest(request);
+    const cursor = request.cursor === undefined
+      ? undefined
+      : decodeChunkPreviewCursor(request.cursor, request.cursorKey);
+    const cursorSql = cursor === undefined ? "" :
+      " AND (c.ordinal > ? OR (c.ordinal = ? AND c.id > ?))";
+    const cursorBindings = cursor === undefined ? [] : [cursor.ordinal, cursor.ordinal, cursor.id];
+    const rows = await this.db.prepare(
+      `WITH authorized_member AS (
+         SELECT 1 AS authorized
+         FROM members
+         WHERE id = ? AND role = 'admin' AND status = 'active'
+       )
+       SELECT c.id, c.parent_chunk_id, c.ordinal, c.heading_path,
+         c.start_line, c.end_line, c.location_json, c.body
+       FROM authorized_member am
+       JOIN revisions r ON r.id = ? AND r.knowledge_item_id = ?
+       JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.status = 'active'
+       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+       JOIN chunks c ON c.revision_id = r.id
+       WHERE (r.visibility = 'shared' OR r.visibility = 'admin_only')
+         ${cursorSql}
+       ORDER BY c.ordinal ASC, c.id ASC
+       LIMIT ?`,
+    ).bind(
+      scope.memberId,
+      revisionId,
+      knowledgeItemId,
+      ...cursorBindings,
+      request.limit + 1,
+    ).all<ChunkPreviewRow>();
+    const items = rows.results.slice(0, request.limit).map(mapChunkPreview);
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? {
+        nextCursor: encodeOpaqueCursor({
+          v: 1,
+          ordinal: last.ordinal,
+          id: last.id,
+          key: request.cursorKey,
+        }),
+      } : {}),
+    };
+  }
+
   private async findAuthorizedRevision(
     scope: LibraryScope,
     knowledgeItemId: string,
@@ -769,6 +848,21 @@ function mapKnowledge(row: KnowledgeRow): KnowledgeListItem {
   };
 }
 
+function mapChunkPreview(row: ChunkPreviewRow): ChunkPreviewPage["items"][number] {
+  const location = parseSourceLocationJson(row.location_json);
+  return {
+    id: row.id,
+    ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
+    ordinal: requireInteger(row.ordinal),
+    headingPath: parseStringArray(row.heading_path),
+    startLine: requireInteger(row.start_line),
+    endLine: requireInteger(row.end_line),
+    ...(location ? { location } : {}),
+    body: row.body,
+    tokenEstimate: Math.ceil([...row.body].length / 4),
+  };
+}
+
 function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
   const presentation = buildSearchPresentation(row.body, termKeys, [
     ...(row.match_title === 1 ? ["title"] : []),
@@ -805,6 +899,20 @@ function decodeListCursor(cursor: string, key: string): ListCursor {
       || typeof record.updatedAt !== "string" || !isCanonicalTimestamp(record.updatedAt)
       || typeof record.id !== "string" || !FILTER_RESOURCE_ID.test(record.id)) throw new Error();
     return { updatedAt: record.updatedAt, id: record.id };
+  } catch {
+    throw invalidPageCursor();
+  }
+}
+
+function decodeChunkPreviewCursor(cursor: string, key: string): ChunkPreviewCursor {
+  try {
+    const decoded = decodeOpaqueCursor(cursor);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    const record = decoded as Record<string, unknown>;
+    if (Object.keys(record).length !== 4 || record.v !== 1 || record.key !== key
+      || typeof record.ordinal !== "number" || !Number.isSafeInteger(record.ordinal) || record.ordinal < 0
+      || typeof record.id !== "string" || !FILTER_RESOURCE_ID.test(record.id)) throw new Error();
+    return { ordinal: record.ordinal, id: record.id };
   } catch {
     throw invalidPageCursor();
   }
@@ -911,7 +1019,7 @@ function isAuthorizedChatScope(value: AuthorizedChatScope): boolean {
     && value.knowledgeItemIds.every((id, index) => index === 0 || value.knowledgeItemIds[index - 1]! < id);
 }
 
-function assertRepositoryPageRequest(request: RepositoryKnowledgePageRequest): void {
+function assertRepositoryPageRequest(request: PageRequest & { cursorKey: string }): void {
   parsePageRequest(request.limit, request.cursor);
   assertCursorKey(request.cursorKey);
 }

@@ -97,7 +97,7 @@
 - [x] `CHK-010` P1/M2 parent-child chunk；状态：L/W；验收：长段落/代码块切分时，首个 chunk 作为有界 parent anchor，后续 child 通过 `parent_chunk_id` 关联；搜索仍召回 child，citation 读取在同一 revision/权限边界内透传 parent body、heading 与行号。证据：`src/sources/chunker.ts`、`migrations/0008_m2_parent_chunks.sql`、`src/publication/repository.ts`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/migrations.test.ts`；命令：`rtk npx vitest run test/unit/source-chunker.test.ts test/worker/migrations.test.ts -t "parent|anchors"`。真实生产重建与跨版本数据仍需远程证据。
 - [x] `CHK-011` P1/M2 overlap 策略；状态：L；验收：跨边界窗口保留有界 overlap，不生成空 chunk 或 surrogate 截断；`test/unit/m2-overlap.test.ts` 固定 max/overlap 并逐邻接块校验重复边界。
 - [x] `CHK-012` P1/M2 table-aware chunk；状态：L；验收：Markdown 表格按数据行有界分组，所有 split chunk 都保留原始表头与分隔线；超长单行按 code point 切分仍不超过预算。证据：`src/sources/chunker.ts`、`test/unit/source-chunker.test.ts`；命令：`rtk npx vitest run test/unit/source-chunker.test.ts -t "table"`。
-- [ ] `CHK-013` P1/M2 Chunk 预览；验收：admin 可分页查看正文、位置和 token 估算。
+- [x] `CHK-013` P1/M2 Chunk 预览；状态：L/W；验收：admin 通过 `/api/admin/knowledge/:knowledgeItemId/revisions/:revisionId/chunks` 分页查看正文、parent/heading/行号/location 与 code-point token 估算；contributor fail-closed 403，cursor 绑定管理员与 Revision。证据：`src/library/service.ts`、`src/library/repository.ts`、`src/routes/admin.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t "chunk previews|chunk preview"`。真实生产数据与远程 smoke 仍需单独授权。
 - [ ] `CHK-014` P1/M2 Chunk 人工修正；验收：生成新 parse version 并重新审核。
 - [ ] `CHK-015` P1/M2 Chunk 启用/禁用；验收：不改原件，索引可重建。
 - [ ] `CHK-016` P1/M2 Chunk 关键词/问题建议；验收：只影响可解释 metadata 权重。

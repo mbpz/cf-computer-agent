@@ -10,12 +10,14 @@ import type {
   AuthorizedRevisionRecord,
   LibraryRepositoryPort,
   RepositoryKnowledgePageRequest,
+  RepositoryChunkPreviewRequest,
   RepositorySearchRequest,
 } from "../../src/library/repository";
 import { encodeCitationId, LibraryService } from "../../src/library/service";
 import { tokenizeSearchText } from "../../src/library/lexical";
 import type {
   KnowledgePage,
+  ChunkPreviewPage,
   ChatScope,
   LibraryScope,
   SearchHit,
@@ -478,6 +480,15 @@ class EvaluationRepository implements LibraryRepositoryPort {
 
   async findRevision(): Promise<AuthorizedRevisionRecord | null> {
     return null;
+  }
+
+  async listRevisionChunks(
+    _scope: LibraryScope,
+    _knowledgeItemId: string,
+    _revisionId: string,
+    _request: RepositoryChunkPreviewRequest,
+  ): Promise<ChunkPreviewPage> {
+    return { items: [] };
   }
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {
