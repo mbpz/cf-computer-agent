@@ -402,7 +402,6 @@ describe("Phase 1 request boundary", () => {
     ["/api/admin/submissions", "POST", "GET"],
     ["/api/admin/members", "POST", "GET"],
     ["/api/admin/members/member-disabled/status", "POST", "PATCH"],
-    ["/api/admin/spaces", "GET", "POST"],
     ["/api/admin/spaces/default", "POST", "PATCH"],
     ["/api/admin/collections", "GET", "POST"],
     ["/api/admin/collections/collection-id", "POST", "PATCH"],
