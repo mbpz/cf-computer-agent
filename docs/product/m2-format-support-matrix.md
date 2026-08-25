@@ -42,6 +42,14 @@ rtk npx vitest run \
 
 当前结果：10 files / 110 tests passed。完整项目门禁仍使用：
 
+统一四态格式矩阵（13 tests）：
+
+```bash
+rtk npx vitest run test/unit/m2-format-matrix.test.ts
+```
+
+该矩阵直接调用每个本地 parser 公共接口，逐格式断言正常、损坏、空内容和超限错误码；Numbers 单独断言免费层稳定降级。
+
 ```bash
 rtk npm run check
 ```
