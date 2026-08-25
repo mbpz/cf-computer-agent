@@ -119,6 +119,21 @@ export class SourceReparseRepository implements SourceReparseRepositoryPort {
     return result.meta.changes === 1;
   }
 
+  async updateCandidate(id: string, actorId: string, candidate: ReparseCandidate, now: string): Promise<boolean> {
+    const result = await this.db.prepare(
+      `UPDATE source_reparse_jobs SET candidate_content = ?, candidate_content_sha256 = ?,
+        candidate_source_identity_sha256 = ?, candidate_code_metadata = ?, candidate_ordinal = ?,
+        candidate_line_count = ?, candidate_created_at = ?, updated_at = ?
+       WHERE id = ? AND status = 'indexed'
+         AND EXISTS (SELECT 1 FROM members WHERE id = ? AND role = 'admin' AND status = 'active')`,
+    ).bind(
+      candidate.content, candidate.contentSha256, candidate.sourceIdentitySha256 ?? null,
+      candidate.codeMetadata === null ? null : JSON.stringify(candidate.codeMetadata), candidate.ordinal,
+      candidate.lineCount, candidate.createdAt, now, id, actorId,
+    ).run();
+    return result.meta.changes === 1;
+  }
+
   async failJob(id: string, code: string, terminal: boolean, now: string): Promise<boolean> {
     const result = await this.db.prepare(
       `UPDATE source_reparse_jobs SET status = ?, last_error_code = ?, updated_at = ?

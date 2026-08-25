@@ -1,5 +1,7 @@
 import { AppError } from "../http";
+import { APP_CONFIG } from "../config";
 import { parseSource } from "./parser";
+import { hasSemanticSourceContent } from "./limits";
 import type { CodeSourceMetadata, SourceVersion } from "./types";
 import type { SubmissionKind } from "../submissions/types";
 
@@ -52,6 +54,52 @@ export async function buildReparseCandidate(
     lineCount: content.lineCount,
   };
   return candidate;
+}
+
+export async function buildManualReparseCandidate(
+  source: SourceVersion,
+  options: ReparseCandidateOptions & { normalizedMarkdown: string },
+): Promise<ReparseCandidate> {
+  assertCandidateInput(source, options);
+  if (typeof options.normalizedMarkdown !== "string"
+    || options.normalizedMarkdown.includes("\0")
+    || hasMalformedSurrogate(options.normalizedMarkdown)) {
+    throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+  }
+  const bytes = new TextEncoder().encode(options.normalizedMarkdown);
+  if (bytes.byteLength > APP_CONFIG.maxParsedAssetOutputBytes) {
+    throw new AppError("SOURCE_TOO_LARGE", "Source content exceeds the limit", 400);
+  }
+  if (!hasSemanticSourceContent(options.kind, options.normalizedMarkdown)) {
+    throw new AppError("SOURCE_EMPTY", "Source content is empty", 400);
+  }
+  // Reuse the canonical Markdown safety gates before persisting an edited
+  // candidate; the candidate is still immutable input to the later publish.
+  await parseSource({ kind: "markdown", content: options.normalizedMarkdown });
+  const content = options.normalizedMarkdown.endsWith("\n")
+    ? options.normalizedMarkdown
+    : `${options.normalizedMarkdown}\n`;
+  const [digest, identity] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([
+      "m2-manual-correction-v1", options.kind, content, source.codeMetadata ?? null,
+    ]))),
+  ]);
+  return {
+    id: options.id,
+    sourceId: source.sourceId,
+    submissionId: source.submissionId,
+    ordinal: source.ordinal + 1,
+    content,
+    contentSha256: hex(digest),
+    parserVersion: REPARSE_PARSER_CONTRACT.parserVersion,
+    parserSchemaVersion: REPARSE_PARSER_CONTRACT.parserSchemaVersion,
+    sourceIdentitySha256: hex(identity),
+    codeMetadata: source.codeMetadata ?? null,
+    createdAt: options.createdAt,
+    sourceFingerprint: "",
+    lineCount: countLines(content),
+  };
 }
 
 export async function sourceReparseFingerprint(source: SourceVersion): Promise<string> {
@@ -111,7 +159,23 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function hex(digest: ArrayBuffer): string {
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function countLines(content: string): number {
   const withoutTerminalNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
   return withoutTerminalNewline.split("\n").length;
+}
+
+function hasMalformedSurrogate(content: string): boolean {
+  for (let index = 0; index < content.length; index += 1) {
+    const unit = content.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = content.charCodeAt(index + 1);
+      if (next < 0xdc00 || next > 0xdfff) return true;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) return true;
+  }
+  return false;
 }

@@ -120,6 +120,40 @@ describe("M2 source reparse schema", () => {
     await expect(env.DB.prepare("SELECT source_version_id FROM revisions WHERE id = 'm2-revision'").first())
       .resolves.toEqual({ source_version_id: "m2-source-version" });
   });
+
+  it("persists an admin candidate correction as a new parse version for review", async () => {
+    const created = await execute(new Request("https://example.test/api/admin/source-versions/m2-source-version/reparse", {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
+    }));
+    const job = await created.json<{ job: { id: string } }>();
+    const corrected = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${job.job.id}/candidate`, {
+      method: "PATCH",
+      headers: {
+        cookie: `__Host-memory-session=${adminCookie}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ normalizedMarkdown: "Corrected chunk body\n" }),
+    }));
+    expect(corrected.status).toBe(200);
+    await expect(corrected.json()).resolves.toMatchObject({
+      job: { status: "indexed", candidate: { content: "Corrected chunk body\n", ordinal: 2 } },
+    });
+    await expect(env.DB.prepare("SELECT content, parser_version FROM source_versions WHERE id = 'm2-source-version'").first())
+      .resolves.toEqual({ content: "Original body", parser_version: "m1-v1" });
+
+    const promoted = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${job.job.id}/promote`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
+    }));
+    expect(promoted.status).toBe(201);
+    await expect(env.DB.prepare(
+      "SELECT s.status, sv.content, sv.parser_version FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id WHERE s.id = ?",
+    ).bind(`${job.job.id}:submission`).first()).resolves.toEqual({
+      status: "review_pending", content: "Corrected chunk body\n", parser_version: "m2-v1",
+    });
+  });
 });
 
 async function execute(request: Request): Promise<Response> {

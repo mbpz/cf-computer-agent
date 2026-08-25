@@ -98,7 +98,7 @@
 - [x] `CHK-011` P1/M2 overlap 策略；状态：L；验收：跨边界窗口保留有界 overlap，不生成空 chunk 或 surrogate 截断；`test/unit/m2-overlap.test.ts` 固定 max/overlap 并逐邻接块校验重复边界。
 - [x] `CHK-012` P1/M2 table-aware chunk；状态：L；验收：Markdown 表格按数据行有界分组，所有 split chunk 都保留原始表头与分隔线；超长单行按 code point 切分仍不超过预算。证据：`src/sources/chunker.ts`、`test/unit/source-chunker.test.ts`；命令：`rtk npx vitest run test/unit/source-chunker.test.ts -t "table"`。
 - [x] `CHK-013` P1/M2 Chunk 预览；状态：L/W；验收：admin 通过 `/api/admin/knowledge/:knowledgeItemId/revisions/:revisionId/chunks` 分页查看正文、parent/heading/行号/location 与 code-point token 估算；contributor fail-closed 403，cursor 绑定管理员与 Revision。证据：`src/library/service.ts`、`src/library/repository.ts`、`src/routes/admin.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t "chunk previews|chunk preview"`。真实生产数据与远程 smoke 仍需单独授权。
-- [ ] `CHK-014` P1/M2 Chunk 人工修正；验收：生成新 parse version 并重新审核。
+- [x] `CHK-014` P1/M2 Chunk 人工修正；状态：L/W；验收：admin 通过 `PATCH /api/admin/reparse-jobs/:id/candidate` 提交有界规范 Markdown，危险/空/超限输入 fail-closed；只替换 queued job 的 indexed candidate，原始 SourceVersion/已发布 Revision 保持不变；随后 promote 生成 `m2-v1` 新 SourceVersion 与 `review_pending` Submission，继续复用审核/发布链路。证据：`src/sources/reparse.ts`、`src/sources/reparse-service.ts`、`src/sources/reparse-repository.ts`、`src/routes/admin.ts`、`test/unit/source-reparse-service.test.ts`、`test/worker/m2-reparse.test.ts`；命令：`rtk npx vitest run test/unit/source-reparse-service.test.ts test/worker/m2-reparse.test.ts -t "correction|candidate correction"`。真实生产数据与远程 smoke 仍需单独授权。
 - [ ] `CHK-015` P1/M2 Chunk 启用/禁用；验收：不改原件，索引可重建。
 - [ ] `CHK-016` P1/M2 Chunk 关键词/问题建议；验收：只影响可解释 metadata 权重。
 - [ ] `CHK-017` P0/M4 current Revision 去重；验收：检索不混入同 Item 多版本。

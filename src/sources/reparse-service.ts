@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { SubmissionKind } from "../submissions/types";
-import { buildReparseCandidate, sourceReparseFingerprint, type ReparseCandidate } from "./reparse";
+import { buildManualReparseCandidate, buildReparseCandidate, sourceReparseFingerprint, type ReparseCandidate } from "./reparse";
 import type { SourceVersion } from "./types";
 
 export type SourceReparseJobStatus = "queued" | "processing" | "indexed" | "failed_retryable" | "failed_terminal";
@@ -47,6 +47,7 @@ export interface SourceReparseRepositoryPort {
   getJob(id: string): Promise<SourceReparseJob | null>;
   claimJob(id: string, now: string): Promise<SourceReparseJob | null>;
   completeJob(id: string, candidate: ReparseCandidate, now: string): Promise<boolean>;
+  updateCandidate(id: string, actorId: string, candidate: ReparseCandidate, now: string): Promise<boolean>;
   failJob(id: string, code: string, terminal: boolean, now: string): Promise<boolean>;
   findPromotion(jobId: string): Promise<SourceReparsePromotion | null>;
   promoteJob(jobId: string, actorId: string, promotion: SourceReparsePromotion): Promise<SourceReparsePromotion>;
@@ -116,6 +117,28 @@ export class SourceReparseService {
       await this.repository.failJob(jobId, code, terminal, this.now().toISOString());
     }
     return (await this.repository.getJob(jobId)) || claimed;
+  }
+
+  async correct(jobId: string, actorId: string, normalizedMarkdown: string): Promise<SourceReparseJob> {
+    if (!jobId || !actorId || typeof normalizedMarkdown !== "string") {
+      throw new AppError("SOURCE_REPARSE_INVALID", "Source reparse input is invalid", 400);
+    }
+    const job = await this.get(jobId);
+    if (job.status !== "indexed" || !job.candidate) {
+      throw new AppError("SOURCE_REPARSE_NOT_READY", "Source reparse candidate is not ready", 409, true);
+    }
+    const snapshot = await this.repository.findSourceVersionForReparse(job.baseSourceVersionId);
+    if (!snapshot) throw new AppError("SOURCE_REPARSE_NOT_FOUND", "Source version not found", 404);
+    const candidate = await buildManualReparseCandidate(snapshot.sourceVersion, {
+      id: `${job.id}:candidate`,
+      createdAt: this.now().toISOString(),
+      kind: snapshot.kind,
+      normalizedMarkdown,
+    });
+    candidate.sourceFingerprint = job.sourceFingerprint;
+    const updated = await this.repository.updateCandidate(job.id, actorId, candidate, this.now().toISOString());
+    if (!updated) throw new AppError("SOURCE_REPARSE_CONFLICT", "Source reparse job changed", 409, true);
+    return (await this.repository.getJob(job.id)) || { ...job, candidate, updatedAt: candidate.createdAt };
   }
 
   async get(jobId: string): Promise<SourceReparseJob> {

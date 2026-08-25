@@ -275,6 +275,28 @@ export async function routeAdminApi(
     return jsonResponse({ job }, job.status === "indexed" || job.status === "failed_terminal" ? 200 : 202, context.requestId);
   }
 
+  const reparseCorrection = /^\/api\/admin\/reparse-jobs\/([^/]+)\/candidate$/.exec(url.pathname);
+  if (reparseCorrection) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);
+    const actor = requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["normalizedMarkdown"],
+      "SOURCE_REPARSE_INVALID",
+    );
+    if (typeof input.normalizedMarkdown !== "string") {
+      throw new AppError("SOURCE_REPARSE_INVALID", "Source reparse input is invalid", 400);
+    }
+    const job = await services.sourceReparse.correct(
+      decodePathId(reparseCorrection[1]!),
+      actor.memberId,
+      input.normalizedMarkdown,
+    );
+    return jsonResponse({ job }, 200, context.requestId);
+  }
+
   const reparseJob = /^\/api\/admin\/reparse-jobs\/([^/]+)$/.exec(url.pathname);
   const reparsePublish = /^\/api\/admin\/reparse-jobs\/([^/]+)\/publish$/.exec(url.pathname);
   if (reparsePublish) {

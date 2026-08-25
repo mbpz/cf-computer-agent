@@ -32,6 +32,10 @@ function repository(): SourceReparseRepositoryPort & { jobs: Map<string, any>; s
       const job = store.jobs.get(id); if (!job || job.status !== "processing") return false;
       Object.assign(job, { status: "indexed", candidate, updatedAt: now }); return true;
     },
+    async updateCandidate(id: string, _actorId: string, candidate: any, now: string) {
+      const job = store.jobs.get(id); if (!job || job.status !== "indexed") return false;
+      Object.assign(job, { candidate, updatedAt: now }); return true;
+    },
     async failJob(id: string, code: string, terminal: boolean, now: string) {
       const job = store.jobs.get(id); if (!job) return false;
       Object.assign(job, { status: terminal ? "failed_terminal" : "failed_retryable", lastErrorCode: code, updatedAt: now }); return true;
@@ -86,5 +90,21 @@ describe("SourceReparseService", () => {
     expect(first).toEqual(replay);
     expect(first).toMatchObject({ submissionId: "reparse-4:submission", sourceVersionId: "reparse-4:source-version" });
     expect(repo.snapshot.publishedRevisionId).toBe("revision-current");
+  });
+
+  it("replaces only the durable candidate for an admin correction and keeps the source version immutable", async () => {
+    const repo = repository();
+    const service = new SourceReparseService(repo, { id: () => "reparse-correction", now: () => new Date("2026-08-26T01:00:00.000Z") });
+    const job = await service.create("admin-1", "source-version-1");
+    await service.process(job.id);
+    const corrected = await service.correct(job.id, "admin-1", "# Stable\n\nCorrected chunk\n");
+    expect(corrected).toMatchObject({
+      id: job.id,
+      status: "indexed",
+      candidate: { content: "# Stable\n\nCorrected chunk\n", ordinal: 2, parserVersion: "m2-v1" },
+    });
+    expect(repo.snapshot.sourceVersion.content).toBe("# Stable\n\nBody\n");
+    await expect(service.correct(job.id, "admin-1", "<script>secret()</script>\n"))
+      .rejects.toMatchObject({ code: "SOURCE_METADATA_INVALID", status: 400 });
   });
 });
