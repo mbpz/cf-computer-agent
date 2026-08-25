@@ -7,7 +7,7 @@
 在当前 `main` 工作树运行 `npm run check`：
 
 - vendor lock：2 个浏览器依赖 hash 校验通过
-- smoke/operations：41/41
+- smoke/operations：42/42
 - i18n contract：13/13
 - unit：75 files / 888 tests
 - Worker：13 files / 298 tests

@@ -14,6 +14,8 @@ rtk npx wrangler deploy --dry-run
 
 dry-run 必须显示 `frontend/dist`，并保留 `KNOWLEDGE`、`DB`、`AI`、`ASSETS` 和 `ALLOW_INSECURE_LOCAL` 绑定；不要在这一步修改 D1 migration、DO migration tag 或 OAuth Secret。
 
+`npm run build` 还会运行 `build:legacy-audit`：旧 `public/` 回滚文件必须仍存在，React 源码和 `frontend/dist` 不得新增旧 vanilla 入口引用。
+
 ## 生产发布与验证
 
 使用项目既有的版本上传/部署手册执行生产发布。发布后只访问自定义域，按顺序检查：
