@@ -110,6 +110,23 @@ export interface PublishedRevision {
   searchStatus: SearchStatus;
 }
 
+export interface ChunkRebuildMapping {
+  ordinal: number;
+  expectedId: string;
+  existingId: string | null;
+  parentExpectedId: string | null;
+  existingStatus: "active" | "disabled" | null;
+}
+
+export interface ChunkRebuildReport {
+  revisionId: string;
+  sourceVersionId: string;
+  contentSha256: string;
+  chunkCount: number;
+  unchanged: boolean;
+  mappings: ChunkRebuildMapping[];
+}
+
 export interface RollbackResult extends PublishedRevision {
   previousRevisionId: string;
 }
@@ -176,6 +193,7 @@ export interface PublicationRepositoryPort {
   preparePurge(knowledgeItemId: string, cutoff: string): Promise<PurgePlan | { alreadyPurged: true }>;
   finalizePurge(plan: PurgePlan, reviewerId: string): Promise<PurgeResult>;
   processIndexJob(revisionId: string): Promise<SearchStatus>;
+  rebuildChunkReport(revisionId: string): Promise<ChunkRebuildReport | null>;
   reject(
     submissionId: string,
     reviewerId: string,

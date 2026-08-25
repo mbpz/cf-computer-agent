@@ -126,7 +126,18 @@ export async function routeAdminApi(
   }
 
   const chunkPreview = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks$/.exec(url.pathname);
+  const chunkRebuildReport = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks\/rebuild-report$/.exec(url.pathname);
   const chunkStatus = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks\/([^/]+)\/status$/.exec(url.pathname);
+  if (chunkRebuildReport) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const member = requireAdminMember(principal);
+    return jsonResponse(await services.publication.rebuildChunkReport(
+      { id: member.memberId, role: member.role, status: "active" },
+      decodePathId(chunkRebuildReport[2]!),
+    ), 200, context.requestId);
+  }
   if (chunkStatus) {
     requireCapability(principal, "knowledge:review");
     if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);

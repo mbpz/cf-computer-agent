@@ -647,6 +647,7 @@ async function publicationFixture(options: PublicationFixtureOptions = {}) {
     async preparePurge() { return { alreadyPurged: true as const }; },
     async finalizePurge() { return { knowledgeItemId: "knowledge-1", status: "purged" as const, purgedRevisionCount: 1 }; },
     async processIndexJob() { events.push("process-index"); indexCount += 1; revision.searchStatus = "indexed"; return "indexed"; },
+    async rebuildChunkReport() { return null; },
     async reject(_submissionId, _reviewerId, input) {
       if (options.decisionConflict) throw Object.assign(new Error("decision conflict"), { kind: "decision_conflict" });
       rejectionInputs.push(input);

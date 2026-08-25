@@ -25,6 +25,7 @@ import type {
   ReviewDecision,
   ReviewPreview,
   ReviewSubmissionSnapshot,
+  ChunkRebuildReport,
 } from "./types";
 
 const MAX_TITLE_CODE_POINTS = 200;
@@ -53,6 +54,13 @@ export class PublicationService {
       chunks: reviewChunkPreviews(chunks),
       safety: analyzeSensitiveContent(`${preview.title}\n${preview.rawContent}`),
     };
+  }
+
+  async rebuildChunkReport(reviewer: PublicationReviewer, revisionId: string): Promise<ChunkRebuildReport> {
+    requireActiveAdmin(reviewer);
+    const report = await this.repository.rebuildChunkReport(requireId(revisionId));
+    if (!report) throw new AppError("KNOWLEDGE_NOT_FOUND", "Revision not found", 404);
+    return report;
   }
 
   async publish(

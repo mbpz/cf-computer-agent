@@ -5,7 +5,7 @@ import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, type Page, type PageRequest } from "../pagination";
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import type { PublishedContentReceipt } from "../knowledge/types";
-import { parseSourceLocationJson, type ChunkDraft } from "../sources/chunker";
+import { chunkDocument, parseSourceLocationJson, type ChunkDraft } from "../sources/chunker";
 import { buildChunkMetadata, metadataSearchText } from "../sources/chunk-metadata";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import type {
@@ -23,6 +23,7 @@ import type {
   ReviewSubmissionSnapshot,
   ReviewTargetSummary,
   SearchStatus,
+  ChunkRebuildReport,
 } from "./types";
 
 export type PublicationRepositoryConflictKind =
@@ -474,6 +475,56 @@ export class PublicationRepository implements PublicationRepositoryPort {
       throw error;
     }
     return this.requireRevision(current.revisionId);
+  }
+
+  async rebuildChunkReport(revisionId: string): Promise<ChunkRebuildReport | null> {
+    const source = await this.db.prepare(
+      `SELECT r.id AS revision_id, r.content_sha256, sv.id AS source_version_id, sv.content,
+         s.kind, sv.line_baseline
+       FROM revisions r
+       JOIN source_versions sv ON sv.id = r.source_version_id
+       JOIN sources s ON s.id = sv.source_id
+       WHERE r.id = ? LIMIT 1`,
+    ).bind(revisionId).first<{
+      revision_id: string; content_sha256: string; source_version_id: string; content: string;
+      kind: "text" | "markdown" | "code" | "rich_text"; line_baseline: number;
+    }>();
+    if (!source) return null;
+    const rebuilt = chunkDocument({
+      normalizedMarkdown: source.content,
+      kind: source.kind === "rich_text" ? "markdown" : source.kind,
+      ...(source.kind === "code" ? { lineBaseline: source.line_baseline } : {}),
+    });
+    const existing = await this.db.prepare(
+      `SELECT id, ordinal, parent_chunk_id, status FROM chunks
+       WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
+    ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<{
+      id: string; ordinal: number; parent_chunk_id: string | null; status: "active" | "disabled";
+    }>();
+    if (existing.results.length > MAX_REVISION_CHUNKS) throw new Error("Chunk mapping exceeds revision limit");
+    const byOrdinal = new Map(existing.results.map((row) => [row.ordinal, row]));
+    const mappings = rebuilt.map((chunk) => {
+      const expectedId = `${revisionId}-chunk-${chunk.ordinal}`;
+      const current = byOrdinal.get(chunk.ordinal);
+      return {
+        ordinal: chunk.ordinal,
+        expectedId,
+        existingId: current?.id ?? null,
+        parentExpectedId: chunk.parentOrdinal === undefined ? null : `${revisionId}-chunk-${chunk.parentOrdinal}`,
+        existingStatus: current?.status ?? null,
+      };
+    });
+    const unchanged = existing.results.length === mappings.length
+      && mappings.every((mapping) => mapping.existingId === mapping.expectedId
+        && mapping.parentExpectedId === (byOrdinal.get(mapping.ordinal)?.parent_chunk_id ?? null));
+    return {
+      revisionId,
+      sourceVersionId: source.source_version_id,
+      contentSha256: source.content_sha256,
+      chunkCount: mappings.length,
+      unchanged,
+      mappings,
+    };
   }
 
   async rollback(

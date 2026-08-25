@@ -211,6 +211,17 @@ describe("M1 API authorization and request boundaries", () => {
         expect.objectContaining({ body: "Body", tokenEstimate: 1, startLine: 3, endLine: 3 }),
       ],
     });
+    const rebuildReport = await memberApi(
+      "admin",
+      `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks/rebuild-report`,
+    );
+    expect(rebuildReport.status).toBe(200);
+    await expect(rebuildReport.json()).resolves.toMatchObject({
+      revisionId: revision.id,
+      sourceVersionId: expect.any(String),
+      unchanged: true,
+      mappings: expect.arrayContaining([expect.objectContaining({ ordinal: 0, expectedId: expect.stringContaining("-chunk-0") })]),
+    });
     await expectApiError(memberApi(
       "contributor",
       `/api/admin/knowledge/${revision.knowledgeItemId}/revisions/${revision.id}/chunks`,
@@ -379,6 +390,7 @@ describe("M1 API authorization and request boundaries", () => {
       ["/api/admin/submissions/batch-review", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/rollback", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks", "POST", "GET"],
+      ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks/rebuild-report", "POST", "GET"],
       ["/api/admin/knowledge/knowledge-1/revisions/revision-1/chunks/chunk-1/status", "GET", "PATCH"],
       ["/api/admin/knowledge/knowledge-1/trash", "GET", "POST"],
       ["/api/admin/knowledge/knowledge-1/restore", "GET", "POST"],
