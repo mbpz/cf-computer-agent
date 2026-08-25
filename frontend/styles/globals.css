@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  --background: oklch(0.985 0.004 255);
+  --foreground: oklch(0.22 0.025 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.025 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.025 255);
+  --primary: oklch(0.52 0.16 250);
+  --primary-foreground: oklch(0.985 0.004 255);
+  --secondary: oklch(0.94 0.012 255);
+  --secondary-foreground: oklch(0.29 0.03 255);
+  --muted: oklch(0.95 0.01 255);
+  --muted-foreground: oklch(0.48 0.025 255);
+  --accent: oklch(0.93 0.025 240);
+  --accent-foreground: oklch(0.28 0.07 250);
+  --destructive: oklch(0.58 0.2 25);
+  --border: oklch(0.88 0.015 255);
+  --input: oklch(0.88 0.015 255);
+  --ring: oklch(0.52 0.16 250);
+  --radius: 0.55rem;
+}
+
+.dark {
+  --background: oklch(0.17 0.02 255);
+  --foreground: oklch(0.93 0.01 255);
+  --card: oklch(0.21 0.022 255);
+  --card-foreground: oklch(0.93 0.01 255);
+  --popover: oklch(0.21 0.022 255);
+  --popover-foreground: oklch(0.93 0.01 255);
+  --primary: oklch(0.7 0.13 235);
+  --primary-foreground: oklch(0.17 0.02 255);
+  --secondary: oklch(0.28 0.025 255);
+  --secondary-foreground: oklch(0.91 0.012 255);
+  --muted: oklch(0.26 0.022 255);
+  --muted-foreground: oklch(0.68 0.02 255);
+  --accent: oklch(0.28 0.045 245);
+  --accent-foreground: oklch(0.86 0.08 235);
+  --destructive: oklch(0.7 0.16 25);
+  --border: oklch(0.32 0.025 255);
+  --input: oklch(0.32 0.025 255);
+  --ring: oklch(0.7 0.13 235);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

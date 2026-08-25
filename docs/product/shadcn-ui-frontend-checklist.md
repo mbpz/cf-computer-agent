@@ -14,22 +14,22 @@
 ## 工具链与构建
 
 - [x] FE-010 安装 React/ReactDOM；证据：`0290c83` 后续工作区，React/Vite 依赖已锁定，`test/unit/frontend-build.test.ts` 2/2、`npm run build:ui`、`npm run typecheck` 通过。
-- [ ] FE-011 安装 Vite React TypeScript 构建链。
-- [ ] FE-012 安装 Tailwind CSS v4 构建插件。
-- [ ] FE-013 安装 `clsx`、`tailwind-merge`、`class-variance-authority`。
-- [ ] FE-014 初始化 shadcn/ui 配置，锁定源码目录和 alias。
-- [ ] FE-015 安装并锁定单一图标族。
-- [ ] FE-016 建立 `frontend/` 目录和入口。
-- [ ] FE-017 建立 `npm run build:ui`。
+- [x] FE-011 安装 Vite React TypeScript 构建链；证据：`vite.config.ts`、`@vitejs/plugin-react`、`vite` 与 `typescript` lockfile。
+- [x] FE-012 安装 Tailwind CSS v4 构建插件；证据：`@tailwindcss/vite` 已接入 Vite。
+- [x] FE-013 安装 `clsx`、`tailwind-merge`、`class-variance-authority`；证据：`package.json` 与 lockfile。
+- [x] FE-014 初始化 shadcn/ui 配置，锁定源码目录和 alias；证据：`frontend/components.json`。
+- [x] FE-015 安装并锁定单一图标族；证据：`@phosphor-icons/react` 与 `iconLibrary: phosphor`。
+- [x] FE-016 建立 `frontend/` 目录和入口；证据：`frontend/index.html`、`frontend/main.tsx`。
+- [x] FE-017 建立 `npm run build:ui`；证据：Vite 构建输出 `frontend/dist` 成功。
 - [ ] FE-018 将静态构建产物接入 Wrangler Assets。
 - [ ] FE-019 增加构建产物 Secret/Token 扫描。
 
 ## 设计 Token 与基础组件
 
-- [ ] FE-020 定义 neutral、accent、状态色和 dark mode token。
-- [ ] FE-021 定义字体、字号、行高、圆角、阴影和断点 token。
+- [x] FE-020 定义 neutral、accent、状态色和 dark mode token；证据：`frontend/styles/globals.css` 与 `test/unit/frontend-tokens.test.ts` 2/2。
+- [x] FE-021 定义字体、字号、行高、圆角、阴影和断点 token；证据：全局字体、`--radius`、Tailwind theme 映射与无渐变约束已建立。
 - [ ] FE-022 接入现有 locale runtime 与浏览器语言选择。
-- [ ] FE-023 接入 `prefers-reduced-motion`。
+- [x] FE-023 接入 `prefers-reduced-motion`；证据：`globals.css` 的 reduced-motion media query 与令牌测试。
 - [ ] FE-024 生成 Button。
 - [ ] FE-025 生成 Input/Textarea/Label。
 - [ ] FE-026 生成 Card/Badge/Alert。

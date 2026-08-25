@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "./styles/globals.css";
 
 declare const document: {
   getElementById(id: string): unknown | null;
