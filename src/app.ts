@@ -33,6 +33,8 @@ import { SubmissionsRepository } from "./submissions/repository";
 import { SubmissionsService } from "./submissions/service";
 import { TagsRepository } from "./tags/repository";
 import { TagsService } from "./tags/service";
+import { SourceReparseRepository } from "./sources/reparse-repository";
+import { SourceReparseService } from "./sources/reparse-service";
 
 export interface AppDependencies {
   githubFetch?: typeof fetch;
@@ -159,6 +161,7 @@ function createRequestServices(
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
     tags,
+    sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
   };
 }
 

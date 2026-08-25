@@ -44,8 +44,10 @@ The reviewed migration provenance is immutable for this candidate:
 | `0002_github_auth.sql` | `b7dd6aac5cfa4f38aac8b242a3d06d787ec202ec64d09ae4ae3d8ec68d384fc1` |
 | `0003_m1_knowledge_loop.sql` | `cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3` |
 | `0004_m1_gate_completion.sql` | `ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb` |
+| `0005_m2_asset_ingestion.sql` | `49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c` |
+| `0006_m2_source_reparse.sql` | `fd77510c130d08650de95fa28a2434158ca0a489dd292c490dfe6460c31dcaff` |
 
-`verify:m1:migrations` hard-codes the four reviewed hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
+`verify:m1:migrations` hard-codes the reviewed M1/M2 forward-migration hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
 Publication recovery treats a legacy intent whose normalized source is semantically empty or produces more than 256 chunks as terminally invalid. The recovery job records no content, revision, review, audit, or indexing job for a pending-content invalid intent and excludes its `failed_terminal` intent from later retries; investigate the underlying submission instead of changing the intent state by hand.
 
@@ -136,11 +138,11 @@ Confirm all of the following in review:
 
 - the fail-closed legacy-pending guard reports zero before any schema change, and the submissions table copy preserves all remaining draft/rejected legacy rows before the legacy table is dropped;
 - `PRAGMA foreign_key_check` and the upgrade-preservation Workerd cases pass;
-- the actual Wrangler `d1_migrations` ledger contains exactly `0001_phase1_control_plane.sql`, then `0002_github_auth.sql`, then `0003_m1_knowledge_loop.sql`, with no missing, renamed, reordered, or extra row;
-- the local reviewed set contains those three applied files plus pending `0004_m1_gate_completion.sql`;
+- the actual Wrangler `d1_migrations` ledger is an exact prefix of the reviewed ordered set `0001` through `0006`, with no missing, renamed, reordered, or extra row;
+- the local reviewed set contains the complete ordered `0001` through `0006` forward-migration set;
 - `KnowledgeBase`, Durable Object migration tag `v1`, existing VFS paths, note journal, GitHub identities, sessions, and automation credentials are not migrated or reset.
 
-The verifier requires exactly the reviewed `0001`–`0003` pre-`0004` state and fails closed if `0004` is already applied or if any unexpected ledger state exists. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
+The verifier requires the reviewed pre-`0004` state, or an exact post-`0004`, post-`0005`, or post-`0006` prefix, and fails closed for any unexpected ledger state. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
 
 ## 5. Apply the remote migration
 

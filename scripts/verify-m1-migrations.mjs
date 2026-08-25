@@ -7,6 +7,7 @@ const migrations = [
   ["0003_m1_knowledge_loop.sql", "cfbccb43485043ad2d125f0e6b8238b1e311c18abe12ddeb6bcc8b79e4bb74a3"],
   ["0004_m1_gate_completion.sql", "ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb"],
   ["0005_m2_asset_ingestion.sql", "49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c"],
+  ["0006_m2_source_reparse.sql", "fd77510c130d08650de95fa28a2434158ca0a489dd292c490dfe6460c31dcaff"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
@@ -42,7 +43,11 @@ async function verifyLedger(phase, path) {
   }
   const expectedNames = phase === "before"
     ? [migrations.slice(0, 3).map(([name]) => name)]
-    : [migrations.slice(0, 4).map(([name]) => name), migrations.map(([name]) => name)];
+    : [
+      migrations.slice(0, 4).map(([name]) => name),
+      migrations.slice(0, 5).map(([name]) => name),
+      migrations.map(([name]) => name),
+    ];
   const names = result.results.map((row, index) => {
     if (!isRecord(row)
       || !hasExactKeys(row, ["applied_at", "id", "name"])

@@ -12,6 +12,7 @@ export interface ReparseCandidate extends Omit<SourceVersion, "parserVersion" | 
   parserVersion: "m2-v1";
   parserSchemaVersion: "m2-v1";
   sourceFingerprint: string;
+  lineCount: number;
 }
 
 export interface ReparseCandidateOptions {
@@ -34,15 +35,7 @@ export async function buildReparseCandidate(
 ): Promise<ReparseCandidate> {
   assertCandidateInput(source, options);
   const content = await replayNormalizedSource(source, options.kind);
-  const sourceFingerprint = await sha256(JSON.stringify([
-    "m2-reparse-source-v1",
-    source.id,
-    source.contentSha256,
-    source.sourceIdentitySha256 ?? null,
-    REPARSE_PARSER_CONTRACT.parserVersion,
-    REPARSE_PARSER_CONTRACT.parserSchemaVersion,
-    source.codeMetadata ?? null,
-  ]));
+  const sourceFingerprint = await sourceReparseFingerprint(source);
   const candidate: ReparseCandidate = {
     id: options.id,
     sourceId: source.sourceId,
@@ -56,17 +49,34 @@ export async function buildReparseCandidate(
     codeMetadata: content.codeMetadata,
     createdAt: options.createdAt,
     sourceFingerprint,
+    lineCount: content.lineCount,
   };
   return candidate;
 }
 
+export async function sourceReparseFingerprint(source: SourceVersion): Promise<string> {
+  return sha256(JSON.stringify([
+    "m2-reparse-source-v1",
+    source.id,
+    source.contentSha256,
+    source.sourceIdentitySha256 ?? null,
+    REPARSE_PARSER_CONTRACT.parserVersion,
+    REPARSE_PARSER_CONTRACT.parserSchemaVersion,
+    source.codeMetadata ?? null,
+  ]));
+}
+
 async function replayNormalizedSource(source: SourceVersion, kind: SubmissionKind) {
   if (kind !== "code") {
+    if (source.content.includes("\0") || /[\uD800-\uDFFF]/u.test(source.content)) {
+      throw new AppError("SOURCE_METADATA_INVALID", "Source metadata is invalid", 400);
+    }
     return {
       normalizedMarkdown: source.content,
       contentSha256: source.contentSha256,
       sourceIdentitySha256: source.sourceIdentitySha256 ?? source.contentSha256,
       codeMetadata: null as CodeSourceMetadata | null,
+      lineCount: countLines(source.content),
     };
   }
   const metadata = source.codeMetadata;
@@ -99,4 +109,9 @@ function assertCandidateInput(source: SourceVersion, options: ReparseCandidateOp
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function countLines(content: string): number {
+  const withoutTerminalNewline = content.endsWith("\n") ? content.slice(0, -1) : content;
+  return withoutTerminalNewline.split("\n").length;
 }

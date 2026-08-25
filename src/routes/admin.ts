@@ -13,6 +13,7 @@ import { pageRequest, record, strictRecord, stringValue } from "./member";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { TagsService } from "../tags/service";
+import type { SourceReparseService } from "../sources/reparse-service";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -22,6 +23,7 @@ export interface AdminRouteServices {
   spaces: SpacesService;
   submissions: SubmissionsService;
   tags: TagsService;
+  sourceReparse: SourceReparseService;
 }
 
 export async function routeAdminApi(
@@ -242,6 +244,27 @@ export async function routeAdminApi(
       pageRequest(url).limit,
       pageRequest(url).cursor,
     ), action), 200, context.requestId);
+  }
+
+  const reparseSource = /^\/api\/admin\/source-versions\/([^/]+)\/reparse$/.exec(url.pathname);
+  if (reparseSource) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
+    requireNoQuery(url);
+    const queued = await services.sourceReparse.create(actor.memberId, decodePathId(reparseSource[1]!));
+    const job = await services.sourceReparse.process(queued.id);
+    return jsonResponse({ job }, job.status === "indexed" || job.status === "failed_terminal" ? 200 : 202, context.requestId);
+  }
+
+  const reparseJob = /^\/api\/admin\/reparse-jobs\/([^/]+)$/.exec(url.pathname);
+  if (reparseJob) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireAdminMember(principal);
+    requireNoQuery(url);
+    const job = await services.sourceReparse.get(decodePathId(reparseJob[1]!));
+    return jsonResponse({ job }, 200, context.requestId);
   }
 
   return undefined;

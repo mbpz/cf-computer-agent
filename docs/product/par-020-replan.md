@@ -1,6 +1,6 @@
 # PAR-020 重新解析排期
 
-状态：M2 实施中。候选构建器已完成，D1 queued/processing 状态机与管理员确认发布仍待实现。
+状态：M2 实施中。候选构建器、D1 queued/processing/indexed 状态机和管理员重解析 API 已完成；管理员确认发布（把候选物化为新 SourceVersion/Revision）仍待实现。
 
 ## 原因
 
@@ -21,7 +21,7 @@ PAR-020 会触及 parser version、source version、发布 Revision 和任务状
 4. 对 text/Markdown/code/PDF/DOC/PPT/XLSX 等格式逐项补 parser fixture、恶意输入和降级证据。
 5. 只在管理员确认后生成新 Revision；旧 Revision 保持可读。
 
-当前证据：`src/sources/reparse.ts` 的 `buildReparseCandidate` 生成 `m2-v1`/`m2-v1` 候选、递增 ordinal 和稳定 source fingerprint；候选构建没有任何 D1、VFS 或发布 Revision 写入副作用。`test/unit/source-reparse.test.ts` 3/3 覆盖确定性、代码元数据和旧 Revision 身份保持。
+当前证据：`src/sources/reparse.ts` 的 `buildReparseCandidate` 生成 `m2-v1`/`m2-v1` 候选、递增 ordinal 和稳定 source fingerprint；候选构建没有任何 D1、VFS 或发布 Revision 写入副作用。`src/sources/reparse-service.ts` 与 `src/sources/reparse-repository.ts` 通过 `0006_m2_source_reparse.sql` 持久化幂等任务、候选正文和安全错误码；管理员可调用 `POST /api/admin/source-versions/:id/reparse`，再用 `GET /api/admin/reparse-jobs/:id` 查询。`test/unit/source-reparse.test.ts`、`test/unit/source-reparse-service.test.ts` 和 `test/worker/m2-reparse.test.ts` 覆盖确定性、代码元数据、任务状态、路由和旧 SourceVersion/Revision 身份保持。
 
 ## 验收边界
 
