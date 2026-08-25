@@ -84,6 +84,7 @@
 - [x] FE-053 重构资产解析队列和 retry；证据：`asset-queue-page.tsx`。
 - [x] FE-054 重构解析预览、warnings、位置元数据；证据：资产页面 Preview/warnings 展示与 38 个管理员/API/资产测试。
 - [x] FE-055 重构成员管理和 disabled 状态；证据：`members-page.tsx` 的 active/disabled 切换。
+- [x] FE-055a 接入 `/api/admin/members` 与 PATCH status：服务端脱敏 DTO、opaque cursor、单成员 pending 和状态更新；证据：`frontend/lib/admin-members-data.ts`、`AdminMembersRoute`。
 - [x] FE-056 重构 Space/Collection 管理；证据：`spaces-page.tsx`。
 - [x] FE-057 重构审计日志和分页；证据：`audit-page.tsx` 的 cursor load-more。
 - [x] FE-058 覆盖 contributor 访问 admin 的 403 状态页；证据：`admin-forbidden-page.tsx` 与页面测试。

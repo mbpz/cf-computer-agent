@@ -21,6 +21,7 @@ import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data
 import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
+import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -84,7 +85,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
-    case "admin-members": return <MembersPage locale={locale} members={[]} />;
+    case "admin-members": return <AdminMembersRoute locale={locale} />;
     case "admin-spaces": return <SpacesPage locale={locale} spaces={[]} />;
     case "admin-audit": return <AuditPage locale={locale} state={{ kind: "ready", events: [], nextCursor: null }} />;
     case "not-found": return <NotFoundPage locale={locale} />;
@@ -299,4 +300,14 @@ function ReviewQueueRoute({ locale }: { locale: LocaleRuntime }) {
     void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, items: [...previous.items, ...page.items], nextCursor: page.nextCursor, pending: false } : previous); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous); });
   };
   return <ReviewQueuePage locale={locale} state={state} onLoadMore={loadMore} />;
+}
+
+function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; members: AdminMember[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const controllerRef = useRef<ReturnType<typeof createAdminMembersRequestController> | null>(null);
+  useEffect(() => { const controller = createAdminMembersRequestController(); controllerRef.current = controller; const request = controller.request(); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", members: page.items, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale]);
+  const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, members: [...previous.members, ...page.items], nextCursor: page.nextCursor } : previous); }); };
+  const changeStatus = async (id: string, status: "active" | "disabled") => { if (pendingIds.includes(id)) return; setPendingIds((ids) => [...ids, id]); try { const member = await updateMemberStatus(id, status); setState((previous) => previous.kind === "ready" ? { ...previous, members: previous.members.map((item) => item.id === id ? member : item) } : previous); } finally { setPendingIds((ids) => ids.filter((item) => item !== id)); } };
+  return <MembersPage locale={locale} loading={state.kind === "loading"} members={state.kind === "ready" ? state.members : []} nextCursor={state.kind === "ready" ? state.nextCursor : null} pendingIds={pendingIds} onLoadMore={loadMore} onStatusChange={changeStatus} />;
 }
