@@ -21,8 +21,8 @@
 - [x] FE-015 安装并锁定单一图标族；证据：`@phosphor-icons/react` 与 `iconLibrary: phosphor`。
 - [x] FE-016 建立 `frontend/` 目录和入口；证据：`frontend/index.html`、`frontend/main.tsx`。
 - [x] FE-017 建立 `npm run build:ui`；证据：Vite 构建输出 `frontend/dist` 成功。
-- [ ] FE-018 将静态构建产物接入 Wrangler Assets。
-- [ ] FE-019 增加构建产物 Secret/Token 扫描。
+- [x] FE-018 将静态构建产物接入 Wrangler Assets；证据：`wrangler.jsonc` 的 `assets.directory=./frontend/dist`、`npm run build` dry-run 读取 React dist 资产，Worker 绑定校验通过。
+- [x] FE-019 增加构建产物 Secret/Token 扫描；证据：`scripts/build-secrets.mjs`、`scripts/build-secrets.test.mjs` 2/2，`npm run build` 在 Wrangler dry-run 前执行 `build:secrets`，真实 `frontend/dist` 扫描通过。
 
 ## 设计 Token 与基础组件
 

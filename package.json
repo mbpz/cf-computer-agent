@@ -10,7 +10,7 @@
     "db:migrate:local": "wrangler d1 migrations apply memory-garden-control-plane --local",
     "db:migrate:remote": "wrangler d1 migrations apply memory-garden-control-plane --remote",
     "test": "npm run test:smoke && npm run test:unit && npm run test:worker",
-    "test:smoke": "node --test scripts/smoke.test.mjs scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs && npm run test:i18n && npm run verify:i18n",
+    "test:smoke": "node --test scripts/smoke.test.mjs scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs scripts/build-secrets.test.mjs && npm run test:i18n && npm run verify:i18n",
     "test:i18n": "node --test scripts/i18n-contract.test.mjs",
     "verify:i18n": "node scripts/verify-i18n.mjs",
     "test:ops:m1": "node --test scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs",
@@ -20,7 +20,7 @@
     "pretest:worker": "npm run build:ui",
     "typecheck": "tsc --noEmit",
     "types:check": "wrangler types --check --env-file config/types.env",
-    "build": "npm run build:ui && wrangler deploy --dry-run",
+    "build": "npm run build:ui && npm run build:secrets && wrangler deploy --dry-run",
     "check": "npm run vendor:check && npm run types:check && npm run typecheck && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
@@ -30,7 +30,8 @@
     "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all",
     "vendor:browser": "node scripts/vendor-browser-deps.mjs",
     "vendor:check": "node scripts/vendor-browser-deps.mjs --check",
-    "build:ui": "vite build --config vite.config.ts"
+    "build:ui": "vite build --config vite.config.ts",
+    "build:secrets": "node scripts/build-secrets.mjs frontend/dist"
   },
   "dependencies": {
     "@cloudflare/computer": "0.1.1",
