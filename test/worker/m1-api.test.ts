@@ -1069,7 +1069,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
       answer: "知识库中没有足够依据回答这个问题。",
       citations: [],
       sources: [],
-      evidenceConfidence: 0.325,
+      evidenceConfidence: 0.375,
       messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT",
       suggestedActionKeys: [
         "KNOWLEDGE_CHAT_REWRITE_QUESTION",

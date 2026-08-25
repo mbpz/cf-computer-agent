@@ -2,6 +2,7 @@ import { uniqueSearchTerms } from "../library/lexical";
 import type { SubmissionKind } from "../submissions/types";
 import type { ParsedSource } from "./types";
 import { MAX_REVISION_CHUNKS } from "./limits";
+import { buildChunkMetadata, type ChunkMetadata } from "./chunk-metadata";
 
 const defaultMaxCodePoints = 1_200;
 const defaultOverlapCodePoints = 120;
@@ -17,6 +18,7 @@ export interface ChunkDraft {
   location?: SourceLocation;
   body: string;
   searchBody: string;
+  metadata?: ChunkMetadata;
 }
 
 export type SourceLocation
@@ -88,6 +90,7 @@ export function chunkDocument(
         ...(headingLocation(block.headingPath, document.normalizedMarkdown, chunk.startLine, chunk.endLine) ? { location: headingLocation(block.headingPath, document.normalizedMarkdown, chunk.startLine, chunk.endLine)! } : {}),
         body: chunk.body,
         searchBody,
+        metadata: buildChunkMetadata(block.headingPath, chunk.body),
       });
       if (drafts.length > MAX_REVISION_CHUNKS) {
         throw new RangeError(`Document exceeds ${MAX_REVISION_CHUNKS} revision chunks`);
@@ -112,6 +115,7 @@ export function chunkDocument(
       ...(headingLocation(heading === null ? [] : [heading.title], document.normalizedMarkdown, firstLine.line, firstLine.line) ? { location: headingLocation(heading === null ? [] : [heading.title], document.normalizedMarkdown, firstLine.line, firstLine.line)! } : {}),
       body: firstLine.text,
       searchBody: makeSearchBody(firstLine.text),
+      metadata: buildChunkMetadata(heading === null ? [] : [heading.title], firstLine.text),
     }];
   }
   return drafts;

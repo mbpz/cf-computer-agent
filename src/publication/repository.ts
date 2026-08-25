@@ -6,6 +6,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, type Page, type PageRequest } f
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import type { PublishedContentReceipt } from "../knowledge/types";
 import { parseSourceLocationJson, type ChunkDraft } from "../sources/chunker";
+import { buildChunkMetadata, metadataSearchText } from "../sources/chunk-metadata";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import type {
   PublicationIntent,
@@ -147,6 +148,8 @@ type IndexChunkRow = {
   searchBody: string;
   index_field: ChunkDraft["indexField"];
   location_json: string;
+  keywords_json: string;
+  question_hints_json: string;
 };
 
 type IndexRevisionRow = {
@@ -441,7 +444,11 @@ export class PublicationRepository implements PublicationRepositoryPort {
            AND (current_revision_id IS NULL OR current_revision_id != ?)`,
       ).bind(current.revisionId, timestamp, current.knowledgeItemId, current.revisionId),
       this.changeGuard(),
-      ...chunks.map((chunk) => this.prepareChunk(current, chunk, indexDocument.tags)),
+      ...chunks.map((chunk) => this.prepareChunk(
+        current,
+        chunk,
+        `${indexDocument.tags} ${metadataSearchText(chunk.metadata ?? buildChunkMetadata(chunk.headingPath, chunk.body))}`.trim(),
+      )),
       ...current.tagIds.map((tagId) => this.db.prepare(
         "INSERT INTO revision_tags (revision_id, tag_id) VALUES (?, ?)",
       ).bind(current.revisionId, tagId)),
@@ -900,7 +907,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
       if (!revision) throw new Error("Index revision not found");
       const chunks = await this.db.prepare(
         `SELECT rowid AS ftsRowid, id, status, ordinal, heading_path, start_line, end_line, body,
-           search_body AS searchBody, index_field, location_json
+           search_body AS searchBody, index_field, location_json, keywords_json, question_hints_json
          FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
       ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<IndexChunkRow>();
       if (chunks.results.length === 0 || chunks.results.length > MAX_REVISION_CHUNKS) {
@@ -916,6 +923,10 @@ export class PublicationRepository implements PublicationRepositoryPort {
         body: chunk.body,
         searchBody: chunk.searchBody,
         indexField: chunk.index_field,
+        metadata: {
+          keywords: parseJsonStringArray(chunk.keywords_json),
+          questionHints: parseJsonStringArray(chunk.question_hints_json),
+        },
         ...(parseSourceLocationJson(chunk.location_json) ? { location: parseSourceLocationJson(chunk.location_json) } : {}),
       }));
       const tags = await this.indexTagsForRevision(revisionId);
@@ -934,7 +945,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
           field.chunkId,
           document.title,
           document.summary,
-          document.tags,
+          `${document.tags} ${metadataSearchText(normalizedChunks[index]!.metadata)}`.trim(),
           field.body,
           field.code,
         )),
@@ -946,7 +957,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
           field.chunkId,
           document.title,
           document.summary,
-          document.tags,
+          `${document.tags} ${metadataSearchText(normalizedChunks[index]!.metadata)}`.trim(),
           field.body,
           field.code,
         )) : []),
@@ -1036,8 +1047,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
     return this.db.prepare(
       `INSERT INTO chunks (
         id, revision_id, ordinal, parent_chunk_id, heading_path, start_line, end_line, body,
-        search_title, search_tags, search_body, index_field, location_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        search_title, search_tags, search_body, index_field, location_json, keywords_json, question_hints_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       `${intent.revisionId}-chunk-${chunk.ordinal}`,
       intent.revisionId,
@@ -1054,6 +1065,8 @@ export class PublicationRepository implements PublicationRepositoryPort {
       chunk.searchBody,
       chunk.indexField,
       JSON.stringify(chunk.location ?? {}),
+      JSON.stringify((chunk.metadata ?? buildChunkMetadata(chunk.headingPath, chunk.body)).keywords),
+      JSON.stringify((chunk.metadata ?? buildChunkMetadata(chunk.headingPath, chunk.body)).questionHints),
     );
   }
 
@@ -1684,5 +1697,16 @@ function assertChunks(chunks: ChunkDraft[]): void {
       || chunk.startLine < 1 || chunk.endLine < chunk.startLine) {
       throw new TypeError("Publication chunks are invalid");
     }
+  }
+}
+
+function parseJsonStringArray(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")
+      ? parsed.slice(0, 8) as string[]
+      : [];
+  } catch {
+    return [];
   }
 }

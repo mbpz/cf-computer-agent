@@ -447,7 +447,7 @@ describe("M1 publication control plane", () => {
     expect(rows.results[0]).toMatchObject({
       title: "Reviewed title",
       summary: `${"😀".repeat(238)} t`,
-      tags: "tag-a Alpha Governance tag-b Beta Safety",
+      tags: "tag-a Alpha Governance tag-b Beta Safety keyword:fields keyword:tail keyword:prose keyword:marker question:What is fields? question:What is tail? question:What is prose? question:What is marker?",
       body: expect.stringContaining("tail prose marker"),
       code: "",
     });

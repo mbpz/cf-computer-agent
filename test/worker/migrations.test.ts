@@ -358,6 +358,8 @@ describe("Phase 1 control-plane migrations", () => {
       "location_json:TEXT:1:'{}':0",
       "parent_chunk_id:TEXT:0:NULL:0",
       "status:TEXT:1:'active':0",
+      "keywords_json:TEXT:1:'[]':0",
+      "question_hints_json:TEXT:1:'[]':0",
     ], [
       "CHECK(ordinal >= 0)",
       "CHECK(start_line > 0)",

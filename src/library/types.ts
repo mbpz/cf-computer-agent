@@ -71,6 +71,8 @@ export interface ChunkPreview {
   location?: SourceLocation;
   body: string;
   tokenEstimate: number;
+  keywords: string[];
+  questionHints: string[];
 }
 
 export interface ChunkPreviewPage {

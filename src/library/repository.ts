@@ -1,5 +1,6 @@
 import { AppError } from "../http";
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
+import { metadataSearchText } from "../sources/chunk-metadata";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
@@ -247,6 +248,8 @@ type ChunkPreviewRow = {
   end_line: number;
   location_json: string | null;
   body: string;
+  keywords_json: string;
+  question_hints_json: string;
 };
 
 export class LibraryRepository implements LibraryRepositoryPort {
@@ -586,7 +589,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
          WHERE id = ? AND role = 'admin' AND status = 'active'
        )
        SELECT c.id, c.status, c.parent_chunk_id, c.ordinal, c.heading_path,
-         c.start_line, c.end_line, c.location_json, c.body
+         c.start_line, c.end_line, c.location_json, c.body, c.keywords_json, c.question_hints_json
        FROM authorized_member am
        JOIN revisions r ON r.id = ? AND r.knowledge_item_id = ?
        JOIN knowledge_items k ON k.id = r.knowledge_item_id AND k.status = 'active'
@@ -646,11 +649,13 @@ export class LibraryRepository implements LibraryRepositoryPort {
        WHERE rt.revision_id = ? ORDER BY t.id ASC`,
     ).bind(revisionId).all<IndexTag>();
     const allChunks = await this.db.prepare(
-      `SELECT id, ordinal, heading_path, start_line, end_line, body, search_body, index_field, location_json
+      `SELECT id, ordinal, heading_path, start_line, end_line, body, search_body, index_field, location_json,
+         keywords_json, question_hints_json
        FROM chunks WHERE revision_id = ? ORDER BY ordinal ASC LIMIT ?`,
     ).bind(revisionId, MAX_REVISION_CHUNKS + 1).all<{
       id: string; ordinal: number; heading_path: string; start_line: number; end_line: number;
       body: string; search_body: string; index_field: "body" | "code"; location_json: string;
+      keywords_json: string; question_hints_json: string;
     }>();
     if (allChunks.results.length === 0 || allChunks.results.length > MAX_REVISION_CHUNKS) return null;
     const normalizedChunks = allChunks.results.map((candidate) => ({
@@ -662,6 +667,10 @@ export class LibraryRepository implements LibraryRepositoryPort {
       body: candidate.body,
       searchBody: candidate.search_body,
       indexField: candidate.index_field,
+      metadata: {
+        keywords: parseJsonStringArray(candidate.keywords_json),
+        questionHints: parseJsonStringArray(candidate.question_hints_json),
+      },
       ...(parseSourceLocationJson(candidate.location_json)
         ? { location: parseSourceLocationJson(candidate.location_json) } : {}),
     }));
@@ -693,14 +702,14 @@ export class LibraryRepository implements LibraryRepositoryPort {
        SELECT c.rowid, c.id, ?, ?, ?, ?, ? FROM chunks c
        WHERE c.id = ? AND c.revision_id = ? AND c.status = 'active'
          AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')`,
-    ).bind(document.title, document.summary, document.tags, field.body, field.code, chunkId, revisionId, scope.memberId);
+    ).bind(document.title, document.summary, `${document.tags} ${metadataSearchText(normalizedChunks.find((candidate) => candidate.id === row.id)?.metadata ?? { keywords: [], questionHints: [] })}`.trim(), field.body, field.code, chunkId, revisionId, scope.memberId);
     const insertShared = this.db.prepare(
       `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
        SELECT c.rowid, c.id, ?, ?, ?, ?, ? FROM chunks c
        JOIN revisions r ON r.id = c.revision_id AND r.visibility = 'shared'
        WHERE c.id = ? AND c.revision_id = ? AND c.status = 'active'
          AND EXISTS (SELECT 1 FROM members m WHERE m.id = ? AND m.role = 'admin' AND m.status = 'active')`,
-    ).bind(document.title, document.summary, document.tags, field.body, field.code, chunkId, revisionId, scope.memberId);
+    ).bind(document.title, document.summary, `${document.tags} ${metadataSearchText(normalizedChunks.find((candidate) => candidate.id === row.id)?.metadata ?? { keywords: [], questionHints: [] })}`.trim(), field.body, field.code, chunkId, revisionId, scope.memberId);
     const results = await this.db.batch([update, deleteAdmin, deleteShared, insertAdmin, insertShared]);
     if (results[0]?.meta.changes !== 1) return null;
     return { id: row.id, status };
@@ -828,6 +837,17 @@ export class LibraryRepository implements LibraryRepositoryPort {
 
 function positiveIntegerOrNull(value: number | null): number | null {
   return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value : null;
+}
+
+function parseJsonStringArray(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === "string")
+      ? parsed.slice(0, 8) as string[]
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function parserSchemaVersionOrNull(value: string | null): ParserSchemaVersion | null {
@@ -966,6 +986,8 @@ function mapChunkPreview(row: ChunkPreviewRow): ChunkPreviewPage["items"][number
     ...(location ? { location } : {}),
     body: row.body,
     tokenEstimate: Math.ceil([...row.body].length / 4),
+    keywords: parseJsonStringArray(row.keywords_json),
+    questionHints: parseJsonStringArray(row.question_hints_json),
   };
 }
 
