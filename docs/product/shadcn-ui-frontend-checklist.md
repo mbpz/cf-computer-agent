@@ -93,6 +93,7 @@
 - [x] FE-063b 接通移动导航的 controlled open、Sheet focus scope、Escape/关闭按钮与路由切换关闭；关闭时不输出 `role=dialog`/`aria-modal`，并新增 Sheet closed-state 回归。
 - [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
 - [x] FE-064a 顶栏 Dropdown 接入 menu/menuitem 语义与 Escape、Home/End、Arrow 上下键盘动作；证据：`frontend/lib/menu-keyboard.ts`、`frontend/components/ui/dropdown-menu.tsx`、`test/unit/frontend-menu-keyboard.test.tsx` 6/6，Shell 回归 6/6；Tabs、表单和分页的全局矩阵仍由 FE-064 主项收口。
+- [x] FE-064b 新增 Tabs 原语：`tablist/tab/tabpanel` 语义、受控/非受控值、roving tabindex、方向键与 Home/End；证据：`frontend/components/ui/tabs.tsx`、`frontend/lib/tabs-keyboard.ts`、`test/unit/frontend-tabs.test.tsx`。
 - [x] FE-065 验证 WCAG AA 对比度和 focus-visible；证据：`scripts/wcag-contract.mjs` 解析 light/dark OKLCH token 并验证正文组合 >=4.5:1，`globals.css` 的 2px `:focus-visible` ring，`scripts/wcag-contract.test.mjs` 1/1，已纳入 `npm test`；同时收紧浅色 primary/muted/destructive 与暗色 accent token。
 - [x] FE-066 验证 320px、768px、1280px 布局；证据：`responsive-contract.ts` 与响应式测试 2/2。
 - [x] FE-067 验证 reduced motion 和无鼠标操作；证据：`globals.css` reduced-motion 规则与 focus restoration 测试。
