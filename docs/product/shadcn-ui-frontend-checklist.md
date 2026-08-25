@@ -47,9 +47,9 @@
 - [x] FE-034a 建立 `PageState` 原子组件并接入管理员审核、资产、审计、成员、空间列表的 empty/error 状态；证据：`frontend/components/ui/page-state.tsx`、`test/unit/frontend-page-state.test.tsx` 5/5，管理员页面回归与全量门禁通过；用户页面 loading/degraded 统一接入仍由 FE-034 主项收口。
 - [x] FE-034b 用户页面接入 `PageState`：Home、Knowledge、Search、Agent、Submit、My Submissions 统一 loading/error/empty/degraded 结构；证据：对应 `frontend/pages/*` 与 `frontend-user-read-pages.test.tsx` 7/7，TypeScript 通过；分页/取消由 FE-036a 独立覆盖。
 - [x] FE-035 实现 `apiFetch`、错误码和 request-id 显示；证据：`frontend/lib/api.ts`、`frontend/lib/session.ts`、API 测试 8/8。
-- [ ] FE-036 实现 cursor 分页和 request cancellation。
+- [x] FE-036 实现 cursor 分页和 request cancellation；证据：知识库、搜索、我的提交、审核队列、成员与管理员数据层均使用 bounded cursor + AbortController。
 - [x] FE-036a 知识库列表接入 20 条 cursor 请求、AbortController 取消旧请求、generation stale-response 防护和重复加载禁用；证据：`frontend/lib/knowledge-data.ts`、`frontend/app.tsx`、`test/unit/frontend-knowledge-data.test.ts` 2/2，用户知识页回归 5/5。
-- [ ] FE-037 实现 stale mutation owner guard。
+- [x] FE-037 实现 stale mutation owner guard；证据：`createAsyncOwner` 已覆盖读取分页、搜索、Agent、提交列表和管理员列表请求，mutation 保留单项 pending 与过期响应保护。
 - [x] FE-037a 抽出 `createAsyncOwner` token 原语并接入审核详情 mutation、知识库分页请求；证据：`frontend/lib/async-owner.ts`、`review-detail-route.tsx`、`knowledge-data.ts`、`frontend-async-owner.test.ts` 2/2，相关数据/审核 focused 回归 8/8。
 - [x] FE-038 实现未知路由 404 和参数路由 contract；证据：`frontend/lib/router.ts`、路由测试 2/2；Worker fallback 仍待最终切换阶段。
 
