@@ -17,7 +17,9 @@ export interface ChunkDraft {
   searchBody: string;
 }
 
-export type SourceLocation = { kind: "pdf"; page: number | "unknown" };
+export type SourceLocation
+  = { kind: "pdf"; page: number | "unknown" }
+  | { kind: "spreadsheet"; sheet: string; range: string };
 
 export function parseSourceLocationJson(value: unknown): SourceLocation | undefined {
   if (typeof value !== "string" || value === "{}") return undefined;
@@ -25,10 +27,18 @@ export function parseSourceLocationJson(value: unknown): SourceLocation | undefi
     const parsed: unknown = JSON.parse(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
     const record = parsed as Record<string, unknown>;
-    if (record.kind !== "pdf") return undefined;
-    if (record.page === "unknown") return { kind: "pdf", page: "unknown" };
-    if (!Number.isSafeInteger(record.page) || (record.page as number) < 1) return undefined;
-    return { kind: "pdf", page: record.page as number };
+    if (record.kind === "pdf") {
+      if (record.page === "unknown") return { kind: "pdf", page: "unknown" };
+      if (!Number.isSafeInteger(record.page) || (record.page as number) < 1) return undefined;
+      return { kind: "pdf", page: record.page as number };
+    }
+    if (record.kind === "spreadsheet"
+      && typeof record.sheet === "string" && record.sheet.length > 0 && record.sheet.length <= 120
+      && !/[\u0000-\u001f\u007f]/u.test(record.sheet)
+      && typeof record.range === "string" && /^[A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*$/u.test(record.range)) {
+      return { kind: "spreadsheet", sheet: record.sheet, range: record.range };
+    }
+    return undefined;
   } catch {
     return undefined;
   }
@@ -58,7 +68,7 @@ export function chunkDocument(
         indexField: block.kind === "code" ? "code" : "body",
         headingPath: [...block.headingPath],
         ...sourceLocation(document, chunk.startLine, chunk.endLine),
-        ...(pdfLocation(block.headingPath) ? { location: pdfLocation(block.headingPath)! } : {}),
+        ...(headingLocation(block.headingPath) ? { location: headingLocation(block.headingPath)! } : {}),
         body: chunk.body,
         searchBody,
       });
@@ -82,7 +92,7 @@ export function chunkDocument(
       indexField: "body",
       headingPath: heading === null ? [] : [heading.title],
       ...sourceLocation(document, firstLine.line, firstLine.line),
-      ...(pdfLocation(heading === null ? [] : [heading.title]) ? { location: pdfLocation(heading === null ? [] : [heading.title])! } : {}),
+      ...(headingLocation(heading === null ? [] : [heading.title]) ? { location: headingLocation(heading === null ? [] : [heading.title])! } : {}),
       body: firstLine.text,
       searchBody: makeSearchBody(firstLine.text),
     }];
@@ -90,12 +100,14 @@ export function chunkDocument(
   return drafts;
 }
 
-function pdfLocation(headingPath: string[]): SourceLocation | null {
+function headingLocation(headingPath: string[]): SourceLocation | null {
   const heading = headingPath.at(-1);
   if (heading === undefined) return null;
-  const match = /^Page (unknown|[1-9][0-9]*)$/u.exec(heading.trim());
-  if (match === null) return null;
-  return { kind: "pdf", page: match[1] === "unknown" ? "unknown" : Number(match[1]) };
+  const page = /^Page (unknown|[1-9][0-9]*)$/u.exec(heading.trim());
+  if (page !== null) return { kind: "pdf", page: page[1] === "unknown" ? "unknown" : Number(page[1]) };
+  const sheet = /^Sheet: (.+) \(([A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*)\)$/u.exec(heading.trim());
+  if (sheet !== null && sheet[1]!.length <= 120) return { kind: "spreadsheet", sheet: sheet[1]!, range: sheet[2]! };
+  return null;
 }
 
 function sourceLocation(

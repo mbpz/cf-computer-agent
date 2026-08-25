@@ -14,6 +14,15 @@ describe("chunkDocument", () => {
       { kind: "pdf", page: "unknown" },
     ]);
   });
+
+  it("carries spreadsheet sheet and cell-range headings into a stable location", () => {
+    const chunks = chunkDocument({
+      normalizedMarkdown: "## Sheet: Sales (A1:B2)\n\n| Product | Amount |\n| --- | --- |\n| Tea | 4 |\n",
+      kind: "markdown",
+    });
+
+    expect(chunks[0]?.location).toEqual({ kind: "spreadsheet", sheet: "Sales", range: "A1:B2" });
+  });
   it("maps fenced code locations to the one-based original line baseline", () => {
     const chunks = chunkDocument({
       kind: "code",
