@@ -9,6 +9,7 @@ import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { AuditPage } from "../../frontend/pages/admin/audit-page";
 import { AdminForbiddenPage } from "../../frontend/pages/admin/admin-forbidden-page";
 import { assetPreviewModel } from "../../frontend/components/assets/asset-preview-model";
+import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 describe("React administrator pages", () => {
   it("renders dashboard metrics and a contributor 403 state", () => {
@@ -51,5 +52,15 @@ describe("React administrator pages", () => {
     const audit = renderToStaticMarkup(<AuditPage state={{ kind: "ready", events: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], nextCursor: "cursor-2" }} onLoadMore={vi.fn()} />);
     expect(audit).toContain("submission.created");
     expect(audit).toContain("Load more");
+  });
+
+  it("localizes administrator copy through the shared locale runtime", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: 1, assets: 2, members: 3 }} />);
+    const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />);
+    expect(dashboard).toContain("管理");
+    expect(dashboard).toContain("审核队列");
+    expect(queue).toContain("审核队列");
+    expect(queue).not.toContain("Review queue");
   });
 });

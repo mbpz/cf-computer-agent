@@ -74,13 +74,13 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "agent": return <AgentPage locale={locale} scope="all" state={{ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] }} />;
     case "submit": return <SubmitPage locale={locale} draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />;
     case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
-    case "admin": return <AdminDashboardPage metrics={{ pending: 0, assets: 0, members: 0 }} />;
-    case "admin-submissions": return <ReviewQueuePage state={{ kind: "ready", items: [], nextCursor: null }} />;
+    case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
+    case "admin-submissions": return <ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
-    case "admin-members": return <MembersPage members={[]} />;
-    case "admin-spaces": return <SpacesPage spaces={[]} />;
-    case "admin-audit": return <AuditPage state={{ kind: "ready", events: [], nextCursor: null }} />;
+    case "admin-members": return <MembersPage locale={locale} members={[]} />;
+    case "admin-spaces": return <SpacesPage locale={locale} spaces={[]} />;
+    case "admin-audit": return <AuditPage locale={locale} state={{ kind: "ready", events: [], nextCursor: null }} />;
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
