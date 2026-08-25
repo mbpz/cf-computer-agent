@@ -23,11 +23,11 @@
 ```text
 frontend/dist/index.html
 frontend/dist/manifest.json
-frontend/dist/assets/index-BoH-uOnZ.js
-frontend/dist/assets/index-DFuClFwz.css
+frontend/dist/assets/index-DBid5W9m.js
+frontend/dist/assets/index-DB6KBWiA.css
 ```
 
-当前构建摘要：JS 278.80 kB、CSS 25.34 kB、gzip 总上传由 Wrangler dry-run 报告为 802.45 KiB（gzip 160.73 KiB）。
+当前构建摘要：JS 300.48 kB、CSS 25.98 kB；构建产物名称由 Vite 内容哈希生成，部署前应以本次 `manifest.json` 为准。
 
 ## 重跑命令
 
