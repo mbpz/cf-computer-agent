@@ -59,6 +59,7 @@
 - [x] FE-041 重构知识库列表；证据：`frontend/pages/knowledge-page.tsx`、`knowledge-card.tsx`，空态与 cursor load-more。
 - [x] FE-042 重构知识阅读页和安全 Markdown 展示；证据：`knowledge-reader-page.tsx` 只消费注入的安全 renderer，测试覆盖调用边界。
 - [x] FE-043 重构搜索页、过滤器、分页和无结果状态；证据：`frontend/pages/search-page.tsx` 与 bounded result list/degraded 状态。
+- [x] FE-043a 封装真实 `/api/knowledge/search` 数据边界：query/cursor bounded、citation href、matchedFields allowlist、degraded 与取消/过期响应保护；证据：`frontend/lib/search-data.ts`、`test/unit/frontend-search-data.test.ts`。
 - [x] FE-044 重构 Agent 问答页、scope、引用和 confidence；证据：`agent-page.tsx`、`answer-panel.tsx`，5 个页面测试通过。
 - [x] FE-045 重构知识录入表单和校验错误；证据：`submit-page.tsx`、`submission-form-model.ts`，UTF-8 128 KiB 边界与模式校验测试。
 - [ ] FE-046 重构文件拖拽/选择上传。
