@@ -87,6 +87,7 @@
 - [x] FE-061 中英文 key/placeholder 静态验证；证据：`npm run test:i18n` 13/13、`npm run verify:i18n` 通过。
 - [x] FE-062 统一 button/link/input accessible name；证据：`frontend-a11y.test.tsx` 2/2 覆盖 skip link、landmarks、language、form label。
 - [ ] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点。
+- [x] FE-063a 增加可复用 focus scope：打开时聚焦首个可聚焦元素、Tab/Shift+Tab 循环、Escape 回调关闭、卸载恢复触发点；证据：`frontend/components/ui/focus-scope.tsx`、Dialog/Sheet data-focus-scope 标记与 `test/unit/frontend-focus-scope.test.tsx` 6/6。移动 Shell 的原生 details 打开状态接线仍由 FE-063 主项收口。
 - [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
 - [ ] FE-065 验证 WCAG AA 对比度和 focus-visible。
 - [x] FE-066 验证 320px、768px、1280px 布局；证据：`responsive-contract.ts` 与响应式测试 2/2。
