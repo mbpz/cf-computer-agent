@@ -449,6 +449,13 @@ describe("Worker application", () => {
     await expectError(loggedOut, 401, "AUTH_REQUIRED");
   });
 
+  it("keeps browser navigation to logout fail-closed while exposing POST as the only method", async () => {
+    const response = await fetchApp(createApp({ githubFetch: fakeGitHubFetch("success") }), "/auth/logout");
+    await expectError(response, 405, "METHOD_NOT_ALLOWED");
+    expect(response.headers.get("allow")).toBe("POST");
+    expect(setCookies(response)).toEqual([]);
+  });
+
   it("clears the browser cookie but preserves a redacted failure when D1 logout revocation fails", async () => {
     const failure = failingSessionDeleteDatabase(env.DB);
     const app = createApp({
