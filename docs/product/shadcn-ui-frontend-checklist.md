@@ -77,6 +77,7 @@
 
 - [x] FE-050 重构管理员 Dashboard；证据：`frontend/pages/admin/admin-dashboard-page.tsx`。
 - [x] FE-051 重构审核队列和筛选；证据：`review-queue-page.tsx` 的 bounded queue 状态与 cursor。
+- [x] FE-051a 接入 `/api/admin/submissions`：服务端 `review_pending` 筛选、opaque cursor、malformed row 过滤、取消/追加分页；证据：`frontend/lib/admin-review-data.ts`、`ReviewQueueRoute`。
 - [x] FE-052 重构审核详情、发布、驳回、要求修改；证据：`review-detail-route.tsx` 已接通真实预览与三类审核 mutation，数据边界 7/7、全量门禁通过。
 - [x] FE-052a 建立参数化审核详情页与动作边界；证据：`review-detail-model.ts`、`review-detail-page.tsx`、`/admin/submissions/:id` 路由测试 21/21；覆盖 loading/error/preview/publish/request_changes/reject，真实 API mutation 接线待后续数据层切片。
 - [x] FE-052b 接通审核详情真实 GET 与审核 mutation；证据：`review-detail-data.ts`、`review-detail-route.tsx`、审核数据边界测试 7/7；覆盖预览归一化、发布、要求修改、驳回、失败提示与 terminal 状态禁用。

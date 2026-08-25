@@ -23,7 +23,8 @@ describe("React administrator pages", () => {
     const html = renderToStaticMarkup(<ReviewQueuePage state={{ kind: "ready", items: [{ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "pending" }], nextCursor: "next" }} onReview={vi.fn()} />);
     expect(html).toContain("Publish");
     expect(html).toContain("Request changes");
-    expect(html).toContain("next");
+    expect(html).toContain("Load more");
+    expect(html).not.toContain('>next<');
   });
 
   it("renders asset retry and preview affordances", () => {
