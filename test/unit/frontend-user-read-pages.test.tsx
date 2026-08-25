@@ -44,6 +44,8 @@ describe("React read-only user pages", () => {
     const html = renderToStaticMarkup(<AgentPage scope="space:personal" state={{ kind: "ready", answer: "Use the guide.", confidence: "high", citations: [{ id: "r1", title: "Guide", href: "/knowledge/r1" }] }} />);
     expect(html).toContain("space:personal");
     expect(html).toContain("High confidence");
+    expect(html).toContain('id="agent-question"');
+    expect(html).toContain("Question");
     expect(html).toContain("Guide");
     expect(renderToStaticMarkup(<AgentPage scope="all" state={{ kind: "error", message: "Retry later" }} />)).toContain("Retry later");
   });

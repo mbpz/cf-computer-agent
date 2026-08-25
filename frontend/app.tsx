@@ -17,6 +17,7 @@ import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
+import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
@@ -72,7 +73,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge": return <KnowledgeRoute locale={locale} />;
     case "knowledge-reader": return <KnowledgeReaderPage locale={locale} revision={{ id: pathname.split("/").pop() || "", title: frontendText(locale, "KNOWLEDGE_TITLE"), markdown: frontendText(locale, "KNOWLEDGE_READER_LOADING") }} renderMarkdown={(markdown) => markdown} />;
     case "search": return <SearchRoute locale={locale} />;
-    case "agent": return <AgentPage locale={locale} scope="all" state={{ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] }} />;
+    case "agent": return <AgentRoute locale={locale} />;
     case "submit": return <SubmitPage locale={locale} draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />;
     case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
@@ -204,4 +205,29 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
     });
   };
   return <SearchPage locale={locale} query={query} state={state} onQueryChange={setQuery} onSubmit={submit} onLoadMore={loadMore} onRetry={() => setSubmitVersion((version) => version + 1)} />;
+}
+
+function AgentRoute({ locale }: { locale: LocaleRuntime }) {
+  const [question, setQuestion] = useState("");
+  const [lastQuestion, setLastQuestion] = useState("");
+  const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
+  const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
+  if (!controllerRef.current) controllerRef.current = createAgentRequestController();
+  useEffect(() => () => { controllerRef.current?.cancel(); }, []);
+  const submit = (nextQuestion = question) => {
+    const normalized = nextQuestion.trim();
+    if (!normalized || !controllerRef.current) return;
+    setQuestion(normalized);
+    setLastQuestion(normalized);
+    setState({ kind: "loading" });
+    const request = controllerRef.current.request(normalized, { kind: "all" });
+    void request.promise.then(({ generation, answer }) => {
+      if (controllerRef.current?.isCurrent(generation)) setState({ kind: "ready", ...answer });
+    }).catch((error: unknown) => {
+      if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
+        setState({ kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
+      }
+    });
+  };
+  return <AgentPage locale={locale} scope={{ kind: "all" }} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onRetry={() => submit(lastQuestion)} />;
 }

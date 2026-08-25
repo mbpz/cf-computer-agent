@@ -1,7 +1,8 @@
 import { Alert, AlertDescription } from "../ui/alert";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
+import type { AgentCitation } from "../../lib/agent-data";
 
-export interface AgentCitation { id: string; title?: string; href: string; }
+export type { AgentCitation } from "../../lib/agent-data";
 
 export function AnswerPanel({ state, locale }: { state: { kind: "ready"; answer: string; confidence: "high" | "medium" | "low"; citations: readonly AgentCitation[] } | { kind: "error"; message: string }; locale?: LocaleRuntime }) {
   if (state.kind === "error") return <Alert variant="destructive"><AlertDescription>{state.message || frontendText(locale, "COMMON_ANSWER_UNAVAILABLE")}</AlertDescription></Alert>;
