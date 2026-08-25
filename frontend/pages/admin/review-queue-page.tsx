@@ -2,10 +2,12 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { Skeleton } from "../../components/ui/skeleton";
+import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 
 export function ReviewQueuePage({ state, onReview, locale }: { state: { kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; submitter?: string; status?: string }[]; nextCursor: string | null } | { kind: "error"; message: string }; onReview?: (id: string, action: "publish" | "reject" | "request_changes") => void; locale?: LocaleRuntime }) {
   if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
-  if (state.kind === "error") return <p className="text-sm text-destructive">{state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</p>;
+  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} />;
+  if (!state.items.length) return <PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />;
   return <section className="space-y-5"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")}</p></div>{state.items.map((item) => <Card key={item.id}><CardContent className="space-y-4 p-4"><div className="flex items-start justify-between gap-4"><div><h2 className="font-medium"><a href={`/admin/submissions/${encodeURIComponent(item.id)}`} className="hover:underline">{item.title?.trim() || frontendText(locale, "ADMIN_REVIEW_UNTITLED")}</a></h2><p className="mt-1 text-xs text-muted-foreground">{item.submitter || frontendText(locale, "ADMIN_REVIEW_SUBMITTER_UNAVAILABLE")}</p></div><Badge variant="outline">{item.status || frontendText(locale, "ADMIN_REVIEW_STATUS_UNAVAILABLE")}</Badge></div><div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => onReview?.(item.id, "publish")}>{frontendText(locale, "ADMIN_REVIEW_PUBLISH")}</Button><Button size="sm" variant="outline" onClick={() => onReview?.(item.id, "request_changes")}>{frontendText(locale, "ADMIN_REVIEW_REQUEST_CHANGES")}</Button><Button size="sm" variant="destructive" onClick={() => onReview?.(item.id, "reject")}>{frontendText(locale, "ADMIN_REVIEW_REJECT")}</Button></div></CardContent></Card>)}{state.nextCursor && <span className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_LOAD_MORE")}: {state.nextCursor}</span>}</section>;
 }

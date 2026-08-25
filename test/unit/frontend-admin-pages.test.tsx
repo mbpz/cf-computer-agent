@@ -60,7 +60,7 @@ describe("React administrator pages", () => {
     const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />);
     expect(dashboard).toContain("管理");
     expect(dashboard).toContain("审核队列");
-    expect(queue).toContain("审核队列");
+    expect(queue).toContain("暂无待审核提交");
     expect(queue).not.toContain("Review queue");
   });
 });
