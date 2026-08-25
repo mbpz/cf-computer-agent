@@ -57,7 +57,7 @@
 
 - [x] FE-040 重构首页 Dashboard；证据：`frontend/pages/home-page.tsx`，loading/ready/error 三态。
 - [x] FE-041 重构知识库列表；证据：`frontend/pages/knowledge-page.tsx`、`knowledge-card.tsx`，空态与 cursor load-more。
-- [x] FE-042 重构知识阅读页和安全 Markdown 展示；证据：`knowledge-reader-page.tsx` 只消费注入的安全 renderer，测试覆盖调用边界。
+- [x] FE-042 重构知识阅读页和安全 Markdown 展示；证据：`knowledge-reader-page.tsx` 接入真实 `/api/knowledge/:id` 当前修订、loading/error/retry/历史修订状态；`knowledge-reader-data.ts` 归一化授权 revision/chunk；`markdown-renderer.ts` 使用 `markdown-it + DOMPurify`，XSS 回归通过。
 - [x] FE-043 重构搜索页、过滤器、分页和无结果状态；证据：`frontend/pages/search-page.tsx`、`frontend/app.tsx` 的 SearchRoute 与 bounded result list/degraded 状态。
 - [x] FE-043a 封装真实 `/api/knowledge/search` 数据边界：query/cursor bounded、citation href、matchedFields allowlist、degraded 与取消/过期响应保护；证据：`frontend/lib/search-data.ts`、`test/unit/frontend-search-data.test.ts`。
 - [x] FE-043b 接入搜索页面真实请求：URL query 同步、结果追加分页、请求取消/过期保护、加载/错误/重试状态；证据：`SearchRoute` 与 `test/unit/frontend-user-read-pages.test.tsx`，完整门禁通过。
