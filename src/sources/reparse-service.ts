@@ -31,6 +31,7 @@ export interface SourceReparseSnapshot {
   collectionId: string | null;
   title: string;
   requestedVisibility: "shared" | "admin_only";
+  publishedKnowledgeItemId: string | null;
 }
 
 export interface SourceReparsePromotion {
@@ -144,6 +145,13 @@ export class SourceReparseService {
       if (replay) return replay;
       throw error;
     }
+  }
+
+  async snapshot(jobId: string): Promise<SourceReparseSnapshot> {
+    const job = await this.get(jobId);
+    const snapshot = await this.repository.findSourceVersionForReparse(job.baseSourceVersionId);
+    if (!snapshot) throw new AppError("SOURCE_REPARSE_NOT_FOUND", "Source version not found", 404);
+    return snapshot;
   }
 }
 

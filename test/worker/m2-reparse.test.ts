@@ -25,13 +25,13 @@ beforeEach(async () => {
   ).bind(now, now).run();
   await env.DB.prepare(
     "INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, parser_schema_version, source_identity_sha256, created_at) VALUES ('m2-source-version', 'm2-source', 'm2-submission', 1, 'Original body', ?, 'm1-v1', 'm1-v2', ?, ?)",
-  ).bind("a".repeat(64), "b".repeat(64), now).run();
+  ).bind(await sha256Hex("Original body"), "b".repeat(64), now).run();
   await env.DB.prepare(
     "INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('m2-item', 'default', NULL, NULL, 'active', 'indexed', ?, ?)",
   ).bind(now, now).run();
   await env.DB.prepare(
     "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('m2-revision', 'm2-item', 'm2-source-version', '/workspace/published/default/m2-item/m2-revision.md', ?, 'M2 source', '[]', 'shared', 'm2-admin', ?)",
-  ).bind("a".repeat(64), now).run();
+  ).bind(await sha256Hex("Original body"), now).run();
   await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'm2-revision' WHERE id = 'm2-item'").run();
   const sessions = new SessionService(env.DB, new MembersRepository(env.DB), { waitUntil: () => undefined });
   adminCookie = (await sessions.create({
@@ -97,13 +97,28 @@ describe("M2 source reparse schema", () => {
       "SELECT s.status, sv.parser_version, sv.parser_schema_version, old.source_version_id AS old_revision_source, old.content_sha256 AS old_hash FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id JOIN revisions old ON old.source_version_id = 'm2-source-version' WHERE s.id = ?",
     ).bind(`${body.job.id}:submission`).first()).resolves.toEqual({
       status: "review_pending", parser_version: "m2-v1", parser_schema_version: "m2-v1",
-      old_revision_source: "m2-source-version", old_hash: "a".repeat(64),
+      old_revision_source: "m2-source-version", old_hash: await sha256Hex("Original body"),
     });
     const replayPromotion = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/promote`, {
       method: "POST",
       headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
     }));
     expect(replayPromotion.status).toBe(201);
+
+    const published = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/publish`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
+    }));
+    expect(published.status).toBe(200);
+    const publishedBody = await published.json<{ revision: { sourceVersionId: string; knowledgeItemId: string } }>();
+    expect(publishedBody.revision).toMatchObject({ sourceVersionId: `${body.job.id}:source-version`, knowledgeItemId: "m2-item" });
+    await expect(env.DB.prepare(
+      "SELECT status FROM submissions WHERE id = ?",
+    ).bind(`${body.job.id}:submission`).first()).resolves.toEqual({ status: "published" });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM revisions WHERE knowledge_item_id = 'm2-item'").first())
+      .resolves.toEqual({ count: 2 });
+    await expect(env.DB.prepare("SELECT source_version_id FROM revisions WHERE id = 'm2-revision'").first())
+      .resolves.toEqual({ source_version_id: "m2-source-version" });
   });
 });
 
@@ -112,4 +127,9 @@ async function execute(request: Request): Promise<Response> {
   const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

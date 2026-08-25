@@ -21,7 +21,7 @@ type SourceRow = {
   source_identity_sha256: string | null; code_language: string | null; file_label: string | null;
   line_baseline: number; created_at: string; kind: SubmissionKind; published_revision_id: string | null;
   owner_id: string; space_id: string; collection_id: string | null; title: string;
-  requested_visibility: "shared" | "admin_only";
+  requested_visibility: "shared" | "admin_only"; published_knowledge_item_id: string | null;
 };
 
 export class SourceReparseRepository implements SourceReparseRepositoryPort {
@@ -32,8 +32,8 @@ export class SourceReparseRepository implements SourceReparseRepositoryPort {
       `SELECT sv.id, sv.source_id, sv.submission_id, sv.ordinal, sv.content, sv.content_sha256,
               sv.parser_version, sv.parser_schema_version, sv.source_identity_sha256,
               sv.code_language, sv.file_label, sv.line_baseline, sv.created_at,
-              s.kind, r.id AS published_revision_id, s.owner_id, s.space_id, s.collection_id, s.title,
-              sub.requested_visibility
+              s.kind, r.id AS published_revision_id, r.knowledge_item_id AS published_knowledge_item_id,
+              s.owner_id, s.space_id, s.collection_id, s.title, sub.requested_visibility
        FROM source_versions sv
        JOIN sources s ON s.id = sv.source_id
        JOIN submissions sub ON sub.id = sv.submission_id
@@ -57,6 +57,7 @@ export class SourceReparseRepository implements SourceReparseRepositoryPort {
       collectionId: row.collection_id,
       title: row.title,
       requestedVisibility: row.requested_visibility,
+      publishedKnowledgeItemId: row.published_knowledge_item_id,
     };
   }
 

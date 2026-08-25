@@ -470,7 +470,7 @@ async function assertSourceVersion(
   sourceVersion: ReviewSubmissionSnapshot["sourceVersion"],
   expectedSha256: string,
 ): Promise<void> {
-  if (sourceVersion.parserVersion !== "m1-v1"
+  if (sourceVersion.parserVersion !== "m1-v1" && sourceVersion.parserVersion !== "m2-v1"
     || expectedSha256 !== sourceVersion.contentSha256
     || new TextEncoder().encode(sourceVersion.content).byteLength > MAX_SOURCE_BYTES
     || await sha256Hex(sourceVersion.content) !== expectedSha256) {

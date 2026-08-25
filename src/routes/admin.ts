@@ -14,6 +14,7 @@ import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { TagsService } from "../tags/service";
 import type { SourceReparseService } from "../sources/reparse-service";
+import type { PublicationService } from "../publication/service";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -24,6 +25,7 @@ export interface AdminRouteServices {
   submissions: SubmissionsService;
   tags: TagsService;
   sourceReparse: SourceReparseService;
+  publication: PublicationService;
 }
 
 export async function routeAdminApi(
@@ -258,6 +260,27 @@ export async function routeAdminApi(
   }
 
   const reparseJob = /^\/api\/admin\/reparse-jobs\/([^/]+)$/.exec(url.pathname);
+  const reparsePublish = /^\/api\/admin\/reparse-jobs\/([^/]+)\/publish$/.exec(url.pathname);
+  if (reparsePublish) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
+    requireNoQuery(url);
+    const reviewer = { id: actor.memberId, role: actor.role, status: "active" as const };
+    const jobId = decodePathId(reparsePublish[1]!);
+    const promotion = await services.sourceReparse.promote(jobId, actor.memberId);
+    const snapshot = await services.sourceReparse.snapshot(jobId);
+    const preview = await services.publication.preview(reviewer, promotion.submissionId);
+    const revision = await services.publication.publish(reviewer, promotion.submissionId, {
+      title: preview.title,
+      visibility: preview.requestedVisibility,
+      spaceId: preview.requestedSpaceId,
+      collectionId: preview.requestedCollectionId,
+      tagIds: [],
+      ...(snapshot.publishedKnowledgeItemId === null ? {} : { knowledgeItemId: snapshot.publishedKnowledgeItemId }),
+    });
+    return jsonResponse({ promotion, revision }, 200, context.requestId);
+  }
   const reparsePromotion = /^\/api\/admin\/reparse-jobs\/([^/]+)\/promote$/.exec(url.pathname);
   if (reparsePromotion) {
     requireCapability(principal, "knowledge:review");

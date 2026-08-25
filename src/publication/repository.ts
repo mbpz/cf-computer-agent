@@ -63,8 +63,8 @@ type PreviewRow = {
   source_version_id: string;
   source_content: string;
   content_sha256: string;
-  parser_version: "m1-v1";
-  parser_schema_version: "m1-v1" | "m1-v2";
+  parser_version: "m1-v1" | "m2-v1";
+  parser_schema_version: "m1-v1" | "m1-v2" | "m2-v1";
   code_language: string | null;
   file_label: string | null;
   line_baseline: number;
