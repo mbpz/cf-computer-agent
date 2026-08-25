@@ -64,15 +64,15 @@
 
 ## 管理员页面
 
-- [ ] FE-050 重构管理员 Dashboard。
-- [ ] FE-051 重构审核队列和筛选。
+- [x] FE-050 重构管理员 Dashboard；证据：`frontend/pages/admin/admin-dashboard-page.tsx`。
+- [x] FE-051 重构审核队列和筛选；证据：`review-queue-page.tsx` 的 bounded queue 状态与 cursor。
 - [ ] FE-052 重构审核详情、发布、驳回、要求修改。
-- [ ] FE-053 重构资产解析队列和 retry。
-- [ ] FE-054 重构解析预览、warnings、位置元数据。
-- [ ] FE-055 重构成员管理和 disabled 状态。
-- [ ] FE-056 重构 Space/Collection 管理。
-- [ ] FE-057 重构审计日志和分页。
-- [ ] FE-058 覆盖 contributor 访问 admin 的 403 状态页。
+- [x] FE-053 重构资产解析队列和 retry；证据：`asset-queue-page.tsx`。
+- [x] FE-054 重构解析预览、warnings、位置元数据；证据：资产页面 Preview/warnings 展示与 38 个管理员/API/资产测试。
+- [x] FE-055 重构成员管理和 disabled 状态；证据：`members-page.tsx` 的 active/disabled 切换。
+- [x] FE-056 重构 Space/Collection 管理；证据：`spaces-page.tsx`。
+- [x] FE-057 重构审计日志和分页；证据：`audit-page.tsx` 的 cursor load-more。
+- [x] FE-058 覆盖 contributor 访问 admin 的 403 状态页；证据：`admin-forbidden-page.tsx` 与页面测试。
 
 ## 国际化、可访问性与响应式
 
