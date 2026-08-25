@@ -167,6 +167,7 @@ export async function routeAdminApi(
 
   if (url.pathname === "/api/admin/spaces") {
     requireCapability(principal, "space:manage");
+    if (request.method === "GET") return jsonResponse(await services.spaces.listSpaces(pageRequest(url)), 200, context.requestId);
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     const actor = requireAdminMember(principal);
@@ -193,6 +194,13 @@ export async function routeAdminApi(
       ...(input.status === undefined ? {} : { status: recordStatus(input.status) }),
       ...(input.position === undefined ? {} : { position: numberValue(input.position) }),
     }, actor.memberId) }, 200, context.requestId);
+  }
+
+  const spaceCollections = /^\/api\/admin\/spaces\/([^/]+)\/collections$/.exec(url.pathname);
+  if (spaceCollections) {
+    requireCapability(principal, "space:manage");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    return jsonResponse(await services.spaces.listCollections(decodePathId(spaceCollections[1]!), pageRequest(url)), 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/collections") {

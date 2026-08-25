@@ -22,6 +22,7 @@ import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
+import { loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -86,7 +87,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
     case "admin-members": return <AdminMembersRoute locale={locale} />;
-    case "admin-spaces": return <SpacesPage locale={locale} spaces={[]} />;
+    case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
     case "admin-audit": return <AuditPage locale={locale} state={{ kind: "ready", events: [], nextCursor: null }} />;
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
@@ -310,4 +311,10 @@ function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {
   const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, members: [...previous.members, ...page.items], nextCursor: page.nextCursor } : previous); }); };
   const changeStatus = async (id: string, status: "active" | "disabled") => { if (pendingIds.includes(id)) return; setPendingIds((ids) => [...ids, id]); try { const member = await updateMemberStatus(id, status); setState((previous) => previous.kind === "ready" ? { ...previous, members: previous.members.map((item) => item.id === id ? member : item) } : previous); } finally { setPendingIds((ids) => ids.filter((item) => item !== id)); } };
   return <MembersPage locale={locale} loading={state.kind === "loading"} members={state.kind === "ready" ? state.members : []} nextCursor={state.kind === "ready" ? state.nextCursor : null} pendingIds={pendingIds} onLoadMore={loadMore} onStatusChange={changeStatus} />;
+}
+
+function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[] } | { kind: "error"; message: string }>({ kind: "loading" });
+  useEffect(() => { let active = true; loadAdminSpaces().then((spaces) => { if (active) setState({ kind: "ready", spaces }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale]);
+  return <SpacesPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} />;
 }
