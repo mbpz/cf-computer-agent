@@ -24,6 +24,7 @@ import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import { loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
+import { createAdminAssetsRequestController, loadAdminAssets, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -86,7 +87,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
-    case "admin-assets": return <AssetQueuePage locale={locale} assets={[]} />;
+    case "admin-assets": return <AdminAssetsRoute locale={locale} />;
     case "admin-members": return <AdminMembersRoute locale={locale} />;
     case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} />;
@@ -326,4 +327,11 @@ function AdminAuditRoute({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => { const controller = createAdminAuditRequestController(); controllerRef.current = controller; const request = controller.request(); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", events: page.events, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE") }); }); return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale]);
   const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, events: [...previous.events, ...page.events], nextCursor: page.nextCursor } : previous); }); };
   return <AuditPage locale={locale} state={state} onLoadMore={loadMore} />;
+}
+
+function AdminAssetsRoute({ locale }: { locale: LocaleRuntime }) {
+  const [assets, setAssets] = useState<AdminAsset[]>([]); const [loading, setLoading] = useState(true); const [pending, setPending] = useState<string[]>([]);
+  useEffect(() => { const controller = createAdminAssetsRequestController(); const request = controller.request(); void request.promise.then(({ generation, items }) => { if (controller.isCurrent(generation)) { setAssets(items); setLoading(false); } }).catch(() => setLoading(false)); return () => controller.cancel(); }, []);
+  const retry = async (id: string) => { if (pending.includes(id)) return; setPending((ids) => [...ids, id]); try { await retryAdminAsset(id); const refreshed = await loadAdminAssets(); setAssets(refreshed); } finally { setPending((ids) => ids.filter((item) => item !== id)); } };
+  return <AssetQueuePage locale={locale} loading={loading} assets={assets.map((asset) => ({ ...asset, warnings: asset.warnings }))} onRetry={(id) => void retry(id)} />;
 }
