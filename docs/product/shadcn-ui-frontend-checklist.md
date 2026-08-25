@@ -87,7 +87,7 @@
 - [x] FE-055 重构成员管理和 disabled 状态；证据：`members-page.tsx` 的 active/disabled 切换。
 - [x] FE-055a 接入 `/api/admin/members` 与 PATCH status：服务端脱敏 DTO、opaque cursor、单成员 pending 和状态更新；证据：`frontend/lib/admin-members-data.ts`、`AdminMembersRoute`。
 - [x] FE-056 重构 Space/Collection 管理；证据：`spaces-page.tsx`。
-- [x] FE-056a 补齐管理员空间/集合只读 API 并接入真实列表：`GET /api/admin/spaces`、`GET /api/admin/spaces/:id/collections`，保留 `space:manage` 授权和错误状态；证据：`frontend/lib/admin-spaces-data.ts`、`AdminSpacesRoute`。
+- [x] FE-056a 补齐管理员空间/集合 API 并接入真实列表与创建：`GET /api/admin/spaces`、`GET /api/admin/spaces/:id/collections`、`POST /api/admin/spaces`，保留 `space:manage` 授权、slug/name 边界和错误状态；证据：`frontend/lib/admin-spaces-data.ts`、`SpacesPage`、`AdminSpacesRoute`。
 - [x] FE-057 重构审计日志和分页；证据：`audit-page.tsx` 的 cursor load-more。
 - [x] FE-057a 接入 `/api/admin/audit-events`：脱敏 actor、action/createdAt allowlist、opaque cursor 与取消/追加分页；证据：`frontend/lib/admin-audit-data.ts`、`AdminAuditRoute`。
 - [x] FE-058 覆盖 contributor 访问 admin 的 403 状态页；证据：`admin-forbidden-page.tsx` 与页面测试。

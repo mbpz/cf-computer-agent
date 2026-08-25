@@ -24,7 +24,7 @@ import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
-import { loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
+import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { createAdminAssetsRequestController, loadAdminAssets, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
@@ -347,7 +347,11 @@ function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {
 function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[] } | { kind: "error"; message: string }>({ kind: "loading" });
   useEffect(() => { let active = true; loadAdminSpaces().then((spaces) => { if (active) setState({ kind: "ready", spaces }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale]);
-  return <SpacesPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} />;
+  const create = async (input: { slug: string; name: string }) => {
+    const space = await createAdminSpace(input);
+    setState((previous) => previous.kind === "ready" ? { ...previous, spaces: [...previous.spaces, space] } : { kind: "ready", spaces: [space] });
+  };
+  return <SpacesPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} onCreate={create} />;
 }
 
 function AdminAuditRoute({ locale }: { locale: LocaleRuntime }) {

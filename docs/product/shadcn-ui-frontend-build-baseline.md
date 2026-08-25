@@ -23,11 +23,11 @@
 ```text
 frontend/dist/index.html
 frontend/dist/manifest.json
-frontend/dist/assets/index-X3wzsMY4.js
-frontend/dist/assets/index-N887_5iX.css
+frontend/dist/assets/index-DMN4hMZc.js
+frontend/dist/assets/index-Ds4ah7bo.css
 ```
 
-当前构建摘要：JS 442.65 kB、CSS 26.00 kB；构建产物名称由 Vite 内容哈希生成，部署前应以本次 `manifest.json` 为准。
+当前构建摘要：JS 444.94 kB、CSS 26.10 kB；构建产物名称由 Vite 内容哈希生成，部署前应以本次 `manifest.json` 为准。
 
 ## 重跑命令
 
