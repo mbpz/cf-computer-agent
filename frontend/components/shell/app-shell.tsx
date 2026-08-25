@@ -22,6 +22,8 @@ export interface AppShellProps {
   children: ReactNode;
   onNavigate?: (path: string) => void;
   onLogout?: () => void;
+  logoutPending?: boolean;
+  logoutError?: string | null;
 }
 
 function hasCapability(session: SessionSnapshot, capability: FrontendCapability | null) {
@@ -32,7 +34,7 @@ function displayValue(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim() && value !== "undefined" && value !== "null" ? value : fallback;
 }
 
-export function AppShell({ session, pathname, locale, children, onNavigate, onLogout }: AppShellProps) {
+export function AppShell({ session, pathname, locale, children, onNavigate, onLogout, logoutPending = false, logoutError = null }: AppShellProps) {
   const routes = ROUTES.filter((route) => hasCapability(session, route.capability));
   const workspaceRoutes = routes.filter((route) => route.group === "workspace");
   const adminRoutes = routes.filter((route) => route.group === "admin");
@@ -65,7 +67,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
             </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={memberLabel}>{memberLabel}</DropdownMenuTrigger>
-              <DropdownMenuContent><DropdownMenuItem onClick={onLogout}>{locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent>
+              <DropdownMenuContent>{logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}<DropdownMenuItem disabled={logoutPending} onClick={onLogout}>{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>
           </div>
         </header>

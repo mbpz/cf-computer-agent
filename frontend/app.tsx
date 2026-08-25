@@ -17,6 +17,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { apiFetch } from "./lib/api";
+import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
 import { pageKindForPath } from "./app-routes";
@@ -25,6 +26,8 @@ export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [session, setSession] = useState<Awaited<ReturnType<typeof sessionSnapshot>> | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutPending, setLogoutPending] = useState(false);
   const [localeTick, setLocaleTick] = useState(0);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: navigator.language, storage: window.localStorage }), []);
   useEffect(() => locale.subscribe(() => setLocaleTick((tick) => tick + 1)), [locale]);
@@ -46,9 +49,21 @@ export function App() {
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };
+  const logout = async () => {
+    if (logoutPending) return;
+    setLogoutPending(true);
+    setLogoutError(null);
+    try {
+      await postLogout(session.logoutUrl);
+      window.location.href = "/auth/github";
+    } catch {
+      setLogoutError(frontendText(locale, "SHELL_LOGOUT_FAILED"));
+      setLogoutPending(false);
+    }
+  };
   const kind = pageKindForPath(pathname);
   const page = renderPage(kind, pathname, locale);
-  return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={() => { window.location.href = session.logoutUrl; }}>{page}</AppShell>;
+  return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
 }
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime) {
