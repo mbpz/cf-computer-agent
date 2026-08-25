@@ -5,6 +5,7 @@ import { SubmitPage } from "../../frontend/pages/submit-page";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
 import { assetStatusModel } from "../../frontend/components/assets/asset-state";
+import { assetUploadModel } from "../../frontend/components/assets/asset-upload-model";
 
 describe("React submission and asset pages", () => {
   it("validates bounded text/code drafts and creates nonempty idempotency keys", () => {
@@ -28,5 +29,12 @@ describe("React submission and asset pages", () => {
     const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "needs_revision" }], nextCursor: null }} />);
     expect(html).toContain("Needs revision");
     expect(html).toContain("Resubmit");
+  });
+
+  it("keeps the free-tier upload boundary explicit and validates enabled files", () => {
+    expect(assetUploadModel({ enabled: false, maxBytes: 10, file: { name: "guide.pdf", size: 1 } })).toEqual({ kind: "disabled", reason: "OBJECT_STORAGE_UNAVAILABLE" });
+    expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "", size: 1 } })).toEqual({ kind: "invalid", reason: "NAME_REQUIRED" });
+    expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.pdf", size: 11 } })).toEqual({ kind: "invalid", reason: "TOO_LARGE" });
+    expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "guide.pdf", size: 10 } })).toEqual({ kind: "idle" });
   });
 });

@@ -89,6 +89,12 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     COMMON_UNABLE_TO_LOAD: "Unable to load the page.",
     COMMON_SEARCH_UNAVAILABLE: "Search is unavailable.",
     COMMON_ANSWER_UNAVAILABLE: "The answer is unavailable.",
+    SUBMIT_ASSET_TITLE: "Add a file",
+    SUBMIT_ASSET_DROP: "Drag a file here or choose one",
+    SUBMIT_ASSET_SELECT: "Choose file",
+    SUBMIT_ASSET_DISABLED: "File uploads are unavailable until object storage is enabled.",
+    SUBMIT_ASSET_TOO_LARGE: "This file exceeds the upload limit.",
+    SUBMIT_ASSET_INVALID: "Choose a file with a valid name.",
   },
   "zh-CN": {
     NAV_HOME: "首页",
@@ -169,6 +175,12 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     COMMON_UNABLE_TO_LOAD: "无法加载页面。",
     COMMON_SEARCH_UNAVAILABLE: "搜索暂不可用。",
     COMMON_ANSWER_UNAVAILABLE: "答案暂不可用。",
+    SUBMIT_ASSET_TITLE: "添加文件",
+    SUBMIT_ASSET_DROP: "将文件拖到这里，或选择文件",
+    SUBMIT_ASSET_SELECT: "选择文件",
+    SUBMIT_ASSET_DISABLED: "启用对象存储前，文件上传不可用。",
+    SUBMIT_ASSET_TOO_LARGE: "文件超过上传限制。",
+    SUBMIT_ASSET_INVALID: "请选择名称有效的文件。",
   },
 };
 

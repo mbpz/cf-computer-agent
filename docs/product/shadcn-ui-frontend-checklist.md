@@ -58,6 +58,7 @@
 - [x] FE-044 重构 Agent 问答页、scope、引用和 confidence；证据：`agent-page.tsx`、`answer-panel.tsx`，5 个页面测试通过。
 - [x] FE-045 重构知识录入表单和校验错误；证据：`submit-page.tsx`、`submission-form-model.ts`，UTF-8 128 KiB 边界与模式校验测试。
 - [ ] FE-046 重构文件拖拽/选择上传。
+- [x] FE-046a 在免费层无 R2 时提供可见但禁用的文件选择边界；证据：`frontend/components/assets/asset-dropzone.tsx`、`asset-upload-model.ts`，覆盖对象存储未启用、文件名和 10 MiB 大小校验；实际二进制上传待 R2 方案重新批准后接入。
 - [x] FE-047 展示上传、解析、失败、重试状态；证据：`asset-state.ts` 覆盖 queued/processing/ready/retryable/terminal。
 - [ ] FE-048 接入资产解析预览。
 - [x] FE-049 重构我的提交和 resubmit；证据：`my-submissions-page.tsx` 覆盖 needs_revision 与 resubmit 入口。
