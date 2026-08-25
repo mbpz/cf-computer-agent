@@ -49,7 +49,7 @@ rtk npm run dev
 
 本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、七项配置、密钥生成、D1、版本上传、部署和故障复盘统一见 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
 
-静态浏览器文件位于 `public/`，由 Worker 的 `ASSETS` binding 提供；`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
+静态浏览器文件由 Vite 输出到 `frontend/dist/`，由 Worker 的 `ASSETS` binding 提供；旧 `public/` 仅作为回滚源，`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
 
 文件能力分为两个显式部署档位。当前生产档位是无需支付配置的**免费文本模式**：提交页保留原件入口说明，但会禁用二进制上传，避免产生伪造任务或半成品数据。只有在 Cloudflare 账户完成 R2 订阅后，才可恢复完整 PDF/Office/图片原件链路。详细行为、切换边界和验证命令见 [M2 原件运维手册](./docs/operations/m2-asset-ingestion.md)。
 
