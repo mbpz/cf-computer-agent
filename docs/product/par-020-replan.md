@@ -1,6 +1,6 @@
 # PAR-020 重新解析排期
 
-状态：暂停，已重新排期到 shadcn/ui 前端 release 之后的 M2 解析切片。
+状态：M2 实施中。候选构建器已完成，D1 queued/processing 状态机与管理员确认发布仍待实现。
 
 ## 原因
 
@@ -21,10 +21,11 @@ PAR-020 会触及 parser version、source version、发布 Revision 和任务状
 4. 对 text/Markdown/code/PDF/DOC/PPT/XLSX 等格式逐项补 parser fixture、恶意输入和降级证据。
 5. 只在管理员确认后生成新 Revision；旧 Revision 保持可读。
 
+当前证据：`src/sources/reparse.ts` 的 `buildReparseCandidate` 生成 `m2-v1`/`m2-v1` 候选、递增 ordinal 和稳定 source fingerprint；候选构建没有任何 D1、VFS 或发布 Revision 写入副作用。`test/unit/source-reparse.test.ts` 3/3 覆盖确定性、代码元数据和旧 Revision 身份保持。
+
 ## 验收边界
 
 - 重新解析失败不得覆盖已发布内容。
 - 同一 source/revision 的重试必须幂等。
 - parser warnings 和位置元数据不得泄漏原始密钥、Cookie 或异常 body。
 - 每个格式都必须有独立 RED→GREEN 测试与可回滚状态。
-
