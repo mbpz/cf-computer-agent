@@ -23,6 +23,19 @@ describe("chunkDocument", () => {
 
     expect(chunks[0]?.location).toEqual({ kind: "spreadsheet", sheet: "Sales", range: "A1:B2" });
   });
+
+  it("carries slide headings and element order into a stable location", () => {
+    const chunks = chunkDocument({
+      normalizedMarkdown: "## Slide 2\n\nTitle\n\nBody\n\nFooter\n",
+      kind: "markdown",
+    });
+
+    expect(chunks.map((chunk) => chunk.location)).toEqual([
+      { kind: "slide", slide: 2, elementStart: 1, elementEnd: 1 },
+      { kind: "slide", slide: 2, elementStart: 2, elementEnd: 2 },
+      { kind: "slide", slide: 2, elementStart: 3, elementEnd: 3 },
+    ]);
+  });
   it("maps fenced code locations to the one-based original line baseline", () => {
     const chunks = chunkDocument({
       kind: "code",

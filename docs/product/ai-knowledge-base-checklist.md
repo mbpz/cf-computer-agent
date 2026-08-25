@@ -93,7 +93,7 @@
 - [x] `CHK-006` P0/M1 Markdown line range；状态：L/W；验收：引用回读包含目标文本。
 - [x] `CHK-007` P0/M2 PDF page location；状态：L/W；验收：PDF `## Page N`/`## Page unknown` 标记被解析为受限 `location`，持久化到 `chunks.location_json`，并在 Revision detail 与 citation reader 中透传页码。证据：`src/sources/chunker.ts`、`migrations/0007_m2_chunk_locations.sql`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-library.test.ts`。
 - [x] `CHK-008` P0/M2 spreadsheet location；状态：L/W；验收：XLSX/ODS 规范 `Sheet: 名称 (A1:B2)` 标记被解析为受限 `location`，复用 `chunks.location_json`，并可从 Revision detail/citation reader 显示 sheet 与 cell range。证据：`src/sources/chunker.ts`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-library.test.ts`。
-- [ ] `CHK-009` P0/M2 slide location；验收：slide/element order 可显示。
+- [x] `CHK-009` P0/M2 slide location；状态：L/W；验收：PPTX `Slide N` 标记按非空元素顺序生成受限 `location`（slide、elementStart、elementEnd），复用 `chunks.location_json` 并从 Revision detail/citation reader 透传。证据：`src/sources/chunker.ts`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-library.test.ts`。
 - [ ] `CHK-010` P1/M2 parent-child chunk；验收：召回 child、上下文读取 parent。
 - [ ] `CHK-011` P1/M2 overlap 策略；验收：避免断句且重复受预算约束。
 - [ ] `CHK-012` P1/M2 table-aware chunk；验收：表头随数据块保留。

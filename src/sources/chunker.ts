@@ -19,7 +19,8 @@ export interface ChunkDraft {
 
 export type SourceLocation
   = { kind: "pdf"; page: number | "unknown" }
-  | { kind: "spreadsheet"; sheet: string; range: string };
+  | { kind: "spreadsheet"; sheet: string; range: string }
+  | { kind: "slide"; slide: number; elementStart: number; elementEnd: number };
 
 export function parseSourceLocationJson(value: unknown): SourceLocation | undefined {
   if (typeof value !== "string" || value === "{}") return undefined;
@@ -37,6 +38,17 @@ export function parseSourceLocationJson(value: unknown): SourceLocation | undefi
       && !/[\u0000-\u001f\u007f]/u.test(record.sheet)
       && typeof record.range === "string" && /^[A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*$/u.test(record.range)) {
       return { kind: "spreadsheet", sheet: record.sheet, range: record.range };
+    }
+    if (record.kind === "slide"
+      && Number.isSafeInteger(record.slide) && (record.slide as number) >= 1
+      && Number.isSafeInteger(record.elementStart) && (record.elementStart as number) >= 1
+      && Number.isSafeInteger(record.elementEnd) && (record.elementEnd as number) >= (record.elementStart as number)) {
+      return {
+        kind: "slide",
+        slide: record.slide as number,
+        elementStart: record.elementStart as number,
+        elementEnd: record.elementEnd as number,
+      };
     }
     return undefined;
   } catch {
@@ -68,7 +80,7 @@ export function chunkDocument(
         indexField: block.kind === "code" ? "code" : "body",
         headingPath: [...block.headingPath],
         ...sourceLocation(document, chunk.startLine, chunk.endLine),
-        ...(headingLocation(block.headingPath) ? { location: headingLocation(block.headingPath)! } : {}),
+        ...(headingLocation(block.headingPath, document.normalizedMarkdown, chunk.startLine, chunk.endLine) ? { location: headingLocation(block.headingPath, document.normalizedMarkdown, chunk.startLine, chunk.endLine)! } : {}),
         body: chunk.body,
         searchBody,
       });
@@ -92,7 +104,7 @@ export function chunkDocument(
       indexField: "body",
       headingPath: heading === null ? [] : [heading.title],
       ...sourceLocation(document, firstLine.line, firstLine.line),
-      ...(headingLocation(heading === null ? [] : [heading.title]) ? { location: headingLocation(heading === null ? [] : [heading.title])! } : {}),
+      ...(headingLocation(heading === null ? [] : [heading.title], document.normalizedMarkdown, firstLine.line, firstLine.line) ? { location: headingLocation(heading === null ? [] : [heading.title], document.normalizedMarkdown, firstLine.line, firstLine.line)! } : {}),
       body: firstLine.text,
       searchBody: makeSearchBody(firstLine.text),
     }];
@@ -100,13 +112,24 @@ export function chunkDocument(
   return drafts;
 }
 
-function headingLocation(headingPath: string[]): SourceLocation | null {
+function headingLocation(headingPath: string[], markdown?: string, startLine?: number, endLine?: number): SourceLocation | null {
   const heading = headingPath.at(-1);
   if (heading === undefined) return null;
   const page = /^Page (unknown|[1-9][0-9]*)$/u.exec(heading.trim());
   if (page !== null) return { kind: "pdf", page: page[1] === "unknown" ? "unknown" : Number(page[1]) };
   const sheet = /^Sheet: (.+) \(([A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*)\)$/u.exec(heading.trim());
   if (sheet !== null && sheet[1]!.length <= 120) return { kind: "spreadsheet", sheet: sheet[1]!, range: sheet[2]! };
+  const slide = /^Slide ([1-9][0-9]*)$/u.exec(heading.trim());
+  if (slide !== null) {
+    const start = startLine ?? 1;
+    const end = endLine ?? start;
+    const lines = markdown === undefined ? [] : markdown.split("\n");
+    let headingLine = start - 1;
+    while (headingLine >= 0 && !/^ {0,3}##[ \t]+Slide [1-9][0-9]*\s*$/u.test(lines[headingLine] ?? "")) headingLine -= 1;
+    const before = lines.slice(Math.max(headingLine + 1, 0), Math.max(start - 1, 0)).filter((line) => line.trim().length > 0).length;
+    const within = lines.slice(Math.max(start - 1, 0), Math.max(end, start)).filter((line) => line.trim().length > 0).length;
+    return { kind: "slide", slide: Number(slide[1]), elementStart: before + 1, elementEnd: before + Math.max(1, within) };
+  }
   return null;
 }
 
