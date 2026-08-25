@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ROUTES, requiredCapability, type FrontendCapability } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
@@ -83,5 +83,7 @@ function NavGroup({ title, routes, pathname, locale, onNavigate }: { title: stri
 }
 
 function MobileNavigation({ routes, pathname, locale, onNavigate }: { routes: readonly typeof ROUTES[number][]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
-  return <Sheet><details className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium">{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{routes.map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={() => onNavigate(route.path)} className="block rounded-md px-2 py-2 text-sm hover:bg-accent">{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [pathname]);
+  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{routes.map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="block rounded-md px-2 py-2 text-sm hover:bg-accent">{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
 }
