@@ -10,6 +10,18 @@ export const ASSET_PICKER_ACCEPT = [
 
 const acceptedExtensions = new Set(ASSET_PICKER_ACCEPT.split(","));
 
+export function clipboardImageFiles(
+  items: readonly { kind?: string; type?: string; getAsFile?: () => File | null }[],
+): File[] {
+  return items.flatMap((item, index) => {
+    if (item.kind !== "file" || typeof item.type !== "string" || !/^image\/(?:png|jpeg|gif|webp)$/iu.test(item.type) || !item.getAsFile) return [];
+    const file = item.getAsFile();
+    if (!file) return [];
+    const extension = item.type.slice("image/".length).replace("jpeg", "jpg");
+    return [file.name ? file : new File([file], `clipboard-${index + 1}.${extension}`, { type: item.type })];
+  });
+}
+
 export function assetUploadModel(input: {
   enabled: boolean;
   file?: { name?: string; size?: number; type?: string };

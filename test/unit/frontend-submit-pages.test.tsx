@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
 import { assetStatusModel } from "../../frontend/components/assets/asset-state";
-import { assetUploadModel } from "../../frontend/components/assets/asset-upload-model";
+import { assetUploadModel, clipboardImageFiles } from "../../frontend/components/assets/asset-upload-model";
 import { createAssetUploadQueue } from "../../frontend/components/assets/asset-upload-queue";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 
@@ -64,5 +64,16 @@ describe("React submission and asset pages", () => {
     expect(peak).toBeLessThanOrEqual(2);
     expect(result.map((item) => item.status)).toEqual(["succeeded", "failed", "succeeded", "succeeded"]);
     expect(result[1]?.error).toBe("bad-file");
+  });
+
+  it("extracts clipboard images while ignoring pasted text and unsupported media", () => {
+    const image = new File(["png"], "", { type: "image/png" });
+    const files = clipboardImageFiles([
+      { kind: "string", type: "text/plain" },
+      { kind: "file", type: "image/png", getAsFile: () => image },
+      { kind: "file", type: "image/svg+xml", getAsFile: () => new File(["svg"], "bad.svg", { type: "image/svg+xml" }) },
+    ]);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({ name: "clipboard-2.png", type: "image/png" });
   });
 });
