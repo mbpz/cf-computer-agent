@@ -872,7 +872,13 @@ describe("Worker application", () => {
     expectProtectedResponse(page);
     await expect(page.text()).resolves.toContain("Memory Garden");
 
-    const stylesheet = await SELF.fetch("https://example.test/styles.css");
+    const manifest = await SELF.fetch("https://example.test/manifest.json");
+    expect(manifest.status).toBe(200);
+    expectProtectedResponse(manifest);
+    const manifestBody = await manifest.json() as Record<string, { css?: string[] }>;
+    const stylesheetPath = Object.values(manifestBody).flatMap((entry) => entry.css ?? [])[0];
+    expect(stylesheetPath).toMatch(/^assets\//u);
+    const stylesheet = await SELF.fetch(`https://example.test/${stylesheetPath}`);
     expect(stylesheet.status).toBe(200);
     expectProtectedResponse(stylesheet);
   });

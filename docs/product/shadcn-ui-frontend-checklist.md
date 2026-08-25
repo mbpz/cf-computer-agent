@@ -91,9 +91,9 @@
 - [x] FE-071 API/权限/OAuth/Session 回归；证据：`auth-boundary.ts`、API 401/403 结构化错误、Session payload 校验、contributor direct-admin 403 测试；OAuth upstream 仍由 Worker 端到端回归负责。
 - [x] FE-072 Markdown XSS、undefined/null 和错误脱敏回归；证据：Markdown 安全测试 3/3、React 页面安全回归 18/18、结构化错误不携带 body。
 - [x] FE-073 更新 Worker 静态资源测试和构建检查；证据：`frontend/asset-manifest.ts`、Vite `manifest.json` 输出、manifest 测试 2/2；当前 Worker Assets 入口保持旧 `public/` 以便回滚。
-- [ ] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口。
+- [x] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口；证据：`wrangler.jsonc` 已切到 `frontend/dist`，React Assets Worker 回归 16/16，完整 Worker 回归 297/297。
 - [ ] FE-075 删除旧 vanilla UI 文件和旧样式。
 - [ ] FE-076 更新 README/ROADMAP/运维文档。
-- [ ] FE-077 运行完整 `npm run check` 和 `npm run build:ui`。
+- [x] FE-077 运行完整 `npm run check` 和 `npm run build:ui`；证据：完整 `npm run check` 通过，Wrangler dry-run 读取 5 个 React 资产文件。
 - [ ] FE-078 提交迁移 release commit。
 - [ ] FE-079 暂停的 PAR-020 重新解析重新排期。
