@@ -17,6 +17,8 @@ describe("React submission and asset pages", () => {
 
   it("renders submit mode and validation error without leaking undefined", () => {
     const html = renderToStaticMarkup(<SubmitPage draft={{ mode: "markdown", title: "Guide", content: "# Heading" }} state={{ kind: "idle" }} />);
+    expect(html).toContain("<form");
+    expect(html).toContain('type="submit"');
     expect(html).toContain("Markdown");
     expect(html).toContain("Submit knowledge");
     expect(html).not.toContain("undefined");

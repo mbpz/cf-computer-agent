@@ -95,6 +95,7 @@
 - [x] FE-064a 顶栏 Dropdown 接入 menu/menuitem 语义与 Escape、Home/End、Arrow 上下键盘动作；证据：`frontend/lib/menu-keyboard.ts`、`frontend/components/ui/dropdown-menu.tsx`、`test/unit/frontend-menu-keyboard.test.tsx` 6/6，Shell 回归 6/6；Tabs、表单和分页的全局矩阵仍由 FE-064 主项收口。
 - [x] FE-064b 新增 Tabs 原语：`tablist/tab/tabpanel` 语义、受控/非受控值、roving tabindex、方向键与 Home/End；证据：`frontend/components/ui/tabs.tsx`、`frontend/lib/tabs-keyboard.ts`、`test/unit/frontend-tabs.test.tsx`。
 - [x] FE-064c 新增 bounded Pagination 原语，提供 `aria-current=page`、Previous/Next disabled 边界和 page-count 上限；证据：`frontend/components/ui/pagination.tsx`、`test/unit/frontend-pagination.test.tsx`。opaque cursor 页面继续使用 Load more，不虚构页码。
+- [x] FE-064d Submit 页面使用原生 `<form>`、`type=submit`、`aria-describedby`/`aria-busy` 和 pending 禁用边界；证据：`frontend/pages/submit-page.tsx` 与 `frontend-submit-pages.test.tsx`。
 - [x] FE-065 验证 WCAG AA 对比度和 focus-visible；证据：`scripts/wcag-contract.mjs` 解析 light/dark OKLCH token 并验证正文组合 >=4.5:1，`globals.css` 的 2px `:focus-visible` ring，`scripts/wcag-contract.test.mjs` 1/1，已纳入 `npm test`；同时收紧浅色 primary/muted/destructive 与暗色 accent token。
 - [x] FE-066 验证 320px、768px、1280px 布局；证据：`responsive-contract.ts` 与响应式测试 2/2。
 - [x] FE-067 验证 reduced motion 和无鼠标操作；证据：`globals.css` reduced-motion 规则与 focus restoration 测试。
