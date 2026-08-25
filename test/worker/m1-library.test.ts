@@ -19,6 +19,7 @@ import { encodeCitationId, LibraryService } from "../../src/library/service";
 import type { LibraryScope } from "../../src/library/types";
 import { decodeOpaqueCursor, encodeOpaqueCursor } from "../../src/pagination";
 import { PublicationRepository } from "../../src/publication/repository";
+import type { SourceLocation } from "../../src/sources/chunker";
 import { SpacesRepository } from "../../src/spaces/repository";
 import { TagsRepository } from "../../src/tags/repository";
 import { MIGRATIONS } from "../fixtures/d1";
@@ -64,6 +65,22 @@ describe("M1 permission-scoped library", () => {
       items: [expect.objectContaining({ id: "knowledge-other-space" })],
     });
     await expect(service.list(disabled, { limit: 20 })).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
+  it("keeps PDF page locations in reader citations", async () => {
+    await seedKnowledge({
+      id: "knowledge-pdf-location",
+      revisionId: "revision-pdf-location",
+      title: "PDF location",
+      visibility: "shared",
+      location: { kind: "pdf", page: 3 },
+      markdown: "## Page 3\n\nPage three body\n",
+    });
+    const service = serviceWithContent();
+    const detail = await service.detail(contributor, "knowledge-pdf-location");
+    expect(detail.currentRevision.chunks[0]).toEqual(expect.objectContaining({ location: { kind: "pdf", page: 3 } }));
+    const citation = await service.readCitation(contributor, detail.currentRevision.chunks[0]!.citationId);
+    expect(citation.location).toEqual({ kind: "pdf", page: 3 });
   });
 
   it("derives a safe failed status from the current terminal index Job while keeping knowledge readable", async () => {
@@ -1975,6 +1992,7 @@ interface SeedKnowledgeInput {
   searchTags?: string;
   indexField?: "body" | "code";
   tagIds?: string[];
+  location?: SourceLocation;
 }
 
 async function seedKnowledge(input: SeedKnowledgeInput): Promise<void> {
@@ -2004,8 +2022,8 @@ async function seedKnowledge(input: SeedKnowledgeInput): Promise<void> {
     ).bind(input.revisionId, input.id, sourceVersionId, `/workspace/published/${spaceId}/${input.id}/${input.revisionId}.md`, contentSha256, input.title, input.summary ?? "", JSON.stringify(input.tagIds ?? []), input.visibility, now),
     env.DB.prepare("UPDATE knowledge_items SET current_revision_id = ? WHERE id = ?").bind(input.revisionId, input.id),
     env.DB.prepare(
-      "INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field) VALUES (?, ?, 0, '[\"Section\"]', 3, 3, ?, ?, ?, ?, ?)",
-    ).bind(`${input.revisionId}-chunk-0`, input.revisionId, body, input.title, input.searchTags ?? "", searchBody, input.indexField ?? "body"),
+      "INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field, location_json) VALUES (?, ?, 0, '[\"Section\"]', 3, 3, ?, ?, ?, ?, ?, ?)",
+    ).bind(`${input.revisionId}-chunk-0`, input.revisionId, body, input.title, input.searchTags ?? "", searchBody, input.indexField ?? "body", JSON.stringify(input.location ?? {})),
     ...((input.tagIds ?? []).map((tagId) => env.DB.prepare(
       "INSERT INTO revision_tags (revision_id, tag_id) VALUES (?, ?)",
     ).bind(input.revisionId, tagId))),

@@ -80,7 +80,7 @@
 
 目标：安全接收常见文件并让每一步处理状态可见、可重试、可降级。
 
-当前进度：M2-1 原件与任务状态、M2-2 提交页上传入口、M2-3 文本类原件解析状态推进、M2-4 免费 Cron 自动扫描、M2-5 可选 Workers AI Markdown Conversion、M2-6 owner-scoped 原件/解析结果下载、M2-7 “我的原件” owner-scoped 分页历史、M2-8 管理员队列查询/解析预览/失败重试 API、M2-9 管理员资产队列页面、M2-10 强类型扩展名/MIME 一致性校验、M2-11 解析失败原因本地化展示、M2-12 二进制魔数校验与代表性格式矩阵、M2-13 R2 缺失可重试与失败恢复矩阵、M2-14 管理员任务尝试次数/更新时间可观测性、M2-15 D1 跟踪容量断路器与双写补偿测试、M2-16 孤儿 R2 对象预览与二次校验安全回收 API、M2-17 DOC/ODT/ODS/Numbers 格式矩阵与解析降级验证、M2-18 全格式失败矩阵与中断上传补偿验证、M2-19 AI/R2 暂时故障后的有界 Cron/手动恢复重投验证、M2-20 PAR-020 重新解析候选/幂等任务/管理员查询/确认物化/同一 KnowledgeItem 新 Revision 发布已在本地/Workerd 完成；真实文件样本、生产 R2 bucket、0005/0006 migration 和部署仍需单独授权与远程证据。
+当前进度：M2-1 原件与任务状态、M2-2 提交页上传入口、M2-3 文本类原件解析状态推进、M2-4 免费 Cron 自动扫描、M2-5 可选 Workers AI Markdown Conversion、M2-6 owner-scoped 原件/解析结果下载、M2-7 “我的原件” owner-scoped 分页历史、M2-8 管理员队列查询/解析预览/失败重试 API、M2-9 管理员资产队列页面、M2-10 强类型扩展名/MIME 一致性校验、M2-11 解析失败原因本地化展示、M2-12 二进制魔数校验与代表性格式矩阵、M2-13 R2 缺失可重试与失败恢复矩阵、M2-14 管理员任务尝试次数/更新时间可观测性、M2-15 D1 跟踪容量断路器与双写补偿测试、M2-16 孤儿 R2 对象预览与二次校验安全回收 API、M2-17 DOC/ODT/ODS/Numbers 格式矩阵与解析降级验证、M2-18 全格式失败矩阵与中断上传补偿验证、M2-19 AI/R2 暂时故障后的有界 Cron/手动恢复重投验证、M2-20 PAR-020 重新解析候选/幂等任务/管理员查询/确认物化/同一 KnowledgeItem 新 Revision 发布已在本地/Workerd 完成，CHK-007 PDF 页定位已贯穿 Chunk/Revision/Reader；真实文件样本、生产 R2 bucket、0005–0007 migration 和部署仍需单独授权与远程证据。
 
 前端迁移：React + Vite + shadcn/ui 已在本地/Worker dry-run 切换到 `frontend/dist`；旧 `public/` 保留为回滚源。生产 OAuth/session、权限拒绝、跨激活和自定义域 smoke 证据完成前，不删除旧 UI。操作顺序见 `docs/operations/react-frontend-cutover.md`。
 

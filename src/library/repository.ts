@@ -2,6 +2,7 @@ import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
+import { parseSourceLocationJson, type SourceLocation } from "../sources/chunker";
 import type { CodeSourceMetadata, ParserSchemaVersion } from "../sources/types";
 import {
   buildSearchMatchQuery,
@@ -66,6 +67,7 @@ export interface AuthorizedRevisionChunk {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
 }
 
 export interface AuthorizedRevisionRecord {
@@ -145,6 +147,7 @@ type RevisionRow = KnowledgeRow & {
   heading_path: string | null;
   start_line: number | null;
   end_line: number | null;
+  location_json: string | null;
 };
 
 type SearchRow = {
@@ -157,6 +160,7 @@ type SearchRow = {
   heading_path: string;
   start_line: number;
   end_line: number;
+  location_json: string;
   body: string;
   published_at: string;
   score: number;
@@ -175,6 +179,7 @@ type CitationRow = {
   heading_path: string;
   start_line: number;
   end_line: number;
+  location_json: string;
   body: string;
   published_at: string;
 };
@@ -393,7 +398,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
        ), ranked AS (
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
            r.id AS revision_id, c.id AS chunk_id, r.title, c.heading_path,
-           c.start_line, c.end_line, c.body, r.published_at,
+           c.start_line, c.end_line, c.location_json, c.body, r.published_at,
            bm25(${searchCorpus}, ${SEARCH_BM25_WEIGHTS_SQL}) AS score,
            instr(highlight(${searchCorpus}, 1, char(1), char(2)), char(1)) > 0 AS match_title,
            instr(highlight(${searchCorpus}, 2, char(1), char(2)), char(1)) > 0 AS match_summary,
@@ -471,7 +476,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        )
        SELECT k.id AS knowledge_item_id, r.id AS revision_id, c.id AS chunk_id,
-         r.title, c.heading_path, c.start_line, c.end_line, c.body, r.published_at
+         r.title, c.heading_path, c.start_line, c.end_line, c.location_json, c.body, r.published_at
        FROM authorized_member am
        JOIN revisions r ON r.id = ?
        JOIN knowledge_items k ON k.id = r.knowledge_item_id
@@ -490,6 +495,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       headingPath: parseStringArray(row.heading_path),
       startLine: row.start_line,
       endLine: row.end_line,
+      ...(parseSourceLocationJson(row.location_json) ? { location: parseSourceLocationJson(row.location_json) } : {}),
       body: row.body,
       publishedAt: row.published_at,
     } : null;
@@ -525,7 +531,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
        SELECT ar.*, sv.ordinal AS source_version_ordinal, sv.parser_schema_version,
          sv.code_language, sv.file_label, sv.line_baseline,
          coalesce(review.reviewer_id, ar.published_by) AS reviewer_id,
-         c.id AS chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line
+           c.id AS chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line, c.location_json
        FROM authorized_revision ar
        JOIN source_versions sv ON sv.id = ar.source_version_id
        LEFT JOIN reviews review
@@ -571,6 +577,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
         headingPath: parseStringArray(requireString(row.heading_path)),
         startLine: requireInteger(row.start_line),
         endLine: requireInteger(row.end_line),
+        ...(parseSourceLocationJson(row.location_json) ? { location: parseSourceLocationJson(row.location_json) } : {}),
       }]),
     };
   }
@@ -754,6 +761,7 @@ function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
     headingPath: parseStringArray(row.heading_path),
     startLine: row.start_line,
     endLine: row.end_line,
+    ...(parseSourceLocationJson(row.location_json) ? { location: parseSourceLocationJson(row.location_json) } : {}),
     ...presentation,
     score: row.score,
     publishedAt: row.published_at,

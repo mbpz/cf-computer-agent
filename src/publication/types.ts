@@ -1,6 +1,6 @@
 import type { PublishedContentReceipt, PublishedContentRemover } from "../knowledge/types";
 import type { MemberRole, MemberStatus } from "../members/types";
-import type { ChunkDraft } from "../sources/chunker";
+import type { ChunkDraft, SourceLocation } from "../sources/chunker";
 import type { SourceVersion } from "../sources/types";
 import type { SubmissionKind } from "../submissions/types";
 import type { Page, PageRequest } from "../pagination";
@@ -68,6 +68,7 @@ export interface ReviewChunkPreview {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
   excerpt: string;
 }
 

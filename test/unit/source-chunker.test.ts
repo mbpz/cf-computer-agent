@@ -3,6 +3,17 @@ import { chunkDocument } from "../../src/sources/chunker";
 import { MAX_REVISION_CHUNKS } from "../../src/sources/limits";
 
 describe("chunkDocument", () => {
+  it("carries PDF page headings into a stable chunk location", () => {
+    const chunks = chunkDocument({
+      normalizedMarkdown: "## Page 3\n\nThird page text\n\n## Page unknown\n\nUnrecoverable page text\n",
+      kind: "markdown",
+    });
+
+    expect(chunks.map((chunk) => chunk.location)).toEqual([
+      { kind: "pdf", page: 3 },
+      { kind: "pdf", page: "unknown" },
+    ]);
+  });
   it("maps fenced code locations to the one-based original line baseline", () => {
     const chunks = chunkDocument({
       kind: "code",

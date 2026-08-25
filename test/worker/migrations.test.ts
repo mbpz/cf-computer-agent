@@ -355,6 +355,7 @@ describe("Phase 1 control-plane migrations", () => {
       "search_tags:TEXT:1:NULL:0",
       "search_body:TEXT:1:NULL:0",
       "index_field:TEXT:1:'body':0",
+      "location_json:TEXT:1:'{}':0",
     ], [
       "CHECK(ordinal >= 0)",
       "CHECK(start_line > 0)",

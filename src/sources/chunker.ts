@@ -12,8 +12,26 @@ export interface ChunkDraft {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
   body: string;
   searchBody: string;
+}
+
+export type SourceLocation = { kind: "pdf"; page: number | "unknown" };
+
+export function parseSourceLocationJson(value: unknown): SourceLocation | undefined {
+  if (typeof value !== "string" || value === "{}") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const record = parsed as Record<string, unknown>;
+    if (record.kind !== "pdf") return undefined;
+    if (record.page === "unknown") return { kind: "pdf", page: "unknown" };
+    if (!Number.isSafeInteger(record.page) || (record.page as number) < 1) return undefined;
+    return { kind: "pdf", page: record.page as number };
+  } catch {
+    return undefined;
+  }
 }
 
 export function chunkDocument(
@@ -40,6 +58,7 @@ export function chunkDocument(
         indexField: block.kind === "code" ? "code" : "body",
         headingPath: [...block.headingPath],
         ...sourceLocation(document, chunk.startLine, chunk.endLine),
+        ...(pdfLocation(block.headingPath) ? { location: pdfLocation(block.headingPath)! } : {}),
         body: chunk.body,
         searchBody,
       });
@@ -63,11 +82,20 @@ export function chunkDocument(
       indexField: "body",
       headingPath: heading === null ? [] : [heading.title],
       ...sourceLocation(document, firstLine.line, firstLine.line),
+      ...(pdfLocation(heading === null ? [] : [heading.title]) ? { location: pdfLocation(heading === null ? [] : [heading.title])! } : {}),
       body: firstLine.text,
       searchBody: makeSearchBody(firstLine.text),
     }];
   }
   return drafts;
+}
+
+function pdfLocation(headingPath: string[]): SourceLocation | null {
+  const heading = headingPath.at(-1);
+  if (heading === undefined) return null;
+  const match = /^Page (unknown|[1-9][0-9]*)$/u.exec(heading.trim());
+  if (match === null) return null;
+  return { kind: "pdf", page: match[1] === "unknown" ? "unknown" : Number(match[1]) };
 }
 
 function sourceLocation(

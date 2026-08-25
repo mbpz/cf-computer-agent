@@ -462,6 +462,7 @@ function reviewChunkPreviews(chunks: ChunkDraft[]) {
     headingPath: [...chunk.headingPath],
     startLine: chunk.startLine,
     endLine: chunk.endLine,
+    ...(chunk.location ? { location: chunk.location } : {}),
     excerpt: [...chunk.body].slice(0, 240).join(""),
   }));
 }

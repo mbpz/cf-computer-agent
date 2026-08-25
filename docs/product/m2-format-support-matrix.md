@@ -51,5 +51,5 @@ rtk npm run check
 ## 暂缓项
 
 - PAR-020 重新解析：现有 `source_versions.submission_id` 唯一约束不允许同一提交追加 parser version；需要新增 source-version lineage/任务模型，并确保已发布 Revision 不被覆盖。
-- CHK-007/008/009：PDF 页、表格单元格、幻灯片元素位置需要从解析结果贯穿到 Chunk、Revision、Reader 引用，不能只在预览 Markdown 中伪造。
+- CHK-008/009：表格单元格、幻灯片元素位置仍需要从解析结果贯穿到 Chunk、Revision、Reader 引用；PDF 页码已由 `chunks.location_json` 完成同一链路。
 - R2/Queue/容量断路器：保持当前免费层禁用，不通过隐式远程资源绕过付费要求。

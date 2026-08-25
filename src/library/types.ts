@@ -1,4 +1,5 @@
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
+import type { SourceLocation } from "../sources/chunker";
 import type { CodeSourceMetadata, ParserSchemaVersion } from "../sources/types";
 
 export type SearchMatchedField = "title" | "summary" | "tags" | "body" | "code";
@@ -61,6 +62,7 @@ export interface RevisionChunkLocation {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
 }
 
 export interface RevisionDetail {
@@ -102,6 +104,7 @@ export interface SearchHit {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
   excerpt: string;
   matchedFields: SearchMatchedField[];
   highlights: SearchHighlightRange[];
@@ -124,6 +127,7 @@ export interface CitationSource {
   headingPath: string[];
   startLine: number;
   endLine: number;
+  location?: SourceLocation;
   body: string;
   publishedAt: string;
 }

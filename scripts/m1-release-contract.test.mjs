@@ -29,6 +29,7 @@ const expectedMigrations = [
   ["0004_m1_gate_completion.sql", "ebda7d5e04fbded4a2503c28a44160325fefcaef4b354a8e25865d68f1ec81bb"],
   ["0005_m2_asset_ingestion.sql", "49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c"],
   ["0006_m2_source_reparse.sql", "fd77510c130d08650de95fa28a2434158ca0a489dd292c490dfe6460c31dcaff"],
+  ["0007_m2_chunk_locations.sql", "0c000b8a2da9c96120d963c290c209dc6dc18a0f42853131d0e7e551c83d50c8"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -182,7 +183,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=6$/mu);
+    assert.match(result.output, /^\[pass\] migration-files count=7$/mu);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {
@@ -197,7 +198,7 @@ test("fails closed when an unexpected local migration file is present", async ()
   }
 });
 
-test("accepts only the exact pre-0004, post-0004, post-0005, or post-0006 Wrangler ledger states", async () => {
+test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
   const names = expectedMigrations.map(([name]) => name);
   await withLedger(ledger(names.slice(0, 3)), async (path) => {
     const result = await runVerifier(["--ledger-before", path]);
@@ -215,6 +216,11 @@ test("accepts only the exact pre-0004, post-0004, post-0005, or post-0006 Wrangl
     assert.match(result.output, /0005_m2_asset_ingestion.sql$/mu);
   });
   await withLedger(ledger(names), async (path) => {
+    const result = await runVerifier(["--ledger-after", path]);
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /0007_m2_chunk_locations.sql$/mu);
+  });
+  await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0006_m2_source_reparse.sql$/mu);
