@@ -89,6 +89,20 @@ describe("chunkDocument", () => {
     expect(chunks.slice(1).every((chunk) => chunk.parentOrdinal === 0)).toBe(true);
   });
 
+  it("keeps the Markdown table header in every split table chunk", () => {
+    const rows = Array.from({ length: 8 }, (_, index) => `| ${index} | ${"row-content-".repeat(3)} |`).join("\n");
+    const chunks = chunkDocument({
+      kind: "markdown",
+      normalizedMarkdown: `| Name | Description |\n| --- | --- |\n${rows}\n`,
+    }, { maxCodePoints: 64, overlapCodePoints: 0 });
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.body.startsWith("| Name | Description |\n| --- | --- |\n")).toBe(true);
+      expect([...chunk.body].length).toBeLessThanOrEqual(64);
+    }
+  });
+
   it("does not emit a whitespace-only unit at a line boundary", () => {
     const chunks = chunkDocument({
       kind: "markdown",

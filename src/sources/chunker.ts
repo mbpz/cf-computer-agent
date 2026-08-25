@@ -255,6 +255,8 @@ function isFenceEnd(line: string, fence: Fence): boolean {
 
 function splitTextBlock(block: Block, max: number, overlap: number): LocatedChunk[] {
   const lines = block.lines;
+  const table = detectTable(lines);
+  if (table !== null) return splitTableBlock(table, max);
   const body = lines.map(({ text }) => text).join("\n");
   const codePoints = [...body];
   if (codePoints.length <= max) {
@@ -285,6 +287,69 @@ function splitTextBlock(block: Block, max: number, overlap: number): LocatedChun
     if (nextStart <= start) throw new RangeError("overlapCodePoints must be smaller than maxCodePoints");
     start = nextStart;
   }
+  return chunks;
+}
+
+interface TableBlock {
+  header: [SourceLine, SourceLine];
+  rows: SourceLine[];
+}
+
+function detectTable(lines: SourceLine[]): TableBlock | null {
+  if (lines.length < 3 || !isTableRow(lines[0]!.text) || !isTableSeparator(lines[1]!.text)) return null;
+  const rows = lines.slice(2);
+  return rows.length === 0 || rows.some(({ text }) => !isTableRow(text))
+    ? null
+    : { header: [lines[0]!, lines[1]!], rows };
+}
+
+function isTableRow(line: string): boolean {
+  return /^\s*\|.*\|\s*$/u.test(line);
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/u.test(line);
+}
+
+function splitTableBlock(table: TableBlock, max: number): LocatedChunk[] {
+  const header = table.header.map(({ text }) => text).join("\n");
+  const prefix = `${header}\n`;
+  const prefixPoints = [...prefix].length;
+  if (prefixPoints >= max) {
+    throw new RangeError("table header exceeds maxCodePoints");
+  }
+  const chunks: LocatedChunk[] = [];
+  let current: SourceLine[] = [];
+  const emit = (rows: SourceLine[]): void => {
+    if (rows.length === 0) return;
+    chunks.push({
+      body: `${prefix}${rows.map(({ text }) => text).join("\n")}`,
+      startLine: table.header[0].line,
+      endLine: rows.at(-1)!.line,
+    });
+  };
+
+  for (const row of table.rows) {
+    const candidate = [...current, row].map(({ text }) => text).join("\n");
+    if (current.length > 0 && prefixPoints + [...candidate].length <= max) {
+      current.push(row);
+      continue;
+    }
+    if (current.length > 0) {
+      emit(current);
+      current = [];
+    }
+    const available = max - prefixPoints;
+    const rowPoints = [...row.text];
+    if (rowPoints.length <= available) {
+      current = [row];
+      continue;
+    }
+    for (let offset = 0; offset < rowPoints.length; offset += available) {
+      emit([{ text: rowPoints.slice(offset, offset + available).join(""), line: row.line }]);
+    }
+  }
+  emit(current);
   return chunks;
 }
 
