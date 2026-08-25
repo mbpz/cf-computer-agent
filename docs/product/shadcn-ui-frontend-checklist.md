@@ -90,7 +90,7 @@
 - [ ] FE-070 新旧路由矩阵逐页对照。
 - [ ] FE-071 API/权限/OAuth/Session 回归。
 - [ ] FE-072 Markdown XSS、undefined/null 和错误脱敏回归。
-- [ ] FE-073 更新 Worker 静态资源测试和构建检查。
+- [x] FE-073 更新 Worker 静态资源测试和构建检查；证据：`frontend/asset-manifest.ts`、Vite `manifest.json` 输出、manifest 测试 2/2；当前 Worker Assets 入口保持旧 `public/` 以便回滚。
 - [ ] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口。
 - [ ] FE-075 删除旧 vanilla UI 文件和旧样式。
 - [ ] FE-076 更新 README/ROADMAP/运维文档。
