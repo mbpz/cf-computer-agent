@@ -7,7 +7,7 @@
 - [x] FE-001 冻结 API 路由/响应契约，并建立前端 route contract 测试；证据：`frontend/contracts/routes.ts`、`frontend/contracts/api.ts`、`test/unit/frontend-contract.test.ts`；focused 3 files/78 tests、TypeScript 通过。
 - [x] FE-002 冻结 GitHub OAuth、Session Cookie、退出和 same-origin contract 测试；证据：`test/unit/github-oauth.test.ts`、`test/unit/oauth-cookies.test.ts`、`test/unit/frontend-logout.test.ts`、`test/worker/app.test.ts` 覆盖 OAuth/PKCE、Host Cookie、同源 POST、GET 退出 405 与 cookie 清除，相关 Worker/Unit 全量门禁通过。
 - [x] FE-003 冻结中英文 locale key/placeholder 基线；证据：`docs/product/shadcn-ui-frontend-i18n-baseline.md` 固化 `en`/`zh-CN` 的 434 keys、55 placeholders、6 文件扫描基线，`npm run test:i18n` 13/13 与 `npm run verify:i18n` 通过。
-- [ ] FE-004 冻结 Markdown 安全渲染入口与 XSS 回归测试。
+- [x] FE-004 冻结 Markdown 安全渲染入口与 XSS 回归测试；证据：`docs/product/shadcn-ui-frontend-markdown-security-baseline.md` 固化 `renderSafeMarkdown`、allowlist、协议与降级规则，`markdown-renderer.test.ts`、`html.test.ts`、`frontend-user-read-pages.test.tsx` focused 11/11。
 - [ ] FE-005 记录当前 `npm run check` 基线和构建资源基线。
 - [ ] FE-006 提交本规格书与迁移清单。
 
