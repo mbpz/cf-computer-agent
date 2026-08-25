@@ -95,7 +95,7 @@
 - [x] `CHK-008` P0/M2 spreadsheet location；状态：L/W；验收：XLSX/ODS 规范 `Sheet: 名称 (A1:B2)` 标记被解析为受限 `location`，复用 `chunks.location_json`，并可从 Revision detail/citation reader 显示 sheet 与 cell range。证据：`src/sources/chunker.ts`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-library.test.ts`。
 - [x] `CHK-009` P0/M2 slide location；状态：L/W；验收：PPTX `Slide N` 标记按非空元素顺序生成受限 `location`（slide、elementStart、elementEnd），复用 `chunks.location_json` 并从 Revision detail/citation reader 透传。证据：`src/sources/chunker.ts`、`src/library/repository.ts`、`test/unit/source-chunker.test.ts`、`test/worker/m1-library.test.ts`。
 - [ ] `CHK-010` P1/M2 parent-child chunk；验收：召回 child、上下文读取 parent。
-- [ ] `CHK-011` P1/M2 overlap 策略；验收：避免断句且重复受预算约束。
+- [x] `CHK-011` P1/M2 overlap 策略；状态：L；验收：跨边界窗口保留有界 overlap，不生成空 chunk 或 surrogate 截断；`test/unit/m2-overlap.test.ts` 固定 max/overlap 并逐邻接块校验重复边界。
 - [ ] `CHK-012` P1/M2 table-aware chunk；验收：表头随数据块保留。
 - [ ] `CHK-013` P1/M2 Chunk 预览；验收：admin 可分页查看正文、位置和 token 估算。
 - [ ] `CHK-014` P1/M2 Chunk 人工修正；验收：生成新 parse version 并重新审核。
