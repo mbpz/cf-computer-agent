@@ -93,7 +93,7 @@
 - [x] FE-073 更新 Worker 静态资源测试和构建检查；证据：`frontend/asset-manifest.ts`、Vite `manifest.json` 输出、manifest 测试 2/2；当前 Worker Assets 入口保持旧 `public/` 以便回滚。
 - [x] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口；证据：`wrangler.jsonc` 已切到 `frontend/dist`，React Assets Worker 回归 16/16，完整 Worker 回归 297/297。
 - [ ] FE-075 删除旧 vanilla UI 文件和旧样式。
-- [ ] FE-076 更新 README/ROADMAP/运维文档。
+- [x] FE-076 更新 README/ROADMAP/运维文档；证据：`README.md`、`docs/operations/react-frontend-cutover.md`，明确 React Assets、回滚和旧 UI 清理边界。
 - [x] FE-077 运行完整 `npm run check` 和 `npm run build:ui`；证据：完整 `npm run check` 通过，Wrangler dry-run 读取 5 个 React 资产文件。
 - [ ] FE-078 提交迁移 release commit。
 - [ ] FE-079 暂停的 PAR-020 重新解析重新排期。

@@ -53,6 +53,8 @@ rtk npm run dev
 
 文件能力分为两个显式部署档位。当前生产档位是无需支付配置的**免费文本模式**：提交页保留原件入口说明，但会禁用二进制上传，避免产生伪造任务或半成品数据。只有在 Cloudflare 账户完成 R2 订阅后，才可恢复完整 PDF/Office/图片原件链路。详细行为、切换边界和验证命令见 [M2 原件运维手册](./docs/operations/m2-asset-ingestion.md)。
 
+前端已进入 React + Vite + shadcn/ui 渐进式切换阶段。当前 Worker Assets 使用 `frontend/dist`，旧 `public/` 仍作为回滚源；发布、生产 smoke、回滚和旧 UI 清理顺序见 [React 前端切换手册](./docs/operations/react-frontend-cutover.md)。
+
 ## 部署
 
 首次部署前必须完整执行 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。M1 发布还必须使用 [M1 精确发布手册](./docs/operations/m1-release.md) 和其 [生产证据模板](./docs/operations/evidence/m1-release-template.md)：D1 导出、完整本地门禁、检查并前向应用 `0003`、上传包含完整七项 Secret 的候选版本、检查精确版本后再部署，最后完成 OAuth/session、M1 浏览器旅程、权限拒绝、signed automation、跨激活读取和 D1 成本证据。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
