@@ -9,7 +9,7 @@
 - vendor lock：2 个浏览器依赖 hash 校验通过
 - smoke/operations：41/41
 - i18n contract：13/13
-- unit：73 files / 875 tests
+- unit：75 files / 888 tests
 - Worker：13 files / 298 tests
 - TypeScript 与 Wrangler types：通过
 - Wrangler dry-run：通过，读取 React Assets 与 Worker bindings
@@ -36,4 +36,3 @@ npm run check
 npm run build:ui
 npm run build:secrets
 ```
-
