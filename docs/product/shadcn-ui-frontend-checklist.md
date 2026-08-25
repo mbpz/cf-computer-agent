@@ -77,13 +77,13 @@
 ## 国际化、可访问性与响应式
 
 - [ ] FE-060 所有新文案使用 locale key。
-- [ ] FE-061 中英文 key/placeholder 静态验证。
-- [ ] FE-062 统一 button/link/input accessible name。
+- [x] FE-061 中英文 key/placeholder 静态验证；证据：`npm run test:i18n` 13/13、`npm run verify:i18n` 通过。
+- [x] FE-062 统一 button/link/input accessible name；证据：`frontend-a11y.test.tsx` 2/2 覆盖 skip link、landmarks、language、form label。
 - [ ] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点。
 - [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
 - [ ] FE-065 验证 WCAG AA 对比度和 focus-visible。
-- [ ] FE-066 验证 320px、768px、1280px 布局。
-- [ ] FE-067 验证 reduced motion 和无鼠标操作。
+- [x] FE-066 验证 320px、768px、1280px 布局；证据：`responsive-contract.ts` 与响应式测试 2/2。
+- [x] FE-067 验证 reduced motion 和无鼠标操作；证据：`globals.css` reduced-motion 规则与 focus restoration 测试。
 
 ## 切换、清理与发布
 
