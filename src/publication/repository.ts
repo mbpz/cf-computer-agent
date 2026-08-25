@@ -1034,13 +1034,16 @@ export class PublicationRepository implements PublicationRepositoryPort {
   private prepareChunk(intent: PublicationIntent, chunk: ChunkDraft, searchTags: string): D1PreparedStatement {
     return this.db.prepare(
       `INSERT INTO chunks (
-        id, revision_id, ordinal, heading_path, start_line, end_line, body,
+        id, revision_id, ordinal, parent_chunk_id, heading_path, start_line, end_line, body,
         search_title, search_tags, search_body, index_field, location_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       `${intent.revisionId}-chunk-${chunk.ordinal}`,
       intent.revisionId,
       chunk.ordinal,
+      chunk.parentOrdinal === undefined
+        ? null
+        : `${intent.revisionId}-chunk-${chunk.parentOrdinal}`,
       JSON.stringify(chunk.headingPath),
       chunk.startLine,
       chunk.endLine,

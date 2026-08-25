@@ -47,6 +47,7 @@ The reviewed migration provenance is immutable for this candidate:
 | `0005_m2_asset_ingestion.sql` | `49a215ee9af462235989217ec365bacb1adfebb2e585df2ec31fbcdb5180667c` |
 | `0006_m2_source_reparse.sql` | `fd77510c130d08650de95fa28a2434158ca0a489dd292c490dfe6460c31dcaff` |
 | `0007_m2_chunk_locations.sql` | `0c000b8a2da9c96120d963c290c209dc6dc18a0f42853131d0e7e551c83d50c8` |
+| `0008_m2_parent_chunks.sql` | `b9f524d90e2614571178ecb63b2d3386c06ee7936b4662c49b28ca37d9ff5205` |
 
 `verify:m1:migrations` hard-codes the reviewed M1/M2 forward-migration hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 
@@ -139,11 +140,11 @@ Confirm all of the following in review:
 
 - the fail-closed legacy-pending guard reports zero before any schema change, and the submissions table copy preserves all remaining draft/rejected legacy rows before the legacy table is dropped;
 - `PRAGMA foreign_key_check` and the upgrade-preservation Workerd cases pass;
-- the actual Wrangler `d1_migrations` ledger is an exact prefix of the reviewed ordered set `0001` through `0007`, with no missing, renamed, reordered, or extra row;
-- the local reviewed set contains the complete ordered `0001` through `0007` forward-migration set;
+- the actual Wrangler `d1_migrations` ledger is an exact prefix of the reviewed ordered set `0001` through `0008`, with no missing, renamed, reordered, or extra row;
+- the local reviewed set contains the complete ordered `0001` through `0008` forward-migration set;
 - `KnowledgeBase`, Durable Object migration tag `v1`, existing VFS paths, note journal, GitHub identities, sessions, and automation credentials are not migrated or reset.
 
-The verifier requires the reviewed pre-`0004` state, or an exact post-`0004` through post-`0007` prefix, and fails closed for any unexpected ledger state. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
+The verifier requires the reviewed pre-`0004` state, or an exact post-`0004` through post-`0008` prefix, and fails closed for any unexpected ledger state. Do not edit or replay SQL directly; investigate and stop. Keep the restricted ledger file out of the repository and never attach raw command output.
 
 ## 5. Apply the remote migration
 

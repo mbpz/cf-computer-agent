@@ -57,6 +57,7 @@ export interface KnowledgePage {
 
 export interface RevisionChunkLocation {
   id: string;
+  parentChunkId?: string;
   citationId: string;
   ordinal: number;
   headingPath: string[];
@@ -100,6 +101,7 @@ export interface SearchHit {
   collectionId: string | null;
   revisionId: string;
   chunkId: string;
+  parentChunkId?: string;
   title: string;
   headingPath: string[];
   startLine: number;
@@ -123,6 +125,13 @@ export interface CitationSource {
   knowledgeItemId: string;
   revisionId: string;
   chunkId: string;
+  parent?: {
+    chunkId: string;
+    headingPath: string[];
+    startLine: number;
+    endLine: number;
+    body: string;
+  };
   title: string;
   headingPath: string[];
   startLine: number;

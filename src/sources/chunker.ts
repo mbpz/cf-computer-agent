@@ -8,6 +8,8 @@ const defaultOverlapCodePoints = 120;
 
 export interface ChunkDraft {
   ordinal: number;
+  /** Ordinal of the block's first chunk; omitted for the parent anchor itself. */
+  parentOrdinal?: number;
   indexField: "body" | "code";
   headingPath: string[];
   startLine: number;
@@ -72,11 +74,14 @@ export function chunkDocument(
     const chunks = block.kind === "code"
       ? splitCodeBlock(block, maxCodePoints, overlapCodePoints)
       : splitTextBlock(block, maxCodePoints, overlapCodePoints);
+    const parentOrdinal = chunks.length > 1 ? drafts.length : undefined;
     for (const chunk of chunks) {
       const searchBody = makeSearchBody(chunk.body);
       if (chunk.body.trim().length === 0 || searchBody.trim().length === 0) continue;
+      const ordinal = drafts.length;
       drafts.push({
-        ordinal: drafts.length,
+        ordinal,
+        ...(parentOrdinal !== undefined && ordinal !== parentOrdinal ? { parentOrdinal } : {}),
         indexField: block.kind === "code" ? "code" : "body",
         headingPath: [...block.headingPath],
         ...sourceLocation(document, chunk.startLine, chunk.endLine),

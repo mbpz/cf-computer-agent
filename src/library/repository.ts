@@ -63,6 +63,7 @@ export type AuthorizedChatScope =
 
 export interface AuthorizedRevisionChunk {
   id: string;
+  parentChunkId?: string;
   ordinal: number;
   headingPath: string[];
   startLine: number;
@@ -143,6 +144,7 @@ type RevisionRow = KnowledgeRow & {
   published_by: string;
   current_revision_id: string;
   chunk_id: string | null;
+  parent_chunk_id: string | null;
   ordinal: number | null;
   heading_path: string | null;
   start_line: number | null;
@@ -156,6 +158,7 @@ type SearchRow = {
   collection_id: string | null;
   revision_id: string;
   chunk_id: string;
+  parent_chunk_id: string | null;
   title: string;
   heading_path: string;
   start_line: number;
@@ -175,6 +178,7 @@ type CitationRow = {
   knowledge_item_id: string;
   revision_id: string;
   chunk_id: string;
+  parent_chunk_id: string | null;
   title: string;
   heading_path: string;
   start_line: number;
@@ -182,6 +186,11 @@ type CitationRow = {
   location_json: string;
   body: string;
   published_at: string;
+  parent_id: string | null;
+  parent_heading_path: string | null;
+  parent_start_line: number | null;
+  parent_end_line: number | null;
+  parent_body: string | null;
 };
 
 interface ListCursor {
@@ -397,7 +406,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        ), ranked AS (
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
-           r.id AS revision_id, c.id AS chunk_id, r.title, c.heading_path,
+           r.id AS revision_id, c.id AS chunk_id, c.parent_chunk_id, r.title, c.heading_path,
            c.start_line, c.end_line, c.location_json, c.body, r.published_at,
            bm25(${searchCorpus}, ${SEARCH_BM25_WEIGHTS_SQL}) AS score,
            instr(highlight(${searchCorpus}, 1, char(1), char(2)), char(1)) > 0 AS match_title,
@@ -476,12 +485,16 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        )
        SELECT k.id AS knowledge_item_id, r.id AS revision_id, c.id AS chunk_id,
-         r.title, c.heading_path, c.start_line, c.end_line, c.location_json, c.body, r.published_at
+         c.parent_chunk_id, r.title, c.heading_path, c.start_line, c.end_line, c.location_json, c.body, r.published_at,
+         parent.id AS parent_id, parent.heading_path AS parent_heading_path,
+         parent.start_line AS parent_start_line, parent.end_line AS parent_end_line,
+         parent.body AS parent_body
        FROM authorized_member am
        JOIN revisions r ON r.id = ?
        JOIN knowledge_items k ON k.id = r.knowledge_item_id
        JOIN revisions current_revision ON current_revision.id = k.current_revision_id
        JOIN chunks c ON c.revision_id = r.id AND c.id = ?
+       LEFT JOIN chunks parent ON parent.id = c.parent_chunk_id AND parent.revision_id = c.revision_id
        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
        WHERE k.status = 'active'
          AND (r.visibility = 'shared' OR am.role = 'admin')
@@ -491,6 +504,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       knowledgeItemId: row.knowledge_item_id,
       revisionId: row.revision_id,
       chunkId: row.chunk_id,
+      ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
       title: row.title,
       headingPath: parseStringArray(row.heading_path),
       startLine: row.start_line,
@@ -498,6 +512,18 @@ export class LibraryRepository implements LibraryRepositoryPort {
       ...(parseSourceLocationJson(row.location_json) ? { location: parseSourceLocationJson(row.location_json) } : {}),
       body: row.body,
       publishedAt: row.published_at,
+      ...(row.parent_id && row.parent_heading_path !== null
+        && row.parent_start_line !== null && row.parent_end_line !== null && row.parent_body !== null
+        ? {
+          parent: {
+            chunkId: row.parent_id,
+            headingPath: parseStringArray(row.parent_heading_path),
+            startLine: row.parent_start_line,
+            endLine: row.parent_end_line,
+            body: row.parent_body,
+          },
+        }
+        : {}),
     } : null;
   }
 
@@ -531,7 +557,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
        SELECT ar.*, sv.ordinal AS source_version_ordinal, sv.parser_schema_version,
          sv.code_language, sv.file_label, sv.line_baseline,
          coalesce(review.reviewer_id, ar.published_by) AS reviewer_id,
-           c.id AS chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line, c.location_json
+           c.id AS chunk_id, c.parent_chunk_id, c.ordinal, c.heading_path, c.start_line, c.end_line, c.location_json
        FROM authorized_revision ar
        JOIN source_versions sv ON sv.id = ar.source_version_id
        LEFT JOIN reviews review
@@ -573,6 +599,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       isCurrent: first.current_revision_id === first.revision_id,
       chunks: rows.results.flatMap((row) => row.chunk_id === null ? [] : [{
         id: row.chunk_id,
+        ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
         ordinal: requireInteger(row.ordinal),
         headingPath: parseStringArray(requireString(row.heading_path)),
         startLine: requireInteger(row.start_line),
@@ -757,6 +784,7 @@ function mapSearchHit(row: SearchRow, termKeys: string[]): SearchHit {
     collectionId: row.collection_id,
     revisionId: row.revision_id,
     chunkId: row.chunk_id,
+    ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),
     title: row.title,
     headingPath: parseStringArray(row.heading_path),
     startLine: row.start_line,

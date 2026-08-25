@@ -83,6 +83,53 @@ describe("M1 permission-scoped library", () => {
     expect(citation.location).toEqual({ kind: "pdf", page: 3 });
   });
 
+  it("recalls a child chunk and returns its bounded parent context", async () => {
+    await seedKnowledge({
+      id: "knowledge-parent-child",
+      revisionId: "revision-parent-child",
+      title: "Parent child",
+      visibility: "shared",
+      body: "Parent anchor context",
+      searchBody: "parent anchor context",
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO chunks (
+          id, revision_id, ordinal, parent_chunk_id, heading_path, start_line, end_line, body,
+          search_title, search_tags, search_body, index_field, location_json
+        ) VALUES (?, ?, 1, ?, '["Section"]', 4, 4, ?, ?, '', ?, 'body', '{}')`,
+      ).bind(
+        "revision-parent-child-chunk-1",
+        "revision-parent-child",
+        "revision-parent-child-chunk-0",
+        "Child retrieval signal",
+        "Parent child",
+        "child retrieval signal",
+      ),
+      env.DB.prepare(
+        `INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code)
+         SELECT rowid, id, ?, '', '', search_body, '' FROM chunks WHERE id = ?`,
+      ).bind("Parent child", "revision-parent-child-chunk-1"),
+      env.DB.prepare(
+        `INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code)
+         SELECT rowid, id, ?, '', '', search_body, '' FROM chunks WHERE id = ?`,
+      ).bind("Parent child", "revision-parent-child-chunk-1"),
+    ]);
+
+    const service = serviceWithContent();
+    const search = await service.search(contributor, { query: "child retrieval signal", limit: 20 });
+    const child = search.items.find((item) => item.chunkId === "revision-parent-child-chunk-1");
+    expect(child).toMatchObject({ parentChunkId: "revision-parent-child-chunk-0" });
+    const citation = await service.readCitation(contributor, child!.citationId);
+    expect(citation.parent).toEqual({
+      chunkId: "revision-parent-child-chunk-0",
+      headingPath: ["Section"],
+      startLine: 3,
+      endLine: 3,
+      body: "Parent anchor context",
+    });
+  });
+
   it("derives a safe failed status from the current terminal index Job while keeping knowledge readable", async () => {
     await seedKnowledge({
       id: "knowledge-terminal-index",

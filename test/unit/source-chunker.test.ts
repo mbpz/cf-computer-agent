@@ -78,6 +78,17 @@ describe("chunkDocument", () => {
     expect(chunks[0].body.slice(-2)).toBe(chunks[1].body.slice(0, 2));
   });
 
+  it("anchors split child chunks to the first chunk of their source block", () => {
+    const chunks = chunkDocument({
+      kind: "text",
+      normalizedMarkdown: "alpha beta gamma delta epsilon",
+    }, { maxCodePoints: 8, overlapCodePoints: 2 });
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[0]?.parentOrdinal).toBeUndefined();
+    expect(chunks.slice(1).every((chunk) => chunk.parentOrdinal === 0)).toBe(true);
+  });
+
   it("does not emit a whitespace-only unit at a line boundary", () => {
     const chunks = chunkDocument({
       kind: "markdown",
