@@ -6,6 +6,7 @@ import { KnowledgePage } from "../../frontend/pages/knowledge-page";
 import { KnowledgeReaderPage } from "../../frontend/pages/knowledge-reader-page";
 import { SearchPage } from "../../frontend/pages/search-page";
 import { AgentPage } from "../../frontend/pages/agent-page";
+import { SubmitPage } from "../../frontend/pages/submit-page";
 
 describe("React read-only user pages", () => {
   it("renders loading and empty knowledge states without undefined values", () => {
@@ -48,5 +49,13 @@ describe("React read-only user pages", () => {
     expect(html).toContain("Question");
     expect(html).toContain("Guide");
     expect(renderToStaticMarkup(<AgentPage scope="all" state={{ kind: "error", message: "Retry later" }} />)).toContain("Retry later");
+  });
+
+  it("renders an editable submission draft without undefined values", () => {
+    const html = renderToStaticMarkup(<SubmitPage draft={{ mode: "markdown", title: "Guide", content: "# Body" }} state={{ kind: "idle" }} />);
+    expect(html).toContain('id="submission-title"');
+    expect(html).toContain('id="submission-mode"');
+    expect(html).toContain('id="submission-content"');
+    expect(html).not.toContain("undefined");
   });
 });

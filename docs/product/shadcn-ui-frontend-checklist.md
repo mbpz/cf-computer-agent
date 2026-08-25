@@ -64,6 +64,7 @@
 - [x] FE-044 重构 Agent 问答页、scope、引用和 confidence；证据：`agent-page.tsx`、`answer-panel.tsx`，5 个页面测试通过。
 - [x] FE-044a 接入 `/api/knowledge/chat`：显式 all scope、答案/置信度/引用 allowlist、请求取消与重试；证据：`frontend/lib/agent-data.ts`、`AgentRoute`、`test/unit/frontend-agent-data.test.ts`。
 - [x] FE-045 重构知识录入表单和校验错误；证据：`submit-page.tsx`、`submission-form-model.ts`，UTF-8 128 KiB 边界与模式校验测试。
+- [x] FE-045a 接入 `/api/submissions`：受控文本/Markdown/code 草稿、默认 `default` 空间、幂等键、成功/校验/API 错误状态；证据：`frontend/lib/submission-data.ts`、`SubmitRoute`、`test/unit/frontend-submission-data.test.ts`。
 - [ ] FE-046 重构文件拖拽/选择上传。
 - [x] FE-046a 在免费层无 R2 时提供可见但禁用的文件选择边界；证据：`frontend/components/assets/asset-dropzone.tsx`、`asset-upload-model.ts`，覆盖对象存储未启用、文件名和 10 MiB 大小校验；实际二进制上传待 R2 方案重新批准后接入。
 - [x] FE-047 展示上传、解析、失败、重试状态；证据：`asset-state.ts` 覆盖 queued/processing/ready/retryable/terminal。

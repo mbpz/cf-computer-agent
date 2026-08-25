@@ -18,6 +18,8 @@ import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data";
+import { createSubmission } from "./lib/submission-data";
+import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
@@ -74,7 +76,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge-reader": return <KnowledgeReaderPage locale={locale} revision={{ id: pathname.split("/").pop() || "", title: frontendText(locale, "KNOWLEDGE_TITLE"), markdown: frontendText(locale, "KNOWLEDGE_READER_LOADING") }} renderMarkdown={(markdown) => markdown} />;
     case "search": return <SearchRoute locale={locale} />;
     case "agent": return <AgentRoute locale={locale} />;
-    case "submit": return <SubmitPage locale={locale} draft={{ mode: "markdown", title: "", content: "" }} state={{ kind: "idle" }} />;
+    case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
@@ -230,4 +232,21 @@ function AgentRoute({ locale }: { locale: LocaleRuntime }) {
     });
   };
   return <AgentPage locale={locale} scope={{ kind: "all" }} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onRetry={() => submit(lastQuestion)} />;
+}
+
+function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
+  const [draft, setDraft] = useState<SubmissionDraft>({ mode: "markdown", title: "", content: "" });
+  const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string }>({ kind: "idle" });
+  const submit = async (nextDraft: SubmissionDraft) => {
+    if (state.kind === "pending") return;
+    setState({ kind: "pending" });
+    try {
+      await createSubmission(nextDraft);
+      setDraft({ mode: nextDraft.mode, title: "", content: "" });
+      setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS") });
+    } catch (error: unknown) {
+      setState({ kind: error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "validation" : "error", message: frontendText(locale, error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "SUBMIT_VALIDATION_ERROR" : "SUBMIT_ERROR") });
+    }
+  };
+  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={setDraft} onSubmit={submit} />;
 }
