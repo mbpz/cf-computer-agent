@@ -9,7 +9,7 @@
 - [x] FE-003 冻结中英文 locale key/placeholder 基线；证据：`docs/product/shadcn-ui-frontend-i18n-baseline.md` 固化 `en`/`zh-CN` 的 434 keys、55 placeholders、6 文件扫描基线，`npm run test:i18n` 13/13 与 `npm run verify:i18n` 通过。
 - [x] FE-004 冻结 Markdown 安全渲染入口与 XSS 回归测试；证据：`docs/product/shadcn-ui-frontend-markdown-security-baseline.md` 固化 `renderSafeMarkdown`、allowlist、协议与降级规则，`markdown-renderer.test.ts`、`html.test.ts`、`frontend-user-read-pages.test.tsx` focused 11/11。
 - [x] FE-005 记录当前 `npm run check` 基线和构建资源基线；证据：`docs/product/shadcn-ui-frontend-build-baseline.md` 固化 2026-08-26 的 41 smoke、13 i18n、875 unit、298 Worker、类型/构建结果与 4 个 React dist 文件。
-- [ ] FE-006 提交本规格书与迁移清单。
+- [x] FE-006 提交本规格书与迁移清单；证据：`docs/superpowers/specs/2026-08-25-shadcn-ui-frontend-migration.md`、`docs/superpowers/plans/2026-08-25-shadcn-ui-frontend-migration.md` 与本清单均已纳入版本控制，规格书状态已更新为按原子切片持续验收。
 
 ## 工具链与构建
 
