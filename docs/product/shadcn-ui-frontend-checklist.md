@@ -71,6 +71,7 @@
 - [ ] FE-048 接入资产解析预览。
 - [x] FE-048a 管理员资产队列接入安全解析预览面板；证据：`asset-preview-model.ts`、`asset-preview-panel.tsx`，只渲染受限文本、warnings、行数和 parser schema，异常 payload fail-closed；真实 API 拉取与预览动作接线留在 FE-052/数据路由切片。
 - [x] FE-049 重构我的提交和 resubmit；证据：`my-submissions-page.tsx` 覆盖 needs_revision 与 resubmit 入口。
+- [x] FE-049a 接入 `/api/submissions/mine`：owner-scoped opaque cursor、malformed row 过滤、取消/过期响应保护与 load-more 状态；证据：`frontend/lib/my-submissions-data.ts`、`MySubmissionsRoute`、`test/unit/frontend-my-submissions-data.test.ts`。
 
 ## 管理员页面
 

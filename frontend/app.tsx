@@ -19,6 +19,7 @@ import { createKnowledgeRequestController, type KnowledgePageResult } from "./li
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data";
 import { createSubmission } from "./lib/submission-data";
+import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -77,7 +78,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "search": return <SearchRoute locale={locale} />;
     case "agent": return <AgentRoute locale={locale} />;
     case "submit": return <SubmitRoute locale={locale} />;
-    case "my-submissions": return <MySubmissionsPage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
+    case "my-submissions": return <MySubmissionsRoute locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-submissions": return <ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
@@ -249,4 +250,32 @@ function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
     }
   };
   return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={setDraft} onSubmit={submit} />;
+}
+
+function MySubmissionsRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
+  const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
+  useEffect(() => {
+    const controller = createMySubmissionsRequestController();
+    controllerRef.current = controller;
+    const request = controller.request();
+    void request.promise.then(({ generation, page }) => {
+      if (controller.isCurrent(generation)) setState({ kind: "ready", items: page.items, nextCursor: page.nextCursor });
+    }).catch((error: unknown) => {
+      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    });
+    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [locale]);
+  const loadMore = () => {
+    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
+    const controller = controllerRef.current;
+    const request = controller.request(state.nextCursor);
+    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
+    void request.promise.then(({ generation, page }) => {
+      if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, items: [...previous.items, ...page.items], nextCursor: page.nextCursor, pending: false } : previous);
+    }).catch((error: unknown) => {
+      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
+    });
+  };
+  return <MySubmissionsPage locale={locale} state={state} onLoadMore={loadMore} />;
 }

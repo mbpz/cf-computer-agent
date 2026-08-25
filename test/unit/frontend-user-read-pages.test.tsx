@@ -7,6 +7,7 @@ import { KnowledgeReaderPage } from "../../frontend/pages/knowledge-reader-page"
 import { SearchPage } from "../../frontend/pages/search-page";
 import { AgentPage } from "../../frontend/pages/agent-page";
 import { SubmitPage } from "../../frontend/pages/submit-page";
+import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 
 describe("React read-only user pages", () => {
   it("renders loading and empty knowledge states without undefined values", () => {
@@ -56,6 +57,13 @@ describe("React read-only user pages", () => {
     expect(html).toContain('id="submission-title"');
     expect(html).toContain('id="submission-mode"');
     expect(html).toContain('id="submission-content"');
+    expect(html).not.toContain("undefined");
+  });
+
+  it("renders scoped submission status and cursor affordance", () => {
+    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "review_pending" }], nextCursor: "v1.next" }} />);
+    expect(html).toContain("Guide");
+    expect(html).toContain("Load more submissions");
     expect(html).not.toContain("undefined");
   });
 });
