@@ -409,6 +409,38 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
+  it("deduplicates retrieval at the current Revision boundary", async () => {
+    await seedKnowledge({
+      id: "knowledge-current-dedup",
+      revisionId: "revision-current-dedup-old",
+      title: "Historical duplicate",
+      visibility: "shared",
+      body: "historical-only marker",
+      searchBody: "historical-only marker",
+    });
+    await addCurrentRevision({
+      knowledgeItemId: "knowledge-current-dedup",
+      revisionId: "revision-current-dedup-new",
+      title: "Current canonical",
+      visibility: "shared",
+      body: "current-only marker",
+      searchBody: "current-only marker",
+    });
+    await env.DB.prepare(
+      `INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, created_at, updated_at)
+       VALUES ('job-current-dedup', 'index_revision', 'revision-current-dedup-new', 'completed', 1, ?, ?, ?)`,
+    ).bind(now, now, now).run();
+    const service = serviceWithContent();
+
+    await expect(service.list(contributor, { limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: "knowledge-current-dedup", revisionId: "revision-current-dedup-new" })],
+    });
+    await expect(service.search(contributor, { query: "historical-only marker", limit: 20 })).resolves.toMatchObject({ items: [] });
+    await expect(service.search(contributor, { query: "current-only marker", limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ knowledgeItemId: "knowledge-current-dedup", revisionId: "revision-current-dedup-new" })],
+    });
+  });
+
   it("keeps a still-visible historical citation readable and makes hidden, inactive, and absent citations indistinguishable", async () => {
     await seedKnowledge({
       id: "knowledge-old-citation",
