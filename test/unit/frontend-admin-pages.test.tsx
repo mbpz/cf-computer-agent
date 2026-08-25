@@ -43,6 +43,12 @@ describe("React administrator pages", () => {
     expect(members).not.toContain("No members");
   });
 
+  it("keeps loaded members visible when a later page fails", () => {
+    const html = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "a@example.com" }]} nextCursor="next" loadMoreError="Unable to load members." />);
+    expect(html).toContain("a@example.com");
+    expect(html).toContain("Unable to load members.");
+  });
+
   it("renders a bounded parsed preview and rejects malformed preview payloads", () => {
     const preview = assetPreviewModel({ assetId: "asset-1", originalName: "guide.pdf", markdown: "# Guide\n\nBody", warnings: ["No title"], lineCount: 3, parserSchemaVersion: "v1" });
     const html = renderToStaticMarkup(<AssetQueuePage assets={[]} preview={preview} />);

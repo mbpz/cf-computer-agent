@@ -9,7 +9,7 @@
 - vendor lock：2 个浏览器依赖 hash 校验通过
 - smoke/operations：42/42
 - i18n contract：13/13
-- unit：83 files / 909 tests
+- unit：83 files / 910 tests
 - Worker：13 files / 297 tests
 - TypeScript 与 Wrangler types：通过
 - Wrangler dry-run：通过，读取 React Assets 与 Worker bindings
@@ -23,11 +23,11 @@
 ```text
 frontend/dist/index.html
 frontend/dist/manifest.json
-frontend/dist/assets/index-4u2ezQYm.js
+frontend/dist/assets/index-CRel8CGJ.js
 frontend/dist/assets/index-Ds4ah7bo.css
 ```
 
-当前构建摘要：JS 447.83 kB、CSS 26.10 kB；构建产物名称由 Vite 内容哈希生成，部署前应以本次 `manifest.json` 为准。
+当前构建摘要：JS 448.07 kB、CSS 26.10 kB；构建产物名称由 Vite 内容哈希生成，部署前应以本次 `manifest.json` 为准。
 
 ## 重跑命令
 
