@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
 import { assetStatusModel } from "../../frontend/components/assets/asset-state";
-import { assetUploadModel, clipboardImageFiles } from "../../frontend/components/assets/asset-upload-model";
+import { assetUploadModel, clipboardImageFiles, displayRelativePath } from "../../frontend/components/assets/asset-upload-model";
 import { createAssetUploadQueue } from "../../frontend/components/assets/asset-upload-queue";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 
@@ -75,5 +75,10 @@ describe("React submission and asset pages", () => {
     ]);
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({ name: "clipboard-2.png", type: "image/png" });
+  });
+
+  it("keeps folder paths display-only and removes traversal/control segments", () => {
+    expect(displayRelativePath({ name: "guide.md", webkitRelativePath: "docs/../private/guide.md" })).toBe("docs/private/guide.md");
+    expect(displayRelativePath({ name: "guide.md", webkitRelativePath: "docs/\u0000guide.md" })).toBe("docs/_guide.md");
   });
 });

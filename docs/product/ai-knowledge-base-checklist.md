@@ -33,7 +33,7 @@
 - [x] `SRC-011` P1/M2 拖放上传；状态：L；验收：拖放目标与隐藏 file input 共用 accepted matrix/大小/数量前置校验，按钮保持键盘可用；服务端仍是唯一最终校验边界。证据：`frontend/components/assets/asset-dropzone.tsx`、`frontend/components/assets/asset-upload-model.ts`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [x] `SRC-012` P1/M2 批量文件队列；状态：L；验收：文件选择/拖放统一进入逐文件 queued/processing/succeeded/failed 状态，失败只影响当前文件，默认并发上限 2、硬上限 3。证据：`frontend/components/assets/asset-upload-queue.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [x] `SRC-013` P1/M2 剪贴板图片；状态：L；验收：仅提取 PNG/JPEG/GIF/WebP 图片，自动补齐安全文件名并进入普通 Asset 队列；文本、SVG 和其它媒体忽略。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
-- [ ] `SRC-014` P2/M2 文件夹导入；验收：相对路径只作显示 metadata，不进入对象键。
+- [x] `SRC-014` P2/M2 文件夹导入；状态：L；验收：文件夹选择保留经过清洗且有界的相对路径用于显示，`..`/控制符被移除，路径不参与对象键生成。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [ ] `SRC-015` P2/M2 受限 URL 快照；验收：HTTPS、SSRF 防护、大小/类型上限、固定重定向策略。
 - [ ] `SRC-016` P2/M2 替代文本；验收：解析失败时用户可提交可审核替代 Markdown。
 - [ ] `SRC-017` P2/M2 上传取消；验收：取消后不可见且暂存对象可回收。

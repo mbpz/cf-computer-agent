@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { ASSET_PICKER_ACCEPT, assetUploadModel, clipboardImageFiles } from "./asset-upload-model";
+import { ASSET_PICKER_ACCEPT, assetUploadModel, clipboardImageFiles, displayRelativePath } from "./asset-upload-model";
 import { createAssetUploadQueue, type AssetQueueItem } from "./asset-upload-queue";
 
-export function AssetDropzone({ locale, enabled = false, maxBytes = 10 * 1024 * 1024, onFile, onFiles }: { locale?: LocaleRuntime; enabled?: boolean; maxBytes?: number; onFile?: (file: File) => void; onFiles?: (files: File[]) => Promise<void> }) {
+export function AssetDropzone({ locale, enabled = false, folderMode = false, maxBytes = 10 * 1024 * 1024, onFile, onFiles }: { locale?: LocaleRuntime; enabled?: boolean; folderMode?: boolean; maxBytes?: number; onFile?: (file: File) => void; onFiles?: (files: File[]) => Promise<void> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [queue, setQueue] = useState<AssetQueueItem<File>[]>([]);
@@ -20,8 +20,8 @@ export function AssetDropzone({ locale, enabled = false, maxBytes = 10 * 1024 * 
     <h2 className="text-sm font-semibold">{frontendText(locale, "SUBMIT_ASSET_TITLE")}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{disabled ? frontendText(locale, "SUBMIT_ASSET_DISABLED") : frontendText(locale, "SUBMIT_ASSET_DROP")}</p>
     {!disabled && <p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "SUBMIT_ASSET_FORMATS")}</p>}
-    <input ref={inputRef} className="sr-only" type="file" accept={ASSET_PICKER_ACCEPT} multiple disabled={disabled} onChange={(event) => { acceptFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} />
+    <input ref={inputRef} className="sr-only" type="file" accept={ASSET_PICKER_ACCEPT} multiple disabled={disabled} {...(folderMode ? ({ webkitdirectory: "" } as Record<string, string>) : {})} onChange={(event) => { acceptFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} />
     <button type="button" className="mt-4 inline-flex rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50" disabled={disabled} onClick={() => inputRef.current?.click()}>{frontendText(locale, "SUBMIT_ASSET_SELECT")}</button>
-    {queue.length > 0 && <ul aria-label="Asset upload queue" className="mt-4 space-y-1 text-xs">{queue.map((item) => <li key={item.id} className="flex justify-between gap-3"><span className="truncate">{item.value.name}</span><span>{item.status}</span></li>)}</ul>}
+    {queue.length > 0 && <ul aria-label="Asset upload queue" className="mt-4 space-y-1 text-xs">{queue.map((item) => <li key={item.id} className="flex justify-between gap-3"><span className="truncate">{displayRelativePath(item.value)}</span><span>{item.status}</span></li>)}</ul>}
   </section>;
 }

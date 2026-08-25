@@ -22,6 +22,14 @@ export function clipboardImageFiles(
   });
 }
 
+/** Keeps a relative folder path as display-only metadata; never use this as an object key. */
+export function displayRelativePath(file: { name?: string; webkitRelativePath?: string }): string {
+  const raw = typeof file.webkitRelativePath === "string" && file.webkitRelativePath.trim()
+    ? file.webkitRelativePath : (file.name || "file");
+  const segments = raw.replaceAll("\\", "/").split("/").filter((segment) => segment && segment !== "." && segment !== "..");
+  return segments.map((segment) => segment.replace(/[\u0000-\u001f\u007f-\u009f]/gu, "_")).join("/").slice(0, 512) || "file";
+}
+
 export function assetUploadModel(input: {
   enabled: boolean;
   file?: { name?: string; size?: number; type?: string };
