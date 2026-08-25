@@ -1,5 +1,6 @@
 import { AppError } from "../http";
 import { decodeSourceBytes } from "../sources/decoder";
+import { recoverHtmlMarkdown } from "../assets/html";
 import { deriveCursorScopeKey, parsePageRequest, type PageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
@@ -24,6 +25,7 @@ export interface CreateSourceSubmissionInput extends Omit<CreateSubmissionInput,
   language?: string;
   fileLabel?: string;
   lineBaseline?: number;
+  contentFormat?: "plain" | "rich_text";
 }
 export interface ResubmitSourceSubmissionInput {
   requestedSpaceId?: string;
@@ -94,7 +96,17 @@ export class SubmissionsService {
   async createWithSourceVersion(submitterId: string, input: CreateSourceSubmissionInput): Promise<SubmissionCreateResult> {
     requireIdempotencyKey(input.idempotencyKey);
     const content = resolveSourceContent(input);
-    const normalized = normalize({ ...input, content }, false);
+    const normalizedContent = input.contentFormat === "rich_text"
+      ? recoverHtmlMarkdown(new TextEncoder().encode(content).buffer).markdown
+      : content;
+    if (input.contentFormat !== undefined && input.contentFormat !== "plain" && input.contentFormat !== "rich_text") {
+      throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
+    }
+    const normalized = normalize({
+      ...input,
+      kind: input.contentFormat === "rich_text" ? "markdown" : input.kind,
+      content: normalizedContent,
+    }, false);
     const parsed = await parseSource({
       kind: normalized.kind,
       content: normalized.content,

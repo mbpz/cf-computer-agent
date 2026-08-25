@@ -122,7 +122,7 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "contentFormat", "language", "fileLabel", "lineBaseline"],
       "SUBMISSION_REQUEST_INVALID",
     );
     const hasContent = Object.hasOwn(input, "content");
@@ -139,6 +139,7 @@ export async function routeMemberApi(
       kind: input.kind as SubmissionKind,
       title: stringValue(input.title),
       ...(hasContent ? { content: stringValue(input.content) } : { contentBase64: stringValue(input.contentBase64) }),
+      ...(input.contentFormat === undefined ? {} : { contentFormat: input.contentFormat as "plain" | "rich_text" }),
       idempotencyKey: request.headers.get("idempotency-key") || "",
       ...(input.language === undefined ? {} : { language: stringValue(input.language) }),
       ...(input.fileLabel === undefined ? {} : { fileLabel: stringValue(input.fileLabel) }),
@@ -189,7 +190,7 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "language", "fileLabel", "lineBaseline"],
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content", "contentBase64", "contentFormat", "language", "fileLabel", "lineBaseline"],
       "SUBMISSION_REQUEST_INVALID",
     );
     const hasContent = Object.hasOwn(input, "content");
@@ -206,6 +207,7 @@ export async function routeMemberApi(
       kind: input.kind as SubmissionKind,
       title: stringValue(input.title),
       ...(hasContent ? { content: stringValue(input.content) } : { contentBase64: stringValue(input.contentBase64) }),
+      ...(input.contentFormat === undefined ? {} : { contentFormat: input.contentFormat as "plain" | "rich_text" }),
       ...(input.language === undefined ? {} : { language: stringValue(input.language) }),
       ...(input.fileLabel === undefined ? {} : { fileLabel: stringValue(input.fileLabel) }),
       ...(input.lineBaseline === undefined ? {} : { lineBaseline: input.lineBaseline as number }),

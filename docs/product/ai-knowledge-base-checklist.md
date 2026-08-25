@@ -28,7 +28,7 @@
 - [x] `SRC-006` P0/M1 Space/Collection 目标选择；状态：L/W；验收：只接受 active 且同 Space 集合。
 - [x] `SRC-007` P0/M1 Submission 幂等键；状态：L/W；验收：重放不创建第二条提交。
 - [x] `SRC-008` P1/M1 草稿保存；状态：L/W；验收：仅创建者可读取和继续编辑。证据：`src/submissions/service.ts`、`src/submissions/repository.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/submissions.test.ts test/worker/m1-api.test.ts`。
-- [ ] `SRC-009` P1/M1 粘贴富文本；验收：严格清洗后转规范 Markdown，无脚本/事件属性。
+- [x] `SRC-009` P1/M1 粘贴富文本；状态：L/W；验收：`contentFormat=rich_text` 经过有界 HTML allowlist 清洗并转规范 Markdown，脚本/事件属性和危险 HTML 不进入 Submission/SourceVersion。证据：`src/assets/html.ts`、`src/submissions/service.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/m1-api.test.ts`。
 - [ ] `SRC-010` P1/M2 文件选择器；验收：支持矩阵、大小和数量前置提示。
 - [ ] `SRC-011` P1/M2 拖放上传；验收：键盘替代入口和相同服务端校验。
 - [ ] `SRC-012` P1/M2 批量文件队列；验收：逐文件状态、失败隔离和有限并发。

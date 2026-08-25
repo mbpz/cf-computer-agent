@@ -112,6 +112,18 @@ describe("SubmissionsService", () => {
     });
   });
 
+  it("strictly sanitizes rich-text HTML into Markdown before source persistence", async () => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+    await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Rich", contentFormat: "rich_text",
+      content: "<h1>Guide</h1><p>Safe <strong>body</strong></p><script>alert(1)</script>",
+      idempotencyKey: "rich-text-key-0001",
+    });
+    expect(repository.sourceCreation?.sourceVersion.content).toBe("# Guide\n\nSafe **body**\n");
+    expect(repository.sourceCreation?.sourceVersion.content).not.toContain("script");
+  });
+
   it.each([
     ["text", `!${"a".repeat(128 * 1024 - 1)}`],
     ["markdown", "a".repeat(128 * 1024)],

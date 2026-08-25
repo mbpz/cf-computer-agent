@@ -521,6 +521,23 @@ describe("M1 API authorization and request boundaries", () => {
       method: "POST", body: JSON.stringify(body),
     }), 405, "METHOD_NOT_ALLOWED");
   });
+
+  it("converts rich-text paste to sanitized Markdown before review persistence", async () => {
+    const response = await memberApi("contributor", "/api/submissions", {
+      method: "POST",
+      headers: { "idempotency-key": "rich-text-api-key1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", kind: "markdown", title: "Rich paste",
+        contentFormat: "rich_text", content: "<h1>Guide</h1><p>Body</p><script>steal()</script>",
+      }),
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json<{ submission: { id: string } }>();
+    await expect(env.DB.prepare("SELECT content FROM submissions WHERE id = ?").bind(body.submission.id).first())
+      .resolves.toMatchObject({ content: "# Guide\n\nBody\n" });
+    await expect(env.DB.prepare("SELECT content FROM source_versions WHERE submission_id = ?").bind(body.submission.id).first())
+      .resolves.toMatchObject({ content: "# Guide\n\nBody\n" });
+  });
 });
 
 describe("M1 trusted knowledge HTTP journey", () => {
