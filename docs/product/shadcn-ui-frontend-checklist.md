@@ -56,11 +56,11 @@
 - [x] FE-042 重构知识阅读页和安全 Markdown 展示；证据：`knowledge-reader-page.tsx` 只消费注入的安全 renderer，测试覆盖调用边界。
 - [x] FE-043 重构搜索页、过滤器、分页和无结果状态；证据：`frontend/pages/search-page.tsx` 与 bounded result list/degraded 状态。
 - [x] FE-044 重构 Agent 问答页、scope、引用和 confidence；证据：`agent-page.tsx`、`answer-panel.tsx`，5 个页面测试通过。
-- [ ] FE-045 重构知识录入表单和校验错误。
+- [x] FE-045 重构知识录入表单和校验错误；证据：`submit-page.tsx`、`submission-form-model.ts`，UTF-8 128 KiB 边界与模式校验测试。
 - [ ] FE-046 重构文件拖拽/选择上传。
-- [ ] FE-047 展示上传、解析、失败、重试状态。
+- [x] FE-047 展示上传、解析、失败、重试状态；证据：`asset-state.ts` 覆盖 queued/processing/ready/retryable/terminal。
 - [ ] FE-048 接入资产解析预览。
-- [ ] FE-049 重构我的提交和 resubmit。
+- [x] FE-049 重构我的提交和 resubmit；证据：`my-submissions-page.tsx` 覆盖 needs_revision 与 resubmit 入口。
 
 ## 管理员页面
 
