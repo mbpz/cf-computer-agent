@@ -16,6 +16,7 @@ function repository(): SourceReparseRepositoryPort & { jobs: Map<string, any>; s
   const store = {
     snapshot,
     jobs: new Map<string, any>(),
+    promotions: new Map<string, any>(),
     async findSourceVersionForReparse() { return store.snapshot; },
     async findJobByFingerprint(_sourceId: string, fingerprint: string) {
       return [...store.jobs.values()].find((job) => job.sourceFingerprint === fingerprint) ?? null;
@@ -35,7 +36,12 @@ function repository(): SourceReparseRepositoryPort & { jobs: Map<string, any>; s
       const job = store.jobs.get(id); if (!job) return false;
       Object.assign(job, { status: terminal ? "failed_terminal" : "failed_retryable", lastErrorCode: code, updatedAt: now }); return true;
     },
-  } as SourceReparseRepositoryPort & { jobs: Map<string, any>; snapshot: any };
+    async findPromotion(id: string) { return store.promotions.get(id) ?? null; },
+    async promoteJob(id: string, _actorId: string, promotion: any) {
+      store.promotions.set(id, promotion);
+      return promotion;
+    },
+  } as SourceReparseRepositoryPort & { jobs: Map<string, any>; promotions: Map<string, any>; snapshot: any };
   return store;
 }
 
@@ -68,5 +74,17 @@ describe("SourceReparseService", () => {
     const job = await service.create("admin-1", "source-version-1");
     const failed = await service.process(job.id);
     expect(failed).toMatchObject({ status: "failed_terminal", lastErrorCode: "SOURCE_METADATA_INVALID" });
+  });
+
+  it("materializes an indexed candidate once without changing the original revision", async () => {
+    const repo = repository();
+    const service = new SourceReparseService(repo, { id: () => "reparse-4", now: () => new Date("2026-08-26T01:00:00.000Z") });
+    const job = await service.create("admin-1", "source-version-1");
+    await service.process(job.id);
+    const first = await service.promote(job.id, "admin-1");
+    const replay = await service.promote(job.id, "admin-1");
+    expect(first).toEqual(replay);
+    expect(first).toMatchObject({ submissionId: "reparse-4:submission", sourceVersionId: "reparse-4:source-version" });
+    expect(repo.snapshot.publishedRevisionId).toBe("revision-current");
   });
 });

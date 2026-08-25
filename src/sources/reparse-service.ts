@@ -26,6 +26,17 @@ export interface SourceReparseSnapshot {
   sourceVersion: SourceVersion;
   kind: SubmissionKind;
   publishedRevisionId: string | null;
+  ownerId: string;
+  spaceId: string;
+  collectionId: string | null;
+  title: string;
+  requestedVisibility: "shared" | "admin_only";
+}
+
+export interface SourceReparsePromotion {
+  submissionId: string;
+  sourceId: string;
+  sourceVersionId: string;
 }
 
 export interface SourceReparseRepositoryPort {
@@ -36,6 +47,8 @@ export interface SourceReparseRepositoryPort {
   claimJob(id: string, now: string): Promise<SourceReparseJob | null>;
   completeJob(id: string, candidate: ReparseCandidate, now: string): Promise<boolean>;
   failJob(id: string, code: string, terminal: boolean, now: string): Promise<boolean>;
+  findPromotion(jobId: string): Promise<SourceReparsePromotion | null>;
+  promoteJob(jobId: string, actorId: string, promotion: SourceReparsePromotion): Promise<SourceReparsePromotion>;
 }
 
 export interface SourceReparseServiceOptions {
@@ -109,6 +122,28 @@ export class SourceReparseService {
     const job = await this.repository.getJob(jobId);
     if (!job) throw new AppError("SOURCE_REPARSE_NOT_FOUND", "Source reparse job not found", 404);
     return job;
+  }
+
+  async promote(jobId: string, actorId: string): Promise<SourceReparsePromotion> {
+    if (!jobId || !actorId) throw new AppError("SOURCE_REPARSE_INVALID", "Source reparse input is invalid", 400);
+    const job = await this.get(jobId);
+    const existing = await this.repository.findPromotion(job.id);
+    if (existing) return existing;
+    if (job.status !== "indexed" || !job.candidate) {
+      throw new AppError("SOURCE_REPARSE_NOT_READY", "Source reparse candidate is not ready", 409, true);
+    }
+    const promotion: SourceReparsePromotion = {
+      submissionId: `${job.id}:submission`,
+      sourceId: `${job.id}:source`,
+      sourceVersionId: `${job.id}:source-version`,
+    };
+    try {
+      return await this.repository.promoteJob(job.id, actorId, promotion);
+    } catch (error) {
+      const replay = await this.repository.findPromotion(job.id);
+      if (replay) return replay;
+      throw error;
+    }
   }
 }
 

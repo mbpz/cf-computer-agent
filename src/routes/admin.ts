@@ -258,6 +258,15 @@ export async function routeAdminApi(
   }
 
   const reparseJob = /^\/api\/admin\/reparse-jobs\/([^/]+)$/.exec(url.pathname);
+  const reparsePromotion = /^\/api\/admin\/reparse-jobs\/([^/]+)\/promote$/.exec(url.pathname);
+  if (reparsePromotion) {
+    requireCapability(principal, "knowledge:review");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
+    requireNoQuery(url);
+    const promotion = await services.sourceReparse.promote(decodePathId(reparsePromotion[1]!), actor.memberId);
+    return jsonResponse({ promotion }, 201, context.requestId);
+  }
   if (reparseJob) {
     requireCapability(principal, "knowledge:review");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

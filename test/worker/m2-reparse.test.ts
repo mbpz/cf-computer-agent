@@ -26,6 +26,13 @@ beforeEach(async () => {
   await env.DB.prepare(
     "INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, parser_schema_version, source_identity_sha256, created_at) VALUES ('m2-source-version', 'm2-source', 'm2-submission', 1, 'Original body', ?, 'm1-v1', 'm1-v2', ?, ?)",
   ).bind("a".repeat(64), "b".repeat(64), now).run();
+  await env.DB.prepare(
+    "INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('m2-item', 'default', NULL, NULL, 'active', 'indexed', ?, ?)",
+  ).bind(now, now).run();
+  await env.DB.prepare(
+    "INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('m2-revision', 'm2-item', 'm2-source-version', '/workspace/published/default/m2-item/m2-revision.md', ?, 'M2 source', '[]', 'shared', 'm2-admin', ?)",
+  ).bind("a".repeat(64), now).run();
+  await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'm2-revision' WHERE id = 'm2-item'").run();
   const sessions = new SessionService(env.DB, new MembersRepository(env.DB), { waitUntil: () => undefined });
   adminCookie = (await sessions.create({
     id: "m2-admin", identitySubject: "github:m2-admin", email: "m2-admin@example.test",
@@ -73,6 +80,30 @@ describe("M2 source reparse schema", () => {
     }));
     expect(status.status).toBe(200);
     await expect(status.json()).resolves.toMatchObject({ job: { status: "indexed" } });
+
+    const promoted = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/promote`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
+    }));
+    expect(promoted.status).toBe(201);
+    await expect(promoted.json()).resolves.toEqual({
+      promotion: {
+        submissionId: `${body.job.id}:submission`,
+        sourceId: `${body.job.id}:source`,
+        sourceVersionId: `${body.job.id}:source-version`,
+      },
+    });
+    await expect(env.DB.prepare(
+      "SELECT s.status, sv.parser_version, sv.parser_schema_version, old.source_version_id AS old_revision_source, old.content_sha256 AS old_hash FROM submissions s JOIN source_versions sv ON sv.submission_id = s.id JOIN revisions old ON old.source_version_id = 'm2-source-version' WHERE s.id = ?",
+    ).bind(`${body.job.id}:submission`).first()).resolves.toEqual({
+      status: "review_pending", parser_version: "m2-v1", parser_schema_version: "m2-v1",
+      old_revision_source: "m2-source-version", old_hash: "a".repeat(64),
+    });
+    const replayPromotion = await execute(new Request(`https://example.test/api/admin/reparse-jobs/${body.job.id}/promote`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${adminCookie}`, origin: APP_CONFIG.canonicalOrigin },
+    }));
+    expect(replayPromotion.status).toBe(201);
   });
 });
 

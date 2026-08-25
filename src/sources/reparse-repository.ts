@@ -1,7 +1,9 @@
 import type { SubmissionKind } from "../submissions/types";
+import { AuditRepository } from "../audit/repository";
+import type { CreateAuditEvent } from "../audit/types";
 import type { CodeSourceMetadata, SourceVersion } from "./types";
 import type { ReparseCandidate, } from "./reparse";
-import type { SourceReparseJob, SourceReparseRepositoryPort, SourceReparseSnapshot } from "./reparse-service";
+import type { SourceReparseJob, SourceReparsePromotion, SourceReparseRepositoryPort, SourceReparseSnapshot } from "./reparse-service";
 
 type ReparseRow = {
   id: string; source_id: string; base_source_version_id: string; submission_id: string; requested_by: string;
@@ -18,19 +20,23 @@ type SourceRow = {
   parser_schema_version: NonNullable<SourceVersion["parserSchemaVersion"]>;
   source_identity_sha256: string | null; code_language: string | null; file_label: string | null;
   line_baseline: number; created_at: string; kind: SubmissionKind; published_revision_id: string | null;
+  owner_id: string; space_id: string; collection_id: string | null; title: string;
+  requested_visibility: "shared" | "admin_only";
 };
 
 export class SourceReparseRepository implements SourceReparseRepositoryPort {
-  constructor(private readonly db: D1Database) {}
+  constructor(private readonly db: D1Database, private readonly audit = new AuditRepository(db)) {}
 
   async findSourceVersionForReparse(sourceVersionId: string): Promise<SourceReparseSnapshot | null> {
     const row = await this.db.prepare(
       `SELECT sv.id, sv.source_id, sv.submission_id, sv.ordinal, sv.content, sv.content_sha256,
               sv.parser_version, sv.parser_schema_version, sv.source_identity_sha256,
               sv.code_language, sv.file_label, sv.line_baseline, sv.created_at,
-              s.kind, r.id AS published_revision_id
+              s.kind, r.id AS published_revision_id, s.owner_id, s.space_id, s.collection_id, s.title,
+              sub.requested_visibility
        FROM source_versions sv
        JOIN sources s ON s.id = sv.source_id
+       JOIN submissions sub ON sub.id = sv.submission_id
        LEFT JOIN revisions r ON r.source_version_id = sv.id
        WHERE sv.id = ? LIMIT 1`,
     ).bind(sourceVersionId).first<SourceRow>();
@@ -46,6 +52,11 @@ export class SourceReparseRepository implements SourceReparseRepositoryPort {
       },
       kind: row.kind,
       publishedRevisionId: row.published_revision_id,
+      ownerId: row.owner_id,
+      spaceId: row.space_id,
+      collectionId: row.collection_id,
+      title: row.title,
+      requestedVisibility: row.requested_visibility,
     };
   }
 
@@ -113,6 +124,77 @@ export class SourceReparseRepository implements SourceReparseRepositoryPort {
        WHERE id = ? AND status = 'processing'`,
     ).bind(terminal ? "failed_terminal" : "failed_retryable", code, now, id).run();
     return result.meta.changes === 1;
+  }
+
+  async findPromotion(jobId: string): Promise<SourceReparsePromotion | null> {
+    const row = await this.db.prepare(
+      `SELECT sub.id AS submission_id, source.id AS source_id, sv.id AS source_version_id
+       FROM source_reparse_jobs job
+       JOIN sources original ON original.id = job.source_id
+       JOIN submissions sub ON sub.submitter_id = original.owner_id AND sub.idempotency_key = ?
+       JOIN source_versions sv ON sv.submission_id = sub.id AND sv.parser_version = 'm2-v1'
+       JOIN sources source ON source.id = sv.source_id
+       WHERE job.id = ? LIMIT 1`,
+    ).bind(`reparse:${jobId}`, jobId).first<{ submission_id: string; source_id: string; source_version_id: string }>();
+    return row ? { submissionId: row.submission_id, sourceId: row.source_id, sourceVersionId: row.source_version_id } : null;
+  }
+
+  async promoteJob(jobId: string, actorId: string, promotion: SourceReparsePromotion): Promise<SourceReparsePromotion> {
+    const job = await this.getJob(jobId);
+    if (!job?.candidate) throw new Error("Source reparse candidate is unavailable");
+    const snapshot = await this.findSourceVersionForReparse(job.baseSourceVersionId);
+    if (!snapshot) throw new Error("Source reparse source is unavailable");
+    const candidate = job.candidate;
+    const now = candidate.createdAt;
+    const audit: CreateAuditEvent = {
+      id: `${jobId}:audit`, actorKind: "member", actorId: snapshot.ownerId,
+      action: "submission.created", resourceType: "submission", resourceId: promotion.submissionId,
+      metadata: {
+        kind: snapshot.kind,
+        requestedSpaceId: snapshot.spaceId,
+        ...(snapshot.collectionId === null ? {} : { requestedCollectionId: snapshot.collectionId }),
+      },
+      createdAt: now,
+    };
+    const results = await this.db.batch([
+      this.db.prepare(
+        `INSERT INTO submissions (
+          id, submitter_id, requested_space_id, requested_collection_id, requested_visibility,
+          kind, status, title, content, idempotency_key, created_at, updated_at
+        ) SELECT ?, ?, ?, ?, ?, ?, 'review_pending', ?, ?, ?, ?, ?
+        WHERE EXISTS (SELECT 1 FROM members WHERE id = ?)
+          AND EXISTS (SELECT 1 FROM members WHERE id = ? AND role = 'admin' AND status = 'active')
+          AND NOT EXISTS (SELECT 1 FROM submissions WHERE idempotency_key = ? AND submitter_id = ?)`,
+      ).bind(
+        promotion.submissionId, snapshot.ownerId, snapshot.spaceId, snapshot.collectionId, snapshot.requestedVisibility,
+        snapshot.kind, snapshot.title, candidate.content, `reparse:${jobId}`, now, now,
+        snapshot.ownerId, actorId, `reparse:${jobId}`, snapshot.ownerId,
+      ),
+      this.db.prepare(
+        `INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM submissions WHERE id = ?)`,
+      ).bind(
+        promotion.sourceId, snapshot.ownerId, snapshot.spaceId, snapshot.collectionId, snapshot.kind,
+        snapshot.title, now, now, promotion.submissionId,
+      ),
+      this.db.prepare(
+        `INSERT INTO source_versions (
+          id, source_id, submission_id, ordinal, content, content_sha256, parser_version,
+          parser_schema_version, source_identity_sha256, code_language, file_label, line_baseline, created_at
+        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         WHERE EXISTS (SELECT 1 FROM sources WHERE id = ?)
+           AND EXISTS (SELECT 1 FROM submissions WHERE id = ?)`,
+      ).bind(
+        promotion.sourceVersionId, promotion.sourceId, promotion.submissionId, candidate.ordinal,
+        candidate.content, candidate.contentSha256, candidate.parserVersion, candidate.parserSchemaVersion,
+        candidate.sourceIdentitySha256 ?? null, candidate.codeMetadata?.language ?? null,
+        candidate.codeMetadata?.fileLabel ?? null, candidate.codeMetadata?.lineBaseline ?? 1, now,
+        promotion.sourceId, promotion.submissionId,
+      ),
+      this.audit.prepareWriteAudit(audit, promotion.submissionId),
+    ]);
+    if (results.some((result) => result.meta.changes !== 1)) throw new Error("Source reparse promotion did not persist");
+    return promotion;
   }
 }
 
