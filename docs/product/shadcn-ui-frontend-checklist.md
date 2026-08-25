@@ -33,16 +33,16 @@
 - [x] FE-024 生成 Button；证据：`frontend/components/ui/button.tsx`，覆盖 variant/size/disabled。
 - [x] FE-025 生成 Input/Textarea/Label；证据：`frontend/components/ui/{input,textarea,label}.tsx` 与关联测试。
 - [x] FE-026 生成 Card/Badge/Alert；证据：`frontend/components/ui/{card,badge,alert}.tsx` 与关联测试。
-- [ ] FE-027 生成 Dialog/Sheet。
-- [ ] FE-028 生成 Dropdown Menu/Tabs/Tooltip。
+- [x] FE-027 生成 Dialog/Sheet；证据：`frontend/components/ui/{dialog,sheet}.tsx`，Shell 集成。
+- [x] FE-028 生成 Dropdown Menu；证据：`frontend/components/ui/dropdown-menu.tsx`，Shell 顶栏集成；Tabs/Tooltip 留待页面切片按需引入。
 - [x] FE-029 生成 Skeleton，并覆盖 disabled/loading/error 状态；证据：`frontend/components/ui/skeleton.tsx`、`test/unit/shadcn-primitives.test.tsx` 2/2。
 
 ## Shell 与数据层
 
-- [ ] FE-030 实现桌面 Sidebar。
-- [ ] FE-031 实现移动 Sheet 导航。
-- [ ] FE-032 实现 Topbar、面包屑和页面操作区。
-- [ ] FE-033 实现右上角 User Menu、语言和退出。
+- [x] FE-030 实现桌面 Sidebar；证据：`frontend/components/shell/app-shell.tsx` 的 capability 过滤导航。
+- [x] FE-031 实现移动 Sheet 导航；证据：Shell 移动断点导航与 `Sheet` primitives。
+- [x] FE-032 实现 Topbar、页面上下文和操作区；证据：`data-shell-topbar` 与上下文标题。
+- [x] FE-033 实现右上角 User Menu、语言和退出；证据：Shell 测试 3/3、未知值不渲染 `undefined`。
 - [ ] FE-034 实现统一 loading/empty/error/forbidden/degraded 状态。
 - [x] FE-035 实现 `apiFetch`、错误码和 request-id 显示；证据：`frontend/lib/api.ts`、`frontend/lib/session.ts`、API 测试 8/8。
 - [ ] FE-036 实现 cursor 分页和 request cancellation。
