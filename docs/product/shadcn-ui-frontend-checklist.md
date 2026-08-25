@@ -91,6 +91,7 @@
 - [ ] FE-063 Dialog/Sheet 焦点捕获、Escape、恢复焦点。
 - [x] FE-063a 增加可复用 focus scope：打开时聚焦首个可聚焦元素、Tab/Shift+Tab 循环、Escape 回调关闭、卸载恢复触发点；证据：`frontend/components/ui/focus-scope.tsx`、Dialog/Sheet data-focus-scope 标记与 `test/unit/frontend-focus-scope.test.tsx` 6/6。移动 Shell 的原生 details 打开状态接线仍由 FE-063 主项收口。
 - [ ] FE-064 键盘完成导航、菜单、Tabs、表单和分页。
+- [x] FE-064a 顶栏 Dropdown 接入 menu/menuitem 语义与 Escape、Home/End、Arrow 上下键盘动作；证据：`frontend/lib/menu-keyboard.ts`、`frontend/components/ui/dropdown-menu.tsx`、`test/unit/frontend-menu-keyboard.test.tsx` 6/6，Shell 回归 6/6；Tabs、表单和分页的全局矩阵仍由 FE-064 主项收口。
 - [ ] FE-065 验证 WCAG AA 对比度和 focus-visible。
 - [x] FE-066 验证 320px、768px、1280px 布局；证据：`responsive-contract.ts` 与响应式测试 2/2。
 - [x] FE-067 验证 reduced motion 和无鼠标操作；证据：`globals.css` reduced-motion 规则与 focus restoration 测试。
