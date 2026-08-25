@@ -35,7 +35,7 @@
 - [x] `SRC-013` P1/M2 剪贴板图片；状态：L；验收：仅提取 PNG/JPEG/GIF/WebP 图片，自动补齐安全文件名并进入普通 Asset 队列；文本、SVG 和其它媒体忽略。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [x] `SRC-014` P2/M2 文件夹导入；状态：L；验收：文件夹选择保留经过清洗且有界的相对路径用于显示，`..`/控制符被移除，路径不参与对象键生成。证据：`frontend/components/assets/asset-upload-model.ts`、`frontend/components/assets/asset-dropzone.tsx`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-submit-pages.test.tsx`。
 - [x] `SRC-015` P2/M2 受限 URL 快照；状态：L/W；验收：`POST /api/assets/from-url` 仅接受 HTTPS、拒绝凭据/非标准端口/本地与私网地址，手动重定向逐跳重新校验且最多 3 次，响应类型 allowlist、流式大小上限和超时均有界；通过普通 Asset 持久化路径。证据：`src/assets/url-snapshot.ts`、`src/assets/service.ts`、`src/routes/member.ts`、`test/unit/url-snapshot.test.ts`、`test/unit/assets-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/url-snapshot.test.ts test/unit/assets-service.test.ts test/worker/m1-api.test.ts`。
-- [ ] `SRC-016` P2/M2 替代文本；验收：解析失败时用户可提交可审核替代 Markdown。
+- [x] `SRC-016` P2/M2 替代文本；状态：L/W；验收：仅原件 owner 且 parse job 为 `failed_retryable|failed_terminal` 时，`POST /api/assets/:id/alternative` 接受有界 Markdown，复用 Submission/SourceVersion 规范化与 `review_pending` 审核链路；队列中、已成功解析和跨 owner 请求稳定拒绝。证据：`src/assets/service.ts`、`src/routes/member.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/worker/m2-assets.test.ts -t "alternative"`。
 - [ ] `SRC-017` P2/M2 上传取消；验收：取消后不可见且暂存对象可回收。
 - [ ] `SRC-018` P2/M2 上传恢复；验收：刷新后恢复未完成状态而非重复提交。
 

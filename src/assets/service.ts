@@ -255,6 +255,19 @@ export class AssetService {
     return result;
   }
 
+  async assertAlternativeAllowed(ownerId: string, assetId: string): Promise<AssetWithJob> {
+    const owned = await this.getOwned(ownerId, assetId);
+    if (owned.job.status !== "failed_retryable" && owned.job.status !== "failed_terminal") {
+      throw new AppError(
+        "ASSET_ALTERNATIVE_NOT_ALLOWED",
+        "Alternative text is available only after asset parsing fails",
+        409,
+        true,
+      );
+    }
+    return owned;
+  }
+
   async listOwned(ownerId: string, request: { limit?: number; cursor?: string } = {}): Promise<AssetPage> {
     const page = parsePageRequest(request.limit, request.cursor);
     return this.repository.listOwned(ownerId, {

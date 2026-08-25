@@ -150,6 +150,43 @@ const richFormatMatrix = [
 ] as const;
 
 describe("AssetService", () => {
+  it("allows an owner to replace a failed parse with reviewable Markdown", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-alternative" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "broken.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "alternative-key-1",
+    });
+    db.jobs[0]!.status = "failed_terminal";
+    db.jobs[0]!.lastErrorCode = "ASSET_PDF_PARSE_UNSUPPORTED";
+
+    await expect(service.assertAlternativeAllowed("member-1", created.asset.id)).resolves.toMatchObject({
+      asset: { id: created.asset.id, ownerId: "member-1" },
+      job: { status: "failed_terminal", lastErrorCode: "ASSET_PDF_PARSE_UNSUPPORTED" },
+    });
+  });
+
+  it.each([
+    ["another owner", "member-2", "failed_terminal"],
+    ["queued asset", "member-1", "queued"],
+    ["succeeded asset", "member-1", "succeeded"],
+  ] as const)("rejects alternative text for %s", async (_label, ownerId, status) => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-alternative" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "source.pdf", contentType: "application/pdf",
+      bytes: new TextEncoder().encode("%PDF-1.7\n").buffer, idempotencyKey: "alternative-key-2",
+    });
+    db.jobs[0]!.status = status;
+
+    await expect(service.assertAlternativeAllowed(ownerId, created.asset.id)).rejects.toMatchObject({
+      code: status === "failed_terminal" ? "ASSET_NOT_FOUND" : "ASSET_ALTERNATIVE_NOT_ALLOWED",
+      status: status === "failed_terminal" ? 404 : 409,
+    });
+  });
+
   it("recovers PDF page headings without a paid parser or AI provider", async () => {
     const pdf = `%PDF-1.4\n3 0 obj\n<< /Type /Page /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 35 >>\nstream\nBT\n(Page one text) Tj\nET\nendstream\nendobj\n%%EOF`;
     const db = repository();

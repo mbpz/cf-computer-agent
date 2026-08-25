@@ -63,8 +63,34 @@ export async function routeMemberApi(
   }
 
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
+  const assetAlternative = /^\/api\/assets\/([^/]+)\/alternative$/.exec(url.pathname);
   const assetPreview = /^\/api\/assets\/([^/]+)\/preview$/.exec(url.pathname);
   const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);
+  if (assetAlternative) {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    await services.assets.assertAlternativeAllowed(member.memberId, decodePathId(assetAlternative[1]!));
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "title", "content"],
+      "ASSET_ALTERNATIVE_REQUEST_INVALID",
+    );
+    const result = await services.submissions.createWithSourceVersion(member.memberId, {
+      requestedSpaceId: stringValue(input.requestedSpaceId),
+      requestedCollectionId: optionalNullableString(input.requestedCollectionId),
+      ...(input.requestedVisibility === undefined ? {} : {
+        requestedVisibility: input.requestedVisibility as "shared" | "admin_only",
+      }),
+      kind: "markdown",
+      title: stringValue(input.title),
+      content: stringValue(input.content),
+      contentFormat: "plain",
+      idempotencyKey: request.headers.get("idempotency-key") || "",
+    });
+    return jsonResponse({ submission: result.submission, duplicateCandidate: result.duplicateCandidate }, 201, context.requestId);
+  }
   if (assetPreview) {
     requireCapability(principal, "submission:read-own");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

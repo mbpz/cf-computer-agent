@@ -141,6 +141,56 @@ describe("M2 asset upload boundary", () => {
     await expect(testOriginals().get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
   });
 
+  it("lets the failed-parse owner submit bounded Markdown as a reviewable alternative", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "application/pdf", "x-asset-name": "manual.pdf", "idempotency-key": "asset-alternative-1" },
+      body: "%PDF-1.7\n",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+
+    const alternative = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/alternative`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "alternative-submission-1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared",
+        title: "Manual PDF notes", content: "# Recovered\n\nHuman supplied notes.",
+      }),
+    });
+    expect(alternative.status).toBe(201);
+    const body = await alternative.json<{ submission: { id: string; status: string; kind: string } }>();
+    expect(body).toMatchObject({ submission: { status: "review_pending", kind: "markdown" } });
+    await expect(env.DB.prepare("SELECT content FROM source_versions WHERE submission_id = ?").bind(body.submission.id).first())
+      .resolves.toMatchObject({ content: "# Recovered\n\nHuman supplied notes.\n" });
+
+    await expectApiError(memberApi("asset-other", `/api/assets/${uploaded.asset.id}/alternative`, {
+      method: "POST",
+      headers: { "idempotency-key": "alternative-submission-2" },
+      body: JSON.stringify({ requestedSpaceId: "default", title: "Hidden", content: "Hidden" }),
+    }), 404, "ASSET_NOT_FOUND");
+  });
+
+  it("rejects alternatives while parsing or after a successful parse", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "ready.txt", "idempotency-key": "asset-alternative-2" },
+      body: "already parsed",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/alternative`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "alternative-submission-3" },
+      body: JSON.stringify({ requestedSpaceId: "default", title: "Too soon", content: "Body" }),
+    }), 409, "ASSET_ALTERNATIVE_NOT_ALLOWED");
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/alternative`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "alternative-submission-4" },
+      body: JSON.stringify({ requestedSpaceId: "default", title: "Already parsed", content: "Body" }),
+    }), 409, "ASSET_ALTERNATIVE_NOT_ALLOWED");
+  });
+
   it("keeps a missing original retryable and recovers after the object returns", async () => {
     const upload = await memberApi("asset-owner", "/api/assets", {
       method: "POST",
@@ -310,6 +360,12 @@ async function memberApi(memberId: string, path: string, init: RequestInit = {},
   const response = await app.fetch!(request, localEnv(), context);
   await waitOnExecutionContext(context);
   return response;
+}
+
+async function expectApiError(responsePromise: Promise<Response>, status: number, code: string): Promise<void> {
+  const response = await responsePromise;
+  expect(response.status).toBe(status);
+  await expect(response.json()).resolves.toMatchObject({ error: { code } });
 }
 
 function localEnv(): Env {
