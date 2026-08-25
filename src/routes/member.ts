@@ -150,6 +150,35 @@ export async function routeMemberApi(
     }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
   }
 
+  if (url.pathname === "/api/submissions/drafts") {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const input = draftInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
+    return jsonResponse(await services.submissions.createDraft(member.memberId, input), 201, context.requestId);
+  }
+
+  const draft = /^\/api\/submissions\/drafts\/([^/]+)$/.exec(url.pathname);
+  if (draft) {
+    requireCapability(principal, "submission:read-own");
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const draftId = decodePathId(draft[1]!);
+    if (request.method === "GET") {
+      return jsonResponse(await services.submissions.getDraft(member.memberId, draftId), 200, context.requestId);
+    }
+    if (request.method === "PATCH") {
+      requireCapability(principal, "submission:create");
+      return jsonResponse(
+        await services.submissions.updateDraft(member.memberId, draftId, draftInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes))),
+        200,
+        context.requestId,
+      );
+    }
+    return methodNotAllowed("GET, PATCH", context);
+  }
+
   const resubmit = /^\/api\/submissions\/([^/]+)\/resubmit$/.exec(url.pathname);
   if (resubmit) {
     requireCapability(principal, "submission:create");
@@ -256,6 +285,33 @@ export function strictRecord(
     throw new AppError(code, "Request body is invalid", 400);
   }
   return result;
+}
+
+function draftInput(value: unknown): {
+  requestedSpaceId: string;
+  requestedCollectionId?: string | null;
+  requestedVisibility?: "shared" | "admin_only";
+  kind: SubmissionKind;
+  title: string;
+  content: string;
+} {
+  const input = strictRecord(
+    value,
+    ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "kind", "title", "content"],
+    "SUBMISSION_REQUEST_INVALID",
+  );
+  if (typeof input.requestedSpaceId !== "string" || typeof input.kind !== "string"
+    || typeof input.title !== "string" || typeof input.content !== "string") {
+    throw new AppError("SUBMISSION_REQUEST_INVALID", "Request body is invalid", 400);
+  }
+  return {
+    requestedSpaceId: input.requestedSpaceId,
+    requestedCollectionId: optionalNullableString(input.requestedCollectionId),
+    ...(input.requestedVisibility === undefined ? {} : { requestedVisibility: input.requestedVisibility as "shared" | "admin_only" }),
+    kind: input.kind as SubmissionKind,
+    title: input.title,
+    content: input.content,
+  };
 }
 
 function requireExactQuery(url: URL, allowedKeys: readonly string[]): void {

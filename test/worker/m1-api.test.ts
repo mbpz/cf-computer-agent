@@ -468,7 +468,7 @@ describe("M1 API authorization and request boundaries", () => {
     await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/absent?spaceId=default"), 400, "LIBRARY_REQUEST_INVALID");
     expect((await memberApi("contributor", "/api/submissions/mine?status=review_pending")).status).toBe(200);
-    await expectApiError(memberApi("contributor", "/api/submissions/mine?status=draft"), 400, "PAGE_INVALID");
+    expect((await memberApi("contributor", "/api/submissions/mine?status=draft")).status).toBe(200);
     await expectApiError(memberApi("contributor", "/api/submissions/mine?status=published&status=rejected"), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/submissions/mine?ownerId=member-other"), 400, "PAGE_INVALID");
     await expectApiError(memberApi(
@@ -490,6 +490,36 @@ describe("M1 API authorization and request boundaries", () => {
         requestedSpaceId: "default", kind: "text", title: "Query", content: "Query body",
       }),
     }), 400, "REQUEST_QUERY_INVALID");
+  });
+
+  it("keeps drafts owner-scoped and editable until submission", async () => {
+    const body = {
+      requestedSpaceId: "default", kind: "markdown", title: "", content: "",
+    };
+    const created = await memberApi("contributor", "/api/submissions/drafts", {
+      method: "POST", body: JSON.stringify(body),
+    });
+    expect(created.status).toBe(201);
+    const draft = await created.json<{ id: string; status: string; submitterId: string }>();
+    expect(draft).toMatchObject({ status: "draft", submitterId: "member-contributor" });
+
+    await expectApiError(memberApi("admin", `/api/submissions/drafts/${draft.id}`), 404, "SUBMISSION_NOT_FOUND");
+    await expectApiError(memberApi("other", `/api/submissions/drafts/${draft.id}`), 404, "SUBMISSION_NOT_FOUND");
+    await expect(memberApi("contributor", `/api/submissions/drafts/${draft.id}`)).resolves.toMatchObject({ status: 200 });
+    const updated = await memberApi("contributor", `/api/submissions/drafts/${draft.id}`, {
+      method: "PATCH", body: JSON.stringify({ ...body, title: "Saved title", content: "# Saved" }),
+    });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({ id: draft.id, status: "draft", title: "Saved title", content: "# Saved" });
+    await expect(env.DB.prepare(
+      "SELECT action, actor_id, resource_id FROM audit_events WHERE resource_id = ? ORDER BY created_at, id",
+    ).bind(draft.id).all()).resolves.toMatchObject({ results: [
+      { action: "submission.draft_saved", actor_id: "member-contributor", resource_id: draft.id },
+      { action: "submission.draft_saved", actor_id: "member-contributor", resource_id: draft.id },
+    ] });
+    await expectApiError(memberApi("contributor", `/api/submissions/drafts/${draft.id}`, {
+      method: "POST", body: JSON.stringify(body),
+    }), 405, "METHOD_NOT_ALLOWED");
   });
 });
 

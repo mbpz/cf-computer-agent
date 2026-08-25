@@ -27,7 +27,7 @@
 - [x] `SRC-005` P0/M1 标题规范化；状态：L/W；验收：trim、UTF-8 上限和控制字符拒绝。
 - [x] `SRC-006` P0/M1 Space/Collection 目标选择；状态：L/W；验收：只接受 active 且同 Space 集合。
 - [x] `SRC-007` P0/M1 Submission 幂等键；状态：L/W；验收：重放不创建第二条提交。
-- [ ] `SRC-008` P1/M1 草稿保存；验收：仅创建者可读取和继续编辑。
+- [x] `SRC-008` P1/M1 草稿保存；状态：L/W；验收：仅创建者可读取和继续编辑。证据：`src/submissions/service.ts`、`src/submissions/repository.ts`、`src/routes/member.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/submissions-service.test.ts test/worker/submissions.test.ts test/worker/m1-api.test.ts`。
 - [ ] `SRC-009` P1/M1 粘贴富文本；验收：严格清洗后转规范 Markdown，无脚本/事件属性。
 - [ ] `SRC-010` P1/M2 文件选择器；验收：支持矩阵、大小和数量前置提示。
 - [ ] `SRC-011` P1/M2 拖放上传；验收：键盘替代入口和相同服务端校验。

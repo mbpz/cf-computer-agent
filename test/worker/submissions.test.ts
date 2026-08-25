@@ -126,9 +126,9 @@ describe("submissions D1 control plane", () => {
     await expect(service.listOwn("member-a", {
       limit: 4, status: "rejected", cursor: first.nextCursor,
     })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
-    await expect(service.listOwn("member-a", {
+      await expect(service.listOwn("member-a", {
       limit: 4, status: "draft" as SubmissionStatusFilter,
-    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    })).resolves.toMatchObject({ items: [] });
 
     await expect(service.listOwn("member-a", { status: "published" })).resolves.toMatchObject({ items: expect.any(Array) });
     await expect(service.listOwn("member-a", { limit: 50 })).resolves.toMatchObject({ items: expect.any(Array) });

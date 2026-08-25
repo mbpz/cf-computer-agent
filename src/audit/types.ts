@@ -14,6 +14,7 @@ export interface AuditActionMap {
   "collection.created": { resourceType: "collection"; metadata: { spaceId: string; status: RecordStatus } };
   "collection.updated": { resourceType: "collection"; metadata: { spaceId: string; previousStatus: RecordStatus; newStatus: RecordStatus } };
   "submission.created": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
+  "submission.draft_saved": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
   "submission.rejected": { resourceType: "submission"; metadata: { reasonCode: "not_relevant" | "duplicate" | "unsafe" } };
   "submission.revision_requested": { resourceType: "submission"; metadata: { reasonCode: "needs_revision" } };
   "review.metadata_changed": { resourceType: "submission"; metadata: {
@@ -48,6 +49,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "collection.created",
   "collection.updated",
   "submission.created",
+  "submission.draft_saved",
   "submission.rejected",
   "submission.revision_requested",
   "review.metadata_changed",
@@ -148,6 +150,19 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       return safeMetadata({ spaceId: metadata.spaceId, previousStatus: metadata.previousStatus, newStatus: metadata.newStatus });
     }
     case "submission.created": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set(["kind", "requestedSpaceId", "requestedCollectionId"]));
+      if (!isSubmissionKind(metadata.kind) || !isNonEmptyString(metadata.requestedSpaceId)
+        || (metadata.requestedCollectionId !== undefined && !isNonEmptyString(metadata.requestedCollectionId))) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({
+        kind: metadata.kind,
+        requestedSpaceId: metadata.requestedSpaceId,
+        ...(metadata.requestedCollectionId === undefined ? {} : { requestedCollectionId: metadata.requestedCollectionId }),
+      });
+    }
+    case "submission.draft_saved": {
       assertResourceType(resourceType, "submission");
       const metadata = readPlainDataObject(input, new Set(["kind", "requestedSpaceId", "requestedCollectionId"]));
       if (!isSubmissionKind(metadata.kind) || !isNonEmptyString(metadata.requestedSpaceId)

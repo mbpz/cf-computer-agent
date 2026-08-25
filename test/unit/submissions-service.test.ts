@@ -40,6 +40,25 @@ describe("SubmissionsService", () => {
     expect(repository.audit?.metadata).toEqual({ kind: "text", requestedSpaceId: "default" });
   });
 
+  it("saves partial drafts and only the owner can continue editing", async () => {
+    const repository = new FakeSubmissionsRepository();
+    const service = serviceFor(repository);
+    const draft = await service.createDraft("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "", content: "",
+    });
+    expect(draft).toMatchObject({ id: "submission-1", status: "draft", submitterId: "member-a" });
+    repository.draft = draft;
+    await expect(service.getDraft("member-a", draft.id)).resolves.toMatchObject({ status: "draft" });
+    await expect(service.getDraft("member-b", draft.id)).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+    await expect(service.updateDraft("member-a", draft.id, {
+      requestedSpaceId: "default", kind: "markdown", title: "Updated", content: "# Body",
+    })).resolves.toMatchObject({ title: "Updated", content: "# Body", status: "draft" });
+    repository.draft = { ...draft, status: "review_pending" };
+    await expect(service.updateDraft("member-a", draft.id, {
+      requestedSpaceId: "default", kind: "markdown", title: "No", content: "No",
+    })).rejects.toMatchObject({ code: "SUBMISSION_NOT_FOUND", status: 404 });
+  });
+
   it.each(["rich_text", "html", ""])('rejects unsupported submission kind "%s"', async (kind) => {
     const service = serviceFor(new FakeSubmissionsRepository());
 
@@ -235,6 +254,21 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     this.audit = audit;
     return submission;
+  }
+
+  draft: Submission | undefined;
+  async createDraft(submission: CreateSubmission, _audit: CreateAuditEvent): Promise<Submission> {
+    this.draft = { ...submission, status: "draft" };
+    return this.draft;
+  }
+  async findOwnedDraft(submitterId: string, submissionId: string): Promise<Submission | null> {
+    return this.draft?.submitterId === submitterId && this.draft.id === submissionId && this.draft.status === "draft"
+      ? this.draft : null;
+  }
+  async updateDraft(submission: CreateSubmission, _audit: CreateAuditEvent): Promise<Submission | null> {
+    if (!await this.findOwnedDraft(submission.submitterId, submission.id)) return null;
+    this.draft = { ...submission, status: "draft" };
+    return this.draft;
   }
 
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {

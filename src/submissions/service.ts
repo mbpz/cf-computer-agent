@@ -50,6 +50,38 @@ export class SubmissionsService {
     this.now = options.now || (() => new Date());
   }
 
+  async createDraft(submitterId: string, input: CreateSubmissionInput): Promise<Submission> {
+    const normalized = normalizeDraft(input);
+    const now = this.now().toISOString();
+    const submission: Submission = { id: this.id(), submitterId, ...normalized, status: "draft", createdAt: now, updatedAt: now };
+    try { return await this.repository.createDraft(submission, draftAudit(this.id(), submission, now)); }
+    catch (error) {
+      if (error instanceof SubmissionsRepositoryConflictError) {
+        throw new AppError("SUBMISSION_TARGET_INVALID", "Submission target must be active and in the selected Space", 400);
+      }
+      throw error;
+    }
+  }
+
+  async getDraft(submitterId: string, submissionId: string): Promise<Submission> {
+    const draft = await this.repository.findOwnedDraft(submitterId, requireDraftId(submissionId));
+    if (!draft) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    return draft;
+  }
+
+  async updateDraft(submitterId: string, submissionId: string, input: CreateSubmissionInput): Promise<Submission> {
+    const id = requireDraftId(submissionId);
+    const normalized = normalizeDraft(input);
+    const existing = await this.repository.findOwnedDraft(submitterId, id);
+    if (!existing) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    const candidate = {
+      id, submitterId, ...normalized, status: "draft", createdAt: existing.createdAt, updatedAt: this.now().toISOString(),
+    } as Submission;
+    const updated = await this.repository.updateDraft(candidate, draftAudit(this.id(), candidate, candidate.updatedAt));
+    if (!updated) throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+    return updated;
+  }
+
   async create(submitterId: string, input: CreateSubmissionInput): Promise<Submission> {
     const normalized = normalize(input);
     const now = this.now().toISOString();
@@ -204,9 +236,35 @@ export class SubmissionsService {
 
 function validateStatusFilter(status: unknown): SubmissionStatusFilter | undefined {
   if (status === undefined) return undefined;
-  if (status === "review_pending" || status === "published" || status === "rejected"
+  if (status === "draft" || status === "review_pending" || status === "published" || status === "rejected"
     || status === "revision_requested") return status;
   throw new AppError("PAGE_INVALID", "Submission status filter is invalid", 400);
+}
+
+function normalizeDraft(
+  input: CreateSubmissionInput,
+): Pick<Submission, "requestedSpaceId" | "requestedCollectionId" | "requestedVisibility" | "kind" | "title" | "content"> {
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  if (title.length > 200 || !isSubmissionKind(input.kind)
+    || !isBoundedId(input.requestedSpaceId)
+    || (input.requestedCollectionId !== undefined && input.requestedCollectionId !== null
+      && !isBoundedId(input.requestedCollectionId))
+    || typeof input.content !== "string"
+    || new TextEncoder().encode(input.content).byteLength > maxContentBytes) {
+    throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
+  }
+  if (input.requestedVisibility !== undefined
+    && input.requestedVisibility !== "shared" && input.requestedVisibility !== "admin_only") {
+    throw new AppError("SUBMISSION_INVALID", "Submission fields are invalid", 400);
+  }
+  return {
+    requestedSpaceId: input.requestedSpaceId,
+    requestedCollectionId: input.requestedCollectionId ?? null,
+    requestedVisibility: input.requestedVisibility ?? "shared",
+    kind: input.kind,
+    title,
+    content: input.content,
+  };
 }
 
 function resolveSourceContent(input: CreateSourceSubmissionInput): string {
@@ -293,6 +351,19 @@ function submissionAudit(id: string, submission: Submission, createdAt: string) 
   };
 }
 
+function draftAudit(id: string, submission: Submission, createdAt: string) {
+  return {
+    id, actorKind: "member" as const, actorId: submission.submitterId,
+    action: "submission.draft_saved" as const, resourceType: "submission" as const, resourceId: submission.id,
+    metadata: {
+      kind: submission.kind,
+      requestedSpaceId: submission.requestedSpaceId,
+      ...(submission.requestedCollectionId ? { requestedCollectionId: submission.requestedCollectionId } : {}),
+    },
+    createdAt,
+  };
+}
+
 function requireIdempotencyKey(value: string): void {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(value)) {
     throw new AppError("IDEMPOTENCY_KEY_INVALID", "Idempotency key is invalid", 400);
@@ -300,6 +371,14 @@ function requireIdempotencyKey(value: string): void {
 }
 
 function requireResourceId(value: string): string {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128
+    || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
+    throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);
+  }
+  return value;
+}
+
+function requireDraftId(value: string): string {
   if (typeof value !== "string" || value.length < 1 || value.length > 128
     || /[\u0000-\u001f\u007f-\u009f]/u.test(value)) {
     throw new AppError("SUBMISSION_NOT_FOUND", "Submission not found", 404);

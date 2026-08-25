@@ -25,6 +25,9 @@ export interface CreateSubmissionWithSourceVersion {
 }
 
 export interface SubmissionsRepositoryPort {
+  createDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission>;
+  findOwnedDraft(submitterId: string, submissionId: string): Promise<Submission | null>;
+  updateDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission | null>;
   createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission>;
   createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null>;
@@ -62,6 +65,59 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
 
   constructor(private readonly db: D1Database, private readonly audit: AuditRepository) {
     this.sources = new SourcesRepository(db);
+  }
+
+  async createDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
+    const results = await this.db.batch([
+      this.db.prepare(
+      `INSERT INTO submissions (
+        id, submitter_id, requested_space_id, requested_collection_id, requested_visibility,
+        kind, status, title, content, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM spaces WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND status = 'active'
+      )
+      AND (? IS NULL OR EXISTS (
+        SELECT 1 FROM collections WHERE id = ? AND space_id = ? AND status = 'active'
+      ))`,
+      ).bind(
+      submission.id, submission.submitterId, submission.requestedSpaceId, submission.requestedCollectionId,
+      submission.requestedVisibility, submission.kind, submission.title, submission.content,
+      submission.createdAt, submission.updatedAt, submission.requestedSpaceId,
+      submission.requestedCollectionId, submission.requestedCollectionId, submission.requestedSpaceId,
+      ),
+      this.audit.prepareDraftAudit(audit, submission.id),
+    ]);
+    if (results[0]?.meta.changes !== 1) throw new SubmissionsRepositoryConflictError("target_invalid");
+    if (results[1]?.meta.changes !== 1) throw new Error("Draft audit write did not persist");
+    return { ...submission, status: "draft" };
+  }
+
+  async findOwnedDraft(submitterId: string, submissionId: string): Promise<Submission | null> {
+    const row = await this.db.prepare(
+      `${submissionSelect} WHERE id = ? AND submitter_id = ? AND status = 'draft' LIMIT 1`,
+    ).bind(submissionId, submitterId).first<SubmissionRow>();
+    return row ? mapSubmissionRow(row) : null;
+  }
+
+  async updateDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission | null> {
+    const results = await this.db.batch([
+      this.db.prepare(
+      `UPDATE submissions
+       SET requested_space_id = ?, requested_collection_id = ?, requested_visibility = ?,
+           kind = ?, title = ?, content = ?, updated_at = ?
+       WHERE id = ? AND submitter_id = ? AND status = 'draft'`,
+      ).bind(
+      submission.requestedSpaceId, submission.requestedCollectionId, submission.requestedVisibility,
+      submission.kind, submission.title, submission.content, submission.updatedAt,
+      submission.id, submission.submitterId,
+      ),
+      this.audit.prepareDraftAudit(audit, submission.id),
+    ]);
+    if (results[0]?.meta.changes !== 1) return null;
+    if (results[1]?.meta.changes !== 1) throw new Error("Draft audit write did not persist");
+    return { ...submission, status: "draft" };
   }
 
   async createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {

@@ -23,6 +23,18 @@ export class AuditRepository {
       .bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, requireSubmissionId);
   }
 
+  prepareDraftAudit(input: CreateAuditEvent, submissionId: string): D1PreparedStatement {
+    const audit = assertAuditEventInput(input);
+    if (audit.action !== "submission.draft_saved" || audit.resourceType !== "submission" || audit.resourceId !== submissionId) {
+      throw new TypeError("Draft audit binding is invalid");
+    }
+    return this.db.prepare(
+      `INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at)
+       SELECT ?, 'member', submitter_id, 'submission.draft_saved', 'submission', id, ?, ?
+       FROM submissions WHERE id = ? AND status = 'draft' AND submitter_id = ?`,
+    ).bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, submissionId, audit.actorId);
+  }
+
   prepareResubmissionAudit(
     input: CreateAuditEvent,
     submissionId: string,
