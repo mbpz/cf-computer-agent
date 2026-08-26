@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -152,6 +152,30 @@ describe("AgentToolRunner", () => {
     });
     await expect(runner.run("member-agent", "createNoteDraft", {
       requestedSpaceId: "space-1", title: "", content: "Draft body",
+    })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+  });
+
+  it("creates an artifact draft only from an owner report and preserves citation provenance", async () => {
+    const members = repository();
+    const getDraftReport = vi.fn(async () => ({
+      id: "report-1", reportId: "report-1", researchRunId: "run-1", knowledgeItemId: "knowledge-1",
+      version: 1, title: "Research artifact", model: "test", promptVersion: "test", createdAt: "2026-08-26T00:00:00.000Z",
+      sections: [{ heading: "Evidence", body: "Grounded finding", citations: [{ citationId: "citation-1", revisionId: "revision-1", chunkId: "chunk-1", title: "Source", headingPath: ["Evidence"], startLine: 2, endLine: 3, publishedAt: "2026-08-26T00:00:00.000Z" }] }],
+      sourceSnapshots: [],
+    }));
+    const createDraft = vi.fn(async (_memberId: string, input: Record<string, unknown>) => ({
+      id: "artifact-draft", ...input, status: "draft",
+    }));
+    const runner = new AgentToolRunner(members, [createArtifactDraftTool({ getDraftReport } as never, { createDraft } as never)]);
+
+    await expect(runner.run("member-agent", "createArtifactDraft", {
+      knowledgeItemId: "knowledge-1", researchRunId: "run-1", reportId: "report-1", requestedSpaceId: "space-1",
+    })).resolves.toMatchObject({ id: "artifact-draft", status: "draft", title: "Research artifact", content: expect.stringContaining("[citation-1]") });
+    expect(getDraftReport).toHaveBeenCalledWith(
+      { memberId: "member-agent", role: "contributor" }, "knowledge-1", "run-1", "report-1",
+    );
+    await expect(runner.run("member-agent", "createArtifactDraft", {
+      knowledgeItemId: "knowledge-1", researchRunId: "run-1", reportId: "report-1",
     })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });

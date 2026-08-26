@@ -55,7 +55,7 @@ import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
-import { createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
+import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
 
 export interface AppDependencies {
@@ -149,12 +149,14 @@ function createRequestServices(
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
+  const researchReports = new ResearchReportService(new ResearchRepository(env.DB), ai);
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
     createReadSourceTool(library),
     createCompareSourcesTool(library),
     createListSourceConflictsTool(sources),
     createNoteDraftTool(submissions),
+    createArtifactDraftTool(researchReports, submissions),
   ]);
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
@@ -183,7 +185,7 @@ function createRequestServices(
     timelines: new TimelineService(ai),
     briefs: new BriefService(ai),
     comparisons: new ComparisonService(ai),
-    researchReports: new ResearchReportService(new ResearchRepository(env.DB), ai),
+    researchReports,
     mindmaps: new MindmapService(ai),
     flashcards: new FlashcardService(ai),
     quizzes: new QuizService(ai),

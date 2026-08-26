@@ -7,6 +7,7 @@ import type { SourcesRepository } from "../sources/repository";
 import type { SourceConflict } from "../sources/types";
 import type { Submission } from "../submissions/types";
 import type { SubmissionsService } from "../submissions/service";
+import { renderResearchReportDraft, type ResearchReportService } from "../ai/research-report-service";
 
 const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
 
@@ -95,6 +96,38 @@ export function createNoteDraftTool(
   };
 }
 
+export function createArtifactDraftTool(
+  researchReports: ResearchReportService,
+  submissions: SubmissionsService,
+): AgentToolDefinition<unknown, Submission> {
+  return {
+    name: "createArtifactDraft",
+    parse: parseArtifactDraftInput,
+    execute: async ({ member }, input) => {
+      const value = input as {
+        knowledgeItemId: string;
+        researchRunId: string;
+        reportId: string;
+        requestedSpaceId: string;
+        requestedCollectionId?: string;
+      };
+      const report = await researchReports.getDraftReport(
+        { memberId: member.id, role: member.role },
+        value.knowledgeItemId,
+        value.researchRunId,
+        value.reportId,
+      );
+      return submissions.createDraft(member.id, {
+        requestedSpaceId: value.requestedSpaceId,
+        ...(value.requestedCollectionId === undefined ? {} : { requestedCollectionId: value.requestedCollectionId }),
+        kind: "markdown",
+        title: report.title,
+        content: renderResearchReportDraft(report),
+      });
+    },
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);
@@ -173,6 +206,26 @@ function parseNoteDraftInput(value: unknown): unknown {
     ...(value.requestedCollectionId === undefined ? {} : { requestedCollectionId: value.requestedCollectionId }),
     title: value.title.trim(),
     content: value.content,
+  };
+}
+
+function parseArtifactDraftInput(value: unknown): unknown {
+  if (!isPlainRecord(value)) throw invalidToolInput();
+  const keys = Object.keys(value).sort();
+  if (keys.join(",") !== "knowledgeItemId,reportId,requestedSpaceId,researchRunId" && keys.join(",") !== "knowledgeItemId,reportId,requestedCollectionId,requestedSpaceId,researchRunId") {
+    throw invalidToolInput();
+  }
+  for (const key of ["knowledgeItemId", "researchRunId", "reportId", "requestedSpaceId"]) {
+    if (typeof value[key] !== "string" || !ID.test(value[key])) throw invalidToolInput();
+  }
+  if (value.requestedCollectionId !== undefined
+    && (typeof value.requestedCollectionId !== "string" || !ID.test(value.requestedCollectionId))) throw invalidToolInput();
+  return {
+    knowledgeItemId: value.knowledgeItemId,
+    researchRunId: value.researchRunId,
+    reportId: value.reportId,
+    requestedSpaceId: value.requestedSpaceId,
+    ...(value.requestedCollectionId === undefined ? {} : { requestedCollectionId: value.requestedCollectionId }),
   };
 }
 
