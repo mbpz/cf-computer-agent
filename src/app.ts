@@ -5,6 +5,7 @@ import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
 import { SourceSummaryService } from "./ai/source-summary-service";
+import { FaqService } from "./ai/faq-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
@@ -147,6 +148,7 @@ function createRequestServices(
     audit,
     citedAnswers: new CitedAnswerService(ai),
     sourceSummaries: new SourceSummaryService(ai),
+    faqs: new FaqService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),

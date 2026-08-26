@@ -36,7 +36,20 @@ const fakeAi = {
     const marker = "输入 JSON：\n";
     const content = input.messages.at(-1)?.content || "";
     const serialized = content.slice(content.indexOf(marker) + marker.length);
+    const schemaName = (input.response_format as { json_schema?: { name?: string } } | undefined)?.json_schema?.name;
     const context = JSON.parse(serialized) as { sources: Array<{ citationId: string }> };
+    if (schemaName === "knowledge_faq") {
+      return {
+        response: JSON.stringify({
+          items: context.sources.map((source) => ({
+            question: "Where is this documented?",
+            answer: "Launch latency is documented.",
+            citationIds: [source.citationId],
+            insufficientEvidence: false,
+          })),
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1188,6 +1201,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
       body: JSON.stringify({ citationIds: [hiddenHit!.citationId] }),
     }), 404, "KNOWLEDGE_NOT_FOUND");
     expect(fakeAiCalls).toBe(beforeDenied);
+  });
+
+  it("generates FAQ answers with citations and refuses hidden source selection", async () => {
+    const selected = await publishSubmission(
+      "contributor", "FAQ source", "faqmarker source evidence", "shared", "faq-source-key01",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=faqmarker");
+    const hit = (await search.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/faq`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json<{ items: Array<{ question: string; answer: string | null; citations: Array<{ citationId: string }>; gap: boolean }> }>();
+    expect(result.items).toEqual([expect.objectContaining({ answer: "Launch latency is documented.", gap: false, citations: [expect.objectContaining({ citationId: hit!.citationId })] })]);
+    expect(JSON.stringify(result)).not.toContain("faqmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {

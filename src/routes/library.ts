@@ -13,12 +13,14 @@ import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import type { SourceSummaryService } from "../ai/source-summary-service";
+import type { FaqService } from "../ai/faq-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
   citedAnswers: CitedAnswerService;
   sourceSummaries: SourceSummaryService;
+  faqs: FaqService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
 }
@@ -105,6 +107,26 @@ export async function routeLibraryApi(
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
     return jsonResponse(await services.sourceSummaries.summarize(scope, knowledgeItemId, citations), 200, context.requestId);
+  }
+
+  const faq = /^\/api\/knowledge\/([^/]+)\/faq$/.exec(url.pathname);
+  if (faq) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(faq[1]!);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["citationIds"],
+      "FAQ_REQUEST_INVALID",
+    );
+    if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
+      throw new AppError("FAQ_REQUEST_INVALID", "Request body is invalid", 400);
+    }
+    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
+      throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
+    }
+    return jsonResponse(await services.faqs.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }
 
   const related = /^\/api\/knowledge\/([^/]+)\/related$/.exec(url.pathname);
