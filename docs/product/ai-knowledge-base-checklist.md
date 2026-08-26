@@ -326,9 +326,9 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `EVAL-002` P0/M1 Markdown/文本/代码解析集；状态：L/W；验收：三类均覆盖正常、空、精确边界、超限、malformed UTF-8、恶意和换行语料，并验证拒绝不持久化。行为级 mutation matrix 另含 28 个具名 witness：每项以独立字面 fixture 通过公共生产函数/服务建立基线，再变异一个输入、策略或状态；每个变异必须只报告其精确 feature ID 和非空原因，零/缺失 witness 失败关闭。证据：`test/fixtures/m1-parser-cases.ts`、`test/fixtures/m1-mutation-matrix.ts`、`test/unit/m1-mutation-matrix.test.ts`、`test/unit/source-decoder.test.ts`、`test/unit/source-parser.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `EVAL-003` P0/M2 每种文件格式解析集；状态：L；验收：TXT、Markdown、Code、CSV、HTML、XML、PDF、DOCX、XLSX、ODT、ODS、PPTX 均通过同一公共解析器矩阵覆盖正常、损坏、空内容和超限输入；Numbers 明确验证免费层 `ASSET_NUMBERS_PARSE_UNSUPPORTED` 降级，不调用 AI。证据：`test/unit/m2-format-matrix.test.ts`；命令：`rtk npx vitest run test/unit/m2-format-matrix.test.ts`（13 tests）。真实 R2 对象、伪造 MIME、断点上传和生产配额仍属于远程证据边界。
 - [x] `EVAL-004` P0/M2 Chunk golden set；状态：L；验收：固定 heading/table/code/PDF/spreadsheet/slide 五类输入与手工期望，逐例通过 parser + chunker 公共接口验证。证据：`test/fixtures/m2-chunk-golden.ts`、`test/unit/m2-chunk-golden.test.ts`。
-- [ ] `EVAL-005` P0/M4 检索 query set；验收：关键词、语义、同义词、跨语言、代码、表格。
-- [ ] `EVAL-006` P0/M4 Recall@5 计算；验收：固定 corpus、确定性报告、目标 ≥85%。
-- [ ] `EVAL-007` P1/M4 排名回归；验收：NDCG/MRR 或人工 top-k 基线可比较。
+- [x] `EVAL-005` P0/M4 检索 query set；状态：L；验收：provider-free 固定 query set 覆盖关键词、语义、同义词、跨语言、代码、表格六类，case ID 与相关文档 opaque ID 有界；不伪造 Vectorize 结果。证据：`test/fixtures/m4-retrieval-cases.ts`、`test/unit/retrieval-metrics.test.ts`。
+- [x] `EVAL-006` P0/M4 Recall@5 计算；状态：L；验收：固定 case/ranking 输入确定性计算非零分母 Recall@5，top-5 外相关项会降低分数；工具：`src/evaluation/retrieval-metrics.ts`、`test/unit/retrieval-metrics.test.ts`。
+- [x] `EVAL-007` P1/M4 排名回归；状态：L；验收：同一固定排名同时输出 MRR/NDCG@5，完整基线为 1，排名偏移可回归；当前为 provider-free harness，不宣称生产语义排序。
 - [ ] `EVAL-008` P0/M4 权限泄露集；验收：shared/admin_only/disabled/history/deleted 泄露为 0。
 - [ ] `EVAL-009` P0/M5 引用正确性集；验收：支持/部分支持/冲突/无来源。
 - [ ] `EVAL-010` P0/M5 错误引用率；验收：错误断言引用为 0，否则拒答。
