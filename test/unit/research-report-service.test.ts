@@ -11,6 +11,7 @@ const sources = [{
 function repository() {
   return {
     createRun: async (input: any) => ({ ...run, ...input, status: "draft" }),
+    findReport: async () => null,
     approveRun: async () => ({ ...run, status: "running" as const }),
     pauseRun: async () => ({ ...run, status: "paused" as const }),
     cancelRun: async () => ({ ...run, status: "cancelled" as const }),

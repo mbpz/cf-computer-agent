@@ -1,8 +1,9 @@
 import { AppError } from "../http";
 import type { LibraryScope } from "../library/types";
-import type { ResearchReportRepository, ResearchReportSaveInput, ResearchRun, ResearchRunPlan, ResearchQuery } from "../ai/research-report-service";
+import type { ResearchReportRepository, ResearchReportRecord, ResearchReportSaveInput, ResearchRun, ResearchRunPlan, ResearchQuery } from "../ai/research-report-service";
 
 type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; scope_json: string; completion_json: string; steps_json: string; subquestions_json: string; status: ResearchRun["status"] };
+type ReportRow = { id: string; research_run_id: string; knowledge_item_id: string; version: number; title: string; sections_json: string; source_snapshots_json: string; model: string; prompt_version: string; created_at: string };
 
 export class ResearchRepository implements ResearchReportRepository {
   constructor(private readonly db: D1Database) {}
@@ -29,6 +30,36 @@ export class ResearchRepository implements ResearchReportRepository {
       if (!Array.isArray(scope.spaceIds) || !Array.isArray(scope.collectionIds) || !Array.isArray(scope.knowledgeItemIds) || !Array.isArray(completion) || !Array.isArray(steps) || !Array.isArray(subquestions)) throw new Error("invalid");
       return { id: row.id, ownerMemberId: row.owner_member_id, knowledgeItemId: row.knowledge_item_id, goal: row.goal, plan: { spaceIds: scope.spaceIds as string[], collectionIds: scope.collectionIds as string[], knowledgeItemIds: scope.knowledgeItemIds as string[], completion: completion as string[], steps: steps as string[], subquestions: subquestions as ResearchRun["plan"]["subquestions"] }, status: row.status };
     } catch { throw new AppError("RESEARCH_RUN_CORRUPT", "Research run is unavailable", 503, true); }
+  }
+
+  async findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null> {
+    const row = await this.db.prepare(
+      `SELECT report.id, report.research_run_id, run.knowledge_item_id, report.version, report.title,
+              report.sections_json, report.source_snapshots_json, report.model, report.prompt_version, report.created_at
+       FROM research_reports AS report
+       JOIN research_runs AS run ON run.id = report.research_run_id
+       WHERE report.id = ? AND report.research_run_id = ? AND run.owner_member_id = ? LIMIT 1`,
+    ).bind(reportId, researchRunId, scope.memberId).first<ReportRow>();
+    if (!row) return null;
+    try {
+      const sections = JSON.parse(row.sections_json) as unknown;
+      const sourceSnapshots = JSON.parse(row.source_snapshots_json) as unknown;
+      if (!Array.isArray(sections) || !Array.isArray(sourceSnapshots)) throw new Error("invalid");
+      return {
+        id: row.id,
+        researchRunId: row.research_run_id,
+        knowledgeItemId: row.knowledge_item_id,
+        version: row.version,
+        title: row.title,
+        sections: sections as ResearchReportRecord["sections"],
+        sourceSnapshots: sourceSnapshots as ResearchReportRecord["sourceSnapshots"],
+        model: row.model,
+        promptVersion: row.prompt_version,
+        createdAt: row.created_at,
+      };
+    } catch {
+      throw new AppError("RESEARCH_REPORT_CORRUPT", "Research report is unavailable", 503, true);
+    }
   }
 
   async approveRun(scope: LibraryScope, id: string): Promise<ResearchRun> {

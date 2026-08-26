@@ -17,11 +17,12 @@ import type { FaqService } from "../ai/faq-service";
 import type { TimelineService } from "../ai/timeline-service";
 import type { BriefService } from "../ai/brief-service";
 import type { ComparisonService } from "../ai/comparison-service";
-import type { ResearchReportService } from "../ai/research-report-service";
+import { renderResearchReportDraft, type ResearchReportService } from "../ai/research-report-service";
 import type { MindmapService } from "../ai/mindmap-service";
 import type { FlashcardService } from "../ai/flashcard-service";
 import type { QuizService } from "../ai/quiz-service";
 import type { PrivateNotesService } from "../private-notes/service";
+import type { SubmissionsService } from "../submissions/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
@@ -37,6 +38,7 @@ export interface LibraryRouteServices {
   quizzes: QuizService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
+  submissions: SubmissionsService;
 }
 
 export async function routeLibraryApi(
@@ -234,6 +236,40 @@ export async function routeLibraryApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     return jsonResponse({ researchRun: await services.researchReports.cancel(scope, decodePathId(researchRunCancel[2]!)) }, 200, context.requestId);
+  }
+
+  const researchDraft = /^\/api\/knowledge\/([^/]+)\/research-runs\/([^/]+)\/draft$/.exec(url.pathname);
+  if (researchDraft) {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["reportId", "requestedSpaceId", "requestedCollectionId", "requestedVisibility"],
+      "RESEARCH_DRAFT_REQUEST_INVALID",
+    );
+    if (!hasExactKeys(input, ["reportId", "requestedSpaceId", "requestedCollectionId", "requestedVisibility"])
+      || typeof input.reportId !== "string" || typeof input.requestedSpaceId !== "string"
+      || (input.requestedCollectionId !== null && typeof input.requestedCollectionId !== "string")
+      || (input.requestedVisibility !== "shared" && input.requestedVisibility !== "admin_only")) {
+      throw new AppError("RESEARCH_DRAFT_REQUEST_INVALID", "Request body is invalid", 400);
+    }
+    const knowledgeItemId = decodePathId(researchDraft[1]!);
+    const report = await services.researchReports.getDraftReport(
+      scope,
+      knowledgeItemId,
+      decodePathId(researchDraft[2]!),
+      input.reportId,
+    );
+    const draft = await services.submissions.createDraft(scope.memberId, {
+      requestedSpaceId: input.requestedSpaceId,
+      requestedCollectionId: input.requestedCollectionId,
+      requestedVisibility: input.requestedVisibility,
+      kind: "markdown",
+      title: report.title,
+      content: renderResearchReportDraft(report),
+    });
+    return jsonResponse({ draft }, 201, context.requestId);
   }
 
   const researchQuery = /^\/api\/knowledge\/([^/]+)\/research-runs\/([^/]+)\/queries$/.exec(url.pathname);

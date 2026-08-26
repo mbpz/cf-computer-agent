@@ -37,7 +37,8 @@ export interface ResearchReportCitation extends SourceSummaryCitation { revision
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRecord extends ResearchReportSaveInput { knowledgeItemId: string }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -72,6 +73,15 @@ export class ResearchReportService {
     const run = await this.repository.findRun(scope, researchRunId);
     if (!run || (run.status !== "draft" && run.status !== "running" && run.status !== "paused")) throw notFound();
     return this.repository.cancelRun(scope, researchRunId);
+  }
+
+  async getDraftReport(scope: LibraryScope, knowledgeItemId: string, researchRunId: string, reportId: string): Promise<ResearchReportRecord> {
+    assertScope(scope);
+    const run = await this.repository.findRun(scope, researchRunId);
+    if (!run || run.knowledgeItemId !== knowledgeItemId) throw notFound();
+    const report = await this.repository.findReport(scope, researchRunId, reportId);
+    if (!report || report.knowledgeItemId !== knowledgeItemId) throw notFound();
+    return report;
   }
 
   async recordQuery(scope: LibraryScope, input: { researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string }): Promise<ResearchQuery> {
@@ -120,6 +130,15 @@ export class ResearchReportService {
     });
     return { reportId: saved.id, researchRunId: run.id, version: saved.version, title, sections, sourceSnapshots };
   }
+}
+
+export function renderResearchReportDraft(report: ResearchReportRecord): string {
+  const sections = report.sections.map((section) => [
+    `## ${section.heading}`,
+    section.body,
+    `> 引用：${section.citations.map((citation) => `[${citation.citationId}]`).join(" ")}`,
+  ].join("\n\n"));
+  return [`# ${report.title}`, ...sections].join("\n\n").trim() + "\n";
 }
 
 function prepareSources(knowledgeItemId: string, sources: CitationSource[]): PreparedSource[] {

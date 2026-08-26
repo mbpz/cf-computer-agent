@@ -1382,11 +1382,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
       method: "POST", body: JSON.stringify({ researchRunId: run.id, citationIds: [hit!.citationId] }),
     });
     expect(reportResponse.status).toBe(200);
-    const report = await reportResponse.json() as { researchRunId: string; version: number; sourceSnapshots: Array<{ citationId: string; revisionId: string; chunkId: string }> };
+    const report = await reportResponse.json() as { reportId: string; researchRunId: string; version: number; title: string; sourceSnapshots: Array<{ citationId: string; revisionId: string; chunkId: string }> };
     expect(report.researchRunId).toBe(run.id);
     expect(report.version).toBe(1);
     expect(report.sourceSnapshots[0]).toEqual(expect.objectContaining({ citationId: hit!.citationId }));
     expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
+    const draftResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/draft`, {
+      method: "POST",
+      body: JSON.stringify({ reportId: report.reportId, requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" }),
+    });
+    expect(draftResponse.status).toBe(201);
+    const draft = await draftResponse.json() as { draft: { id: string; status: string; kind: string; title: string; content: string } };
+    expect(draft.draft).toMatchObject({ status: "draft", kind: "markdown", title: report.title });
+    expect(draft.draft.content).toContain("The source records a bounded conclusion.");
+    await expect(env.DB.prepare("SELECT id FROM knowledge_items WHERE id = ?").bind(draft.draft.id).first()).resolves.toBeNull();
+    await expectApiError(memberApi("admin", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/draft`, {
+      method: "POST",
+      body: JSON.stringify({ reportId: report.reportId, requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" }),
+    }), 404, "RESEARCH_RUN_NOT_FOUND");
     const cancel = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/cancel`, { method: "POST", body: "{}" });
     expect(cancel.status).toBe(200);
     await expectApiError(memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/queries`, {
