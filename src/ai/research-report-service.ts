@@ -32,13 +32,14 @@ const RESPONSE_SCHEMA = {
 export interface ResearchSubquestion { id: string; question: string; scope: { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[] }; status: "pending" | "completed" | "blocked" }
 export interface ResearchQuery { id: string; researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string; createdAt: string }
 export interface ResearchRunPlan { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[]; completion: string[]; steps: string[]; subquestions: ResearchSubquestion[] }
-export interface ResearchRun { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: "draft" | "running" | "paused" | "completed" | "cancelled" }
+export interface ResearchCheckpoint { nextStep: number; completedSubquestionIds: string[] }
+export interface ResearchRun { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: "draft" | "running" | "paused" | "completed" | "cancelled"; quotaState: "available" | "deferred_quota"; quotaDeferredUntil: string | null; checkpoint: ResearchCheckpoint }
 export interface ResearchReportCitation extends SourceSummaryCitation { revisionId: string; chunkId: string; publishedAt: string }
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
 export interface ResearchReportRecord extends ResearchReportSaveInput { knowledgeItemId: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; deferQuota(scope: LibraryScope, id: string, deferredUntil: string, checkpoint: ResearchCheckpoint): Promise<ResearchRun>; resumeQuota(scope: LibraryScope, id: string, now: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -94,8 +95,14 @@ export class ResearchReportService {
 
   async generate(scope: LibraryScope, researchRunId: string, sources: CitationSource[]): Promise<ResearchReportResult> {
     assertScope(scope);
-    const run = await this.repository.findRun(scope, researchRunId);
+    let run = await this.repository.findRun(scope, researchRunId);
     if (!run || run.ownerMemberId !== scope.memberId || run.status !== "running") throw notFound();
+    if (run.quotaState === "deferred_quota") {
+      if (!run.quotaDeferredUntil || Date.parse(run.quotaDeferredUntil) > this.now().getTime()) {
+        throw quotaDeferred(run.quotaDeferredUntil || nextUtcDay(this.now()));
+      }
+      run = await this.repository.resumeQuota(scope, run.id, this.now().toISOString());
+    }
     const prepared = prepareSources(run.knowledgeItemId, sources);
     let raw: unknown;
     try {
@@ -107,7 +114,17 @@ export class ResearchReportService {
         max_tokens: Math.min(APP_CONFIG.maxAnswerTokens, 700), temperature: 0,
         response_format: { type: "json_schema", json_schema: { name: "research_report", strict: true, schema: RESPONSE_SCHEMA } },
       }), this.timeoutMs);
-    } catch { throw aiUnavailable(); }
+    } catch (error) {
+      if (isQuotaError(error)) {
+        const deferredUntil = nextUtcDay(this.now());
+        await this.repository.deferQuota(scope, run.id, deferredUntil, {
+          nextStep: 0,
+          completedSubquestionIds: run.plan.subquestions.filter((item) => item.status === "completed").map((item) => item.id),
+        });
+        throw quotaDeferred(deferredUntil);
+      }
+      throw aiUnavailable();
+    }
     const provider = parseProvider(raw);
     if (provider.insufficientEvidence) {
       if (provider.sections.length) throw aiUnavailable();
@@ -174,6 +191,13 @@ function notFound(): AppError { return new AppError("RESEARCH_RUN_NOT_FOUND", "R
 function invalid(): AppError { return new AppError("RESEARCH_REPORT_INVALID", "Research report request is invalid", 400); }
 function ungrounded(): AppError { return new AppError("RESEARCH_REPORT_UNGROUNDED", "Research report could not be grounded in authorized sources", 422); }
 function aiUnavailable(): AppError { return new AppError("AI_UNAVAILABLE", "AI service is temporarily unavailable", 503, true); }
+function quotaDeferred(until: string): AppError { return new AppError("RESEARCH_QUOTA_DEFERRED", `Research quota deferred until ${until}`, 429, true); }
+function isQuotaError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || Array.isArray(error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === "AI_QUOTA_EXHAUSTED" || code === "QUOTA_EXHAUSTED";
+}
+function nextUtcDay(now: Date): string { const next = new Date(now.getTime()); next.setUTCHours(24, 0, 0, 0); return next.toISOString(); }
 function truncate(value: string, max: number): string { return [...value].slice(0, max).join(""); }
 function codePointLength(value: string): number { return [...value].length; }
 function hasMalformedSurrogate(value: string): boolean { for (let index = 0; index < value.length; index += 1) { const unit = value.charCodeAt(index); if (unit >= 0xd800 && unit <= 0xdbff) { const next = value.charCodeAt(index + 1); if (next < 0xdc00 || next > 0xdfff) return true; index += 1; } else if (unit >= 0xdc00 && unit <= 0xdfff) return true; } return false; }

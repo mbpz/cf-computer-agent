@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ResearchReportService } from "../../src/ai/research-report-service";
 
 const scope = { memberId: "member-1", role: "contributor" as const };
-const run = { id: "run-1", ownerMemberId: "member-1", knowledgeItemId: "k-1", goal: "比较落地方案", plan: { spaceIds: [], collectionIds: [], knowledgeItemIds: [], completion: ["形成有引用结论"], steps: ["读取来源"], subquestions: [{ id: "q1", question: "成本约束是什么？", scope: { spaceIds: [], collectionIds: [], knowledgeItemIds: [] }, status: "pending" as const }] }, status: "running" as const };
+const run = { id: "run-1", ownerMemberId: "member-1", knowledgeItemId: "k-1", goal: "比较落地方案", plan: { spaceIds: [], collectionIds: [], knowledgeItemIds: [], completion: ["形成有引用结论"], steps: ["读取来源"], subquestions: [{ id: "q1", question: "成本约束是什么？", scope: { spaceIds: [], collectionIds: [], knowledgeItemIds: [] }, status: "pending" as const }] }, status: "running" as const, quotaState: "available" as const, quotaDeferredUntil: null, checkpoint: { nextStep: 0, completedSubquestionIds: [] } };
 const sources = [{
   citationId: "c-1", knowledgeItemId: "k-1", revisionId: "r-1", chunkId: "ch-1", title: "设计文档", headingPath: ["方案"], startLine: 1, endLine: 4,
   body: "方案甲强调低成本。", publishedAt: "2026-01-01T00:00:00.000Z",
@@ -15,6 +15,8 @@ function repository() {
     approveRun: async () => ({ ...run, status: "running" as const }),
     pauseRun: async () => ({ ...run, status: "paused" as const }),
     cancelRun: async () => ({ ...run, status: "cancelled" as const }),
+    deferQuota: async (_scope: any, _id: string, deferredUntil: string, checkpoint: any) => ({ ...run, quotaState: "deferred_quota" as const, quotaDeferredUntil: deferredUntil, checkpoint }),
+    resumeQuota: async () => ({ ...run }),
     recordQuery: async (input: any) => input,
     findRun: async () => run,
     nextVersion: async () => 1,
@@ -98,5 +100,47 @@ describe("ResearchReportService", () => {
     expect(result.sections).toHaveLength(1);
     expect(calls).toBe(1);
     await expect(new ResearchReportService(repository(), { run: async () => new Promise(() => undefined) }, 1).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "AI_UNAVAILABLE", retryable: true });
+  });
+
+  it("defers an exhausted AI quota with a next-day checkpoint", async () => {
+    let deferred: unknown[] | undefined;
+    const quotaRepo = {
+      ...repository(),
+      deferQuota: async (...input: unknown[]) => {
+        deferred = input;
+        return { ...run, quotaState: "deferred_quota" as const, quotaDeferredUntil: "2026-08-27T00:00:00.000Z" };
+      },
+    };
+    const quotaError = Object.assign(new Error("quota"), { code: "AI_QUOTA_EXHAUSTED" });
+    await expect(new ResearchReportService(
+      quotaRepo,
+      { run: async () => { throw quotaError; } },
+      5_000,
+      () => new Date("2026-08-26T12:00:00.000Z"),
+    ).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "RESEARCH_QUOTA_DEFERRED", status: 429, retryable: true });
+    expect(deferred?.[0]).toEqual(scope);
+    expect(deferred?.[1]).toBe("run-1");
+    expect(deferred?.[2]).toBe("2026-08-27T00:00:00.000Z");
+    expect(deferred?.[3]).toEqual({ nextStep: 0, completedSubquestionIds: [] });
+  });
+
+  it("resumes a deferred run after the quota window and invokes AI once", async () => {
+    let resumed = 0;
+    let calls = 0;
+    const deferredRun = { ...run, quotaState: "deferred_quota" as const, quotaDeferredUntil: "2026-08-27T00:00:00.000Z", checkpoint: { nextStep: 0, completedSubquestionIds: [] } };
+    const repo = {
+      ...repository(),
+      findRun: async () => deferredRun,
+      resumeQuota: async () => { resumed += 1; return { ...run }; },
+    };
+    const result = await new ResearchReportService(repo, {
+      run: async () => {
+        calls += 1;
+        return { response: JSON.stringify({ title: "恢复报告", sections: [{ heading: "结论", body: "恢复后继续。", citationIds: ["c-1"] }], insufficientEvidence: false }) };
+      },
+    }, 5_000, () => new Date("2026-08-27T01:00:00.000Z")).generate(scope, "run-1", sources);
+    expect(result.title).toBe("恢复报告");
+    expect(resumed).toBe(1);
+    expect(calls).toBe(1);
   });
 });
