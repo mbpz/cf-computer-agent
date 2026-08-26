@@ -41,6 +41,10 @@ describe("frontend accessibility gates", () => {
       backlinkState={{ kind: "ready", items: [{ id: "knowledge-3", revisionId: "revision-3", chunkId: "chunk-3", title: "引用指南", publishedAt: "2026-08-26", startLine: 4, endLine: 6 }] }}
     />);
     expect(html).toContain("来源");
+    expect(html).toContain('data-reader-layout="true"');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain("来源与链接");
+    expect(html).toContain('data-reader-outline="true"');
     expect(html).toContain("source-version-1");
     expect(html).toContain("Sheet1 · A1:B2");
     expect(html).toContain('aria-pressed="false"');

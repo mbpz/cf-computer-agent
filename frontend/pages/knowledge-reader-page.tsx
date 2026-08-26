@@ -29,10 +29,38 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
     chunks: Array.isArray(revision.chunks) ? revision.chunks : [],
   };
   const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(null);
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
-  return <article className="space-y-5"><Card><CardHeader><CardTitle>{normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</CardTitle><div className="flex flex-wrap items-center justify-between gap-3">{normalizedRevision.publishedAt && <p className="text-xs text-muted-foreground">{normalizedRevision.publishedAt}{normalizedRevision.isCurrent === false ? ` · ${frontendText(locale, "KNOWLEDGE_READER_HISTORICAL")}` : ""}</p>}<div className="flex flex-wrap gap-2">{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}<a href={`/agent?scope=items&knowledgeItemId=${encodeURIComponent(normalizedRevision.knowledgeItemId)}`} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_ASK")}</a></div></div></CardHeader><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card><SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />{diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}{backlinkState.kind !== "idle" && <BacklinkPanel locale={locale} state={backlinkState} />}{relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} />}</article>;
+  return <article data-reader-layout className="space-y-5">
+    <div className="flex gap-2 lg:hidden" role="tablist" aria-label={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")}>
+      <button type="button" role="tab" aria-selected={mobilePanel === "outline"} aria-controls="reader-outline-panel" onClick={() => setMobilePanel(mobilePanel === "outline" ? null : "outline")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE")}</button>
+      <button type="button" role="tab" aria-selected={mobilePanel === "sources"} aria-controls="reader-sources-panel" onClick={() => setMobilePanel(mobilePanel === "sources" ? null : "sources")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES")}</button>
+    </div>
+    <div className="grid gap-5 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(17rem,22rem)] lg:items-start">
+      <aside id="reader-outline-panel" data-reader-outline className={(mobilePanel === "outline" ? "block" : "hidden") + " lg:block"}>
+        <ReaderOutlinePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} onSelectChunk={setSelectedChunkId} />
+      </aside>
+      <main className="min-w-0 space-y-5">
+        <Card><CardHeader><CardTitle>{normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</CardTitle><div className="flex flex-wrap items-center justify-between gap-3">{normalizedRevision.publishedAt && <p className="text-xs text-muted-foreground">{normalizedRevision.publishedAt}{normalizedRevision.isCurrent === false ? " · " + frontendText(locale, "KNOWLEDGE_READER_HISTORICAL") : ""}</p>}<div className="flex flex-wrap gap-2">{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}<a href={"/agent?scope=items&knowledgeItemId=" + encodeURIComponent(normalizedRevision.knowledgeItemId)} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_ASK")}</a></div></div></CardHeader><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card>
+        {diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}
+      </main>
+      <aside id="reader-sources-panel" data-reader-sources className={(mobilePanel === "sources" ? "block" : "hidden") + " space-y-5 lg:block"}>
+        <SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />
+        {backlinkState.kind !== "idle" && <BacklinkPanel locale={locale} state={backlinkState} />}
+        {relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} />}
+      </aside>
+    </div>
+  </article>
+}
+
+function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }: { locale?: LocaleRuntime; revision: KnowledgeRevision; selectedChunkId: string | null; onSelectChunk: (id: string) => void }) {
+  const headings = revision.chunks.filter((chunk) => chunk.headingPath.length > 0).map((chunk) => ({
+    id: chunk.id,
+    label: chunk.headingPath.join(" / ").trim(),
+  })).filter((item, index, items) => item.label && items.findIndex((candidate) => candidate.label === item.label) === index);
+  return <Card data-reader-outline-card><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}</CardTitle></CardHeader><CardContent>{headings.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_READER_OUTLINE_EMPTY")}</p> : <nav aria-label={frontendText(locale, "KNOWLEDGE_READER_OUTLINE")}><ol className="space-y-1">{headings.map((heading) => <li key={heading.id}><button type="button" aria-current={selectedChunkId === heading.id ? "location" : undefined} onClick={() => onSelectChunk(heading.id)} className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground aria-[current=location]:bg-accent aria-[current=location]:font-medium aria-[current=location]:text-foreground">{heading.label}</button></li>)}</ol></nav>}</CardContent></Card>;
 }
 
 function RelatedKnowledgePanel({ locale, state }: { locale?: LocaleRuntime; state: RelatedState }) {
