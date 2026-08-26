@@ -12,6 +12,7 @@ function repository() {
   return {
     createRun: async (input: any) => ({ ...run, ...input, status: "draft" }),
     approveRun: async () => ({ ...run, status: "running" as const }),
+    recordQuery: async (input: any) => input,
     findRun: async () => run,
     nextVersion: async () => 1,
     saveReport: async (input: any) => ({ ...input, id: "report-1" }),

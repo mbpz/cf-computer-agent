@@ -224,7 +224,7 @@
 - [ ] `RES-003` P1/M6 研究计划草稿；验收：用户确认后才执行多步检索。
 - [x] `RES-004` P1/M6 有限步骤预算；状态：L/W；验收：ResearchRun 最多 8 个计划 steps，报告生成固定 1 次 AI 调用、最多 700 tokens、5 秒 wall-time 超时；超时映射 retryable `AI_UNAVAILABLE`，不会继续执行隐藏步骤。证据：`src/ai/research-report-service.ts`（`MAX_RESEARCH_STEPS`/`MAX_RESEARCH_AI_CALLS`/`MAX_RESEARCH_WALL_MS`）、`test/unit/research-report-service.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/research-report-service.test.ts`。
 - [x] `RES-005` P1/M6 子问题拆解；状态：L/W；验收：ResearchRun 创建必须提供 1–8 个唯一子问题 ID；每项含有界问题文本、独立 Space/Collection/KnowledgeItem 来源范围和 `pending|completed|blocked` 状态，持久化后重新读取不丢失；非法/重复/越界输入 400。证据：`migrations/0016_m6_research_subquestions.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
-- [ ] `RES-006` P1/M6 多次检索；验收：查询、结果 ID 和选择理由可追踪。
+- [x] `RES-006` P1/M6 多次检索；状态：L/W；验收：owner 可为已确认 ResearchRun 的子问题记录有界 query、结果 ID 列表、选择理由和时间；子问题 ID 必须属于该 run，结果记录不返回正文、不改变发布状态；非法/越权返回稳定错误。证据：`migrations/0017_m6_research_queries.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；接口：`POST /api/knowledge/:knowledgeItemId/research-runs/:runId/queries`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [ ] `RES-007` P1/M6 来源比较；验收：共同点、差异和各自引用。
 - [ ] `RES-008` P1/M6 冲突识别；验收：时间/版本/事实冲突不被静默覆盖。
 - [ ] `RES-009` P1/M6 证据缺口；验收：标明无来源问题而非模型补全。

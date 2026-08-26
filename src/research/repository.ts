@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { LibraryScope } from "../library/types";
-import type { ResearchReportRepository, ResearchReportSaveInput, ResearchRun, ResearchRunPlan } from "../ai/research-report-service";
+import type { ResearchReportRepository, ResearchReportSaveInput, ResearchRun, ResearchRunPlan, ResearchQuery } from "../ai/research-report-service";
 
 type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; scope_json: string; completion_json: string; steps_json: string; subquestions_json: string; status: ResearchRun["status"] };
 
@@ -37,6 +37,11 @@ export class ResearchRepository implements ResearchReportRepository {
     const run = await this.findRun(scope, id);
     if (!run) throw new AppError("RESEARCH_RUN_UNAVAILABLE", "Research run is unavailable", 503, true);
     return run;
+  }
+
+  async recordQuery(input: ResearchQuery): Promise<ResearchQuery> {
+    await this.db.prepare("INSERT INTO research_queries (id, research_run_id, subquestion_id, query, result_ids_json, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(input.id, input.researchRunId, input.subquestionId, input.query, JSON.stringify(input.resultIds), input.rationale, input.createdAt).run();
+    return input;
   }
 
   async nextVersion(researchRunId: string): Promise<number> {

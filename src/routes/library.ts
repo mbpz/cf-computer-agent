@@ -221,6 +221,15 @@ export async function routeLibraryApi(
     return jsonResponse({ researchRun: await services.researchReports.approve(scope, decodePathId(researchRunApprove[2]!)) }, 200, context.requestId);
   }
 
+  const researchQuery = /^\/api\/knowledge\/([^/]+)\/research-runs\/([^/]+)\/queries$/.exec(url.pathname);
+  if (researchQuery) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["subquestionId", "query", "resultIds", "rationale"], "RESEARCH_QUERY_INVALID");
+    if (!hasExactKeys(input, ["subquestionId", "query", "resultIds", "rationale"]) || typeof input.subquestionId !== "string" || typeof input.query !== "string" || !Array.isArray(input.resultIds) || typeof input.rationale !== "string") throw new AppError("RESEARCH_QUERY_INVALID", "Request body is invalid", 400);
+    return jsonResponse({ query: await services.researchReports.recordQuery(scope, { researchRunId: decodePathId(researchQuery[2]!), subquestionId: input.subquestionId, query: input.query, resultIds: input.resultIds as string[], rationale: input.rationale }) }, 201, context.requestId);
+  }
+
   const mindmap = /^\/api\/knowledge\/([^/]+)\/mindmap$/.exec(url.pathname);
   if (mindmap) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);

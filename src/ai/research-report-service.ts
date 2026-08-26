@@ -30,13 +30,14 @@ const RESPONSE_SCHEMA = {
 } as const;
 
 export interface ResearchSubquestion { id: string; question: string; scope: { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[] }; status: "pending" | "completed" | "blocked" }
+export interface ResearchQuery { id: string; researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string; createdAt: string }
 export interface ResearchRunPlan { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[]; completion: string[]; steps: string[]; subquestions: ResearchSubquestion[] }
 export interface ResearchRun { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: "draft" | "running" | "paused" | "completed" | "cancelled" }
 export interface ResearchReportCitation extends SourceSummaryCitation { revisionId: string; chunkId: string; publishedAt: string }
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -57,6 +58,14 @@ export class ResearchReportService {
   async approve(scope: LibraryScope, researchRunId: string): Promise<ResearchRun> {
     assertScope(scope);
     return this.repository.approveRun(scope, researchRunId);
+  }
+
+  async recordQuery(scope: LibraryScope, input: { researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string }): Promise<ResearchQuery> {
+    assertScope(scope);
+    const run = await this.repository.findRun(scope, input.researchRunId);
+    if (!run || !run.plan.subquestions.some((item) => item.id === input.subquestionId)) throw notFound();
+    if (!input.query.trim() || codePointLength(input.query.trim()) > 512 || !Array.isArray(input.resultIds) || input.resultIds.length > 20 || !input.resultIds.every((id) => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9_:\-]{0,255}$/u.test(id)) || !input.rationale.trim() || codePointLength(input.rationale.trim()) > 1_000) throw new AppError("RESEARCH_QUERY_INVALID", "Research query is invalid", 400);
+    return this.repository.recordQuery({ id: crypto.randomUUID(), researchRunId: run.id, subquestionId: input.subquestionId, query: input.query.trim(), resultIds: input.resultIds, rationale: input.rationale.trim(), createdAt: this.now().toISOString() });
   }
 
   async generate(scope: LibraryScope, researchRunId: string, sources: CitationSource[]): Promise<ResearchReportResult> {
