@@ -1155,6 +1155,41 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(fakeAiCalls).toBe(beforeDenied);
   });
 
+  it("summarizes only re-authorized selected citations and never exposes source bodies", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Summary source", "summarymarker source evidence", "shared", "summary-source-key1",
+    );
+    const hidden = await publishSubmission(
+      "other", "Hidden summary source", "summarymarker hidden evidence", "admin_only", "summary-hidden-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=summarymarker");
+    expect(search.status).toBe(200);
+    const selectedHit = (await search.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(selectedHit).toBeTruthy();
+
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/summary`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [selectedHit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const summary = await response.json<{ summary: string; citations: Array<{ citationId: string; title: string; startLine: number; endLine: number }> }>();
+    expect(summary.summary).toContain("Launch latency is documented.");
+    expect(summary.citations).toEqual([expect.objectContaining({ citationId: selectedHit!.citationId })]);
+    expect(JSON.stringify(summary)).not.toContain("summarymarker source evidence");
+
+    const hiddenSearch = await memberApi("admin", "/api/knowledge/search?q=summarymarker");
+    const hiddenHit = (await hiddenSearch.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === hidden.knowledgeItemId);
+    expect(hiddenHit).toBeTruthy();
+    const beforeDenied = fakeAiCalls;
+    await expectApiError(memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/summary`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [hiddenHit!.citationId] }),
+    }), 404, "KNOWLEDGE_NOT_FOUND");
+    expect(fakeAiCalls).toBe(beforeDenied);
+  });
+
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
     const weak = await publishSubmission(
       "contributor",

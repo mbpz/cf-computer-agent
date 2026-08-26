@@ -239,7 +239,7 @@
 ## ART — 研究产物
 
 - [x] `ART-001` P1/M5 私人 Note；状态：L/W；验收：D1 持久化、owner-only 默认、成员状态/知识可见性重新授权，保存必须携带可读 Revision/Chunk 引用，Note 不进入 Submission/Publication/FTS。证据：`migrations/0012_m5_private_notes.sql`、`src/private-notes/types.ts`、`src/private-notes/service.ts`、`src/private-notes/repository.ts`、`src/routes/library.ts`、`src/app.ts`、`frontend/lib/knowledge-note.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/private-notes-service.test.ts`、`test/unit/frontend-knowledge-note.test.ts`、`test/worker/private-notes.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/private-notes-service.test.ts test/unit/frontend-knowledge-note.test.ts test/worker/private-notes.test.ts`。
-- [ ] `ART-002` P1/M5 来源摘要；验收：只总结选中来源并附引用。
+- [x] `ART-002` P1/M5 来源摘要；状态：L/W；验收：只总结选中来源并附引用。证据：`src/ai/source-summary-service.ts`、`src/routes/library.ts`、`src/app.ts`、`test/unit/source-summary-service.test.ts`、`test/worker/m1-api.test.ts`；`POST /api/knowledge/:knowledgeItemId/summary` 逐条通过 `LibraryService.readCitation` 重新授权，仅接收同一 KnowledgeItem 的 1–8 个引用，AI 输出必须引用选中 citation，响应不含来源正文，失败返回可重试 `AI_UNAVAILABLE`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/source-summary-service.test.ts test/worker/m1-api.test.ts -t 'summary|selected citations'`。
 - [ ] `ART-003` P1/M5 FAQ；验收：每个回答有来源，无答案问题标缺口。
 - [ ] `ART-004` P1/M5 时间线；验收：日期事件逐项引用，无法排序时提示。
 - [ ] `ART-005` P1/M5 Brief；验收：目标、要点、风险、开放问题和引用。

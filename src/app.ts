@@ -4,6 +4,7 @@ import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
 import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
+import { SourceSummaryService } from "./ai/source-summary-service";
 import { AuditRepository } from "./audit/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
@@ -41,6 +42,7 @@ import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
 
 export interface AppDependencies {
+  ai?: Ai;
   githubFetch?: typeof fetch;
   assetFetch?: typeof fetch;
   sessionDatabase?: D1Database;
@@ -116,6 +118,7 @@ function createRequestServices(
   context: RequestContext,
   dependencies: AppDependencies,
 ) {
+  const ai = dependencies.ai || env.AI;
   const audit = new AuditRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
@@ -138,11 +141,12 @@ function createRequestServices(
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
-    answers: new AnswerService(env.AI),
+    answers: new AnswerService(ai),
     assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
-    citedAnswers: new CitedAnswerService(env.AI),
+    citedAnswers: new CitedAnswerService(ai),
+    sourceSummaries: new SourceSummaryService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
