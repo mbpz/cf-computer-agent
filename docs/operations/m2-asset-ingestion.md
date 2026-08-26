@@ -20,6 +20,16 @@
 
 免费模式的推荐入口是 `/api/submissions`，直接提交 `text`、`markdown` 或 `code`。提交页会禁用二进制选择控件并提示需要 R2 订阅；不影响知识审核、发布、搜索和问答。
 
+### 取消、替代文本与刷新恢复
+
+启用 R2 的部署可使用以下 owner-scoped 生命周期接口；免费模式不创建新资产，相关接口对历史记录保持能力闭锁：
+
+- `POST /api/assets/:id/cancel`：仅能取消 `queued` 或 `failed_retryable` 任务；D1 元数据先原子移除，再尝试删除 `staging/<id>`。处理中、已完成、跨 owner 请求返回稳定冲突/不存在错误；对象删除临时失败时不再可见，后续 orphan 扫描负责回收。
+- `POST /api/assets/:id/alternative`：解析失败后，owner 可提交有界 Markdown；服务端复用 Source/Submission parser，生成 `review_pending` Submission，不绕过管理员审核。
+- `GET /api/assets/resume`（`Idempotency-Key` header）：刷新后恢复同一 owner 的已有 asset/job 状态；重复上传使用同一幂等键只返回既有记录，不创建第二条 D1/R2 记录。
+
+三个接口都不返回 R2 公网 URL；响应只含受限 asset/job metadata。免费文本模式仍应直接使用 `/api/submissions`。
+
 ## 数据流
 
 ```text

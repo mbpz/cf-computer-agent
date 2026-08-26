@@ -43,7 +43,7 @@
 
 - [x] `ING-001` P0/M1 SHA-256 内容哈希；状态：L/W；验收：服务端重新验证，不信任客户端声明。
 - [x] `ING-002` P0/M1 完全重复检测；状态：L/W；验收：同 hash 返回既有候选，不静默发布。
-- [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；验收：无公开对象 URL。
+- [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；状态：deferred（免费层边界）；验收：启用付费 R2 档位时必须是 Standard/private、无公开对象 URL。当前生产明确不声明 `ORIGINALS`/`r2_buckets`，因此不宣称 R2 能力；历史对象接口仍 fail-closed，文本录入不受影响。证据：`wrangler.jsonc`、`src/env.d.ts`、`src/assets/service.ts`、`docs/operations/m2-asset-ingestion.md`。
 - [ ] `ING-004` P0/M2 暂存对象键；验收：内部随机 ID，不含邮箱和原文件名。
 - [ ] `ING-005` P0/M2 原件对象键；验收：SourceVersion 不可变映射。
 - [ ] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；验收：不一致进入拒绝或人工处理。
