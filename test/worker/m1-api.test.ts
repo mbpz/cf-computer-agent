@@ -1449,6 +1449,13 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(report.version).toBe(1);
     expect(report.sourceSnapshots[0]).toEqual(expect.objectContaining({ citationId: hit!.citationId }));
     expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
+    await expect(env.DB.prepare(
+      "SELECT model, prompt_version, created_at FROM research_reports WHERE id = ?",
+    ).bind(report.reportId).first()).resolves.toMatchObject({
+      model: APP_CONFIG.model,
+      prompt_version: "research-report-v1",
+      created_at: expect.any(String),
+    });
     const draftResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/draft`, {
       method: "POST",
       body: JSON.stringify({ reportId: report.reportId, requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" }),
