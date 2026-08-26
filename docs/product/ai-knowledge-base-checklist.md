@@ -262,7 +262,7 @@
 - [x] `AGT-005` P0/M6 每工具调用重载 member；验收：disabled 立即停止。证据：`src/agent/tool-runner.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
 - [x] `AGT-006` P0/M6 `searchKnowledge`；验收：只返回授权 current Chunk。证据：`src/agent/tools.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [x] `AGT-007` P0/M6 `readSource`；验收：稳定 ID、权限和来源位置。证据：`src/agent/tools.ts`、`src/app.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'stable source revision' && rtk npm run typecheck`。
-- [ ] `AGT-008` P0/M6 `compareSources`；验收：输入来源显式、有界。
+- [x] `AGT-008` P0/M6 `compareSources`；验收：输入来源显式、有界。证据：`src/agent/tools.ts`、`src/app.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'compares two explicit revisions' && rtk npm run typecheck`。
 - [ ] `AGT-009` P1/M6 `listSourceConflicts`；验收：只基于已有证据。
 - [ ] `AGT-010` P1/M6 `createNoteDraft`；验收：owner 私有、无发布副作用。
 - [ ] `AGT-011` P1/M6 `createArtifactDraft`；验收：产物 provenance 完整。

@@ -1,6 +1,7 @@
 import { AppError } from "../http";
 import type { LibraryService } from "../library/service";
 import type { LibraryScope, RevisionDetail, SearchPage, SearchRequest } from "../library/types";
+import type { RevisionDiffResult } from "../library/revision-diff";
 import type { AgentToolDefinition } from "./tool-runner";
 
 const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
@@ -36,6 +37,28 @@ export function createReadSourceTool(
   };
 }
 
+export function createCompareSourcesTool(
+  library: LibraryService,
+): AgentToolDefinition<unknown, RevisionDiffResult> {
+  return {
+    name: "compareSources",
+    parse: parseCompareSourcesInput,
+    execute: async ({ member }, input) => {
+      const { knowledgeItemId, fromRevisionId, toRevisionId } = input as {
+        knowledgeItemId: string;
+        fromRevisionId: string;
+        toRevisionId: string;
+      };
+      return library.diff(
+        { memberId: member.id, role: member.role },
+        knowledgeItemId,
+        fromRevisionId,
+        toRevisionId,
+      );
+    },
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);
@@ -63,6 +86,25 @@ function parseReadSourceInput(value: unknown): unknown {
     throw invalidToolInput();
   }
   return { knowledgeItemId: value.knowledgeItemId, revisionId: value.revisionId };
+}
+
+function parseCompareSourcesInput(value: unknown): unknown {
+  if (!isPlainRecord(value)
+    || Object.keys(value).length !== 3
+    || typeof value.knowledgeItemId !== "string"
+    || typeof value.fromRevisionId !== "string"
+    || typeof value.toRevisionId !== "string"
+    || !ID.test(value.knowledgeItemId)
+    || !ID.test(value.fromRevisionId)
+    || !ID.test(value.toRevisionId)
+    || value.fromRevisionId === value.toRevisionId) {
+    throw invalidToolInput();
+  }
+  return {
+    knowledgeItemId: value.knowledgeItemId,
+    fromRevisionId: value.fromRevisionId,
+    toRevisionId: value.toRevisionId,
+  };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

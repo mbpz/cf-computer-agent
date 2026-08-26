@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createCompareSourcesTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -96,5 +96,27 @@ describe("AgentToolRunner", () => {
     );
     await expect(runner.run("member-agent", "readSource", { knowledgeItemId: "knowledge-1" }))
       .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+  });
+
+  it("compares two explicit revisions without accepting an implicit current source", async () => {
+    const members = repository();
+    const diff = vi.fn(async () => ({
+      fromRevisionId: "revision-1", toRevisionId: "revision-2", changed: true,
+      metadataChanges: [], stats: { added: 1, removed: 0, unchanged: 1, truncated: false }, hunks: [],
+    }));
+    const runner = new AgentToolRunner(members, [createCompareSourcesTool({ diff } as never)]);
+
+    await expect(runner.run("member-agent", "compareSources", {
+      knowledgeItemId: "knowledge-1", fromRevisionId: "revision-1", toRevisionId: "revision-2",
+    })).resolves.toMatchObject({ changed: true, fromRevisionId: "revision-1", toRevisionId: "revision-2" });
+    expect(diff).toHaveBeenCalledWith(
+      { memberId: "member-agent", role: "contributor" },
+      "knowledge-1",
+      "revision-1",
+      "revision-2",
+    );
+    await expect(runner.run("member-agent", "compareSources", {
+      knowledgeItemId: "knowledge-1", fromRevisionId: "revision-1", toRevisionId: "revision-1",
+    })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });
