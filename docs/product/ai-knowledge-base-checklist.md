@@ -260,7 +260,7 @@
 - [x] `AGT-003` P1/M6 流式回答；状态：L/W；验收：Worker 通过 Workers AI `stream:true` 返回 SSE，用户消息先持久化，assistant 仅在上游完整结束后落库；客户端断线取消 reader，不写入未完成 assistant，也没有工具注册/副作用可重复执行。证据：`src/routes/agent.ts`、`src/agent/session-do.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/agent-session.test.ts -t 'stream|incomplete'`。
 - [x] `AGT-004` P1/M6 断线恢复；状态：L/W；验收：每个流式请求创建 member-bound turn；上游完整结束原子转为 `completed` 并只写一次 assistant，客户端断线转为可查询的 `terminated`，后续迟到完成回调返回 409 且不重复写入。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts -t 'stream|terminated|incomplete'`。
 - [x] `AGT-005` P0/M6 每工具调用重载 member；验收：disabled 立即停止。证据：`src/agent/tool-runner.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
-- [ ] `AGT-006` P0/M6 `searchKnowledge`；验收：只返回授权 current Chunk。
+- [x] `AGT-006` P0/M6 `searchKnowledge`；验收：只返回授权 current Chunk。证据：`src/agent/tools.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [ ] `AGT-007` P0/M6 `readSource`；验收：稳定 ID、权限和来源位置。
 - [ ] `AGT-008` P0/M6 `compareSources`；验收：输入来源显式、有界。
 - [ ] `AGT-009` P1/M6 `listSourceConflicts`；验收：只基于已有证据。

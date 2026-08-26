@@ -3,6 +3,7 @@ import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonReques
 import { APP_CONFIG } from "../config";
 import type { Principal } from "../identity/principal";
 import type { AgentMessagePage, AgentMessageRecord, AgentSession, AgentSessionRecord, AgentSessionResult, AgentTurnRecord } from "../agent/session-do";
+import type { AgentToolRunner } from "../agent/tool-runner";
 
 const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
 
@@ -13,6 +14,7 @@ export async function routeAgentApi(
   principal: Principal,
   namespace: DurableObjectNamespace<AgentSession>,
   ai: Ai,
+  tools: AgentToolRunner,
 ): Promise<Response | undefined> {
   if (url.pathname !== "/api/agent/sessions" && !url.pathname.startsWith("/api/agent/sessions/")) return undefined;
   requireCapability(principal, "knowledge:read");
@@ -29,6 +31,18 @@ export async function routeAgentApi(
       now: new Date().toISOString(),
     });
     return jsonAgentResult(result, 201, context.requestId);
+  }
+
+  const toolPath = /^\/api\/agent\/sessions\/([^/]+)\/tools\/([^/]+)$/u.exec(url.pathname);
+  if (toolPath) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const stub = sessionStub(namespace, decodePathId(toolPath[1]!));
+    throwIfAgentError(await stub.read(principal.memberId));
+    const input = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
+    const name = decodePathId(toolPath[2]!);
+    const result = await tools.run(principal.memberId, name, input);
+    return jsonResponse({ tool: name, result }, 200, context.requestId);
   }
 
   const messagePath = /^\/api\/agent\/sessions\/([^/]+)\/messages$/u.exec(url.pathname);

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
+import { createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -54,5 +55,22 @@ describe("AgentToolRunner", () => {
     await expect(runner.run("member-agent", "unknown", {}))
       .rejects.toMatchObject({ code: "AGENT_TOOL_NOT_FOUND", status: 404 });
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("bounds searchKnowledge and derives the library scope from the reloaded member", async () => {
+    const members = repository();
+    const search = vi.fn(async () => ({ items: [{ citationId: "citation-1" }], degraded: false, nextCursor: "never-expose" }));
+    const tool = createSearchKnowledgeTool({ search } as never);
+    const runner = new AgentToolRunner(members, [tool]);
+
+    await expect(runner.run("member-agent", "searchKnowledge", {
+      query: "  durable objects  ", spaceId: "space-1",
+    })).resolves.toEqual({ items: [{ citationId: "citation-1" }], degraded: false });
+    expect(search).toHaveBeenCalledWith(
+      { memberId: "member-agent", role: "contributor" },
+      { query: "  durable objects  ", spaceId: "space-1", limit: 8 },
+    );
+    await expect(runner.run("member-agent", "searchKnowledge", { query: "x", extra: true }))
+      .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });

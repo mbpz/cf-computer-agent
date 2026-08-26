@@ -54,6 +54,8 @@ import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
+import { createSearchKnowledgeTool } from "./agent/tools";
+import { AgentToolRunner } from "./agent/tool-runner";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -143,6 +145,8 @@ function createRequestServices(
   const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
+  const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
+  const agentTools = new AgentToolRunner(memberRecords, [createSearchKnowledgeTool(library)]);
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
     new AssetsRepository(env.DB),
@@ -158,6 +162,7 @@ function createRequestServices(
     answers: new AnswerService(ai),
     ai,
     agentSessions: env.AGENT_SESSIONS,
+    agentTools,
     assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
@@ -174,7 +179,7 @@ function createRequestServices(
     flashcards: new FlashcardService(ai),
     quizzes: new QuizService(ai),
     knowledge: new KnowledgeService(legacyRepository),
-    library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
+    library,
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,
@@ -222,7 +227,7 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
-  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai);
+  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools);
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;

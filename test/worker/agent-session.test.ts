@@ -119,6 +119,52 @@ describe("AgentSession Durable Object", () => {
     await waitOnExecutionContext(listContext);
     expect(listed.status).toBe(200);
     await expect(listed.json()).resolves.toMatchObject({ messages: { items: [expect.objectContaining({ content: "route message" })], truncated: false } });
+
+    const now = "2026-08-26T00:00:01.000Z";
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at) VALUES ('agent-submission', 'agent-member', 'default', NULL, 'markdown', 'published', 'Agent knowledge', '# Agent knowledge\\n\\nDurable search evidence', NULL, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('agent-source', 'agent-member', 'default', NULL, 'markdown', 'Agent knowledge', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('agent-version', 'agent-source', 'agent-submission', 1, '# Agent knowledge\\n\\nDurable search evidence', ?, 'm1-v1', ?)").bind("a".repeat(64), now),
+      env.DB.prepare("INSERT INTO knowledge_items (id, space_id, collection_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('agent-knowledge', 'default', NULL, NULL, 'active', 'indexed', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, summary, tags_json, visibility, published_by, published_at) VALUES ('agent-revision', 'agent-knowledge', 'agent-version', '/workspace/published/default/agent-knowledge/agent-revision.md', ?, 'Agent knowledge', '', '[]', 'shared', 'agent-member', ?)").bind("a".repeat(64), now),
+      env.DB.prepare("INSERT INTO chunks (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field, location_json) VALUES ('agent-chunk', 'agent-revision', 0, '[\"Agent\"]', 3, 3, 'Durable search evidence', 'Agent knowledge', '', 'Durable search evidence', 'body', '{}')"),
+      env.DB.prepare("INSERT INTO jobs (id, kind, resource_id, state, attempts, available_at, created_at, updated_at) VALUES ('agent-job', 'index_revision', 'agent-revision', 'completed', 1, ?, ?, ?)").bind(now, now, now),
+      env.DB.prepare("INSERT INTO chunks_fts (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, 'Agent knowledge', '', '', search_body, '' FROM chunks WHERE id = 'agent-chunk'"),
+      env.DB.prepare("INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, 'Agent knowledge', '', '', search_body, '' FROM chunks WHERE id = 'agent-chunk'"),
+    ]);
+    await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'agent-revision' WHERE id = 'agent-knowledge'").run();
+
+    const toolContext = createExecutionContext();
+    const toolResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/searchKnowledge`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ query: "Durable" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, toolContext);
+    await waitOnExecutionContext(toolContext);
+    expect(toolResponse.status).toBe(200);
+    await expect(toolResponse.json()).resolves.toMatchObject({
+      tool: "searchKnowledge",
+      result: { degraded: false, items: [expect.objectContaining({ knowledgeItemId: "agent-knowledge", citationId: expect.any(String), excerpt: expect.stringContaining("Durable") })] },
+    });
+
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'agent-member'").run();
+    const disabledToolContext = createExecutionContext();
+    const disabledToolResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/searchKnowledge`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ query: "must stop" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, disabledToolContext);
+    await waitOnExecutionContext(disabledToolContext);
+    expect(disabledToolResponse.status).toBe(403);
+    await expect(disabledToolResponse.json()).resolves.toMatchObject({ error: { code: "MEMBER_DISABLED" } });
   });
 
   it("streams an assistant answer and persists it only after the upstream stream completes", async () => {
