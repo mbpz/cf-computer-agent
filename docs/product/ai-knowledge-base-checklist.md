@@ -310,7 +310,7 @@
 - [x] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。证据：真实 D1+DO 覆盖 list/search/current detail/history/citation/download 的 admin/contributor/disabled/伪造角色，hidden/absent/cross-item download 统一 404，客户端 path/hash query 被拒绝。
 - [x] `AUTH-016` P0/M5 Note/Research owner scope；状态：L/W；验收：ID 猜测和跨用户读取为 404/403 稳定合同。证据：`src/private-notes/service.ts`、`src/ai/research-report-service.ts`、`src/routes/library.ts`、`test/worker/private-notes.test.ts`、`test/worker/m1-api.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npx vitest run test/worker/private-notes.test.ts test/worker/m1-api.test.ts -t 'owner|cross|research' && rtk npm run typecheck`。
 - [x] `AUTH-017` P0/M6 Agent 工具授权；状态：L/W；验收：每次工具调用重新校验。证据：`src/agent/tool-runner.ts`、`src/routes/agent.ts`、`test/unit/agent-tool-runner.test.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts test/worker/agent-session.test.ts -t 'disabled|tool' && rtk npm run typecheck`。
-- [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。
+- [x] `AUTH-018` P0/M8 登录体系兼容门禁；状态：L；验收：固定 `rtk npm run test:auth-compat` 回归 GitHub OAuth start/callback、D1 session、浏览器登出、member/disabled capability 和 HMAC automation，作为每个 Milestone 的前置门禁。证据：`package.json`、`test/worker/app.test.ts`、`test/worker/m1-api.test.ts`、`test/unit/github-oauth.test.ts`、`test/unit/session.test.ts`、`test/unit/automation.test.ts`；命令：`rtk npm run test:auth-compat`。
 
 ## I18N — 国际化
 
