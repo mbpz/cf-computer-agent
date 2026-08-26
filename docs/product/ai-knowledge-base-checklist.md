@@ -357,7 +357,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `OPS-014` P0/M2 Workers AI 日额度策略；验收：优先级、deferred_quota 和次日恢复。
 - [x] `OPS-015` P0/M1 D1 query 成本证据；状态：R；证据：`docs/operations/evidence/m1-release-2026-08-23.md`，13 个有界生产只读路径记录 returned rows、rows_read、rows_written。
 - [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界；Submit/Search 的 Space/Collection/Tag 第 51 项仅由可访问的显式 Load more 获取，去重、single-flight 且抑制 stale scope 结果。
-- [ ] `OPS-017` P0/M7 全量导出；验收：manifest、metadata、Revision、原件和引用映射。
+- [x] `OPS-017` P0/M7 全量导出；状态：L；验收：manifest、metadata、Revision、原件和引用映射。证据：`src/ops/export-package.ts`、`test/unit/export-package.test.ts`；命令：`rtk npx vitest run test/unit/export-package.test.ts && rtk npm run typecheck`。当前为离线导出包构建器，支持原件元数据/可选内联字节；D1 远程读取、R2 对象扫描和生产导出仍需后续 OPS-022/付费资源边界授权。
 - [ ] `OPS-018` P0/M7 增量导出；验收：基于稳定 cursor/checkpoint，无漏项。
 - [ ] `OPS-019` P0/M7 导入 dry-run；验收：schema、容量、冲突和权限报告，不写数据。
 - [ ] `OPS-020` P0/M7 新环境恢复；验收：身份映射、内容、Revision、原件和引用一致。
