@@ -144,7 +144,7 @@
 - [ ] `IDX-011` P0/M4 visibility metadata；验收：Vectorize 前置过滤后仍执行 D1 二次授权。
 - [ ] `IDX-012` P0/M4 向量删除传播；验收：回收/current 切换后旧向量不可召回。
 - [ ] `IDX-013` P0/M4 Vectorize 80% 断路器；验收：停止普通 Chunk，摘要/FTS 继续。
-- [ ] `IDX-014` P0/M4 FTS5-only 模式；验收：无 AI/Vectorize 完整搜索可用。
+- [x] `IDX-014` P0/M4 FTS5-only 模式；状态：L/W；验收：搜索直接使用 D1 FTS5 `chunks_fts`/`chunks_fts_shared`，不依赖 AI 或 Vectorize；当前 Revision、可见性、Space/Collection/Tag 权限过滤仍在 FTS 查询内执行。证据：`src/library/repository.ts`、`src/library/service.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t "search|FTS|visibility"`。
 - [ ] `IDX-015` P1/M7 全量索引重建；验收：从权威 Revision 重建且有差异报告。
 - [ ] `IDX-016` P1/M7 索引漂移检测；验收：current Revision、FTS 和向量 ID 定期对账。
 
@@ -166,7 +166,7 @@
 - [ ] `SRCH-014` P1/M4 可选 rerank；验收：超时/额度失败保持融合结果。
 - [ ] `SRCH-015` P0/M4 D1 Chunk 回读；验收：向量 metadata 不作为正文权威。
 - [ ] `SRCH-016` P0/M4 查询时二次授权；验收：成员禁用/权限变化立即生效。
-- [ ] `SRCH-017` P1/M4 Search/Chat 模式切换；验收：搜索不强制生成答案。
+- [x] `SRCH-017` P1/M4 Search/Chat 模式切换；状态：L/W；验收：`GET /api/knowledge/search` 只返回 FTS 命中，`POST /api/knowledge/chat` 才调用回答链路；搜索不会强制生成答案，Chat scope 单独授权且缺失/非法 scope fail-closed。证据：`src/routes/library.ts`、`src/library/service.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "search|ChatScope|scope"`。
 - [ ] `SRCH-018` P1/M4 Add context；验收：来源/Space/Collection 范围清晰展示。
 - [ ] `SRCH-019` P2/M4 Saved View；验收：owner 私有、过滤 schema 版本化。
 - [ ] `SRCH-020` P1/M4 结果内提问；验收：选中结果转为显式来源集合。
