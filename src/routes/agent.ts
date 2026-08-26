@@ -12,6 +12,7 @@ export async function routeAgentApi(
   context: RequestContext,
   principal: Principal,
   namespace: DurableObjectNamespace<AgentSession>,
+  ai: Ai,
 ): Promise<Response | undefined> {
   if (url.pathname !== "/api/agent/sessions" && !url.pathname.startsWith("/api/agent/sessions/")) return undefined;
   requireCapability(principal, "knowledge:read");
@@ -50,6 +51,39 @@ export async function routeAgentApi(
     return methodNotAllowed("GET, POST", context);
   }
 
+  const streamPath = /^\/api\/agent\/sessions\/([^/]+)\/stream$/u.exec(url.pathname);
+  if (streamPath) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const id = decodePathId(streamPath[1]!);
+    const stub = sessionStub(namespace, id);
+    const body = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
+    if (!isQuestionBody(body)) throw new AppError("AGENT_STREAM_REQUEST_INVALID", "Agent stream request is invalid", 400);
+    throwIfAgentError(await stub.appendMessage(principal.memberId, { role: "user", content: body.question }));
+    let upstream: ReadableStream;
+    try {
+      const candidate = await ai.run(APP_CONFIG.model, {
+        messages: [{ role: "user", content: body.question }],
+        stream: true,
+        max_tokens: Math.min(APP_CONFIG.maxAnswerTokens, 700),
+        temperature: 0,
+      }) as unknown;
+      if (!(candidate instanceof ReadableStream)) throw new Error("stream unavailable");
+      upstream = candidate;
+    } catch {
+      throw new AppError("AGENT_STREAM_UNAVAILABLE", "Agent stream is temporarily unavailable", 503, true);
+    }
+    return new Response(withPersistedAssistant(upstream, stub, principal.memberId), {
+      status: 200,
+      headers: {
+        "cache-control": "no-store",
+        "content-type": "text/event-stream; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-request-id": context.requestId,
+      },
+    });
+  }
+
   const id = decodePathId(url.pathname.slice("/api/agent/sessions/".length));
   if (!SESSION_ID.test(id)) throw new AppError("AGENT_SESSION_NOT_FOUND", "Agent session was not found", 404);
   if (request.method !== "GET") return methodNotAllowed("GET", context);
@@ -68,6 +102,10 @@ function jsonAgentResult<T extends AgentSessionRecord | AgentMessageRecord | Age
   return jsonResponse({ [key]: result.value }, successStatus, requestId);
 }
 
+function throwIfAgentError<T>(result: AgentSessionResult<T>): asserts result is { ok: true; value: T } {
+  if (!result.ok) throw new AppError(result.error.code, result.error.code === "AGENT_SESSION_INVALID" ? "Agent session request is invalid" : "Agent session was not found", result.error.status, result.error.retryable);
+}
+
 function sessionStub(namespace: DurableObjectNamespace<AgentSession>, id: string): DurableObjectStub<AgentSession> {
   if (!SESSION_ID.test(id)) throw new AppError("AGENT_SESSION_NOT_FOUND", "Agent session was not found", 404);
   try {
@@ -83,4 +121,86 @@ function isMessageBody(value: unknown): value is { content: string } {
   return Object.keys(body).length === 1
     && typeof body.content === "string"
     && body.content.trim().length > 0;
+}
+
+function isQuestionBody(value: unknown): value is { question: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const body = value as Record<string, unknown>;
+  return Object.keys(body).length === 1
+    && typeof body.question === "string"
+    && body.question.trim().length > 0
+    && body.question.length <= 4_000
+    && !/[\p{Cc}\p{Cf}]/u.test(body.question);
+}
+
+function withPersistedAssistant(
+  upstream: ReadableStream,
+  stub: DurableObjectStub<AgentSession>,
+  memberId: string,
+): ReadableStream<Uint8Array> {
+  let activeReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let disconnected = false;
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = upstream.getReader();
+      activeReader = reader;
+      const chunks: Uint8Array[] = [];
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          if (next.value) {
+            chunks.push(next.value);
+            controller.enqueue(next.value);
+          }
+        }
+        if (disconnected) {
+          controller.close();
+          return;
+        }
+        const answer = extractStreamAnswer(chunks);
+        if (answer) throwIfAgentError(await stub.appendMessage(memberId, { role: "assistant", content: answer }));
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        activeReader = undefined;
+      }
+    },
+    cancel(reason) {
+      disconnected = true;
+      void activeReader?.cancel(reason);
+    },
+  });
+}
+
+function extractStreamAnswer(chunks: readonly Uint8Array[]): string {
+  const text = new TextDecoder().decode(concat(chunks));
+  const lines = text.split(/\r?\n/u).filter((line) => line.startsWith("data:"));
+  if (lines.length === 0) return text.trim();
+  const pieces: string[] = [];
+  for (const line of lines) {
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const value = JSON.parse(payload) as Record<string, unknown>;
+      if (typeof value.response === "string") pieces.push(value.response);
+      const choices = value.choices;
+      if (Array.isArray(choices)) {
+        const content = (choices[0] as Record<string, unknown> | undefined)?.delta;
+        if (content && typeof content === "object" && typeof (content as Record<string, unknown>).content === "string") pieces.push((content as Record<string, string>).content);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return pieces.join("").trim();
+}
+
+function concat(chunks: readonly Uint8Array[]): Uint8Array {
+  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
+  return result;
 }

@@ -257,7 +257,7 @@
 
 - [x] `AGT-001` P1/M6 AgentSession DO 路由；状态：L/W；验收：Worker 通过独立 SQLite Durable Object namespace 创建随机 session ID，DO 持久化 member 绑定与时间戳；跨成员读取统一 404，路由仅允许已认证 member 的 `knowledge:read` 能力。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`src/app.ts`、`wrangler.jsonc`（AgentSession v2 SQLite binding）、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [x] `AGT-002` P1/M6 消息持久化；状态：L/W；验收：AgentSession SQLite 持久化仅允许 `user|assistant` 角色，正文单条有界，读取支持 1–50 条上限并返回截断标记；owner 外统一 404，Worker 写入只接受 user 正文，未开放工具角色或任意成员 ID。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
-- [ ] `AGT-003` P1/M6 流式回答；验收：断线不导致重复工具写入。
+- [x] `AGT-003` P1/M6 流式回答；状态：L/W；验收：Worker 通过 Workers AI `stream:true` 返回 SSE，用户消息先持久化，assistant 仅在上游完整结束后落库；客户端断线取消 reader，不写入未完成 assistant，也没有工具注册/副作用可重复执行。证据：`src/routes/agent.ts`、`src/agent/session-do.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/agent-session.test.ts -t 'stream|incomplete'`。
 - [ ] `AGT-004` P1/M6 断线恢复；验收：从 checkpoint 恢复或明确终止。
 - [ ] `AGT-005` P0/M6 每工具调用重载 member；验收：disabled 立即停止。
 - [ ] `AGT-006` P0/M6 `searchKnowledge`；验收：只返回授权 current Chunk。

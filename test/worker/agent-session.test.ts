@@ -120,4 +120,91 @@ describe("AgentSession Durable Object", () => {
     expect(listed.status).toBe(200);
     await expect(listed.json()).resolves.toMatchObject({ messages: { items: [expect.objectContaining({ content: "route message" })], truncated: false } });
   });
+
+  it("streams an assistant answer and persists it only after the upstream stream completes", async () => {
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const member = await members.findById("agent-member");
+    const session = await sessions.create(member!);
+    const encoder = new TextEncoder();
+    const streamingAi = {
+      async run(_model: string, input: { stream?: boolean }): Promise<ReadableStream | Record<string, unknown>> {
+        if (!input.stream) return { response: "unused" };
+        return new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"response":"streamed answer"}\n\n'));
+            controller.close();
+          },
+        });
+      },
+    };
+    const app = createApp({ ai: streamingAi as unknown as Ai });
+    const createContext = createExecutionContext();
+    const created = await app.fetch!(new Request("https://example.test/api/agent/sessions", {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: APP_CONFIG.canonicalOrigin },
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, createContext);
+    await waitOnExecutionContext(createContext);
+    const body = await created.json() as { session: { id: string } };
+
+    const streamContext = createExecutionContext();
+    const response = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/stream`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ question: "stream question" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, streamContext);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/^text\/event-stream/u);
+    await expect(response.text()).resolves.toContain("streamed answer");
+    await waitOnExecutionContext(streamContext);
+
+    const listed = await env.AGENT_SESSIONS.get(env.AGENT_SESSIONS.idFromString(body.session.id)).listMessages("agent-member", { limit: 10 });
+    expect(listed).toMatchObject({ ok: true, value: { items: [
+      { role: "assistant", content: "streamed answer" },
+      { role: "user", content: "stream question" },
+    ], truncated: false } });
+  });
+
+  it("does not persist an incomplete assistant message after the client disconnects", async () => {
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
+    const member = await members.findById("agent-member");
+    const session = await sessions.create(member!);
+    let controllerRef!: ReadableStreamDefaultController<Uint8Array>;
+    const encoder = new TextEncoder();
+    const streamingAi = {
+      async run(): Promise<ReadableStream> {
+        return new ReadableStream({ start(controller) {
+          controllerRef = controller;
+          controller.enqueue(encoder.encode('data: {"response":"partial"}\n\n'));
+        } });
+      },
+    };
+    const app = createApp({ ai: streamingAi as unknown as Ai });
+    const createContext = createExecutionContext();
+    const created = await app.fetch!(new Request("https://example.test/api/agent/sessions", {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: APP_CONFIG.canonicalOrigin },
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, createContext);
+    await waitOnExecutionContext(createContext);
+    const body = await created.json() as { session: { id: string } };
+    const streamContext = createExecutionContext();
+    const response = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/stream`, {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: APP_CONFIG.canonicalOrigin, "content-type": "application/json" },
+      body: JSON.stringify({ question: "disconnect question" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, streamContext);
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel("disconnect");
+    controllerRef.error(new Error("client disconnected"));
+    await waitOnExecutionContext(streamContext);
+
+    const listed = await env.AGENT_SESSIONS.get(env.AGENT_SESSIONS.idFromString(body.session.id)).listMessages("agent-member", { limit: 10 });
+    expect(listed).toMatchObject({ ok: true, value: { items: [{ role: "user", content: "disconnect question" }], truncated: false } });
+  });
 });

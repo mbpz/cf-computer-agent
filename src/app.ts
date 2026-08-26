@@ -156,6 +156,7 @@ function createRequestServices(
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(ai),
+    ai,
     agentSessions: env.AGENT_SESSIONS,
     assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
@@ -221,7 +222,7 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
-  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions);
+  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai);
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;
