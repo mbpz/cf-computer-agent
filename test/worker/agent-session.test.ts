@@ -45,6 +45,32 @@ describe("AgentSession Durable Object", () => {
     });
   });
 
+  it("persists bounded user and assistant messages for the owner only", async () => {
+    const id = crypto.randomUUID();
+    const stub = env.AGENT_SESSIONS.getByName(`agent-message-test-${id}`);
+    await stub.create({ sessionId: id, memberId: "member-a", now: "2026-08-26T00:00:00.000Z" });
+    await expect(stub.appendMessage("member-a", { role: "user", content: "hello" })).resolves.toMatchObject({
+      ok: true,
+      value: { role: "user", content: "hello" },
+    });
+    await expect(stub.appendMessage("member-a", { role: "assistant", content: "grounded answer" })).resolves.toMatchObject({
+      ok: true,
+      value: { role: "assistant", content: "grounded answer" },
+    });
+    await expect(stub.listMessages("member-a", { limit: 1 })).resolves.toMatchObject({
+      ok: true,
+      value: { items: [expect.objectContaining({ role: "assistant", content: "grounded answer" })], truncated: true },
+    });
+    await expect(stub.listMessages("member-b", { limit: 10 })).resolves.toEqual({
+      ok: false,
+      error: { code: "AGENT_SESSION_NOT_FOUND", status: 404, retryable: false },
+    });
+    await expect(stub.appendMessage("member-a", { role: "tool", content: "not allowed" })).resolves.toEqual({
+      ok: false,
+      error: { code: "AGENT_SESSION_INVALID", status: 400, retryable: false },
+    });
+  });
+
   it("routes create and read through the authenticated Worker boundary", async () => {
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
@@ -71,5 +97,27 @@ describe("AgentSession Durable Object", () => {
     await waitOnExecutionContext(getContext);
     expect(read.status).toBe(200);
     await expect(read.json()).resolves.toMatchObject({ session: { id: body.session.id, memberId: "agent-member" } });
+
+    const messageContext = createExecutionContext();
+    const message = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/messages`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ content: "route message" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, messageContext);
+    await waitOnExecutionContext(messageContext);
+    expect(message.status).toBe(201);
+    await expect(message.json()).resolves.toMatchObject({ message: { role: "user", content: "route message" } });
+
+    const listContext = createExecutionContext();
+    const listed = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/messages?limit=5`, {
+      headers: { cookie: `__Host-memory-session=${session.token}` },
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, listContext);
+    await waitOnExecutionContext(listContext);
+    expect(listed.status).toBe(200);
+    await expect(listed.json()).resolves.toMatchObject({ messages: { items: [expect.objectContaining({ content: "route message" })], truncated: false } });
   });
 });

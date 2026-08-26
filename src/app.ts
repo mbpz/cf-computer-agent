@@ -221,8 +221,8 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
-  const agent = routeAgentApi(request, url, context, principal, services.agentSessions);
-  if (agent !== undefined) return await agent;
+  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions);
+  if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;
   const admin = await routeAdminApi(request, url, context, principal, services);
