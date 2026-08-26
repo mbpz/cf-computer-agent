@@ -60,6 +60,7 @@ const RESPONSE_SCHEMA = {
             maxItems: MAX_CITATIONS_PER_CLAIM,
             items: { type: "string", maxLength: MAX_CITATION_ID_CODE_POINTS },
           },
+          evidenceQuotes: { type: "array", maxItems: 4, items: { type: "string", maxLength: 400 } },
         },
       },
     },
@@ -89,6 +90,7 @@ export interface ProviderAnswer {
   claims: Array<{
     text: string;
     citationIds: string[];
+    evidenceQuotes?: string[];
   }>;
   insufficientEvidence: boolean;
   conflicts?: Array<{ text: string; citationIds: string[] }>;
@@ -338,7 +340,7 @@ function parseProviderAnswer(result: unknown): ProviderAnswer {
   if (parsed.conflicts !== undefined && (!Array.isArray(parsed.conflicts) || parsed.conflicts.length > MAX_CONFLICTS)) throw aiUnavailable();
   for (const claim of parsed.claims) {
     if (!isPlainRecord(claim)
-      || !hasExactKeys(claim, ["text", "citationIds"])
+      || !hasOnlyKeys(claim, ["text", "citationIds", "evidenceQuotes"])
       || typeof claim.text !== "string"
       || hasMalformedSurrogate(claim.text)
       || codePointLength(claim.text) > MAX_CLAIM_CODE_POINTS
@@ -347,6 +349,9 @@ function parseProviderAnswer(result: unknown): ProviderAnswer {
       || !claim.citationIds.every(validCitationId)) {
       throw aiUnavailable();
     }
+    if (claim.evidenceQuotes !== undefined && (!Array.isArray(claim.evidenceQuotes)
+      || claim.evidenceQuotes.length > 4
+      || !claim.evidenceQuotes.every((quote) => typeof quote === "string" && quote.length > 0 && codePointLength(quote) <= 400 && !hasMalformedSurrogate(quote)))) throw aiUnavailable();
   }
   for (const conflict of parsed.conflicts ?? []) {
     if (!isPlainRecord(conflict)
@@ -378,6 +383,10 @@ function validateGrounding(
     }
     if (text === "") continue;
     if (candidate.citationIds.length === 0) throw answerUngrounded();
+    if (candidate.evidenceQuotes !== undefined) {
+      const citedExcerpts = sources.filter((source) => candidate.citationIds.includes(source.context.citationId)).map((source) => source.context.excerpt);
+      if (candidate.evidenceQuotes.some((quote) => !citedExcerpts.some((excerpt) => excerpt.includes(quote)))) throw answerUngrounded();
+    }
 
     const requestedIds = new Set(candidate.citationIds);
     claims.push({

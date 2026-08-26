@@ -174,6 +174,15 @@ describe("CitedAnswerService.answer", () => {
     expect(result.citations).toEqual([firstHit.citationId, secondHit.citationId]);
   });
 
+  it("rejects a provider evidence quote that is not present in the authorized excerpt", async () => {
+    const ai = new FakeAi();
+    ai.result = providerResponse({
+      claims: [{ text: "测试窗口被压缩。", citationIds: [firstHit.citationId], evidenceQuotes: ["未授权的模型补充"] }],
+      insufficientEvidence: false,
+    });
+    await expect(new CitedAnswerService(ai).answer(scope, "launch latency", [firstHit])).rejects.toMatchObject({ code: "ANSWER_UNGROUNDED", status: 422 });
+  });
+
   it("keeps malicious source instructions inside inert serialized source data", async () => {
     const ai = new FakeAi();
     ai.result = providerResponse({ claims: [], insufficientEvidence: true });
