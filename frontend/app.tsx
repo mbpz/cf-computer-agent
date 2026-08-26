@@ -15,7 +15,7 @@ import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
-import { createKnowledgeRequestController, loadRecentKnowledge, type KnowledgePageResult, type RecentKnowledgeItem } from "./lib/knowledge-data";
+import { createKnowledgeRequestController, loadRecentKnowledge, loadRecentResearch, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
@@ -207,6 +207,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
+  const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
   const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
     setState((previous) => ({
       kind: "ready",
@@ -218,6 +219,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => {
     let active = true;
     void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
+    void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -242,7 +244,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
     });
   };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} />;
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} />;
 }
 
 function SearchRoute({ locale }: { locale: LocaleRuntime }) {

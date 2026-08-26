@@ -21,6 +21,24 @@ export interface RecentKnowledgeItem {
   visitCount: number;
 }
 
+export type ResearchRunStatus = "draft" | "running" | "paused" | "completed" | "cancelled";
+export type ResearchQuotaState = "available" | "deferred_quota";
+export interface RecentResearchItem {
+  id: string;
+  knowledgeItemId: string;
+  goal: string;
+  status: ResearchRunStatus;
+  quotaState: ResearchQuotaState;
+  quotaDeferredUntil: string | null;
+  sourceScope: { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[] };
+  completion: string[];
+  steps: string[];
+  subquestions: Array<{ id: string; question: string; status: "pending" | "completed" | "blocked" }>;
+  checkpoint: { nextStep: number; completedSubquestionIds: string[] };
+  createdAt: string;
+  updatedAt: string;
+}
+
 function normalizeItem(value: unknown): KnowledgeListItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -59,6 +77,72 @@ export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: A
       visitCount: Number.isSafeInteger(item.visitCount) && (item.visitCount as number) > 0 ? item.visitCount as number : 1,
     }];
   });
+}
+
+export async function loadRecentResearch(requester: Fetcher = fetch, signal?: AbortSignal): Promise<RecentResearchItem[]> {
+  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/research-runs?limit=8", { requester, signal });
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((value) => {
+    const item = normalizeRecentResearchItem(value);
+    return item ? [item] : [];
+  });
+}
+
+function normalizeRecentResearchItem(value: unknown): RecentResearchItem | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  const status = item.status;
+  const quotaState = item.quotaState;
+  const plan = item.plan;
+  const checkpoint = item.checkpoint;
+  if (typeof item.id !== "string" || !item.id || typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
+    || typeof item.goal !== "string" || !item.goal.trim() || !isResearchRunStatus(status) || !isResearchQuotaState(quotaState)
+    || !isRecord(plan) || !isRecord(checkpoint) || typeof item.createdAt !== "string" || typeof item.updatedAt !== "string") return null;
+  const sourceScope = {
+    spaceIds: boundedStringArray(plan.spaceIds),
+    collectionIds: boundedStringArray(plan.collectionIds),
+    knowledgeItemIds: boundedStringArray(plan.knowledgeItemIds),
+  };
+  const completion = boundedStringArray(plan.completion);
+  const steps = boundedStringArray(plan.steps);
+  const subquestions = Array.isArray(plan.subquestions) ? plan.subquestions.flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.question !== "string"
+      || (entry.status !== "pending" && entry.status !== "completed" && entry.status !== "blocked")) return [];
+    return [{ id: entry.id, question: entry.question, status: entry.status as "pending" | "completed" | "blocked" }];
+  }) : [];
+  if (typeof checkpoint.nextStep !== "number" || !Number.isSafeInteger(checkpoint.nextStep) || checkpoint.nextStep < 0
+    || !Array.isArray(checkpoint.completedSubquestionIds) || !checkpoint.completedSubquestionIds.every((id) => typeof id === "string")) return null;
+  return {
+    id: item.id,
+    knowledgeItemId: item.knowledgeItemId,
+    goal: item.goal,
+    status,
+    quotaState,
+    quotaDeferredUntil: typeof item.quotaDeferredUntil === "string" ? item.quotaDeferredUntil : null,
+    sourceScope,
+    completion,
+    steps,
+    subquestions,
+    checkpoint: { nextStep: checkpoint.nextStep, completedSubquestionIds: checkpoint.completedSubquestionIds },
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function isResearchRunStatus(value: unknown): value is ResearchRunStatus {
+  return value === "draft" || value === "running" || value === "paused" || value === "completed" || value === "cancelled";
+}
+
+function isResearchQuotaState(value: unknown): value is ResearchQuotaState {
+  return value === "available" || value === "deferred_quota";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundedStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
 export function createKnowledgeRequestController(requester: Fetcher = fetch) {

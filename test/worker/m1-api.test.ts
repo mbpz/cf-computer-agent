@@ -1499,6 +1499,17 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(queryResponse.status).toBe(201);
     const pause = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/pause`, { method: "POST", body: "{}" });
     expect(pause.status).toBe(200);
+    const recent = await memberApi("contributor", "/api/knowledge/research-runs?limit=8");
+    expect(recent.status).toBe(200);
+    const recentResult = await recent.json() as { items: Array<{ id: string; status: string; plan: { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[] }; checkpoint: { nextStep: number; completedSubquestionIds: string[] } }> };
+    expect(recentResult.items.find((item) => item.id === run.id)).toEqual(expect.objectContaining({
+      status: "paused",
+      plan: expect.objectContaining({ spaceIds: [], collectionIds: [], knowledgeItemIds: [selected.knowledgeItemId] }),
+      checkpoint: { nextStep: 0, completedSubquestionIds: [] },
+    }));
+    const adminRecent = await memberApi("admin", "/api/knowledge/research-runs?limit=8");
+    expect(adminRecent.status).toBe(200);
+    expect((await adminRecent.json() as { items: Array<{ id: string }> }).items.some((item) => item.id === run.id)).toBe(false);
     const resumeForReport = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/approve`, { method: "POST", body: "{}" });
     expect(resumeForReport.status).toBe(200);
     const reportResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/report`, {

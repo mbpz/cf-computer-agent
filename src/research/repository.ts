@@ -1,9 +1,11 @@
 import { AppError } from "../http";
 import type { LibraryScope } from "../library/types";
-import type { ResearchCheckpoint, ResearchReportRepository, ResearchReportRecord, ResearchReportSaveInput, ResearchRun, ResearchRunPlan, ResearchQuery } from "../ai/research-report-service";
+import { decodeOpaqueCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
+import type { ResearchCheckpoint, ResearchReportRepository, ResearchReportRecord, ResearchReportSaveInput, ResearchRun, ResearchRunListItem, ResearchRunPage, ResearchRunPlan, ResearchQuery } from "../ai/research-report-service";
 
-type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; scope_json: string; completion_json: string; steps_json: string; subquestions_json: string; status: ResearchRun["status"]; quota_state: ResearchRun["quotaState"]; quota_deferred_until: string | null; checkpoint_json: string };
+type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; scope_json: string; completion_json: string; steps_json: string; subquestions_json: string; status: string; quota_state: string; quota_deferred_until: string | null; checkpoint_json: string; created_at: string; updated_at: string };
 type ReportRow = { id: string; research_run_id: string; knowledge_item_id: string; version: number; title: string; sections_json: string; source_snapshots_json: string; model: string; prompt_version: string; created_at: string };
+type ResearchCursor = { v: 1; updatedAt: string; id: string };
 
 export class ResearchRepository implements ResearchReportRepository {
   constructor(private readonly db: D1Database) {}
@@ -18,23 +20,35 @@ export class ResearchRepository implements ResearchReportRepository {
 
   async findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null> {
     const row = await this.db.prepare(
-      `SELECT id, owner_member_id, knowledge_item_id, goal, scope_json, completion_json, steps_json, subquestions_json, status, quota_state, quota_deferred_until, checkpoint_json
+      `SELECT id, owner_member_id, knowledge_item_id, goal, scope_json, completion_json, steps_json, subquestions_json, status, quota_state, quota_deferred_until, checkpoint_json, created_at, updated_at
        FROM research_runs WHERE id = ? AND owner_member_id = ? LIMIT 1`,
     ).bind(id, scope.memberId).first<RunRow>();
     if (!row) return null;
-    try {
-      const scope = JSON.parse(row.scope_json) as { spaceIds?: unknown; collectionIds?: unknown; knowledgeItemIds?: unknown };
-      const completion = JSON.parse(row.completion_json) as unknown;
-      const steps = JSON.parse(row.steps_json) as unknown;
-      const subquestions = JSON.parse(row.subquestions_json) as unknown;
-      const checkpoint = JSON.parse(row.checkpoint_json) as Partial<ResearchCheckpoint>;
-      if (!Array.isArray(scope.spaceIds) || !Array.isArray(scope.collectionIds) || !Array.isArray(scope.knowledgeItemIds) || !Array.isArray(completion) || !Array.isArray(steps) || !Array.isArray(subquestions)
-        || (row.quota_state !== "available" && row.quota_state !== "deferred_quota")
-        || typeof checkpoint.nextStep !== "number" || !Number.isSafeInteger(checkpoint.nextStep) || checkpoint.nextStep < 0
-        || !Array.isArray(checkpoint.completedSubquestionIds) || !checkpoint.completedSubquestionIds.every((id) => typeof id === "string")) throw new Error("invalid");
-      const checkpointValue = { nextStep: checkpoint.nextStep as number, completedSubquestionIds: checkpoint.completedSubquestionIds as string[] };
-      return { id: row.id, ownerMemberId: row.owner_member_id, knowledgeItemId: row.knowledge_item_id, goal: row.goal, plan: { spaceIds: scope.spaceIds as string[], collectionIds: scope.collectionIds as string[], knowledgeItemIds: scope.knowledgeItemIds as string[], completion: completion as string[], steps: steps as string[], subquestions: subquestions as ResearchRun["plan"]["subquestions"] }, status: row.status, quotaState: row.quota_state, quotaDeferredUntil: row.quota_deferred_until, checkpoint: checkpointValue };
-    } catch { throw new AppError("RESEARCH_RUN_CORRUPT", "Research run is unavailable", 503, true); }
+    return parseRun(row);
+  }
+
+  async listRuns(scope: LibraryScope, request: PageRequest): Promise<ResearchRunPage> {
+    const cursor = request.cursor === undefined ? undefined : decodeResearchCursor(request.cursor);
+    const cursorSql = cursor ? "AND (updated_at < ? OR (updated_at = ? AND id < ?))" : "";
+    const rows = await this.db.prepare(
+      `SELECT id, owner_member_id, knowledge_item_id, goal, scope_json, completion_json, steps_json, subquestions_json, status, quota_state, quota_deferred_until, checkpoint_json, created_at, updated_at
+       FROM research_runs
+       WHERE owner_member_id = ? ${cursorSql}
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ?`,
+    ).bind(
+      scope.memberId,
+      ...(cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.id] : []),
+      request.limit + 1,
+    ).all<RunRow>();
+    const items = rows.results.slice(0, request.limit).map((row) => toListItem(parseRun(row)));
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? {
+        nextCursor: encodeOpaqueCursor({ v: 1, updatedAt: last.updatedAt, id: last.id }),
+      } : {}),
+    };
   }
 
   async findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null> {
@@ -130,3 +144,63 @@ export class ResearchRepository implements ResearchReportRepository {
     return { id: input.id, version: input.version };
   }
 }
+
+function parseRun(row: RunRow): ResearchRun & { createdAt: string; updatedAt: string } {
+  try {
+    const scope = JSON.parse(row.scope_json) as { spaceIds?: unknown; collectionIds?: unknown; knowledgeItemIds?: unknown };
+    const completion = JSON.parse(row.completion_json) as unknown;
+    const steps = JSON.parse(row.steps_json) as unknown;
+    const subquestions = JSON.parse(row.subquestions_json) as unknown;
+    const checkpoint = JSON.parse(row.checkpoint_json) as Partial<ResearchCheckpoint>;
+    if (!Array.isArray(scope.spaceIds) || !Array.isArray(scope.collectionIds) || !Array.isArray(scope.knowledgeItemIds) || !Array.isArray(completion) || !Array.isArray(steps) || !Array.isArray(subquestions)
+      || !isResearchStatus(row.status) || !isQuotaState(row.quota_state)
+      || typeof checkpoint.nextStep !== "number" || !Number.isSafeInteger(checkpoint.nextStep) || checkpoint.nextStep < 0
+      || !Array.isArray(checkpoint.completedSubquestionIds) || !checkpoint.completedSubquestionIds.every((id) => typeof id === "string")) throw new Error("invalid");
+    return {
+      id: row.id,
+      ownerMemberId: row.owner_member_id,
+      knowledgeItemId: row.knowledge_item_id,
+      goal: row.goal,
+      plan: {
+        spaceIds: scope.spaceIds as string[],
+        collectionIds: scope.collectionIds as string[],
+        knowledgeItemIds: scope.knowledgeItemIds as string[],
+        completion: completion as string[],
+        steps: steps as string[],
+        subquestions: subquestions as ResearchRun["plan"]["subquestions"],
+      },
+      status: row.status,
+      quotaState: row.quota_state,
+      quotaDeferredUntil: row.quota_deferred_until,
+      checkpoint: { nextStep: checkpoint.nextStep, completedSubquestionIds: checkpoint.completedSubquestionIds as string[] },
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  } catch { throw new AppError("RESEARCH_RUN_CORRUPT", "Research run is unavailable", 503, true); }
+}
+
+function toListItem(run: ResearchRun & { createdAt: string; updatedAt: string }): ResearchRunListItem {
+  const { ownerMemberId: _ownerMemberId, ...item } = run;
+  return item;
+}
+
+function decodeResearchCursor(value: string): ResearchCursor {
+  try {
+    const decoded = decodeOpaqueCursor(value);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    const record = decoded as Record<string, unknown>;
+    if (Object.keys(record).length !== 3 || record.v !== 1 || typeof record.updatedAt !== "string" || !isIsoTimestamp(record.updatedAt)
+      || typeof record.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(record.id)) throw new Error();
+    return { v: 1, updatedAt: record.updatedAt, id: record.id };
+  } catch { throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400); }
+}
+
+function isResearchStatus(value: string): value is ResearchRun["status"] {
+  return value === "draft" || value === "running" || value === "paused" || value === "completed" || value === "cancelled";
+}
+
+function isQuotaState(value: string): value is ResearchRun["quotaState"] {
+  return value === "available" || value === "deferred_quota";
+}
+
+function isIsoTimestamp(value: string): boolean { return value.length === 24 && !Number.isNaN(Date.parse(value)) && value.endsWith("Z"); }

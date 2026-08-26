@@ -1,5 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { parsePageRequest, type PageRequest } from "../pagination";
 import type { CitationSource, LibraryScope } from "../library/types";
 import type { SourceSummaryCitation } from "./source-summary-service";
 
@@ -34,12 +35,14 @@ export interface ResearchQuery { id: string; researchRunId: string; subquestionI
 export interface ResearchRunPlan { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[]; completion: string[]; steps: string[]; subquestions: ResearchSubquestion[] }
 export interface ResearchCheckpoint { nextStep: number; completedSubquestionIds: string[] }
 export interface ResearchRun { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: "draft" | "running" | "paused" | "completed" | "cancelled"; quotaState: "available" | "deferred_quota"; quotaDeferredUntil: string | null; checkpoint: ResearchCheckpoint }
+export interface ResearchRunListItem { id: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: ResearchRun["status"]; quotaState: ResearchRun["quotaState"]; quotaDeferredUntil: string | null; checkpoint: ResearchCheckpoint; createdAt: string; updatedAt: string }
+export interface ResearchRunPage { items: ResearchRunListItem[]; nextCursor?: string }
 export interface ResearchReportCitation extends SourceSummaryCitation { revisionId: string; chunkId: string; publishedAt: string }
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
 export interface ResearchReportRecord extends ResearchReportSaveInput { knowledgeItemId: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; deferQuota(scope: LibraryScope, id: string, deferredUntil: string, checkpoint: ResearchCheckpoint): Promise<ResearchRun>; resumeQuota(scope: LibraryScope, id: string, now: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; listRuns?: (scope: LibraryScope, request: PageRequest) => Promise<ResearchRunPage>; findReport(scope: LibraryScope, researchRunId: string, reportId: string): Promise<ResearchReportRecord | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; deferQuota(scope: LibraryScope, id: string, deferredUntil: string, checkpoint: ResearchCheckpoint): Promise<ResearchRun>; resumeQuota(scope: LibraryScope, id: string, now: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -60,6 +63,12 @@ export class ResearchReportService {
   async approve(scope: LibraryScope, researchRunId: string): Promise<ResearchRun> {
     assertScope(scope);
     return this.repository.approveRun(scope, researchRunId);
+  }
+
+  async list(scope: LibraryScope, request?: PageRequest): Promise<ResearchRunPage> {
+    assertScope(scope);
+    if (!this.repository.listRuns) throw new AppError("RESEARCH_RUN_UNAVAILABLE", "Research runs are unavailable", 503, true);
+    return this.repository.listRuns(scope, parsePageRequest(request?.limit, request?.cursor));
   }
 
   async pause(scope: LibraryScope, researchRunId: string): Promise<ResearchRun> {
