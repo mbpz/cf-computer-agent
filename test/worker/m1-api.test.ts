@@ -117,6 +117,14 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_quiz") {
+      return {
+        response: JSON.stringify({
+          questions: context.sources.map((source) => ({ id: "q-1", prompt: "What is documented?", options: ["The selected source", "Nothing"], answerIndex: 0, explanation: "The selected source contains the evidence.", citationIds: [source.citationId] })),
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1404,6 +1412,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(result.cards[0]?.answer).toContain("selected source");
     expect(result.cards[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
     expect(JSON.stringify(result)).not.toContain("flashcardmarker source evidence");
+  });
+
+  it("generates a skippable cited quiz", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Quiz source", "quizmarker source evidence", "shared", "quiz-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=quizmarker");
+    const hit = (await search.json() as { items: Array<{ citationId: string; knowledgeItemId: string }> }).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/quiz`, {
+      method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json() as { questions: Array<{ answerIndex: number | null; explanationCitations: Array<{ citationId: string }> }> };
+    expect(result.questions[0]?.answerIndex).toBe(0);
+    expect(result.questions[0]?.explanationCitations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(JSON.stringify(result)).not.toContain("quizmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {

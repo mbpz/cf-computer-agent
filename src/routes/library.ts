@@ -20,6 +20,7 @@ import type { ComparisonService } from "../ai/comparison-service";
 import type { ResearchReportService } from "../ai/research-report-service";
 import type { MindmapService } from "../ai/mindmap-service";
 import type { FlashcardService } from "../ai/flashcard-service";
+import type { QuizService } from "../ai/quiz-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import { strictRecord, stringValue } from "./member";
 
@@ -33,6 +34,7 @@ export interface LibraryRouteServices {
   researchReports: ResearchReportService;
   mindmaps: MindmapService;
   flashcards: FlashcardService;
+  quizzes: QuizService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
 }
@@ -246,6 +248,18 @@ export async function routeLibraryApi(
     const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     return jsonResponse(await services.flashcards.generate(scope, knowledgeItemId, citations), 200, context.requestId);
+  }
+
+  const quiz = /^\/api\/knowledge\/([^/]+)\/quiz$/.exec(url.pathname);
+  if (quiz) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(quiz[1]!);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["citationIds"], "QUIZ_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("QUIZ_REQUEST_INVALID", "Request body is invalid", 400);
+    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
+    return jsonResponse(await services.quizzes.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }
 
   const related = /^\/api\/knowledge\/([^/]+)\/related$/.exec(url.pathname);
