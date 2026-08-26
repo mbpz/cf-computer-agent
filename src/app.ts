@@ -47,6 +47,7 @@ import { SavedViewsService } from "./saved-views/service";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
+import { FlashcardService } from "./ai/flashcard-service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -160,6 +161,7 @@ function createRequestServices(
     comparisons: new ComparisonService(ai),
     researchReports: new ResearchReportService(new ResearchRepository(env.DB), ai),
     mindmaps: new MindmapService(ai),
+    flashcards: new FlashcardService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),

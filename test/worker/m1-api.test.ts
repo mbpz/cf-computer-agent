@@ -109,6 +109,14 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_flashcards") {
+      return {
+        response: JSON.stringify({
+          cards: context.sources.map((source) => ({ question: "What is documented?", answer: "The selected source is documented.", citationIds: [source.citationId] })),
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1378,6 +1386,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
     const result = await response.json() as { nodes: Array<{ citations: Array<{ citationId: string }> }> };
     expect(result.nodes[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
     expect(JSON.stringify(result)).not.toContain("mindmapmarker source evidence");
+  });
+
+  it("generates learning cards with cited answers", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Flashcard source", "flashcardmarker source evidence", "shared", "flashcard-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=flashcardmarker");
+    const hit = (await search.json() as { items: Array<{ citationId: string; knowledgeItemId: string }> }).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/flashcards`, {
+      method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json() as { cards: Array<{ answer: string; citations: Array<{ citationId: string }> }> };
+    expect(result.cards[0]?.answer).toContain("selected source");
+    expect(result.cards[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(JSON.stringify(result)).not.toContain("flashcardmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
