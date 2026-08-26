@@ -45,7 +45,7 @@
 - [x] `ING-002` P0/M1 完全重复检测；状态：L/W；验收：同 hash 返回既有候选，不静默发布。
 - [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；状态：deferred（免费层边界）；验收：启用付费 R2 档位时必须是 Standard/private、无公开对象 URL。当前生产明确不声明 `ORIGINALS`/`r2_buckets`，因此不宣称 R2 能力；历史对象接口仍 fail-closed，文本录入不受影响。证据：`wrangler.jsonc`、`src/env.d.ts`、`src/assets/service.ts`、`docs/operations/m2-asset-ingestion.md`。
 - [x] `ING-004` P0/M2 暂存对象键；状态：L/W；验收：staging key 只使用服务端生成 asset ID，不含邮箱/原文件名，响应不返回公开 URL。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`。
-- [ ] `ING-005` P0/M2 原件对象键；验收：SourceVersion 不可变映射。
+- [x] `ING-005` P0/M2 原件对象键；状态：L；验收：SourceVersion 不可变映射。证据：`src/assets/object-key.ts`、`test/unit/original-object-key.test.ts`；命令：`rtk npx vitest run test/unit/original-object-key.test.ts && rtk npm run typecheck`。原件键只由 SourceVersion ID 推导，拒绝路径穿越、staging 键和身份不匹配；当前无 R2 binding，未宣称远程对象写入。
 - [x] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；状态：L/W；验收：扩展名/MIME 在写入前校验，领取解析前再校验 PDF/图片/Office/OLE/ZIP magic，冲突进入 415 或 `ASSET_CONTENT_INVALID` terminal。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`、`test/unit/m2-format-matrix.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/unit/m2-format-matrix.test.ts test/worker/m2-assets.test.ts`。
 - [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；验收：越权和过期拒绝。
 - [ ] `ING-008` P0/M2 完成接口 HEAD 校验；验收：对象大小、类型和存在性一致后才建 Asset。
