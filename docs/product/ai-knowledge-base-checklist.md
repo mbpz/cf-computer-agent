@@ -157,7 +157,7 @@
 - [x] `SRCH-005` P0/M1 Space 过滤；状态：L/W；验收：无权限 Space 不进入候选。
 - [x] `SRCH-006` P0/M1 Collection 过滤；状态：L/W；验收：父子范围规则明确。
 - [x] `SRCH-007` P0/M1 Tag 过滤；验收：AND/OR 语义固定、有界。证据：1..8 Tag、显式 AND/OR、active same-Space fail-closed、cursor drift 和真实 D1 plan 测试见 `test/unit/library-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`。
-- [ ] `SRCH-008` P1/M4 类型、作者和时间过滤；验收：使用索引、无全表扫描。
+- [x] `SRCH-008` P1/M4 类型、作者和时间过滤；状态：L/W；验收：使用索引、无全表扫描。证据：`src/library/types.ts`、`src/library/service.ts`、`src/library/repository.ts`、`src/routes/library.ts`、`test/unit/library-service.test.ts`；命令：`rtk npx vitest run test/unit/library-service.test.ts -t "bounded type" && rtk npm run typecheck`。kind 通过 source/source_version EXISTS，author 绑定 published_by，时间使用 published_at 范围；游标 scope 包含全部过滤器。
 - [x] `SRCH-009` P0/M1 visibility 过滤；状态：L/W；验收：contributor 永不返回 admin_only。
 - [x] `SRCH-010` P0/M1 keyset pagination；状态：L/W；验收：重复排序值无漏项/重复。
 - [ ] `SRCH-011` P1/M4 自然语言 query rewrite；验收：失败或无额度回退原始 query。

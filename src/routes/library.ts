@@ -61,7 +61,7 @@ export async function routeLibraryApi(
 
   if (url.pathname === "/api/knowledge") {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    const query = queryRecord(url, ["limit", "cursor", "spaceId", "collectionId", "tagId"]);
+    const query = queryRecord(url, ["limit", "cursor", "spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"]);
     return jsonResponse(await services.library.list(scope, pageRequest(query)), 200, context.requestId);
   }
 
@@ -518,7 +518,7 @@ function invalidChatRequest(): AppError {
 }
 
 function searchRequest(url: URL): SearchRequest {
-  const allowed = ["q", "limit", "cursor", "spaceId", "collectionId", "tagId", "tagMode"];
+  const allowed = ["q", "limit", "cursor", "spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"];
   for (const key of url.searchParams.keys()) {
     if (!allowed.includes(key) || (key !== "tagId" && url.searchParams.getAll(key).length !== 1)) {
       throw invalidRequest();
@@ -529,7 +529,7 @@ function searchRequest(url: URL): SearchRequest {
   if ((tagIds.length === 0) !== (tagMode === null)) throw invalidRequest();
   if (tagMode !== null && tagMode !== "and" && tagMode !== "or") throw invalidRequest();
   const query: Record<string, string | undefined> = Object.create(null) as Record<string, string | undefined>;
-  for (const key of ["q", "limit", "cursor", "spaceId", "collectionId"] as const) {
+  for (const key of ["q", "limit", "cursor", "spaceId", "collectionId", "kind", "authorId", "publishedFrom", "publishedTo"] as const) {
     query[key] = url.searchParams.get(key) ?? undefined;
   }
   const tagFilter: Pick<SearchRequest, "tagIds" | "tagMode"> = tagMode === null
@@ -563,6 +563,10 @@ function pageRequest(query: Record<string, string | undefined>) {
     ...(query.spaceId === undefined ? {} : { spaceId: query.spaceId }),
     ...(query.collectionId === undefined ? {} : { collectionId: query.collectionId }),
     ...(query.tagId === undefined ? {} : { tagId: query.tagId }),
+    ...(query.kind === undefined ? {} : { kind: query.kind as "text" | "markdown" | "code" }),
+    ...(query.authorId === undefined ? {} : { authorId: query.authorId }),
+    ...(query.publishedFrom === undefined ? {} : { publishedFrom: query.publishedFrom }),
+    ...(query.publishedTo === undefined ? {} : { publishedTo: query.publishedTo }),
   };
 }
 

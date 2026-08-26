@@ -1033,6 +1033,28 @@ function filterSql(filters: LibraryFilters, itemAlias: string, revisionAlias: st
     )`);
     bindings.push(filters.tagId);
   }
+  if (filters.kind !== undefined) {
+    clauses.push(`EXISTS (
+      SELECT 1 FROM source_versions selected_source_version
+      JOIN sources selected_source
+        ON selected_source.id = selected_source_version.source_id
+        AND selected_source.kind = ?
+      WHERE selected_source_version.id = ${revisionAlias}.source_version_id
+    )`);
+    bindings.push(filters.kind);
+  }
+  if (filters.authorId !== undefined) {
+    clauses.push(`${revisionAlias}.published_by = ?`);
+    bindings.push(filters.authorId);
+  }
+  if (filters.publishedFrom !== undefined) {
+    clauses.push(`${revisionAlias}.published_at >= ?`);
+    bindings.push(filters.publishedFrom);
+  }
+  if (filters.publishedTo !== undefined) {
+    clauses.push(`${revisionAlias}.published_at <= ?`);
+    bindings.push(filters.publishedTo);
+  }
   return {
     sql: clauses.length === 0 ? "" : `AND ${clauses.join(" AND ")}`,
     bindings,

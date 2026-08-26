@@ -205,6 +205,19 @@ describe("LibraryService", () => {
     expect(requests).toHaveLength(1);
   });
 
+  it("normalizes bounded type, author and publication-time filters for list", async () => {
+    const requests: RepositoryKnowledgePageRequest[] = [];
+    const repository = repositoryFixture({
+      async list(_scope, request) { requests.push(request); return emptyKnowledgePage; },
+    });
+    await new LibraryService(repository, noContentReader).list(contributor, {
+      kind: "code", authorId: "member-2", publishedFrom: "2026-01-01T00:00:00.000Z", publishedTo: "2026-12-31T23:59:59.999Z",
+    });
+    expect(requests[0]).toMatchObject({ kind: "code", authorId: "member-2", publishedFrom: "2026-01-01T00:00:00.000Z", publishedTo: "2026-12-31T23:59:59.999Z" });
+    await expect(new LibraryService(repository, noContentReader).list(contributor, { kind: "binary" as never })).rejects.toMatchObject({ status: 400 });
+    await expect(new LibraryService(repository, noContentReader).list(contributor, { publishedFrom: "2026-02-01T00:00:00.000Z", publishedTo: "2026-01-01T00:00:00.000Z" })).rejects.toMatchObject({ status: 400 });
+  });
+
   it("quotes normalized Unicode/code terms so FTS operators remain inert", () => {
     expect(normalizeSearchQuery("  ＧｅｔUser_ID  权限治理  ")).toEqual({
       normalizedQuery: "GetUser_ID 权限治理",

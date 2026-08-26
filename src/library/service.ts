@@ -457,7 +457,7 @@ export function decodeCitationId(citationId: string): CitationLookup {
 
 function normalizeFilters(request: KnowledgePageRequest): LibraryFilters {
   const filters: LibraryFilters = {};
-  for (const key of ["spaceId", "collectionId", "tagId"] as const) {
+  for (const key of ["spaceId", "collectionId", "tagId", "authorId"] as const) {
     const value = request[key];
     if (value === undefined) continue;
     if (typeof value !== "string" || !FILTER_ID.test(value)) {
@@ -465,11 +465,32 @@ function normalizeFilters(request: KnowledgePageRequest): LibraryFilters {
     }
     filters[key] = value;
   }
+  if (request.kind !== undefined) {
+    if (request.kind !== "text" && request.kind !== "markdown" && request.kind !== "code") {
+      throw new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
+    }
+    filters.kind = request.kind;
+  }
+  for (const key of ["publishedFrom", "publishedTo"] as const) {
+    const value = request[key];
+    if (value === undefined) continue;
+    if (!isCanonicalTimestamp(value)) throw new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
+    filters[key] = value;
+  }
+  if (filters.publishedFrom !== undefined && filters.publishedTo !== undefined
+    && filters.publishedFrom > filters.publishedTo) {
+    throw new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
+  }
   if ((filters.collectionId !== undefined || filters.tagId !== undefined)
     && filters.spaceId === undefined) {
     throw new AppError("LIBRARY_REQUEST_INVALID", "Collection and tag filters require a Space", 400);
   }
   return filters;
+}
+
+function isCanonicalTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 async function cursorKey(

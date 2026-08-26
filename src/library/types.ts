@@ -24,6 +24,10 @@ export interface LibraryFilters {
   spaceId?: string;
   collectionId?: string;
   tagId?: string;
+  kind?: "text" | "markdown" | "code";
+  authorId?: string;
+  publishedFrom?: string;
+  publishedTo?: string;
 }
 
 export interface KnowledgePageRequest extends LibraryFilters {
