@@ -2,7 +2,7 @@ import { requireCapability } from "../authorization/policy";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import { APP_CONFIG } from "../config";
 import type { Principal } from "../identity/principal";
-import type { AgentMessagePage, AgentMessageRecord, AgentSession, AgentSessionRecord, AgentSessionResult } from "../agent/session-do";
+import type { AgentMessagePage, AgentMessageRecord, AgentSession, AgentSessionRecord, AgentSessionResult, AgentTurnRecord } from "../agent/session-do";
 
 const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
 
@@ -59,7 +59,8 @@ export async function routeAgentApi(
     const stub = sessionStub(namespace, id);
     const body = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
     if (!isQuestionBody(body)) throw new AppError("AGENT_STREAM_REQUEST_INVALID", "Agent stream request is invalid", 400);
-    throwIfAgentError(await stub.appendMessage(principal.memberId, { role: "user", content: body.question }));
+    const started = await stub.startTurn(principal.memberId, body.question);
+    throwIfAgentError(started);
     let upstream: ReadableStream;
     try {
       const candidate = await ai.run(APP_CONFIG.model, {
@@ -73,15 +74,25 @@ export async function routeAgentApi(
     } catch {
       throw new AppError("AGENT_STREAM_UNAVAILABLE", "Agent stream is temporarily unavailable", 503, true);
     }
-    return new Response(withPersistedAssistant(upstream, stub, principal.memberId), {
+    return new Response(withPersistedAssistant(upstream, stub, principal.memberId, started.value.turnId), {
       status: 200,
       headers: {
         "cache-control": "no-store",
         "content-type": "text/event-stream; charset=utf-8",
         "x-content-type-options": "nosniff",
         "x-request-id": context.requestId,
+        "x-agent-turn-id": started.value.turnId,
       },
     });
+  }
+
+  const turnPath = /^\/api\/agent\/sessions\/([^/]+)\/turns\/([^/]+)$/u.exec(url.pathname);
+  if (turnPath) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const stub = sessionStub(namespace, decodePathId(turnPath[1]!));
+    const result = await stub.getTurn(principal.memberId, decodePathId(turnPath[2]!));
+    return jsonAgentResult(result, 200, context.requestId, "turn");
   }
 
   const id = decodePathId(url.pathname.slice("/api/agent/sessions/".length));
@@ -92,7 +103,7 @@ export async function routeAgentApi(
   return jsonAgentResult(await stub.read(principal.memberId), 200, context.requestId);
 }
 
-function jsonAgentResult<T extends AgentSessionRecord | AgentMessageRecord | AgentMessagePage>(
+function jsonAgentResult<T extends AgentSessionRecord | AgentMessageRecord | AgentMessagePage | AgentTurnRecord>(
   result: AgentSessionResult<T>,
   successStatus: number,
   requestId: string,
@@ -137,6 +148,7 @@ function withPersistedAssistant(
   upstream: ReadableStream,
   stub: DurableObjectStub<AgentSession>,
   memberId: string,
+  turnId: string,
 ): ReadableStream<Uint8Array> {
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let disconnected = false;
@@ -155,11 +167,12 @@ function withPersistedAssistant(
           }
         }
         if (disconnected) {
+          await stub.terminateTurn(memberId, turnId);
           controller.close();
           return;
         }
         const answer = extractStreamAnswer(chunks);
-        if (answer) throwIfAgentError(await stub.appendMessage(memberId, { role: "assistant", content: answer }));
+        if (answer) throwIfAgentError(await stub.completeTurn(memberId, turnId, answer));
         controller.close();
       } catch (error) {
         controller.error(error);

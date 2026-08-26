@@ -27,9 +27,19 @@ export interface AgentMessagePage {
   truncated: boolean;
 }
 
+export type AgentTurnStatus = "active" | "completed" | "terminated";
+
+export interface AgentTurnRecord {
+  turnId: string;
+  question: string;
+  status: AgentTurnStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AgentSessionResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: { code: "AGENT_SESSION_INVALID" | "AGENT_SESSION_NOT_FOUND"; status: 400 | 404; retryable: false } };
+  | { ok: false; error: { code: "AGENT_SESSION_INVALID" | "AGENT_SESSION_NOT_FOUND" | "AGENT_TURN_TERMINATED"; status: 400 | 404 | 409; retryable: false } };
 
 interface AgentSessionRow {
   [key: string]: string;
@@ -45,6 +55,16 @@ interface AgentMessageRow {
   role: AgentMessageRole;
   content: string;
   created_at: string;
+}
+
+interface AgentTurnRow {
+  [key: string]: string;
+  turn_id: string;
+  member_id: string;
+  question: string;
+  status: AgentTurnStatus;
+  created_at: string;
+  updated_at: string;
 }
 
 const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
@@ -70,6 +90,17 @@ export class AgentSession extends DurableObject<Env> {
       )
     `);
     this.ctx.storage.sql.exec("CREATE INDEX IF NOT EXISTS agent_session_messages_page ON agent_session_messages(created_at DESC, id DESC)");
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS agent_session_turns (
+        turn_id TEXT PRIMARY KEY,
+        member_id TEXT NOT NULL,
+        question TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'terminated')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+    this.ctx.storage.sql.exec("CREATE UNIQUE INDEX IF NOT EXISTS agent_session_active_turn ON agent_session_turns(member_id) WHERE status = 'active'");
   }
 
   async create(input: unknown): Promise<AgentSessionResult<AgentSessionRecord>> {
@@ -128,9 +159,81 @@ export class AgentSession extends DurableObject<Env> {
     });
   }
 
+  async startTurn(memberId: string, question: string): Promise<AgentSessionResult<AgentTurnRecord>> {
+    if (!MEMBER_ID.test(memberId) || !validContent(question, 4_000)) return invalid();
+    const session = this.row();
+    if (!session || session.member_id !== memberId) return notFound();
+    const existing = this.ctx.storage.sql.exec<AgentTurnRow>(
+      "SELECT turn_id, member_id, question, status, created_at, updated_at FROM agent_session_turns WHERE member_id = ? AND status = 'active' LIMIT 1",
+      memberId,
+    ).toArray()[0];
+    if (existing) return success(toTurnRecord(existing));
+    const now = new Date().toISOString();
+    const turnId = crypto.randomUUID();
+    this.ctx.storage.sql.exec(
+      "INSERT INTO agent_session_turns (turn_id, member_id, question, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
+      turnId,
+      memberId,
+      question.trim(),
+      now,
+      now,
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT INTO agent_session_messages (id, role, content, created_at) VALUES (?, 'user', ?, ?)",
+      crypto.randomUUID(),
+      question.trim(),
+      now,
+    );
+    return success({ turnId, question: question.trim(), status: "active", createdAt: now, updatedAt: now });
+  }
+
+  async terminateTurn(memberId: string, turnId: string): Promise<AgentSessionResult<AgentTurnRecord>> {
+    const current = this.turnFor(memberId, turnId);
+    if (!current) return notFound();
+    if (current.status === "active") {
+      const now = new Date().toISOString();
+      this.ctx.storage.sql.exec("UPDATE agent_session_turns SET status = 'terminated', updated_at = ? WHERE turn_id = ? AND member_id = ? AND status = 'active'", now, turnId, memberId);
+      return success({ ...toTurnRecord(current), status: "terminated", updatedAt: now });
+    }
+    return success(toTurnRecord(current));
+  }
+
+  async getTurn(memberId: string, turnId: string): Promise<AgentSessionResult<AgentTurnRecord>> {
+    const current = this.turnFor(memberId, turnId);
+    return current ? success(toTurnRecord(current)) : notFound();
+  }
+
+  async completeTurn(memberId: string, turnId: string, answer: string): Promise<AgentSessionResult<AgentTurnRecord>> {
+    if (!validContent(answer, 16_384)) return invalid();
+    const current = this.turnFor(memberId, turnId);
+    if (!current) return notFound();
+    if (current.status === "terminated") return terminated();
+    if (current.status === "completed") return success(toTurnRecord(current));
+    const now = new Date().toISOString();
+    this.ctx.storage.sql.exec(
+      "INSERT INTO agent_session_messages (id, role, content, created_at) VALUES (?, 'assistant', ?, ?)",
+      crypto.randomUUID(),
+      answer.trim(),
+      now,
+    );
+    this.ctx.storage.sql.exec("UPDATE agent_session_turns SET status = 'completed', updated_at = ? WHERE turn_id = ? AND member_id = ? AND status = 'active'", now, turnId, memberId);
+    return success({ ...toTurnRecord(current), status: "completed", updatedAt: now });
+  }
+
   private row(): AgentSessionRow | undefined {
     return this.ctx.storage.sql.exec<AgentSessionRow>(
       "SELECT session_id, member_id, created_at, last_seen_at FROM agent_session LIMIT 1",
+    ).toArray()[0];
+  }
+
+  private turnFor(memberId: string, turnId: string): AgentTurnRow | undefined {
+    if (!MEMBER_ID.test(memberId) || !/^[A-Za-z0-9-]{16,128}$/u.test(turnId)) return undefined;
+    const session = this.row();
+    if (!session || session.member_id !== memberId) return undefined;
+    return this.ctx.storage.sql.exec<AgentTurnRow>(
+      "SELECT turn_id, member_id, question, status, created_at, updated_at FROM agent_session_turns WHERE turn_id = ? AND member_id = ? LIMIT 1",
+      turnId,
+      memberId,
     ).toArray()[0];
   }
 }
@@ -151,15 +254,17 @@ function isMessageInput(value: unknown): value is { role: AgentMessageRole; cont
   const input = value as Record<string, unknown>;
   return (input.role === "user" || input.role === "assistant")
     && typeof input.content === "string"
-    && input.content.trim().length > 0
-    && input.content.length <= 16_384
-    && !/[\p{Cc}\p{Cf}]/u.test(input.content);
+    && validContent(input.content, 16_384);
 }
 
 function isPageInput(value: unknown): value is { limit?: number } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const limit = (value as Record<string, unknown>).limit;
   return limit === undefined || (typeof limit === "number" && Number.isSafeInteger(limit) && limit >= 1 && limit <= 50);
+}
+
+function validContent(value: string, max: number): boolean {
+  return value.trim().length > 0 && value.length <= max && !/[\p{Cc}\p{Cf}]/u.test(value);
 }
 
 function success<T>(value: T): AgentSessionResult<T> {
@@ -174,6 +279,14 @@ function notFound(): AgentSessionResult<never> {
   return { ok: false, error: { code: "AGENT_SESSION_NOT_FOUND", status: 404, retryable: false } };
 }
 
+function terminated(): AgentSessionResult<never> {
+  return { ok: false, error: { code: "AGENT_TURN_TERMINATED", status: 409, retryable: false } };
+}
+
 function toRecord(row: AgentSessionRow): AgentSessionRecord {
   return { id: row.session_id, memberId: row.member_id, createdAt: row.created_at, lastSeenAt: row.last_seen_at };
+}
+
+function toTurnRecord(row: AgentTurnRow): AgentTurnRecord {
+  return { turnId: row.turn_id, question: row.question, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at };
 }

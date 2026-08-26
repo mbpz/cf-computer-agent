@@ -198,6 +198,8 @@ describe("AgentSession Durable Object", () => {
       headers: { cookie: `__Host-memory-session=${session.token}`, origin: APP_CONFIG.canonicalOrigin, "content-type": "application/json" },
       body: JSON.stringify({ question: "disconnect question" }),
     }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, streamContext);
+    const turnId = response.headers.get("x-agent-turn-id");
+    expect(turnId).toMatch(/^[A-Za-z0-9-]{16,128}$/u);
     const reader = response.body!.getReader();
     await reader.read();
     await reader.cancel("disconnect");
@@ -206,5 +208,25 @@ describe("AgentSession Durable Object", () => {
 
     const listed = await env.AGENT_SESSIONS.get(env.AGENT_SESSIONS.idFromString(body.session.id)).listMessages("agent-member", { limit: 10 });
     expect(listed).toMatchObject({ ok: true, value: { items: [{ role: "user", content: "disconnect question" }], truncated: false } });
+    await expect(env.AGENT_SESSIONS.get(env.AGENT_SESSIONS.idFromString(body.session.id)).getTurn("agent-member", turnId!)).resolves.toMatchObject({ ok: true, value: { status: "terminated" } });
+  });
+
+  it("records a terminated turn so reconnects cannot duplicate an assistant write", async () => {
+    const id = crypto.randomUUID();
+    const stub = env.AGENT_SESSIONS.getByName(`agent-turn-test-${id}`);
+    await stub.create({ sessionId: id, memberId: "member-a", now: "2026-08-26T00:00:00.000Z" });
+    const started = await stub.startTurn("member-a", "turn question");
+    expect(started).toMatchObject({ ok: true, value: { status: "active", question: "turn question" } });
+    const turnId = (started as { ok: true; value: { turnId: string } }).value.turnId;
+    await expect(stub.terminateTurn("member-a", turnId)).resolves.toMatchObject({ ok: true, value: { status: "terminated" } });
+    await expect(stub.getTurn("member-a", turnId)).resolves.toMatchObject({ ok: true, value: { status: "terminated" } });
+    await expect(stub.completeTurn("member-a", turnId, "late answer")).resolves.toEqual({
+      ok: false,
+      error: { code: "AGENT_TURN_TERMINATED", status: 409, retryable: false },
+    });
+    await expect(stub.listMessages("member-a", { limit: 10 })).resolves.toMatchObject({
+      ok: true,
+      value: { items: [{ role: "user", content: "turn question" }], truncated: false },
+    });
   });
 });
