@@ -68,6 +68,15 @@ export async function updateAgentConversationScope(conversationId: string, scope
   });
 }
 
+export async function cancelAgentConversation(conversationId: string, requester: Fetcher = fetch): Promise<boolean> {
+  const data = await apiFetch<{ cancelled?: unknown }>(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/cancel`, {
+    requester,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  return data.cancelled === true;
+}
+
 function normalizeCitation(value: unknown): AgentCitation | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -98,6 +107,9 @@ export function createAgentRequestController(requester: Fetcher = fetch) {
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },
-    cancel() { owner.invalidate(); active?.abort(); active = null; },
+    cancel(conversationId?: string) {
+      if (conversationId) void cancelAgentConversation(conversationId, requester).catch(() => undefined);
+      owner.invalidate(); active?.abort(); active = null;
+    },
   };
 }

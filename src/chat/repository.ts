@@ -37,6 +37,31 @@ export class ChatRepository implements ChatConversationRepository {
     return this.find(ownerMemberId, conversationId);
   }
 
+  async startTurn(ownerMemberId: string, conversationId: string, turnId: string, now: string): Promise<string | "busy" | null> {
+    const result = await this.db.prepare(
+      "UPDATE chat_conversations SET active_turn_id = ?, cancel_requested_at = NULL, updated_at = ? WHERE id = ? AND owner_member_id = ? AND active_turn_id IS NULL",
+    ).bind(turnId, now, conversationId, ownerMemberId).run();
+    if (result.meta.changes) return turnId;
+    const existing = await this.db.prepare("SELECT active_turn_id FROM chat_conversations WHERE id = ? AND owner_member_id = ? LIMIT 1").bind(conversationId, ownerMemberId).first<{ active_turn_id: string | null }>();
+    return existing ? "busy" : null;
+  }
+
+  async requestCancel(ownerMemberId: string, conversationId: string, now: string): Promise<boolean> {
+    const result = await this.db.prepare(
+      "UPDATE chat_conversations SET cancel_requested_at = ? WHERE id = ? AND owner_member_id = ? AND active_turn_id IS NOT NULL AND cancel_requested_at IS NULL",
+    ).bind(now, conversationId, ownerMemberId).run();
+    return result.meta.changes > 0;
+  }
+
+  async isCancelled(ownerMemberId: string, conversationId: string, turnId: string): Promise<boolean> {
+    const row = await this.db.prepare("SELECT active_turn_id, cancel_requested_at FROM chat_conversations WHERE id = ? AND owner_member_id = ? LIMIT 1").bind(conversationId, ownerMemberId).first<{ active_turn_id: string | null; cancel_requested_at: string | null }>();
+    return !row || row.active_turn_id !== turnId || row.cancel_requested_at !== null;
+  }
+
+  async finishTurn(ownerMemberId: string, conversationId: string, turnId: string, now: string): Promise<void> {
+    await this.db.prepare("UPDATE chat_conversations SET active_turn_id = NULL, cancel_requested_at = NULL, updated_at = ? WHERE id = ? AND owner_member_id = ? AND active_turn_id = ?").bind(now, conversationId, ownerMemberId, turnId).run();
+  }
+
   async listMessages(ownerMemberId: string, conversationId: string): Promise<ChatHistoryMessage[]> {
     const rows = await this.db.prepare(
       `SELECT message.role, message.question, message.answer, message.citation_ids_json
@@ -57,15 +82,19 @@ export class ChatRepository implements ChatConversationRepository {
     }).slice(-8);
   }
 
-  async append(input: { ownerMemberId: string; conversationId: string; question: string; answer: string; citationIds: string[]; now: string }): Promise<void> {
+  async append(input: { ownerMemberId: string; conversationId: string; turnId?: string; question: string; answer: string; citationIds: string[]; now: string }): Promise<void> {
+    const turnGuard = input.turnId === undefined ? "" : " AND conversation.active_turn_id = ? AND conversation.cancel_requested_at IS NULL";
     const result = await this.db.prepare(
       `INSERT INTO chat_messages (id, conversation_id, sequence, role, question, answer, citation_ids_json, created_at)
        SELECT ?, conversation.id, COALESCE((SELECT MAX(sequence) FROM chat_messages WHERE conversation_id = conversation.id), 0) + 1,
               'turn', ?, ?, ?, ?
        FROM chat_conversations AS conversation
-       WHERE conversation.id = ? AND conversation.owner_member_id = ?`,
-    ).bind(crypto.randomUUID(), input.question, input.answer, JSON.stringify(input.citationIds), input.now, input.conversationId, input.ownerMemberId).run();
-    if (!result.meta.changes) throw new AppError("CHAT_CONVERSATION_NOT_FOUND", "Chat conversation was not found", 404);
+       WHERE conversation.id = ? AND conversation.owner_member_id = ?${turnGuard}`,
+    ).bind(
+      crypto.randomUUID(), input.question, input.answer, JSON.stringify(input.citationIds), input.now, input.conversationId, input.ownerMemberId,
+      ...(input.turnId === undefined ? [] : [input.turnId]),
+    ).run();
+    if (!result.meta.changes) throw new AppError(input.turnId === undefined ? "CHAT_CONVERSATION_NOT_FOUND" : "CHAT_CANCELLED", input.turnId === undefined ? "Chat conversation was not found" : "Chat generation was cancelled", input.turnId === undefined ? 404 : 409);
     await this.db.prepare("UPDATE chat_conversations SET updated_at = ? WHERE id = ? AND owner_member_id = ?").bind(input.now, input.conversationId, input.ownerMemberId).run();
   }
 }

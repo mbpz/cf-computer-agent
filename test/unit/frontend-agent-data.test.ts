@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { askAgent, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
 
 describe("frontend agent data", () => {
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
@@ -38,6 +38,15 @@ describe("frontend agent data", () => {
       return new Response(JSON.stringify({ conversation: { id: "conversation-1" } }), { status: 200 });
     });
     await expect(updateAgentConversationScope("conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] }, requester)).resolves.toBeUndefined();
+  });
+
+  it("requests server-side cancellation for an active conversation", async () => {
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/knowledge/chat/conversations/conversation-1/cancel");
+      expect(init?.method).toBe("POST");
+      return new Response(JSON.stringify({ cancelled: true }), { status: 202 });
+    });
+    await expect(cancelAgentConversation("conversation-1", requester)).resolves.toBe(true);
   });
 
   it("binds cited source context from the server source set without exposing raw content", async () => {

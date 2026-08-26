@@ -331,7 +331,7 @@ function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const conversationIdRef = useRef<string | undefined>(undefined);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
-  useEffect(() => () => { controllerRef.current?.cancel(); }, []);
+  useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
   const submit = (nextQuestion = question) => {
     const normalized = nextQuestion.trim();
     if (!normalized || !controllerRef.current) return;
@@ -350,7 +350,7 @@ function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string
       }
     });
   };
-  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onRetry={() => submit(lastQuestion)} />;
+  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={() => controllerRef.current?.cancel(conversationIdRef.current)} onRetry={() => submit(lastQuestion)} />;
 }
 
 function agentScopeFromSearch(search: string): AgentScope {

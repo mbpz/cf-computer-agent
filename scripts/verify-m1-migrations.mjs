@@ -21,6 +21,7 @@ const migrations = [
   ["0017_m6_research_queries.sql", "67a6981a008100216b79a0070b5819d63e9578bf00f52c88f33f2287427a32b6"],
   ["0018_m6_research_quota.sql", "6401a2b1500016f1a3316ea0c96d8d777aa562125401a593961d425aa70bc64d"],
   ["0019_m5_chat_conversations.sql", "4930029c6987c648674edc6f977d1792e8ed967468afe0057a92d185c33fad5b"],
+  ["0020_m5_chat_cancel.sql", "6097ccbf52cc3bf7e7ca85a84d98612c723d2ac4c77d897239f55e79ee262468"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

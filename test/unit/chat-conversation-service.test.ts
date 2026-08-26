@@ -34,6 +34,12 @@ class FakeRepository implements ChatConversationRepository {
     this.conversations.set(conversationId, updated);
     return updated;
   }
+  active = new Set<string>();
+  cancelled = new Set<string>();
+  async startTurn(ownerMemberId: string, conversationId: string, turnId: string) { if (!(await this.find(ownerMemberId, conversationId))) return null; this.active.add(`${conversationId}:${turnId}`); return turnId; }
+  async requestCancel(ownerMemberId: string, conversationId: string) { if (![...this.active].some((value) => value.startsWith(`${conversationId}:`))) return false; for (const value of this.active) if (value.startsWith(`${conversationId}:`)) this.cancelled.add(value); return true; }
+  async isCancelled(ownerMemberId: string, conversationId: string, turnId: string) { return this.cancelled.has(`${conversationId}:${turnId}`); }
+  async finishTurn(ownerMemberId: string, conversationId: string, turnId: string) { this.active.delete(`${conversationId}:${turnId}`); this.cancelled.delete(`${conversationId}:${turnId}`); }
 }
 
 describe("ChatConversationService", () => {
@@ -63,5 +69,14 @@ describe("ChatConversationService", () => {
     await service.ensure(member, undefined, scope);
     await expect(service.updateScope(member, "conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] })).resolves.toMatchObject({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
     await expect(service.ensure(member, "conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] })).resolves.toMatchObject({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
+  });
+
+  it("marks an active turn cancelled and prevents its completion", async () => {
+    const repository = new FakeRepository();
+    const service = new ChatConversationService(repository, { now: () => "2026-08-26T00:00:00.000Z", id: () => "conversation-1" });
+    await service.ensure(member, undefined, scope);
+    await expect(service.startTurn(member, "conversation-1", "turn-1")).resolves.toBe("turn-1");
+    await expect(service.cancel(member, "conversation-1")).resolves.toBe(true);
+    await expect(service.isCancelled(member, "conversation-1", "turn-1")).resolves.toBe(true);
   });
 });

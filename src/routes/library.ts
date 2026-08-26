@@ -99,6 +99,14 @@ export async function routeLibraryApi(
     return jsonResponse({ conversation: updated }, 200, context.requestId);
   }
 
+  const conversationCancel = /^\/api\/knowledge\/chat\/conversations\/([^/]+)\/cancel$/.exec(url.pathname);
+  if (conversationCancel) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const cancelled = await services.chatConversations.cancel(scope, decodePathId(conversationCancel[1]!));
+    return jsonResponse({ cancelled }, 202, context.requestId);
+  }
+
   if (url.pathname === "/api/knowledge/chat") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
@@ -113,11 +121,18 @@ export async function routeLibraryApi(
     const conversationId = input.conversationId === undefined ? undefined : stringValue(input.conversationId);
     if (conversationId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) throw invalidChatRequest();
     const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
-    const history = await services.chatConversations.history(scope, conversation.id);
-    const hits = await services.library.search(scope, { query: question, limit: 8 }, chatScope);
-    const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
-    await services.chatConversations.appendTurn(scope, conversation.id, { question, answer: answer.answer, citationIds: answer.citations });
-    return jsonResponse({ ...answer, conversationId: conversation.id }, 200, context.requestId);
+    const turnId = crypto.randomUUID();
+    await services.chatConversations.startTurn(scope, conversation.id, turnId);
+    try {
+      const history = await services.chatConversations.history(scope, conversation.id);
+      const hits = await services.library.search(scope, { query: question, limit: 8 }, chatScope);
+      const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
+      if (await services.chatConversations.isCancelled(scope, conversation.id, turnId)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
+      await services.chatConversations.appendTurn(scope, conversation.id, { turnId, question, answer: answer.answer, citationIds: answer.citations });
+      return jsonResponse({ ...answer, conversationId: conversation.id }, 200, context.requestId);
+    } finally {
+      await services.chatConversations.finishTurn(scope, conversation.id, turnId);
+    }
   }
 
   const summary = /^\/api\/knowledge\/([^/]+)\/summary$/.exec(url.pathname);
