@@ -367,7 +367,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-024` P1/M8 任务仪表盘；状态：L；验收：backlog、age、failure、retry、quota。证据：`src/ops/task-dashboard.ts`、`test/unit/task-dashboard.test.ts`；命令：`rtk npx vitest run test/unit/task-dashboard.test.ts && rtk npm run typecheck`。输入上限 1,000 条、按 kind 聚合、额度 80% 进入 degraded/100% exhausted；仅聚合安全任务元数据。
 - [x] `OPS-025` P1/M8 索引漂移仪表盘；状态：L；验收：current/FTS/vector mismatch 可定位。证据：`src/ops/index-drift.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。报告区分 current mismatch、FTS missing/stale、Vector missing/stale，并在无 binding 时标记 `skipped_unbound`。
 - [x] `OPS-026` P0/M8 配额故障演练；状态：L；验收：D1/R2/DO/AI/Vectorize/Queue 分别验证降级。证据：`src/ops/quota-drill.ts`、`test/unit/quota-drill.test.ts`；命令：`rtk npx vitest run test/unit/quota-drill.test.ts && rtk npm run typecheck`。六组件覆盖、重复/缺失/未知组件 fail-closed；D1 阻写、R2 metadata-only、DO retryable、AI defer、Vectorize FTS-only、Queue D1 recovery scan，演练本身 `writes:none`。
-- [ ] `OPS-027` P0/M8 发布 checklist；验收：backup→migration→upload→inspect→deploy→smoke→evidence。
+- [x] `OPS-027` P0/M8 发布 checklist；状态：L；验收：backup→migration→upload→inspect→deploy→smoke→evidence。证据：`docs/operations/m7-release-checklist.md`；命令：文档内 7 阶段命令。远程执行仍需独立生产授权，未将本地门禁伪装成生产证据。
 - [ ] `OPS-028` P0/M8 前向兼容回滚；验收：不逆向 migration、不部署旧 Access build。
 
 ## Milestone Gate
