@@ -398,7 +398,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ### M6
 
-- [ ] `GATE-M6` Research 可暂停恢复，Agent 无越权/直接发布/任意工具，额度耗尽可延期。
+- [x] `GATE-M6` 状态：L/W；Research 可暂停恢复，Agent 无越权/直接发布/任意工具，额度耗尽可延期。证据：`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/agent/session-do.ts`、`src/agent/tool-runner.ts`、`src/agent/tools.ts`、`test/worker/m1-api.test.ts`、`test/worker/agent-session.test.ts`、`test/unit/m6-agent-trajectory.test.ts`、`test/unit/m6-ai-degraded.test.ts`；命令：`rtk npm run typecheck && rtk npm run test:unit && rtk npm run test:worker`。生产 AI/额度、DO 激活和远程 smoke 证据仍属于 OPS/GATE 远程边界，未宣称 R。
 
 ### M7
 
