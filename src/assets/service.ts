@@ -22,6 +22,7 @@ export interface AssetRepositoryPort {
   insertAssetWithJob(asset: AssetRecord, job: ParseJobRecord): Promise<void>;
   findOwned(ownerId: string, assetId: string): Promise<AssetWithJob | null>;
   findById(assetId: string): Promise<AssetWithJob | null>;
+  cancelOwned(ownerId: string, assetId: string): Promise<{ objectKey: string } | null>;
   listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage>;
   listAll(request: AssetPageRepositoryRequest): Promise<AssetPage>;
   resetParseJob(assetId: string, now: string): Promise<boolean>;
@@ -249,6 +250,16 @@ export class AssetService {
     });
   }
 
+  async resume(ownerId: string, idempotencyKey: string): Promise<AssetWithJob> {
+    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0 || idempotencyKey.length > 200
+      || /[\u0000-\u001f\u007f]/u.test(idempotencyKey)) {
+      throw new AppError("ASSET_RESUME_INVALID", "Asset resume key is invalid", 400);
+    }
+    const result = await this.repository.findByIdempotency(ownerId, idempotencyKey);
+    if (!result) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
+    return result;
+  }
+
   async getOwned(ownerId: string, assetId: string): Promise<AssetWithJob> {
     const result = await this.repository.findOwned(ownerId, assetId);
     if (!result) throw new AppError("ASSET_NOT_FOUND", "Asset not found", 404);
@@ -266,6 +277,17 @@ export class AssetService {
       );
     }
     return owned;
+  }
+
+  async cancel(ownerId: string, assetId: string): Promise<void> {
+    this.assertStorageEnabled();
+    const current = await this.getOwned(ownerId, assetId);
+    if (current.job.status !== "queued" && current.job.status !== "failed_retryable") {
+      throw new AppError("ASSET_CANCEL_CONFLICT", "Asset cannot be cancelled in its current state", 409, true);
+    }
+    const removed = await this.repository.cancelOwned(ownerId, assetId);
+    if (!removed) throw new AppError("ASSET_CANCEL_CONFLICT", "Asset cannot be cancelled in its current state", 409, true);
+    await this.requireStorage().delete(removed.objectKey).catch(() => undefined);
   }
 
   async listOwned(ownerId: string, request: { limit?: number; cursor?: string } = {}): Promise<AssetPage> {

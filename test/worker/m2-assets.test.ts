@@ -171,6 +171,58 @@ describe("M2 asset upload boundary", () => {
     }), 404, "ASSET_NOT_FOUND");
   });
 
+  it("cancels a queued upload, hides its metadata, and removes the staging object", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "cancel.txt", "idempotency-key": "asset-cancel-1" },
+      body: "cancel me",
+    });
+    const uploaded = await upload.json<{ asset: { id: string; objectKey: string } }>();
+
+    const cancelled = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/cancel`, { method: "POST" });
+    expect(cancelled.status).toBe(204);
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`), 404, "ASSET_NOT_FOUND");
+    await expect(testOriginals().get(uploaded.asset.objectKey)).resolves.toBeNull();
+    await expect(env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(uploaded.asset.id).first()).resolves.toBeNull();
+  });
+
+  it("recovers an unfinished upload by idempotency key after a fresh request", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "resume.txt", "idempotency-key": "asset-resume-1" },
+      body: "resume me",
+    });
+    const uploaded = await upload.json<{ asset: { id: string }; job: { status: string } }>();
+
+    const resumed = await memberApi("asset-owner", "/api/assets/resume", {
+      headers: { "idempotency-key": "asset-resume-1" },
+    });
+    expect(resumed.status).toBe(200);
+    await expect(resumed.json()).resolves.toEqual(uploaded);
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM assets WHERE owner_id = 'asset-owner'").first())
+      .resolves.toEqual({ count: 1 });
+
+    await expectApiError(memberApi("asset-other", "/api/assets/resume", {
+      headers: { "idempotency-key": "asset-resume-1" },
+    }), 404, "ASSET_NOT_FOUND");
+    await expectApiError(memberApi("asset-owner", "/api/assets/resume", {
+      headers: { "idempotency-key": "" },
+    }), 400, "ASSET_RESUME_INVALID");
+  });
+
+  it("does not cancel an asset that is already processing or parsed", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "keep.txt", "idempotency-key": "asset-cancel-2" },
+      body: "keep me",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    await env.DB.prepare("UPDATE parse_jobs SET status = 'processing' WHERE asset_id = ?").bind(uploaded.asset.id).run();
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/cancel`, { method: "POST" }), 409, "ASSET_CANCEL_CONFLICT");
+    await env.DB.prepare("UPDATE parse_jobs SET status = 'succeeded' WHERE asset_id = ?").bind(uploaded.asset.id).run();
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/cancel`, { method: "POST" }), 409, "ASSET_CANCEL_CONFLICT");
+  });
+
   it("rejects alternatives while parsing or after a successful parse", async () => {
     const upload = await memberApi("asset-owner", "/api/assets", {
       method: "POST",

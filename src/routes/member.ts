@@ -62,10 +62,31 @@ export async function routeMemberApi(
     return jsonResponse(result, 201, context.requestId);
   }
 
+  if (url.pathname === "/api/assets/resume") {
+    requireCapability(principal, "submission:read-own");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const result = await services.assets.resume(member.memberId, request.headers.get("idempotency-key") || "");
+    return jsonResponse(result, 200, context.requestId);
+  }
+
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
+  const assetCancel = /^\/api\/assets\/([^/]+)\/cancel$/.exec(url.pathname);
   const assetAlternative = /^\/api\/assets\/([^/]+)\/alternative$/.exec(url.pathname);
   const assetPreview = /^\/api\/assets\/([^/]+)\/preview$/.exec(url.pathname);
   const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);
+  if (assetCancel) {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    await services.assets.cancel(member.memberId, decodePathId(assetCancel[1]!));
+    return new Response(null, {
+      status: 204,
+      headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId },
+    });
+  }
   if (assetAlternative) {
     requireCapability(principal, "submission:create");
     if (request.method !== "POST") return methodNotAllowed("POST", context);

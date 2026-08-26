@@ -53,6 +53,16 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
       const asset = store.assets.find((item) => item.id === assetId);
       return asset ? { asset, job: store.jobs.find((item) => item.assetId === asset.id)! } : null;
     },
+    async cancelOwned(ownerId: string, assetId: string) {
+      const assetIndex = store.assets.findIndex((item) => item.ownerId === ownerId && item.id === assetId);
+      const asset = assetIndex < 0 ? undefined : store.assets[assetIndex];
+      const job = asset ? store.jobs.find((item) => item.assetId === asset.id) : undefined;
+      if (!asset || !job || !["queued", "failed_retryable"].includes(job.status)) return null;
+      store.assets.splice(assetIndex, 1);
+      const jobIndex = store.jobs.findIndex((item) => item.assetId === assetId);
+      if (jobIndex >= 0) store.jobs.splice(jobIndex, 1);
+      return { objectKey: asset.objectKey };
+    },
     async listOwned(ownerId: string, request: { limit: number }) {
       const items = store.assets
         .filter((item) => item.ownerId === ownerId)
@@ -150,6 +160,35 @@ const richFormatMatrix = [
 ] as const;
 
 describe("AssetService", () => {
+  it("cancels a queued asset before removing its staging object", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-cancel" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "cancel.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("cancel me").buffer, idempotencyKey: "cancel-key-0001",
+    });
+
+    await expect(service.cancel("member-1", created.asset.id)).resolves.toBeUndefined();
+    expect(db.assets).toHaveLength(0);
+    expect(db.jobs).toHaveLength(0);
+    expect(originals.objects.has(created.asset.objectKey)).toBe(false);
+  });
+
+  it("resumes an owned asset by its idempotency key without creating another record", async () => {
+    const db = repository();
+    const originals = bucket();
+    const service = new AssetService(originals, db, { id: () => "asset-resume" });
+    const created = await service.create({
+      ownerId: "member-1", originalName: "resume.txt", contentType: "text/plain",
+      bytes: new TextEncoder().encode("resume me").buffer, idempotencyKey: "resume-key-0001",
+    });
+
+    await expect(service.resume("member-1", "resume-key-0001")).resolves.toEqual(created);
+    await expect(service.resume("member-2", "resume-key-0001")).rejects.toMatchObject({ code: "ASSET_NOT_FOUND", status: 404 });
+    await expect(service.resume("member-1", "")).rejects.toMatchObject({ code: "ASSET_RESUME_INVALID", status: 400 });
+  });
+
   it("allows an owner to replace a failed parse with reviewable Markdown", async () => {
     const db = repository();
     const originals = bucket();

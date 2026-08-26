@@ -39,6 +39,23 @@ export class AssetsRepository implements AssetRepositoryPort {
     return this.find("a.id = ?", [assetId]);
   }
 
+  async cancelOwned(ownerId: string, assetId: string): Promise<{ objectKey: string } | null> {
+    const row = await this.db.prepare(
+      "SELECT object_key FROM assets WHERE owner_id = ? AND id = ? LIMIT 1",
+    ).bind(ownerId, assetId).first<{ object_key: string }>();
+    if (!row) return null;
+    const results = await this.db.batch([
+      this.db.prepare(
+        "DELETE FROM parse_jobs WHERE asset_id = ? AND status IN ('queued', 'failed_retryable')",
+      ).bind(assetId),
+      this.db.prepare(
+        "DELETE FROM assets WHERE owner_id = ? AND id = ? AND NOT EXISTS (SELECT 1 FROM parse_jobs WHERE asset_id = ?)",
+      ).bind(ownerId, assetId, assetId),
+    ]);
+    if (results[0]?.meta.changes !== 1 || results[1]?.meta.changes !== 1) return null;
+    return { objectKey: row.object_key };
+  }
+
   async listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage> {
     return this.listPage("a.owner_id = ?", [ownerId], request);
   }
