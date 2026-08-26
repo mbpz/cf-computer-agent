@@ -1,3 +1,5 @@
+import { apiFetch, type Fetcher } from "./api";
+
 export interface PrivateKnowledgeNote {
   v: 1;
   knowledgeItemId: string;
@@ -10,6 +12,13 @@ export interface PrivateKnowledgeNote {
 export interface PrivateKnowledgeNoteDraft {
   title?: string;
   body?: string;
+}
+
+export interface PrivateKnowledgeNoteCitation {
+  revisionId: string;
+  chunkId: string;
+  startLine: number;
+  endLine: number;
 }
 
 type NoteStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -55,8 +64,42 @@ export function normalizePrivateKnowledgeNote(value: unknown, expectedKnowledgeI
   return { v: 1, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private", updatedAt: record.updatedAt };
 }
 
+export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNote | null> {
+  assertKnowledgeItemId(knowledgeItemId);
+  const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, { requester, signal });
+  if (data.note === null || data.note === undefined) return null;
+  return normalizeRemoteNote(data.note, knowledgeItemId);
+}
+
+export async function saveRemotePrivateKnowledgeNote(
+  knowledgeItemId: string,
+  draft: PrivateKnowledgeNoteDraft,
+  citations: readonly PrivateKnowledgeNoteCitation[],
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<PrivateKnowledgeNote> {
+  assertKnowledgeItemId(knowledgeItemId);
+  const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, {
+    requester,
+    signal,
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: draft.title ?? "", body: draft.body ?? "", citations }),
+  });
+  return normalizeRemoteNote(data.note, knowledgeItemId);
+}
+
 function emptyNote(knowledgeItemId: string): PrivateKnowledgeNote {
   return { v: 1, knowledgeItemId, title: "", body: "", visibility: "private", updatedAt: "" };
+}
+
+function normalizeRemoteNote(value: unknown, expectedKnowledgeItemId: string): PrivateKnowledgeNote {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_NOTE_INVALID");
+  const record = value as Record<string, unknown>;
+  if (record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string" || typeof record.updatedAt !== "string") throw new Error("KNOWLEDGE_NOTE_INVALID");
+  const note = { v: 1 as const, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private" as const, updatedAt: record.updatedAt };
+  if (!normalizePrivateKnowledgeNote(note, expectedKnowledgeItemId)) throw new Error("KNOWLEDGE_NOTE_INVALID");
+  return note;
 }
 
 function normalizeDraftText(value: string | undefined): string {

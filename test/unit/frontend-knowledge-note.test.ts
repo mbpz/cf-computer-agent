@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { loadPrivateKnowledgeNote, normalizePrivateKnowledgeNote, savePrivateKnowledgeNote } from "../../frontend/lib/knowledge-note";
+import { loadPrivateKnowledgeNote, loadRemotePrivateKnowledgeNote, normalizePrivateKnowledgeNote, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote } from "../../frontend/lib/knowledge-note";
 
 function storage() {
   const values = new Map<string, string>();
@@ -31,5 +31,18 @@ describe("private reader notes", () => {
     expect(() => savePrivateKnowledgeNote("../other", { title: "x", body: "y" }, storage())).toThrow("KNOWLEDGE_NOTE_ID_INVALID");
     expect(normalizePrivateKnowledgeNote({ v: 1, knowledgeItemId: "knowledge-a", title: "x", body: "y", visibility: "private", updatedAt: "" }, "knowledge-b")).toBeNull();
     expect(() => savePrivateKnowledgeNote("knowledge-a", { title: "x".repeat(2000), body: "" }, storage())).toThrow("KNOWLEDGE_NOTE_TOO_LARGE");
+  });
+
+  it("uses the owner-scoped API and preserves explicit citation payloads", async () => {
+    const requests: Array<{ path: string; init?: RequestInit }> = [];
+    const requester = async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ path: String(input), init });
+      if (init?.method === "PUT") return new Response(JSON.stringify({ note: { visibility: "private", title: "Saved", body: "Body", updatedAt: "2026-08-26T00:00:00.000Z" } }), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ note: null }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await expect(loadRemotePrivateKnowledgeNote("knowledge-a", requester)).resolves.toBeNull();
+    await expect(saveRemotePrivateKnowledgeNote("knowledge-a", { title: "Saved", body: "Body" }, [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }], requester)).resolves.toMatchObject({ title: "Saved", body: "Body", visibility: "private" });
+    expect(requests[0]?.path).toBe("/api/knowledge/knowledge-a/note");
+    expect(JSON.parse(String(requests[1]?.init?.body))).toMatchObject({ citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }] });
   });
 });

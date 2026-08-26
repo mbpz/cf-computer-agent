@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import { loadPrivateKnowledgeNote, savePrivateKnowledgeNote } from "../lib/knowledge-note";
+import { loadPrivateKnowledgeNote, loadRemotePrivateKnowledgeNote, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote } from "../lib/knowledge-note";
 import type { KnowledgeBacklinkItem, KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
 
 export type KnowledgeReaderState = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
@@ -33,34 +33,52 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
   const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(null);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteBody, setNoteBody] = useState("");
-  const [noteStatus, setNoteStatus] = useState<"idle" | "saved" | "unsaved" | "error">("idle");
+  const [noteStatus, setNoteStatus] = useState<"idle" | "saved" | "saving" | "unsaved" | "error">("idle");
   useEffect(() => {
+    let active = true;
+    let localNote;
     try {
-      const note = loadPrivateKnowledgeNote(normalizedRevision.knowledgeItemId);
-      setNoteTitle(note.title);
-      setNoteBody(note.body);
-      setNoteStatus("idle");
+      localNote = loadPrivateKnowledgeNote(normalizedRevision.knowledgeItemId);
+      setNoteTitle(localNote.title);
+      setNoteBody(localNote.body);
     } catch {
-      setNoteTitle("");
-      setNoteBody("");
-      setNoteStatus("error");
+      localNote = undefined;
     }
+    void loadRemotePrivateKnowledgeNote(normalizedRevision.knowledgeItemId).then((note) => {
+      if (!active) return;
+      if (note) {
+        setNoteTitle(note.title);
+        setNoteBody(note.body);
+      } else if (!localNote) {
+        setNoteTitle("");
+        setNoteBody("");
+      }
+      setNoteStatus("idle");
+    }).catch(() => {
+      if (active) setNoteStatus(localNote ? "idle" : "error");
+    });
+    return () => { active = false; };
   }, [normalizedRevision.knowledgeItemId]);
   const updateNote = (setter: (value: string) => void, value: string) => {
     setter(value);
     setNoteStatus("unsaved");
   };
-  const saveNote = () => {
+  const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
+  const saveNote = async () => {
+    setNoteStatus("saving");
+    const citationChunk = selectedChunk ?? normalizedRevision.chunks[0];
+    const citations = citationChunk ? [{ revisionId: normalizedRevision.id, chunkId: citationChunk.id, startLine: citationChunk.startLine, endLine: citationChunk.endLine }] : [];
     try {
+      await saveRemotePrivateKnowledgeNote(normalizedRevision.knowledgeItemId, { title: noteTitle, body: noteBody }, citations);
       savePrivateKnowledgeNote(normalizedRevision.knowledgeItemId, { title: noteTitle, body: noteBody });
       setNoteStatus("saved");
     } catch {
+      try { savePrivateKnowledgeNote(normalizedRevision.knowledgeItemId, { title: noteTitle, body: noteBody }); } catch { /* retain the visible error */ }
       setNoteStatus("error");
     }
   };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
-  const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
   return <article data-reader-layout className="space-y-5">
     <div className="flex gap-2 lg:hidden" role="tablist" aria-label={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")}>
       <button type="button" role="tab" aria-selected={mobilePanel === "outline"} aria-controls="reader-outline-panel" onClick={() => setMobilePanel(mobilePanel === "outline" ? null : "outline")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE")}</button>
@@ -84,9 +102,9 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
   </article>
 }
 
-function ReaderNotePanel({ locale, title, body, status, onTitleChange, onBodyChange, onSave }: { locale?: LocaleRuntime; title: string; body: string; status: "idle" | "saved" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
-  const statusLabel = status === "saved" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVED") : status === "unsaved" ? frontendText(locale, "KNOWLEDGE_NOTE_UNSAVED") : status === "error" ? frontendText(locale, "KNOWLEDGE_NOTE_ERROR") : "";
-  return <Card data-reader-note="true" data-note-visibility="private" data-note-save="explicit"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE")}</CardTitle><span className="rounded-full border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_PRIVATE")}</span></div><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_DESCRIPTION")}</p></CardHeader><CardContent className="space-y-3"><div><label htmlFor="reader-note-title" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE_LABEL")}</label><input id="reader-note-title" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} className="mt-1 flex h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={200} /></div><div><label htmlFor="reader-note-body" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_BODY_LABEL")}</label><textarea id="reader-note-body" value={body} onChange={(event) => onBodyChange(event.currentTarget.value)} className="mt-1 min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={16000} /></div><div className="flex items-center justify-between gap-2"><span role="status" aria-live="polite" className="text-xs text-muted-foreground">{statusLabel}</span><Button size="sm" onClick={onSave}>{frontendText(locale, "KNOWLEDGE_NOTE_SAVE")}</Button></div></CardContent></Card>;
+function ReaderNotePanel({ locale, title, body, status, onTitleChange, onBodyChange, onSave }: { locale?: LocaleRuntime; title: string; body: string; status: "idle" | "saved" | "saving" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
+  const statusLabel = status === "saved" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVED") : status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : status === "unsaved" ? frontendText(locale, "KNOWLEDGE_NOTE_UNSAVED") : status === "error" ? frontendText(locale, "KNOWLEDGE_NOTE_ERROR") : "";
+  return <Card data-reader-note="true" data-note-visibility="private" data-note-save="explicit"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE")}</CardTitle><span className="rounded-full border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_PRIVATE")}</span></div><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_DESCRIPTION")}</p></CardHeader><CardContent className="space-y-3"><div><label htmlFor="reader-note-title" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE_LABEL")}</label><input id="reader-note-title" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} className="mt-1 flex h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={200} /></div><div><label htmlFor="reader-note-body" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_BODY_LABEL")}</label><textarea id="reader-note-body" value={body} onChange={(event) => onBodyChange(event.currentTarget.value)} className="mt-1 min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={16000} /></div><div className="flex items-center justify-between gap-2"><span role="status" aria-live="polite" className="text-xs text-muted-foreground">{statusLabel}</span><Button size="sm" disabled={status === "saving"} onClick={onSave}>{status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : frontendText(locale, "KNOWLEDGE_NOTE_SAVE")}</Button></div></CardContent></Card>;
 }
 
 function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }: { locale?: LocaleRuntime; revision: KnowledgeRevision; selectedChunkId: string | null; onSelectChunk: (id: string) => void }) {

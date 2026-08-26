@@ -12,11 +12,13 @@ import type { Principal } from "../identity/principal";
 import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
+import type { PrivateNotesService } from "../private-notes/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
   citedAnswers: CitedAnswerService;
   library: LibraryService;
+  privateNotes: PrivateNotesService;
 }
 
 export async function routeLibraryApi(
@@ -42,6 +44,26 @@ export async function routeLibraryApi(
   if (url.pathname === "/api/knowledge/search") {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     return jsonResponse(await services.library.search(scope, searchRequest(url)), 200, context.requestId);
+  }
+
+  const note = /^\/api\/knowledge\/([^/]+)\/note$/.exec(url.pathname);
+  if (note) {
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(note[1]!);
+    const noteScope = memberScope(principal);
+    if (request.method === "GET") {
+      return jsonResponse({ note: await services.privateNotes.get(noteScope, knowledgeItemId) }, 200, context.requestId);
+    }
+    if (request.method === "PUT") {
+      const input = strictRecord(
+        await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+        ["title", "body", "citations"],
+        "PRIVATE_NOTE_REQUEST_INVALID",
+      );
+      if (!hasExactKeys(input, ["title", "body", "citations"])) throw new AppError("PRIVATE_NOTE_REQUEST_INVALID", "Request body is invalid", 400);
+      return jsonResponse({ note: await services.privateNotes.save(noteScope, knowledgeItemId, input as { title: unknown; body: unknown; citations: unknown }) }, 200, context.requestId);
+    }
+    return methodNotAllowed("GET, PUT", context);
   }
 
   if (url.pathname === "/api/knowledge/chat") {

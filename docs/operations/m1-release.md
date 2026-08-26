@@ -10,7 +10,7 @@ Writing or testing this runbook is local evidence only. Every command containing
 - Local Workerd proves the checked-in D1 schema and `KnowledgeBase` Durable Object integration, not production state.
 - Production evidence requires a date, commit, exact Worker version ID, and redacted request IDs in [the M1 release evidence template](./evidence/m1-release-template.md).
 - Preserve GitHub OAuth, D1 hashed sessions, `__Host-memory-session`, HMAC plus `APP_TOKEN` automation, the `KnowledgeBase` class, and Durable Object migration tag `v1`.
-- Migrations `0001` through `0011_m4_saved_views.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
+- Migrations `0001` through `0012_m5_private_notes.sql` are forward-only. Once applied remotely, do not edit, reverse, or delete them. Never delete D1 rows/tables or Durable Object/VFS state to roll back a Worker.
 - `GATE-M0` remote evidence is archived for this candidate: OAuth callback, disabled-member rejection, normal Durable Object lifecycle read, signed automation, and Dashboard workers.dev/preview closure. The current status is **M1 production gate accepted**; subsequent code changes require a new evidence record.
 
 Use a fresh copy of [the evidence template](./evidence/m1-release-template.md) for one candidate. Do not place source text, response bodies, cookies, OAuth codes, authorization headers, secret values, or full callback URLs in it.
@@ -51,6 +51,7 @@ The reviewed migration provenance is immutable for this candidate:
 | `0009_m2_chunk_status.sql` | `072d6ba8a9e0661ce5e1031b841fa8f2766f38f56eb94e41d1da22695840acff` |
 | `0010_m2_chunk_metadata.sql` | `c4c593c5496adf06f24d3c7671a758331db660dd35e947ec121b5d7b7132d79b` |
 | `0011_m4_saved_views.sql` | `f0f8c000dd8e0d41f5defdd4496e52080fa58f6ac3f672baa813cef8edbce688` |
+| `0012_m5_private_notes.sql` | `f9dbb34250383552ffbe0e4b80cff5d57f4694c5a1f25ad4c7000ee9d44e88b0` |
 
 `verify:m1:migrations` hard-codes the reviewed M1/M2 forward-migration hashes above and compares them with the checked-in file bytes. The checksum command must pass before `whoami`, export, migration, upload, or any other remote action. Stop if any hash differs, the commit is not the reviewed candidate, the worktree is unexpectedly dirty, the Cloudflare account is wrong, `GATE-M0` evidence is missing, or the operator has not separately authorized the next remote action.
 

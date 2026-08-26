@@ -19,6 +19,8 @@ import { LibraryRepository } from "./library/repository";
 import { LibraryService } from "./library/service";
 import { MembersRepository } from "./members/repository";
 import { MembersService } from "./members/service";
+import { PrivateNotesRepository } from "./private-notes/repository";
+import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
 import { clearOAuthCookies, routeAuth } from "./routes/auth";
@@ -143,6 +145,7 @@ function createRequestServices(
     citedAnswers: new CitedAnswerService(env.AI),
     knowledge: new KnowledgeService(legacyRepository),
     library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
+    privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,
     members,
