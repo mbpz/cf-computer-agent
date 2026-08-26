@@ -1112,6 +1112,30 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(env.DB.prepare("SELECT count(*) AS count FROM private_note_shares").first()).resolves.toEqual({ count: 0 });
   });
 
+  it("creates the admin-owned duplicate candidate queue with guarded decisions", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("duplicate_candidates", [
+      "submission_id:TEXT:0:NULL:1",
+      "canonical_submission_id:TEXT:1:NULL:0",
+      "canonical_source_id:TEXT:1:NULL:0",
+      "canonical_source_version_id:TEXT:1:NULL:0",
+      "decision:TEXT:1:'pending':0",
+      "decided_by:TEXT:0:NULL:0",
+      "decided_at:TEXT:0:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+    ], ["CHECK(decision IN ('pending', 'associate', 'keep_separate', 'reject'))"]);
+    await expectIndex("duplicate_candidates", "duplicate_candidates_queue", [
+      { name: "decision", desc: 0 }, { name: "created_at", desc: 1 }, { name: "submission_id", desc: 1 },
+    ]);
+    await expectForeignKeys("duplicate_candidates", [
+      { from: "submission_id", table: "submissions", to: "id" },
+      { from: "canonical_submission_id", table: "submissions", to: "id" },
+      { from: "canonical_source_id", table: "sources", to: "id" },
+      { from: "canonical_source_version_id", table: "source_versions", to: "id" },
+      { from: "decided_by", table: "members", to: "id" },
+    ]);
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

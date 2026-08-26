@@ -9,6 +9,7 @@ import { AssetQueuePage } from "./pages/admin/asset-queue-page";
 import { MembersPage } from "./pages/admin/members-page";
 import { SpacesPage } from "./pages/admin/spaces-page";
 import { AuditPage } from "./pages/admin/audit-page";
+import { DuplicateQueuePage } from "./pages/admin/duplicate-queue-page";
 import { AgentPage } from "./pages/agent-page";
 import { HomePage } from "./pages/home-page";
 import { KnowledgePage } from "./pages/knowledge-page";
@@ -32,6 +33,7 @@ import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/a
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
+import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./components/review/review-detail-data";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
@@ -138,6 +140,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
+    case "admin-duplicates": return <AdminDuplicateRoute locale={locale} />;
     case "admin-assets": return <AdminAssetsRoute locale={locale} />;
     case "admin-members": return <AdminMembersRoute locale={locale} />;
     case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
@@ -537,6 +540,37 @@ function ReviewQueueRoute({ locale }: { locale: LocaleRuntime }) {
     }
   };
   return <ReviewQueuePage locale={locale} state={state} pendingId={pendingId} actionError={actionError} onReview={(id, action) => void review(id, action)} onLoadMore={loadMore} />;
+}
+
+function AdminDuplicateRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: AdminDuplicateCandidate[]; nextCursor: string | null; pending?: boolean; error?: string } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const controllerRef = useRef<ReturnType<typeof createAdminDuplicateRequestController> | null>(null);
+  useEffect(() => {
+    const controller = createAdminDuplicateRequestController();
+    controllerRef.current = controller;
+    const request = controller.request();
+    void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", items: page.items, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
+    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [locale]);
+  const loadMore = () => {
+    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
+    const controller = controllerRef.current;
+    const request = controller.request(state.nextCursor);
+    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
+    void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, items: [...previous.items, ...page.items], nextCursor: page.nextCursor, pending: false } : previous); }).catch(() => { if (controller.isCurrent(request.generation)) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false, error: frontendText(locale, "COMMON_UNABLE_TO_LOAD") } : previous); });
+  };
+  const decide = async (id: string, decision: DuplicateDecision) => {
+    if (pendingId) return;
+    setPendingId(id);
+    try {
+      await decideAdminDuplicate(id, decision);
+      setState((previous) => previous.kind === "ready" ? { ...previous, items: previous.items.filter((item) => item.submissionId !== id) } : previous);
+    } catch {
+      setState((previous) => previous.kind === "ready" ? { ...previous, error: frontendText(locale, "COMMON_UNABLE_TO_LOAD") } : previous);
+    } finally { setPendingId(null); }
+  };
+  return <DuplicateQueuePage locale={locale} state={state} pendingId={pendingId} onDecision={(id, decision) => void decide(id, decision)} onLoadMore={loadMore} />;
 }
 
 function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {

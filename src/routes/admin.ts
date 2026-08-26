@@ -17,6 +17,7 @@ import type { SourceReparseService } from "../sources/reparse-service";
 import type { PublicationService } from "../publication/service";
 import type { LibraryService } from "../library/service";
 import type { AnalyticsRepository } from "../analytics/repository";
+import type { DuplicateCandidatesService } from "../duplicates/service";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -30,6 +31,7 @@ export interface AdminRouteServices {
   publication: PublicationService;
   library: LibraryService;
   analytics: AnalyticsRepository;
+  duplicates: DuplicateCandidatesService;
 }
 
 export async function routeAdminApi(
@@ -44,6 +46,22 @@ export async function routeAdminApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const days = parseAnalyticsDays(url);
     return jsonResponse(await services.analytics.overview(days), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/admin/duplicates") {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    return jsonResponse(await services.duplicates.listPending(pageRequest(url)), 200, context.requestId);
+  }
+
+  const duplicateDecision = /^\/api\/admin\/duplicates\/([^/]+)\/decision$/.exec(url.pathname);
+  if (duplicateDecision) {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const actor = requireAdminMember(principal);
+    requireNoQuery(url);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["decision"], "DUPLICATE_REQUEST_INVALID");
+    return jsonResponse({ candidate: await services.duplicates.decide(actor.memberId, decodePathId(duplicateDecision[1]!), input.decision) }, 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/assets/capacity") {

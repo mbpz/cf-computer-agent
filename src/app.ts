@@ -67,6 +67,8 @@ import { FavoritesRepository } from "./favorites/repository";
 import { FavoritesService } from "./favorites/service";
 import { RecentVisitsRepository } from "./recent-visits/repository";
 import { RecentVisitsService } from "./recent-visits/service";
+import { DuplicateCandidatesRepository } from "./duplicates/repository";
+import { DuplicateCandidatesService } from "./duplicates/service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -138,7 +140,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
 const workspaceRoutes = new Set([
   "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-  "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit", "/admin/analytics",
+  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
@@ -168,6 +170,7 @@ function createRequestServices(
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
+  const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
   const researchReports = new ResearchReportService(new ResearchRepository(env.DB), ai);
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
@@ -238,6 +241,7 @@ function createRequestServices(
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions,
+    duplicates,
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),

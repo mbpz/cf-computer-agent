@@ -9,6 +9,7 @@ import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { AuditPage } from "../../frontend/pages/admin/audit-page";
 import { AdminForbiddenPage } from "../../frontend/pages/admin/admin-forbidden-page";
 import { AdminAnalyticsPage } from "../../frontend/pages/admin/analytics-page";
+import { DuplicateQueuePage } from "../../frontend/pages/admin/duplicate-queue-page";
 import { assetPreviewModel } from "../../frontend/components/assets/asset-preview-model";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -26,6 +27,15 @@ describe("React administrator pages", () => {
     expect(html).toContain("Request changes");
     expect(html).toContain("Load more");
     expect(html).not.toContain('>next<');
+  });
+
+  it("renders duplicate decisions without exposing source bodies", () => {
+    const html = renderToStaticMarkup(<DuplicateQueuePage state={{ kind: "ready", items: [{ submissionId: "s-1", canonicalSubmissionId: "s-0", canonicalSourceId: "src-0", canonicalSourceVersionId: "ver-0", submissionTitle: "New entry", canonicalTitle: "Existing entry", decision: "pending" }], nextCursor: null }} />);
+    expect(html).toContain("Associate");
+    expect(html).toContain("Keep separate");
+    expect(html).toContain("Reject");
+    expect(html).toContain("Existing entry");
+    expect(html).not.toContain("undefined");
   });
 
   it("renders asset retry and preview affordances", () => {

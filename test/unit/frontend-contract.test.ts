@@ -7,7 +7,7 @@ describe("frontend route contract", () => {
   it("keeps the existing public and admin routes", () => {
     expect(ROUTES.map((route) => route.path)).toEqual(expect.arrayContaining([
       "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-      "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit",
+      "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit",
     ]));
     expect(requiredCapability("/admin/assets")).toBe("submission:read-all");
     expect(requiredCapability("/knowledge")).toBe("knowledge:read");

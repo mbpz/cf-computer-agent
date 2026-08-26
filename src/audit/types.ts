@@ -16,6 +16,7 @@ export interface AuditActionMap {
   "submission.created": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
   "submission.draft_saved": { resourceType: "submission"; metadata: { kind: SubmissionKind; requestedSpaceId: string; requestedCollectionId?: string } };
   "submission.rejected": { resourceType: "submission"; metadata: { reasonCode: "not_relevant" | "duplicate" | "unsafe" } };
+  "submission.duplicate_decided": { resourceType: "submission"; metadata: { decision: "associate" | "keep_separate" | "reject" } };
   "submission.revision_requested": { resourceType: "submission"; metadata: { reasonCode: "needs_revision" } };
   "review.metadata_changed": { resourceType: "submission"; metadata: {
     requestedTitle: string; finalTitle: string;
@@ -52,6 +53,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "submission.created",
   "submission.draft_saved",
   "submission.rejected",
+  "submission.duplicate_decided",
   "submission.revision_requested",
   "review.metadata_changed",
   "review.visibility_expanded",
@@ -205,6 +207,14 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
         throw invalidMetadata();
       }
       return safeMetadata({ reasonCode: metadata.reasonCode });
+    }
+    case "submission.duplicate_decided": {
+      assertResourceType(resourceType, "submission");
+      const metadata = readPlainDataObject(input, new Set(["decision"]));
+      if (metadata.decision !== "associate" && metadata.decision !== "keep_separate" && metadata.decision !== "reject") {
+        throw invalidMetadata();
+      }
+      return safeMetadata({ decision: metadata.decision });
     }
     case "submission.revision_requested": {
       assertResourceType(resourceType, "submission");

@@ -24,6 +24,7 @@ export const ROUTES: readonly RouteDefinition[] = Object.freeze([
   { path: "/my-submissions", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", capability: "submission:read-own" },
   { path: "/admin", labelKey: "NAV_ADMINISTRATION", group: "admin", capability: "submission:read-all" },
   { path: "/admin/submissions", labelKey: "NAV_REVIEW_QUEUE", group: "admin", capability: "knowledge:review" },
+  { path: "/admin/duplicates", labelKey: "NAV_DUPLICATES", group: "admin", capability: "submission:read-all" },
   { path: "/admin/assets", labelKey: "NAV_ASSET_QUEUE", group: "admin", capability: "submission:read-all" },
   { path: "/admin/members", labelKey: "NAV_MEMBERS", group: "admin", capability: "member:manage" },
   { path: "/admin/spaces", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },

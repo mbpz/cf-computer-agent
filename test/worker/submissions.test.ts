@@ -7,6 +7,8 @@ import type { CreateAuditEvent } from "../../src/audit/types";
 import { SubmissionsRepository } from "../../src/submissions/repository";
 import { SubmissionsService } from "../../src/submissions/service";
 import { SourcesRepository } from "../../src/sources/repository";
+import { DuplicateCandidatesRepository } from "../../src/duplicates/repository";
+import { DuplicateCandidatesService } from "../../src/duplicates/service";
 import type { CreateSubmissionWithSourceVersion } from "../../src/submissions/repository";
 import type { SubmissionStatusFilter } from "../../src/submissions/types";
 import { MIGRATIONS } from "../fixtures/d1";
@@ -297,6 +299,36 @@ describe("submissions D1 control plane", () => {
     });
     expect(replay).toEqual(duplicate);
     await expect(counts()).resolves.toEqual({ submissions: 2, sources: 1, sourceVersions: 1, audits: 2 });
+  });
+
+  it("keeps exact duplicate decisions admin-scoped, idempotent, and audited", async () => {
+    const submissions = createService();
+    const first = await submissions.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Canonical", content: "# Canonical\n", idempotencyKey: "duplicate-decision-01",
+    });
+    const duplicate = await submissions.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Duplicate", content: "# Canonical\n", idempotencyKey: "duplicate-decision-02",
+    });
+    const audit = new AuditRepository(env.DB);
+    const service = new DuplicateCandidatesService(
+      new DuplicateCandidatesRepository(env.DB, audit),
+      () => new Date("2026-08-26T00:01:00.000Z"),
+    );
+
+    await expect(service.listPending({ limit: 20 })).resolves.toMatchObject({ items: [{
+      submissionId: duplicate.submission!.id,
+      canonicalSubmissionId: first.submission!.id,
+      decision: "pending",
+    }] });
+    await expect(service.decide("member-a", duplicate.submission!.id, "associate")).resolves.toMatchObject({
+      decision: "associate", decidedBy: "member-a", canonicalSourceId: first.source!.id,
+    });
+    await expect(service.decide("member-a", duplicate.submission!.id, "associate")).resolves.toMatchObject({ decision: "associate" });
+    await expect(service.decide("member-a", duplicate.submission!.id, "reject")).rejects.toMatchObject({ code: "DUPLICATE_DECISION_CONFLICT" });
+    await expect(service.listPending({ limit: 20 })).resolves.toMatchObject({ items: [] });
+    await expect(env.DB.prepare("SELECT action, metadata FROM audit_events WHERE action = 'submission.duplicate_decided'").first()).resolves.toEqual({
+      action: "submission.duplicate_decided", metadata: JSON.stringify({ decision: "associate" }),
+    });
   });
 
   it("returns bounded same-owner same-space similar candidates as advice without merging", async () => {

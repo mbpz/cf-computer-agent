@@ -4,6 +4,7 @@ import { AppError } from "../http";
 import { decodeOpaqueCursor, decodePageCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
 import { SourcesRepository } from "../sources/repository";
 import type { Source, SourceVersion } from "../sources/types";
+import { DuplicateCandidatesRepository } from "../duplicates/repository";
 import type {
   CreateSubmission,
   Submission,
@@ -80,14 +81,16 @@ const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as 
 
 export class SubmissionsRepository implements SubmissionsRepositoryPort {
   private readonly sources: SourcesRepository;
+  private readonly duplicates: DuplicateCandidatesRepository;
 
   constructor(private readonly db: D1Database, private readonly audit: AuditRepository) {
     this.sources = new SourcesRepository(db);
+    this.duplicates = new DuplicateCandidatesRepository(db, audit);
   }
 
   async createDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission> {
     const results = await this.db.batch([
-      this.db.prepare(
+          this.db.prepare(
       `INSERT INTO submissions (
         id, submitter_id, requested_space_id, requested_collection_id, requested_visibility,
         kind, status, title, content, created_at, updated_at
@@ -227,6 +230,13 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
               rejected.idempotencyKey, rejected.createdAt, rejected.updatedAt,
             ),
             this.audit.prepareWriteAudit(duplicateAudit),
+            this.duplicates.prepareInsertPending({
+              submissionId: rejected.id,
+              canonicalSubmissionId: duplicateCandidate.submissionId,
+              canonicalSourceId: duplicateCandidate.sourceId,
+              canonicalSourceVersionId: duplicateCandidate.sourceVersionId,
+              createdAt: rejected.createdAt,
+            }),
           ]);
         } catch (error) {
           const winner = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
@@ -237,7 +247,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
           }
           throw error;
         }
-        if (duplicateWrites[0]?.meta.changes !== 1 || duplicateWrites[1]?.meta.changes !== 1) {
+        if (duplicateWrites[0]?.meta.changes !== 1 || duplicateWrites[1]?.meta.changes !== 1 || duplicateWrites[2]?.meta.changes !== 1) {
           throw new Error("Duplicate submission audit did not persist");
         }
         return { submission: publicSubmission(rejected), source: null, sourceVersion: null, duplicateCandidate };

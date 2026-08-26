@@ -1002,6 +1002,31 @@ describe("M1 trusted knowledge HTTP journey", () => {
     ).first()).resolves.toEqual({ submissions: 2, versions: 1, rejected_audits: 1 });
   });
 
+  it("exposes exact duplicate candidates only to admins and records their decision", async () => {
+    const first = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Canonical route duplicate", content: "# Route duplicate\n",
+    }, "duplicate-route-key-01");
+    const duplicate = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Duplicate route candidate", content: "# Route duplicate\n",
+    }, "duplicate-route-key-02");
+    const pending = await memberApi("admin", "/api/admin/duplicates?limit=20");
+    expect(pending.status).toBe(200);
+    await expect(pending.json()).resolves.toMatchObject({ items: [expect.objectContaining({
+      submissionId: duplicate.body.submission.id,
+      canonicalSubmissionId: first.body.submission.id,
+      decision: "pending",
+    })] });
+    await expectApiError(memberApi("contributor", "/api/admin/duplicates"), 403, "FORBIDDEN");
+    const decision = await memberApi("admin", `/api/admin/duplicates/${duplicate.body.submission.id}/decision`, {
+      method: "POST", body: JSON.stringify({ decision: "keep_separate" }),
+    });
+    expect(decision.status).toBe(200);
+    await expect(decision.json()).resolves.toMatchObject({ candidate: {
+      submissionId: duplicate.body.submission.id, decision: "keep_separate", decidedBy: "member-admin",
+    } });
+    await expect(memberApi("admin", "/api/admin/duplicates?limit=20").then((response) => response.json())).resolves.toEqual({ items: [] });
+  });
+
   it("publishes an explicit update as a new immutable Revision on the existing Knowledge Item", async () => {
     const first = await publishSubmission(
       "contributor", "Version one", "Version one body", "shared", "revision-api-first",
