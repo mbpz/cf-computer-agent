@@ -110,6 +110,7 @@ export interface LibraryRepositoryPort {
   ): Promise<AuthorizedChatScope | null>;
   list(scope: LibraryScope, request: RepositoryKnowledgePageRequest): Promise<KnowledgePage>;
   findCurrent(scope: LibraryScope, knowledgeItemId: string): Promise<AuthorizedRevisionRecord | null>;
+  listBacklinkCandidates(scope: LibraryScope, knowledgeItemId: string): Promise<RepositoryBacklinkCandidate[]>;
   findRevision(
     scope: LibraryScope,
     knowledgeItemId: string,
@@ -134,6 +135,17 @@ export interface LibraryRepositoryPort {
     chunkId: string,
     status: "active" | "disabled",
   ): Promise<ChunkStatusMutation | null>;
+}
+
+export interface RepositoryBacklinkCandidate {
+  knowledgeItemId: string;
+  revisionId: string;
+  chunkId: string;
+  title: string;
+  publishedAt: string;
+  startLine: number;
+  endLine: number;
+  body: string;
 }
 
 export interface RepositoryChunkPreviewRequest extends PageRequest {
@@ -381,6 +393,63 @@ export class LibraryRepository implements LibraryRepositoryPort {
 
   findCurrent(scope: LibraryScope, knowledgeItemId: string): Promise<AuthorizedRevisionRecord | null> {
     return this.findAuthorizedRevision(scope, knowledgeItemId, undefined);
+  }
+
+  async listBacklinkCandidates(scope: LibraryScope, knowledgeItemId: string): Promise<RepositoryBacklinkCandidate[]> {
+    const rows = await this.db.prepare(
+      `WITH authorized_member AS (
+         SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
+       )
+       SELECT DISTINCT k.id AS knowledge_item_id, r.id AS revision_id, c.id AS chunk_id,
+         r.title, r.published_at, c.start_line, c.end_line, c.body
+       FROM authorized_member am
+       JOIN knowledge_items k ON k.status = 'active' AND k.id != ?
+       JOIN revisions r ON r.id = k.current_revision_id
+       JOIN chunks c ON c.revision_id = r.id AND c.status = 'active'
+       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+       LEFT JOIN collections active_collection
+         ON active_collection.id = k.collection_id
+           AND active_collection.space_id = k.space_id AND active_collection.status = 'active'
+       WHERE (k.collection_id IS NULL OR active_collection.id IS NOT NULL)
+         AND (r.visibility = 'shared' OR am.role = 'admin')
+         AND (
+           instr(c.body, '[[' || ? || ']]') > 0
+           OR instr(c.body, '/knowledge/' || ?) > 0
+           OR instr(c.body, 'knowledge://' || ?) > 0
+           OR instr(c.body, ?) > 0
+           OR instr(c.body, replace(?, '-', char(92) || '-')) > 0
+         )
+       ORDER BY r.published_at DESC, k.id ASC, c.ordinal ASC
+       LIMIT 501`,
+    ).bind(
+      scope.memberId,
+      scope.role,
+      knowledgeItemId,
+      knowledgeItemId,
+      knowledgeItemId,
+      knowledgeItemId,
+      knowledgeItemId,
+      knowledgeItemId,
+    ).all<{
+      knowledge_item_id: string;
+      revision_id: string;
+      chunk_id: string;
+      title: string;
+      published_at: string;
+      start_line: number;
+      end_line: number;
+      body: string;
+    }>();
+    return rows.results.map((row) => ({
+      knowledgeItemId: row.knowledge_item_id,
+      revisionId: row.revision_id,
+      chunkId: row.chunk_id,
+      title: row.title,
+      publishedAt: row.published_at,
+      startLine: row.start_line,
+      endLine: row.end_line,
+      body: row.body,
+    }));
   }
 
   findRevision(

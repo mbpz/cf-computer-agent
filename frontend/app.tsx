@@ -16,7 +16,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
-import { createKnowledgeReaderRequestController, loadKnowledgeRevisionDiff, loadRelatedKnowledge, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
+import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeRevisionDiff, loadRelatedKnowledge, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
@@ -110,6 +110,7 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
+  const [backlinkState, setBacklinkState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly KnowledgeBacklinkItem[] } | { kind: "error" }>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
   const diffGeneration = useRef(0);
   useEffect(() => {
@@ -119,14 +120,21 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
     setState({ kind: "loading" });
     setDiffState({ kind: "idle" });
     setRelatedState({ kind: "idle" });
+    setBacklinkState({ kind: "idle" });
     void request.promise.then(({ generation, revision }) => {
       if (controller.isCurrent(generation)) {
         setState({ kind: "ready", revision });
         setRelatedState({ kind: "loading" });
+        setBacklinkState({ kind: "loading" });
         void loadRelatedKnowledge(knowledgeItemId).then((items) => {
           if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "ready", items });
         }).catch(() => {
           if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "error" });
+        });
+        void loadKnowledgeBacklinks(knowledgeItemId).then((items) => {
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setBacklinkState({ kind: "ready", items });
+        }).catch(() => {
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setBacklinkState({ kind: "error" });
         });
       }
     }).catch((error: unknown) => {
@@ -150,7 +158,7 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
   if (state.kind !== "ready") {
       return <KnowledgeReaderPage locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
-  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} />;
+  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {

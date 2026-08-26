@@ -9,6 +9,7 @@ import type {
   AuthorizedChatScope,
   AuthorizedRevisionRecord,
   LibraryRepositoryPort,
+  RepositoryBacklinkCandidate,
   RepositoryKnowledgePageRequest,
   RepositoryChunkPreviewRequest,
   RepositorySearchRequest,
@@ -477,6 +478,10 @@ class EvaluationRepository implements LibraryRepositoryPort {
 
   async findCurrent(): Promise<AuthorizedRevisionRecord | null> {
     return null;
+  }
+
+  async listBacklinkCandidates(): Promise<RepositoryBacklinkCandidate[]> {
+    return [];
   }
 
   async findRevision(): Promise<AuthorizedRevisionRecord | null> {

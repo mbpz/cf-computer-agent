@@ -236,7 +236,7 @@ describe("M1 API authorization and request boundaries", () => {
     await expect(disabled.json()).resolves.toMatchObject({ chunk: { id: chunkId, status: "disabled" } });
   });
 
-  it("returns authorized, bounded related knowledge with explainable fields", async () => {
+it("returns authorized, bounded related knowledge with explainable fields", async () => {
     const seed = await publishSubmission("contributor", "Cloudflare deployment guide", "# Cloudflare deployment\n\nWorkers deployment and rollback.\n", "shared", "related-seed-api-key1");
     const related = await publishSubmission("contributor", "Cloudflare rollback notes", "# Cloudflare rollback\n\nWorkers deployment notes.\n", "shared", "related-match-api-key1");
     const response = await memberApi("contributor", `/api/knowledge/${seed.knowledgeItemId}/related`);
@@ -555,6 +555,18 @@ describe("M1 API authorization and request boundaries", () => {
     await expect(env.DB.prepare("SELECT content FROM source_versions WHERE submission_id = ?").bind(body.submission.id).first())
       .resolves.toMatchObject({ content: "# Guide\n\nBody\n" });
   });
+});
+
+it("returns only explicit backlinks from visible current revisions", async () => {
+  const target = await publishSubmission("contributor", "Backlink target", "The target knowledge.", "shared", "backlink-target-0001");
+  const source = await publishSubmission("contributor", "Backlink source", "[Target](/knowledge/" + target.knowledgeItemId + ")", "shared", "backlink-source-0001");
+  const hidden = await publishSubmission("admin", "Hidden backlink", "[[" + target.knowledgeItemId + "]]", "admin_only", "backlink-hidden-0001");
+  const response = await memberApi("contributor", "/api/knowledge/" + target.knowledgeItemId + "/backlinks");
+  expect(response.status).toBe(200);
+  const body = await response.json() as { backlinks: { items: Array<{ id: string; revisionId: string; chunkId: string }> } };
+  expect(body.backlinks.items.map((item) => item.id)).toEqual([source.knowledgeItemId]);
+  expect(body.backlinks.items.map((item) => item.id)).not.toContain(hidden.knowledgeItemId);
+  await expectApiError(memberApi("contributor", "/api/knowledge/" + hidden.knowledgeItemId + "/backlinks"), 404, "KNOWLEDGE_NOT_FOUND");
 });
 
 describe("M1 trusted knowledge HTTP journey", () => {

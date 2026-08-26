@@ -7,6 +7,7 @@ import {
   type AuthorizedCitationRecord,
   type AuthorizedRevisionRecord,
   type LibraryRepositoryPort,
+  type RepositoryBacklinkCandidate,
   type RepositoryKnowledgePageRequest,
   type RepositorySearchRequest,
 } from "../../src/library/repository";
@@ -118,6 +119,23 @@ describe("LibraryService", () => {
     });
     const page = await new LibraryService(repository, { async read() { return "database retention guide"; } }).related(contributor, "knowledge-1");
     expect(page).toEqual({ items: [{ id: "knowledge-2", title: "Related", publishedAt: "2026-08-23", reasonFields: ["title", "body"] }] });
+  });
+
+  it("returns only explicit backlinks to visible current knowledge", async () => {
+    const repository = repositoryFixture({
+      async listBacklinkCandidates() {
+        return [
+          { knowledgeItemId: "knowledge-2", revisionId: "revision-2", chunkId: "chunk-2", title: "Links here", publishedAt: "2026-08-25", startLine: 4, endLine: 6, body: "See [[knowledge-1]] for the runbook." },
+          { knowledgeItemId: "knowledge-3", revisionId: "revision-3", chunkId: "chunk-3", title: "False match", publishedAt: "2026-08-24", startLine: 1, endLine: 1, body: "knowledge-10 is unrelated." },
+          { knowledgeItemId: "knowledge-4", revisionId: "revision-4", chunkId: "chunk-4", title: "Markdown link", publishedAt: "2026-08-23", startLine: 8, endLine: 9, body: "[Guide](/knowledge/knowledge-1)" },
+        ];
+      },
+    });
+    await expect(new LibraryService(repository, noContentReader).backlinks(contributor, "knowledge-1"))
+      .resolves.toEqual({ items: [
+        { id: "knowledge-2", revisionId: "revision-2", chunkId: "chunk-2", title: "Links here", publishedAt: "2026-08-25", startLine: 4, endLine: 6 },
+        { id: "knowledge-4", revisionId: "revision-4", chunkId: "chunk-4", title: "Markdown link", publishedAt: "2026-08-23", startLine: 8, endLine: 9 },
+      ] });
   });
 
   it("uses the same not-found contract for hidden revisions and citations", async () => {
@@ -505,6 +523,7 @@ function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): Libr
     async authorizeChatScope(_scope, chatScope) { return chatScope as AuthorizedChatScope; },
     async list() { return emptyKnowledgePage; },
     async findCurrent() { return revisionRecord(); },
+    async listBacklinkCandidates() { return []; },
     async findRevision() { return revisionRecord(); },
     async listRevisionChunks() { return { items: [] }; },
     async setChunkStatus(_scope, _knowledgeItemId, _revisionId, chunkId, status) { return { id: chunkId, status }; },

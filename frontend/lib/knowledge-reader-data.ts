@@ -54,6 +54,16 @@ export interface RelatedKnowledgeItem {
   reasonFields: readonly string[];
 }
 
+export interface KnowledgeBacklinkItem {
+  id: string;
+  revisionId: string;
+  chunkId: string;
+  title: string;
+  publishedAt: string;
+  startLine: number;
+  endLine: number;
+}
+
 function normalizeRevision(value: unknown): KnowledgeRevision | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -153,6 +163,40 @@ export async function loadRelatedKnowledge(
       : [];
     return [{ id: record.id, title: record.title, publishedAt: record.publishedAt, reasonFields }];
   }).slice(0, 5);
+}
+
+export async function loadKnowledgeBacklinks(
+  knowledgeItemId: string,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<readonly KnowledgeBacklinkItem[]> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ID_INVALID");
+  const data = await apiFetch<{ backlinks?: unknown }>(
+    "/api/knowledge/" + encodeURIComponent(knowledgeItemId) + "/backlinks",
+    { requester, signal },
+  );
+  if (!data.backlinks || typeof data.backlinks !== "object" || Array.isArray(data.backlinks)) throw new Error("KNOWLEDGE_BACKLINKS_INVALID");
+  const items = (data.backlinks as Record<string, unknown>).items;
+  if (!Array.isArray(items)) throw new Error("KNOWLEDGE_BACKLINKS_INVALID");
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || !record.id
+      || typeof record.revisionId !== "string" || !record.revisionId
+      || typeof record.chunkId !== "string" || !record.chunkId
+      || typeof record.title !== "string" || typeof record.publishedAt !== "string"
+      || !Number.isSafeInteger(record.startLine) || (record.startLine as number) < 1
+      || !Number.isSafeInteger(record.endLine) || (record.endLine as number) < (record.startLine as number)) return [];
+    return [{
+      id: record.id,
+      revisionId: record.revisionId,
+      chunkId: record.chunkId,
+      title: record.title,
+      publishedAt: record.publishedAt,
+      startLine: record.startLine as number,
+      endLine: record.endLine as number,
+    }];
+  }).slice(0, 50);
 }
 
 function normalizeDiff(value: unknown): KnowledgeRevisionDiff | null {

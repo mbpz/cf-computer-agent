@@ -38,6 +38,7 @@ describe("frontend accessibility gates", () => {
       }}
       renderMarkdown={(markdown) => markdown}
       relatedState={{ kind: "ready", items: [{ id: "knowledge-2", title: "关联指南", publishedAt: "2026-08-26", reasonFields: ["title", "body"] }] }}
+      backlinkState={{ kind: "ready", items: [{ id: "knowledge-3", revisionId: "revision-3", chunkId: "chunk-3", title: "引用指南", publishedAt: "2026-08-26", startLine: 4, endLine: 6 }] }}
     />);
     expect(html).toContain("来源");
     expect(html).toContain("source-version-1");
@@ -46,6 +47,8 @@ describe("frontend accessibility gates", () => {
     expect(html).toContain('href="/api/knowledge/knowledge-1/revisions/revision-1/download"');
     expect(html).toContain('href="/agent?scope=items&amp;knowledgeItemId=knowledge-1"');
     expect(html).toContain("相关知识");
+    expect(html).toContain("反向链接");
+    expect(html).toContain("引用行 4–6");
     expect(html).toContain("匹配字段 标题, 正文");
     expect(html).not.toMatch(/>\s*(undefined|null)\s*</u);
   });

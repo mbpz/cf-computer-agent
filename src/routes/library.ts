@@ -74,6 +74,17 @@ export async function routeLibraryApi(
     );
   }
 
+  const backlinks = /^\/api\/knowledge\/([^/]+)\/backlinks$/.exec(url.pathname);
+  if (backlinks) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(
+      { backlinks: await services.library.backlinks(scope, decodePathId(backlinks[1]!)) },
+      200,
+      context.requestId,
+    );
+  }
+
   const citation = /^\/api\/knowledge\/citations\/([^/]+)$/.exec(url.pathname);
   if (citation) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);

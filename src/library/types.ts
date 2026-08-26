@@ -66,6 +66,20 @@ export interface RelatedKnowledgePage {
   items: RelatedKnowledgeItem[];
 }
 
+export interface BacklinkItem {
+  id: string;
+  revisionId: string;
+  chunkId: string;
+  title: string;
+  publishedAt: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface BacklinkPage {
+  items: BacklinkItem[];
+}
+
 export interface ChunkPreviewRequest {
   limit?: number;
   cursor?: string;

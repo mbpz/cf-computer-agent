@@ -6,6 +6,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pag
 import { normalizeSearchQuery } from "./lexical";
 import { SEARCH_POLICY } from "./search-policy";
 import { buildRevisionDiff, type RevisionDiffResult } from "./revision-diff";
+import { hasExplicitKnowledgeLink } from "./backlinks";
 import type {
   AuthorizedRevisionRecord,
   RepositoryChunkPreviewRequest,
@@ -27,6 +28,7 @@ import type {
   RevisionDetail,
   RevisionDownload,
   RelatedKnowledgePage,
+  BacklinkPage,
   SearchPage,
   SearchRequest,
 } from "./types";
@@ -160,6 +162,29 @@ export class LibraryService {
         }];
       }).slice(0, 5),
     };
+  }
+
+  async backlinks(scope: LibraryScope, knowledgeItemId: string): Promise<BacklinkPage> {
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    const target = await this.repository.findCurrent(scope, knowledgeItemId);
+    if (!target) throw knowledgeNotFound();
+    const candidates = await this.repository.listBacklinkCandidates(scope, knowledgeItemId);
+    const seen = new Set<string>();
+    const items = candidates.flatMap((candidate) => {
+      if (seen.has(candidate.knowledgeItemId) || !hasExplicitKnowledgeLink(candidate.body, knowledgeItemId)) return [];
+      seen.add(candidate.knowledgeItemId);
+      return [{
+        id: candidate.knowledgeItemId,
+        revisionId: candidate.revisionId,
+        chunkId: candidate.chunkId,
+        title: candidate.title,
+        publishedAt: candidate.publishedAt,
+        startLine: candidate.startLine,
+        endLine: candidate.endLine,
+      }];
+    }).slice(0, 50);
+    return { items };
   }
 
   async previewChunks(

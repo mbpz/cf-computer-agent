@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadKnowledgeRevision, loadKnowledgeRevisionDiff, loadRelatedKnowledge } from "../../frontend/lib/knowledge-reader-data";
+import { loadKnowledgeBacklinks, loadKnowledgeRevision, loadKnowledgeRevisionDiff, loadRelatedKnowledge } from "../../frontend/lib/knowledge-reader-data";
 
 describe("knowledge reader data boundary", () => {
   it("loads only the authorized current revision and normalizes malformed chunks", async () => {
@@ -80,5 +80,16 @@ describe("knowledge reader data boundary", () => {
       { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body"] },
     ]);
     expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/related", expect.objectContaining({ credentials: "same-origin" }));
+  });
+
+  it("loads bounded backlink locations and rejects malformed rows", async () => {
+    const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ backlinks: { items: [
+      { id: "knowledge-2", revisionId: "revision-2", chunkId: "chunk-2", title: "Source", publishedAt: "2026-08-26", startLine: 4, endLine: 6 },
+      { id: "broken", revisionId: "revision-3", chunkId: "chunk-3", title: "Broken", publishedAt: "2026-08-26", startLine: 0, endLine: 2 },
+    ] } }), { status: 200, headers: { "content-type": "application/json" } }));
+    await expect(loadKnowledgeBacklinks("knowledge-1", requester)).resolves.toEqual([
+      { id: "knowledge-2", revisionId: "revision-2", chunkId: "chunk-2", title: "Source", publishedAt: "2026-08-26", startLine: 4, endLine: 6 },
+    ]);
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/backlinks", expect.objectContaining({ credentials: "same-origin" }));
   });
 });
