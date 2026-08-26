@@ -266,7 +266,7 @@
 - [x] `AGT-009` P1/M6 `listSourceConflicts`；验收：只基于已有证据。证据：`src/sources/repository.ts`、`src/agent/tools.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts -t 'conflict|tool' && rtk npm run typecheck`。
 - [x] `AGT-010` P1/M6 `createNoteDraft`；验收：owner 私有、无发布副作用。证据：`src/agent/tools.ts`、`src/submissions/service.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts -t 'draft|tool' && rtk npm run typecheck`。
 - [x] `AGT-011` P1/M6 `createArtifactDraft`；验收：产物 provenance 完整。证据：`src/agent/tools.ts`、`src/ai/research-report-service.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'artifact draft' && rtk npm run typecheck`。
-- [ ] `AGT-012` P1/M6 `saveResearchDraft`；验收：进入 Submission/草稿流程。
+- [x] `AGT-012` P1/M6 `saveResearchDraft`；验收：进入 Submission/草稿流程。证据：`src/agent/tools.ts`、`src/submissions/service.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'saveResearchDraft' && rtk npm run typecheck`。
 - [ ] `AGT-013` P0/M6 禁止直接发布工具；验收：工具注册和路由都不存在。
 - [ ] `AGT-014` P0/M6 禁止任意 MCP/Shell/浏览器；验收：Prompt 不能动态添加工具。
 - [ ] `AGT-015` P0/M6 工具参数 schema；验收：unknown/超限/跨 Space 输入拒绝。

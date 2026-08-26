@@ -55,7 +55,7 @@ import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
-import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
+import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
 
 export interface AppDependencies {
@@ -157,6 +157,7 @@ function createRequestServices(
     createListSourceConflictsTool(sources),
     createNoteDraftTool(submissions),
     createArtifactDraftTool(researchReports, submissions),
+    createSaveResearchDraftTool(researchReports, submissions),
   ]);
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,

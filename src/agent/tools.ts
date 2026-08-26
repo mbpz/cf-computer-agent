@@ -128,6 +128,16 @@ export function createArtifactDraftTool(
   };
 }
 
+export function createSaveResearchDraftTool(
+  researchReports: ResearchReportService,
+  submissions: SubmissionsService,
+): AgentToolDefinition<unknown, Submission> {
+  return {
+    ...createArtifactDraftTool(researchReports, submissions),
+    name: "saveResearchDraft",
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);

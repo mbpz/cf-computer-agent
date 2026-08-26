@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -177,5 +177,10 @@ describe("AgentToolRunner", () => {
     await expect(runner.run("member-agent", "createArtifactDraft", {
       knowledgeItemId: "knowledge-1", researchRunId: "run-1", reportId: "report-1",
     })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+
+    const saveRunner = new AgentToolRunner(members, [createSaveResearchDraftTool({ getDraftReport } as never, { createDraft } as never)]);
+    await expect(saveRunner.run("member-agent", "saveResearchDraft", {
+      knowledgeItemId: "knowledge-1", researchRunId: "run-1", reportId: "report-1", requestedSpaceId: "space-1",
+    })).resolves.toMatchObject({ id: "artifact-draft", status: "draft" });
   });
 });
