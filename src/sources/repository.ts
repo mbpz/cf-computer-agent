@@ -1,9 +1,18 @@
-import type { DuplicateSourceCandidate, Source, SourceVersion } from "./types";
+import type { DuplicateSourceCandidate, Source, SourceConflict, SourceVersion } from "./types";
 
 type DuplicateCandidateRow = {
   submission_id: string;
   source_id: string;
   source_version_id: string;
+};
+
+type SourceConflictRow = {
+  source_version_id: string;
+  source_id: string;
+  submission_id: string;
+  space_id: string;
+  content_sha256: string;
+  created_at: string;
 };
 
 export class SourcesRepository {
@@ -53,5 +62,28 @@ export class SourcesRepository {
       sourceId: row.source_id,
       sourceVersionId: row.source_version_id,
     } : null;
+  }
+
+  async listConflicts(sourceVersionId: string, ownerId: string, limit = 8): Promise<SourceConflict[]> {
+    const rows = await this.db.prepare(
+      `SELECT sv.id AS source_version_id, sv.source_id, sv.submission_id,
+              s.space_id, sv.content_sha256, sv.created_at
+       FROM source_versions sv
+       JOIN sources s ON s.id = sv.source_id
+       WHERE s.owner_id = ?
+         AND sv.id <> ?
+         AND sv.content_sha256 = (SELECT content_sha256 FROM source_versions WHERE id = ?)
+         AND s.space_id = (SELECT s2.space_id FROM source_versions sv2 JOIN sources s2 ON s2.id = sv2.source_id WHERE sv2.id = ?)
+       ORDER BY sv.created_at ASC, sv.id ASC
+       LIMIT ?`,
+    ).bind(ownerId, sourceVersionId, sourceVersionId, sourceVersionId, limit).all<SourceConflictRow>();
+    return rows.results.map((row) => ({
+      sourceVersionId: row.source_version_id,
+      sourceId: row.source_id,
+      submissionId: row.submission_id,
+      spaceId: row.space_id,
+      contentSha256: row.content_sha256,
+      createdAt: row.created_at,
+    }));
   }
 }

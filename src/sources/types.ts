@@ -59,3 +59,12 @@ export interface DuplicateSourceCandidate {
   sourceId: string;
   sourceVersionId: string;
 }
+
+export interface SourceConflict {
+  sourceVersionId: string;
+  sourceId: string;
+  submissionId: string;
+  spaceId: string;
+  contentSha256: string;
+  createdAt: string;
+}

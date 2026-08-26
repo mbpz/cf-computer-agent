@@ -3,6 +3,8 @@ import type { LibraryService } from "../library/service";
 import type { LibraryScope, RevisionDetail, SearchPage, SearchRequest } from "../library/types";
 import type { RevisionDiffResult } from "../library/revision-diff";
 import type { AgentToolDefinition } from "./tool-runner";
+import type { SourcesRepository } from "../sources/repository";
+import type { SourceConflict } from "../sources/types";
 
 const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
 
@@ -59,6 +61,19 @@ export function createCompareSourcesTool(
   };
 }
 
+export function createListSourceConflictsTool(
+  sources: SourcesRepository,
+): AgentToolDefinition<unknown, { items: SourceConflict[] }> {
+  return {
+    name: "listSourceConflicts",
+    parse: parseSourceConflictInput,
+    execute: async ({ member }, input) => {
+      const { sourceVersionId } = input as { sourceVersionId: string };
+      return { items: await sources.listConflicts(sourceVersionId, member.id, 8) };
+    },
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);
@@ -105,6 +120,16 @@ function parseCompareSourcesInput(value: unknown): unknown {
     fromRevisionId: value.fromRevisionId,
     toRevisionId: value.toRevisionId,
   };
+}
+
+function parseSourceConflictInput(value: unknown): unknown {
+  if (!isPlainRecord(value)
+    || Object.keys(value).length !== 1
+    || typeof value.sourceVersionId !== "string"
+    || !ID.test(value.sourceVersionId)) {
+    throw invalidToolInput();
+  }
+  return { sourceVersionId: value.sourceVersionId };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

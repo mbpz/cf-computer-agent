@@ -133,6 +133,11 @@ describe("AgentSession Durable Object", () => {
       env.DB.prepare("INSERT INTO chunks_fts_shared (rowid, chunk_id, title, summary, tags, body, code) SELECT rowid, id, 'Agent knowledge', '', '', search_body, '' FROM chunks WHERE id = 'agent-chunk'"),
     ]);
     await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'agent-revision' WHERE id = 'agent-knowledge'").run();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, kind, status, title, content, idempotency_key, created_at, updated_at) VALUES ('agent-submission-2', 'agent-member', 'default', NULL, 'markdown', 'review_pending', 'Duplicate agent knowledge', 'same evidence', NULL, ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, collection_id, kind, title, created_at, updated_at) VALUES ('agent-source-2', 'agent-member', 'default', NULL, 'markdown', 'Duplicate agent knowledge', ?, ?)").bind(now, now),
+      env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('agent-version-2', 'agent-source-2', 'agent-submission-2', 1, 'same evidence', ?, 'm1-v1', ?)").bind("a".repeat(64), now),
+    ]);
 
     const toolContext = createExecutionContext();
     const toolResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/searchKnowledge`, {
@@ -149,6 +154,23 @@ describe("AgentSession Durable Object", () => {
     await expect(toolResponse.json()).resolves.toMatchObject({
       tool: "searchKnowledge",
       result: { degraded: false, items: [expect.objectContaining({ knowledgeItemId: "agent-knowledge", citationId: expect.any(String), excerpt: expect.stringContaining("Durable") })] },
+    });
+
+    const conflictContext = createExecutionContext();
+    const conflictResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/listSourceConflicts`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceVersionId: "agent-version" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, conflictContext);
+    await waitOnExecutionContext(conflictContext);
+    expect(conflictResponse.status).toBe(200);
+    await expect(conflictResponse.json()).resolves.toMatchObject({
+      tool: "listSourceConflicts",
+      result: { items: [expect.objectContaining({ sourceVersionId: "agent-version-2", spaceId: "default", contentSha256: "a".repeat(64) })] },
     });
 
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'agent-member'").run();

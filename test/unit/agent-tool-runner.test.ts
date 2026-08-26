@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createCompareSourcesTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createCompareSourcesTool, createListSourceConflictsTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -118,5 +118,20 @@ describe("AgentToolRunner", () => {
     await expect(runner.run("member-agent", "compareSources", {
       knowledgeItemId: "knowledge-1", fromRevisionId: "revision-1", toRevisionId: "revision-1",
     })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+  });
+
+  it("lists only persisted same-space conflict evidence for an explicit source version", async () => {
+    const members = repository();
+    const listConflicts = vi.fn(async () => [{
+      sourceVersionId: "source-version-2", sourceId: "source-2", submissionId: "submission-2",
+      spaceId: "space-1", contentSha256: "a".repeat(64), createdAt: "2026-08-26T00:00:00.000Z",
+    }]);
+    const runner = new AgentToolRunner(members, [createListSourceConflictsTool({ listConflicts } as never)]);
+
+    await expect(runner.run("member-agent", "listSourceConflicts", { sourceVersionId: "source-version-1" }))
+      .resolves.toMatchObject({ items: [{ sourceVersionId: "source-version-2", spaceId: "space-1" }] });
+    expect(listConflicts).toHaveBeenCalledWith("source-version-1", "member-agent", 8);
+    await expect(runner.run("member-agent", "listSourceConflicts", { sourceVersionId: "source-version-1", spaceId: "space-1" }))
+      .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });

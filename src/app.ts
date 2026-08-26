@@ -47,6 +47,7 @@ import { TagsRepository } from "./tags/repository";
 import { TagsService } from "./tags/service";
 import { SourceReparseRepository } from "./sources/reparse-repository";
 import { SourceReparseService } from "./sources/reparse-service";
+import { SourcesRepository } from "./sources/repository";
 import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
 import { ResearchRepository } from "./research/repository";
@@ -54,7 +55,7 @@ import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
-import { createCompareSourcesTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
+import { createCompareSourcesTool, createListSourceConflictsTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
 
 export interface AppDependencies {
@@ -146,10 +147,12 @@ function createRequestServices(
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
+  const sources = new SourcesRepository(env.DB);
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
     createReadSourceTool(library),
     createCompareSourcesTool(library),
+    createListSourceConflictsTool(sources),
   ]);
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
