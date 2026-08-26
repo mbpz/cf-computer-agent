@@ -1,3 +1,5 @@
+import { emitStructuredLog } from "./ops/structured-log";
+
 export class AppError extends Error {
   constructor(
     readonly code: string,
@@ -58,7 +60,7 @@ export function errorResponse(error: unknown, requestId: string): Response {
 
 export function logRequestFailure(request: Request, context: RequestContext, error: unknown): void {
   const appError = error instanceof AppError ? error : undefined;
-  console.error("request failed", {
+  emitStructuredLog("error", {
     requestId: context.requestId,
     method: request.method,
     path: new URL(request.url).pathname,

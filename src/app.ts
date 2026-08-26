@@ -21,6 +21,7 @@ import { AutomationAuthenticator } from "./identity/automation";
 import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/github-oauth";
 import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
+import { emitStructuredLog } from "./ops/structured-log";
 import { KnowledgeService } from "./knowledge/service";
 import { createRequestPublishedContent } from "./knowledge/published-content";
 import { WorkspaceRepository } from "./knowledge/workspace-repository";
@@ -208,7 +209,7 @@ function createRequestServices(
       onUpstreamFailure: (diagnostic) => {
         const correlated = { requestId: context.requestId, ...diagnostic };
         if (dependencies.oauthDiagnostic) dependencies.oauthDiagnostic(correlated);
-        else console.warn("github oauth upstream failed", correlated);
+        else emitStructuredLog("warn", correlated);
       },
     }),
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
