@@ -47,8 +47,8 @@
 - [x] `ING-004` P0/M2 暂存对象键；状态：L/W；验收：staging key 只使用服务端生成 asset ID，不含邮箱/原文件名，响应不返回公开 URL。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`。
 - [x] `ING-005` P0/M2 原件对象键；状态：L；验收：SourceVersion 不可变映射。证据：`src/assets/object-key.ts`、`test/unit/original-object-key.test.ts`；命令：`rtk npx vitest run test/unit/original-object-key.test.ts && rtk npm run typecheck`。原件键只由 SourceVersion ID 推导，拒绝路径穿越、staging 键和身份不匹配；当前无 R2 binding，未宣称远程对象写入。
 - [x] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；状态：L/W；验收：扩展名/MIME 在写入前校验，领取解析前再校验 PDF/图片/Office/OLE/ZIP magic，冲突进入 415 或 `ASSET_CONTENT_INVALID` terminal。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`、`test/unit/m2-format-matrix.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/unit/m2-format-matrix.test.ts test/worker/m2-assets.test.ts`。
-- [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；验收：越权和过期拒绝。
-- [ ] `ING-008` P0/M2 完成接口 HEAD 校验；验收：对象大小、类型和存在性一致后才建 Asset。
+- [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；状态：deferred（免费层无 R2 上传 binding）；启用付费对象存储时再执行 presigned upload 授权。
+- [ ] `ING-008` P0/M2 完成接口 HEAD 校验；状态：deferred（免费层无 R2 对象）；启用付费对象存储时再执行大小、类型和存在性 HEAD 校验。
 - [x] `ING-009` P0/M2 9 GB R2 写入断路器；状态：L/W；验收：D1 累计达到 `maxAssetTotalBytes` 时返回 507，写入前拒绝且文本 `/api/submissions` 路径不受影响。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`。
 - [x] `ING-010` P0/M2 8 GB 预警；状态：L/W；验收：管理员通过 `GET /api/admin/assets/capacity` 查看有界容量快照；达到 8 GiB 时 `warning=true`，贡献者 fail-closed 403，免费文本模式返回 `storageEnabled=false` 且不暴露 D1/R2 使用量。证据：`src/assets/service.ts`、`src/routes/admin.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/worker/m2-assets.test.ts -t capacity`。
 - [x] `ING-011` P0/M2 单文件大小限制；状态：L/W；验收：前端 10 MiB preflight 与 Worker body bound/服务校验一致，超限不建资产。证据：`frontend/components/assets/asset-upload-model.ts`、`src/http.ts`、`src/assets/service.ts`、`test/unit/frontend-submit-pages.test.tsx`、`test/worker/m2-assets.test.ts`。
@@ -137,13 +137,13 @@
 - [x] `IDX-004` P0/M1 标题/标签权重；验收：固定 query set 排名符合手工期望。证据：`src/library/search-policy.ts`、`test/fixtures/m1-search-ranking.ts`、`test/worker/m1-library.test.ts`；30 Revision 独立语料的 3 个 query/15 个 top-five 位置与命中字段精确通过。
 - [x] `IDX-005` P0/M1 索引 Job 幂等；状态：L/W/D；验收：重复消息不重复写或改变 current。
 - [x] `IDX-006` P0/M1 索引状态；验收：pending/indexed/search_degraded/failed 可见。
-- [ ] `IDX-007` P0/M4 Vectorize 384 维 index；验收：维度、metric、namespace 固定并生成类型。
-- [ ] `IDX-008` P0/M4 Embedding 输入规范化；验收：标题路径+正文，有界且版本化。
-- [ ] `IDX-009` P0/M4 摘要向量优先；验收：每 Revision 至多一个摘要向量。
-- [ ] `IDX-010` P1/M4 高价值 Chunk 选择；验收：容量策略确定性、可解释。
-- [ ] `IDX-011` P0/M4 visibility metadata；验收：Vectorize 前置过滤后仍执行 D1 二次授权。
-- [ ] `IDX-012` P0/M4 向量删除传播；验收：回收/current 切换后旧向量不可召回。
-- [ ] `IDX-013` P0/M4 Vectorize 80% 断路器；验收：停止普通 Chunk，摘要/FTS 继续。
+- [ ] `IDX-007` P0/M4 Vectorize 384 维 index；状态：deferred（免费层边界）；启用 Vectorize 付费 binding 时再固定维度、metric、namespace。
+- [ ] `IDX-008` P0/M4 Embedding 输入规范化；状态：deferred（免费层无 Vectorize）；当前使用有界 FTS 文档输入。
+- [ ] `IDX-009` P0/M4 摘要向量优先；状态：deferred（免费层无 Vectorize）；不伪造向量状态。
+- [ ] `IDX-010` P1/M4 高价值 Chunk 选择；状态：deferred（免费层无 Vectorize）；当前由 FTS chunk 全量重建计划覆盖。
+- [ ] `IDX-011` P0/M4 visibility metadata；状态：deferred（免费层无 Vectorize）；D1/FTS 权限过滤仍是权威路径。
+- [ ] `IDX-012` P0/M4 向量删除传播；状态：deferred（免费层无 Vectorize）；不产生向量引用。
+- [ ] `IDX-013` P0/M4 Vectorize 80% 断路器；状态：deferred（免费层无 Vectorize）；当前固定 FTS-only 降级。
 - [x] `IDX-014` P0/M4 FTS5-only 模式；状态：L/W；验收：搜索直接使用 D1 FTS5 `chunks_fts`/`chunks_fts_shared`，不依赖 AI 或 Vectorize；当前 Revision、可见性、Space/Collection/Tag 权限过滤仍在 FTS 查询内执行。证据：`src/library/repository.ts`、`src/library/service.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t "search|FTS|visibility"`。
 - [x] `IDX-015` P1/M7 全量索引重建；状态：L；验收：从权威 Revision 重建且有差异报告。证据：`src/ops/index-drift.ts`、`src/ops/index-rebuild-plan.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。仅选择 active current Revision，输出确定性 FTS 重建计划，`writes: none`。
 - [x] `IDX-016` P1/M7 索引漂移检测；状态：L；验收：current Revision、FTS 和向量 ID 定期对账。证据：`src/ops/index-drift.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。报告 missing/stale/mismatch；Vectorize 未绑定时固定 `skipped_unbound`，不虚报 clean。
@@ -161,9 +161,9 @@
 - [x] `SRCH-009` P0/M1 visibility 过滤；状态：L/W；验收：contributor 永不返回 admin_only。
 - [x] `SRCH-010` P0/M1 keyset pagination；状态：L/W；验收：重复排序值无漏项/重复。
 - [ ] `SRCH-011` P1/M4 自然语言 query rewrite；验收：失败或无额度回退原始 query。
-- [ ] `SRCH-012` P1/M4 语义召回；验收：Vectorize topK 有界并记录降级。
-- [ ] `SRCH-013` P0/M4 RRF 融合；验收：确定性常数、current Revision 去重。
-- [ ] `SRCH-014` P1/M4 可选 rerank；验收：超时/额度失败保持融合结果。
+- [ ] `SRCH-012` P1/M4 语义召回；状态：deferred（免费层无 Vectorize）；当前 FTS-only，额度/绑定启用后再接有界 topK。
+- [ ] `SRCH-013` P0/M4 RRF 融合；状态：deferred（免费层无 Vectorize）；当前不混合不存在的向量结果。
+- [ ] `SRCH-014` P1/M4 可选 rerank；状态：deferred（免费层无 Vectorize/额外 AI 额度）；保持现有确定性 FTS 排名。
 - [ ] `SRCH-015` P0/M4 D1 Chunk 回读；验收：向量 metadata 不作为正文权威。
 - [ ] `SRCH-016` P0/M4 查询时二次授权；验收：成员禁用/权限变化立即生效。
 - [x] `SRCH-017` P1/M4 Search/Chat 模式切换；状态：L/W；验收：`GET /api/knowledge/search` 只返回 FTS 命中，`POST /api/knowledge/chat` 才调用回答链路；搜索不会强制生成答案，Chat scope 单独授权且缺失/非法 scope fail-closed。证据：`src/routes/library.ts`、`src/library/service.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "search|ChatScope|scope"`。
