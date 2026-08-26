@@ -82,6 +82,7 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 管理员可使用 `submission:read-all` 能力查看全局 ParseJob 状态：
 
 - `GET /api/admin/assets?status=<queued|processing|succeeded|failed_retryable|failed_terminal>&limit=20` 查看有界队列。
+- `GET /api/admin/assets/capacity` 查看有界容量快照。R2 档位返回已用字节、9 GiB 上限和 8 GiB 预警；免费文本模式返回 `storageEnabled=false`、`usedBytes=null`，不会向贡献者或普通成员暴露容量细节。
 - `GET /api/admin/assets/<assetId>/original` 或 `/parsed` 查看私有原件/解析结果；响应不生成公开 URL。
 - `POST /api/admin/assets/<assetId>/retry` 将失败任务安全重置为 `queued` 并清零 attempts；正在处理的任务拒绝并发重试，已成功任务保持幂等返回。
 

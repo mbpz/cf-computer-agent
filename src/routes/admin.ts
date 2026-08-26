@@ -37,6 +37,13 @@ export async function routeAdminApi(
   principal: Principal,
   services: AdminRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/admin/assets/capacity") {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(await services.assets.capacity(), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/assets") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);

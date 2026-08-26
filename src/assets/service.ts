@@ -96,8 +96,17 @@ export interface AssetOrphanPage {
   truncated: boolean;
 }
 
+export interface AssetCapacitySnapshot {
+  storageEnabled: boolean;
+  usedBytes: number | null;
+  maxBytes: number;
+  warningThresholdBytes: number;
+  warning: boolean;
+}
+
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_BYTES = 9 * 1024 * 1024 * 1024;
+const ASSET_CAPACITY_WARNING_BYTES = 8 * 1024 * 1024 * 1024;
 const DEFAULT_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 const allowedTypes = new Set([
   "text/plain", "text/markdown", "text/csv", "text/html", "application/pdf",
@@ -305,6 +314,34 @@ export class AssetService {
       ...(request.status === undefined ? {} : { status: request.status }),
       cursorKey: await deriveCursorScopeKey("all-assets", { status: request.status ?? null, sort: "created_at-desc-id-desc" }),
     });
+  }
+
+  async capacity(): Promise<AssetCapacitySnapshot> {
+    if (!this.originals) {
+      return {
+        storageEnabled: false,
+        usedBytes: null,
+        maxBytes: this.maxTotalBytes,
+        warningThresholdBytes: ASSET_CAPACITY_WARNING_BYTES,
+        warning: false,
+      };
+    }
+    let usedBytes: number;
+    try {
+      usedBytes = await this.repository.sumByteSize();
+    } catch {
+      throw new AppError("ASSET_CAPACITY_UNAVAILABLE", "Asset capacity is temporarily unavailable", 503, true);
+    }
+    if (!Number.isSafeInteger(usedBytes) || usedBytes < 0) {
+      throw new AppError("ASSET_CAPACITY_UNAVAILABLE", "Asset capacity is temporarily unavailable", 503, true);
+    }
+    return {
+      storageEnabled: true,
+      usedBytes,
+      maxBytes: this.maxTotalBytes,
+      warningThresholdBytes: ASSET_CAPACITY_WARNING_BYTES,
+      warning: usedBytes >= ASSET_CAPACITY_WARNING_BYTES,
+    };
   }
 
   async previewOrphans(request: { prefix?: AssetOrphanPrefix; limit?: number } = {}): Promise<AssetOrphanPage> {

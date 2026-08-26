@@ -31,6 +31,25 @@ beforeEach(async () => {
 });
 
 describe("M2 asset upload boundary", () => {
+  it("exposes capacity only to administrators and reports free-tier storage as disabled", async () => {
+    const contributor = await memberApi("asset-owner", "/api/admin/assets/capacity", undefined, createApp({ assetStorage: null }));
+    expect(contributor.status).toBe(403);
+
+    const admin = await memberApi("asset-admin", "/api/admin/assets/capacity", undefined, createApp({ assetStorage: null }));
+    expect(admin.status).toBe(200);
+    await expect(admin.json()).resolves.toEqual({
+      storageEnabled: false,
+      usedBytes: null,
+      maxBytes: 9 * 1024 * 1024 * 1024,
+      warningThresholdBytes: 8 * 1024 * 1024 * 1024,
+      warning: false,
+    });
+
+    const query = await memberApi("asset-admin", "/api/admin/assets/capacity?limit=1", undefined, createApp({ assetStorage: null }));
+    expect(query.status).toBe(400);
+    await expect(query.json()).resolves.toMatchObject({ error: { code: "REQUEST_QUERY_INVALID" } });
+  });
+
   it("returns a stable free-tier error before reading or persisting a binary upload", async () => {
     const response = await memberApi("asset-owner", "/api/assets", {
       method: "POST",

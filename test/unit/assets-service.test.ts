@@ -160,6 +160,32 @@ const richFormatMatrix = [
 ] as const;
 
 describe("AssetService", () => {
+  it("reports a bounded admin-only capacity snapshot and hides usage in free text mode", async () => {
+    const db = repository();
+    db.assets.push({
+      id: "asset-capacity-1", ownerId: "member-1", objectKey: "staging/asset-capacity-1",
+      originalName: "notes.txt", contentType: "text/plain", byteSize: 8 * 1024 * 1024 * 1024,
+      contentSha256: "a".repeat(64), idempotencyKey: "capacity-1", status: "ready",
+      createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z",
+    });
+    const enabled = new AssetService(bucket(), db);
+    await expect(enabled.capacity()).resolves.toEqual({
+      storageEnabled: true,
+      usedBytes: 8 * 1024 * 1024 * 1024,
+      maxBytes: 9 * 1024 * 1024 * 1024,
+      warningThresholdBytes: 8 * 1024 * 1024 * 1024,
+      warning: true,
+    });
+
+    await expect(new AssetService(undefined, db).capacity()).resolves.toEqual({
+      storageEnabled: false,
+      usedBytes: null,
+      maxBytes: 9 * 1024 * 1024 * 1024,
+      warningThresholdBytes: 8 * 1024 * 1024 * 1024,
+      warning: false,
+    });
+  });
+
   it("cancels a queued asset before removing its staging object", async () => {
     const db = repository();
     const originals = bucket();

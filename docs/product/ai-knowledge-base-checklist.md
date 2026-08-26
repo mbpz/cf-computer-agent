@@ -50,7 +50,7 @@
 - [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；验收：越权和过期拒绝。
 - [ ] `ING-008` P0/M2 完成接口 HEAD 校验；验收：对象大小、类型和存在性一致后才建 Asset。
 - [x] `ING-009` P0/M2 9 GB R2 写入断路器；状态：L/W；验收：D1 累计达到 `maxAssetTotalBytes` 时返回 507，写入前拒绝且文本 `/api/submissions` 路径不受影响。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`。
-- [ ] `ING-010` P0/M2 8 GB 预警；验收：admin 可见且不向 contributor 暴露账户细节。
+- [x] `ING-010` P0/M2 8 GB 预警；状态：L/W；验收：管理员通过 `GET /api/admin/assets/capacity` 查看有界容量快照；达到 8 GiB 时 `warning=true`，贡献者 fail-closed 403，免费文本模式返回 `storageEnabled=false` 且不暴露 D1/R2 使用量。证据：`src/assets/service.ts`、`src/routes/admin.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/worker/m2-assets.test.ts -t capacity`。
 - [x] `ING-011` P0/M2 单文件大小限制；状态：L/W；验收：前端 10 MiB preflight 与 Worker body bound/服务校验一致，超限不建资产。证据：`frontend/components/assets/asset-upload-model.ts`、`src/http.ts`、`src/assets/service.ts`、`test/unit/frontend-submit-pages.test.tsx`、`test/worker/m2-assets.test.ts`。
 - [x] `ING-012` P0/M2 上传中断回收；状态：L/W；验收：R2 写成功但 D1 双写失败时补偿删除 staging；补偿失败对象无 D1 引用，可由 orphan grace 扫描/显式回收。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`docs/operations/m2-asset-ingestion.md`。
 - [ ] `ING-013` P0/M2 Asset/Submission 配对写入；验收：任一失败不留下可见孤儿记录。
