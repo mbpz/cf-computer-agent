@@ -356,7 +356,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `OPS-011` P0/M2 Job 重投扫描；验收：Queue 丢失/过期后从 D1 恢复。
 - [ ] `OPS-012` P0/M4 Vectorize index 配置；验收：384 维、metadata indexes、binding 和 rebuild。
 - [ ] `OPS-013` P0/M4 Vectorize 用量断路器；验收：80% 后停止普通向量。
-- [ ] `OPS-014` P0/M2 Workers AI 日额度策略；验收：优先级、deferred_quota 和次日恢复。
+- [x] `OPS-014` P0/M2 Workers AI 日额度策略；状态：L；验收：provider-free quota policy 为 interactive 保留有界额度，ingestion/research 超过可用配额返回 `defer` 与 `deferredUntil`，80% 进入 degraded、100% exhausted，次日 UTC 窗口确定性恢复；非法元数据 fail-closed。证据：`src/ai/quota-policy.ts`、`test/unit/quota-policy.test.ts`；当前策略原语未声明远程 AI 用量账本。
 - [x] `OPS-015` P0/M1 D1 query 成本证据；状态：R；证据：`docs/operations/evidence/m1-release-2026-08-23.md`，13 个有界生产只读路径记录 returned rows、rows_read、rows_written。
 - [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界；Submit/Search 的 Space/Collection/Tag 第 51 项仅由可访问的显式 Load more 获取，去重、single-flight 且抑制 stale scope 结果。
 - [x] `OPS-017` P0/M7 全量导出；状态：L；验收：manifest、metadata、Revision、原件和引用映射。证据：`src/ops/export-package.ts`、`test/unit/export-package.test.ts`；命令：`rtk npx vitest run test/unit/export-package.test.ts && rtk npm run typecheck`。当前为离线导出包构建器，支持原件元数据/可选内联字节；D1 远程读取、R2 对象扫描和生产导出仍需后续 OPS-022/付费资源边界授权。
