@@ -16,7 +16,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
-import { createKnowledgeReaderRequestController, type KnowledgeRevision } from "./lib/knowledge-reader-data";
+import { createKnowledgeReaderRequestController, loadKnowledgeRevisionDiff, type KnowledgeRevision, type KnowledgeRevisionDiff } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data";
@@ -107,11 +107,15 @@ function decodeRouteId(pathname: string): string {
 
 function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRuntime; knowledgeItemId: string }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
+  const diffGeneration = useRef(0);
   useEffect(() => {
     const controller = createKnowledgeReaderRequestController();
+    const generation = ++diffGeneration.current;
     const request = controller.request(knowledgeItemId);
     setState({ kind: "loading" });
+    setDiffState({ kind: "idle" });
     void request.promise.then(({ generation, revision }) => {
       if (controller.isCurrent(generation)) setState({ kind: "ready", revision });
     }).catch((error: unknown) => {
@@ -119,12 +123,23 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
         setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_READER_ERROR") });
       }
     });
-    return () => controller.cancel();
+    return () => { controller.cancel(); if (diffGeneration.current === generation) diffGeneration.current += 1; };
   }, [knowledgeItemId, locale, retry]);
+  const showDiff = async () => {
+    if (state.kind !== "ready" || !state.revision.previousRevisionId || diffState.kind === "loading") return;
+    const generation = diffGeneration.current;
+    setDiffState({ kind: "loading" });
+    try {
+      const diff = await loadKnowledgeRevisionDiff(knowledgeItemId, state.revision.previousRevisionId, state.revision.id);
+      if (diffGeneration.current === generation) setDiffState({ kind: "ready", diff });
+    } catch {
+      if (diffGeneration.current === generation) setDiffState({ kind: "error" });
+    }
+  };
   if (state.kind !== "ready") {
     return <KnowledgeReaderPage locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", markdown: "" }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
-  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} />;
+  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {

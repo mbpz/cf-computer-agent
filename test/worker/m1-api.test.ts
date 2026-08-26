@@ -799,6 +799,27 @@ describe("M1 trusted knowledge HTTP journey", () => {
     const historical = await memberApi("contributor", `/api/knowledge/${first.knowledgeItemId}/revisions/${first.id}`);
     expect(historical.status).toBe(200);
     await expect(historical.json()).resolves.toMatchObject({ revision: { id: first.id, title: "Version one", isCurrent: false } });
+
+    const diff = await memberApi(
+      "contributor",
+      `/api/knowledge/${first.knowledgeItemId}/revisions/${first.id}/diff/${revision.revision.id}`,
+    );
+    expect(diff.status).toBe(200);
+    await expect(diff.json()).resolves.toMatchObject({
+      diff: {
+        fromRevisionId: first.id,
+        toRevisionId: revision.revision.id,
+        changed: true,
+        stats: { added: 1, removed: 1, truncated: false },
+        metadataChanges: [{ field: "title", from: "Version one", to: "Version two" }],
+      },
+    });
+
+    await expectApiError(
+      memberApi("contributor", `/api/knowledge/${first.knowledgeItemId}/revisions/${first.id}/diff/hidden-revision`),
+      404,
+      "KNOWLEDGE_NOT_FOUND",
+    );
   });
 
   it("submits, reviews, publishes, lists, reads, searches, answers, and preserves citation history", async () => {

@@ -88,6 +88,21 @@ export async function routeLibraryApi(
   }
 
   const revision = /^\/api\/knowledge\/([^/]+)\/revisions\/([^/]+)$/.exec(url.pathname);
+  const revisionDiff = /^\/api\/knowledge\/([^/]+)\/revisions\/([^/]+)\/diff\/([^/]+)$/.exec(url.pathname);
+  if (revisionDiff) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(
+      { diff: await services.library.diff(
+        scope,
+        decodePathId(revisionDiff[1]!),
+        decodePathId(revisionDiff[2]!),
+        decodePathId(revisionDiff[3]!),
+      ) },
+      200,
+      context.requestId,
+    );
+  }
   if (revision) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireNoQuery(url);

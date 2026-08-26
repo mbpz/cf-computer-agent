@@ -5,6 +5,7 @@ import type { PublishedContentReader } from "../knowledge/types";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
 import { normalizeSearchQuery } from "./lexical";
 import { SEARCH_POLICY } from "./search-policy";
+import { buildRevisionDiff, type RevisionDiffResult } from "./revision-diff";
 import type {
   AuthorizedRevisionRecord,
   RepositoryChunkPreviewRequest,
@@ -94,6 +95,44 @@ export class LibraryService {
     const record = await this.repository.findRevision(scope, knowledgeItemId, revisionId);
     if (!record) throw knowledgeNotFound();
     return this.readRevision(record);
+  }
+
+  async diff(
+    scope: LibraryScope,
+    knowledgeItemId: string,
+    fromRevisionId: string,
+    toRevisionId: string,
+  ): Promise<RevisionDiffResult> {
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    assertLookupId(fromRevisionId);
+    assertLookupId(toRevisionId);
+    const [fromRecord, toRecord] = await Promise.all([
+      this.repository.findRevision(scope, knowledgeItemId, fromRevisionId),
+      this.repository.findRevision(scope, knowledgeItemId, toRevisionId),
+    ]);
+    if (!fromRecord || !toRecord) throw knowledgeNotFound();
+    const [from, to] = await Promise.all([this.readRevision(fromRecord), this.readRevision(toRecord)]);
+    return buildRevisionDiff(
+      {
+        id: from.id,
+        title: from.title,
+        tags: from.tagIds,
+        visibility: from.visibility,
+        parserSchemaVersion: from.parserSchemaVersion,
+        codeMetadata: from.codeMetadata,
+        markdown: from.markdown,
+      },
+      {
+        id: to.id,
+        title: to.title,
+        tags: to.tagIds,
+        visibility: to.visibility,
+        parserSchemaVersion: to.parserSchemaVersion,
+        codeMetadata: to.codeMetadata,
+        markdown: to.markdown,
+      },
+    );
   }
 
   async previewChunks(
@@ -247,6 +286,7 @@ export class LibraryService {
       publishedBy: record.publishedBy,
       publishedAt: record.publishedAt,
       isCurrent: record.isCurrent,
+      previousRevisionId: record.previousRevisionId ?? null,
       markdown,
       chunks: record.chunks.map((chunk) => ({
         ...chunk,

@@ -183,7 +183,7 @@
 - [ ] `READ-008` P0/M2 幻灯片定位；验收：slide number 和元素顺序可理解。
 - [x] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。证据：可见性授权 CTE 后联结 Review/SourceVersion，Reader 以文本节点显示稳定 ID、ordinal、parser schema、code metadata 和 index status；不导出 email/path/hash/provider 字段。
 - [x] `READ-010` P0/M1 历史 Revision；状态：L/W；验收：旧引用可读但明确非 current。
-- [ ] `READ-011` P1/M3 Revision diff；验收：正文和 metadata 差异有界展示。
+- [x] `READ-011` P1/M3 Revision diff；状态：L/W；验收：授权成员可通过 `GET /api/knowledge/:knowledgeItemId/revisions/:fromRevisionId/diff/:toRevisionId` 查看有界正文行操作与 title/tags/visibility/parser/code metadata 差异；240 行输出上限、超限标记和隐藏 Revision 统一 404。Reader 在存在上一修订时提供中英文对比入口。证据：`src/library/revision-diff.ts`、`src/library/service.ts`、`src/routes/library.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/revision-diff.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/revision-diff.test.ts test/unit/library-service.test.ts test/worker/m1-api.test.ts -t "diff|publishes an explicit update"`。
 - [ ] `READ-012` P1/M4 Sources panel；验收：原件、解析状态、位置和选中状态。
 - [ ] `READ-013` P1/M4 反向链接；验收：只列当前用户可见 current Revision。
 - [ ] `READ-014` P1/M4 相关知识；验收：理由可解释，FTS-only 可用。

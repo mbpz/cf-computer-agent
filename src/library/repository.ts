@@ -96,6 +96,7 @@ export interface AuthorizedRevisionRecord {
   normalizedPath: string;
   contentSha256: string;
   isCurrent: boolean;
+  previousRevisionId?: string | null;
   chunks: AuthorizedRevisionChunk[];
 }
 
@@ -164,6 +165,7 @@ type RevisionRow = KnowledgeRow & {
   content_sha256: string;
   published_by: string;
   current_revision_id: string;
+  previous_revision_id: string | null;
   chunk_id: string | null;
   parent_chunk_id: string | null;
   ordinal: number | null;
@@ -731,7 +733,16 @@ export class LibraryRepository implements LibraryRepositoryPort {
          SELECT k.id, k.space_id, k.collection_id, k.status,
            ${visibleSearchStatusSql} AS search_status, k.updated_at,
            k.current_revision_id, r.id AS revision_id, r.source_version_id, r.normalized_path,
-           r.content_sha256, r.title, r.tags_json, r.visibility, r.published_by, r.published_at
+           r.content_sha256, r.title, r.tags_json, r.visibility, r.published_by, r.published_at,
+           (SELECT previous.id
+            FROM revisions previous
+            WHERE previous.knowledge_item_id = k.id
+              AND previous.id != r.id
+              AND (previous.published_at < r.published_at
+                OR (previous.published_at = r.published_at AND previous.id < r.id))
+              AND (previous.visibility = 'shared' OR am.role = 'admin')
+            ORDER BY previous.published_at DESC, previous.id DESC
+            LIMIT 1) AS previous_revision_id
          FROM authorized_member am
          JOIN knowledge_items k
          JOIN revisions current_revision ON current_revision.id = k.current_revision_id
@@ -790,6 +801,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       normalizedPath: first.normalized_path,
       contentSha256: first.content_sha256,
       isCurrent: first.current_revision_id === first.revision_id,
+      previousRevisionId: typeof first.previous_revision_id === "string" ? first.previous_revision_id : null,
       chunks: rows.results.flatMap((row) => row.chunk_id === null ? [] : [{
         id: row.chunk_id,
         ...(row.parent_chunk_id ? { parentChunkId: row.parent_chunk_id } : {}),

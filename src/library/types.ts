@@ -111,6 +111,7 @@ export interface RevisionDetail {
   publishedBy: string;
   publishedAt: string;
   isCurrent: boolean;
+  previousRevisionId: string | null;
   markdown: string;
   chunks: RevisionChunkLocation[];
 }

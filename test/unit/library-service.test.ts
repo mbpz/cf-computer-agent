@@ -73,6 +73,37 @@ describe("LibraryService", () => {
     expect(reads).toBe(0);
   });
 
+  it("builds an authorized, bounded diff without exposing storage paths", async () => {
+    const from = { ...revisionRecord(), revisionId: "revision-from", isCurrent: false, title: "Old title", normalizedPath: "/old", contentSha256: "b".repeat(64) };
+    const to = { ...revisionRecord(), revisionId: "revision-to", normalizedPath: "/new", contentSha256: "c".repeat(64) };
+    const repository = repositoryFixture({
+      async findRevision(_scope, _knowledgeItemId, revisionId) {
+        return revisionId === "revision-from" ? from : revisionId === "revision-to" ? to : null;
+      },
+    });
+    const service = new LibraryService(repository, {
+      async read(path) { return path === "/old" ? "# Old title\n\nBefore\n" : "# Trusted title\n\nAfter\n"; },
+    });
+
+    const diff = await service.diff(contributor, "knowledge-1", "revision-from", "revision-to");
+
+    expect(diff).toMatchObject({
+      fromRevisionId: "revision-from",
+      toRevisionId: "revision-to",
+      changed: true,
+      stats: { added: 2, removed: 2, truncated: false },
+    });
+    expect(JSON.stringify(diff)).not.toMatch(/normalizedPath|contentSha256|\/old|\/new/);
+  });
+
+  it("uses the same not-found boundary for a hidden diff revision", async () => {
+    const repository = repositoryFixture({
+      async findRevision(_scope, _knowledgeItemId, revisionId) { return revisionId === "revision-from" ? revisionRecord() : null; },
+    });
+    await expect(new LibraryService(repository, noContentReader).diff(contributor, "knowledge-1", "revision-from", "revision-hidden"))
+      .rejects.toEqual(notFoundError());
+  });
+
   it("uses the same not-found contract for hidden revisions and citations", async () => {
     const repository = repositoryFixture({
       async findRevision() { return null; },
