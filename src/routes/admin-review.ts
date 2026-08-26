@@ -12,10 +12,12 @@ import {
 import type { Principal } from "../identity/principal";
 import type { PublicationService } from "../publication/service";
 import type { PublishedRevision, ReviewPreview } from "../publication/types";
+import type { ReviewCommentsService } from "../review-comments/service";
 import { pageRequest, strictRecord, stringValue } from "./member";
 
 export interface AdminReviewRouteServices {
   publication: PublicationService;
+  reviewComments: ReviewCommentsService;
 }
 
 export async function routeAdminReviewApi(
@@ -32,6 +34,27 @@ export async function routeAdminReviewApi(
   if (!reviewNamespace) return undefined;
 
   requireCapability(principal, "knowledge:review");
+
+  const adminComments = /^\/api\/admin\/submissions\/([^/]+)\/comments(?:\/([^/]+))?$/.exec(url.pathname);
+  if (adminComments) {
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const submissionId = decodePathId(adminComments[1]!);
+    const commentId = adminComments[2] === undefined ? undefined : decodePathId(adminComments[2]);
+    const viewer = { memberId: reviewer.memberId, role: "admin" as const };
+    if (request.method === "GET" && commentId === undefined) {
+      return jsonResponse({ comments: await services.reviewComments.list(viewer, submissionId) }, 200, context.requestId);
+    }
+    if (request.method === "POST" && commentId === undefined) {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["body"], "REVIEW_COMMENT_REQUEST_INVALID");
+      return jsonResponse({ comment: await services.reviewComments.create(viewer, submissionId, input.body) }, 201, context.requestId);
+    }
+    if (request.method === "PATCH" && commentId !== undefined) {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["body"], "REVIEW_COMMENT_REQUEST_INVALID");
+      return jsonResponse({ comment: await services.reviewComments.edit(viewer, commentId, input.body) }, 200, context.requestId);
+    }
+    return methodNotAllowed(commentId === undefined ? "GET, POST" : "PATCH", context);
+  }
 
   if (url.pathname === "/api/admin/publications/recover") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);

@@ -926,6 +926,40 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(item).not.toHaveProperty("reviewerId");
     expect(item).not.toHaveProperty("reviewerEmail");
   });
+
+  it("keeps review comments visible to admin and owner with append-only edits", async () => {
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "text", title: "Commented submission", content: "Body",
+    }, "review-comment-key1");
+    const submissionId = created.body.submission.id;
+    const ownerCreate = await memberApi("contributor", `/api/submissions/${submissionId}/comments`, {
+      method: "POST", body: JSON.stringify({ body: "Owner context" }),
+    });
+    expect(ownerCreate.status).toBe(201);
+    const ownerComment = await ownerCreate.json<{ comment: Record<string, unknown> }>();
+    expect(ownerComment.comment).toMatchObject({ authorRole: "owner", body: "Owner context" });
+    expect(ownerComment.comment).not.toHaveProperty("authorId");
+
+    const adminCreate = await memberApi("admin", `/api/admin/submissions/${submissionId}/comments`, {
+      method: "POST", body: JSON.stringify({ body: "Admin guidance" }),
+    });
+    expect(adminCreate.status).toBe(201);
+    const adminComment = await adminCreate.json<{ comment: { id: string; authorId?: string } }>();
+    expect(adminComment.comment.authorId).toBe("member-admin");
+
+    const ownerEdit = await memberApi("contributor", `/api/submissions/${submissionId}/comments/${ownerComment.comment.id}`, {
+      method: "PATCH", body: JSON.stringify({ body: "Owner context revised" }),
+    });
+    expect(ownerEdit.status).toBe(200);
+    const ownerComments = await memberApi("contributor", `/api/submissions/${submissionId}/comments`);
+    await expect(ownerComments.json()).resolves.toMatchObject({ comments: [
+      { body: "Owner context", authorRole: "owner" },
+      { body: "Admin guidance", authorRole: "admin" },
+      { body: "Owner context revised", supersedesCommentId: ownerComment.comment.id },
+    ] });
+    const otherComments = await memberApi("other", `/api/submissions/${submissionId}/comments`);
+    await expectApiError(Promise.resolve(otherComments), 404, "REVIEW_COMMENT_NOT_FOUND");
+  });
   it("uses only the Idempotency-Key header and replays without duplicate writes", async () => {
     const input = {
       requestedSpaceId: "default" as const,

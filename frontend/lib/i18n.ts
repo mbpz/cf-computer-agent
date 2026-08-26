@@ -255,6 +255,13 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_ACTION_SUCCESS: "Review decision saved.",
     ADMIN_REVIEW_ACTION_ERROR: "Unable to save this review decision.",
     ADMIN_REVIEW_ACTION_PENDING: "Saving…",
+    ADMIN_REVIEW_COMMENTS: "Review comments",
+    ADMIN_REVIEW_COMMENT_EMPTY: "No review comments yet.",
+    ADMIN_REVIEW_COMMENT_PLACEHOLDER: "Add context for the submitter or next reviewer…",
+    ADMIN_REVIEW_COMMENT_ADD: "Add comment",
+    ADMIN_REVIEW_COMMENT_ERROR: "Unable to save or load comments.",
+    ADMIN_REVIEW_COMMENT_AUTHOR_ADMIN: "Administrator",
+    ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "Submitter",
   },
   "zh-CN": {
     NAV_HOME: "首页",
@@ -501,6 +508,13 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_ACTION_SUCCESS: "审核决定已保存。",
     ADMIN_REVIEW_ACTION_ERROR: "无法保存审核决定。",
     ADMIN_REVIEW_ACTION_PENDING: "保存中…",
+    ADMIN_REVIEW_COMMENTS: "审核评论",
+    ADMIN_REVIEW_COMMENT_EMPTY: "暂时没有审核评论。",
+    ADMIN_REVIEW_COMMENT_PLACEHOLDER: "为提交者或下一位审核员补充上下文…",
+    ADMIN_REVIEW_COMMENT_ADD: "添加评论",
+    ADMIN_REVIEW_COMMENT_ERROR: "无法加载或保存评论。",
+    ADMIN_REVIEW_COMMENT_AUTHOR_ADMIN: "管理员",
+    ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "提交者",
   },
 };
 

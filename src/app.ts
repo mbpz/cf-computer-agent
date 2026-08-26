@@ -58,6 +58,8 @@ import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
 import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
+import { ReviewCommentsRepository } from "./review-comments/repository";
+import { ReviewCommentsService } from "./review-comments/service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -218,6 +220,7 @@ function createRequestServices(
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
+    reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
   };
 }
 

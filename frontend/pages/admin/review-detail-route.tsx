@@ -4,6 +4,7 @@ import type { Fetcher } from "../../lib/api";
 import { loadReviewDetail, submitReviewDecision, type ReviewDecision, type ReviewDetailData } from "../../components/review/review-detail-data";
 import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } from "./review-detail-page";
 import { createAsyncOwner } from "../../lib/async-owner";
+import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error"; message: string };
 
@@ -40,5 +41,5 @@ export function ReviewDetailRoute({ id, locale, requester = fetch }: { id: strin
   };
 
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
-  return <ReviewDetailPage locale={locale} state={pageState} decisionState={decisionState} onDecision={(action) => { void decide(action); }} />;
+  return <ReviewDetailPage locale={locale} state={pageState} decisionState={decisionState} onDecision={(action) => { void decide(action); }} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }

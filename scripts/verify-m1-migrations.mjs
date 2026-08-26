@@ -23,6 +23,7 @@ const migrations = [
   ["0019_m5_chat_conversations.sql", "4930029c6987c648674edc6f977d1792e8ed967468afe0057a92d185c33fad5b"],
   ["0020_m5_chat_cancel.sql", "6097ccbf52cc3bf7e7ca85a84d98612c723d2ac4c77d897239f55e79ee262468"],
   ["0021_m5_chat_feedback.sql", "a87aa11779e9aa26523d4c00279cb83b7f4aabc1b12d2dd30a6a48ca71c40712"],
+  ["0022_m4_review_comments.sql", "9f65606f504dddbf7d4c573dd0ed71ec542f434fa3420bac5a9767320181380c"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

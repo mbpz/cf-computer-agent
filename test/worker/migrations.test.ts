@@ -1012,6 +1012,37 @@ describe("Phase 1 control-plane migrations", () => {
     expect(collectionInvalidationPlan).not.toMatch(/SCAN knowledge_items|USE TEMP B-TREE/iu);
   });
 
+  it("creates append-only review comments with bounded bodies and relationships", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const tables = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'review_comments'",
+    ).all<{ name: string }>();
+    expect(tables.results).toEqual([{ name: "review_comments" }]);
+    const indexes = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('review_comments_submission_created', 'review_comments_author_created') ORDER BY name",
+    ).all<{ name: string }>();
+    expect(indexes.results).toEqual([
+      { name: "review_comments_author_created" },
+      { name: "review_comments_submission_created" },
+    ]);
+    const timestamp = "2026-08-26T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?)",
+    ).bind("comment-owner", "github:comment-owner", "comment-owner@example.test", timestamp, timestamp).run();
+    await env.DB.prepare(
+      "INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES (?, ?, 'default', 'text', 'review_pending', ?, ?, ?, ?)",
+    ).bind("comment-submission", "comment-owner", "Commented", "Body", timestamp, timestamp).run();
+    await env.DB.prepare(
+      "INSERT INTO review_comments (id, submission_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind("comment-1", "comment-submission", "comment-owner", "First", timestamp).run();
+    await expect(env.DB.prepare(
+      "INSERT INTO review_comments (id, submission_id, author_id, body, created_at) VALUES ('comment-bad', 'comment-submission', 'comment-owner', '', ?)",
+    ).bind(timestamp).run()).rejects.toThrow();
+    await expect(env.DB.prepare(
+      "INSERT INTO review_comments (id, submission_id, author_id, body, created_at) VALUES ('comment-orphan', 'missing', 'comment-owner', 'Orphan', ?)",
+    ).bind(timestamp).run()).rejects.toThrow();
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

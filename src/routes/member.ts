@@ -9,6 +9,7 @@ import type { SubmissionsService } from "../submissions/service";
 import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } from "../submissions/types";
 import type { TagsService } from "../tags/service";
 import type { SavedViewsService } from "../saved-views/service";
+import type { ReviewCommentsService } from "../review-comments/service";
 
 export interface MemberRouteServices {
   assets: AssetService;
@@ -16,6 +17,7 @@ export interface MemberRouteServices {
   submissions: SubmissionsService;
   tags: TagsService;
   savedViews: SavedViewsService;
+  reviewComments: ReviewCommentsService;
 }
 
 export async function routeMemberApi(
@@ -210,6 +212,27 @@ export async function routeMemberApi(
       submission: result.submission,
       duplicateCandidate: result.duplicateCandidate,
     }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
+  }
+
+  const submissionComments = /^\/api\/submissions\/([^/]+)\/comments(?:\/([^/]+))?$/.exec(url.pathname);
+  if (submissionComments) {
+    requireCapability(principal, "submission:read-own");
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const submissionId = decodePathId(submissionComments[1]!);
+    const commentId = submissionComments[2] === undefined ? undefined : decodePathId(submissionComments[2]);
+    if (request.method === "GET" && commentId === undefined) {
+      return jsonResponse({ comments: await services.reviewComments.list({ memberId: member.memberId, role: member.role }, submissionId) }, 200, context.requestId);
+    }
+    if (request.method === "POST" && commentId === undefined) {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["body"], "REVIEW_COMMENT_REQUEST_INVALID");
+      return jsonResponse({ comment: await services.reviewComments.create({ memberId: member.memberId, role: member.role }, submissionId, input.body) }, 201, context.requestId);
+    }
+    if (request.method === "PATCH" && commentId !== undefined) {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["body"], "REVIEW_COMMENT_REQUEST_INVALID");
+      return jsonResponse({ comment: await services.reviewComments.edit({ memberId: member.memberId, role: member.role }, commentId, input.body) }, 200, context.requestId);
+    }
+    return methodNotAllowed(commentId === undefined ? "GET, POST" : "PATCH", context);
   }
 
   if (url.pathname === "/api/saved-views") {
