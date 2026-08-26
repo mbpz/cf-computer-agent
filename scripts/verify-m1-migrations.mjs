@@ -16,6 +16,7 @@ const migrations = [
   ["0012_m5_private_notes.sql", "f9dbb34250383552ffbe0e4b80cff5d57f4694c5a1f25ad4c7000ee9d44e88b0"],
   ["0013_m6_research_reports.sql", "67c93f32c7c1615bf7dd098ac1fe9ccfa3a34aee057eb83576ecc833108e1286"],
   ["0014_m6_research_run_plan.sql", "de06a3f61af248a62e3ac69da92cef9c7693366b684f6105e65997389c69ad46"],
+  ["0015_m6_research_plan_steps.sql", "9b58938e273178a8136b486360f34947fa698d758e6e2fc23231f91205c8010f"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

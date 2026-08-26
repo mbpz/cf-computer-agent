@@ -26,13 +26,13 @@ const RESPONSE_SCHEMA = {
   },
 } as const;
 
-export interface ResearchRunPlan { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[]; completion: string[] }
+export interface ResearchRunPlan { spaceIds: string[]; collectionIds: string[]; knowledgeItemIds: string[]; completion: string[]; steps: string[] }
 export interface ResearchRun { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; status: "draft" | "running" | "paused" | "completed" | "cancelled" }
 export interface ResearchReportCitation extends SourceSummaryCitation { revisionId: string; chunkId: string; publishedAt: string }
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -50,10 +50,15 @@ export class ResearchReportService {
     return this.repository.createRun({ id: crypto.randomUUID(), ownerMemberId: scope.memberId, knowledgeItemId, goal: normalizedGoal, plan, createdAt: this.now().toISOString() });
   }
 
+  async approve(scope: LibraryScope, researchRunId: string): Promise<ResearchRun> {
+    assertScope(scope);
+    return this.repository.approveRun(scope, researchRunId);
+  }
+
   async generate(scope: LibraryScope, researchRunId: string, sources: CitationSource[]): Promise<ResearchReportResult> {
     assertScope(scope);
     const run = await this.repository.findRun(scope, researchRunId);
-    if (!run || run.ownerMemberId !== scope.memberId || (run.status !== "draft" && run.status !== "running")) throw notFound();
+    if (!run || run.ownerMemberId !== scope.memberId || run.status !== "running") throw notFound();
     const prepared = prepareSources(run.knowledgeItemId, sources);
     let raw: unknown;
     try {
@@ -115,8 +120,9 @@ function sanitize(value: string, max: number): string { const text = value.norma
 function validText(value: string, max: number): boolean { return value.length > 0 && !/[\p{Cc}\p{Cf}]/u.test(value) && !hasMalformedSurrogate(value) && codePointLength(value) <= max; }
 function isCitationSource(value: unknown): value is CitationSource { if (!isPlainRecord(value)) return false; return typeof value.citationId === "string" && validText(value.citationId, MAX_ID) && typeof value.knowledgeItemId === "string" && validText(value.knowledgeItemId, 128) && typeof value.revisionId === "string" && validText(value.revisionId, 128) && typeof value.chunkId === "string" && validText(value.chunkId, 128) && typeof value.title === "string" && validText(value.title, 256) && Array.isArray(value.headingPath) && value.headingPath.every((part) => typeof part === "string" && validText(part, 256)) && typeof value.startLine === "number" && Number.isSafeInteger(value.startLine) && value.startLine >= 1 && typeof value.endLine === "number" && Number.isSafeInteger(value.endLine) && value.endLine >= value.startLine && typeof value.publishedAt === "string" && validText(value.publishedAt, 64) && typeof value.body === "string" && value.body.length > 0 && !hasMalformedSurrogate(value.body) && codePointLength(value.body) <= 128 * 1024; }
 function assertScope(scope: LibraryScope): void { if (!isPlainRecord(scope) || typeof scope.memberId !== "string" || !scope.memberId || (scope.role !== "admin" && scope.role !== "contributor")) throw new AppError("FORBIDDEN", "Knowledge access is not permitted", 403); }
-function normalizePlan(value: unknown): ResearchRunPlan { if (!isPlainRecord(value) || !hasExactKeys(value, ["spaceIds", "collectionIds", "knowledgeItemIds", "completion"]) || !boundedIds(value.spaceIds, 8) || !boundedIds(value.collectionIds, 8) || !boundedIds(value.knowledgeItemIds, 8) || !Array.isArray(value.completion) || value.completion.length < 1 || value.completion.length > 8 || !value.completion.every((item) => typeof item === "string" && item.trim().length > 0 && codePointLength(item.trim()) <= 512)) throw new AppError("RESEARCH_RUN_INVALID", "Research goal is invalid", 400); return { spaceIds: value.spaceIds as string[], collectionIds: value.collectionIds as string[], knowledgeItemIds: value.knowledgeItemIds as string[], completion: (value.completion as string[]).map((item) => item.trim()) }; }
+function normalizePlan(value: unknown): ResearchRunPlan { if (!isPlainRecord(value) || !hasExactKeys(value, ["spaceIds", "collectionIds", "knowledgeItemIds", "completion", "steps"]) || !boundedIds(value.spaceIds, 8) || !boundedIds(value.collectionIds, 8) || !boundedIds(value.knowledgeItemIds, 8) || !boundedText(value.completion, 8) || !boundedText(value.steps, 8)) throw new AppError("RESEARCH_RUN_INVALID", "Research goal is invalid", 400); return { spaceIds: value.spaceIds as string[], collectionIds: value.collectionIds as string[], knowledgeItemIds: value.knowledgeItemIds as string[], completion: (value.completion as string[]).map((item) => item.trim()), steps: (value.steps as string[]).map((item) => item.trim()) }; }
 function boundedIds(value: unknown, max: number): value is string[] { return Array.isArray(value) && value.length <= max && value.every((item) => typeof item === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(item)); }
+function boundedText(value: unknown, max: number): value is string[] { return Array.isArray(value) && value.length >= 1 && value.length <= max && value.every((item) => typeof item === "string" && item.trim().length > 0 && codePointLength(item.trim()) <= 512); }
 function notFound(): AppError { return new AppError("RESEARCH_RUN_NOT_FOUND", "Research run was not found", 404); }
 function invalid(): AppError { return new AppError("RESEARCH_REPORT_INVALID", "Research report request is invalid", 400); }
 function ungrounded(): AppError { return new AppError("RESEARCH_REPORT_UNGROUNDED", "Research report could not be grounded in authorized sources", 422); }
