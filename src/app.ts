@@ -236,6 +236,12 @@ function getQuestion(value: unknown): string {
 
 function withAssetSecurityHeaders(response: Response, requestId: string): Response {
   const headers = new Headers(response.headers);
+  // The HTML shell contains the hashed React entrypoint. Never let an edge
+  // cache keep an older shell after a deployment, otherwise browser actions
+  // (such as the POST-only logout control) can be wired to a stale bundle.
+  if (headers.get("content-type")?.toLowerCase().startsWith("text/html") === true) {
+    headers.set("cache-control", "no-store");
+  }
   headers.set("content-security-policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'");
   headers.set("referrer-policy", "no-referrer");
   headers.set("x-content-type-options", "nosniff");

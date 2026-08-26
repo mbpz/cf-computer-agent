@@ -877,6 +877,7 @@ describe("Worker application", () => {
     const page = await SELF.fetch("https://example.test/");
     expect(page.status).toBe(200);
     expectProtectedResponse(page);
+    expect(page.headers.get("cache-control")).toBe("no-store");
     await expect(page.text()).resolves.toContain("Memory Garden");
 
     const manifest = await SELF.fetch("https://example.test/manifest.json");
