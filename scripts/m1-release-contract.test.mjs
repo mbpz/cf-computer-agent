@@ -36,6 +36,7 @@ const expectedMigrations = [
   ["0011_m4_saved_views.sql", "f0f8c000dd8e0d41f5defdd4496e52080fa58f6ac3f672baa813cef8edbce688"],
   ["0012_m5_private_notes.sql", "f9dbb34250383552ffbe0e4b80cff5d57f4694c5a1f25ad4c7000ee9d44e88b0"],
   ["0013_m6_research_reports.sql", "67c93f32c7c1615bf7dd098ac1fe9ccfa3a34aee057eb83576ecc833108e1286"],
+  ["0014_m6_research_run_plan.sql", "de06a3f61af248a62e3ac69da92cef9c7693366b684f6105e65997389c69ad46"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -189,7 +190,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-files count=13$/mu);
+    assert.match(result.output, /^\[pass\] migration-files count=14$/mu);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {
@@ -226,8 +227,8 @@ test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0008_m2_parent_chunks.sql/mu);
     assert.match(result.output, /0009_m2_chunk_status.sql/mu);
-    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql$/mu);
-    assert.match(result.output, /0013_m6_research_reports.sql$/mu);
+    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql$/mu);
+    assert.match(result.output, /0013_m6_research_reports.sql,0014_m6_research_run_plan.sql$/mu);
   });
   await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);

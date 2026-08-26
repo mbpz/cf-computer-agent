@@ -220,7 +220,7 @@
 ## RES — Deep Research
 
 - [ ] `RES-001` P1/M6 Research Workspace；验收：绑定 Space、来源集合、owner 和状态。
-- [ ] `RES-002` P1/M6 研究目标；验收：长度、范围和完成条件显式。
+- [x] `RES-002` P1/M6 研究目标；状态：L/W；验收：ResearchRun 创建必须同时提供有界 goal、Space/Collection/KnowledgeItem 范围和 1–8 条完成条件；D1 以 scope_json/completion_json 持久化，owner 重新读取时安全解析，非法/越界输入 400。证据：`migrations/0014_m6_research_run_plan.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [ ] `RES-003` P1/M6 研究计划草稿；验收：用户确认后才执行多步检索。
 - [ ] `RES-004` P1/M6 有限步骤预算；验收：工具步数、AI 用量和 wall time 硬限制。
 - [ ] `RES-005` P1/M6 子问题拆解；验收：每个子问题有来源范围和状态。

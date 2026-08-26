@@ -1,26 +1,32 @@
 import { AppError } from "../http";
 import type { LibraryScope } from "../library/types";
-import type { ResearchReportRepository, ResearchReportSaveInput, ResearchRun } from "../ai/research-report-service";
+import type { ResearchReportRepository, ResearchReportSaveInput, ResearchRun, ResearchRunPlan } from "../ai/research-report-service";
 
-type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; status: ResearchRun["status"] };
+type RunRow = { id: string; owner_member_id: string; knowledge_item_id: string; goal: string; scope_json: string; completion_json: string; status: ResearchRun["status"] };
 
 export class ResearchRepository implements ResearchReportRepository {
   constructor(private readonly db: D1Database) {}
 
-  async createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; createdAt: string }): Promise<ResearchRun> {
+  async createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun> {
     await this.db.prepare(
-      `INSERT INTO research_runs (id, owner_member_id, knowledge_item_id, goal, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?)`,
-    ).bind(input.id, input.ownerMemberId, input.knowledgeItemId, input.goal, input.createdAt, input.createdAt).run();
-    return { id: input.id, ownerMemberId: input.ownerMemberId, knowledgeItemId: input.knowledgeItemId, goal: input.goal, status: "draft" };
+      `INSERT INTO research_runs (id, owner_member_id, knowledge_item_id, goal, scope_json, completion_json, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+    ).bind(input.id, input.ownerMemberId, input.knowledgeItemId, input.goal, JSON.stringify({ spaceIds: input.plan.spaceIds, collectionIds: input.plan.collectionIds, knowledgeItemIds: input.plan.knowledgeItemIds }), JSON.stringify(input.plan.completion), input.createdAt, input.createdAt).run();
+    return { id: input.id, ownerMemberId: input.ownerMemberId, knowledgeItemId: input.knowledgeItemId, goal: input.goal, plan: input.plan, status: "draft" };
   }
 
   async findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null> {
     const row = await this.db.prepare(
-      `SELECT id, owner_member_id, knowledge_item_id, goal, status
+      `SELECT id, owner_member_id, knowledge_item_id, goal, scope_json, completion_json, status
        FROM research_runs WHERE id = ? AND owner_member_id = ? LIMIT 1`,
     ).bind(id, scope.memberId).first<RunRow>();
-    return row ? { id: row.id, ownerMemberId: row.owner_member_id, knowledgeItemId: row.knowledge_item_id, goal: row.goal, status: row.status } : null;
+    if (!row) return null;
+    try {
+      const scope = JSON.parse(row.scope_json) as { spaceIds?: unknown; collectionIds?: unknown; knowledgeItemIds?: unknown };
+      const completion = JSON.parse(row.completion_json) as unknown;
+      if (!Array.isArray(scope.spaceIds) || !Array.isArray(scope.collectionIds) || !Array.isArray(scope.knowledgeItemIds) || !Array.isArray(completion)) throw new Error("invalid");
+      return { id: row.id, ownerMemberId: row.owner_member_id, knowledgeItemId: row.knowledge_item_id, goal: row.goal, plan: { spaceIds: scope.spaceIds as string[], collectionIds: scope.collectionIds as string[], knowledgeItemIds: scope.knowledgeItemIds as string[], completion: completion as string[] }, status: row.status };
+    } catch { throw new AppError("RESEARCH_RUN_CORRUPT", "Research run is unavailable", 503, true); }
   }
 
   async nextVersion(researchRunId: string): Promise<number> {

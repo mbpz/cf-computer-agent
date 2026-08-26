@@ -1364,7 +1364,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
       .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
     expect(hit).toBeTruthy();
     const runResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs`, {
-      method: "POST", body: JSON.stringify({ goal: "验证当前方案" }),
+      method: "POST", body: JSON.stringify({ goal: "验证当前方案", scope: { spaceIds: [], collectionIds: [], knowledgeItemIds: [selected.knowledgeItemId] }, completion: ["形成有引用结论"] }),
     });
     expect(runResponse.status).toBe(201);
     const run = (await runResponse.json() as { researchRun: { id: string } }).researchRun;

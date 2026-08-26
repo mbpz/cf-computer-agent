@@ -209,9 +209,9 @@ export async function routeLibraryApi(
     requireNoQuery(url);
     const knowledgeItemId = decodePathId(researchRun[1]!);
     await services.library.detail(scope, knowledgeItemId);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goal"], "RESEARCH_RUN_REQUEST_INVALID");
-    if (!hasExactKeys(input, ["goal"]) || typeof input.goal !== "string") throw new AppError("RESEARCH_RUN_REQUEST_INVALID", "Request body is invalid", 400);
-    return jsonResponse({ researchRun: await services.researchReports.start(scope, knowledgeItemId, input.goal) }, 201, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goal", "scope", "completion"], "RESEARCH_RUN_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["goal", "scope", "completion"]) || typeof input.goal !== "string" || typeof input.scope !== "object" || input.scope === null || Array.isArray(input.scope) || !Array.isArray(input.completion)) throw new AppError("RESEARCH_RUN_REQUEST_INVALID", "Request body is invalid", 400);
+    return jsonResponse({ researchRun: await services.researchReports.start(scope, knowledgeItemId, input.goal, { ...input.scope, completion: input.completion }) }, 201, context.requestId);
   }
 
   const mindmap = /^\/api\/knowledge\/([^/]+)\/mindmap$/.exec(url.pathname);
