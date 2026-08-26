@@ -190,7 +190,7 @@
 - [x] `READ-015` P1/M4 从此处提问；状态：L/W；验收：Reader 入口跳转到 Agent 时显式传递当前 `knowledgeItemId` 的 `items` scope；Agent 请求不会扩大为全库，scope 无效时 fail-closed 回退 `all`。证据：`frontend/pages/knowledge-reader-page.tsx`、`frontend/app.tsx`、`frontend/lib/agent-data.ts`、`test/unit/frontend-a11y.test.tsx`、`test/unit/frontend-agent-data.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/frontend-a11y.test.tsx test/unit/frontend-agent-data.test.ts`。
 - [ ] `READ-016` P1/M5 Note 侧栏；验收：私有默认，显式保存，不改正文。
 - [ ] `READ-017` P1/M4 响应式三栏；验收：移动端转换为可访问抽屉/标签页。
-- [ ] `READ-018` P0/M4 阅读权限回归；验收：URL 猜测、历史 ID、下载均不泄露。
+- [x] `READ-018` P0/M4 阅读权限回归；状态：L/W；验收：真实 Worker 回归覆盖 URL 猜测、hidden/missing Knowledge、历史 shared Revision、citation 和 download；admin_only current 对 contributor 统一 404，历史可见 Revision 仍按授权读取，cross-item/伪造路径不泄露正文、path/hash 或 metadata。证据：`src/library/repository.ts`、`src/library/service.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "submits, reviews, publishes|permission|hidden|download"`。
 
 ## CHAT — 引用问答
 
