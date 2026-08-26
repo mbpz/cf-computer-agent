@@ -43,6 +43,7 @@ describe("frontend accessibility gates", () => {
     expect(html).toContain("source-version-1");
     expect(html).toContain("Sheet1 · A1:B2");
     expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain('href="/agent?scope=items&amp;knowledgeItemId=knowledge-1"');
     expect(html).toContain("相关知识");
     expect(html).toContain("匹配字段 标题, 正文");
     expect(html).not.toMatch(/>\s*(undefined|null)\s*</u);

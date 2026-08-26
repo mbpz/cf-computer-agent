@@ -19,7 +19,7 @@ import { createKnowledgeRequestController, type KnowledgePageResult } from "./li
 import { createKnowledgeReaderRequestController, loadKnowledgeRevisionDiff, loadRelatedKnowledge, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
-import { createAgentRequestController, type AgentAnswer } from "./lib/agent-data";
+import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
@@ -75,17 +75,17 @@ export function App() {
     }
   };
   const kind = pageKindForPath(pathname);
-  const page = renderPage(kind, pathname, locale);
+  const page = renderPage(kind, pathname, locale, window.location.search);
   return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
 }
 
-function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime) {
+function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "") {
   switch (kind) {
     case "home": return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0 }} />;
     case "knowledge": return <KnowledgeRoute locale={locale} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} />;
-    case "agent": return <AgentRoute locale={locale} />;
+    case "agent": return <AgentRoute locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
@@ -271,7 +271,8 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
   return <SearchPage locale={locale} query={query} state={state} onQueryChange={setQuery} onSubmit={submit} onLoadMore={loadMore} onRetry={() => setSubmitVersion((version) => version + 1)} />;
 }
 
-function AgentRoute({ locale }: { locale: LocaleRuntime }) {
+function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {
+  const scope = agentScopeFromSearch(search ?? "");
   const [question, setQuestion] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
@@ -284,7 +285,7 @@ function AgentRoute({ locale }: { locale: LocaleRuntime }) {
     setQuestion(normalized);
     setLastQuestion(normalized);
     setState({ kind: "loading" });
-    const request = controllerRef.current.request(normalized, { kind: "all" });
+    const request = controllerRef.current.request(normalized, scope);
     void request.promise.then(({ generation, answer }) => {
       if (controllerRef.current?.isCurrent(generation)) setState({ kind: "ready", ...answer });
     }).catch((error: unknown) => {
@@ -293,7 +294,16 @@ function AgentRoute({ locale }: { locale: LocaleRuntime }) {
       }
     });
   };
-  return <AgentPage locale={locale} scope={{ kind: "all" }} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onRetry={() => submit(lastQuestion)} />;
+  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onRetry={() => submit(lastQuestion)} />;
+}
+
+function agentScopeFromSearch(search: string): AgentScope {
+  const params = new URLSearchParams(search);
+  if (params.get("scope") !== "items") return { kind: "all" };
+  const knowledgeItemId = params.get("knowledgeItemId");
+  return knowledgeItemId !== null && /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(knowledgeItemId)
+    ? { kind: "items", knowledgeItemIds: [knowledgeItemId] }
+    : { kind: "all" };
 }
 
 function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
