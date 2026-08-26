@@ -74,6 +74,23 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_comparison") {
+      return {
+        response: JSON.stringify({
+          rows: [{
+            topic: "Documented choice",
+            cells: context.sources.map((source) => ({
+              sourceId: source.citationId,
+              text: "The source records a bounded choice.",
+              citationIds: [source.citationId],
+            })),
+          }],
+          consensus: [{ text: "Both sources document the decision.", citationIds: context.sources.map((source) => source.citationId) }],
+          conflicts: [],
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1283,6 +1300,25 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(result.risks).toHaveLength(1);
     expect(result.openQuestions).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain("briefmarker source evidence");
+  });
+
+  it("generates a comparison table whose cells and consensus carry citations", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Comparison source", "comparisonmarker source evidence", "shared", "comparison-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=comparisonmarker");
+    const hit = (await search.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/comparison`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json() as { rows: Array<{ cells: Array<{ citations: Array<{ citationId: string }> }> }>; consensus: Array<{ citations: Array<{ citationId: string }> }> };
+    expect(result.rows[0]?.cells[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(result.consensus[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(JSON.stringify(result)).not.toContain("comparisonmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
