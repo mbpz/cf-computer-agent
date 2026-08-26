@@ -18,6 +18,7 @@ import type { TimelineService } from "../ai/timeline-service";
 import type { BriefService } from "../ai/brief-service";
 import type { ComparisonService } from "../ai/comparison-service";
 import type { ResearchReportService } from "../ai/research-report-service";
+import type { MindmapService } from "../ai/mindmap-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import { strictRecord, stringValue } from "./member";
 
@@ -29,6 +30,7 @@ export interface LibraryRouteServices {
   briefs: BriefService;
   comparisons: ComparisonService;
   researchReports: ResearchReportService;
+  mindmaps: MindmapService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
 }
@@ -206,6 +208,18 @@ export async function routeLibraryApi(
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goal"], "RESEARCH_RUN_REQUEST_INVALID");
     if (!hasExactKeys(input, ["goal"]) || typeof input.goal !== "string") throw new AppError("RESEARCH_RUN_REQUEST_INVALID", "Request body is invalid", 400);
     return jsonResponse({ researchRun: await services.researchReports.start(scope, knowledgeItemId, input.goal) }, 201, context.requestId);
+  }
+
+  const mindmap = /^\/api\/knowledge\/([^/]+)\/mindmap$/.exec(url.pathname);
+  if (mindmap) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(mindmap[1]!);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["citationIds"], "MINDMAP_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("MINDMAP_REQUEST_INVALID", "Request body is invalid", 400);
+    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
+    return jsonResponse(await services.mindmaps.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }
 
   const report = /^\/api\/knowledge\/([^/]+)\/report$/.exec(url.pathname);

@@ -100,6 +100,15 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_mindmap") {
+      return {
+        response: JSON.stringify({
+          nodes: context.sources.map((source, index) => ({ id: `concept-${index}`, label: "Documented concept", citationIds: [source.citationId] })),
+          edges: context.sources.length > 1 ? [{ from: "concept-0", to: "concept-1", relation: "related", citationIds: [context.sources[0]!.citationId, context.sources[1]!.citationId] }] : [],
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1352,6 +1361,23 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(report.version).toBe(1);
     expect(report.sourceSnapshots[0]).toEqual(expect.objectContaining({ citationId: hit!.citationId }));
     expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
+  });
+
+  it("generates a cited mindmap with readable concept nodes", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Mindmap source", "mindmapmarker source evidence", "shared", "mindmap-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=mindmapmarker");
+    const hit = (await search.json() as { items: Array<{ citationId: string; knowledgeItemId: string }> }).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/mindmap`, {
+      method: "POST", body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json() as { nodes: Array<{ citations: Array<{ citationId: string }> }> };
+    expect(result.nodes[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(JSON.stringify(result)).not.toContain("mindmapmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
