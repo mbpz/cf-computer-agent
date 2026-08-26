@@ -28,6 +28,7 @@ export const ROUTES: readonly RouteDefinition[] = Object.freeze([
   { path: "/admin/members", labelKey: "NAV_MEMBERS", group: "admin", capability: "member:manage" },
   { path: "/admin/spaces", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },
   { path: "/admin/audit", labelKey: "NAV_AUDIT", group: "admin", capability: "audit:read" },
+  { path: "/admin/analytics", labelKey: "NAV_ANALYTICS", group: "admin", capability: "audit:read" },
 ]);
 
 export function requiredCapability(pathname: string): FrontendCapability | null {

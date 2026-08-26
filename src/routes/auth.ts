@@ -1,6 +1,7 @@
 import { APP_CONFIG } from "../config";
 import { AppError, errorResponse, logRequestFailure, methodNotAllowed, requireSameOrigin, type RequestContext } from "../http";
 import type { GitHubOAuthClient } from "../identity/github-oauth";
+import type { WeChatOAuthClient } from "../identity/wechat-oauth";
 import { clearCookie, oauthCookie, readUniqueCookie, sessionCookie } from "../identity/oauth-cookies";
 import type { SessionService } from "../identity/session";
 import type { MembersService } from "../members/service";
@@ -11,10 +12,12 @@ const SESSION_COOKIE = "__Host-memory-session";
 const CALLBACK_VALUE = /^[A-Za-z0-9._~-]{1,512}$/u;
 const STATE_VALUE = /^[A-Za-z0-9_-]{43}$/u;
 const VERIFIER_VALUE = /^[A-Za-z0-9._~-]{43,128}$/u;
+const WECHAT_STATE_COOKIE = "__Host-wechat-state";
 
 export interface AuthRouteServices {
   oauth: GitHubOAuthClient;
-  members: Pick<MembersService, "resolveGitHubLogin">;
+  wechat: WeChatOAuthClient;
+  members: Pick<MembersService, "resolveGitHubLogin" | "resolveWeChatLogin">;
   sessions: Pick<SessionService, "create" | "logout">;
 }
 
@@ -65,6 +68,29 @@ export async function routeAuth(
     return response;
   }
 
+  if (url.pathname === "/auth/wechat") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const start = await services.wechat.createStart();
+    const response = redirectResponse(start.authorizationUrl, context);
+    response.headers.append("set-cookie", oauthCookie(WECHAT_STATE_COOKIE, start.state));
+    return response;
+  }
+
+  if (url.pathname === "/auth/wechat/callback") {
+    if (request.method !== "GET") return clearWeChatCookie(methodNotAllowed("GET", context));
+    const expectedState = readUniqueCookie(request, WECHAT_STATE_COOKIE, 43);
+    const state = uniqueQueryValue(url, "state");
+    if (!expectedState || !state || !STATE_VALUE.test(expectedState) || !STATE_VALUE.test(state) || state !== expectedState) throw callbackInvalid();
+    const code = uniqueQueryValue(url, "code");
+    if (!code) throw callbackInvalid();
+    const identity = await services.wechat.resolveCallback(code);
+    const member = await services.members.resolveWeChatLogin(identity);
+    const session = await services.sessions.create(member);
+    const response = clearWeChatCookie(redirectResponse("/", context));
+    response.headers.append("set-cookie", sessionCookie(session.token));
+    return response;
+  }
+
   if (url.pathname === "/auth/logout") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
@@ -85,6 +111,11 @@ export async function routeAuth(
 export function clearOAuthCookies(response: Response): Response {
   response.headers.append("set-cookie", clearCookie(OAUTH_STATE_COOKIE));
   response.headers.append("set-cookie", clearCookie(OAUTH_VERIFIER_COOKIE));
+  return response;
+}
+
+export function clearWeChatCookie(response: Response): Response {
+  response.headers.append("set-cookie", clearCookie(WECHAT_STATE_COOKIE));
   return response;
 }
 

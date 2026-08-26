@@ -14,11 +14,13 @@ import { TimelineService } from "./ai/timeline-service";
 import { BriefService } from "./ai/brief-service";
 import { ComparisonService } from "./ai/comparison-service";
 import { AuditRepository } from "./audit/repository";
+import { AnalyticsRepository } from "./analytics/repository";
 import { requireCapability } from "./authorization/policy";
 import { APP_CONFIG } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
 import { createGitHubOAuthClient, type GitHubOAuthDiagnostic } from "./identity/github-oauth";
+import { createWeChatOAuthClient } from "./identity/wechat-oauth";
 import { resolvePrincipal, type Principal } from "./identity/principal";
 import { SessionService } from "./identity/session";
 import { emitStructuredLog } from "./ops/structured-log";
@@ -34,10 +36,11 @@ import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
 import { routeAgentApi } from "./routes/agent";
-import { clearOAuthCookies, routeAuth } from "./routes/auth";
+import { clearOAuthCookies, clearWeChatCookie, routeAuth } from "./routes/auth";
 import { routeLibraryApi } from "./routes/library";
 import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
+import { routeTelemetry } from "./routes/telemetry";
 import { SpacesRepository } from "./spaces/repository";
 import { SpacesService } from "./spaces/service";
 import { PublicationRepository } from "./publication/repository";
@@ -103,6 +106,13 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
         const services = createRequestServices(env, ctx, context, dependencies);
         try {
+          if (url.pathname === "/api/telemetry/pageview") {
+            const telemetry = await routeTelemetry(request, url, context, {
+              analytics: services.analytics,
+              sessions: services.sessions,
+            });
+            if (telemetry) return telemetry;
+          }
           const resolved = await resolvePrincipal(request, {
             sessions: services.sessions,
             automation: services.automation,
@@ -119,7 +129,8 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
       } catch (error) {
         logRequestFailure(request, context, error);
         const response = errorResponse(error, context.requestId);
-        return url.pathname === "/auth/github/callback" ? clearOAuthCookies(response) : response;
+        return url.pathname === "/auth/github/callback" ? clearOAuthCookies(response)
+          : url.pathname === "/auth/wechat/callback" ? clearWeChatCookie(response) : response;
       }
     },
   };
@@ -127,7 +138,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
 const workspaceRoutes = new Set([
   "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-  "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit",
+  "/admin", "/admin/submissions", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
@@ -144,6 +155,7 @@ function createRequestServices(
 ) {
   const ai = dependencies.ai || env.AI;
   const audit = new AuditRepository(env.DB);
+  const analytics = new AnalyticsRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
     waitUntil: (promise) => ctx.waitUntil(promise),
@@ -185,6 +197,7 @@ function createRequestServices(
     assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
+    analytics,
     citedAnswers: new CitedAnswerService(ai),
     chatConversations: new ChatConversationService(new ChatRepository(env.DB)),
     chatFeedback: new ChatFeedbackService(new ChatRepository(env.DB), new D1ChatFeedbackRepository(env.DB)),
@@ -217,6 +230,10 @@ function createRequestServices(
         if (dependencies.oauthDiagnostic) dependencies.oauthDiagnostic(correlated);
         else emitStructuredLog("warn", correlated);
       },
+    }),
+    wechat: createWeChatOAuthClient({
+      appId: env.WECHAT_APP_ID || "",
+      appSecret: env.WECHAT_APP_SECRET || "",
     }),
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),

@@ -3,10 +3,13 @@ import { canonicalEmail } from "../identity/email";
 import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
 import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
+import type { WeChatIdentity } from "../identity/wechat-oauth";
 
 export interface MembersEnvironment {
   BOOTSTRAP_ADMIN_EMAIL?: string;
   ALLOWED_MEMBER_EMAILS?: string;
+  BOOTSTRAP_WECHAT_SUBJECT?: string;
+  ALLOWED_WECHAT_SUBJECTS?: string;
 }
 
 export interface MembersServiceOptions {
@@ -27,6 +30,8 @@ export class MembersService {
   private readonly waitUntil: (promise: Promise<unknown>) => void;
   private readonly bootstrapAdminEmail: string | undefined;
   private readonly allowedMemberEmails: string | undefined;
+  private readonly bootstrapWeChatSubject: string | undefined;
+  private readonly allowedWeChatSubjects: string | undefined;
 
   constructor(
     private readonly repository: MembersRepositoryPort,
@@ -36,6 +41,8 @@ export class MembersService {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.bootstrapAdminEmail = canonicalEmail(environment.BOOTSTRAP_ADMIN_EMAIL);
     this.allowedMemberEmails = environment.ALLOWED_MEMBER_EMAILS;
+    this.bootstrapWeChatSubject = normalizeWeChatSubject(environment.BOOTSTRAP_WECHAT_SUBJECT);
+    this.allowedWeChatSubjects = environment.ALLOWED_WECHAT_SUBJECTS;
     this.id = options.id || (() => crypto.randomUUID());
     this.auditId = options.auditId || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
@@ -55,10 +62,25 @@ export class MembersService {
 
     const byEmail = await this.repository.findByCanonicalEmail(identity.email, 2);
     if (byEmail.length > 1) throw identityConflict();
-    if (byEmail.length === 1) return this.linkExistingIdentity(byEmail[0]!, identity);
+    if (byEmail.length === 1) return this.linkExistingIdentity(byEmail[0]!, identity, "github");
 
     const hasActiveAdmin = await this.repository.hasActiveAdmin();
     const role = !hasActiveAdmin && this.bootstrapAdminEmail === identity.email ? "admin" : "contributor";
+    return this.insertWithConflictRecovery(identity, role);
+  }
+
+  async resolveWeChatLogin(input: WeChatIdentity): Promise<Member> {
+    const subject = normalizeWeChatSubject(input.subject);
+    const allowed = parseAllowedWeChatSubjects(this.allowedWeChatSubjects, this.bootstrapWeChatSubject);
+    if (!subject || !allowed.has(subject)) throw new AppError("MEMBER_NOT_ALLOWED", "Member access is not allowed", 403);
+    const existing = await this.repository.findByIdentitySubject(subject);
+    if (existing) return this.resolveExisting(existing);
+    const identity: MemberIdentity = { identitySubject: subject, email: `${subject.slice("wechat:".length)}@wechat.invalid` };
+    const byEmail = await this.repository.findByCanonicalEmail(identity.email, 2);
+    if (byEmail.length > 1) throw identityConflict();
+    if (byEmail.length === 1) return this.linkExistingIdentity(byEmail[0]!, identity, "wechat");
+    const hasActiveAdmin = await this.repository.hasActiveAdmin();
+    const role = !hasActiveAdmin && this.bootstrapWeChatSubject === subject ? "admin" : "contributor";
     return this.insertWithConflictRecovery(identity, role);
   }
 
@@ -81,7 +103,7 @@ export class MembersService {
     return updated;
   }
 
-  private async linkExistingIdentity(existing: Member, identity: MemberIdentity): Promise<Member> {
+  private async linkExistingIdentity(existing: Member, identity: MemberIdentity, provider: "github" | "wechat"): Promise<Member> {
     requireActive(existing);
     const updatedAt = this.now().toISOString();
     let linked: Member | null;
@@ -98,7 +120,7 @@ export class MembersService {
           action: "member.identity_linked",
           resourceType: "member",
           resourceId: existing.id,
-          metadata: { provider: "github" },
+          metadata: { provider },
           createdAt: updatedAt,
         },
       );
@@ -210,12 +232,28 @@ function githubMemberIdentity(identity: GitHubIdentity): MemberIdentity {
   return { identitySubject: identity.subject, email };
 }
 
+function normalizeWeChatSubject(value: unknown): string | undefined {
+  return typeof value === "string" && /^wechat:[A-Za-z0-9_-]{2,128}$/u.test(value) ? value : undefined;
+}
+
+function parseAllowedWeChatSubjects(input: string | undefined, bootstrap: string | undefined): ReadonlySet<string> {
+  if (typeof input !== "string" || !input.trim()) throw oauthConfigurationInvalid("WeChat authentication is not configured");
+  const values = new Set<string>();
+  for (const entry of input.split(",")) {
+    const subject = normalizeWeChatSubject(entry.trim());
+    if (!subject || values.has(subject)) throw oauthConfigurationInvalid("WeChat authentication is not configured");
+    values.add(subject);
+  }
+  if (bootstrap !== undefined && !values.has(bootstrap)) throw oauthConfigurationInvalid("WeChat authentication is not configured");
+  return values;
+}
+
 function requireActive(member: Member): void {
   if (member.status !== "active") throw new AppError("MEMBER_DISABLED", "Member access is disabled", 403);
 }
 
-function oauthConfigurationInvalid(): AppError {
-  return new AppError("OAUTH_CONFIG_INVALID", "GitHub authentication is not configured", 503);
+function oauthConfigurationInvalid(message = "GitHub authentication is not configured"): AppError {
+  return new AppError("OAUTH_CONFIG_INVALID", message, 503);
 }
 
 function identityConflict(): AppError {

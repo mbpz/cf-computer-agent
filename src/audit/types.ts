@@ -7,7 +7,7 @@ export type AuditActorKind = "member" | "automation" | "system";
 
 export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
-  "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" } };
+  "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
@@ -139,8 +139,8 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
     case "member.identity_linked": {
       assertResourceType(resourceType, "member");
       const metadata = readPlainDataObject(input, new Set(["provider"]));
-      if (metadata.provider !== "github") throw invalidMetadata();
-      return safeMetadata({ provider: "github" });
+      if (metadata.provider !== "github" && metadata.provider !== "wechat") throw invalidMetadata();
+      return safeMetadata({ provider: metadata.provider });
     }
     case "member.status_updated": {
       assertResourceType(resourceType, "member");

@@ -6,6 +6,10 @@ declare global {
     BOOTSTRAP_ADMIN_EMAIL?: string;
     GITHUB_OAUTH_CLIENT_ID?: string;
     GITHUB_OAUTH_CLIENT_SECRET?: string;
+    WECHAT_APP_ID?: string;
+    WECHAT_APP_SECRET?: string;
+    ALLOWED_WECHAT_SUBJECTS?: string;
+    BOOTSTRAP_WECHAT_SUBJECT?: string;
     ALLOWED_MEMBER_EMAILS?: string;
     AUTOMATION_CLIENT_ID?: string;
     AUTOMATION_SECRET?: string;

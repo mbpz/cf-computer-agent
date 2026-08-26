@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
+import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
 import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
@@ -29,6 +30,7 @@ import { createAdminMembersRequestController, updateMemberStatus, type AdminMemb
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
+import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./components/review/review-detail-data";
@@ -70,13 +72,24 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!session && !anonymous) return;
+    void fetch("/api/telemetry/pageview", {
+      method: "POST",
+      credentials: "same-origin",
+      keepalive: true,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: pathname }),
+    }).catch(() => undefined);
+  }, [anonymous, pathname, session]);
+
+  useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname);
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  if (sessionError) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_SIGN_IN_REQUIRED")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_SIGN_IN_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">{frontendText(locale, "APP_SIGN_IN_GITHUB")}</a></main>;
-  if (anonymous) return <AnonymousShell locale={locale} />;
+  if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} />;
+  if (anonymous) return <LoginPage locale={locale} />;
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };
@@ -112,10 +125,6 @@ export function App() {
   return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
 }
 
-function AnonymousShell({ locale }: { locale: LocaleRuntime }) {
-  return <main data-anonymous-shell className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_SIGNED_OUT_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_SIGNED_OUT_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">{frontendText(locale, "APP_SIGN_IN_GITHUB")}</a></main>;
-}
-
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "") {
   switch (kind) {
     case "home": return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0 }} />;
@@ -126,6 +135,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
+    case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-assets": return <AdminAssetsRoute locale={locale} />;
@@ -135,6 +145,16 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
+}
+
+function AdminAnalyticsRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }>({ kind: "loading" });
+  useEffect(() => {
+    let active = true;
+    void loadAdminAnalytics().then((data) => { if (active) setState({ kind: "ready", data }); }).catch(() => { if (active) setState({ kind: "error" }); });
+    return () => { active = false; };
+  }, []);
+  return <AdminAnalyticsPage locale={locale} state={state} />;
 }
 
 function decodeRouteId(pathname: string): string {

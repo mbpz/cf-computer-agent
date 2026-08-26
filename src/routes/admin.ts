@@ -16,6 +16,7 @@ import type { TagsService } from "../tags/service";
 import type { SourceReparseService } from "../sources/reparse-service";
 import type { PublicationService } from "../publication/service";
 import type { LibraryService } from "../library/service";
+import type { AnalyticsRepository } from "../analytics/repository";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -28,6 +29,7 @@ export interface AdminRouteServices {
   sourceReparse: SourceReparseService;
   publication: PublicationService;
   library: LibraryService;
+  analytics: AnalyticsRepository;
 }
 
 export async function routeAdminApi(
@@ -37,6 +39,13 @@ export async function routeAdminApi(
   principal: Principal,
   services: AdminRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/admin/analytics/overview") {
+    requireCapability(principal, "audit:read");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const days = parseAnalyticsDays(url);
+    return jsonResponse(await services.analytics.overview(days), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/assets/capacity") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
@@ -379,6 +388,17 @@ export async function routeAdminApi(
   }
 
   return undefined;
+}
+
+function parseAnalyticsDays(url: URL): number {
+  for (const key of url.searchParams.keys()) {
+    if (key !== "days" || url.searchParams.getAll(key).length !== 1) throw new AppError("ANALYTICS_RANGE_INVALID", "Analytics range is invalid", 400);
+  }
+  const raw = url.searchParams.get("days");
+  if (raw === null) return 7;
+  const days = Number(raw);
+  if (!Number.isSafeInteger(days) || days < 1 || days > 31) throw new AppError("ANALYTICS_RANGE_INVALID", "Analytics range must be between 1 and 31 days", 400);
+  return days;
 }
 
 function memberDto(member: Member): Omit<Member, "identitySubject"> {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CreateAuditEvent } from "../../src/audit/types";
 import type { GitHubIdentity } from "../../src/identity/github-oauth";
+import type { WeChatIdentity } from "../../src/identity/wechat-oauth";
 import { MembersConflictError, type MembersRepositoryPort } from "../../src/members/repository";
 import { MembersService, type MembersEnvironment, type MembersServiceOptions } from "../../src/members/service";
 import type { CreateMember, Member, MemberStatus } from "../../src/members/types";
@@ -201,6 +202,20 @@ describe("MembersService GitHub login", () => {
       .rejects.toThrow("D1 insert unavailable");
     expect(repository.members).toEqual([]);
     expect(repository.linkCalls).toEqual([]);
+  });
+});
+
+describe("MembersService WeChat login", () => {
+  const identity: WeChatIdentity = { subject: "wechat:union-123", openId: "open-123", unionId: "union-123" };
+
+  it("creates only an allowlisted WeChat subject and bootstraps its first admin", async () => {
+    const repository = new FakeMembersRepository();
+    const service = createService(repository, {
+      BOOTSTRAP_WECHAT_SUBJECT: identity.subject,
+      ALLOWED_WECHAT_SUBJECTS: identity.subject,
+    });
+    await expect(service.resolveWeChatLogin(identity)).resolves.toMatchObject({ role: "admin", identitySubject: identity.subject, email: "union-123@wechat.invalid" });
+    await expect(service.resolveWeChatLogin({ ...identity, subject: "wechat:outside-123" })).rejects.toMatchObject({ code: "MEMBER_NOT_ALLOWED", status: 403 });
   });
 });
 

@@ -2,9 +2,9 @@ import { APP_CONFIG } from "../config";
 
 const COOKIE_VALUE = /^[A-Za-z0-9_-]+$/;
 const COOKIE_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-const OAUTH_COOKIE_NAMES = new Set(["__Host-oauth-state", "__Host-oauth-verifier"]);
+const OAUTH_COOKIE_NAMES = new Set(["__Host-oauth-state", "__Host-oauth-verifier", "__Host-wechat-state"]);
 
-type OAuthCookieName = "__Host-oauth-state" | "__Host-oauth-verifier";
+type OAuthCookieName = "__Host-oauth-state" | "__Host-oauth-verifier" | "__Host-wechat-state";
 
 export function readUniqueCookie(request: Request, name: string, maxBytes: number): string | undefined {
   if (!COOKIE_NAME.test(name) || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) return undefined;

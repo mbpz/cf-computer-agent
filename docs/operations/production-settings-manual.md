@@ -5,11 +5,13 @@
 > 生产域名：`https://memory.crgmhrc.asia`  
 > Worker：`memory-garden-agent`  
 > 适用 shell：macOS `zsh`  
-> 本手册只处理七项 Worker 配置，不替代 D1 migration、OAuth 验收和生产 smoke。
+> 本手册处理 GitHub/微信 OAuth 与 automation 配置，不替代 D1 migration、OAuth 验收和生产 smoke。
 
 ## 1. 配置清单
 
-建议在 Cloudflare 中把七项全部保存为 **Secret**。对 Worker 运行时而言 Secret 和文本变量的读取方式相同，但 Secret 保存后不能从 Dashboard 或 Wrangler 重新查看明文。
+建议在 Cloudflare 中把下表全部保存为 **Secret**。对 Worker 运行时而言 Secret 和文本变量的读取方式相同，但 Secret 保存后不能从 Dashboard 或 Wrangler 重新查看明文。
+
+微信登录没有邮箱，使用 `wechat:<unionid>`（优先）或 `wechat:<openid>` 作为 allowlist subject；缺少微信 AppID/Secret 时入口 fail-closed，不接受伪造二维码或任意 subject。
 
 | 名称 | 如何获得 | 作用 | 是否随机生成 |
 |---|---|---|---:|
@@ -20,6 +22,12 @@
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识生产 smoke/自动化客户端 | 是，非敏感标识 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 生成 | HMAC-SHA256 请求签名 | 是，敏感 |
 | `APP_TOKEN` | 本地 CSPRNG 生成 | Bearer 第二因子和 legacy API 校验 | 是，敏感 |
+| `WECHAT_APP_ID` | 微信开放平台网站应用 | 微信 QR OAuth 应用标识 | 否 |
+| `WECHAT_APP_SECRET` | 微信开放平台网站应用生成 | 服务端 code 换取 access token | 是，敏感 |
+| `ALLOWED_WECHAT_SUBJECTS` | `wechat:<unionid/openid>` 逗号分隔 | 微信登录白名单 | 否 |
+| `BOOTSTRAP_WECHAT_SUBJECT` | allowlist 中预定管理员 subject | 首个微信管理员 | 否 |
+
+微信四项配置是可选扩展，不放入 GitHub/automation 的七项必填 bundle。启用时在 Dashboard 以 **Secret** 单独添加四项；`ALLOWED_WECHAT_SUBJECTS` 使用英文逗号分隔，且必须包含 `BOOTSTRAP_WECHAT_SUBJECT`（如设置）。
 
 ## 2. 创建 GitHub OAuth App
 

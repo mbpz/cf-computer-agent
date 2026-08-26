@@ -11,12 +11,11 @@
 
 ```text
 浏览器
-  → GET /auth/github
-  → GitHub OAuth（state + PKCE S256）
-  → GET /auth/github/callback
-  → Worker 用 Client ID/Secret 换取短期 GitHub token
-  → Worker 读取 GitHub primary + verified 邮箱
-  → 邮箱 allowlist + D1 成员/角色校验
+  → GET /auth/github 或 GET /auth/wechat
+  → GitHub state + PKCE S256，或微信 snsapi_login QR OAuth
+  → callback 服务端 code exchange
+  → GitHub primary + verified 邮箱，或微信 unionid/openid subject
+  → 对应 allowlist + D1 成员/角色校验
   → D1 保存哈希后的会话
   → 浏览器只得到 __Host-memory-session Cookie
 
@@ -28,9 +27,9 @@
 
 D1 保存成员、会话、空间、投稿、审计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。
 
-## 2. 七项生产配置
+## 2. 生产配置
 
-建议七项都作为 Cloudflare Worker **Secret** 保存。
+建议表中所有配置都作为 Cloudflare Worker **Secret** 保存；GitHub/automation 七项是基础 bundle，微信四项是可选 provider 扩展。
 
 | 名称 | 来源或生成方式 | 作用 |
 |---|---|---|
@@ -41,6 +40,10 @@ D1 保存成员、会话、空间、投稿、审计和防重放 nonce；`Knowled
 | `AUTOMATION_CLIENT_ID` | 本地随机生成 | 标识自动化客户端；本身不是密码 |
 | `AUTOMATION_SECRET` | 本地 CSPRNG 独立生成 | HMAC-SHA256 请求签名 |
 | `APP_TOKEN` | 本地 CSPRNG 独立生成 | 自动化 Bearer 第二因子及 legacy API 校验 |
+| `WECHAT_APP_ID` | 微信开放平台已审核网站应用 | 微信 QR OAuth 应用标识 |
+| `WECHAT_APP_SECRET` | 微信开放平台网站应用生成 | 服务端 code exchange；敏感 |
+| `ALLOWED_WECHAT_SUBJECTS` | `wechat:<unionid/openid>` 逗号分隔 | 微信登录白名单 |
+| `BOOTSTRAP_WECHAT_SUBJECT` | allowlist 中管理员 subject | 微信首个管理员；可选 |
 
 禁止把这些值写入仓库、`wrangler.jsonc`、`.dev.vars`、命令参数、URL、日志、截图或聊天。已经公开过的值必须轮换。
 
@@ -63,7 +66,26 @@ BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 ALLOWED_MEMBER_EMAILS=admin@example.com,member@example.com
 ```
 
-## 4. 生成自动化密钥
+## 4. 微信扫码登录
+
+在微信开放平台创建并审核“网站应用”，回调地址填写：
+
+```text
+https://memory.crgmhrc.asia/auth/wechat/callback
+```
+
+把平台提供的 AppID、AppSecret 作为 Worker Secret 单独录入（不会立即部署）：
+
+```bash
+rtk npx wrangler secret put WECHAT_APP_ID
+rtk npx wrangler secret put WECHAT_APP_SECRET
+rtk npx wrangler secret put ALLOWED_WECHAT_SUBJECTS
+rtk npx wrangler secret put BOOTSTRAP_WECHAT_SUBJECT
+```
+
+`ALLOWED_WECHAT_SUBJECTS` 使用英文逗号分隔的 `wechat:<unionid>` 或 `wechat:<openid>`；如果设置 `BOOTSTRAP_WECHAT_SUBJECT`，它必须同时出现在 allowlist 中。微信登录和 GitHub 登录最终都创建同一种 D1 Session，并重新经过 active/disabled 与 capability 校验；没有配置四项微信 Secret 时，入口故意返回配置错误，不会生成伪造二维码或绕过白名单。
+
+## 5. 生成自动化密钥
 
 在私密终端执行；命令不打印密钥：
 
@@ -82,7 +104,7 @@ printf 'automation credentials generated\n'
 
 立即把三项保存到密码管理器。`AUTOMATION_SECRET` 与 `APP_TOKEN` 必须独立生成，不能相同，也不能与其他环境复用。
 
-## 5. 发布前检查与 D1 migration
+## 6. 发布前检查与 D1 migration
 
 ```bash
 rtk npx wrangler whoami
@@ -112,7 +134,7 @@ rtk npx wrangler d1 migrations list memory-garden-control-plane --remote
 
 生产必须至少包含 `0001_phase1_control_plane.sql` 和 `0002_github_auth.sql`。
 
-## 6. 构造完整 Secret bundle
+## 7. 构造完整 Secret bundle
 
 先从密码管理器准备七项值，再交互输入。敏感输入不会回显：
 
@@ -162,7 +184,7 @@ node -e '
 ' > "$SECRETS_FILE"
 ```
 
-## 7. 上传、检查并部署精确版本
+## 8. 上传、检查并部署精确版本
 
 上传完整候选版本：
 
@@ -197,7 +219,7 @@ rtk npx wrangler deployments status
 
 如果 `--strict` 报本地与远端配置冲突，先把 `wrangler.jsonc` 与已批准的远端 routes、D1、DO 和 assets 配置对齐；不要通过删除 `--strict` 绕过审查。禁止用普通 `wrangler deploy`、逐项 `wrangler secret put` 或 `versions secret bulk` 代替这条发布链路。
 
-## 8. 最小验收
+## 9. 最小验收
 
 OAuth 启动：
 
@@ -217,7 +239,7 @@ curl -sS -D - -o /dev/null https://memory.crgmhrc.asia/auth/github
 
 最后按 [smoke-test.md](./smoke-test.md) 运行 signed automation smoke。
 
-## 9. 本次 GitHub OAuth 故障复盘
+## 10. 本次 GitHub OAuth 故障复盘
 
 ### 9.1 `OAUTH_CONFIG_INVALID`
 
@@ -242,7 +264,7 @@ reason=network
 
 排障时只记录 `stage`、`reason`、`httpStatus` 和脱敏 request ID。完整 callback URL 含一次性 OAuth code，不能贴入聊天、issue 或发布证据。
 
-## 10. 回滚原则
+## 11. 回滚原则
 
 - Worker 版本可切换，D1 migration 和 DO 数据不可逆向删除。
 - 旧 Access 版本无法识别已写入的 `github:<id>` 身份，不能直接回滚到旧 Access build。
