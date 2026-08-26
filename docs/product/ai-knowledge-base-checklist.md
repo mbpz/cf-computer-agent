@@ -336,7 +336,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `EVAL-014` P1/M6 Research 计划集；验收：步骤有界、证据缺口可见。
 - [x] `EVAL-015` P1/M6 Agent 工具轨迹集；验收：无越权、无未注册工具、步数受控。证据：`test/fixtures/m6-agent-trajectories.ts`、`test/unit/m6-agent-trajectory.test.ts`、`src/agent/tool-runner.ts`；命令：`rtk npx vitest run test/unit/m6-agent-trajectory.test.ts test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
 - [ ] `EVAL-016` P0/M4 FTS5-only 降级集；验收：核心检索和阅读通过。
-- [ ] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。
+- [x] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。证据：`test/unit/m6-ai-degraded.test.ts`、`test/unit/research-report-service.test.ts`、`src/ai/answer-service.ts`、`src/submissions/service.ts`、`src/library/service.ts`；命令：`rtk npx vitest run test/unit/m6-ai-degraded.test.ts test/unit/research-report-service.test.ts -t 'degraded|quota|available' && rtk npm run typecheck`。
 - [ ] `EVAL-018` P1/M8 生产合成探针；验收：只用无敏感 fixture、限频、可清理。
 
 ## OPS — 运维、额度、备份和恢复
