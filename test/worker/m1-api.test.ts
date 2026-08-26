@@ -235,6 +235,20 @@ describe("M1 API authorization and request boundaries", () => {
     expect(disabled.status).toBe(200);
     await expect(disabled.json()).resolves.toMatchObject({ chunk: { id: chunkId, status: "disabled" } });
   });
+
+  it("returns authorized, bounded related knowledge with explainable fields", async () => {
+    const seed = await publishSubmission("contributor", "Cloudflare deployment guide", "# Cloudflare deployment\n\nWorkers deployment and rollback.\n", "shared", "related-seed-api-key1");
+    const related = await publishSubmission("contributor", "Cloudflare rollback notes", "# Cloudflare rollback\n\nWorkers deployment notes.\n", "shared", "related-match-api-key1");
+    const response = await memberApi("contributor", `/api/knowledge/${seed.knowledgeItemId}/related`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { related: { items: Array<{ id: string; title: string; reasonFields: string[] }> } };
+    expect(body.related.items.length).toBeLessThanOrEqual(5);
+    expect(body.related.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: related.knowledgeItemId, title: "Cloudflare rollback notes", reasonFields: expect.arrayContaining(["title", "body"]) }),
+    ]));
+    expect(body.related.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: seed.knowledgeItemId })]));
+    await expectApiError(memberApi("contributor", "/api/knowledge/missing-knowledge/related"), 404, "KNOWLEDGE_NOT_FOUND");
+  });
   it("authorizes capabilities before malformed or oversized bodies, query values, and resource identifiers", async () => {
     const oversized = JSON.stringify({ question: "x".repeat(APP_CONFIG.maxJsonRequestBytes + 1) });
 

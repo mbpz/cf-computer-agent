@@ -63,6 +63,17 @@ export async function routeLibraryApi(
     );
   }
 
+  const related = /^\/api\/knowledge\/([^/]+)\/related$/.exec(url.pathname);
+  if (related) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(
+      { related: await services.library.related(scope, decodePathId(related[1]!)) },
+      200,
+      context.requestId,
+    );
+  }
+
   const citation = /^\/api\/knowledge\/citations\/([^/]+)$/.exec(url.pathname);
   if (citation) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);

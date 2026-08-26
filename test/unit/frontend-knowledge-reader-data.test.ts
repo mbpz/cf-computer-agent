@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadKnowledgeRevision, loadKnowledgeRevisionDiff } from "../../frontend/lib/knowledge-reader-data";
+import { loadKnowledgeRevision, loadKnowledgeRevisionDiff, loadRelatedKnowledge } from "../../frontend/lib/knowledge-reader-data";
 
 describe("knowledge reader data boundary", () => {
   it("loads only the authorized current revision and normalizes malformed chunks", async () => {
@@ -63,5 +63,16 @@ describe("knowledge reader data boundary", () => {
     await expect(loadKnowledgeRevision("../secret", requester)).rejects.toThrow("KNOWLEDGE_ID_INVALID");
     await expect(loadKnowledgeRevision("knowledge-1", requester)).rejects.toThrow("KNOWLEDGE_REVISION_INVALID");
     expect(requester).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads at most five related items and drops malformed fields", async () => {
+    const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ related: { items: [
+      { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body", 42] },
+      { id: "broken", title: 42, publishedAt: "2026-08-26" },
+    ] } }), { status: 200, headers: { "content-type": "application/json" } }));
+    await expect(loadRelatedKnowledge("knowledge-1", requester)).resolves.toEqual([
+      { id: "knowledge-2", title: "Related", publishedAt: "2026-08-26", reasonFields: ["title", "body"] },
+    ]);
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/related", expect.objectContaining({ credentials: "same-origin" }));
   });
 });

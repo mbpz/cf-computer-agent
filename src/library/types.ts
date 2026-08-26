@@ -55,6 +55,17 @@ export interface KnowledgePage {
   nextCursor?: string;
 }
 
+export interface RelatedKnowledgeItem {
+  id: string;
+  title: string;
+  publishedAt: string;
+  reasonFields: SearchMatchedField[];
+}
+
+export interface RelatedKnowledgePage {
+  items: RelatedKnowledgeItem[];
+}
+
 export interface ChunkPreviewRequest {
   limit?: number;
   cursor?: string;

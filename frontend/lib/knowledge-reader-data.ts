@@ -47,6 +47,13 @@ export interface KnowledgeRevisionDiff {
   hunks: readonly { oldStart: number; newStart: number; lines: readonly KnowledgeRevisionDiffLine[] }[];
 }
 
+export interface RelatedKnowledgeItem {
+  id: string;
+  title: string;
+  publishedAt: string;
+  reasonFields: readonly string[];
+}
+
 function normalizeRevision(value: unknown): KnowledgeRevision | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -125,6 +132,27 @@ export async function loadKnowledgeRevisionDiff(
   const diff = normalizeDiff(data.diff);
   if (!diff) throw new Error("KNOWLEDGE_DIFF_INVALID");
   return diff;
+}
+
+export async function loadRelatedKnowledge(
+  knowledgeItemId: string,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<readonly RelatedKnowledgeItem[]> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ID_INVALID");
+  const data = await apiFetch<{ related?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/related`, { requester, signal });
+  if (!data.related || typeof data.related !== "object" || Array.isArray(data.related)) throw new Error("KNOWLEDGE_RELATED_INVALID");
+  const items = (data.related as Record<string, unknown>).items;
+  if (!Array.isArray(items)) throw new Error("KNOWLEDGE_RELATED_INVALID");
+  return items.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || !record.id || typeof record.title !== "string" || typeof record.publishedAt !== "string") return [];
+    const reasonFields = Array.isArray(record.reasonFields)
+      ? record.reasonFields.filter((field): field is string => typeof field === "string").slice(0, 5)
+      : [];
+    return [{ id: record.id, title: record.title, publishedAt: record.publishedAt, reasonFields }];
+  }).slice(0, 5);
 }
 
 function normalizeDiff(value: unknown): KnowledgeRevisionDiff | null {

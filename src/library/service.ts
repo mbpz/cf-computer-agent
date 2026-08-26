@@ -26,6 +26,7 @@ import type {
   LibraryScope,
   RevisionDetail,
   RevisionDownload,
+  RelatedKnowledgePage,
   SearchPage,
   SearchRequest,
 } from "./types";
@@ -133,6 +134,32 @@ export class LibraryService {
         markdown: to.markdown,
       },
     );
+  }
+
+  async related(scope: LibraryScope, knowledgeItemId: string): Promise<RelatedKnowledgePage> {
+    await this.authorize(scope);
+    assertLookupId(knowledgeItemId);
+    const record = await this.repository.findCurrent(scope, knowledgeItemId);
+    if (!record) throw knowledgeNotFound();
+    const revision = await this.readRevision(record);
+    const titleTerms = record.title.trim().split(/\s+/u).slice(0, 2).join(" ");
+    const contentTerms = revision.markdown.replace(/[^\p{L}\p{N}_-]+/gu, " ").trim().split(/\s+/u).slice(0, 2).join(" ");
+    const seed = (titleTerms || contentTerms).trim();
+    if (!seed) return { items: [] };
+    const results = await this.search(scope, { query: seed, limit: 8 });
+    const seen = new Set<string>([knowledgeItemId]);
+    return {
+      items: results.items.flatMap((hit) => {
+        if (seen.has(hit.knowledgeItemId)) return [];
+        seen.add(hit.knowledgeItemId);
+        return [{
+          id: hit.knowledgeItemId,
+          title: hit.title,
+          publishedAt: hit.publishedAt,
+          reasonFields: [...hit.matchedFields],
+        }];
+      }).slice(0, 5),
+    };
   }
 
   async previewChunks(

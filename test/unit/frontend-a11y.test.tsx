@@ -37,11 +37,14 @@ describe("frontend accessibility gates", () => {
         parserSchemaVersion: "m2-v1", indexStatus: "indexed", chunks: [{ id: "chunk-1", ordinal: 0, text: "正文", headingPath: ["指南"], startLine: 3, endLine: 4, location: { kind: "spreadsheet", sheet: "Sheet1", range: "A1:B2" } }],
       }}
       renderMarkdown={(markdown) => markdown}
+      relatedState={{ kind: "ready", items: [{ id: "knowledge-2", title: "关联指南", publishedAt: "2026-08-26", reasonFields: ["title", "body"] }] }}
     />);
     expect(html).toContain("来源");
     expect(html).toContain("source-version-1");
     expect(html).toContain("Sheet1 · A1:B2");
     expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain("相关知识");
+    expect(html).toContain("匹配字段 标题, 正文");
     expect(html).not.toMatch(/>\s*(undefined|null)\s*</u);
   });
 });

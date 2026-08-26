@@ -3,14 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import type { KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation } from "../lib/knowledge-reader-data";
+import type { KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
 
 export type KnowledgeReaderState = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
 
 type DiffState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" };
+type RelatedState = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" };
 type KnowledgeReaderRevisionInput = Pick<KnowledgeRevision, "id" | "markdown"> & Partial<KnowledgeRevision>;
 
-export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = { kind: "ready" }, onRetry, diffState = { kind: "idle" }, onCompare }: { revision: KnowledgeReaderRevisionInput; renderMarkdown: (markdown: string) => ReactNode; locale?: LocaleRuntime; state?: KnowledgeReaderState; onRetry?: () => void; diffState?: DiffState; onCompare?: () => void }) {
+export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = { kind: "ready" }, onRetry, diffState = { kind: "idle" }, onCompare, relatedState = { kind: "idle" } }: { revision: KnowledgeReaderRevisionInput; renderMarkdown: (markdown: string) => ReactNode; locale?: LocaleRuntime; state?: KnowledgeReaderState; onRetry?: () => void; diffState?: DiffState; onCompare?: () => void; relatedState?: RelatedState }) {
   const normalizedRevision: KnowledgeRevision = {
     id: revision.id,
     knowledgeItemId: revision.knowledgeItemId ?? "",
@@ -30,7 +31,22 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
-  return <article className="space-y-5"><Card><CardHeader><CardTitle>{normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</CardTitle><div className="flex flex-wrap items-center justify-between gap-3">{normalizedRevision.publishedAt && <p className="text-xs text-muted-foreground">{normalizedRevision.publishedAt}{normalizedRevision.isCurrent === false ? ` · ${frontendText(locale, "KNOWLEDGE_READER_HISTORICAL")}` : ""}</p>}{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}</div></CardHeader><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card><SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />{diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}</article>;
+  return <article className="space-y-5"><Card><CardHeader><CardTitle>{normalizedRevision.title?.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</CardTitle><div className="flex flex-wrap items-center justify-between gap-3">{normalizedRevision.publishedAt && <p className="text-xs text-muted-foreground">{normalizedRevision.publishedAt}{normalizedRevision.isCurrent === false ? ` · ${frontendText(locale, "KNOWLEDGE_READER_HISTORICAL")}` : ""}</p>}{normalizedRevision.previousRevisionId && onCompare && <Button size="sm" variant="outline" disabled={diffState.kind === "loading"} onClick={onCompare}>{diffState.kind === "loading" ? frontendText(locale, "KNOWLEDGE_READER_COMPARING") : frontendText(locale, "KNOWLEDGE_READER_COMPARE")}</Button>}</div></CardHeader><CardContent><div className="prose prose-slate max-w-none text-sm leading-7">{renderMarkdown(normalizedRevision.markdown)}</div></CardContent></Card><SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />{diffState.kind !== "idle" && <RevisionDiffPanel locale={locale} state={diffState} />}{relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} />}</article>;
+}
+
+function RelatedKnowledgePanel({ locale, state }: { locale?: LocaleRuntime; state: RelatedState }) {
+  if (state.kind === "loading") return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_LOADING")}</CardContent></Card>;
+  if (state.kind === "error") return null;
+  return <Card data-related-knowledge="true"><CardHeader><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_RELATED_TITLE")}</CardTitle></CardHeader><CardContent>{state.items.length === 0 ? <p className="text-sm text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_EMPTY")}</p> : <div className="grid gap-2">{state.items.map((item) => <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="rounded-md border p-3 transition hover:bg-accent"><span className="font-medium">{item.title.trim() || frontendText(locale, "KNOWLEDGE_UNTITLED")}</span><span className="mt-1 block text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_RELATED_MATCHED")} {item.reasonFields.map((field) => relatedFieldLabel(field, locale)).join(", ") || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</span></a>)}</div>}</CardContent></Card>;
+}
+
+function relatedFieldLabel(field: string, locale?: LocaleRuntime): string {
+  const key = field === "title" ? "KNOWLEDGE_RELATED_FIELD_TITLE"
+    : field === "summary" ? "KNOWLEDGE_RELATED_FIELD_SUMMARY"
+      : field === "tags" ? "KNOWLEDGE_RELATED_FIELD_TAGS"
+        : field === "code" ? "KNOWLEDGE_RELATED_FIELD_CODE"
+          : field === "body" ? "KNOWLEDGE_RELATED_FIELD_BODY" : "COMMON_VALUE_UNAVAILABLE";
+  return frontendText(locale, key);
 }
 
 function SourcePanel({ locale, revision, selectedChunkId, selectedChunk, onSelectChunk }: { locale?: LocaleRuntime; revision: KnowledgeRevision; selectedChunkId: string | null; selectedChunk?: KnowledgeRevision["chunks"][number]; onSelectChunk: (id: string) => void }) {

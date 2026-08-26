@@ -104,6 +104,22 @@ describe("LibraryService", () => {
       .rejects.toEqual(notFoundError());
   });
 
+  it("returns bounded related knowledge with explainable matched fields and excludes the seed", async () => {
+    const repository = repositoryFixture({
+      async search() {
+        return {
+          degraded: false,
+          items: [
+            { knowledgeItemId: "knowledge-1", title: "Seed", publishedAt: "2026-08-22", matchedFields: ["title"], citationId: "c1", spaceId: "default", collectionId: null, revisionId: "r1", chunkId: "c1", headingPath: [], startLine: 1, endLine: 1, excerpt: "seed", highlights: [], score: -1 },
+            { knowledgeItemId: "knowledge-2", title: "Related", publishedAt: "2026-08-23", matchedFields: ["title", "body"], citationId: "c2", spaceId: "default", collectionId: null, revisionId: "r2", chunkId: "c2", headingPath: [], startLine: 1, endLine: 1, excerpt: "related", highlights: [], score: -2 },
+          ],
+        };
+      },
+    });
+    const page = await new LibraryService(repository, { async read() { return "database retention guide"; } }).related(contributor, "knowledge-1");
+    expect(page).toEqual({ items: [{ id: "knowledge-2", title: "Related", publishedAt: "2026-08-23", reasonFields: ["title", "body"] }] });
+  });
+
   it("uses the same not-found contract for hidden revisions and citations", async () => {
     const repository = repositoryFixture({
       async findRevision() { return null; },
