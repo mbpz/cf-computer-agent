@@ -44,20 +44,20 @@
 - [x] `ING-001` P0/M1 SHA-256 内容哈希；状态：L/W；验收：服务端重新验证，不信任客户端声明。
 - [x] `ING-002` P0/M1 完全重复检测；状态：L/W；验收：同 hash 返回既有候选，不静默发布。
 - [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；状态：deferred（免费层边界）；验收：启用付费 R2 档位时必须是 Standard/private、无公开对象 URL。当前生产明确不声明 `ORIGINALS`/`r2_buckets`，因此不宣称 R2 能力；历史对象接口仍 fail-closed，文本录入不受影响。证据：`wrangler.jsonc`、`src/env.d.ts`、`src/assets/service.ts`、`docs/operations/m2-asset-ingestion.md`。
-- [ ] `ING-004` P0/M2 暂存对象键；验收：内部随机 ID，不含邮箱和原文件名。
+- [x] `ING-004` P0/M2 暂存对象键；状态：L/W；验收：staging key 只使用服务端生成 asset ID，不含邮箱/原文件名，响应不返回公开 URL。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`。
 - [ ] `ING-005` P0/M2 原件对象键；验收：SourceVersion 不可变映射。
-- [ ] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；验收：不一致进入拒绝或人工处理。
+- [x] `ING-006` P0/M2 文件扩展名、MIME、魔数联合校验；状态：L/W；验收：扩展名/MIME 在写入前校验，领取解析前再校验 PDF/图片/Office/OLE/ZIP magic，冲突进入 415 或 `ASSET_CONTENT_INVALID` terminal。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`test/worker/m2-assets.test.ts`、`test/unit/m2-format-matrix.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts test/unit/m2-format-matrix.test.ts test/worker/m2-assets.test.ts`。
 - [ ] `ING-007` P0/M2 上传授权绑定 member/source/bytes/type/expiry；验收：越权和过期拒绝。
 - [ ] `ING-008` P0/M2 完成接口 HEAD 校验；验收：对象大小、类型和存在性一致后才建 Asset。
-- [ ] `ING-009` P0/M2 9 GB R2 写入断路器；验收：文件拒绝但文本录入继续。
+- [x] `ING-009` P0/M2 9 GB R2 写入断路器；状态：L/W；验收：D1 累计达到 `maxAssetTotalBytes` 时返回 507，写入前拒绝且文本 `/api/submissions` 路径不受影响。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`。
 - [ ] `ING-010` P0/M2 8 GB 预警；验收：admin 可见且不向 contributor 暴露账户细节。
-- [ ] `ING-011` P0/M2 单文件大小限制；验收：前端提示和服务端强制一致。
-- [ ] `ING-012` P0/M2 上传中断回收；验收：超时 staging 不进入可见列表。
+- [x] `ING-011` P0/M2 单文件大小限制；状态：L/W；验收：前端 10 MiB preflight 与 Worker body bound/服务校验一致，超限不建资产。证据：`frontend/components/assets/asset-upload-model.ts`、`src/http.ts`、`src/assets/service.ts`、`test/unit/frontend-submit-pages.test.tsx`、`test/worker/m2-assets.test.ts`。
+- [x] `ING-012` P0/M2 上传中断回收；状态：L/W；验收：R2 写成功但 D1 双写失败时补偿删除 staging；补偿失败对象无 D1 引用，可由 orphan grace 扫描/显式回收。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`docs/operations/m2-asset-ingestion.md`。
 - [ ] `ING-013` P0/M2 Asset/Submission 配对写入；验收：任一失败不留下可见孤儿记录。
 - [ ] `ING-014` P1/M2 完全重复关联建议；验收：admin 决定关联、保留或拒绝。
 - [ ] `ING-015` P2/M3 相似重复候选；验收：只作建议，不自动合并。
-- [ ] `ING-016` P1/M2 原件下载授权；验收：每次下载重新检查 visibility/status。
-- [ ] `ING-017` P1/M2 Content-Disposition 安全文件名；验收：无 CRLF、路径或脚本注入。
+- [x] `ING-016` P1/M2 原件下载授权；状态：L/W；验收：每次 owner/admin 下载重新查询资产 owner 与 parse 状态，跨 owner 不泄露存在性，parsed 未完成稳定拒绝。证据：`src/assets/service.ts`、`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
+- [x] `ING-017` P1/M2 Content-Disposition 安全文件名；状态：L/W；验收：下载响应使用 ASCII fallback + RFC5987 编码，去除 CRLF、路径和引号注入。证据：`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
 - [ ] `ING-018` P1/M7 原件校验任务；验收：定期抽检 hash 并报告损坏，不自动删除。
 
 ## PAR — 文档解析
@@ -81,7 +81,7 @@
 - [x] `PAR-017` P0/M2 解析超时；状态：L/W；验收：解析阶段使用统一 10 秒超时（测试可注入更短预算），超时映射为不泄露正文的 `ASSET_PARSE_TIMEOUT`/`failed_retryable`；失败路径先删除同一 `parsed/{assetId}.md` 临时产物，再由现有有限 attempts（最多 3 次）和显式 retry 复用同一对象键，成功重试不产生重复对象。证据：`src/config.ts`、`src/assets/service.ts`、`src/assets/errors.ts`、`test/unit/assets-service.test.ts`；命令：`rtk npx vitest run test/unit/assets-service.test.ts -t "times out a slow conversion"`。
 - [x] `PAR-018` P0/M2 解析输出大小限制；状态：L/W；验收：所有解析适配器在写入 `parsed/` 前执行统一 UTF-8 字节上限（128 KiB），超限使用固定 `SOURCE_TOO_LARGE` 终止，不生成 parsed 对象且保留 staging 原件；源解析器与资产服务双层防线共享同一配置。证据：`src/config.ts`、`src/assets/empty.ts`、`src/assets/service.ts`、`src/sources/parser.ts`、`test/unit/empty-document.test.ts`、`test/unit/assets-service.test.ts`；命令：`rtk npx vitest run test/unit/empty-document.test.ts test/unit/assets-service.test.ts -t "byte limit|oversized rich conversion"`。
 - [x] `PAR-019` P1/M2 解析预览；状态：L/W；验收：owner 通过 `/api/assets/:id/preview`、admin 通过 `/api/admin/assets/:id/preview` 查看规范 Markdown；响应仅返回 parsed 对象内容与受限 parser 元数据（parser schema、行数、代码语言/文件名/行基线、warnings），未完成解析、跨 owner 或缺失对象分别稳定拒绝/脱敏。元数据从同一 parsed R2 对象的受限 custom metadata 读取并安全降级。证据：`src/assets/service.ts`、`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`；命令：`rtk npx vitest run test/worker/m2-assets.test.ts -t "previews normalized Markdown"`。
-- [ ] `PAR-020` P1/M2 重新解析；验收：新 parser version，不覆盖已发布 Revision。候选构建器、D1 queued/processing/indexed 状态机、幂等持久化、管理员重解析/确认物化/发布已完成：`src/sources/reparse.ts`、`src/sources/reparse-service.ts`、`src/sources/reparse-repository.ts`、`migrations/0006_m2_source_reparse.sql`，路由为 `POST /api/admin/source-versions/:id/reparse`、`GET /api/admin/reparse-jobs/:id`、`POST /api/admin/reparse-jobs/:id/promote` 与 `POST /api/admin/reparse-jobs/:id/publish`；确认会创建新的 review_pending Submission/Source/SourceVersion，发布复用现有审核/索引流水线并生成同一 KnowledgeItem 的新 Revision，旧 SourceVersion/Revision 不变。证据：`test/unit/source-reparse.test.ts`、`test/unit/source-reparse-service.test.ts`、`test/worker/m2-reparse.test.ts`。
+- [x] `PAR-020` P1/M2 重新解析；状态：L/W；验收：新 parser version，不覆盖已发布 Revision。候选构建器、D1 queued/processing/indexed 状态机、幂等持久化、管理员重解析/确认物化/发布已完成：`src/sources/reparse.ts`、`src/sources/reparse-service.ts`、`src/sources/reparse-repository.ts`、`migrations/0006_m2_source_reparse.sql`，路由为 `POST /api/admin/source-versions/:id/reparse`、`GET /api/admin/reparse-jobs/:id`、`POST /api/admin/reparse-jobs/:id/promote` 与 `POST /api/admin/reparse-jobs/:id/publish`；确认会创建新的 review_pending Submission/Source/SourceVersion，发布复用现有审核/索引流水线并生成同一 KnowledgeItem 的新 Revision，旧 SourceVersion/Revision 不变。证据：`test/unit/source-reparse.test.ts`、`test/unit/source-reparse-service.test.ts`、`test/worker/m2-reparse.test.ts`；命令：`rtk npx vitest run test/unit/source-reparse.test.ts test/unit/source-reparse-service.test.ts test/worker/m2-reparse.test.ts`（11 tests）。
 
 ## CHK — Chunk 与来源定位
 
