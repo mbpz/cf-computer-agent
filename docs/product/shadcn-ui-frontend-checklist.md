@@ -121,5 +121,5 @@
 - [x] FE-075a 删除前置审计：构建时保留 `public/app.js`、`workspace-ui.js`、`navigation.js`、`styles.css` 作为回滚源，并拒绝 React 源码/产物引用这些入口；证据：`scripts/frontend-legacy-audit.mjs`、`scripts/frontend-legacy-audit.test.mjs`、`npm run build:legacy-audit`。
 - [x] FE-076 更新 README/ROADMAP/运维文档；证据：`README.md`、`docs/operations/react-frontend-cutover.md`，明确 React Assets、回滚和旧 UI 清理边界。
 - [x] FE-077 运行完整 `npm run check` 和 `npm run build:ui`；证据：完整 `npm run check` 通过，Wrangler dry-run 读取 5 个 React 资产文件。
-- [ ] FE-078 提交迁移 release commit。
+- [x] FE-078 提交迁移 release commit；证据：`340fefe`（隐私统计、双 provider 登录与 React/shadcn 迁移后的完整 release commit），提交前已通过 `npm run check`、`npm run build:ui`、`git diff --check`。
 - [x] FE-079 暂停的 PAR-020 重新解析重新排期；证据：`docs/product/par-020-replan.md` 固化前置条件、M2 原子顺序和“不覆盖已发布 Revision”的验收边界；解析实现仍保留在 M2 清单。

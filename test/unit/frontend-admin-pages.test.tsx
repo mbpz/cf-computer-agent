@@ -8,6 +8,7 @@ import { MembersPage } from "../../frontend/pages/admin/members-page";
 import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { AuditPage } from "../../frontend/pages/admin/audit-page";
 import { AdminForbiddenPage } from "../../frontend/pages/admin/admin-forbidden-page";
+import { AdminAnalyticsPage } from "../../frontend/pages/admin/analytics-page";
 import { assetPreviewModel } from "../../frontend/components/assets/asset-preview-model";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -68,6 +69,14 @@ describe("React administrator pages", () => {
     const audit = renderToStaticMarkup(<AuditPage state={{ kind: "ready", events: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], nextCursor: "cursor-2" }} onLoadMore={vi.fn()} />);
     expect(audit).toContain("submission.created");
     expect(audit).toContain("Load more");
+  });
+
+  it("renders bounded analytics range controls without exposing raw telemetry", () => {
+    const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} days={14} state={{ kind: "ready", data: { range: { from: "2026-08-12", to: "2026-08-25", days: 14 }, totals: { pageViews: 12, uniqueVisitors: 4, loginUsers: 2 }, daily: [] } }} />);
+    expect(html).toContain("Last 14 days");
+    expect(html).toContain("Refresh");
+    expect(html).not.toContain("visitorHash");
+    expect(html).not.toContain("undefined");
   });
 
   it("localizes administrator copy through the shared locale runtime", () => {

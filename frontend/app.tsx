@@ -149,12 +149,15 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
 
 function AdminAnalyticsRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }>({ kind: "loading" });
+  const [days, setDays] = useState(7);
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
-    void loadAdminAnalytics().then((data) => { if (active) setState({ kind: "ready", data }); }).catch(() => { if (active) setState({ kind: "error" }); });
+    setState({ kind: "loading" });
+    void loadAdminAnalytics(days).then((data) => { if (active) setState({ kind: "ready", data }); }).catch(() => { if (active) setState({ kind: "error" }); });
     return () => { active = false; };
-  }, []);
-  return <AdminAnalyticsPage locale={locale} state={state} />;
+  }, [days, refresh]);
+  return <AdminAnalyticsPage locale={locale} state={state} days={days} onDaysChange={setDays} onRefresh={() => setRefresh((value) => value + 1)} />;
 }
 
 function decodeRouteId(pathname: string): string {
