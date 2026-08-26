@@ -6,6 +6,8 @@ import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
 import { ChatRepository } from "./chat/repository";
 import { ChatConversationService } from "./chat/conversation-service";
+import { D1ChatFeedbackRepository } from "./chat/feedback-repository";
+import { ChatFeedbackService } from "./chat/feedback-service";
 import { SourceSummaryService } from "./ai/source-summary-service";
 import { FaqService } from "./ai/faq-service";
 import { TimelineService } from "./ai/timeline-service";
@@ -158,6 +160,7 @@ function createRequestServices(
     audit,
     citedAnswers: new CitedAnswerService(ai),
     chatConversations: new ChatConversationService(new ChatRepository(env.DB)),
+    chatFeedback: new ChatFeedbackService(new ChatRepository(env.DB), new D1ChatFeedbackRepository(env.DB)),
     sourceSummaries: new SourceSummaryService(ai),
     faqs: new FaqService(ai),
     timelines: new TimelineService(ai),

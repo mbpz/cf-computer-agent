@@ -246,6 +246,12 @@ describe("M1 API authorization and request boundaries", () => {
       }),
     });
     expect(second.status).toBe(200);
+    const feedback = await memberApi("contributor", `/api/knowledge/chat/conversations/${firstBody.conversationId}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ rating: "citation_error", citationIds: firstBody.citations }),
+    });
+    expect(feedback.status).toBe(201);
+    await expect(env.DB.prepare("SELECT rating, citation_ids_json FROM chat_feedback WHERE conversation_id = ?").bind(firstBody.conversationId).first()).resolves.toEqual({ rating: "citation_error", citation_ids_json: JSON.stringify(firstBody.citations) });
     await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE conversation_id = ?").bind(firstBody.conversationId).first<{ count: number }>()).resolves.toMatchObject({ count: 2 });
     await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
       method: "POST",

@@ -13,6 +13,7 @@ import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import type { ChatConversationService } from "../chat/conversation-service";
+import type { ChatFeedbackService } from "../chat/feedback-service";
 import type { SourceSummaryService } from "../ai/source-summary-service";
 import type { FaqService } from "../ai/faq-service";
 import type { TimelineService } from "../ai/timeline-service";
@@ -29,6 +30,7 @@ import { strictRecord, stringValue } from "./member";
 export interface LibraryRouteServices {
   citedAnswers: CitedAnswerService;
   chatConversations: ChatConversationService;
+  chatFeedback: ChatFeedbackService;
   sourceSummaries: SourceSummaryService;
   faqs: FaqService;
   timelines: TimelineService;
@@ -105,6 +107,16 @@ export async function routeLibraryApi(
     requireNoQuery(url);
     const cancelled = await services.chatConversations.cancel(scope, decodePathId(conversationCancel[1]!));
     return jsonResponse({ cancelled }, 202, context.requestId);
+  }
+
+  const conversationFeedback = /^\/api\/knowledge\/chat\/conversations\/([^/]+)\/feedback$/.exec(url.pathname);
+  if (conversationFeedback) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["rating", "citationIds"], "CHAT_FEEDBACK_INVALID");
+    if (!hasExactKeys(input, ["rating", "citationIds"])) throw new AppError("CHAT_FEEDBACK_INVALID", "Feedback is invalid", 400);
+    const feedback = await services.chatFeedback.save(scope, decodePathId(conversationFeedback[1]!), { rating: input.rating, citationIds: input.citationIds });
+    return jsonResponse({ feedback }, 201, context.requestId);
   }
 
   if (url.pathname === "/api/knowledge/chat") {
