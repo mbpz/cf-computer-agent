@@ -42,4 +42,13 @@ describe("ResearchReportService", () => {
     expect(gap.messageKey).toBe("KNOWLEDGE_EVIDENCE_INSUFFICIENT");
     await expect(new ResearchReportService(repository(), { run: async () => { throw new Error("upstream"); } }).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "AI_UNAVAILABLE", retryable: true });
   });
+
+  it("increments the report version instead of replacing the prior artifact", async () => {
+    const saved: any[] = [];
+    const repo = { ...repository(), nextVersion: async () => 2, saveReport: async (input: any) => { saved.push(input); return { id: "report-2", version: input.version }; } };
+    const result = await new ResearchReportService(repo, ai({ title: "第二版", sections: [{ heading: "结论", body: "仍有依据。", citationIds: ["c-1"] }], insufficientEvidence: false })).generate(scope, "run-1", sources);
+    expect(result.version).toBe(2);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.version).toBe(2);
+  });
 });
