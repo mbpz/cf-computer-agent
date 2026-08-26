@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ResearchReportService } from "../../src/ai/research-report-service";
 
 const scope = { memberId: "member-1", role: "contributor" as const };
-const run = { id: "run-1", ownerMemberId: "member-1", knowledgeItemId: "k-1", goal: "比较落地方案", plan: { spaceIds: [], collectionIds: [], knowledgeItemIds: [], completion: ["形成有引用结论"], steps: ["读取来源"] }, status: "running" as const };
+const run = { id: "run-1", ownerMemberId: "member-1", knowledgeItemId: "k-1", goal: "比较落地方案", plan: { spaceIds: [], collectionIds: [], knowledgeItemIds: [], completion: ["形成有引用结论"], steps: ["读取来源"], subquestions: [{ id: "q1", question: "成本约束是什么？", scope: { spaceIds: [], collectionIds: [], knowledgeItemIds: [] }, status: "pending" as const }] }, status: "running" as const };
 const sources = [{
   citationId: "c-1", knowledgeItemId: "k-1", revisionId: "r-1", chunkId: "ch-1", title: "设计文档", headingPath: ["方案"], startLine: 1, endLine: 4,
   body: "方案甲强调低成本。", publishedAt: "2026-01-01T00:00:00.000Z",

@@ -38,6 +38,7 @@ const expectedMigrations = [
   ["0013_m6_research_reports.sql", "67c93f32c7c1615bf7dd098ac1fe9ccfa3a34aee057eb83576ecc833108e1286"],
   ["0014_m6_research_run_plan.sql", "de06a3f61af248a62e3ac69da92cef9c7693366b684f6105e65997389c69ad46"],
   ["0015_m6_research_plan_steps.sql", "9b58938e273178a8136b486360f34947fa698d758e6e2fc23231f91205c8010f"],
+  ["0016_m6_research_subquestions.sql", "4fe59d01b5514943421de346edd826f29bae00dc9b757a1ba3260e6f2ba70508"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -191,7 +192,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-files count=15$/mu);
+    assert.match(result.output, /^\[pass\] migration-files count=16$/mu);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {
@@ -228,8 +229,8 @@ test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0008_m2_parent_chunks.sql/mu);
     assert.match(result.output, /0009_m2_chunk_status.sql/mu);
-    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql$/mu);
-    assert.match(result.output, /0013_m6_research_reports.sql,0014_m6_research_run_plan.sql,0015_m6_research_plan_steps.sql$/mu);
+    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql$/mu);
+    assert.match(result.output, /0013_m6_research_reports.sql,0014_m6_research_run_plan.sql,0015_m6_research_plan_steps.sql,0016_m6_research_subquestions.sql$/mu);
   });
   await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);
