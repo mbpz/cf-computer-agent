@@ -145,8 +145,8 @@
 - [ ] `IDX-012` P0/M4 向量删除传播；验收：回收/current 切换后旧向量不可召回。
 - [ ] `IDX-013` P0/M4 Vectorize 80% 断路器；验收：停止普通 Chunk，摘要/FTS 继续。
 - [x] `IDX-014` P0/M4 FTS5-only 模式；状态：L/W；验收：搜索直接使用 D1 FTS5 `chunks_fts`/`chunks_fts_shared`，不依赖 AI 或 Vectorize；当前 Revision、可见性、Space/Collection/Tag 权限过滤仍在 FTS 查询内执行。证据：`src/library/repository.ts`、`src/library/service.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t "search|FTS|visibility"`。
-- [ ] `IDX-015` P1/M7 全量索引重建；验收：从权威 Revision 重建且有差异报告。
-- [ ] `IDX-016` P1/M7 索引漂移检测；验收：current Revision、FTS 和向量 ID 定期对账。
+- [x] `IDX-015` P1/M7 全量索引重建；状态：L；验收：从权威 Revision 重建且有差异报告。证据：`src/ops/index-drift.ts`、`src/ops/index-rebuild-plan.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。仅选择 active current Revision，输出确定性 FTS 重建计划，`writes: none`。
+- [x] `IDX-016` P1/M7 索引漂移检测；状态：L；验收：current Revision、FTS 和向量 ID 定期对账。证据：`src/ops/index-drift.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。报告 missing/stale/mismatch；Vectorize 未绑定时固定 `skipped_unbound`，不虚报 clean。
 
 ## SRCH — 搜索
 
