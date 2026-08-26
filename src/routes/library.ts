@@ -12,6 +12,7 @@ import type { Principal } from "../identity/principal";
 import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
+import type { ChatConversationService } from "../chat/conversation-service";
 import type { SourceSummaryService } from "../ai/source-summary-service";
 import type { FaqService } from "../ai/faq-service";
 import type { TimelineService } from "../ai/timeline-service";
@@ -27,6 +28,7 @@ import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
   citedAnswers: CitedAnswerService;
+  chatConversations: ChatConversationService;
   sourceSummaries: SourceSummaryService;
   faqs: FaqService;
   timelines: TimelineService;
@@ -91,18 +93,20 @@ export async function routeLibraryApi(
     requireNoQuery(url);
     const input = strictRecord(
       await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
-      ["question", "scope"],
+      ["question", "scope", "conversationId"],
       "KNOWLEDGE_CHAT_REQUEST_INVALID",
     );
-    if (!hasExactKeys(input, ["question", "scope"])) throw invalidChatRequest();
+    if (!hasExactKeys(input, ["question", "scope", ...(input.conversationId === undefined ? [] : ["conversationId"])])) throw invalidChatRequest();
     const question = stringValue(input.question);
     const chatScope = chatScopeRequest(input.scope);
+    const conversationId = input.conversationId === undefined ? undefined : stringValue(input.conversationId);
+    if (conversationId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) throw invalidChatRequest();
+    const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
+    const history = await services.chatConversations.history(scope, conversation.id);
     const hits = await services.library.search(scope, { query: question, limit: 8 }, chatScope);
-    return jsonResponse(
-      await services.citedAnswers.answer(scope, question, hits.items),
-      200,
-      context.requestId,
-    );
+    const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
+    await services.chatConversations.appendTurn(scope, conversation.id, { question, answer: answer.answer, citationIds: answer.citations });
+    return jsonResponse({ ...answer, conversationId: conversation.id }, 200, context.requestId);
   }
 
   const summary = /^\/api\/knowledge\/([^/]+)\/summary$/.exec(url.pathname);

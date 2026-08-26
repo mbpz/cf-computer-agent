@@ -222,6 +222,32 @@ describe("M1 API authorization and request boundaries", () => {
     expect(aiCalls).toBe(1);
   });
 
+  it("persists a bounded owner-scoped chat history and rejects scope widening", async () => {
+    const published = await publishSubmission("admin", "Chat history", "conversationmarker is documented", "shared", "chat-history-key01");
+    const first = await memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({ question: "conversationmarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json<{ conversationId: string; citations: string[] }>();
+    expect(firstBody.conversationId).toMatch(/^[A-Za-z0-9-]+$/u);
+    expect(firstBody.citations).toHaveLength(1);
+    const second = await memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "conversationmarker",
+        conversationId: firstBody.conversationId,
+        scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] },
+      }),
+    });
+    expect(second.status).toBe(200);
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE conversation_id = ?").bind(firstBody.conversationId).first<{ count: number }>()).resolves.toMatchObject({ count: 2 });
+    await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({ question: "conversationmarker", conversationId: firstBody.conversationId, scope: { kind: "all" } }),
+    }), 409, "CHAT_CONVERSATION_SCOPE_MISMATCH");
+  });
+
   it("accepts only canonical base64 source bytes and persists M1-v2 code metadata", async () => {
     const contentBase64 = btoa("const x = 1;\\r\\n");
     const created = await memberApi("contributor", "/api/submissions", {
@@ -1479,7 +1505,9 @@ describe("M1 trusted knowledge HTTP journey", () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    const weakBody = await response.json<{ conversationId: string; answer: string; citations: string[]; sources: unknown[]; evidenceConfidence: number; messageKey: string; suggestedActionKeys: string[] }>();
+    expect(weakBody.conversationId).toMatch(/^[A-Za-z0-9-]+$/u);
+    expect(weakBody).toMatchObject({
       answer: "知识库中没有足够依据回答这个问题。",
       citations: [],
       sources: [],

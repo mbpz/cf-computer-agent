@@ -22,20 +22,22 @@ export interface AgentAnswer {
   answer: string;
   confidence: "high" | "medium" | "low";
   citations: AgentCitation[];
+  conversationId?: string;
 }
 
-export async function askAgent({ question, scope, requester = fetch, signal }: {
+export async function askAgent({ question, scope, conversationId, requester = fetch, signal }: {
   question: string;
   scope: AgentScope;
+  conversationId?: string;
   requester?: Fetcher;
   signal?: AbortSignal;
 }): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[] }>("/api/knowledge/chat", {
+  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown }>("/api/knowledge/chat", {
     requester,
     signal,
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ question: question.trim(), scope }),
+    body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
   });
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
@@ -47,7 +49,7 @@ export async function askAgent({ question, scope, requester = fetch, signal }: {
   const citations = citationObjects.length > 0
     ? citationObjects
     : (Array.isArray(data.sources) ? data.sources.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null && citationIds.has(citation.id)) : []);
-  return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations };
+  return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
 }
 
 function normalizeCitation(value: unknown): AgentCitation | null {
@@ -72,11 +74,11 @@ export function createAgentRequestController(requester: Fetcher = fetch) {
   let active: AbortController | null = null;
   const owner = createAsyncOwner();
   return {
-    request(question: string, scope: AgentScope) {
+    request(question: string, scope: AgentScope, conversationId?: string) {
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = askAgent({ question, scope, requester, signal: active.signal }).then((answer) => ({ generation, answer }));
+      const promise = askAgent({ question, scope, conversationId, requester, signal: active.signal }).then((answer) => ({ generation, answer }));
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },

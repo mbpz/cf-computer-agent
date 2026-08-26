@@ -22,6 +22,14 @@ describe("frontend agent data", () => {
     await expect(askAgent({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({ answer: "", confidence: "low", citations: [] });
   });
 
+  it("round-trips the server conversation id for follow-up turns", async () => {
+    const requester = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1" });
+      return new Response(JSON.stringify({ answer: "Grounded", evidenceConfidence: 0.9, citations: [], conversationId: "conversation-1" }), { status: 200 });
+    });
+    await expect(askAgent({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1", requester })).resolves.toMatchObject({ conversationId: "conversation-1" });
+  });
+
   it("binds cited source context from the server source set without exposing raw content", async () => {
     const requester = vi.fn(async () => new Response(JSON.stringify({
       answer: "Use [1]", evidenceConfidence: 0.8, citations: ["citation-1"],

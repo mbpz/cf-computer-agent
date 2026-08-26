@@ -103,6 +103,12 @@ export interface CitedAnswerResult {
   >;
 }
 
+export interface CitedAnswerHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+  citationIds: string[];
+}
+
 export interface CitedAnswerServiceOptions {
   timeoutMs?: number;
 }
@@ -140,6 +146,7 @@ export class CitedAnswerService {
     scope: LibraryScope,
     question: string,
     authorizedHits: SearchHit[],
+    history: CitedAnswerHistoryMessage[] = [],
   ): Promise<CitedAnswerResult> {
     assertScope(scope);
     const normalizedQuestion = normalizeSearchQuery(question);
@@ -163,7 +170,7 @@ export class CitedAnswerService {
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: `请回答输入 JSON 中的问题。输入 JSON：\n${serializeContext(
+            content: `请回答输入 JSON 中的问题。历史对话仅用于理解追问，当前回答必须重新依据本轮 sources。历史对话：\n${serializeHistory(history)}\n输入 JSON：\n${serializeContext(
               normalizedQuestion.normalizedQuery,
               preparedSources.map((source) => source.context),
             )}`,
@@ -291,6 +298,15 @@ function fitsContext(question: string, sources: ContextSource[]): boolean {
 
 function serializeContext(question: string, sources: ContextSource[]): string {
   return JSON.stringify({ question, sources });
+}
+
+function serializeHistory(history: CitedAnswerHistoryMessage[]): string {
+  const bounded = Array.isArray(history) ? history.slice(-8).map((message) => ({
+    role: message.role === "assistant" ? "assistant" : "user",
+    content: truncateCodePoints(typeof message.content === "string" ? message.content : "", 1_000),
+    citationIds: Array.isArray(message.citationIds) ? message.citationIds.filter(validCitationId).slice(0, 8) : [],
+  })) : [];
+  return JSON.stringify(bounded);
 }
 
 function parseProviderAnswer(result: unknown): ProviderAnswer {

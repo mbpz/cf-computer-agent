@@ -209,7 +209,7 @@
 - [x] `CHAT-013` P0/M1 引用跳转；状态：L/W；验收：阅读器定位并标历史/current。
 - [x] `CHAT-014` P0/M1 答案归一化；状态：L/W；验收：provider string/object/empty 有稳定合同。
 - [x] `CHAT-015` P0/M1 AI 上游失败；状态：L/W/D；验收：稳定 retryable 错误、无 provider body。
-- [ ] `CHAT-016` P1/M5 多轮追问；验收：历史有界、引用权限每轮重查。
+- [x] `CHAT-016` P1/M5 多轮追问；状态：L/W；验收：每轮使用 owner-bound conversation、历史最多保留最近 8 条消息，scope 变化 fail-closed；每轮重新执行当前成员/范围检索与引用授权，答案只保存已授权 citation ID。证据：`migrations/0019_m5_chat_conversations.sql`、`src/chat/conversation-service.ts`、`src/chat/repository.ts`、`src/routes/library.ts`、`src/ai/cited-answer-service.ts`、`frontend/lib/agent-data.ts`、`test/unit/chat-conversation-service.test.ts`、`test/worker/m1-api.test.ts`、`test/unit/frontend-agent-data.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/chat-conversation-service.test.ts test/unit/frontend-agent-data.test.ts test/worker/m1-api.test.ts -t 'chat|conversation'`。
 - [ ] `CHAT-017` P1/M5 来源增删；验收：会话中显示变更且下一轮生效。
 - [ ] `CHAT-018` P1/M5 冲突来源；验收：并列展示，不强行合并为单一事实。
 - [ ] `CHAT-019` P1/M5 引用支持性验证；验收：不支持断言删除、改写或拒答。

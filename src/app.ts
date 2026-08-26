@@ -4,6 +4,8 @@ import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
 import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
+import { ChatRepository } from "./chat/repository";
+import { ChatConversationService } from "./chat/conversation-service";
 import { SourceSummaryService } from "./ai/source-summary-service";
 import { FaqService } from "./ai/faq-service";
 import { TimelineService } from "./ai/timeline-service";
@@ -155,6 +157,7 @@ function createRequestServices(
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
     citedAnswers: new CitedAnswerService(ai),
+    chatConversations: new ChatConversationService(new ChatRepository(env.DB)),
     sourceSummaries: new SourceSummaryService(ai),
     faqs: new FaqService(ai),
     timelines: new TimelineService(ai),

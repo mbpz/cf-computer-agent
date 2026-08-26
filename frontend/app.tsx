@@ -329,6 +329,7 @@ function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
+  const conversationIdRef = useRef<string | undefined>(undefined);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
   useEffect(() => () => { controllerRef.current?.cancel(); }, []);
   const submit = (nextQuestion = question) => {
@@ -337,9 +338,12 @@ function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string
     setQuestion(normalized);
     setLastQuestion(normalized);
     setState({ kind: "loading" });
-    const request = controllerRef.current.request(normalized, scope);
+    const request = controllerRef.current.request(normalized, scope, conversationIdRef.current);
     void request.promise.then(({ generation, answer }) => {
-      if (controllerRef.current?.isCurrent(generation)) setState({ kind: "ready", ...answer });
+      if (controllerRef.current?.isCurrent(generation)) {
+        conversationIdRef.current = answer.conversationId;
+        setState({ kind: "ready", ...answer });
+      }
     }).catch((error: unknown) => {
       if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
         setState({ kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
