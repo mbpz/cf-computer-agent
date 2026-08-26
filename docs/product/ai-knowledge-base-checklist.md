@@ -308,8 +308,8 @@
 - [x] `AUTH-013` P0/M1 新 Source/Submission capability；状态：L/W；验收：admin/contributor 可创建、automation 不可。
 - [x] `AUTH-014` P0/M1 Review/Publish capability；状态：L/W；验收：仅 active admin。
 - [x] `AUTH-015` P0/M1 shared/admin_only 全读路径；验收：列表/搜索/引用/下载分别测试。证据：真实 D1+DO 覆盖 list/search/current detail/history/citation/download 的 admin/contributor/disabled/伪造角色，hidden/absent/cross-item download 统一 404，客户端 path/hash query 被拒绝。
-- [ ] `AUTH-016` P0/M5 Note/Research owner scope；验收：ID 猜测和跨用户读取为 404/403 稳定合同。
-- [ ] `AUTH-017` P0/M6 Agent 工具授权；验收：每次工具调用重新校验。
+- [x] `AUTH-016` P0/M5 Note/Research owner scope；状态：L/W；验收：ID 猜测和跨用户读取为 404/403 稳定合同。证据：`src/private-notes/service.ts`、`src/ai/research-report-service.ts`、`src/routes/library.ts`、`test/worker/private-notes.test.ts`、`test/worker/m1-api.test.ts`、`test/unit/submissions-service.test.ts`；命令：`rtk npx vitest run test/worker/private-notes.test.ts test/worker/m1-api.test.ts -t 'owner|cross|research' && rtk npm run typecheck`。
+- [x] `AUTH-017` P0/M6 Agent 工具授权；状态：L/W；验收：每次工具调用重新校验。证据：`src/agent/tool-runner.ts`、`src/routes/agent.ts`、`test/unit/agent-tool-runner.test.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts test/worker/agent-session.test.ts -t 'disabled|tool' && rtk npm run typecheck`。
 - [ ] `AUTH-018` P0/M8 登录体系兼容门禁；验收：每个 Milestone 固定运行 GitHub/session/automation 回归集。
 
 ## I18N — 国际化
@@ -333,7 +333,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `EVAL-011` P0/M5 引用定位率；验收：所有返回 citation 可回读位置。
 - [ ] `EVAL-012` P0/M5 Prompt injection 集；验收：伪系统、工具诱导、泄露、引用伪造。
 - [ ] `EVAL-013` P1/M5 用户反馈采样；验收：按 query/citation 聚合且不保存 Secret。
-- [ ] `EVAL-014` P1/M6 Research 计划集；验收：步骤有界、证据缺口可见。
+- [x] `EVAL-014` P1/M6 Research 计划集；状态：L/W；验收：步骤有界、证据缺口可见。证据：`src/ai/research-report-service.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/research-report-service.test.ts test/worker/m1-api.test.ts -t 'plan|research|evidence' && rtk npm run typecheck`。
 - [x] `EVAL-015` P1/M6 Agent 工具轨迹集；验收：无越权、无未注册工具、步数受控。证据：`test/fixtures/m6-agent-trajectories.ts`、`test/unit/m6-agent-trajectory.test.ts`、`src/agent/tool-runner.ts`；命令：`rtk npx vitest run test/unit/m6-agent-trajectory.test.ts test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
 - [ ] `EVAL-016` P0/M4 FTS5-only 降级集；验收：核心检索和阅读通过。
 - [x] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。证据：`test/unit/m6-ai-degraded.test.ts`、`test/unit/research-report-service.test.ts`、`src/ai/answer-service.ts`、`src/submissions/service.ts`、`src/library/service.ts`；命令：`rtk npx vitest run test/unit/m6-ai-degraded.test.ts test/unit/research-report-service.test.ts -t 'degraded|quota|available' && rtk npm run typecheck`。
