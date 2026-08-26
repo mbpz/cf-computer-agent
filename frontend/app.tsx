@@ -34,11 +34,13 @@ import type { SubmissionDraft } from "./components/submissions/submission-form-m
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
+import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   const [session, setSession] = useState<Awaited<ReturnType<typeof sessionSnapshot>> | null>(null);
+  const [anonymous, setAnonymous] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -49,7 +51,19 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    sessionSnapshot().then((value) => { if (active) setSession(value); }).catch((error: unknown) => { if (active) setSessionError(error instanceof Error ? error.message : "SESSION_UNAVAILABLE"); });
+    sessionSnapshot().then((value) => {
+      if (!active) return;
+      setSession(value);
+      setAnonymous(false);
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (isAnonymousSessionError(error)) {
+        setSession(null);
+        setAnonymous(true);
+        return;
+      }
+      setSessionError(error instanceof Error ? error.message : "SESSION_UNAVAILABLE");
+    });
     return () => { active = false; };
   }, []);
 
@@ -60,6 +74,7 @@ export function App() {
   }, []);
 
   if (sessionError) return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_SIGN_IN_REQUIRED")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_SIGN_IN_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">{frontendText(locale, "APP_SIGN_IN_GITHUB")}</a></main>;
+  if (anonymous) return <AnonymousShell locale={locale} />;
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };
@@ -71,7 +86,11 @@ export function App() {
       await postLogout(session.logoutUrl);
       // Return to the anonymous shell. Starting OAuth here would immediately
       // sign the user back in when GitHub still has an active browser session.
-      window.location.href = "/";
+      setSession(null);
+      setAnonymous(true);
+      setLogoutPending(false);
+      window.history.replaceState({}, "", "/");
+      setPathname("/");
     } catch {
       setLogoutError(frontendText(locale, "SHELL_LOGOUT_FAILED"));
       setLogoutPending(false);
@@ -80,6 +99,10 @@ export function App() {
   const kind = pageKindForPath(pathname);
   const page = renderPage(kind, pathname, locale, window.location.search);
   return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
+}
+
+function AnonymousShell({ locale }: { locale: LocaleRuntime }) {
+  return <main data-anonymous-shell className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_SIGNED_OUT_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_SIGNED_OUT_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/auth/github">{frontendText(locale, "APP_SIGN_IN_GITHUB")}</a></main>;
 }
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "") {
