@@ -251,7 +251,7 @@
 - [x] `ART-011` P2/M5 产物重新生成；状态：L/W；验收：ResearchReport 以 ResearchRun 内递增版本写入，`UNIQUE(research_run_id, version)` 防止覆盖旧产物，重新生成保留旧版本及其来源快照；服务测试覆盖 version=2 保存路径。证据：`migrations/0013_m6_research_reports.sql`、`src/research/repository.ts`、`src/ai/research-report-service.ts`、`test/unit/research-report-service.test.ts`；命令：`rtk npx vitest run test/unit/research-report-service.test.ts`。
 - [x] `ART-012` P1/M5 产物转 Submission；状态：L/W；验收：ResearchReport 只能通过 owner-scoped draft endpoint 转为 `Submission.status=draft`，不会创建 KnowledgeItem 或直接发布；随后必须进入现有审核/发布流。证据：`src/routes/library.ts`（`POST /api/knowledge/:knowledgeItemId/research-runs/:runId/draft`）、`src/ai/research-report-service.ts`、`src/submissions/service.ts`、`test/worker/m1-api.test.ts`（研究报告转草稿、无 KnowledgeItem 副作用、跨 owner 404）；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'research report'`。
 - [x] `ART-013` P0/M5 生成 provenance；状态：L/W；验收：研究报告持久化模型、Prompt 版本、创建时间、ResearchRun 状态以及去重后的来源 Revision/Chunk/publishedAt 快照，响应/草稿不包含来源正文。证据：`migrations/0013_m6_research_reports.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'research report'`。
-- [ ] `ART-014` P3/M8 音频/视频/幻灯片实验；验收：默认关闭、额度隔离、非 1.0 阻断。
+- [x] `ART-014` P3/M8 音频/视频/幻灯片实验；状态：L；验收：`decideExperimentalMedia` 默认关闭，使用独立 `experimental-media` 额度范围，质量分数非 1.0 时在消耗额度前阻断，并在额度耗尽时延期到下一 UTC 日。该策略仅为显式 rollout gate，当前不向生产 UI 暴露实验入口。证据：`src/ai/experimental-media-policy.ts`、`test/unit/experimental-media-policy.test.ts`；命令：`rtk npx vitest run test/unit/experimental-media-policy.test.ts && rtk npm run typecheck`。
 
 ## AGT — Agent 工具与会话
 
