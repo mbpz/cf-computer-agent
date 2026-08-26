@@ -8,7 +8,7 @@
 - [x] FE-002 冻结 GitHub OAuth、Session Cookie、退出和 same-origin contract 测试；证据：`test/unit/github-oauth.test.ts`、`test/unit/oauth-cookies.test.ts`、`test/unit/frontend-logout.test.ts`、`test/worker/app.test.ts` 覆盖 OAuth/PKCE、Host Cookie、同源 POST、GET 退出 405 与 cookie 清除，相关 Worker/Unit 全量门禁通过。
 - [x] FE-003 冻结中英文 locale key/placeholder 基线；证据：`docs/product/shadcn-ui-frontend-i18n-baseline.md` 固化 `en`/`zh-CN` 的 434 keys、55 placeholders、6 文件扫描基线，`npm run test:i18n` 13/13 与 `npm run verify:i18n` 通过。
 - [x] FE-004 冻结 Markdown 安全渲染入口与 XSS 回归测试；证据：`docs/product/shadcn-ui-frontend-markdown-security-baseline.md` 固化 `renderSafeMarkdown`、allowlist、协议与降级规则，`markdown-renderer.test.ts`、`html.test.ts`、`frontend-user-read-pages.test.tsx` focused 11/11。
-- [x] FE-005 记录当前 `npm run check` 基线和构建资源基线；证据：`docs/product/shadcn-ui-frontend-build-baseline.md` 固化 2026-08-26 的 42 smoke、13 i18n、888 unit、298 Worker、类型/构建结果与 4 个 React dist 文件。
+- [x] FE-005 记录当前 `npm run check` 基线和构建资源基线；证据：`docs/product/shadcn-ui-frontend-build-baseline.md` 固化 2026-08-27 的 44 smoke、13 i18n、1153 unit、364 Worker、类型/构建结果与 6 个 React dist 文件。
 - [x] FE-006 提交本规格书与迁移清单；证据：`docs/superpowers/specs/2026-08-25-shadcn-ui-frontend-migration.md`、`docs/superpowers/plans/2026-08-25-shadcn-ui-frontend-migration.md` 与本清单均已纳入版本控制，规格书状态已更新为按原子切片持续验收。
 
 ## 工具链与构建
@@ -113,8 +113,8 @@
 ## 切换、清理与发布
 
 - [x] FE-070 新旧路由矩阵逐页对照；证据：`frontend/cutover-contract.ts`、路由矩阵测试 2/2，旧 Worker Shell 回归 28/28。
-- [x] FE-071 API/权限/OAuth/Session 回归；证据：`auth-boundary.ts`、API 401/403 结构化错误、Session payload 校验、contributor direct-admin 403 测试；OAuth upstream 仍由 Worker 端到端回归负责。
-- [x] FE-072 Markdown XSS、undefined/null 和错误脱敏回归；证据：Markdown 安全测试 3/3、React 页面安全回归 18/18、结构化错误不携带 body。
+- [x] FE-071 API/权限/OAuth/Session 回归；证据：`auth-boundary.ts`、API 401/403 结构化错误、Session payload 校验、contributor direct-admin 403 测试、`scripts/frontend-app-contract.test.mjs`（匿名 401 分支确保 `LoginPage` import 存在）；OAuth upstream 仍由 Worker 端到端回归负责。
+- [x] FE-072 Markdown XSS、undefined/null 和错误脱敏回归；证据：Markdown 安全测试 3/3、React 页面安全回归 18/18、结构化错误不携带 body；`test/worker/assets.test.ts` 固定 Cloudflare Web Analytics beacon 的 `script-src`/`connect-src` CSP 允许列表。
 - [x] FE-073 更新 Worker 静态资源测试和构建检查；证据：`frontend/asset-manifest.ts`、Vite `manifest.json` 输出、manifest 测试 2/2；当前 Worker Assets 入口保持旧 `public/` 以便回滚。
 - [x] FE-074 新 UI 全部路由通过后再切换 Wrangler Assets 入口；证据：`wrangler.jsonc` 已切到 `frontend/dist`，React Assets Worker 回归 16/16，完整 Worker 回归 298/298。
 - [ ] FE-075 删除旧 vanilla UI 文件和旧样式。

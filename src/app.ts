@@ -332,7 +332,13 @@ function withAssetSecurityHeaders(response: Response, requestId: string): Respon
   if (headers.get("content-type")?.toLowerCase().startsWith("text/html") === true) {
     headers.set("cache-control", "no-store");
   }
-  headers.set("content-security-policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'");
+  // Cloudflare Web Analytics may inject its beacon into HTML responses. Keep
+  // the script and reporting endpoints explicitly allowlisted instead of
+  // relying on default-src (which would block the beacon at the browser).
+  headers.set(
+    "content-security-policy",
+    "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'",
+  );
   headers.set("referrer-policy", "no-referrer");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");

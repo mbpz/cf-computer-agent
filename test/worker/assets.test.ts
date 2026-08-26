@@ -25,7 +25,10 @@ describe("React workspace assets", () => {
     const page = await SELF.fetch("https://example.test/");
     const html = await page.text();
     expect(page.status).toBe(200);
-    expect(page.headers.get("content-security-policy")).toContain("default-src 'self'");
+    const csp = page.headers.get("content-security-policy") || "";
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("script-src 'self' https://static.cloudflareinsights.com");
+    expect(csp).toContain("connect-src 'self'");
     expect(page.headers.get("x-request-id")).toBeTruthy();
     expect(html).toContain('id="root"');
     expect(html).toContain("/assets/");
@@ -53,7 +56,9 @@ describe("React workspace assets", () => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('id="root"');
-    expect(response.headers.get("content-security-policy")).toContain("default-src 'self'");
+    const csp = response.headers.get("content-security-policy") || "";
+    expect(csp).toContain("script-src 'self' https://static.cloudflareinsights.com");
+    expect(csp).toContain("connect-src 'self'");
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
