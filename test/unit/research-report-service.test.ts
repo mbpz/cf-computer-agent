@@ -47,6 +47,20 @@ describe("ResearchReportService", () => {
     await expect(new ResearchReportService(repository(), { run: async () => { throw new Error("upstream"); } }).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "AI_UNAVAILABLE", retryable: true });
   });
 
+  it("rejects query writes after a research run is cancelled", async () => {
+    const cancelledRepo = {
+      ...repository(),
+      findRun: async () => ({ ...run, status: "cancelled" as const }),
+    };
+    await expect(new ResearchReportService(cancelledRepo, ai({})).recordQuery(scope, {
+      researchRunId: "run-1",
+      subquestionId: "q1",
+      query: "成本约束",
+      resultIds: ["c-1"],
+      rationale: "结果直接回答子问题",
+    })).rejects.toMatchObject({ code: "RESEARCH_RUN_NOT_FOUND", status: 404 });
+  });
+
   it("increments the report version instead of replacing the prior artifact", async () => {
     const saved: any[] = [];
     const repo = { ...repository(), nextVersion: async () => 2, saveReport: async (input: any) => { saved.push(input); return { id: "report-2", version: input.version }; } };

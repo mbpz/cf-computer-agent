@@ -77,7 +77,7 @@ export class ResearchReportService {
   async recordQuery(scope: LibraryScope, input: { researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string }): Promise<ResearchQuery> {
     assertScope(scope);
     const run = await this.repository.findRun(scope, input.researchRunId);
-    if (!run || !run.plan.subquestions.some((item) => item.id === input.subquestionId)) throw notFound();
+    if (!run || run.status === "cancelled" || run.status === "completed" || !run.plan.subquestions.some((item) => item.id === input.subquestionId)) throw notFound();
     if (!input.query.trim() || codePointLength(input.query.trim()) > 512 || !Array.isArray(input.resultIds) || input.resultIds.length > 20 || !input.resultIds.every((id) => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9_:\-]{0,255}$/u.test(id)) || !input.rationale.trim() || codePointLength(input.rationale.trim()) > 1_000) throw new AppError("RESEARCH_QUERY_INVALID", "Research query is invalid", 400);
     return this.repository.recordQuery({ id: crypto.randomUUID(), researchRunId: run.id, subquestionId: input.subquestionId, query: input.query.trim(), resultIds: input.resultIds, rationale: input.rationale.trim(), createdAt: this.now().toISOString() });
   }

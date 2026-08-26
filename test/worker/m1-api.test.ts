@@ -1389,6 +1389,9 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
     const cancel = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/cancel`, { method: "POST", body: "{}" });
     expect(cancel.status).toBe(200);
+    await expectApiError(memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/queries`, {
+      method: "POST", body: JSON.stringify({ subquestionId: "q1", query: "取消后不应写入", resultIds: [hit!.citationId], rationale: "取消后的查询必须被拒绝" }),
+    }), 404, "RESEARCH_RUN_NOT_FOUND");
   });
 
   it("generates a cited mindmap with readable concept nodes", async () => {
