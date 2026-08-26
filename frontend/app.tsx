@@ -19,6 +19,7 @@ import { createKnowledgeRequestController, type KnowledgePageResult } from "./li
 import { createKnowledgeReaderRequestController, loadKnowledgeRevisionDiff, loadRelatedKnowledge, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
+import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
 import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
@@ -210,6 +211,15 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
     message: string;
   }>(() => activeQuery.trim() ? { kind: "loading" } : { kind: "ready", query: "", degraded: false, results: [], nextCursor: null });
   const controllerRef = useRef<ReturnType<typeof createSearchRequestController> | null>(null);
+  const [savedViews, setSavedViews] = useState<SavedViewItem[]>([]);
+  const [savedViewPending, setSavedViewPending] = useState(false);
+  const [savedViewError, setSavedViewError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let active = true;
+    void loadSavedViews().then((items) => { if (active) setSavedViews(items); }).catch(() => { if (active) setSavedViews([]); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const onPopState = () => {
@@ -268,7 +278,41 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
       }
     });
   };
-  return <SearchPage locale={locale} query={query} state={state} onQueryChange={setQuery} onSubmit={submit} onLoadMore={loadMore} onRetry={() => setSubmitVersion((version) => version + 1)} />;
+  const saveView = async (name: string) => {
+    if (savedViewPending) return;
+    setSavedViewPending(true);
+    setSavedViewError(undefined);
+    try {
+      const created = await createSavedView(name, { q: activeQuery });
+      setSavedViews((views) => [created, ...views.filter((view) => view.id !== created.id)]);
+    } catch {
+      setSavedViewError(frontendText(locale, "SEARCH_SAVED_VIEW_ERROR"));
+    } finally {
+      setSavedViewPending(false);
+    }
+  };
+  const applyView = (view: SavedViewItem) => {
+    const normalized = view.filters.q.trim();
+    setQuery(normalized);
+    const nextUrl = normalized ? `/search?q=${encodeURIComponent(normalized)}` : "/search";
+    window.history.pushState({}, "", nextUrl);
+    setActiveQuery(normalized);
+    setSubmitVersion((version) => version + 1);
+  };
+  const removeView = async (id: string) => {
+    if (savedViewPending) return;
+    setSavedViewPending(true);
+    setSavedViewError(undefined);
+    try {
+      await deleteSavedView(id);
+      setSavedViews((views) => views.filter((view) => view.id !== id));
+    } catch {
+      setSavedViewError(frontendText(locale, "SEARCH_SAVED_VIEW_ERROR"));
+    } finally {
+      setSavedViewPending(false);
+    }
+  };
+  return <SearchPage locale={locale} query={query} state={state} onQueryChange={setQuery} onSubmit={submit} onLoadMore={loadMore} onRetry={() => setSubmitVersion((version) => version + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
 }
 
 function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {

@@ -35,6 +35,8 @@ import { TagsRepository } from "./tags/repository";
 import { TagsService } from "./tags/service";
 import { SourceReparseRepository } from "./sources/reparse-repository";
 import { SourceReparseService } from "./sources/reparse-service";
+import { SavedViewsRepository } from "./saved-views/repository";
+import { SavedViewsService } from "./saved-views/service";
 
 export interface AppDependencies {
   githubFetch?: typeof fetch;
@@ -164,6 +166,7 @@ function createRequestServices(
     submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
+    savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
   };
 }
 

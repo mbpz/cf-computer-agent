@@ -8,12 +8,14 @@ import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } from "../submissions/types";
 import type { TagsService } from "../tags/service";
+import type { SavedViewsService } from "../saved-views/service";
 
 export interface MemberRouteServices {
   assets: AssetService;
   spaces: SpacesService;
   submissions: SubmissionsService;
   tags: TagsService;
+  savedViews: SavedViewsService;
 }
 
 export async function routeMemberApi(
@@ -210,6 +212,38 @@ export async function routeMemberApi(
     }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
   }
 
+  if (url.pathname === "/api/saved-views") {
+    requireCapability(principal, "knowledge:read");
+    const member = requireMember(principal);
+    requireExactQuery(url, ["limit", "cursor"]);
+    if (request.method === "GET") {
+      return jsonResponse(await services.savedViews.list(member.memberId, pageRequest(url)), 200, context.requestId);
+    }
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
+    requireNoQuery(url);
+    const input = savedViewInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
+    return jsonResponse(await services.savedViews.create(member.memberId, input), 201, context.requestId);
+  }
+
+  const savedView = /^\/api\/saved-views\/([^/]+)$/.exec(url.pathname);
+  if (savedView) {
+    requireCapability(principal, "knowledge:read");
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const id = decodePathId(savedView[1]!);
+    if (request.method === "GET") {
+      return jsonResponse(await services.savedViews.get(member.memberId, id), 200, context.requestId);
+    }
+    if (request.method === "PATCH") {
+      return jsonResponse(await services.savedViews.update(member.memberId, id, savedViewInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes))), 200, context.requestId);
+    }
+    if (request.method === "DELETE") {
+      await services.savedViews.delete(member.memberId, id);
+      return new Response(null, { status: 204, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId } });
+    }
+    return methodNotAllowed("DELETE, GET, PATCH", context);
+  }
+
   if (url.pathname === "/api/submissions/drafts") {
     requireCapability(principal, "submission:create");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
@@ -386,4 +420,9 @@ function requireExactQuery(url: URL, allowedKeys: readonly string[]): void {
 function optionalNullableString(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return value;
   return stringValue(value);
+}
+
+function savedViewInput(value: unknown): { name: unknown; filters: unknown } {
+  const input = strictRecord(value, ["name", "filters"], "SAVED_VIEW_INVALID");
+  return { name: input.name, filters: input.filters };
 }

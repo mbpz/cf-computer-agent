@@ -8,6 +8,7 @@ import { SearchPage } from "../../frontend/pages/search-page";
 import { AgentPage } from "../../frontend/pages/agent-page";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
+import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 describe("React read-only user pages", () => {
   it("renders loading and empty knowledge states without undefined values", () => {
@@ -40,6 +41,22 @@ describe("React read-only user pages", () => {
     expect(html).toContain('href="/knowledge/r1"');
     expect(html).toContain("body");
     expect(html).toContain("Ask about this result");
+    expect(html).not.toContain("undefined");
+  });
+
+  it("renders owner saved-view controls without exposing undefined values", () => {
+    const html = renderToStaticMarkup(<SearchPage
+      locale={createLocaleRuntime()}
+      state={{ kind: "ready", query: "docs", degraded: false, results: [], nextCursor: null }}
+      query="docs"
+      savedViews={[{ id: "view-1", name: "Platform docs", updatedAt: "", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } }]}
+      onSaveView={() => undefined}
+      onApplyView={() => undefined}
+      onDeleteView={() => undefined}
+    />);
+    expect(html).toContain("data-saved-view-controls");
+    expect(html).toContain("Platform docs");
+    expect(html).toContain("Save view");
     expect(html).not.toContain("undefined");
   });
 

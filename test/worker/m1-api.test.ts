@@ -1375,6 +1375,34 @@ describe("M1 trusted knowledge HTTP journey", () => {
       sources: [expect.objectContaining({ id: "legacy-automation" })],
     });
   });
+
+  it("keeps Saved Views owner-scoped through the member API", async () => {
+    const created = await memberApi("contributor", "/api/saved-views", {
+      method: "POST",
+      body: JSON.stringify({ name: "Launch docs", filters: { q: "launch", spaceId: "default", tagIds: [], tagMode: "or" } }),
+    });
+    expect(created.status).toBe(201);
+    const saved = await created.json<{ id: string; memberId: string; filters: { v: number } }>();
+    expect(saved).toMatchObject({ memberId: "member-contributor", filters: { v: 1 } });
+
+    const list = await memberApi("contributor", "/api/saved-views");
+    expect(list.status).toBe(200);
+    await expect(list.json()).resolves.toMatchObject({ items: [{ id: saved.id, name: "Launch docs" }] });
+
+    const otherList = await memberApi("other", "/api/saved-views");
+    await expect(otherList.json()).resolves.toEqual({ items: [] });
+    await expectApiError(memberApi("other", `/api/saved-views/${saved.id}`, { method: "PATCH", body: JSON.stringify({ name: "Hijack", filters: { q: "x" } }) }), 404, "SAVED_VIEW_NOT_FOUND");
+    await expectApiError(memberApi("contributor", "/api/saved-views", { method: "POST", body: JSON.stringify({ name: "Launch docs", filters: { q: "duplicate" } }) }), 409, "SAVED_VIEW_NAME_CONFLICT");
+
+    const updated = await memberApi("contributor", `/api/saved-views/${saved.id}`, {
+      method: "PATCH", body: JSON.stringify({ name: "Launch docs", filters: { q: "updated" } }),
+    });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({ filters: { q: "updated" } });
+    const deleted = await memberApi("contributor", `/api/saved-views/${saved.id}`, { method: "DELETE" });
+    expect(deleted.status).toBe(204);
+    await expectApiError(memberApi("contributor", `/api/saved-views/${saved.id}`), 404, "SAVED_VIEW_NOT_FOUND");
+  });
 });
 
 async function createSubmission(
