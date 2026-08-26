@@ -22,9 +22,15 @@
     }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "KNOWLEDGE", "class_name": "KnowledgeBase" }]
+    "bindings": [
+      { "name": "KNOWLEDGE", "class_name": "KnowledgeBase" },
+      { "name": "AGENT_SESSIONS", "class_name": "AgentSession" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KnowledgeBase"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["KnowledgeBase"] },
+    { "tag": "v2", "new_sqlite_classes": ["AgentSession"] }
+  ],
   "assets": {
     "directory": "./frontend/dist",
     "binding": "ASSETS",

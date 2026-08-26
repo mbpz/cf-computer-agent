@@ -32,6 +32,7 @@ import { PrivateNotesRepository } from "./private-notes/repository";
 import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
+import { routeAgentApi } from "./routes/agent";
 import { clearOAuthCookies, routeAuth } from "./routes/auth";
 import { routeLibraryApi } from "./routes/library";
 import { routeMemberApi } from "./routes/member";
@@ -155,6 +156,7 @@ function createRequestServices(
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
   return {
     answers: new AnswerService(ai),
+    agentSessions: env.AGENT_SESSIONS,
     assets,
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
@@ -219,6 +221,8 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
+  const agent = routeAgentApi(request, url, context, principal, services.agentSessions);
+  if (agent !== undefined) return await agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;
   const admin = await routeAdminApi(request, url, context, principal, services);

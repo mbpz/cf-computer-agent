@@ -139,8 +139,14 @@ test("disables production and preview workers.dev URLs", async () => {
     database_id: "653c9e43-c7ad-45b8-a109-bc144843bee7",
     migrations_dir: "migrations",
   }]);
-  assert.deepEqual(configuration.durable_objects.bindings, [{ name: "KNOWLEDGE", class_name: "KnowledgeBase" }]);
-  assert.deepEqual(configuration.migrations, [{ tag: "v1", new_sqlite_classes: ["KnowledgeBase"] }]);
+  assert.deepEqual(configuration.durable_objects.bindings, [
+    { name: "KNOWLEDGE", class_name: "KnowledgeBase" },
+    { name: "AGENT_SESSIONS", class_name: "AgentSession" },
+  ]);
+  assert.deepEqual(configuration.migrations, [
+    { tag: "v1", new_sqlite_classes: ["KnowledgeBase"] },
+    { tag: "v2", new_sqlite_classes: ["AgentSession"] },
+  ]);
   assert.equal(configuration.assets.binding, "ASSETS");
   assert.equal(configuration.assets.run_worker_first, true);
 });

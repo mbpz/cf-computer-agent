@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { getWorkspace, type DurableObjectStorageLike, withWorkspace } from "@cloudflare/computer";
 import { createApp } from "./app";
+export { AgentSession } from "./agent/session-do";
 import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
 import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetsRepository } from "./assets/repository";

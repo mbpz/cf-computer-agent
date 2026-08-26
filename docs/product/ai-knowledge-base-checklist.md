@@ -255,7 +255,7 @@
 
 ## AGT — Agent 工具与会话
 
-- [ ] `AGT-001` P1/M6 AgentSession DO 路由；验收：会话 ID 随机且成员绑定。
+- [x] `AGT-001` P1/M6 AgentSession DO 路由；状态：L/W；验收：Worker 通过独立 SQLite Durable Object namespace 创建随机 session ID，DO 持久化 member 绑定与时间戳；跨成员读取统一 404，路由仅允许已认证 member 的 `knowledge:read` 能力。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`src/app.ts`、`wrangler.jsonc`（AgentSession v2 SQLite binding）、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [ ] `AGT-002` P1/M6 消息持久化；验收：有界列表、角色固定、正文权限保护。
 - [ ] `AGT-003` P1/M6 流式回答；验收：断线不导致重复工具写入。
 - [ ] `AGT-004` P1/M6 断线恢复；验收：从 checkpoint 恢复或明确终止。
