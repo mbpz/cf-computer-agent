@@ -365,7 +365,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-022` P0/M7 定期恢复演练；状态：L；验收：真实命令、时间、差异和失败处理记录。证据：`src/ops/restore-drill.ts`、`test/unit/restore-drill.test.ts`、`docs/operations/m7-restore-drill.md`；命令：`rtk npx vitest run test/unit/export-package.test.ts test/unit/export-cursor.test.ts test/unit/import-dry-run.test.ts test/unit/restore-plan.test.ts test/unit/index-rebuild-plan.test.ts test/unit/restore-drill.test.ts && rtk npm run typecheck`。报告固定记录三阶段、耗时、差异、`writes:none` 和失败处理；当前仅本地离线演练。
 - [x] `OPS-023` P1/M8 结构化日志；状态：L；验收：request ID、stage/reason、无正文/Secret/OAuth code。证据：`src/ops/structured-log.ts`、`src/http.ts`、`src/app.ts`、`test/unit/structured-log.test.ts`；命令：`rtk npx vitest run test/unit/structured-log.test.ts test/unit/frontend-api.test.ts && rtk npm run typecheck`。日志字段 allowlist 化，OAuth upstream 与请求失败边界统一输出安全诊断字段。
 - [x] `OPS-024` P1/M8 任务仪表盘；状态：L；验收：backlog、age、failure、retry、quota。证据：`src/ops/task-dashboard.ts`、`test/unit/task-dashboard.test.ts`；命令：`rtk npx vitest run test/unit/task-dashboard.test.ts && rtk npm run typecheck`。输入上限 1,000 条、按 kind 聚合、额度 80% 进入 degraded/100% exhausted；仅聚合安全任务元数据。
-- [ ] `OPS-025` P1/M8 索引漂移仪表盘；验收：current/FTS/vector mismatch 可定位。
+- [x] `OPS-025` P1/M8 索引漂移仪表盘；状态：L；验收：current/FTS/vector mismatch 可定位。证据：`src/ops/index-drift.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。报告区分 current mismatch、FTS missing/stale、Vector missing/stale，并在无 binding 时标记 `skipped_unbound`。
 - [ ] `OPS-026` P0/M8 配额故障演练；验收：D1/R2/DO/AI/Vectorize/Queue 分别验证降级。
 - [ ] `OPS-027` P0/M8 发布 checklist；验收：backup→migration→upload→inspect→deploy→smoke→evidence。
 - [ ] `OPS-028` P0/M8 前向兼容回滚；验收：不逆向 migration、不部署旧 Access build。
