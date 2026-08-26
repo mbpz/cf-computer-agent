@@ -33,6 +33,7 @@ const MAX_HEADING_CODE_POINTS = 128;
 const MAX_PROVIDER_RESPONSE_CODE_POINTS = 16_000;
 const MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024;
 const MAX_CLAIMS = 16;
+const MAX_CONFLICTS = 8;
 const MAX_CLAIM_CODE_POINTS = 1_200;
 const MAX_CITATIONS_PER_CLAIM = 8;
 const MAX_ANSWER_CODE_POINTS = 4_000;
@@ -90,6 +91,7 @@ export interface ProviderAnswer {
     citationIds: string[];
   }>;
   insufficientEvidence: boolean;
+  conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
 export interface CitedAnswerResult {
@@ -101,6 +103,7 @@ export interface CitedAnswerResult {
   suggestedActionKeys?: Array<
     "KNOWLEDGE_CHAT_REWRITE_QUESTION" | "KNOWLEDGE_CHAT_EXPAND_SCOPE"
   >;
+  conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
 export interface CitedAnswerHistoryMessage {
@@ -193,8 +196,9 @@ export class CitedAnswerService {
 
     const providerAnswer = parseProviderAnswer(providerResult);
     const normalizedClaims = validateGrounding(providerAnswer, preparedSources);
+    const conflicts = validateConflicts(providerAnswer.conflicts ?? [], preparedSources);
     if (providerAnswer.insufficientEvidence) return noEvidence(evidenceConfidence);
-    return renderGroundedAnswer(normalizedClaims, preparedSources, evidenceConfidence);
+    return renderGroundedAnswer(normalizedClaims, conflicts, preparedSources, evidenceConfidence);
   }
 }
 
@@ -325,12 +329,13 @@ function parseProviderAnswer(result: unknown): ProviderAnswer {
     throw aiUnavailable();
   }
   if (!isPlainRecord(parsed)
-    || !hasExactKeys(parsed, ["claims", "insufficientEvidence"])
+    || !hasOnlyKeys(parsed, ["claims", "insufficientEvidence", "conflicts"])
     || !Array.isArray(parsed.claims)
     || parsed.claims.length > MAX_CLAIMS
     || typeof parsed.insufficientEvidence !== "boolean") {
     throw aiUnavailable();
   }
+  if (parsed.conflicts !== undefined && (!Array.isArray(parsed.conflicts) || parsed.conflicts.length > MAX_CONFLICTS)) throw aiUnavailable();
   for (const claim of parsed.claims) {
     if (!isPlainRecord(claim)
       || !hasExactKeys(claim, ["text", "citationIds"])
@@ -342,6 +347,17 @@ function parseProviderAnswer(result: unknown): ProviderAnswer {
       || !claim.citationIds.every(validCitationId)) {
       throw aiUnavailable();
     }
+  }
+  for (const conflict of parsed.conflicts ?? []) {
+    if (!isPlainRecord(conflict)
+      || !hasExactKeys(conflict, ["text", "citationIds"])
+      || typeof conflict.text !== "string"
+      || hasMalformedSurrogate(conflict.text)
+      || codePointLength(conflict.text) > MAX_CLAIM_CODE_POINTS
+      || !Array.isArray(conflict.citationIds)
+      || conflict.citationIds.length < 1
+      || conflict.citationIds.length > MAX_CITATIONS_PER_CLAIM
+      || !conflict.citationIds.every(validCitationId)) throw aiUnavailable();
   }
   return parsed as unknown as ProviderAnswer;
 }
@@ -372,14 +388,26 @@ function validateGrounding(
   return claims;
 }
 
+function validateConflicts(conflicts: Array<{ text: string; citationIds: string[] }>, sources: PreparedSource[]): Array<{ text: string; citationIds: string[] }> {
+  const sourceOrder = sources.map((source) => source.context.citationId);
+  const allowedIds = new Set(sourceOrder);
+  return conflicts.flatMap((candidate) => {
+    const text = sanitizeClaimText(candidate.text);
+    if (text === "" || /[\p{Cc}\p{Cf}]/u.test(text) || candidate.citationIds.length === 0 || candidate.citationIds.some((id) => !allowedIds.has(id))) throw answerUngrounded();
+    const requestedIds = new Set(candidate.citationIds);
+    return [{ text, citationIds: sourceOrder.filter((citationId) => requestedIds.has(citationId)) }];
+  });
+}
+
 function renderGroundedAnswer(
   claims: NormalizedClaim[],
+  conflicts: Array<{ text: string; citationIds: string[] }>,
   sources: PreparedSource[],
   evidenceConfidence: number,
 ): CitedAnswerResult {
   if (claims.length === 0) throw answerUngrounded();
   const sourceOrder = sources.map((source) => source.context.citationId);
-  const usedSet = new Set(claims.flatMap((claim) => claim.citationIds));
+  const usedSet = new Set([...claims.flatMap((claim) => claim.citationIds), ...conflicts.flatMap((conflict) => conflict.citationIds)]);
   const citations = sourceOrder.filter((citationId) => usedSet.has(citationId));
   const markers = new Map(citations.map((citationId, index) => [citationId, `[${index + 1}]`]));
   const rendered = claims.map((claim) => {
@@ -394,6 +422,7 @@ function renderGroundedAnswer(
     citations,
     sources: citedSources.map((source) => source.hit),
     evidenceConfidence,
+    ...(conflicts.length > 0 ? { conflicts } : {}),
   };
 }
 
@@ -444,6 +473,10 @@ function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   const actual = Object.keys(value).sort();
   return actual.length === keys.length
     && actual.every((key, index) => key === [...keys].sort()[index]);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
 }
 
 function hasMalformedSurrogate(value: string): boolean {

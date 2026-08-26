@@ -327,7 +327,7 @@ function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string
   const scope = agentScopeFromSearch(search ?? "");
   const [question, setQuestion] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
-  const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
+  const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const conversationIdRef = useRef<string | undefined>(undefined);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();

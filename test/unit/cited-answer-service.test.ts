@@ -162,6 +162,18 @@ describe("CitedAnswerService.answer", () => {
     ]);
   });
 
+  it("keeps provider-reported source conflicts side by side with independent citations", async () => {
+    const ai = new FakeAi();
+    ai.result = providerResponse({
+      claims: [{ text: "两份资料对发布时间存在差异。", citationIds: [firstHit.citationId, secondHit.citationId] }],
+      conflicts: [{ text: "发布时间分别记录为一月和二月，不能合并为单一日期。", citationIds: [firstHit.citationId, secondHit.citationId] }],
+      insufficientEvidence: false,
+    });
+    const result = await new CitedAnswerService(ai).answer(scope, "launch latency", [firstHit, secondHit]);
+    expect(result.conflicts).toEqual([{ text: "发布时间分别记录为一月和二月,不能合并为单一日期。", citationIds: [firstHit.citationId, secondHit.citationId] }]);
+    expect(result.citations).toEqual([firstHit.citationId, secondHit.citationId]);
+  });
+
   it("keeps malicious source instructions inside inert serialized source data", async () => {
     const ai = new FakeAi();
     ai.result = providerResponse({ claims: [], insufficientEvidence: true });

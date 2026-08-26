@@ -23,6 +23,7 @@ export interface AgentAnswer {
   confidence: "high" | "medium" | "low";
   citations: AgentCitation[];
   conversationId?: string;
+  conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
 export async function askAgent({ question, scope, conversationId, requester = fetch, signal }: {
@@ -32,7 +33,7 @@ export async function askAgent({ question, scope, conversationId, requester = fe
   requester?: Fetcher;
   signal?: AbortSignal;
 }): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown }>("/api/knowledge/chat", {
+  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[] }>("/api/knowledge/chat", {
     requester,
     signal,
     method: "POST",
@@ -49,7 +50,13 @@ export async function askAgent({ question, scope, conversationId, requester = fe
   const citations = citationObjects.length > 0
     ? citationObjects
     : (Array.isArray(data.sources) ? data.sources.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null && citationIds.has(citation.id)) : []);
-  return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
+  const conflicts = Array.isArray(data.conflicts) ? data.conflicts.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const record = value as Record<string, unknown>;
+    if (typeof record.text !== "string" || !Array.isArray(record.citationIds) || !record.citationIds.every((id) => typeof id === "string")) return [];
+    return [{ text: record.text, citationIds: record.citationIds as string[] }];
+  }) : [];
+  return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(conflicts.length > 0 ? { conflicts } : {}), ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
 }
 
 export async function updateAgentConversationScope(conversationId: string, scope: AgentScope, requester: Fetcher = fetch): Promise<void> {

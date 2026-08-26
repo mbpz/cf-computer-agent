@@ -6,7 +6,7 @@ import { PageState } from "../components/ui/page-state";
 import type { AgentScope } from "../lib/agent-data";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 
-export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onRetry }: { scope: string | AgentScope; state: { kind: "loading" } | { kind: "ready"; answer: string; confidence: "high" | "medium" | "low"; citations: readonly AgentCitation[] } | { kind: "error"; message: string }; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onRetry?: () => void }) {
+export function AgentPage({ scope, state, locale, question = "", onQuestionChange, onSubmit, onRetry }: { scope: string | AgentScope; state: { kind: "loading" } | { kind: "ready"; answer: string; confidence: "high" | "medium" | "low"; citations: readonly AgentCitation[]; conflicts?: Array<{ text: string; citationIds: string[] }> } | { kind: "error"; message: string }; locale?: LocaleRuntime; question?: string; onQuestionChange?: (question: string) => void; onSubmit?: () => void; onRetry?: () => void }) {
   const scopeLabel = typeof scope === "string" ? scope || "all" : scope.kind;
   return <section className="space-y-6"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "AGENT_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "AGENT_SCOPE")}: <code>{scopeLabel}</code></p></div>
     <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
