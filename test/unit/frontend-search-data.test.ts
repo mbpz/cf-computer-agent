@@ -11,7 +11,7 @@ describe("frontend search data", () => {
     await expect(loadSearchPage({ query: "  title / body  ", requester })).resolves.toEqual({
       degraded: true,
       nextCursor: null,
-      items: [{ id: "c-1", title: "Guide", snippet: "Excerpt", href: "/knowledge/k-1#c-1", matchedFields: ["title", "code"] }],
+      items: [{ id: "c-1", knowledgeItemId: "k-1", title: "Guide", snippet: "Excerpt", href: "/knowledge/k-1#c-1", matchedFields: ["title", "code"] }],
     });
   });
 
@@ -19,7 +19,7 @@ describe("frontend search data", () => {
     const requester = vi.fn(async () => new Response(JSON.stringify({ items: [null, {}, { knowledgeItemId: "" }, { knowledgeItemId: "k-2" }], nextCursor: "v1.cursor" }), { status: 200 }));
     await expect(loadSearchPage({ query: "q", cursor: "v1.previous", requester })).resolves.toMatchObject({
       nextCursor: "v1.cursor",
-      items: [{ id: "k-2", href: "/knowledge/k-2" }],
+      items: [{ id: "k-2", knowledgeItemId: "k-2", href: "/knowledge/k-2" }],
     });
   });
 

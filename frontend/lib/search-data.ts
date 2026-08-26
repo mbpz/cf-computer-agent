@@ -3,6 +3,7 @@ import { createAsyncOwner } from "./async-owner";
 
 export interface SearchResultItem {
   id: string;
+  knowledgeItemId?: string;
   title?: string;
   snippet?: string;
   href: string;
@@ -40,6 +41,7 @@ function normalizeSearchItem(value: unknown): SearchResultItem | null {
     : [];
   return {
     id: citation || record.knowledgeItemId,
+    knowledgeItemId: record.knowledgeItemId,
     title: typeof record.title === "string" ? record.title : undefined,
     snippet: typeof record.excerpt === "string" ? record.excerpt : undefined,
     href: `/knowledge/${encodeURIComponent(record.knowledgeItemId)}${citation ? `#${encodeURIComponent(citation)}` : ""}`,
