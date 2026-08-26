@@ -329,10 +329,10 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `EVAL-005` P0/M4 检索 query set；状态：L；验收：provider-free 固定 query set 覆盖关键词、语义、同义词、跨语言、代码、表格六类，case ID 与相关文档 opaque ID 有界；不伪造 Vectorize 结果。证据：`test/fixtures/m4-retrieval-cases.ts`、`test/unit/retrieval-metrics.test.ts`。
 - [x] `EVAL-006` P0/M4 Recall@5 计算；状态：L；验收：固定 case/ranking 输入确定性计算非零分母 Recall@5，top-5 外相关项会降低分数；工具：`src/evaluation/retrieval-metrics.ts`、`test/unit/retrieval-metrics.test.ts`。
 - [x] `EVAL-007` P1/M4 排名回归；状态：L；验收：同一固定排名同时输出 MRR/NDCG@5，完整基线为 1，排名偏移可回归；当前为 provider-free harness，不宣称生产语义排序。
-- [ ] `EVAL-008` P0/M4 权限泄露集；验收：shared/admin_only/disabled/history/deleted 泄露为 0。
-- [ ] `EVAL-009` P0/M5 引用正确性集；验收：支持/部分支持/冲突/无来源。
-- [ ] `EVAL-010` P0/M5 错误引用率；验收：错误断言引用为 0，否则拒答。
-- [ ] `EVAL-011` P0/M5 引用定位率；验收：所有返回 citation 可回读位置。
+- [x] `EVAL-008` P0/M4 权限泄露集；状态：L；验收：固定 provider-free leak harness 覆盖 shared、admin_only、disabled、history、deleted 五类表面，所有观察值必须显式存在，正确基线泄露为 0，任一可见性回归精确计数；实际 D1/FTS 读路径仍由既有 worker/library 权限套件验证。证据：`src/evaluation/permission-leaks.ts`、`test/fixtures/m4-permission-cases.ts`、`test/unit/permission-leaks.test.ts`、`test/worker/m1-library.test.ts`。
+- [x] `EVAL-009` P0/M5 引用正确性集；状态：L；验收：固定 harness 覆盖支持、部分支持、冲突、无来源四类，冲突/无来源默认拒答，返回 citation 必须属于 allowlist；实际答案链路继续由 M1 citation tests 验证。证据：`src/evaluation/citation-metrics.ts`、`test/fixtures/m5-citation-cases.ts`、`test/unit/citation-metrics.test.ts`。
+- [x] `EVAL-010` P0/M5 错误引用率；状态：L；验收：错误 citation 与冲突回答均计入失败，正常基线错误引用为 0，禁止以缺少 observation 隐藏分母。
+- [x] `EVAL-011` P0/M5 引用定位率；状态：L；验收：每个返回 citation 必须出现在可回读 located 集合，否则精确计 location miss；M1 实际 citation location 仍要求 1.0。
 - [ ] `EVAL-012` P0/M5 Prompt injection 集；验收：伪系统、工具诱导、泄露、引用伪造。
 - [ ] `EVAL-013` P1/M5 用户反馈采样；验收：按 query/citation 聚合且不保存 Secret。
 - [x] `EVAL-014` P1/M6 Research 计划集；状态：L/W；验收：步骤有界、证据缺口可见。证据：`src/ai/research-report-service.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/research-report-service.test.ts test/worker/m1-api.test.ts -t 'plan|research|evidence' && rtk npm run typecheck`。
