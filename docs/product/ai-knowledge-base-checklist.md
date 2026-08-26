@@ -353,7 +353,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [ ] `OPS-008` P0/M2 R2 Bucket 配置；验收：Standard/private/CORS/生命周期和 binding。
 - [ ] `OPS-009` P0/M2 R2 用量账本；验收：8/9 GB 阈值和 Dashboard 对账。
 - [ ] `OPS-010` P0/M2 Queue 配置；验收：consumer、重试、DLQ/替代扫描和 24h 约束。
-- [ ] `OPS-011` P0/M2 Job 重投扫描；验收：Queue 丢失/过期后从 D1 恢复。
+- [x] `OPS-011` P0/M2 Job 重投扫描；状态：L/W/D；免费层由 Cron 直接从 D1 有界扫描 `queued|failed_retryable` 任务，Queue 丢失/过期等价场景可从 D1 恢复，单任务最多 3 次领取且不阻断其它任务；当前不声明 Queue consumer。证据：`src/assets/service.ts`（`processDue`）、`src/index.ts`（5 分钟 Cron）、`test/unit/assets-service.test.ts`（AI 故障后下一次 sweep 恢复）、`docs/operations/m2-asset-ingestion.md`；命令：`rtk npx vitest run test/unit/assets-service.test.ts -t 'bounded sweep|recovery' && rtk npm run typecheck`。
 - [ ] `OPS-012` P0/M4 Vectorize index 配置；验收：384 维、metadata indexes、binding 和 rebuild。
 - [ ] `OPS-013` P0/M4 Vectorize 用量断路器；验收：80% 后停止普通向量。
 - [x] `OPS-014` P0/M2 Workers AI 日额度策略；状态：L；验收：provider-free quota policy 为 interactive 保留有界额度，ingestion/research 超过可用配额返回 `defer` 与 `deferredUntil`，80% 进入 degraded、100% exhausted，次日 UTC 窗口确定性恢复；非法元数据 fail-closed。证据：`src/ai/quota-policy.ts`、`test/unit/quota-policy.test.ts`；当前策略原语未声明远程 AI 用量账本。
