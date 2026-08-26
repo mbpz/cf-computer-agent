@@ -160,7 +160,7 @@
 - [x] `SRCH-008` P1/M4 类型、作者和时间过滤；状态：L/W；验收：使用索引、无全表扫描。证据：`src/library/types.ts`、`src/library/service.ts`、`src/library/repository.ts`、`src/routes/library.ts`、`test/unit/library-service.test.ts`；命令：`rtk npx vitest run test/unit/library-service.test.ts -t "bounded type" && rtk npm run typecheck`。kind 通过 source/source_version EXISTS，author 绑定 published_by，时间使用 published_at 范围；游标 scope 包含全部过滤器。
 - [x] `SRCH-009` P0/M1 visibility 过滤；状态：L/W；验收：contributor 永不返回 admin_only。
 - [x] `SRCH-010` P0/M1 keyset pagination；状态：L/W；验收：重复排序值无漏项/重复。
-- [ ] `SRCH-011` P1/M4 自然语言 query rewrite；验收：失败或无额度回退原始 query。
+- [x] `SRCH-011` P1/M4 自然语言 query rewrite；状态：L；验收：失败或无额度回退原始 query。证据：`src/library/query-rewrite.ts`、`test/unit/query-rewrite.test.ts`；命令：`rtk npx vitest run test/unit/query-rewrite.test.ts && rtk npm run typecheck`。provider 不存在、异常、无效/越界输出均回退规范化原 query；当前 FTS-only 默认不调用 provider。
 - [ ] `SRCH-012` P1/M4 语义召回；状态：deferred（免费层无 Vectorize）；当前 FTS-only，额度/绑定启用后再接有界 topK。
 - [ ] `SRCH-013` P0/M4 RRF 融合；状态：deferred（免费层无 Vectorize）；当前不混合不存在的向量结果。
 - [ ] `SRCH-014` P1/M4 可选 rerank；状态：deferred（免费层无 Vectorize/额外 AI 额度）；保持现有确定性 FTS 排名。
