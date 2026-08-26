@@ -28,6 +28,7 @@ import type { PrivateNotesService } from "../private-notes/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { FavoritesService } from "../favorites/service";
 import type { RecentVisitsService } from "../recent-visits/service";
+import type { ReviewService } from "../review/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
@@ -48,6 +49,7 @@ export interface LibraryRouteServices {
   submissions: SubmissionsService;
   favorites: FavoritesService;
   recentVisits: RecentVisitsService;
+  review: ReviewService;
 }
 
 export async function routeLibraryApi(
@@ -80,6 +82,12 @@ export async function routeLibraryApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const query = queryRecord(url, ["limit", "cursor"]);
     return jsonResponse(await services.recentVisits.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/knowledge/review") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const query = queryRecord(url, ["period"]);
+    return jsonResponse(await services.review.list(scope, query.period), 200, context.requestId);
   }
 
   if (url.pathname === "/api/knowledge/research-runs") {

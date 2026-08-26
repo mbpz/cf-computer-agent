@@ -31,6 +31,7 @@ import { createAdminMembersRequestController, updateMemberStatus, type AdminMemb
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
+import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
@@ -248,6 +249,8 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
   const [activity, setActivity] = useState<WorkspaceActivityItem[]>([]);
   const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
+  const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>("daily");
+  const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
   const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
     setState((previous) => ({
       kind: "ready",
@@ -262,8 +265,16 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
     void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
+    void loadKnowledgeReview("daily").then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (reviewPeriod === "daily") return;
+    let active = true;
+    setReview({ kind: "loading" });
+    void loadKnowledgeReview(reviewPeriod).then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
+    return () => { active = false; };
+  }, [reviewPeriod]);
   const loadMoreActivity = () => {
     if (!activityNextCursor) return;
     const cursor = activityNextCursor;
@@ -295,7 +306,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
     });
   };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} />;
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
 function SearchRoute({ locale }: { locale: LocaleRuntime }) {

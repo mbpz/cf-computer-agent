@@ -69,6 +69,8 @@ import { RecentVisitsRepository } from "./recent-visits/repository";
 import { RecentVisitsService } from "./recent-visits/service";
 import { DuplicateCandidatesRepository } from "./duplicates/repository";
 import { DuplicateCandidatesService } from "./duplicates/service";
+import { ReviewRepository } from "./review/repository";
+import { ReviewService } from "./review/service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -171,6 +173,7 @@ function createRequestServices(
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
+  const review = new ReviewService(new ReviewRepository(env.DB));
   const researchReports = new ResearchReportService(new ResearchRepository(env.DB), ai);
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
@@ -248,6 +251,7 @@ function createRequestServices(
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
+    review,
   };
 }
 

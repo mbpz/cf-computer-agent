@@ -25,6 +25,20 @@ describe("React read-only user pages", () => {
     expect(html).toContain("cf");
   });
 
+  it("renders daily/weekly review items without undefined values", () => {
+    const html = renderToStaticMarkup(<KnowledgePage
+      locale={createLocaleRuntime({ navigatorLanguage: "en" })}
+      state={{ kind: "ready", items: [], nextCursor: null }}
+      review={{ kind: "ready", data: { items: [{ knowledgeItemId: "k1", revisionId: "r1", title: "Guide", publishedAt: "2026-08-25", lastVisitedAt: null, reason: "to_read", favorite: true }] } }}
+      reviewPeriod="weekly"
+    />);
+    expect(html).toContain("Review queue");
+    expect(html).toContain("This week");
+    expect(html).toContain("To read");
+    expect(html).toContain("Guide");
+    expect(html).not.toContain("undefined");
+  });
+
   it("passes reader Markdown through the supplied safe renderer as content", () => {
     const renderer = vi.fn(() => "<p>safe</p>");
     const html = renderToStaticMarkup(<KnowledgeReaderPage revision={{ id: "r1", title: "Guide", markdown: "# Safe" }} renderMarkdown={renderer} />);
