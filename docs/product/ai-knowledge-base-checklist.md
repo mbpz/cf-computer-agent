@@ -339,7 +339,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `EVAL-015` P1/M6 Agent 工具轨迹集；验收：无越权、无未注册工具、步数受控。证据：`test/fixtures/m6-agent-trajectories.ts`、`test/unit/m6-agent-trajectory.test.ts`、`src/agent/tool-runner.ts`；命令：`rtk npx vitest run test/unit/m6-agent-trajectory.test.ts test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
 - [x] `EVAL-016` P0/M4 FTS5-only 降级集；状态：L/W；验收：无 Vectorize/provider 时固定 corpus 的 degraded 检索仍可返回可定位 citation，答案路径不绕过权限且 provider 调用状态可审计；无结果仍拒答，权限泄露为 0。证据：`test/fixtures/m1-evaluation.ts`、`test/unit/m1-evaluation.test.ts`（`provider-free FTS-only degraded path`）；命令：`rtk npx vitest run test/unit/m1-evaluation.test.ts -t 'degraded|FTS-only' && rtk npm run typecheck`。当前不宣称 Vectorize 语义召回。
 - [x] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。证据：`test/unit/m6-ai-degraded.test.ts`、`test/unit/research-report-service.test.ts`、`src/ai/answer-service.ts`、`src/submissions/service.ts`、`src/library/service.ts`；命令：`rtk npx vitest run test/unit/m6-ai-degraded.test.ts test/unit/research-report-service.test.ts -t 'degraded|quota|available' && rtk npm run typecheck`。
-- [ ] `EVAL-018` P1/M8 生产合成探针；验收：只用无敏感 fixture、限频、可清理。
+- [ ] `EVAL-018` P1/M8 生产合成探针；状态：I/L（生产待授权）；验收：`buildSyntheticProbePlan` 仅接受 HTTPS 自定义域，fixture 自动生成且拒绝 Secret、邮箱、Bearer/OAuth/session 标记，单窗口最多一次运行、请求数上限 8，并强制声明可清理策略。证据：`src/evaluation/synthetic-probe.ts`、`test/unit/synthetic-probe.test.ts`；命令：`rtk npx vitest run test/unit/synthetic-probe.test.ts && rtk npm run typecheck`。尚未执行生产请求，需单独授权并在保留期后完成管理员 purge 证据。
 
 ## OPS — 运维、额度、备份和恢复
 
