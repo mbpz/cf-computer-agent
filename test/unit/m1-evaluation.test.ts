@@ -214,6 +214,15 @@ describe("M1 fixed knowledge-loop evaluation", () => {
     expect(result("prompt-injection")?.answer).not.toMatch(/EXFILTRATE|SYSTEM_OVERRIDE/u);
   });
 
+  it("keeps the provider-free FTS-only degraded path readable", async () => {
+    const report = await runM1Evaluation();
+    const degraded = report.cases.find((entry) => entry.id === "degraded-readable");
+    expect(degraded).toMatchObject({ degraded: true, denied: false, noEvidence: false, providerCalled: true });
+    expect(degraded?.retrievedCitationIds.length).toBeGreaterThan(0);
+    expect(degraded?.returnedCitationIds).toHaveLength(1);
+    expect(report.metrics.permissionLeaks).toBe(0);
+  });
+
   it("makes Tag-labelled cases fail recall and per-case gates when Tag indexing is removed", async () => {
     const report = await runM1Evaluation({ includeTags: false });
     const tagCaseIds = M1_EVALUATION_CASES
