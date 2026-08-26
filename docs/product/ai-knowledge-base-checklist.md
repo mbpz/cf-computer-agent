@@ -215,7 +215,7 @@
 - [x] `CHAT-019` P1/M5 引用支持性验证；状态：L/W；验收：Provider 可为断言声明 evidenceQuotes；每个片段必须逐字来自当前授权 citation excerpt，否则服务端返回稳定 `ANSWER_UNGROUNDED`，不渲染或保存该回答。未声明片段的历史响应仍受 citation allowlist、来源回读和不可信数据边界约束。证据：`src/ai/cited-answer-service.ts`、`test/unit/cited-answer-service.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/cited-answer-service.test.ts`。
 - [x] `CHAT-020` P1/M5 回答停止；状态：L/W；验收：客户端停止本地请求并发送会话取消，服务端以 D1 active_turn/cancel_requested 标记做竞态门禁；取消后的 AI 结果不会写入 chat_messages，重复运行 fail-closed。证据：`migrations/0020_m5_chat_cancel.sql`、`src/chat/repository.ts`、`src/chat/conversation-service.ts`、`src/routes/library.ts`、`frontend/lib/agent-data.ts`、`frontend/pages/agent-page.tsx`、`test/unit/chat-conversation-service.test.ts`、`test/unit/frontend-agent-data.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/chat-conversation-service.test.ts test/unit/frontend-agent-data.test.ts`。
 - [x] `CHAT-021` P1/M5 回答反馈；状态：L/W；验收：会话 owner 可提交 `useful|not_useful|citation_error`，只保存评分和 bounded citation IDs，数据库不写入回答正文；跨成员和非法评分 fail-closed。证据：`migrations/0021_m5_chat_feedback.sql`、`src/chat/feedback-service.ts`、`src/chat/feedback-repository.ts`、`src/routes/library.ts`、`test/unit/chat-feedback-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/chat-feedback-service.test.ts test/worker/m1-api.test.ts -t 'chat|feedback'`。
-- [ ] `CHAT-022` P0/M5 权限变化；验收：禁用成员或降权后旧会话不能继续回读。
+- [x] `CHAT-022` P0/M5 权限变化；状态：L/W；验收：禁用成员后旧会话不能继续回读，身份解析在会话路由前即时拒绝；证据：`src/identity/session.ts`、`src/chat/repository.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'existing conversation'`。
 
 ## RES — Deep Research
 

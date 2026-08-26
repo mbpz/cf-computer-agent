@@ -259,6 +259,31 @@ describe("M1 API authorization and request boundaries", () => {
     }), 409, "CHAT_CONVERSATION_SCOPE_MISMATCH");
   });
 
+  it("rejects an existing conversation immediately after its member is disabled", async () => {
+    const published = await publishSubmission("admin", "Disabled chat", "disabledconversation is documented", "shared", "disabled-chat-key01");
+    const created = await memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "disabledconversation",
+        scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] },
+      }),
+    });
+    expect(created.status).toBe(200);
+    const body = await created.json<{ conversationId: string }>();
+    expect(body.conversationId).toMatch(/^[A-Za-z0-9-]+$/u);
+
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-contributor'").run();
+
+    await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "disabledconversation",
+        conversationId: body.conversationId,
+        scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] },
+      }),
+    }), 403, "MEMBER_DISABLED");
+  });
+
   it("accepts only canonical base64 source bytes and persists M1-v2 code metadata", async () => {
     const contentBase64 = btoa("const x = 1;\\r\\n");
     const created = await memberApi("contributor", "/api/submissions", {
