@@ -1083,6 +1083,35 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(env.DB.prepare("SELECT count(*) AS count FROM knowledge_visits").first()).resolves.toEqual({ count: 0 });
   });
 
+  it("creates private note shares with active-member boundaries and cascades", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("private_note_shares", [
+      "note_id:TEXT:1:NULL:1",
+      "recipient_member_id:TEXT:1:NULL:2",
+      "created_at:TEXT:1:NULL:0",
+      "revoked_at:TEXT:0:NULL:0",
+    ], ["CHECK(revoked_at IS NULL OR revoked_at >= created_at)"]);
+    await expectIndex("private_note_shares", "private_note_shares_recipient_page", [
+      { name: "recipient_member_id", desc: 0 }, { name: "created_at", desc: 1 }, { name: "note_id", desc: 1 },
+    ]);
+    await expectIndex("private_note_shares", "private_note_shares_note_page", [
+      { name: "note_id", desc: 0 }, { name: "revoked_at", desc: 0 }, { name: "recipient_member_id", desc: 0 },
+    ]);
+    await expectForeignKeys("private_note_shares", [
+      { from: "note_id", table: "private_notes", to: "id" },
+      { from: "recipient_member_id", table: "members", to: "id" },
+    ]);
+    const timestamp = "2026-08-26T00:00:00.000Z";
+    await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('share-owner', 'github:share-owner', 'share-owner@example.test', 'contributor', 'active', ?, ?), ('share-recipient', 'github:share-recipient', 'share-recipient@example.test', 'contributor', 'active', ?, ?)").bind(timestamp, timestamp, timestamp, timestamp).run();
+    await env.DB.prepare("INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('share-knowledge', 'default', NULL, 'active', 'indexed', ?, ?)").bind(timestamp, timestamp).run();
+    await env.DB.prepare("INSERT INTO private_notes (id, owner_member_id, knowledge_item_id, title, body, citations_json, created_at, updated_at) VALUES ('share-note', 'share-owner', 'share-knowledge', 'Shared', 'Body', '[]', ?, ?)").bind(timestamp, timestamp).run();
+    await env.DB.prepare("INSERT INTO private_note_shares (note_id, recipient_member_id, created_at) VALUES ('share-note', 'share-recipient', ?)").bind(timestamp).run();
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'share-recipient'").run();
+    await expect(env.DB.prepare("INSERT INTO private_note_shares (note_id, recipient_member_id, created_at) VALUES ('share-note', 'share-recipient', ?)").bind(timestamp).run()).rejects.toThrow();
+    await env.DB.prepare("DELETE FROM private_notes WHERE id = 'share-note'").run();
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM private_note_shares").first()).resolves.toEqual({ count: 0 });
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

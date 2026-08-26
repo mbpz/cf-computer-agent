@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import { parsePageRequest, type PageRequest } from "../pagination";
-import type { PrivateNote, PrivateNoteCitation, PrivateNoteInput, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope } from "./types";
+import type { PrivateNote, PrivateNoteCitation, PrivateNoteInput, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteShare } from "./types";
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const MAX_TITLE_BYTES = 1024;
@@ -23,16 +23,22 @@ export class PrivateNotesService {
 
   async get(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNote | null> {
     assertId(knowledgeItemId);
-    return this.repository.findOwned(scope, knowledgeItemId);
+    return this.repository.findVisible
+      ? this.repository.findVisible(scope, knowledgeItemId)
+      : this.repository.findOwned(scope, knowledgeItemId);
   }
 
   async list(scope: PrivateNoteScope, request?: PageRequest): Promise<PrivateNotePage> {
-    if (!this.repository.listOwned) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private notes are unavailable", 503, true);
-    return this.repository.listOwned(scope, parsePageRequest(request?.limit, request?.cursor));
+    const parsed = parsePageRequest(request?.limit, request?.cursor);
+    if (this.repository.listVisible) return this.repository.listVisible(scope, parsed);
+    if (this.repository.listOwned) return this.repository.listOwned(scope, parsed);
+    throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private notes are unavailable", 503, true);
   }
 
   async save(scope: PrivateNoteScope, knowledgeItemId: string, input: PrivateNoteInput): Promise<PrivateNote> {
     assertId(knowledgeItemId);
+    const existing = await this.get(scope, knowledgeItemId);
+    if (existing?.access === "shared") throw new AppError("PRIVATE_NOTE_READ_ONLY", "Shared notes are read-only", 403);
     const normalized = normalizeInput(input);
     const timestamp = this.now().toISOString();
     return this.repository.upsert({
@@ -40,6 +46,27 @@ export class PrivateNotesService {
       title: normalized.title, body: normalized.body, citations: normalized.citations,
       createdAt: timestamp, updatedAt: timestamp,
     });
+  }
+
+  async share(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string): Promise<PrivateNoteShare> {
+    assertId(knowledgeItemId);
+    assertId(recipientMemberId);
+    if (scope.memberId === recipientMemberId) throw new AppError("PRIVATE_NOTE_SHARE_INVALID", "A note cannot be shared with its owner", 400);
+    if (!this.repository.share) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note sharing is unavailable", 503, true);
+    return this.repository.share(scope, knowledgeItemId, recipientMemberId, this.now().toISOString());
+  }
+
+  async revokeShare(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string): Promise<void> {
+    assertId(knowledgeItemId);
+    assertId(recipientMemberId);
+    if (!this.repository.revokeShare) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note sharing is unavailable", 503, true);
+    return this.repository.revokeShare(scope, knowledgeItemId, recipientMemberId, this.now().toISOString());
+  }
+
+  async listShares(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNoteShare[]> {
+    assertId(knowledgeItemId);
+    if (!this.repository.listShares) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private note sharing is unavailable", 503, true);
+    return this.repository.listShares(scope, knowledgeItemId);
   }
 }
 

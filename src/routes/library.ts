@@ -94,6 +94,33 @@ export async function routeLibraryApi(
     return jsonResponse(await services.privateNotes.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
   }
 
+  const noteShares = /^\/api\/knowledge\/([^/]+)\/note\/shares(?:\/([^/]+))?$/.exec(url.pathname);
+  if (noteShares) {
+    const knowledgeItemId = decodePathId(noteShares[1]!);
+    const recipientMemberId = noteShares[2] === undefined ? undefined : decodePathId(noteShares[2]);
+    if (request.method === "GET") {
+      requireNoQuery(url);
+      if (recipientMemberId !== undefined) throw new AppError("PRIVATE_NOTE_SHARE_PATH_INVALID", "Share path is invalid", 400);
+      return jsonResponse({ shares: await services.privateNotes.listShares(scope, knowledgeItemId) }, 200, context.requestId);
+    }
+    if (request.method === "POST") {
+      requireNoQuery(url);
+      if (recipientMemberId !== undefined) throw new AppError("PRIVATE_NOTE_SHARE_PATH_INVALID", "Share path is invalid", 400);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["recipientMemberId"], "PRIVATE_NOTE_SHARE_REQUEST_INVALID");
+      if (!hasExactKeys(input, ["recipientMemberId"]) || typeof input.recipientMemberId !== "string") {
+        throw new AppError("PRIVATE_NOTE_SHARE_REQUEST_INVALID", "Request body is invalid", 400);
+      }
+      return jsonResponse({ share: await services.privateNotes.share(scope, knowledgeItemId, input.recipientMemberId) }, 201, context.requestId);
+    }
+    if (request.method === "DELETE") {
+      requireNoQuery(url);
+      if (recipientMemberId === undefined) throw new AppError("PRIVATE_NOTE_SHARE_PATH_INVALID", "Share recipient is required", 400);
+      await services.privateNotes.revokeShare(scope, knowledgeItemId, recipientMemberId);
+      return new Response(null, { status: 204, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId } });
+    }
+    return methodNotAllowed("DELETE, GET, POST", context);
+  }
+
   const favorite = /^\/api\/knowledge\/([^/]+)\/favorite$/.exec(url.pathname);
   if (favorite) {
     requireNoQuery(url);

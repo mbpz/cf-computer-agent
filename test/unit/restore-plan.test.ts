@@ -5,7 +5,7 @@ import { planKnowledgeRestore } from "../../src/ops/restore-plan";
 const input = () => ({
   exportId: "export-restore-1",
   generatedAt: "2026-08-26T00:00:00.000Z",
-  schemaFingerprint: "migrations-0024",
+  schemaFingerprint: "migrations-0025",
   members: [{ id: "member-1", identitySubject: "github:1", email: "owner@example.test", role: "admin" as const, status: "active" as const, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
   spaces: [{ id: "space-1", slug: "default" }], collections: [], submissions: [], reviews: [],
   sources: [{ id: "source-1", ownerId: "member-1" }], sourceVersions: [{ id: "source-version-1", sourceId: "source-1" }],
@@ -17,7 +17,7 @@ const input = () => ({
 describe("new-environment restore plan", () => {
   it("maps identities and preserves revision/citation/original operations without writes", async () => {
     const pkg = await buildKnowledgeExport(input());
-    const plan = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0024", memberMap: { "member-1": "target-admin" } });
+    const plan = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0025", memberMap: { "member-1": "target-admin" } });
     expect(plan.ok).toBe(true);
     expect(plan.writes).toBe("none");
     expect(plan.identityMappings).toEqual([{ sourceMemberId: "member-1", targetMemberId: "target-admin" }]);
@@ -31,9 +31,9 @@ describe("new-environment restore plan", () => {
     const plan = await planKnowledgeRestore(broken, { expectedSchemaFingerprint: "migrations-9999", memberMap: { "member-1": "target-admin" } });
     expect(plan.ok).toBe(false);
     expect(plan.errors.map((error) => error.code)).toEqual(expect.arrayContaining(["SCHEMA_MISMATCH", "CITATION_MISMATCH"]));
-    const unmapped = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0024", memberMap: {} });
+    const unmapped = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0025", memberMap: {} });
     expect(unmapped.errors.map((error) => error.code)).toContain("IDENTITY_UNMAPPED");
-    const duplicate = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0024", memberMap: { "member-1": "target-admin" }, targetMemberIds: ["target-admin"] });
+    const duplicate = await planKnowledgeRestore(pkg, { expectedSchemaFingerprint: "migrations-0025", memberMap: { "member-1": "target-admin" }, targetMemberIds: ["target-admin"] });
     expect(duplicate.errors.map((error) => error.code)).toContain("IDENTITY_CONFLICT");
   });
 });

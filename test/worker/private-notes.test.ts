@@ -67,6 +67,50 @@ describe("private knowledge notes", () => {
     await expect(env.DB.prepare("SELECT count(*) AS count FROM private_notes").first()).resolves.toMatchObject({ count: 0 });
   });
 
+  it("shares only with active members, keeps recipients read-only, and revokes access", async () => {
+    const directory = await api("/api/members/active", sessionA);
+    expect(directory.status).toBe(200);
+    expect(await directory.json()).toMatchObject({ items: expect.arrayContaining([expect.objectContaining({ id: "member-a", email: "a@example.test" }), expect.objectContaining({ id: "member-b", email: "b@example.test" })]) });
+
+    const created = await api("/api/knowledge/knowledge-1/note", sessionA, {
+      method: "PUT",
+      body: JSON.stringify({ title: "Share me", body: "Read only", citations: [{ revisionId: "revision-1", chunkId: "chunk-1", startLine: 2, endLine: 4 }] }),
+    });
+    expect(created.status).toBe(200);
+
+    const shared = await api("/api/knowledge/knowledge-1/note/shares", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ recipientMemberId: "member-b" }),
+    });
+    expect(shared.status).toBe(201);
+    expect(await shared.json()).toMatchObject({ share: { recipientMemberId: "member-b", revokedAt: null } });
+
+    const recipientRead = await api("/api/knowledge/knowledge-1/note", sessionB);
+    expect(await recipientRead.json()).toMatchObject({ note: { title: "Share me", access: "shared" } });
+    const recipientWrite = await api("/api/knowledge/knowledge-1/note", sessionB, {
+      method: "PUT",
+      body: JSON.stringify({ title: "No", body: "No", citations: [{ revisionId: "revision-1", chunkId: "chunk-1", startLine: 2, endLine: 4 }] }),
+    });
+    expect(recipientWrite.status).toBe(403);
+    expect(await recipientWrite.json()).toMatchObject({ error: { code: "PRIVATE_NOTE_READ_ONLY" } });
+    expect((await (await api("/api/knowledge/notes?limit=8", sessionB)).json() as { items: Array<{ knowledgeItemId: string; access: string }> }).items)
+      .toEqual([expect.objectContaining({ knowledgeItemId: "knowledge-1", access: "shared" })]);
+
+    const shares = await api("/api/knowledge/knowledge-1/note/shares", sessionA);
+    expect(await shares.json()).toMatchObject({ shares: [{ recipientMemberId: "member-b", revokedAt: null }] });
+    const revoked = await api("/api/knowledge/knowledge-1/note/shares/member-b", sessionA, { method: "DELETE" });
+    expect(revoked.status).toBe(204);
+    expect(await (await api("/api/knowledge/knowledge-1/note", sessionB)).json()).toEqual({ note: null });
+
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-b'").run();
+    const disabledTarget = await api("/api/knowledge/knowledge-1/note/shares", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ recipientMemberId: "member-b" }),
+    });
+    expect(disabledTarget.status).toBe(404);
+    expect(await disabledTarget.json()).toMatchObject({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID" } });
+  });
+
   it("keeps the repository owner boundary when read directly", async () => {
     const service = new PrivateNotesService(new PrivateNotesRepository(env.DB), { id: () => "note-direct", now: () => new Date(NOW) });
     await service.save({ memberId: "member-a", role: "contributor" }, "knowledge-1", { title: "Direct", body: "Owned", citations: [{ revisionId: "revision-1", chunkId: "chunk-1", startLine: 2, endLine: 4 }] });

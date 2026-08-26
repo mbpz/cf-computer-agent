@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { loadPrivateKnowledgeNote, loadPrivateKnowledgeNotes, loadRemotePrivateKnowledgeNote, normalizePrivateKnowledgeNote, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote } from "../../frontend/lib/knowledge-note";
+import { listPrivateKnowledgeNoteShares, loadActiveWorkspaceMembers, loadPrivateKnowledgeNote, loadPrivateKnowledgeNotes, loadRemotePrivateKnowledgeNote, normalizePrivateKnowledgeNote, revokePrivateKnowledgeNoteShare, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote, sharePrivateKnowledgeNote } from "../../frontend/lib/knowledge-note";
 
 function storage() {
   const values = new Map<string, string>();
@@ -37,7 +37,7 @@ describe("private reader notes", () => {
     const requests: Array<{ path: string; init?: RequestInit }> = [];
     const requester = async (input: string | URL | Request, init?: RequestInit) => {
       requests.push({ path: String(input), init });
-      if (init?.method === "PUT") return new Response(JSON.stringify({ note: { visibility: "private", title: "Saved", body: "Body", updatedAt: "2026-08-26T00:00:00.000Z" } }), { status: 200, headers: { "content-type": "application/json" } });
+      if (init?.method === "PUT") return new Response(JSON.stringify({ note: { visibility: "private", access: "owner", title: "Saved", body: "Body", updatedAt: "2026-08-26T00:00:00.000Z" } }), { status: 200, headers: { "content-type": "application/json" } });
       return new Response(JSON.stringify({ note: null }), { status: 200, headers: { "content-type": "application/json" } });
     };
     await expect(loadRemotePrivateKnowledgeNote("knowledge-a", requester)).resolves.toBeNull();
@@ -52,5 +52,33 @@ describe("private reader notes", () => {
       { id: "note-b", knowledgeItemId: "../other", title: "B", body: "No", visibility: "private", createdAt: "", updatedAt: "" },
     ] }), { status: 200 });
     await expect(loadPrivateKnowledgeNotes(requester)).resolves.toEqual([expect.objectContaining({ id: "note-a", knowledgeItemId: "knowledge-a", visibility: "private" })]);
+  });
+
+  it("uses owner-scoped share endpoints and normalizes active/revoked rows", async () => {
+    const requests: Array<{ path: string; method?: string; body?: string }> = [];
+    const requester = async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push({ path: String(input), method: init?.method, body: typeof init?.body === "string" ? init.body : undefined });
+      if (init?.method === "POST") return new Response(JSON.stringify({ share: { noteId: "note-a", recipientMemberId: "member-b", createdAt: "2026-08-26T00:00:00.000Z", revokedAt: null } }), { status: 201 });
+      if (init?.method === "DELETE") return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({ shares: [{ noteId: "note-a", recipientMemberId: "member-b", createdAt: "2026-08-26T00:00:00.000Z", revokedAt: null }] }), { status: 200 });
+    };
+    await expect(sharePrivateKnowledgeNote("knowledge-a", "member-b", requester)).resolves.toMatchObject({ recipientMemberId: "member-b", revokedAt: null });
+    await expect(listPrivateKnowledgeNoteShares("knowledge-a", requester)).resolves.toHaveLength(1);
+    await expect(revokePrivateKnowledgeNoteShare("knowledge-a", "member-b", requester)).resolves.toBeUndefined();
+    expect(requests.map((request) => `${request.method ?? "GET"} ${request.path}`)).toEqual([
+      "POST /api/knowledge/knowledge-a/note/shares",
+      "GET /api/knowledge/knowledge-a/note/shares",
+      "DELETE /api/knowledge/knowledge-a/note/shares/member-b",
+    ]);
+    expect(JSON.parse(requests[0]?.body ?? "{}")).toEqual({ recipientMemberId: "member-b" });
+    await expect(sharePrivateKnowledgeNote("knowledge-a", "../other", requester)).rejects.toThrow("KNOWLEDGE_NOTE_MEMBER_ID_INVALID");
+  });
+
+  it("loads only the public member directory fields needed by sharing", async () => {
+    const requester = async () => new Response(JSON.stringify({ items: [
+      { id: "member-a", email: "a@example.test", role: "contributor", identitySubject: "github:1" },
+      { id: "bad", email: "bad@example.test", role: "unknown" },
+    ] }), { status: 200 });
+    await expect(loadActiveWorkspaceMembers(requester)).resolves.toEqual([{ id: "member-a", email: "a@example.test", role: "contributor" }]);
   });
 });

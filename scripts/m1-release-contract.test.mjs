@@ -47,6 +47,7 @@ const expectedMigrations = [
   ["0022_m4_review_comments.sql", "9f65606f504dddbf7d4c573dd0ed71ec542f434fa3420bac5a9767320181380c"],
   ["0023_m4_knowledge_favorites.sql", "088ff7b97473a901f95c8d18ac4dc0243916039f0a5bd1a5a7739f50a5d61228"],
   ["0024_m4_knowledge_visits.sql", "cc7c0aa09413eb1b50a9cd1e6ade7437672095b4d0afa1b622e06f7512fc4d65"],
+  ["0025_m5_private_note_shares.sql", "3c8919fe45ec700ff854620f22d71d5f8abd2edaee239910d6041f5985013200"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -200,7 +201,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-files count=24$/mu);
+    assert.match(result.output, /^\[pass\] migration-files count=25$/mu);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {
@@ -237,8 +238,8 @@ test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0008_m2_parent_chunks.sql/mu);
     assert.match(result.output, /0009_m2_chunk_status.sql/mu);
-    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql$/mu);
-    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql$/mu);
+    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql$/mu);
+    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql$/mu);
   });
   await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);

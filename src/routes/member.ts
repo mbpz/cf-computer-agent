@@ -18,6 +18,7 @@ export interface MemberRouteServices {
   tags: TagsService;
   savedViews: SavedViewsService;
   reviewComments: ReviewCommentsService;
+  memberRecords: Pick<import("../members/repository").MembersRepository, "listPage">;
 }
 
 export async function routeMemberApi(
@@ -27,6 +28,14 @@ export async function routeMemberApi(
   principal: Principal,
   services: MemberRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/members/active") {
+    requireCapability(principal, "knowledge:read");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const page = await services.memberRecords.listPage(50, undefined, "active");
+    return jsonResponse({ items: page.items.map((member) => ({ id: member.id, email: member.email, role: member.role })) }, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/assets") {
     const member = requireMember(principal);
     if (request.method === "GET") {

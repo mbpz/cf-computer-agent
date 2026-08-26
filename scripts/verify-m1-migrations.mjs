@@ -26,6 +26,7 @@ const migrations = [
   ["0022_m4_review_comments.sql", "9f65606f504dddbf7d4c573dd0ed71ec542f434fa3420bac5a9767320181380c"],
   ["0023_m4_knowledge_favorites.sql", "088ff7b97473a901f95c8d18ac4dc0243916039f0a5bd1a5a7739f50a5d61228"],
   ["0024_m4_knowledge_visits.sql", "cc7c0aa09413eb1b50a9cd1e6ade7437672095b4d0afa1b622e06f7512fc4d65"],
+  ["0025_m5_private_note_shares.sql", "3c8919fe45ec700ff854620f22d71d5f8abd2edaee239910d6041f5985013200"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

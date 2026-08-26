@@ -17,9 +17,17 @@ export interface PrivateNote {
   title: string;
   body: string;
   visibility: "private";
+  access: "owner" | "shared";
   citations: readonly PrivateNoteCitation[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PrivateNoteShare {
+  noteId: string;
+  recipientMemberId: string;
+  createdAt: string;
+  revokedAt: string | null;
 }
 
 export type PrivateNoteListItem = Omit<PrivateNote, "ownerId">;
@@ -45,6 +53,11 @@ export interface PrivateNoteUpsert {
 
 export interface PrivateNoteRepositoryPort {
   findOwned(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNote | null>;
+  findVisible?(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNote | null>;
   listOwned?: (scope: PrivateNoteScope, request: import("../pagination").PageRequest) => Promise<PrivateNotePage>;
+  listVisible?: (scope: PrivateNoteScope, request: import("../pagination").PageRequest) => Promise<PrivateNotePage>;
+  share?(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string, createdAt: string): Promise<PrivateNoteShare>;
+  revokeShare?(scope: PrivateNoteScope, knowledgeItemId: string, recipientMemberId: string, revokedAt: string): Promise<void>;
+  listShares?(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNoteShare[]>;
   upsert(input: PrivateNoteUpsert): Promise<PrivateNote>;
 }

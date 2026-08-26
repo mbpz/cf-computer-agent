@@ -9,7 +9,7 @@ function repository(initial: PrivateNote | null = null): PrivateNoteRepositoryPo
     findOwned: async () => value,
     upsert: async (input) => {
       const id = value?.id || input.id;
-      value = { id, ownerId: input.ownerId, knowledgeItemId: input.knowledgeItemId, title: input.title, body: input.body, citations: input.citations, createdAt: input.createdAt, updatedAt: input.updatedAt, visibility: "private" };
+      value = { id, ownerId: input.ownerId, knowledgeItemId: input.knowledgeItemId, title: input.title, body: input.body, citations: input.citations, createdAt: input.createdAt, updatedAt: input.updatedAt, visibility: "private", access: "owner" };
       return value;
     },
   };

@@ -6,6 +6,7 @@ export interface PrivateKnowledgeNote {
   title: string;
   body: string;
   visibility: "private";
+  access?: "owner" | "shared";
   updatedAt: string;
 }
 
@@ -24,6 +25,19 @@ export interface PrivateKnowledgeNoteCitation {
   chunkId: string;
   startLine: number;
   endLine: number;
+}
+
+export interface PrivateKnowledgeNoteShare {
+  noteId: string;
+  recipientMemberId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface PrivateKnowledgeWorkspaceMember {
+  id: string;
+  email: string;
+  role: "admin" | "contributor";
 }
 
 type NoteStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -64,9 +78,13 @@ export function normalizePrivateKnowledgeNote(value: unknown, expectedKnowledgeI
   if (!ID_PATTERN.test(expectedKnowledgeItemId) || !value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (record.v !== 1 || record.knowledgeItemId !== expectedKnowledgeItemId || record.visibility !== "private") return null;
+  if (record.access !== undefined && record.access !== "owner" && record.access !== "shared") return null;
   if (typeof record.title !== "string" || typeof record.body !== "string" || typeof record.updatedAt !== "string") return null;
   if (new TextEncoder().encode(record.title).byteLength > MAX_TITLE_BYTES || new TextEncoder().encode(record.body).byteLength > MAX_BODY_BYTES) return null;
-  return { v: 1, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private", updatedAt: record.updatedAt };
+  return {
+    v: 1, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private", updatedAt: record.updatedAt,
+    ...(record.access === undefined ? {} : { access: record.access }),
+  };
 }
 
 export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNote | null> {
@@ -92,10 +110,47 @@ export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, sign
       title: record.title,
       body: record.body,
       visibility: "private" as const,
+      access: record.access === "shared" ? "shared" as const : "owner" as const,
       updatedAt: record.updatedAt,
       createdAt: record.createdAt,
     }];
   });
+}
+
+export async function listPrivateKnowledgeNoteShares(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteShare[]> {
+  assertKnowledgeItemId(knowledgeItemId);
+  const data = await apiFetch<{ shares?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares`, { requester, signal });
+  if (!Array.isArray(data.shares)) return [];
+  return data.shares.flatMap((value) => {
+    try { return [normalizeShare(value)]; } catch { return []; }
+  });
+}
+
+export async function loadActiveWorkspaceMembers(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeWorkspaceMember[]> {
+  const data = await apiFetch<{ items?: unknown }>("/api/members/active", { requester, signal });
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const record = value as Record<string, unknown>;
+    if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.email !== "string"
+      || (record.role !== "admin" && record.role !== "contributor")) return [];
+    return [{ id: record.id, email: record.email, role: record.role }];
+  });
+}
+
+export async function sharePrivateKnowledgeNote(knowledgeItemId: string, recipientMemberId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteShare> {
+  assertKnowledgeItemId(knowledgeItemId);
+  assertMemberId(recipientMemberId);
+  const data = await apiFetch<{ share?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares`, {
+    requester, signal, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipientMemberId }),
+  });
+  return normalizeShare(data.share);
+}
+
+export async function revokePrivateKnowledgeNoteShare(knowledgeItemId: string, recipientMemberId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<void> {
+  assertKnowledgeItemId(knowledgeItemId);
+  assertMemberId(recipientMemberId);
+  await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares/${encodeURIComponent(recipientMemberId)}`, { requester, signal, method: "DELETE" });
 }
 
 export async function saveRemotePrivateKnowledgeNote(
@@ -124,7 +179,7 @@ function normalizeRemoteNote(value: unknown, expectedKnowledgeItemId: string): P
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_NOTE_INVALID");
   const record = value as Record<string, unknown>;
   if (record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string" || typeof record.updatedAt !== "string") throw new Error("KNOWLEDGE_NOTE_INVALID");
-  const note = { v: 1 as const, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private" as const, updatedAt: record.updatedAt };
+  const note = { v: 1 as const, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private" as const, access: record.access === "shared" ? "shared" as const : "owner" as const, updatedAt: record.updatedAt };
   if (!normalizePrivateKnowledgeNote(note, expectedKnowledgeItemId)) throw new Error("KNOWLEDGE_NOTE_INVALID");
   return note;
 }
@@ -135,6 +190,21 @@ function normalizeDraftText(value: string | undefined): string {
 
 function assertKnowledgeItemId(value: string): void {
   if (!ID_PATTERN.test(value)) throw new Error("KNOWLEDGE_NOTE_ID_INVALID");
+}
+
+function assertMemberId(value: string): void {
+  if (!ID_PATTERN.test(value)) throw new Error("KNOWLEDGE_NOTE_MEMBER_ID_INVALID");
+}
+
+function normalizeShare(value: unknown): PrivateKnowledgeNoteShare {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_NOTE_SHARE_INVALID");
+  const record = value as Record<string, unknown>;
+  if (typeof record.noteId !== "string" || !ID_PATTERN.test(record.noteId)
+    || typeof record.recipientMemberId !== "string" || !ID_PATTERN.test(record.recipientMemberId)
+    || typeof record.createdAt !== "string" || (record.revokedAt !== null && typeof record.revokedAt !== "string")) {
+    throw new Error("KNOWLEDGE_NOTE_SHARE_INVALID");
+  }
+  return { noteId: record.noteId, recipientMemberId: record.recipientMemberId, createdAt: record.createdAt, revokedAt: record.revokedAt as string | null };
 }
 
 function assertByteLimit(value: string, maxBytes: number, code: string): void {
