@@ -125,6 +125,40 @@ describe("AgentToolRunner", () => {
       .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 
+  it("writes a resource-only audit without recording tool input", async () => {
+    const members = repository();
+    const read = vi.fn(async () => ({ id: "revision-1", knowledgeItemId: "knowledge-1" }));
+    const audit = { writeAudit: vi.fn(async (event: unknown) => event) };
+    const runner = new AgentToolRunner(
+      members,
+      [createReadSourceTool({ revision: read } as never)],
+      { audit },
+    );
+
+    await runner.run("member-agent", "readSource", {
+      knowledgeItemId: "knowledge-1", revisionId: "revision-1",
+    });
+
+    expect(audit.writeAudit).toHaveBeenCalledTimes(1);
+    const event = audit.writeAudit.mock.calls[0]![0] as Record<string, unknown>;
+    expect(event).toMatchObject({
+      actorKind: "member", actorId: "member-agent", action: "agent.tool_called",
+      resourceType: "agent_tool", resourceId: "knowledge-1",
+      metadata: { tool: "readSource", resourceIds: ["knowledge-1", "revision-1"] },
+    });
+    expect(JSON.stringify(event)).not.toContain("content");
+    expect(JSON.stringify(event)).not.toContain("jwt");
+
+    const searchAudit = { writeAudit: vi.fn(async (event: unknown) => event) };
+    const searchRunner = new AgentToolRunner(
+      members,
+      [createSearchKnowledgeTool({ search: vi.fn(async () => ({ items: [], degraded: false })) } as never)],
+      { audit: searchAudit },
+    );
+    await searchRunner.run("member-agent", "searchKnowledge", { query: "private JWT content marker" });
+    expect(JSON.stringify(searchAudit.writeAudit.mock.calls[0]![0])).not.toContain("private JWT content marker");
+  });
+
   it("compares two explicit revisions without accepting an implicit current source", async () => {
     const members = repository();
     const diff = vi.fn(async () => ({

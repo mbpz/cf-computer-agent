@@ -45,6 +45,7 @@ describe("audit input validation", () => {
     ["knowledge.trashed", "knowledge", { currentRevisionId: "revision-1" }],
     ["knowledge.restored", "knowledge", { currentRevisionId: "revision-1" }],
     ["knowledge.purged", "knowledge", { currentRevisionId: "revision-1", purgedRevisionCount: 2 }],
+    ["agent.tool_called", "agent_tool", { tool: "readSource", resourceIds: ["knowledge-1", "revision-1"] }],
   ])("accepts and safely rebuilds %s", (action, resourceType, metadata) => {
     const input = {
       id: `audit-${action}`,

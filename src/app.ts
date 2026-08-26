@@ -158,7 +158,7 @@ function createRequestServices(
     createNoteDraftTool(submissions),
     createArtifactDraftTool(researchReports, submissions),
     createSaveResearchDraftTool(researchReports, submissions),
-  ]);
+  ], { audit });
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
     new AssetsRepository(env.DB),

@@ -272,7 +272,7 @@
 - [x] `AGT-015` P0/M6 工具参数 schema；验收：unknown/超限/跨 Space 输入拒绝。证据：`src/agent/tool-runner.ts`、`src/agent/tools.ts`、`src/library/service.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'bounds|invalid' && rtk npm run typecheck`。
 - [x] `AGT-016` P0/M6 工具步数限制；验收：达到上限停止并保存草稿。证据：`src/agent/tool-runner.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'eight steps' && rtk npm run typecheck`。
 - [x] `AGT-017` P0/M6 工具输出内容边界；验收：进入模型前有界且序列化为不可信数据。证据：`src/agent/tool-runner.ts`、`test/unit/agent-tool-runner.test.ts`；命令：`rtk npx vitest run test/unit/agent-tool-runner.test.ts -t 'untrusted and bounded' && rtk npm run typecheck`。
-- [ ] `AGT-018` P1/M6 Agent 运行审计；验收：记录动作和资源 ID，不记录正文/凭据。
+- [x] `AGT-018` P1/M6 Agent 运行审计；验收：记录动作和资源 ID，不记录正文/凭据。证据：`src/agent/tool-runner.ts`、`src/audit/types.ts`、`src/app.ts`、`test/unit/agent-tool-runner.test.ts`、`test/unit/audit.test.ts`；命令：`rtk npx vitest run test/unit/audit.test.ts test/unit/agent-tool-runner.test.ts && rtk npm run typecheck`。
 
 ## COL — 协作与个人工作区
 

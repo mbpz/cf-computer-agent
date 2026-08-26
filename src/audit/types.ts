@@ -37,6 +37,7 @@ export interface AuditActionMap {
   "knowledge.trashed": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.purged": { resourceType: "knowledge"; metadata: { currentRevisionId: string; purgedRevisionCount: number } };
+  "agent.tool_called": { resourceType: "agent_tool"; metadata: { tool: string; resourceIds: string[] } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -61,6 +62,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "knowledge.trashed",
   "knowledge.restored",
   "knowledge.purged",
+  "agent.tool_called",
 ]);
 
 export type CreateAuditEvent = {
@@ -284,6 +286,17 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
         purgedRevisionCount: metadata.purgedRevisionCount,
       });
     }
+    case "agent.tool_called": {
+      assertResourceType(resourceType, "agent_tool");
+      const metadata = readPlainDataObject(input, new Set(["tool", "resourceIds"]));
+      if (!isBoundedToolName(metadata.tool) || !Array.isArray(metadata.resourceIds)
+        || metadata.resourceIds.length > 8
+        || !metadata.resourceIds.every(isBoundedId)
+        || new Set(metadata.resourceIds).size !== metadata.resourceIds.length) {
+        throw invalidMetadata();
+      }
+      return safeMetadata({ tool: metadata.tool, resourceIds: [...metadata.resourceIds] });
+    }
     default:
       throw new TypeError("Audit action is invalid");
   }
@@ -305,6 +318,9 @@ function isNonEmptyString(value: unknown): value is string { return typeof value
 function isBoundedId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128
     && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
+function isBoundedToolName(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(value);
 }
 function isBoundedTitle(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && [...value].length <= 200

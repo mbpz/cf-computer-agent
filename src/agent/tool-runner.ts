@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import type { CreateAuditEvent } from "../audit/types";
 import type { Member } from "../members/types";
 import type { MembersRepositoryPort } from "../members/repository";
 
@@ -33,6 +34,16 @@ export interface AgentToolModelOutput {
   truncated: boolean;
 }
 
+export interface AgentToolAuditPort {
+  writeAudit(input: CreateAuditEvent): Promise<unknown>;
+}
+
+export interface AgentToolRunnerOptions {
+  audit?: AgentToolAuditPort;
+  auditId?: () => string;
+  now?: () => Date;
+}
+
 /**
  * The only entry point for agent tools. The member row is deliberately read
  * on every invocation instead of trusting the session/principal snapshot.
@@ -44,6 +55,7 @@ export class AgentToolRunner {
   constructor(
     private readonly members: Pick<MembersRepositoryPort, "findById">,
     definitions: readonly AgentToolDefinition<unknown, unknown>[],
+    private readonly options: AgentToolRunnerOptions = {},
   ) {
     const map = new Map<string, AgentToolDefinition<unknown, unknown>>();
     for (const definition of definitions) {
@@ -78,7 +90,22 @@ export class AgentToolRunner {
     } catch {
       throw new AppError("AGENT_TOOL_ARGUMENTS_INVALID", "Agent tool arguments are invalid", 400);
     }
+    if (this.options.audit) await this.options.audit.writeAudit(this.createToolAudit(member.id, name, args));
     return tool.execute({ member }, args);
+  }
+
+  private createToolAudit(memberId: string, tool: string, args: unknown): CreateAuditEvent {
+    const resourceIds = extractResourceIds(args);
+    return {
+      id: this.options.auditId?.() ?? crypto.randomUUID(),
+      actorKind: "member",
+      actorId: memberId,
+      action: "agent.tool_called",
+      resourceType: "agent_tool",
+      resourceId: resourceIds[0] ?? null,
+      metadata: { tool, resourceIds },
+      createdAt: (this.options.now?.() ?? new Date()).toISOString(),
+    };
   }
 
   async runSequence(
@@ -100,6 +127,23 @@ export class AgentToolRunner {
   async runForModel(memberId: string, name: string, input: unknown): Promise<AgentToolModelOutput> {
     return serializeAgentToolOutput(await this.run(memberId, name, input));
   }
+}
+
+const RESOURCE_ID_KEYS = new Set([
+  "knowledgeItemId", "revisionId", "fromRevisionId", "toRevisionId", "sourceVersionId",
+  "reportId", "researchRunId", "requestedSpaceId", "requestedCollectionId",
+]);
+
+function extractResourceIds(args: unknown): string[] {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return [];
+  const record = args as Record<string, unknown>;
+  const ids: string[] = [];
+  for (const key of RESOURCE_ID_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(value) && !ids.includes(value)) ids.push(value);
+    if (ids.length === 8) break;
+  }
+  return ids;
 }
 
 export function serializeAgentToolOutput(value: unknown, maxBytes = MAX_TOOL_OUTPUT_BYTES): AgentToolModelOutput {
