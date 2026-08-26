@@ -11,6 +11,11 @@ export interface AgentCitation {
   id: string;
   title?: string;
   href: string;
+  spaceId?: string;
+  collectionId?: string | null;
+  headingPath?: readonly string[];
+  startLine?: number;
+  endLine?: number;
 }
 
 export interface AgentAnswer {
@@ -25,7 +30,7 @@ export async function askAgent({ question, scope, requester = fetch, signal }: {
   requester?: Fetcher;
   signal?: AbortSignal;
 }): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[] }>("/api/knowledge/chat", {
+  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[] }>("/api/knowledge/chat", {
     requester,
     signal,
     method: "POST",
@@ -35,9 +40,13 @@ export async function askAgent({ question, scope, requester = fetch, signal }: {
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
     : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";
-  const citations = Array.isArray(data.citations)
+  const citationObjects = Array.isArray(data.citations)
     ? data.citations.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null)
     : [];
+  const citationIds = new Set(Array.isArray(data.citations) ? data.citations.filter((value): value is string => typeof value === "string") : []);
+  const citations = citationObjects.length > 0
+    ? citationObjects
+    : (Array.isArray(data.sources) ? data.sources.map(normalizeCitation).filter((citation): citation is AgentCitation => citation !== null && citationIds.has(citation.id)) : []);
   return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations };
 }
 
@@ -46,11 +55,17 @@ function normalizeCitation(value: unknown): AgentCitation | null {
   const record = value as Record<string, unknown>;
   if (typeof record.citationId !== "string" || !record.citationId
     || typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) return null;
-  return {
+  const citation: AgentCitation = {
     id: record.citationId,
     title: typeof record.title === "string" ? record.title : undefined,
     href: `/knowledge/${encodeURIComponent(record.knowledgeItemId)}#${encodeURIComponent(record.citationId)}`,
   };
+  if (typeof record.spaceId === "string" && record.spaceId) citation.spaceId = record.spaceId;
+  if (record.collectionId === null || (typeof record.collectionId === "string" && record.collectionId)) citation.collectionId = record.collectionId as string | null;
+  if (Array.isArray(record.headingPath)) citation.headingPath = record.headingPath.filter((item): item is string => typeof item === "string").slice(0, 8);
+  if (Number.isSafeInteger(record.startLine) && (record.startLine as number) >= 1) citation.startLine = record.startLine as number;
+  if (Number.isSafeInteger(record.endLine) && (record.endLine as number) >= (citation.startLine ?? 1)) citation.endLine = record.endLine as number;
+  return citation;
 }
 
 export function createAgentRequestController(requester: Fetcher = fetch) {

@@ -43,12 +43,13 @@ describe("React read-only user pages", () => {
   });
 
   it("renders Agent scope, confidence, citations, and safe error fallback", () => {
-    const html = renderToStaticMarkup(<AgentPage scope="space:personal" state={{ kind: "ready", answer: "Use the guide.", confidence: "high", citations: [{ id: "r1", title: "Guide", href: "/knowledge/r1" }] }} />);
+    const html = renderToStaticMarkup(<AgentPage scope="space:personal" state={{ kind: "ready", answer: "Use the guide.", confidence: "high", citations: [{ id: "r1", title: "Guide", href: "/knowledge/r1", spaceId: "space-1", collectionId: "collection-1", startLine: 2, endLine: 4 }] }} />);
     expect(html).toContain("space:personal");
     expect(html).toContain("High confidence");
     expect(html).toContain('id="agent-question"');
     expect(html).toContain("Question");
     expect(html).toContain("Guide");
+    expect(html).toContain("Context: space-1 · collection-1 · lines 2–4");
     expect(renderToStaticMarkup(<AgentPage scope="all" state={{ kind: "error", message: "Retry later" }} />)).toContain("Retry later");
   });
 

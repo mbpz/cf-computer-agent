@@ -167,7 +167,7 @@
 - [ ] `SRCH-015` P0/M4 D1 Chunk 回读；验收：向量 metadata 不作为正文权威。
 - [ ] `SRCH-016` P0/M4 查询时二次授权；验收：成员禁用/权限变化立即生效。
 - [x] `SRCH-017` P1/M4 Search/Chat 模式切换；状态：L/W；验收：`GET /api/knowledge/search` 只返回 FTS 命中，`POST /api/knowledge/chat` 才调用回答链路；搜索不会强制生成答案，Chat scope 单独授权且缺失/非法 scope fail-closed。证据：`src/routes/library.ts`、`src/library/service.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "search|ChatScope|scope"`。
-- [ ] `SRCH-018` P1/M4 Add context；验收：来源/Space/Collection 范围清晰展示。
+- [x] `SRCH-018` P1/M4 Add context；状态：L/W；验收：Chat 返回的 allowlisted source context 显示 Space、Collection、heading 和行范围；正文仍只来自服务端授权 SearchHit，前端不持久化或展示 raw body/path/hash。证据：`frontend/lib/agent-data.ts`、`frontend/components/agent/answer-panel.tsx`、`test/unit/frontend-agent-data.test.ts`、`test/unit/frontend-user-read-pages.test.tsx`；命令：`rtk npx vitest run test/unit/frontend-agent-data.test.ts test/unit/frontend-user-read-pages.test.tsx`。
 - [ ] `SRCH-019` P2/M4 Saved View；验收：owner 私有、过滤 schema 版本化。
 - [ ] `SRCH-020` P1/M4 结果内提问；验收：选中结果转为显式来源集合。
 

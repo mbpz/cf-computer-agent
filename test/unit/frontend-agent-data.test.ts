@@ -22,6 +22,16 @@ describe("frontend agent data", () => {
     await expect(askAgent({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({ answer: "", confidence: "low", citations: [] });
   });
 
+  it("binds cited source context from the server source set without exposing raw content", async () => {
+    const requester = vi.fn(async () => new Response(JSON.stringify({
+      answer: "Use [1]", evidenceConfidence: 0.8, citations: ["citation-1"],
+      sources: [{ citationId: "citation-1", knowledgeItemId: "knowledge-1", title: "Guide", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8, body: "secret body" }],
+    }), { status: 200 }));
+    await expect(askAgent({ question: "q", scope: { kind: "all" }, requester })).resolves.toEqual({
+      answer: "Use [1]", confidence: "high", citations: [{ id: "citation-1", title: "Guide", href: "/knowledge/knowledge-1#citation-1", spaceId: "space-1", collectionId: "collection-1", headingPath: ["Guide"], startLine: 4, endLine: 8 }],
+    });
+  });
+
   it("cancels stale agent requests", async () => {
     const requester = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true })));
     const controller = createAgentRequestController(requester);
