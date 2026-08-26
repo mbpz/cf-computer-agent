@@ -1,7 +1,14 @@
 import { apiFetch, type Fetcher } from "./api";
 import { createAsyncOwner } from "./async-owner";
 
-export interface MySubmissionItem { id: string; title?: string; status?: string; }
+export type MySubmissionReviewDecision = "rejected" | "revision_requested";
+export type MySubmissionReviewReasonCode = "not_relevant" | "duplicate" | "unsafe" | "needs_revision";
+export interface MySubmissionReview {
+  decision: MySubmissionReviewDecision;
+  reasonCode: MySubmissionReviewReasonCode;
+  note: string;
+}
+export interface MySubmissionItem { id: string; title?: string; status?: string; review?: MySubmissionReview; }
 export interface MySubmissionsPageResult { items: MySubmissionItem[]; nextCursor: string | null; }
 
 export async function loadMySubmissionsPage({ cursor, requester = fetch, signal }: { cursor?: string | null; requester?: Fetcher; signal?: AbortSignal }): Promise<MySubmissionsPageResult> {
@@ -18,7 +25,28 @@ function normalizeSubmission(value: unknown): MySubmissionItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || !record.id) return null;
-  return { id: record.id, title: typeof record.title === "string" ? record.title : undefined, status: typeof record.status === "string" ? record.status : undefined };
+  const review = normalizeReview(record.review);
+  return {
+    id: record.id,
+    title: typeof record.title === "string" ? record.title : undefined,
+    status: typeof record.status === "string" ? record.status : undefined,
+    ...(review ? { review } : {}),
+  };
+}
+
+function normalizeReview(value: unknown): MySubmissionReview | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (!isReviewDecision(record.decision) || !isReviewReasonCode(record.reasonCode) || typeof record.note !== "string") return null;
+  return { decision: record.decision, reasonCode: record.reasonCode, note: record.note };
+}
+
+function isReviewDecision(value: unknown): value is MySubmissionReviewDecision {
+  return value === "rejected" || value === "revision_requested";
+}
+
+function isReviewReasonCode(value: unknown): value is MySubmissionReviewReasonCode {
+  return value === "not_relevant" || value === "duplicate" || value === "unsafe" || value === "needs_revision";
 }
 
 export function createMySubmissionsRequestController(requester: Fetcher = fetch) {

@@ -277,7 +277,7 @@
 ## COL — 协作与个人工作区
 
 - [x] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
-- [ ] `COL-002` P1/M1 驳回理由；验收：安全文本、历史可见、无 admin 内部 metadata。
+- [x] `COL-002` P1/M1 驳回理由；状态：L/W；验收：owner 的 `/api/submissions/mine` 仅返回审核决策、allowlist reasonCode、规范化 note 和时间，不返回 reviewer 身份或后台 metadata；React 提交列表展示中英文原因/备注且无 `undefined`。证据：`src/submissions/repository.ts`、`src/submissions/types.ts`、`frontend/lib/my-submissions-data.ts`、`frontend/pages/my-submissions-page.tsx`、`test/worker/m1-api.test.ts`、`test/unit/frontend-my-submissions-data.test.ts`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'owner-visible review reason' && rtk npx vitest run test/unit/frontend-my-submissions-data.test.ts test/unit/frontend-submit-pages.test.tsx && rtk npm run typecheck`。
 - [ ] `COL-003` P1/M3 审核评论；验收：admin 与 owner 可见，编辑留历史。
 - [ ] `COL-004` P1/M4 收藏；验收：成员私有、删除 Knowledge 后安全清理。
 - [ ] `COL-005` P1/M4 最近访问；验收：有界、隐私私有、禁用成员不可读取。

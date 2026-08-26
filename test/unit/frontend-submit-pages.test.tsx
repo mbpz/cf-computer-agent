@@ -34,6 +34,21 @@ describe("React submission and asset pages", () => {
     expect(html).toContain("Resubmit");
   });
 
+  it("renders an owner-safe review reason and note without internal metadata", () => {
+    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{
+      id: "s2",
+      title: "Duplicate guide",
+      status: "rejected",
+      review: { decision: "rejected", reasonCode: "duplicate", note: "已有正式条目" },
+    }], nextCursor: null }} />);
+    expect(html).toContain("Review reason");
+    expect(html).toContain("Duplicate");
+    expect(html).toContain("Reviewer note");
+    expect(html).toContain("已有正式条目");
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("reviewerId");
+  });
+
   it("keeps the free-tier upload boundary explicit and validates enabled files", () => {
     expect(assetUploadModel({ enabled: false, maxBytes: 10, file: { name: "guide.pdf", size: 1 } })).toEqual({ kind: "disabled", reason: "OBJECT_STORAGE_UNAVAILABLE" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "", size: 1 } })).toEqual({ kind: "invalid", reason: "NAME_REQUIRED" });

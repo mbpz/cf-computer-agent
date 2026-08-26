@@ -11,6 +11,32 @@ describe("frontend my submissions data", () => {
     await expect(loadMySubmissionsPage({ cursor: "v1.previous", requester })).resolves.toEqual({ items: [{ id: "s-1", title: "Guide", status: "review_pending" }], nextCursor: "v1.next" });
   });
 
+  it("keeps only the owner-safe review reason fields", async () => {
+    const requester = vi.fn(async () => new Response(JSON.stringify({ items: [
+      {
+        id: "s-2",
+        title: "Rejected guide",
+        status: "rejected",
+        review: {
+          decision: "rejected",
+          reasonCode: "duplicate",
+          note: "已有正式条目",
+          createdAt: "2026-08-26T00:00:00.000Z",
+          reviewerId: "admin-secret",
+        },
+      },
+      { id: "s-3", status: "rejected", review: { decision: "rejected", reasonCode: "forged", note: "ignore" } },
+    ] }), { status: 200 }));
+
+    await expect(loadMySubmissionsPage({ requester })).resolves.toMatchObject({
+      items: [{
+        id: "s-2",
+        review: { decision: "rejected", reasonCode: "duplicate", note: "已有正式条目" },
+      }, { id: "s-3" }],
+    });
+    await expect(loadMySubmissionsPage({ requester })).resolves.not.toMatchObject({ items: [{ review: { reviewerId: expect.anything() } }] });
+  });
+
   it("cancels stale list requests", async () => {
     const requester = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true })));
     const controller = createMySubmissionsRequestController(requester);

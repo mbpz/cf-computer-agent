@@ -5,6 +5,17 @@ export type SubmissionKind = "text" | "markdown" | "code";
 export type SubmissionStatusFilter = "draft" | "review_pending" | "published" | "rejected" | "revision_requested";
 export type SubmissionStatus = "draft" | SubmissionStatusFilter;
 
+export type SubmissionReviewDecision = "rejected" | "revision_requested";
+export type SubmissionReviewReasonCode = "not_relevant" | "duplicate" | "unsafe" | "needs_revision";
+
+/** The only review data an owner may see on their own submission history. */
+export interface SubmissionReview {
+  decision: SubmissionReviewDecision;
+  reasonCode: SubmissionReviewReasonCode;
+  note: string;
+  createdAt: string;
+}
+
 export interface Submission {
   id: string;
   submitterId: string;
@@ -17,6 +28,7 @@ export interface Submission {
   content: string;
   /** Set only for an immutable resubmission of a prior terminal Submission. */
   supersedesSubmissionId?: string | null;
+  review?: SubmissionReview;
   createdAt: string;
   updatedAt: string;
 }

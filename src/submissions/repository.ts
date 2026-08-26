@@ -10,6 +10,7 @@ import type {
   SubmissionCreateResult,
   SubmissionPage,
   SubmissionPageRepositoryRequest,
+  SubmissionReview,
 } from "./types";
 
 export type SubmissionsRepositoryConflictKind = "target_invalid" | "idempotency_conflict" | "resubmission_conflict";
@@ -36,7 +37,24 @@ export interface SubmissionsRepositoryPort {
   listPending(request: PageRequest): Promise<SubmissionPage>;
 }
 
-type SubmissionRow = { id: string; submitter_id: string; requested_space_id: string; requested_collection_id: string | null; requested_visibility: Submission["requestedVisibility"]; supersedes_submission_id: string | null; kind: Submission["kind"]; status: Submission["status"]; title: string; content: string; created_at: string; updated_at: string };
+type SubmissionRow = {
+  id: string;
+  submitter_id: string;
+  requested_space_id: string;
+  requested_collection_id: string | null;
+  requested_visibility: Submission["requestedVisibility"];
+  supersedes_submission_id: string | null;
+  kind: Submission["kind"];
+  status: Submission["status"];
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  review_decision: SubmissionReview["decision"] | null;
+  review_reason_code: SubmissionReview["reasonCode"] | null;
+  review_note: string | null;
+  review_created_at: string | null;
+};
 type CreationRow = SubmissionRow & {
   source_id: string;
   source_owner_id: string;
@@ -96,7 +114,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
 
   async findOwnedDraft(submitterId: string, submissionId: string): Promise<Submission | null> {
     const row = await this.db.prepare(
-      `${submissionSelect} WHERE id = ? AND submitter_id = ? AND status = 'draft' LIMIT 1`,
+      `${submissionSelect} WHERE s.id = ? AND s.submitter_id = ? AND s.status = 'draft' LIMIT 1`,
     ).bind(submissionId, submitterId).first<SubmissionRow>();
     return row ? mapSubmissionRow(row) : null;
   }
@@ -234,7 +252,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
 
   async findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null> {
     const row = await this.db.prepare(
-      `${submissionSelect} WHERE id = ? AND submitter_id = ? AND status = 'revision_requested' LIMIT 1`,
+      `${submissionSelect} WHERE s.id = ? AND s.submitter_id = ? AND s.status = 'revision_requested' LIMIT 1`,
     ).bind(priorSubmissionId, memberId).first<SubmissionRow>();
     return row ? mapSubmissionRow(row) : null;
   }
@@ -306,16 +324,16 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     const cursor = request.cursor === undefined
       ? undefined
       : decodeOwnedSubmissionCursor(request.cursor, request.cursorKey);
-    const statusSql = request.status === undefined ? "" : " AND status = ?";
+    const statusSql = request.status === undefined ? "" : " AND s.status = ?";
     const cursorSql = cursor === undefined
       ? ""
-      : " AND (created_at < ? OR (created_at = ? AND id < ?))";
+      : " AND (s.created_at < ? OR (s.created_at = ? AND s.id < ?))";
     const cursorBindings = cursor === undefined
       ? []
       : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id];
     const rows = await this.db.prepare(
-      `${submissionSelect} WHERE submitter_id = ?${statusSql}${cursorSql}
-       ORDER BY created_at DESC, id DESC LIMIT ?`,
+      `${submissionSelect} WHERE s.submitter_id = ?${statusSql}${cursorSql}
+       ORDER BY s.created_at DESC, s.id DESC LIMIT ?`,
     ).bind(
       submitterId,
       ...(request.status === undefined ? [] : [request.status]),
@@ -326,14 +344,14 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   async listPending(request: PageRequest): Promise<SubmissionPage> {
-    return this.listPage("WHERE status = 'review_pending'", [], request);
+    return this.listPage("WHERE s.status = 'review_pending'", [], request);
   }
 
   private async listPage(where: string, values: unknown[], request: PageRequest): Promise<SubmissionPage> {
     const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
     const rows = cursor
-      ? await this.db.prepare(`${submissionSelect} ${where} AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...values, timestamp(cursor.sort), timestamp(cursor.sort), cursor.id, request.limit + 1).all<SubmissionRow>()
-      : await this.db.prepare(`${submissionSelect} ${where} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...values, request.limit + 1).all<SubmissionRow>();
+      ? await this.db.prepare(`${submissionSelect} ${where} AND (s.created_at < ? OR (s.created_at = ? AND s.id < ?)) ORDER BY s.created_at DESC, s.id DESC LIMIT ?`).bind(...values, timestamp(cursor.sort), timestamp(cursor.sort), cursor.id, request.limit + 1).all<SubmissionRow>()
+      : await this.db.prepare(`${submissionSelect} ${where} ORDER BY s.created_at DESC, s.id DESC LIMIT ?`).bind(...values, request.limit + 1).all<SubmissionRow>();
     return page(rows.results.map(mapSubmissionRow), request.limit);
   }
 
@@ -346,7 +364,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
 
   private async findRejectedByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<Submission | null> {
     const row = await this.db.prepare(
-      `${submissionSelect} WHERE submitter_id = ? AND idempotency_key = ? AND status = 'rejected' LIMIT 1`,
+      `${submissionSelect} WHERE s.submitter_id = ? AND s.idempotency_key = ? AND s.status = 'rejected' LIMIT 1`,
     ).bind(submitterId, idempotencyKey).first<SubmissionRow>();
     return row ? mapSubmissionRow(row) : null;
   }
@@ -369,7 +387,14 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 }
 
-const submissionSelect = "SELECT id, submitter_id, requested_space_id, requested_collection_id, requested_visibility, supersedes_submission_id, kind, status, title, content, created_at, updated_at FROM submissions";
+const submissionSelect = `SELECT
+  s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.requested_visibility,
+  s.supersedes_submission_id, s.kind, s.status, s.title, s.content, s.created_at, s.updated_at,
+  r.decision AS review_decision, r.reason_code AS review_reason_code,
+  r.reason AS review_note, r.created_at AS review_created_at
+FROM submissions s
+LEFT JOIN reviews r ON r.submission_id = s.id
+  AND r.decision IN ('rejected', 'revision_requested')`;
 const creationSelect = `SELECT
   s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.requested_visibility,
   s.supersedes_submission_id, s.kind, s.status, s.title, s.content, s.created_at, s.updated_at,
@@ -429,7 +454,31 @@ function assertCursorKey(cursorKey: string): void {
     throw new AppError("PAGE_INVALID", "Page request is invalid", 400);
   }
 }
-function mapSubmissionRow(row: SubmissionRow): Submission { return { id: row.id, submitterId: row.submitter_id, requestedSpaceId: row.requested_space_id, requestedCollectionId: row.requested_collection_id, requestedVisibility: row.requested_visibility, ...(row.supersedes_submission_id === null ? {} : { supersedesSubmissionId: row.supersedes_submission_id }), kind: row.kind, status: row.status, title: row.title, content: row.content, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function mapSubmissionRow(row: SubmissionRow): Submission {
+  const review = row.review_decision && row.review_reason_code && row.review_created_at
+    ? {
+      decision: row.review_decision,
+      reasonCode: row.review_reason_code,
+      note: row.review_note || "",
+      createdAt: row.review_created_at,
+    }
+    : undefined;
+  return {
+    id: row.id,
+    submitterId: row.submitter_id,
+    requestedSpaceId: row.requested_space_id,
+    requestedCollectionId: row.requested_collection_id,
+    requestedVisibility: row.requested_visibility,
+    ...(row.supersedes_submission_id === null ? {} : { supersedesSubmissionId: row.supersedes_submission_id }),
+    kind: row.kind,
+    status: row.status,
+    title: row.title,
+    content: row.content,
+    ...(review ? { review } : {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 function mapCreationRow(row: CreationRow): SubmissionCreateResult {
   const submission = mapSubmissionRow(row);
   const source: Source = {

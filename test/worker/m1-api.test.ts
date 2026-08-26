@@ -899,6 +899,33 @@ describe("M1 trusted knowledge HTTP journey", () => {
       supersedes_submission_id: priorId, versions: 2,
     });
   });
+
+  it("returns the owner-visible review reason without reviewer metadata", async () => {
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default", kind: "markdown", title: "Reasoned submission", content: "# Body\n",
+    }, "review-reason-key1");
+    const submissionId = created.body.submission.id;
+    const decision = await memberApi("admin", `/api/admin/submissions/${submissionId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reasonCode: "duplicate", note: "已有同一事实的正式条目" }),
+    });
+    expect(decision.status).toBe(200);
+
+    const ownerPage = await memberApi("contributor", "/api/submissions/mine?status=rejected");
+    expect(ownerPage.status).toBe(200);
+    const ownerBody = await ownerPage.json<{ items: Array<Record<string, unknown>> }>();
+    const item = ownerBody.items.find((candidate) => candidate.id === submissionId);
+    expect(item).toMatchObject({
+      id: submissionId,
+      review: {
+        decision: "rejected",
+        reasonCode: "duplicate",
+        note: "已有同一事实的正式条目",
+      },
+    });
+    expect(item).not.toHaveProperty("reviewerId");
+    expect(item).not.toHaveProperty("reviewerEmail");
+  });
   it("uses only the Idempotency-Key header and replays without duplicate writes", async () => {
     const input = {
       requestedSpaceId: "default" as const,
