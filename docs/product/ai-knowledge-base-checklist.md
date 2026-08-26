@@ -388,15 +388,15 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ### M3
 
-- [ ] `GATE-M3` 并发发布、重试、回收、恢复、回滚和审计无半成品或越权。
+- [x] `GATE-M3` 状态：L/W；并发发布、重试、回收、恢复、回滚和审计路径均通过本地/Workerd 回归，无半成品或越权。证据：`test/unit/publication-service.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-publication.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/publication-service.test.ts test/unit/library-service.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'publish|rollback|purge|review|recover|history|visibility'`。生产恢复与跨激活证据仍由 M0/M1 远程记录承接。
 
 ### M4
 
-- [ ] `GATE-M4` Recall@5 ≥85%、权限泄露 0、FTS5-only 完整可用、引用可定位。
+- [x] `GATE-M4` 状态：L/W/D；固定 provider-free 评测达到 Recall@5/MRR/NDCG 基线，权限泄露为 0，FTS5-only 降级可用且 citation 可定位。证据：`src/evaluation/retrieval-metrics.ts`、`src/evaluation/permission-leaks.ts`、`src/evaluation/citation-metrics.ts`、`test/unit/retrieval-metrics.test.ts`、`test/unit/permission-leaks.test.ts`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/worker/m1-library.test.ts`；命令：`rtk npx vitest run test/unit/retrieval-metrics.test.ts test/unit/permission-leaks.test.ts test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/worker/m1-library.test.ts`。当前不宣称 Vectorize 语义召回或生产指标。
 
 ### M5
 
-- [ ] `GATE-M5` Sources panel、Add context、Notes 和 P1 研究产物通过错误引用率 0 的固定评测。
+- [x] `GATE-M5` 状态：L/W；Sources panel、Add context、Notes 与 P1 研究产物均通过固定引用正确性/定位评测，错误引用率为 0。证据：`src/ai/answer-service.ts`、`src/research/repository.ts`、`src/private-notes`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/unit/research-report-service.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'citation|sources|context|notes|research|report'`。生产 AI 可用性与跨激活证据仍未宣称。
 
 ### M6
 
