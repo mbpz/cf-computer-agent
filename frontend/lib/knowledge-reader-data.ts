@@ -9,9 +9,27 @@ export interface KnowledgeRevision {
   publishedAt?: string;
   isCurrent: boolean;
   previousRevisionId: string | null;
+  sourceVersionId: string;
+  sourceVersionOrdinal: number | null;
+  parserSchemaVersion: string | null;
+  indexStatus: "pending" | "indexed" | "search_degraded" | "failed";
   visibility?: string;
-  chunks: readonly { id: string; text: string; citationId?: string; headingPath: readonly string[] }[];
+  chunks: readonly {
+    id: string;
+    ordinal: number;
+    text: string;
+    citationId?: string;
+    headingPath: readonly string[];
+    startLine: number;
+    endLine: number;
+    location?: KnowledgeSourceLocation;
+  }[];
 }
+
+export type KnowledgeSourceLocation =
+  | { kind: "pdf"; page: number | "unknown" }
+  | { kind: "spreadsheet"; sheet: string; range: string }
+  | { kind: "slide"; slide: number; elementStart: number; elementEnd: number };
 
 export interface KnowledgeRevisionDiffLine {
   kind: "context" | "added" | "removed";
@@ -38,11 +56,18 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
     if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) return [];
     const item = chunk as Record<string, unknown>;
     if (typeof item.id !== "string" || typeof item.text !== "string") return [];
+    const startLine = Number.isSafeInteger(item.startLine) && (item.startLine as number) >= 1 ? item.startLine as number : 1;
+    const endLine = Number.isSafeInteger(item.endLine) && (item.endLine as number) >= startLine ? item.endLine as number : startLine;
+    const location = normalizeSourceLocation(item.location);
     return [{
       id: item.id,
+      ordinal: Number.isSafeInteger(item.ordinal) && (item.ordinal as number) >= 0 ? item.ordinal as number : 0,
       text: item.text,
       citationId: typeof item.citationId === "string" && item.citationId ? item.citationId : undefined,
       headingPath: Array.isArray(item.headingPath) ? item.headingPath.filter((heading): heading is string => typeof heading === "string") : [],
+      startLine,
+      endLine,
+      ...(location ? { location } : {}),
     }];
   }) : [];
   return {
@@ -53,9 +78,33 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
     publishedAt: typeof record.publishedAt === "string" ? record.publishedAt : undefined,
     isCurrent: record.isCurrent === true,
     previousRevisionId: typeof record.previousRevisionId === "string" && record.previousRevisionId ? record.previousRevisionId : null,
+    sourceVersionId: typeof record.sourceVersionId === "string" && record.sourceVersionId ? record.sourceVersionId : "unknown-source",
+    sourceVersionOrdinal: Number.isSafeInteger(record.sourceVersionOrdinal) && (record.sourceVersionOrdinal as number) >= 0 ? record.sourceVersionOrdinal as number : null,
+    parserSchemaVersion: typeof record.parserSchemaVersion === "string" && record.parserSchemaVersion ? record.parserSchemaVersion : null,
+    indexStatus: record.indexStatus === "indexed" || record.indexStatus === "search_degraded" || record.indexStatus === "failed" ? record.indexStatus : "pending",
     visibility: typeof record.visibility === "string" ? record.visibility : undefined,
     chunks,
   };
+}
+
+function normalizeSourceLocation(value: unknown): KnowledgeSourceLocation | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.kind === "pdf" && (record.page === "unknown" || (Number.isSafeInteger(record.page) && (record.page as number) >= 1))) {
+    return { kind: "pdf", page: record.page as number | "unknown" };
+  }
+  if (record.kind === "spreadsheet"
+    && typeof record.sheet === "string" && record.sheet.length > 0 && record.sheet.length <= 120
+    && typeof record.range === "string" && /^[A-Z]{1,3}[1-9][0-9]*:[A-Z]{1,3}[1-9][0-9]*$/u.test(record.range)) {
+    return { kind: "spreadsheet", sheet: record.sheet, range: record.range };
+  }
+  if (record.kind === "slide"
+    && Number.isSafeInteger(record.slide) && (record.slide as number) >= 1
+    && Number.isSafeInteger(record.elementStart) && (record.elementStart as number) >= 1
+    && Number.isSafeInteger(record.elementEnd) && (record.elementEnd as number) >= (record.elementStart as number)) {
+    return { kind: "slide", slide: record.slide as number, elementStart: record.elementStart as number, elementEnd: record.elementEnd as number };
+  }
+  return undefined;
 }
 
 export async function loadKnowledgeRevisionDiff(

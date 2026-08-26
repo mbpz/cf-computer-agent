@@ -12,8 +12,12 @@ describe("knowledge reader data boundary", () => {
           markdown: "# Guide",
           publishedAt: "2026-08-26T00:00:00.000Z",
           isCurrent: true,
+          sourceVersionId: "source-version-1",
+          sourceVersionOrdinal: 2,
+          parserSchemaVersion: "m2-v1",
+          indexStatus: "indexed",
           chunks: [
-            { id: "chunk-1", text: "Body", citationId: "citation-1", headingPath: ["Guide", 1] },
+            { id: "chunk-1", text: "Body", citationId: "citation-1", headingPath: ["Guide", 1], startLine: 3, endLine: 4, location: { kind: "pdf", page: 2 } },
             { id: "broken", text: 42 },
           ],
         },
@@ -29,7 +33,11 @@ describe("knowledge reader data boundary", () => {
       isCurrent: true,
       previousRevisionId: null,
       visibility: undefined,
-      chunks: [{ id: "chunk-1", text: "Body", citationId: "citation-1", headingPath: ["Guide"] }],
+      sourceVersionId: "source-version-1",
+      sourceVersionOrdinal: 2,
+      parserSchemaVersion: "m2-v1",
+      indexStatus: "indexed",
+      chunks: [{ id: "chunk-1", ordinal: 0, text: "Body", citationId: "citation-1", headingPath: ["Guide"], startLine: 3, endLine: 4, location: { kind: "pdf", page: 2 } }],
     });
     expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1", expect.objectContaining({ credentials: "same-origin" }));
   });
