@@ -25,6 +25,7 @@ import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } 
 import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
+import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
@@ -473,19 +474,21 @@ function agentScopeFromSearch(search: string): AgentScope {
 }
 
 function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
-  const [draft, setDraft] = useState<SubmissionDraft>({ mode: "markdown", title: "", content: "" });
+  const [draft, setDraft] = useState<SubmissionDraft>(() => loadOfflineSubmissionDraft() ?? { mode: "markdown", title: "", content: "" });
   const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
   const submit = async (nextDraft: SubmissionDraft) => {
     if (state.kind === "pending") return;
     setState({ kind: "pending" });
     try {
       const result = await createSubmission(nextDraft);
+      clearOfflineSubmissionDraft();
       setDraft({ mode: nextDraft.mode, title: "", content: "" });
       setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS"), similarCandidates: result.similarCandidates });
     } catch (error: unknown) {
       setState({ kind: error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "validation" : "error", message: frontendText(locale, error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "SUBMIT_VALIDATION_ERROR" : "SUBMIT_ERROR") });
     }
   };
+  useEffect(() => { saveOfflineSubmissionDraft(draft); }, [draft]);
   return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={setDraft} onSubmit={submit} />;
 }
 
