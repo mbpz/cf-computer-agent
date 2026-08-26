@@ -63,6 +63,17 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_brief") {
+      return {
+        response: JSON.stringify({
+          goal: { text: "Launch latency is documented.", citationIds: [context.sources[0]?.citationId] },
+          keyPoints: [{ text: "The source is selected and authorized.", citationIds: [context.sources[0]?.citationId] }],
+          risks: [{ text: "Evidence may become stale.", citationIds: [context.sources[0]?.citationId] }],
+          openQuestions: [{ text: "What is the next review date?", citationIds: [context.sources[0]?.citationId] }],
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1251,6 +1262,27 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(result.sortStatus).toBe("sorted");
     expect(result.events).toEqual([expect.objectContaining({ title: "Documented milestone", citations: [expect.objectContaining({ citationId: hit!.citationId })] })]);
     expect(JSON.stringify(result)).not.toContain("timelinemarker source evidence");
+  });
+
+  it("generates a cited brief with bounded goal, points, risks, and open questions", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Brief source", "briefmarker source evidence", "shared", "brief-source-key01",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=briefmarker");
+    const hit = (await search.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/brief`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json<{ goal: { citations: Array<{ citationId: string }> }; keyPoints: unknown[]; risks: unknown[]; openQuestions: unknown[] }>();
+    expect(result.goal.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
+    expect(result.keyPoints).toHaveLength(1);
+    expect(result.risks).toHaveLength(1);
+    expect(result.openQuestions).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("briefmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
