@@ -45,6 +45,10 @@ describe("frontend accessibility gates", () => {
     expect(html).toContain('role="tablist"');
     expect(html).toContain("来源与链接");
     expect(html).toContain('data-reader-outline="true"');
+    expect(html).toContain('data-reader-note="true"');
+    expect(html).toContain('data-note-visibility="private"');
+    expect(html).toContain('data-note-save="explicit"');
+    expect(html).toContain("保存笔记");
     expect(html).toContain("source-version-1");
     expect(html).toContain("Sheet1 · A1:B2");
     expect(html).toContain('aria-pressed="false"');

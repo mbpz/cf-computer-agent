@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
+import { loadPrivateKnowledgeNote, savePrivateKnowledgeNote } from "../lib/knowledge-note";
 import type { KnowledgeBacklinkItem, KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
 
 export type KnowledgeReaderState = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
@@ -30,6 +31,33 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
   };
   const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(null);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteBody, setNoteBody] = useState("");
+  const [noteStatus, setNoteStatus] = useState<"idle" | "saved" | "unsaved" | "error">("idle");
+  useEffect(() => {
+    try {
+      const note = loadPrivateKnowledgeNote(normalizedRevision.knowledgeItemId);
+      setNoteTitle(note.title);
+      setNoteBody(note.body);
+      setNoteStatus("idle");
+    } catch {
+      setNoteTitle("");
+      setNoteBody("");
+      setNoteStatus("error");
+    }
+  }, [normalizedRevision.knowledgeItemId]);
+  const updateNote = (setter: (value: string) => void, value: string) => {
+    setter(value);
+    setNoteStatus("unsaved");
+  };
+  const saveNote = () => {
+    try {
+      savePrivateKnowledgeNote(normalizedRevision.knowledgeItemId, { title: noteTitle, body: noteBody });
+      setNoteStatus("saved");
+    } catch {
+      setNoteStatus("error");
+    }
+  };
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
@@ -48,11 +76,17 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
       </main>
       <aside id="reader-sources-panel" data-reader-sources className={(mobilePanel === "sources" ? "block" : "hidden") + " space-y-5 lg:block"}>
         <SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />
+        <ReaderNotePanel locale={locale} title={noteTitle} body={noteBody} status={noteStatus} onTitleChange={(value) => updateNote(setNoteTitle, value)} onBodyChange={(value) => updateNote(setNoteBody, value)} onSave={saveNote} />
         {backlinkState.kind !== "idle" && <BacklinkPanel locale={locale} state={backlinkState} />}
         {relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} />}
       </aside>
     </div>
   </article>
+}
+
+function ReaderNotePanel({ locale, title, body, status, onTitleChange, onBodyChange, onSave }: { locale?: LocaleRuntime; title: string; body: string; status: "idle" | "saved" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
+  const statusLabel = status === "saved" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVED") : status === "unsaved" ? frontendText(locale, "KNOWLEDGE_NOTE_UNSAVED") : status === "error" ? frontendText(locale, "KNOWLEDGE_NOTE_ERROR") : "";
+  return <Card data-reader-note="true" data-note-visibility="private" data-note-save="explicit"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE")}</CardTitle><span className="rounded-full border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_PRIVATE")}</span></div><p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_DESCRIPTION")}</p></CardHeader><CardContent className="space-y-3"><div><label htmlFor="reader-note-title" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE_LABEL")}</label><input id="reader-note-title" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} className="mt-1 flex h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={200} /></div><div><label htmlFor="reader-note-body" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_BODY_LABEL")}</label><textarea id="reader-note-body" value={body} onChange={(event) => onBodyChange(event.currentTarget.value)} className="mt-1 min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={16000} /></div><div className="flex items-center justify-between gap-2"><span role="status" aria-live="polite" className="text-xs text-muted-foreground">{statusLabel}</span><Button size="sm" onClick={onSave}>{frontendText(locale, "KNOWLEDGE_NOTE_SAVE")}</Button></div></CardContent></Card>;
 }
 
 function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }: { locale?: LocaleRuntime; revision: KnowledgeRevision; selectedChunkId: string | null; onSelectChunk: (id: string) => void }) {
