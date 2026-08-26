@@ -193,6 +193,16 @@ describe("M2 asset upload boundary", () => {
     });
     expect(replay.status).toBe(201);
     await expect(replay.json()).resolves.toMatchObject({ submission: { id: body.submission.id, assetId: uploaded.asset.id } });
+
+    const conflicting = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "asset-pair-submission-2" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared", title: "Second submission",
+      }),
+    });
+    expect(conflicting.status).toBe(409);
+    await expect(conflicting.json()).resolves.toMatchObject({ error: { code: "ASSET_ALREADY_SUBMITTED" } });
   });
 
   it("does not create a submission while an asset parse is still queued", async () => {

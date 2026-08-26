@@ -289,6 +289,7 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
     const { idempotencyKey: _idempotencyKey, ...submission } = input.submission;
     return { submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
   }
+  async findByIdempotencyKey(): Promise<SubmissionCreateResult | null> { return null; }
 
   async findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null> {
     return this.prior?.submitterId === memberId && this.prior.id === priorSubmissionId

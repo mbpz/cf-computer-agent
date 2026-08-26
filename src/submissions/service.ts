@@ -94,6 +94,11 @@ export class SubmissionsService {
     catch (error) { if (error instanceof SubmissionsRepositoryConflictError) throw new AppError("SUBMISSION_TARGET_INVALID", "Submission target must be active and in the selected Space", 400); throw error; }
   }
 
+  async findByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null> {
+    if (typeof idempotencyKey !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(idempotencyKey)) return null;
+    return this.repository.findByIdempotencyKey(submitterId, idempotencyKey);
+  }
+
   async createWithSourceVersion(submitterId: string, input: CreateSourceSubmissionInput): Promise<SubmissionCreateResult> {
     requireIdempotencyKey(input.idempotencyKey);
     const content = resolveSourceContent(input);
@@ -139,6 +144,9 @@ export class SubmissionsService {
       if (error instanceof SubmissionsRepositoryConflictError) {
         if (error.kind === "target_invalid") {
           throw new AppError("SUBMISSION_TARGET_INVALID", "Submission target must be active and in the selected Space", 400);
+        }
+        if (error.kind === "asset_pairing_conflict") {
+          throw new AppError("ASSET_ALREADY_SUBMITTED", "Asset is already paired with a submission", 409);
         }
         throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key was already used for another submission", 409);
       }

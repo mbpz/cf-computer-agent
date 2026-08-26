@@ -14,7 +14,7 @@ import type {
   SubmissionReview,
 } from "./types";
 
-export type SubmissionsRepositoryConflictKind = "target_invalid" | "idempotency_conflict" | "resubmission_conflict";
+export type SubmissionsRepositoryConflictKind = "target_invalid" | "idempotency_conflict" | "resubmission_conflict" | "asset_pairing_conflict";
 export class SubmissionsRepositoryConflictError extends Error { constructor(readonly kind: SubmissionsRepositoryConflictKind) { super(`Submission conflict: ${kind}`); } }
 
 export interface PersistedSubmission extends Submission { idempotencyKey: string; }
@@ -33,6 +33,7 @@ export interface SubmissionsRepositoryPort {
   updateDraft(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission | null>;
   createWithAudit(submission: CreateSubmission, audit: CreateAuditEvent): Promise<Submission>;
   createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
+  findByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null>;
   findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null>;
   createResubmissionWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage>;
@@ -198,6 +199,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     } catch (error) {
       const concurrentReplay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey);
       if (concurrentReplay) return exactReplayOrThrow(concurrentReplay, input);
+      if (String(error).includes("asset pairing")) throw new SubmissionsRepositoryConflictError("asset_pairing_conflict");
       throw error;
     }
 
@@ -367,11 +369,15 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     return page(rows.results.map(mapSubmissionRow), request.limit);
   }
 
-  private async findCreationByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null> {
+  async findByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null> {
     const row = await this.db.prepare(
       `${creationSelect} WHERE s.submitter_id = ? AND s.idempotency_key = ? LIMIT 1`,
     ).bind(submitterId, idempotencyKey).first<CreationRow>();
     return row ? mapCreationRow(row) : null;
+  }
+
+  private findCreationByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null> {
+    return this.findByIdempotencyKey(submitterId, idempotencyKey);
   }
 
   private async findRejectedByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<Submission | null> {

@@ -108,6 +108,14 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const assetId = decodePathId(assetSubmit[1]!);
     const asset = await services.assets.getOwned(member.memberId, assetId);
+    const idempotencyKey = request.headers.get("idempotency-key") || "";
+    if (asset.asset.submissionId) {
+      const replay = await services.submissions.findByIdempotencyKey(member.memberId, idempotencyKey);
+      if (replay?.submission.assetId === assetId) {
+        return jsonResponse({ submission: replay.submission, duplicateCandidate: replay.duplicateCandidate }, 201, context.requestId);
+      }
+      throw new AppError("ASSET_ALREADY_SUBMITTED", "Asset is already paired with a submission", 409);
+    }
     if (asset.job.status !== "succeeded") {
       throw new AppError("ASSET_RESULT_NOT_READY", "Asset parsing has not completed", 409, true);
     }
@@ -138,7 +146,7 @@ export async function routeMemberApi(
       title: input.title,
       content,
       assetId,
-      idempotencyKey: request.headers.get("idempotency-key") || "",
+      idempotencyKey,
     });
     return jsonResponse({
       submission: result.submission,
