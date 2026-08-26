@@ -10,9 +10,9 @@ describe("frontend submission data", () => {
       expect(init?.headers).toMatchObject({ "content-type": "application/json" });
       expect((init?.headers as Record<string, string>)["idempotency-key"]).toBeTruthy();
       expect(JSON.parse(String(init?.body))).toMatchObject({ requestedSpaceId: "default", requestedVisibility: "shared", kind: "markdown", title: "Guide", content: "# Body" });
-      return new Response(JSON.stringify({ submission: { id: "submission-1" } }), { status: 201 });
+      return new Response(JSON.stringify({ submission: { id: "submission-1" }, similarCandidates: [{ submissionId: "old-1", sourceId: "source-1", sourceVersionId: "version-1", title: "Existing guide", similarity: 0.72 }] }), { status: 201 });
     });
-    await expect(createSubmission({ mode: "markdown", title: " Guide ", content: "# Body" }, requester)).resolves.toEqual({ id: "submission-1" });
+    await expect(createSubmission({ mode: "markdown", title: " Guide ", content: "# Body" }, requester)).resolves.toEqual({ id: "submission-1", similarCandidates: [{ submissionId: "old-1", sourceId: "source-1", sourceVersionId: "version-1", title: "Existing guide", similarity: 0.72 }] });
   });
 
   it("rejects empty and oversized drafts before network", async () => {
@@ -25,5 +25,10 @@ describe("frontend submission data", () => {
   it("rejects malformed response data", async () => {
     const requester = vi.fn(async () => new Response(JSON.stringify({ submission: null }), { status: 201 }));
     await expect(createSubmission({ mode: "code", title: "Code", content: "const x = 1;" }, requester)).rejects.toThrow("SUBMISSION_RESPONSE_INVALID");
+  });
+
+  it("drops malformed similarity suggestions without weakening submission success", async () => {
+    const requester = vi.fn(async () => new Response(JSON.stringify({ submission: { id: "submission-1" }, similarCandidates: [{ title: "leak", similarity: 2 }, null] }), { status: 201 }));
+    await expect(createSubmission({ mode: "text", title: "Guide", content: "Body" }, requester)).resolves.toEqual({ id: "submission-1", similarCandidates: [] });
   });
 });

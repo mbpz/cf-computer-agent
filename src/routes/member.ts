@@ -134,7 +134,11 @@ export async function routeMemberApi(
       contentFormat: "plain",
       idempotencyKey: request.headers.get("idempotency-key") || "",
     });
-    return jsonResponse({ submission: result.submission, duplicateCandidate: result.duplicateCandidate }, 201, context.requestId);
+    return jsonResponse({
+      submission: result.submission,
+      duplicateCandidate: result.duplicateCandidate,
+      ...(result.similarCandidates && result.similarCandidates.length > 0 ? { similarCandidates: result.similarCandidates } : {}),
+    }, 201, context.requestId);
   }
   if (assetPreview) {
     requireCapability(principal, "submission:read-own");
@@ -231,6 +235,7 @@ export async function routeMemberApi(
     return jsonResponse({
       submission: result.submission,
       duplicateCandidate: result.duplicateCandidate,
+      ...(result.similarCandidates && result.similarCandidates.length > 0 ? { similarCandidates: result.similarCandidates } : {}),
     }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
   }
 
@@ -351,6 +356,7 @@ export async function routeMemberApi(
     return jsonResponse({
       submission: result.submission,
       duplicateCandidate: result.duplicateCandidate,
+      ...(result.similarCandidates && result.similarCandidates.length > 0 ? { similarCandidates: result.similarCandidates } : {}),
     }, 201, context.requestId);
   }
 

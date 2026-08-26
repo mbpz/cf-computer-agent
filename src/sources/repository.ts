@@ -1,10 +1,16 @@
-import type { DuplicateSourceCandidate, Source, SourceConflict, SourceVersion } from "./types";
+import type { DuplicateSourceCandidate, SimilarSourceCandidate, Source, SourceConflict, SourceVersion } from "./types";
+import { sourceSimilarity } from "./similarity";
 
 type DuplicateCandidateRow = {
   submission_id: string;
   source_id: string;
   source_version_id: string;
 };
+
+type SimilarCandidateRow = DuplicateCandidateRow & { title: string; content: string };
+const SIMILARITY_THRESHOLD = 0.55;
+const SIMILARITY_SCAN_LIMIT = 50;
+const SIMILARITY_CONTENT_LIMIT = 16 * 1024;
 
 type SourceConflictRow = {
   source_version_id: string;
@@ -62,6 +68,29 @@ export class SourcesRepository {
       sourceId: row.source_id,
       sourceVersionId: row.source_version_id,
     } : null;
+  }
+
+  async findSimilarCandidates(content: string, contentSha256: string, ownerId: string, spaceId: string): Promise<SimilarSourceCandidate[]> {
+    const rows = await this.db.prepare(
+      `SELECT sv.submission_id, sv.source_id, sv.id AS source_version_id, s.title,
+              substr(sv.content, 1, ?) AS content
+       FROM source_versions sv
+       JOIN sources s ON s.id = sv.source_id
+       WHERE s.owner_id = ? AND s.space_id = ? AND sv.content_sha256 <> ?
+       ORDER BY sv.created_at DESC, sv.id DESC
+       LIMIT ?`,
+    ).bind(SIMILARITY_CONTENT_LIMIT, ownerId, spaceId, contentSha256, SIMILARITY_SCAN_LIMIT).all<SimilarCandidateRow>();
+    return rows.results
+      .map((row) => ({
+        submissionId: row.submission_id,
+        sourceId: row.source_id,
+        sourceVersionId: row.source_version_id,
+        title: row.title,
+        similarity: Number(sourceSimilarity(content, row.content).toFixed(4)),
+      }))
+      .filter((candidate) => candidate.similarity >= SIMILARITY_THRESHOLD)
+      .sort((left, right) => right.similarity - left.similarity || left.submissionId.localeCompare(right.submissionId))
+      .slice(0, 3);
   }
 
   async listConflicts(sourceVersionId: string, ownerId: string, limit = 8): Promise<SourceConflict[]> {

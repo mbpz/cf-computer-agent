@@ -49,6 +49,14 @@ describe("React submission and asset pages", () => {
     expect(html).not.toContain("reviewerId");
   });
 
+  it("renders advisory similar-source suggestions without exposing similarity internals", () => {
+    const html = renderToStaticMarkup(<SubmitPage draft={{ mode: "markdown", title: "Guide", content: "Body" }} state={{ kind: "success", message: "Submitted", similarCandidates: [{ submissionId: "submission-1", sourceId: "source-1", sourceVersionId: "version-1", title: "Existing guide", similarity: 0.72 }] }} />);
+    expect(html).toContain("Similar entries found");
+    expect(html).toContain("Existing guide");
+    expect(html).not.toContain("0.72");
+    expect(html).not.toContain("undefined");
+  });
+
   it("keeps the free-tier upload boundary explicit and validates enabled files", () => {
     expect(assetUploadModel({ enabled: false, maxBytes: 10, file: { name: "guide.pdf", size: 1 } })).toEqual({ kind: "disabled", reason: "OBJECT_STORAGE_UNAVAILABLE" });
     expect(assetUploadModel({ enabled: true, maxBytes: 10, file: { name: "", size: 1 } })).toEqual({ kind: "invalid", reason: "NAME_REQUIRED" });

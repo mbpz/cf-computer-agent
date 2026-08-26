@@ -55,7 +55,7 @@
 - [x] `ING-012` P0/M2 上传中断回收；状态：L/W；验收：R2 写成功但 D1 双写失败时补偿删除 staging；补偿失败对象无 D1 引用，可由 orphan grace 扫描/显式回收。证据：`src/assets/service.ts`、`test/unit/assets-service.test.ts`、`docs/operations/m2-asset-ingestion.md`。
 - [ ] `ING-013` P0/M2 Asset/Submission 配对写入；验收：任一失败不留下可见孤儿记录。
 - [ ] `ING-014` P1/M2 完全重复关联建议；验收：admin 决定关联、保留或拒绝。
-- [ ] `ING-015` P2/M3 相似重复候选；验收：只作建议，不自动合并。
+- [x] `ING-015` P2/M3 相似重复候选；状态：L/W；验收：仅扫描同成员、同 Space 的最近 50 个版本，使用有界 token-set Jaccard（阈值 0.55）返回最多 3 个标题与 opaque ID 候选；建议失败时不阻塞提交、不改变 `review_pending`、不自动合并。证据：`src/sources/similarity.ts`、`src/sources/repository.ts`、`src/submissions/repository.ts`、`frontend/pages/submit-page.tsx`、`test/unit/source-similarity.test.ts`、`test/worker/submissions.test.ts`。
 - [x] `ING-016` P1/M2 原件下载授权；状态：L/W；验收：每次 owner/admin 下载重新查询资产 owner 与 parse 状态，跨 owner 不泄露存在性，parsed 未完成稳定拒绝。证据：`src/assets/service.ts`、`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
 - [x] `ING-017` P1/M2 Content-Disposition 安全文件名；状态：L/W；验收：下载响应使用 ASCII fallback + RFC5987 编码，去除 CRLF、路径和引号注入。证据：`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
 - [x] `ING-018` P1/M7 原件校验任务；状态：L；验收：定期抽检 hash 并报告损坏，不自动删除。证据：`src/ops/original-validation.ts`、`test/unit/original-validation.test.ts`；命令：`rtk npx vitest run test/unit/original-validation.test.ts && rtk npm run typecheck`。报告区分 missing/size_mismatch/hash_mismatch/unverified，删除计数固定为 0；无 R2 binding 时标记 `unbound`。

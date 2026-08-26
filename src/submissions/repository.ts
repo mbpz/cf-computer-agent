@@ -247,7 +247,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     if (results[1]?.meta.changes !== 1 || results[2]?.meta.changes !== 1 || results[3]?.meta.changes !== 1) {
       throw new Error("Submission source creation did not fully persist");
     }
-    return { submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null };
+    return this.attachSimilarCandidates({ submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null }, sourceVersion, submission.submitterId, submission.requestedSpaceId);
   }
 
   async findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null> {
@@ -316,7 +316,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     if (results[1]?.meta.changes !== 1 || results[2]?.meta.changes !== 1 || results[3]?.meta.changes !== 1) {
       throw new Error("Resubmission source creation did not fully persist");
     }
-    return { submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null };
+    return this.attachSimilarCandidates({ submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null }, sourceVersion, submission.submitterId, submission.requestedSpaceId);
   }
 
   async listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage> {
@@ -384,6 +384,21 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     return this.db.prepare(
       "SELECT CASE WHEN changes() = 1 THEN 1 ELSE json_extract('submission-change-guard', '$') END AS ok",
     );
+  }
+
+  private async attachSimilarCandidates(
+    result: SubmissionCreateResult,
+    sourceVersion: SourceVersion,
+    ownerId: string,
+    spaceId: string,
+  ): Promise<SubmissionCreateResult> {
+    const similarCandidates = await this.sources.findSimilarCandidates(
+      sourceVersion.content,
+      sourceVersion.contentSha256,
+      ownerId,
+      spaceId,
+    ).catch(() => []);
+    return similarCandidates.length > 0 ? { ...result, similarCandidates } : result;
   }
 }
 

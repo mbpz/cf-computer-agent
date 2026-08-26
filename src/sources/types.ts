@@ -60,6 +60,12 @@ export interface DuplicateSourceCandidate {
   sourceVersionId: string;
 }
 
+/** Advisory-only near-duplicate. It never changes submission state. */
+export interface SimilarSourceCandidate extends DuplicateSourceCandidate {
+  title: string;
+  similarity: number;
+}
+
 export interface SourceConflict {
   sourceVersionId: string;
   sourceId: string;

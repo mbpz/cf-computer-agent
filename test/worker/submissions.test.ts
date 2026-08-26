@@ -299,6 +299,32 @@ describe("submissions D1 control plane", () => {
     await expect(counts()).resolves.toEqual({ submissions: 2, sources: 1, sourceVersions: 1, audits: 2 });
   });
 
+  it("returns bounded same-owner same-space similar candidates as advice without merging", async () => {
+    const service = createService();
+    const first = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "D1 backup guide",
+      content: "# D1 backup guide\n\nExport the D1 database before a forward migration and record the backup hash.",
+      idempotencyKey: "similar-key-0001",
+    });
+    const second = await service.createWithSourceVersion("member-a", {
+      requestedSpaceId: "default", kind: "markdown", title: "Migration recovery checklist",
+      content: "# Migration recovery checklist\n\nExport the D1 database before a forward migration and record the backup hash. Then verify the ledger.",
+      idempotencyKey: "similar-key-0002",
+    });
+
+    expect(first.duplicateCandidate).toBeNull();
+    expect(second.submission).toMatchObject({ status: "review_pending", submitterId: "member-a" });
+    expect(second.source).not.toBeNull();
+    expect(second.similarCandidates).toEqual([expect.objectContaining({
+      submissionId: first.submission!.id,
+      sourceId: first.source!.id,
+      sourceVersionId: first.sourceVersion!.id,
+      title: "D1 backup guide",
+    })]);
+    expect(second.similarCandidates?.[0]?.similarity).toBeGreaterThan(0.55);
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 2, sourceVersions: 2, audits: 2 });
+  });
+
   it("does not expose or block on a different member's same-hash source", async () => {
     const first = await createService("member-a-first").createWithSourceVersion("member-a", {
       requestedSpaceId: "default", kind: "markdown", title: "Member A", content: "# Shared hash\n", idempotencyKey: "member-a-hash-001",

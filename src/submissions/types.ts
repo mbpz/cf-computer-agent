@@ -1,5 +1,5 @@
 import type { Page, PageRequest } from "../pagination";
-import type { DuplicateSourceCandidate, Source, SourceVersion } from "../sources/types";
+import type { DuplicateSourceCandidate, SimilarSourceCandidate, Source, SourceVersion } from "../sources/types";
 
 export type SubmissionKind = "text" | "markdown" | "code";
 export type SubmissionStatusFilter = "draft" | "review_pending" | "published" | "rejected" | "revision_requested";
@@ -35,8 +35,8 @@ export interface Submission {
 
 export type CreateSubmission = Submission;
 export type SubmissionCreateResult =
-  | { submission: Submission; source: Source; sourceVersion: SourceVersion; duplicateCandidate: null }
-  | { submission: Submission; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate };
+  | { submission: Submission; source: Source; sourceVersion: SourceVersion; duplicateCandidate: null; similarCandidates?: readonly SimilarSourceCandidate[] }
+  | { submission: Submission; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate; similarCandidates?: readonly SimilarSourceCandidate[] };
 export type SubmissionPage = Page<Submission>;
 export interface SubmissionPageRequest {
   limit?: number;

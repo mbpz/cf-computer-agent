@@ -23,7 +23,7 @@ import { createSearchRequestController, type SearchPageResult } from "./lib/sear
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
 import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
-import { createSubmission } from "./lib/submission-data";
+import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
@@ -458,14 +458,14 @@ function agentScopeFromSearch(search: string): AgentScope {
 
 function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
   const [draft, setDraft] = useState<SubmissionDraft>({ mode: "markdown", title: "", content: "" });
-  const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string }>({ kind: "idle" });
+  const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
   const submit = async (nextDraft: SubmissionDraft) => {
     if (state.kind === "pending") return;
     setState({ kind: "pending" });
     try {
-      await createSubmission(nextDraft);
+      const result = await createSubmission(nextDraft);
       setDraft({ mode: nextDraft.mode, title: "", content: "" });
-      setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS") });
+      setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS"), similarCandidates: result.similarCandidates });
     } catch (error: unknown) {
       setState({ kind: error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "validation" : "error", message: frontendText(locale, error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "SUBMIT_VALIDATION_ERROR" : "SUBMIT_ERROR") });
     }
