@@ -281,7 +281,7 @@
 - [ ] `COL-003` P1/M3 审核评论；验收：admin 与 owner 可见，编辑留历史。
 - [ ] `COL-004` P1/M4 收藏；验收：成员私有、删除 Knowledge 后安全清理。
 - [ ] `COL-005` P1/M4 最近访问；验收：有界、隐私私有、禁用成员不可读取。
-- [ ] `COL-006` P1/M4 Saved View；验收：成员私有、过滤 schema 安全。
+- [x] `COL-006` P1/M4 Saved View；状态：L/W；验收：Saved View 按 member 私有隔离，过滤 schema 仅允许版本化 `q/spaceId/collectionId/tagIds/tagMode`，名称/游标/更新/删除均有边界与 owner 校验。证据：`src/saved-views/service.ts`、`src/saved-views/repository.ts`、`src/routes/member.ts`、`frontend/lib/saved-views-data.ts`、`test/unit/saved-views-service.test.ts`、`test/worker/saved-views.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/saved-views-service.test.ts test/worker/saved-views.test.ts test/worker/m1-api.test.ts -t 'saved view' && rtk npm run typecheck`。
 - [ ] `COL-007` P1/M5 最近 Research；验收：恢复来源集合和未完成状态。
 - [ ] `COL-008` P1/M5 Note 列表；验收：私有默认，分享必须显式。
 - [ ] `COL-009` P2/M5 共享 Note；验收：只能共享给 active members，随时撤销。
