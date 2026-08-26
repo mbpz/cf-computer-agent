@@ -1,5 +1,6 @@
 import { AppError } from "../http";
-import type { PrivateNote, PrivateNoteCitation, PrivateNoteInput, PrivateNoteRepositoryPort, PrivateNoteScope } from "./types";
+import { parsePageRequest, type PageRequest } from "../pagination";
+import type { PrivateNote, PrivateNoteCitation, PrivateNoteInput, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope } from "./types";
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const MAX_TITLE_BYTES = 1024;
@@ -23,6 +24,11 @@ export class PrivateNotesService {
   async get(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNote | null> {
     assertId(knowledgeItemId);
     return this.repository.findOwned(scope, knowledgeItemId);
+  }
+
+  async list(scope: PrivateNoteScope, request?: PageRequest): Promise<PrivateNotePage> {
+    if (!this.repository.listOwned) throw new AppError("PRIVATE_NOTE_UNAVAILABLE", "Private notes are unavailable", 503, true);
+    return this.repository.listOwned(scope, parsePageRequest(request?.limit, request?.cursor));
   }
 
   async save(scope: PrivateNoteScope, knowledgeItemId: string, input: PrivateNoteInput): Promise<PrivateNote> {

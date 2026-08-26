@@ -88,6 +88,12 @@ export async function routeLibraryApi(
     return jsonResponse(await services.researchReports.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
   }
 
+  if (url.pathname === "/api/knowledge/notes") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const query = queryRecord(url, ["limit", "cursor"]);
+    return jsonResponse(await services.privateNotes.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
+  }
+
   const favorite = /^\/api\/knowledge\/([^/]+)\/favorite$/.exec(url.pathname);
   if (favorite) {
     requireNoQuery(url);

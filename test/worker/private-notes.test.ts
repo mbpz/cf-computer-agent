@@ -49,6 +49,12 @@ describe("private knowledge notes", () => {
     expect(crossKnowledge.status).toBe(404);
     const loaded = await api("/api/knowledge/knowledge-1/note", sessionA);
     expect(await loaded.json()).toMatchObject({ note: { title: "Key idea", body: "Keep this private" } });
+    const listed = await api("/api/knowledge/notes?limit=8", sessionA);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ items: [expect.objectContaining({ id: expect.any(String), knowledgeItemId: "knowledge-1", title: "Key idea", visibility: "private" })] });
+    const otherList = await api("/api/knowledge/notes?limit=8", sessionB);
+    expect(otherList.status).toBe(200);
+    expect((await otherList.json() as { items: Array<{ knowledgeItemId: string }> }).items.map((item) => item.knowledgeItemId)).toEqual(["knowledge-1"]);
   });
 
   it("keeps malformed note input outside the publication path", async () => {

@@ -21,6 +21,7 @@ import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
 import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
+import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission } from "./lib/submission-data";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
@@ -208,6 +209,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
   const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
+  const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
   const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
     setState((previous) => ({
       kind: "ready",
@@ -220,6 +222,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
     let active = true;
     void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
+    void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -244,7 +247,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
     });
   };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} />;
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} />;
 }
 
 function SearchRoute({ locale }: { locale: LocaleRuntime }) {

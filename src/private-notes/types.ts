@@ -22,6 +22,9 @@ export interface PrivateNote {
   updatedAt: string;
 }
 
+export type PrivateNoteListItem = Omit<PrivateNote, "ownerId">;
+export interface PrivateNotePage { items: PrivateNoteListItem[]; nextCursor?: string }
+
 export interface PrivateNoteInput {
   title: unknown;
   body: unknown;
@@ -42,5 +45,6 @@ export interface PrivateNoteUpsert {
 
 export interface PrivateNoteRepositoryPort {
   findOwned(scope: PrivateNoteScope, knowledgeItemId: string): Promise<PrivateNote | null>;
+  listOwned?: (scope: PrivateNoteScope, request: import("../pagination").PageRequest) => Promise<PrivateNotePage>;
   upsert(input: PrivateNoteUpsert): Promise<PrivateNote>;
 }

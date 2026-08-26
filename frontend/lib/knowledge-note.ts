@@ -9,6 +9,11 @@ export interface PrivateKnowledgeNote {
   updatedAt: string;
 }
 
+export interface PrivateKnowledgeNoteListItem extends PrivateKnowledgeNote {
+  id: string;
+  createdAt: string;
+}
+
 export interface PrivateKnowledgeNoteDraft {
   title?: string;
   body?: string;
@@ -69,6 +74,28 @@ export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, re
   const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, { requester, signal });
   if (data.note === null || data.note === undefined) return null;
   return normalizeRemoteNote(data.note, knowledgeItemId);
+}
+
+export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteListItem[]> {
+  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/notes?limit=8", { requester, signal });
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const record = value as Record<string, unknown>;
+    if (typeof record.id !== "string" || !ID_PATTERN.test(record.id) || typeof record.knowledgeItemId !== "string" || !ID_PATTERN.test(record.knowledgeItemId)
+      || record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string"
+      || typeof record.createdAt !== "string" || typeof record.updatedAt !== "string") return [];
+    return [{
+      v: 1 as const,
+      id: record.id,
+      knowledgeItemId: record.knowledgeItemId,
+      title: record.title,
+      body: record.body,
+      visibility: "private" as const,
+      updatedAt: record.updatedAt,
+      createdAt: record.createdAt,
+    }];
+  });
 }
 
 export async function saveRemotePrivateKnowledgeNote(

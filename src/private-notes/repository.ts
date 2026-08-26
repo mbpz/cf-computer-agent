@@ -1,5 +1,6 @@
 import { AppError } from "../http";
-import type { PrivateNote, PrivateNoteCitation, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteUpsert } from "./types";
+import { decodeOpaqueCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
+import type { PrivateNote, PrivateNoteCitation, PrivateNoteListItem, PrivateNotePage, PrivateNoteRepositoryPort, PrivateNoteScope, PrivateNoteUpsert } from "./types";
 
 type PrivateNoteRow = {
   id: string;
@@ -11,6 +12,7 @@ type PrivateNoteRow = {
   created_at: string;
   updated_at: string;
 };
+type NoteCursor = { v: 1; updatedAt: string; id: string };
 
 export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
   constructor(private readonly db: D1Database) {}
@@ -20,6 +22,28 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
       `SELECT id, owner_member_id, knowledge_item_id, title, body, citations_json, created_at, updated_at
        FROM private_notes WHERE owner_member_id = ? AND knowledge_item_id = ? LIMIT 1`,
     ).bind(scope.memberId, knowledgeItemId).first<PrivateNoteRow>());
+  }
+
+  async listOwned(scope: PrivateNoteScope, request: PageRequest): Promise<PrivateNotePage> {
+    const cursor = request.cursor === undefined ? undefined : decodeNoteCursor(request.cursor);
+    const cursorSql = cursor ? "AND (updated_at < ? OR (updated_at = ? AND id < ?))" : "";
+    const rows = await this.db.prepare(
+      `SELECT id, owner_member_id, knowledge_item_id, title, body, citations_json, created_at, updated_at
+       FROM private_notes
+       WHERE owner_member_id = ? ${cursorSql}
+       ORDER BY updated_at DESC, id DESC
+       LIMIT ?`,
+    ).bind(
+      scope.memberId,
+      ...(cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.id] : []),
+      request.limit + 1,
+    ).all<PrivateNoteRow>();
+    const items = rows.results.slice(0, request.limit).map((row) => toListItem(mapRow(row)!));
+    const last = items.at(-1);
+    return {
+      items,
+      ...(rows.results.length > request.limit && last ? { nextCursor: encodeOpaqueCursor({ v: 1, updatedAt: last.updatedAt, id: last.id }) } : {}),
+    };
   }
 
   async upsert(input: PrivateNoteUpsert): Promise<PrivateNote> {
@@ -41,6 +65,24 @@ export class PrivateNotesRepository implements PrivateNoteRepositoryPort {
     return saved;
   }
 }
+
+function toListItem(note: PrivateNote): PrivateNoteListItem {
+  const { ownerId: _ownerId, ...item } = note;
+  return item;
+}
+
+function decodeNoteCursor(value: string): NoteCursor {
+  try {
+    const decoded = decodeOpaqueCursor(value);
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
+    const record = decoded as Record<string, unknown>;
+    if (Object.keys(record).length !== 3 || record.v !== 1 || typeof record.updatedAt !== "string" || !isIsoTimestamp(record.updatedAt)
+      || typeof record.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(record.id)) throw new Error();
+    return { v: 1, updatedAt: record.updatedAt, id: record.id };
+  } catch { throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400); }
+}
+
+function isIsoTimestamp(value: string): boolean { return value.length === 24 && !Number.isNaN(Date.parse(value)) && value.endsWith("Z"); }
 
 async function assertCitationReadable(db: D1Database, input: PrivateNoteUpsert, citation: PrivateNoteCitation): Promise<void> {
   const row = await db.prepare(
