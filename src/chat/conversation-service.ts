@@ -18,6 +18,7 @@ export interface ChatHistoryMessage {
 export interface ChatConversationRepository {
   create(input: { id: string; ownerMemberId: string; scope: ChatScope; now: string }): Promise<ChatConversation>;
   find(ownerMemberId: string, id: string): Promise<ChatConversation | null>;
+  updateScope(ownerMemberId: string, conversationId: string, scope: ChatScope, now: string): Promise<ChatConversation | null>;
   listMessages(ownerMemberId: string, conversationId: string): Promise<ChatHistoryMessage[]>;
   append(input: { ownerMemberId: string; conversationId: string; question: string; answer: string; citationIds: string[]; now: string }): Promise<void>;
 }
@@ -55,6 +56,12 @@ export class ChatConversationService {
     if (!conversation) throw new AppError("CHAT_CONVERSATION_NOT_FOUND", "Chat conversation was not found", 404);
     const messages = await this.repository.listMessages(scope.memberId, conversationId);
     return messages.slice(-MAX_HISTORY_MESSAGES);
+  }
+
+  async updateScope(scope: LibraryScope, conversationId: string, requestedScope: ChatScope): Promise<ChatConversation> {
+    const updated = await this.repository.updateScope(scope.memberId, conversationId, requestedScope, this.now());
+    if (!updated) throw new AppError("CHAT_CONVERSATION_NOT_FOUND", "Chat conversation was not found", 404);
+    return updated;
   }
 
   async appendTurn(scope: LibraryScope, conversationId: string, input: { question: string; answer: string; citationIds: string[] }): Promise<void> {

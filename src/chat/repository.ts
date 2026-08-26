@@ -29,6 +29,14 @@ export class ChatRepository implements ChatConversationRepository {
     }
   }
 
+  async updateScope(ownerMemberId: string, conversationId: string, scope: ChatScope, now: string): Promise<ChatConversation | null> {
+    const result = await this.db.prepare(
+      "UPDATE chat_conversations SET scope_json = ?, updated_at = ? WHERE id = ? AND owner_member_id = ?",
+    ).bind(JSON.stringify(scope), now, conversationId, ownerMemberId).run();
+    if (!result.meta.changes) return null;
+    return this.find(ownerMemberId, conversationId);
+  }
+
   async listMessages(ownerMemberId: string, conversationId: string): Promise<ChatHistoryMessage[]> {
     const rows = await this.db.prepare(
       `SELECT message.role, message.question, message.answer, message.citation_ids_json

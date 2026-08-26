@@ -52,6 +52,15 @@ export async function askAgent({ question, scope, conversationId, requester = fe
   return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
 }
 
+export async function updateAgentConversationScope(conversationId: string, scope: AgentScope, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/scope`, {
+    requester,
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope }),
+  });
+}
+
 function normalizeCitation(value: unknown): AgentCitation | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;

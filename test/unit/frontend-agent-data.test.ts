@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { askAgent, createAgentRequestController } from "../../frontend/lib/agent-data";
+import { askAgent, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
 
 describe("frontend agent data", () => {
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
@@ -28,6 +28,16 @@ describe("frontend agent data", () => {
       return new Response(JSON.stringify({ answer: "Grounded", evidenceConfidence: 0.9, citations: [], conversationId: "conversation-1" }), { status: 200 });
     });
     await expect(askAgent({ question: "follow up", scope: { kind: "all" }, conversationId: "conversation-1", requester })).resolves.toMatchObject({ conversationId: "conversation-1" });
+  });
+
+  it("updates conversation sources through the explicit scope endpoint", async () => {
+    const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/knowledge/chat/conversations/conversation-1/scope");
+      expect(init?.method).toBe("PATCH");
+      expect(JSON.parse(String(init?.body))).toEqual({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
+      return new Response(JSON.stringify({ conversation: { id: "conversation-1" } }), { status: 200 });
+    });
+    await expect(updateAgentConversationScope("conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] }, requester)).resolves.toBeUndefined();
   });
 
   it("binds cited source context from the server source set without exposing raw content", async () => {

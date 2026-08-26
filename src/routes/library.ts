@@ -88,6 +88,17 @@ export async function routeLibraryApi(
     return methodNotAllowed("GET, PUT", context);
   }
 
+  const conversationScope = /^\/api\/knowledge\/chat\/conversations\/([^/]+)\/scope$/.exec(url.pathname);
+  if (conversationScope) {
+    if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);
+    requireNoQuery(url);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["scope"], "KNOWLEDGE_CHAT_SCOPE_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["scope"])) throw new AppError("KNOWLEDGE_CHAT_SCOPE_REQUEST_INVALID", "Request body is invalid", 400);
+    const chatScope = chatScopeRequest(input.scope);
+    const updated = await services.chatConversations.updateScope(scope, decodePathId(conversationScope[1]!), chatScope);
+    return jsonResponse({ conversation: updated }, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/knowledge/chat") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);

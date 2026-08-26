@@ -232,19 +232,24 @@ describe("M1 API authorization and request boundaries", () => {
     const firstBody = await first.json<{ conversationId: string; citations: string[] }>();
     expect(firstBody.conversationId).toMatch(/^[A-Za-z0-9-]+$/u);
     expect(firstBody.citations).toHaveLength(1);
+    const scopeUpdate = await memberApi("contributor", `/api/knowledge/chat/conversations/${firstBody.conversationId}/scope`, {
+      method: "PATCH",
+      body: JSON.stringify({ scope: { kind: "all" } }),
+    });
+    expect(scopeUpdate.status).toBe(200);
     const second = await memberApi("contributor", "/api/knowledge/chat", {
       method: "POST",
       body: JSON.stringify({
         question: "conversationmarker",
         conversationId: firstBody.conversationId,
-        scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] },
+        scope: { kind: "all" },
       }),
     });
     expect(second.status).toBe(200);
     await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE conversation_id = ?").bind(firstBody.conversationId).first<{ count: number }>()).resolves.toMatchObject({ count: 2 });
     await expectApiError(memberApi("contributor", "/api/knowledge/chat", {
       method: "POST",
-      body: JSON.stringify({ question: "conversationmarker", conversationId: firstBody.conversationId, scope: { kind: "all" } }),
+      body: JSON.stringify({ question: "conversationmarker", conversationId: firstBody.conversationId, scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }),
     }), 409, "CHAT_CONVERSATION_SCOPE_MISMATCH");
   });
 

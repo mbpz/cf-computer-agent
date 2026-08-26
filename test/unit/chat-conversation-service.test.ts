@@ -27,6 +27,13 @@ class FakeRepository implements ChatConversationRepository {
     if (!(await this.find(input.ownerMemberId, input.conversationId))) throw new Error("missing");
     this.messages.push(input);
   }
+  async updateScope(ownerMemberId: string, conversationId: string, scope: ChatScope, now: string) {
+    const conversation = await this.find(ownerMemberId, conversationId);
+    if (!conversation) return null;
+    const updated = { ...conversation, scope, updatedAt: now };
+    this.conversations.set(conversationId, updated);
+    return updated;
+  }
 }
 
 describe("ChatConversationService", () => {
@@ -48,5 +55,13 @@ describe("ChatConversationService", () => {
     const service = new ChatConversationService(repository, { now: () => "2026-08-26T00:00:00.000Z", id: () => "conversation-1" });
     await service.ensure(member, undefined, scope);
     await expect(service.history({ memberId: "member-2", role: "contributor" }, "conversation-1")).rejects.toMatchObject({ code: "CHAT_CONVERSATION_NOT_FOUND", status: 404 });
+  });
+
+  it("changes sources only through an explicit owner-scoped update", async () => {
+    const repository = new FakeRepository();
+    const service = new ChatConversationService(repository, { now: () => "2026-08-26T00:00:00.000Z", id: () => "conversation-1" });
+    await service.ensure(member, undefined, scope);
+    await expect(service.updateScope(member, "conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] })).resolves.toMatchObject({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
+    await expect(service.ensure(member, "conversation-1", { kind: "items", knowledgeItemIds: ["knowledge-2"] })).resolves.toMatchObject({ scope: { kind: "items", knowledgeItemIds: ["knowledge-2"] } });
   });
 });
