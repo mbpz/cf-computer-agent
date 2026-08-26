@@ -178,9 +178,9 @@
 - [x] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。证据：本地固定 `markdown-it@15.0.0` + `dompurify@3.4.14` 双边界，`happy-dom` 覆盖 raw HTML、混淆协议、表格、代码围栏、嵌套列表和链接目标；应用仅插入 `DocumentFragment`。
 - [x] `READ-004` P0/M1 目录；状态：L/W；验收：heading path 与正文锚点一致。
 - [x] `READ-005` P0/M1 heading/line 定位；状态：L/W；验收：citation 打开目标并高亮。
-- [ ] `READ-006` P0/M2 PDF 页定位；验收：无页预览时显示页码和下载入口。
-- [ ] `READ-007` P0/M2 表格定位；验收：sheet/cell range 可理解。
-- [ ] `READ-008` P0/M2 幻灯片定位；验收：slide number 和元素顺序可理解。
+- [x] `READ-006` P0/M2 PDF 页定位；状态：L/W；验收：Reader 来源面板显示 PDF 页码（含 unknown），并提供授权 Revision 的规范化内容下载入口作为无原件预览时的回退；不声称原始 PDF 对象可用。证据：`frontend/lib/knowledge-reader-data.ts`、`frontend/pages/knowledge-reader-page.tsx`、`src/routes/library.ts`、`test/unit/frontend-knowledge-reader-data.test.ts`、`test/unit/frontend-a11y.test.tsx`。
+- [x] `READ-007` P0/M2 表格定位；状态：L/W；验收：Reader 来源面板以 `sheet · cell range` 展示表格位置，并保持授权/下载边界。证据：`frontend/lib/knowledge-reader-data.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/frontend-knowledge-reader-data.test.ts`、`test/unit/frontend-a11y.test.tsx`。
+- [x] `READ-008` P0/M2 幻灯片定位；状态：L/W；验收：Reader 来源面板显示 slide number 与 element range，位置字段只来自服务端 allowlist。证据：`frontend/lib/knowledge-reader-data.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/frontend-knowledge-reader-data.test.ts`。
 - [x] `READ-009` P0/M1 Revision 信息；验收：版本、发布时间、审核者和来源版本。证据：可见性授权 CTE 后联结 Review/SourceVersion，Reader 以文本节点显示稳定 ID、ordinal、parser schema、code metadata 和 index status；不导出 email/path/hash/provider 字段。
 - [x] `READ-010` P0/M1 历史 Revision；状态：L/W；验收：旧引用可读但明确非 current。
 - [x] `READ-011` P1/M3 Revision diff；状态：L/W；验收：授权成员可通过 `GET /api/knowledge/:knowledgeItemId/revisions/:fromRevisionId/diff/:toRevisionId` 查看有界正文行操作与 title/tags/visibility/parser/code metadata 差异；240 行输出上限、超限标记和隐藏 Revision 统一 404。Reader 在存在上一修订时提供中英文对比入口。证据：`src/library/revision-diff.ts`、`src/library/service.ts`、`src/routes/library.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/revision-diff.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/revision-diff.test.ts test/unit/library-service.test.ts test/worker/m1-api.test.ts -t "diff|publishes an explicit update"`。
