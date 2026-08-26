@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
-import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
+import { AgentToolRunner, serializeAgentToolOutput, type AgentToolDefinition } from "../../src/agent/tool-runner";
 import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
@@ -61,6 +61,23 @@ describe("AgentToolRunner", () => {
         .rejects.toMatchObject({ code: "AGENT_TOOL_NOT_FOUND", status: 404 });
     }
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("stops a tool sequence at eight steps and marks model output as untrusted and bounded", async () => {
+    const members = repository();
+    const execute = vi.fn(async (_context: unknown, args: { text: string }) => args.text);
+    const runner = new AgentToolRunner(members, [{ ...echoTool, execute }]);
+    const saved: unknown[] = [];
+    const result = await runner.runSequence("member-agent", Array.from({ length: 9 }, () => ({ name: "echo", input: { text: "step" } })), {
+      onLimit: (partial) => { saved.push(...partial); },
+    });
+    expect(result).toEqual({ steps: 8, stopped: true, results: Array(8).fill("step") });
+    expect(saved).toHaveLength(8);
+    expect(execute).toHaveBeenCalledTimes(8);
+    await expect(runner.runForModel("member-agent", "echo", { text: "safe" })).resolves.toEqual({
+      untrusted: true, json: JSON.stringify("safe"), truncated: false,
+    });
+    expect(serializeAgentToolOutput("x".repeat(40_000))).toMatchObject({ untrusted: true, truncated: true, json: expect.stringContaining("TOOL_OUTPUT_LIMIT") });
   });
 
   it("bounds searchKnowledge and derives the library scope from the reloaded member", async () => {

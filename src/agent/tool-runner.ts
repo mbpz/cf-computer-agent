@@ -13,6 +13,25 @@ export interface AgentToolDefinition<Args, Result> {
 }
 
 const MAX_TOOL_ARGUMENT_BYTES = 16 * 1024;
+export const MAX_AGENT_TOOL_STEPS = 8;
+const MAX_TOOL_OUTPUT_BYTES = 32 * 1024;
+
+export interface AgentToolCall {
+  name: string;
+  input: unknown;
+}
+
+export interface AgentToolSequenceResult {
+  results: unknown[];
+  steps: number;
+  stopped: boolean;
+}
+
+export interface AgentToolModelOutput {
+  untrusted: true;
+  json: string;
+  truncated: boolean;
+}
 
 /**
  * The only entry point for agent tools. The member row is deliberately read
@@ -61,4 +80,43 @@ export class AgentToolRunner {
     }
     return tool.execute({ member }, args);
   }
+
+  async runSequence(
+    memberId: string,
+    calls: readonly AgentToolCall[],
+    options: { maxSteps?: number; onLimit?: (results: readonly unknown[]) => Promise<void> | void } = {},
+  ): Promise<AgentToolSequenceResult> {
+    const maxSteps = options.maxSteps ?? MAX_AGENT_TOOL_STEPS;
+    if (!Number.isSafeInteger(maxSteps) || maxSteps < 1 || maxSteps > MAX_AGENT_TOOL_STEPS) {
+      throw new AppError("AGENT_TOOL_ARGUMENTS_INVALID", "Agent tool arguments are invalid", 400);
+    }
+    const results: unknown[] = [];
+    for (const call of calls.slice(0, maxSteps)) results.push(await this.run(memberId, call.name, call.input));
+    const stopped = calls.length > maxSteps;
+    if (stopped) await options.onLimit?.(results);
+    return { results, steps: results.length, stopped };
+  }
+
+  async runForModel(memberId: string, name: string, input: unknown): Promise<AgentToolModelOutput> {
+    return serializeAgentToolOutput(await this.run(memberId, name, input));
+  }
+}
+
+export function serializeAgentToolOutput(value: unknown, maxBytes = MAX_TOOL_OUTPUT_BYTES): AgentToolModelOutput {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 256 || maxBytes > MAX_TOOL_OUTPUT_BYTES) {
+    throw new RangeError("Invalid tool output limit");
+  }
+  let json: string;
+  try {
+    json = JSON.stringify(value) ?? "null";
+  } catch {
+    json = JSON.stringify({ truncated: true, reason: "TOOL_OUTPUT_UNSERIALIZABLE" });
+    return { untrusted: true, json, truncated: true };
+  }
+  if (new TextEncoder().encode(json).byteLength <= maxBytes) return { untrusted: true, json, truncated: false };
+  return {
+    untrusted: true,
+    json: JSON.stringify({ truncated: true, reason: "TOOL_OUTPUT_LIMIT" }),
+    truncated: true,
+  };
 }
