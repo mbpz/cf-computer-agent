@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createCompareSourcesTool, createListSourceConflictsTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -133,5 +133,25 @@ describe("AgentToolRunner", () => {
     expect(listConflicts).toHaveBeenCalledWith("source-version-1", "member-agent", 8);
     await expect(runner.run("member-agent", "listSourceConflicts", { sourceVersionId: "source-version-1", spaceId: "space-1" }))
       .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+  });
+
+  it("creates an owner-bound markdown draft without entering publish flow", async () => {
+    const members = repository();
+    const createDraft = vi.fn(async (memberId: string, input: Record<string, unknown>) => ({
+      id: "draft-1", submitterId: memberId, ...input, requestedCollectionId: null,
+      requestedVisibility: "shared", kind: "markdown", status: "draft",
+      createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:00.000Z",
+    }));
+    const runner = new AgentToolRunner(members, [createNoteDraftTool({ createDraft } as never)]);
+
+    await expect(runner.run("member-agent", "createNoteDraft", {
+      requestedSpaceId: "space-1", title: "Draft title", content: "Draft body",
+    })).resolves.toMatchObject({ submitterId: "member-agent", status: "draft", kind: "markdown" });
+    expect(createDraft).toHaveBeenCalledWith("member-agent", {
+      requestedSpaceId: "space-1", kind: "markdown", title: "Draft title", content: "Draft body",
+    });
+    await expect(runner.run("member-agent", "createNoteDraft", {
+      requestedSpaceId: "space-1", title: "", content: "Draft body",
+    })).rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });

@@ -55,7 +55,7 @@ import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
 import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
-import { createCompareSourcesTool, createListSourceConflictsTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
+import { createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
 
 export interface AppDependencies {
@@ -148,11 +148,13 @@ function createRequestServices(
   const tags = new TagsService(new TagsRepository(env.DB));
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
   const sources = new SourcesRepository(env.DB);
+  const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
     createReadSourceTool(library),
     createCompareSourcesTool(library),
     createListSourceConflictsTool(sources),
+    createNoteDraftTool(submissions),
   ]);
   const assets = new AssetService(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
@@ -208,7 +210,7 @@ function createRequestServices(
     }),
     sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
-    submissions: new SubmissionsService(new SubmissionsRepository(env.DB, audit)),
+    submissions,
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),

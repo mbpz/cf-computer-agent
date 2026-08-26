@@ -173,6 +173,23 @@ describe("AgentSession Durable Object", () => {
       result: { items: [expect.objectContaining({ sourceVersionId: "agent-version-2", spaceId: "default", contentSha256: "a".repeat(64) })] },
     });
 
+    const draftContext = createExecutionContext();
+    const draftResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/createNoteDraft`, {
+      method: "POST",
+      headers: {
+        cookie: `__Host-memory-session=${session.token}`,
+        origin: APP_CONFIG.canonicalOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ requestedSpaceId: "default", title: "Agent draft", content: "Private working note" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, draftContext);
+    await waitOnExecutionContext(draftContext);
+    expect(draftResponse.status).toBe(200);
+    await expect(draftResponse.json()).resolves.toMatchObject({
+      tool: "createNoteDraft",
+      result: { submitterId: "agent-member", status: "draft", kind: "markdown", title: "Agent draft" },
+    });
+
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'agent-member'").run();
     const disabledToolContext = createExecutionContext();
     const disabledToolResponse = await app.fetch!(new Request(`https://example.test/api/agent/sessions/${body.session.id}/tools/searchKnowledge`, {

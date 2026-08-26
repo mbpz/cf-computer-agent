@@ -5,6 +5,8 @@ import type { RevisionDiffResult } from "../library/revision-diff";
 import type { AgentToolDefinition } from "./tool-runner";
 import type { SourcesRepository } from "../sources/repository";
 import type { SourceConflict } from "../sources/types";
+import type { Submission } from "../submissions/types";
+import type { SubmissionsService } from "../submissions/service";
 
 const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
 
@@ -74,6 +76,25 @@ export function createListSourceConflictsTool(
   };
 }
 
+export function createNoteDraftTool(
+  submissions: SubmissionsService,
+): AgentToolDefinition<unknown, Submission> {
+  return {
+    name: "createNoteDraft",
+    parse: parseNoteDraftInput,
+    execute: async ({ member }, input) => {
+      const value = input as { requestedSpaceId: string; requestedCollectionId?: string; title: string; content: string };
+      return submissions.createDraft(member.id, {
+        requestedSpaceId: value.requestedSpaceId,
+        ...(value.requestedCollectionId === undefined ? {} : { requestedCollectionId: value.requestedCollectionId }),
+        kind: "markdown",
+        title: value.title,
+        content: value.content,
+      });
+    },
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);
@@ -130,6 +151,29 @@ function parseSourceConflictInput(value: unknown): unknown {
     throw invalidToolInput();
   }
   return { sourceVersionId: value.sourceVersionId };
+}
+
+function parseNoteDraftInput(value: unknown): unknown {
+  if (!isPlainRecord(value)) throw invalidToolInput();
+  const keys = Object.keys(value).sort();
+  if (keys.join(",") !== "content,requestedSpaceId,title" && keys.join(",") !== "content,requestedCollectionId,requestedSpaceId,title") {
+    throw invalidToolInput();
+  }
+  if (typeof value.requestedSpaceId !== "string" || !ID.test(value.requestedSpaceId)
+    || typeof value.title !== "string" || value.title.trim().length === 0 || [...value.title].length > 200
+    || typeof value.content !== "string" || value.content.trim().length === 0
+    || new TextEncoder().encode(value.content).byteLength > 128 * 1024
+    || /[\p{Cc}\p{Cf}]/u.test(value.content)) {
+    throw invalidToolInput();
+  }
+  if (value.requestedCollectionId !== undefined
+    && (typeof value.requestedCollectionId !== "string" || !ID.test(value.requestedCollectionId))) throw invalidToolInput();
+  return {
+    requestedSpaceId: value.requestedSpaceId,
+    ...(value.requestedCollectionId === undefined ? {} : { requestedCollectionId: value.requestedCollectionId }),
+    title: value.title.trim(),
+    content: value.content,
+  };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
