@@ -167,6 +167,11 @@ export async function buildKnowledgeExport(input: KnowledgeExportInput): Promise
   return { manifest: { ...manifestBase, integritySha256 }, records, citations };
 }
 
+export async function computeKnowledgeExportIntegrity(pkg: KnowledgeExportPackage): Promise<string> {
+  const { integritySha256: _ignored, ...manifest } = pkg.manifest;
+  return sha256Hex(stableJson({ records: pkg.records, citations: pkg.citations, manifest }));
+}
+
 function validateInput(input: KnowledgeExportInput): void {
   if (!isSafeId(input.exportId) || !isIso(input.generatedAt) || !isSafeText(input.schemaFingerprint)) throw new TypeError("Export header is invalid");
   for (const collection of [input.members, input.spaces, input.collections, input.submissions, input.reviews, input.sources, input.sourceVersions, input.knowledgeItems, input.revisions, input.researchRuns, input.researchReports, input.privateNotes, input.assets]) {

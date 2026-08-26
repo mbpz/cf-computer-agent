@@ -359,7 +359,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-016` P0/M1 keyset pagination 全局门禁；状态：L/W；验收：所有列表 default/max 有界；Submit/Search 的 Space/Collection/Tag 第 51 项仅由可访问的显式 Load more 获取，去重、single-flight 且抑制 stale scope 结果。
 - [x] `OPS-017` P0/M7 全量导出；状态：L；验收：manifest、metadata、Revision、原件和引用映射。证据：`src/ops/export-package.ts`、`test/unit/export-package.test.ts`；命令：`rtk npx vitest run test/unit/export-package.test.ts && rtk npm run typecheck`。当前为离线导出包构建器，支持原件元数据/可选内联字节；D1 远程读取、R2 对象扫描和生产导出仍需后续 OPS-022/付费资源边界授权。
 - [x] `OPS-018` P0/M7 增量导出；状态：L；验收：基于稳定 cursor/checkpoint，无漏项。证据：`src/ops/export-cursor.ts`、`test/unit/export-cursor.test.ts`；命令：`rtk npx vitest run test/unit/export-cursor.test.ts && rtk npm run typecheck`。游标绑定 exportId/category/snapshotSha256，跨快照或跨类别复用 fail-closed；当前为离线分页原语，尚未连接 D1 远程批量读取。
-- [ ] `OPS-019` P0/M7 导入 dry-run；验收：schema、容量、冲突和权限报告，不写数据。
+- [x] `OPS-019` P0/M7 导入 dry-run；状态：L；验收：schema、容量、冲突和权限报告，不写数据。证据：`src/ops/import-dry-run.ts`、`test/unit/import-dry-run.test.ts`；命令：`rtk npx vitest run test/unit/import-dry-run.test.ts && rtk npm run typecheck`。校验导出完整性、记录计数、管理员权限、ID 冲突和容量，报告明确 `writes: none`；当前未连接远程恢复写入。
 - [ ] `OPS-020` P0/M7 新环境恢复；验收：身份映射、内容、Revision、原件和引用一致。
 - [ ] `OPS-021` P0/M7 FTS/Vectorize 重建；验收：权威数据不改、结果与导出一致。
 - [ ] `OPS-022` P0/M7 定期恢复演练；验收：真实命令、时间、差异和失败处理记录。
