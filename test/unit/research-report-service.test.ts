@@ -52,4 +52,12 @@ describe("ResearchReportService", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]?.version).toBe(2);
   });
+
+  it("keeps research generation to one bounded AI call and wall clock", async () => {
+    let calls = 0;
+    const result = await new ResearchReportService(repository(), { run: async () => { calls += 1; return { response: JSON.stringify({ title: "报告", sections: [{ heading: "结论", body: "有依据。", citationIds: ["c-1"] }], insufficientEvidence: false }) }; } }).generate(scope, "run-1", sources);
+    expect(result.sections).toHaveLength(1);
+    expect(calls).toBe(1);
+    await expect(new ResearchReportService(repository(), { run: async () => new Promise(() => undefined) }, 1).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "AI_UNAVAILABLE", retryable: true });
+  });
 });
