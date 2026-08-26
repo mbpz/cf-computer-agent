@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Member } from "../../src/members/types";
 import { AgentToolRunner, type AgentToolDefinition } from "../../src/agent/tool-runner";
-import { createSearchKnowledgeTool } from "../../src/agent/tools";
+import { createReadSourceTool, createSearchKnowledgeTool } from "../../src/agent/tools";
 
 const activeMember: Member = {
   id: "member-agent",
@@ -71,6 +71,30 @@ describe("AgentToolRunner", () => {
       { query: "  durable objects  ", spaceId: "space-1", limit: 8 },
     );
     await expect(runner.run("member-agent", "searchKnowledge", { query: "x", extra: true }))
+      .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+  });
+
+  it("reads a stable source revision through the authorization-scoped library", async () => {
+    const members = repository();
+    const revision = {
+      id: "revision-1",
+      knowledgeItemId: "knowledge-1",
+      sourceVersionId: "source-version-1",
+      title: "Source",
+      markdown: "# Source",
+      chunks: [{ id: "chunk-1", citationId: "citation-1", ordinal: 0, headingPath: ["Source"], startLine: 1, endLine: 1, location: { kind: "pdf", page: 3 } }],
+    };
+    const read = vi.fn(async () => revision);
+    const runner = new AgentToolRunner(members, [createReadSourceTool({ revision: read } as never)]);
+
+    await expect(runner.run("member-agent", "readSource", { knowledgeItemId: "knowledge-1", revisionId: "revision-1" }))
+      .resolves.toEqual(revision);
+    expect(read).toHaveBeenCalledWith(
+      { memberId: "member-agent", role: "contributor" },
+      "knowledge-1",
+      "revision-1",
+    );
+    await expect(runner.run("member-agent", "readSource", { knowledgeItemId: "knowledge-1" }))
       .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 });

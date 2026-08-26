@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { LibraryService } from "../library/service";
-import type { LibraryScope, SearchPage, SearchRequest } from "../library/types";
+import type { LibraryScope, RevisionDetail, SearchPage, SearchRequest } from "../library/types";
 import type { AgentToolDefinition } from "./tool-runner";
 
 const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
@@ -23,6 +23,19 @@ export function createSearchKnowledgeTool(
   };
 }
 
+export function createReadSourceTool(
+  library: LibraryService,
+): AgentToolDefinition<unknown, RevisionDetail> {
+  return {
+    name: "readSource",
+    parse: parseReadSourceInput,
+    execute: async ({ member }, input) => {
+      const { knowledgeItemId, revisionId } = input as { knowledgeItemId: string; revisionId: string };
+      return library.revision({ memberId: member.id, role: member.role }, knowledgeItemId, revisionId);
+    },
+  };
+}
+
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
   const allowed = new Set(["query", "spaceId", "collectionId"]);
@@ -38,6 +51,18 @@ function parseSearchKnowledgeInput(value: unknown): unknown {
     ...(value.collectionId === undefined ? {} : { collectionId: value.collectionId }),
     limit: 8,
   } satisfies SearchRequest;
+}
+
+function parseReadSourceInput(value: unknown): unknown {
+  if (!isPlainRecord(value)
+    || Object.keys(value).length !== 2
+    || typeof value.knowledgeItemId !== "string"
+    || typeof value.revisionId !== "string"
+    || !ID.test(value.knowledgeItemId)
+    || !ID.test(value.revisionId)) {
+    throw invalidToolInput();
+  }
+  return { knowledgeItemId: value.knowledgeItemId, revisionId: value.revisionId };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
