@@ -10,6 +10,7 @@ import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } fr
 import type { TagsService } from "../tags/service";
 import type { SavedViewsService } from "../saved-views/service";
 import type { ReviewCommentsService } from "../review-comments/service";
+import type { AuditRepository } from "../audit/repository";
 
 export interface MemberRouteServices {
   assets: AssetService;
@@ -19,6 +20,7 @@ export interface MemberRouteServices {
   savedViews: SavedViewsService;
   reviewComments: ReviewCommentsService;
   memberRecords: Pick<import("../members/repository").MembersRepository, "listPage">;
+  audit: Pick<AuditRepository, "listMemberActivity">;
 }
 
 export async function routeMemberApi(
@@ -34,6 +36,15 @@ export async function routeMemberApi(
     requireNoQuery(url);
     const page = await services.memberRecords.listPage(50, undefined, "active");
     return jsonResponse({ items: page.items.map((member) => ({ id: member.id, email: member.email, role: member.role })) }, 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/activity") {
+    requireCapability(principal, "knowledge:read");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const member = requireMember(principal);
+    requireExactQuery(url, ["limit", "cursor"]);
+    const query = pageRequest(url);
+    return jsonResponse(await services.audit.listMemberActivity(member.memberId, member.role, query), 200, context.requestId);
   }
 
   if (url.pathname === "/api/assets") {

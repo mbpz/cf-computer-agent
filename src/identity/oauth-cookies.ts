@@ -42,7 +42,10 @@ export function sessionCookie(value: string): string {
 
 export function clearCookie(name: string): string {
   if (!COOKIE_NAME.test(name)) throw new Error("Cookie name is invalid");
-  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+  // Keep both deletion signals. Max-Age is authoritative per RFC 6265, while
+  // Expires covers older browser/proxy cookie stores that only evict an
+  // existing cookie after seeing an expired date.
+  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 }
 
 function serializeCookie(name: string, value: string, maxAge: number): string {

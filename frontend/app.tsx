@@ -28,6 +28,7 @@ import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/
 import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
+import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./components/review/review-detail-data";
@@ -85,6 +86,15 @@ export function App() {
     setLogoutError(null);
     try {
       await postLogout(session.logoutUrl);
+      // Do not present a local signed-out screen until the server confirms
+      // that this browser no longer has an active session. This catches stale
+      // cookies or an edge that failed to apply the Set-Cookie deletion.
+      try {
+        await sessionSnapshot();
+        throw new Error("LOGOUT_NOT_CONFIRMED");
+      } catch (error: unknown) {
+        if (!isAnonymousSessionError(error)) throw error;
+      }
       // Return to the anonymous shell. Starting OAuth here would immediately
       // sign the user back in when GitHub still has an active browser session.
       setSession(null);
@@ -210,6 +220,8 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
   const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
   const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
+  const [activity, setActivity] = useState<WorkspaceActivityItem[]>([]);
+  const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
   const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
     setState((previous) => ({
       kind: "ready",
@@ -223,8 +235,18 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
     void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
+    void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
     return () => { active = false; };
   }, []);
+  const loadMoreActivity = () => {
+    if (!activityNextCursor) return;
+    const cursor = activityNextCursor;
+    setActivityNextCursor(null);
+    void loadWorkspaceActivity({ cursor }).then((page) => {
+      setActivity((items) => [...items, ...page.items]);
+      setActivityNextCursor(page.nextCursor);
+    }).catch(() => setActivityNextCursor(cursor));
+  };
   useEffect(() => {
     const controller = createKnowledgeRequestController();
     controllerRef.current = controller;
@@ -247,7 +269,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
     });
   };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} />;
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} />;
 }
 
 function SearchRoute({ locale }: { locale: LocaleRuntime }) {

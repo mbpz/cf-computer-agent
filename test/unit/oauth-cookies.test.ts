@@ -53,10 +53,10 @@ describe("OAuth cookie primitives", () => {
 
   it("clears host-only cookies immediately", () => {
     expect(clearCookie("__Host-oauth-state")).toBe(
-      "__Host-oauth-state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+      "__Host-oauth-state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     );
     expect(clearCookie("__Host-memory-session")).toBe(
-      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     );
   });
 

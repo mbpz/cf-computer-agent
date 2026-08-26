@@ -1,7 +1,8 @@
 import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
-import { assertAuditEventInput, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
+import { assertAuditEventInput, type ActivityPage, type ActivityItem, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
 
 type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
+type ActivityRow = Pick<AuditRow, "id" | "action" | "resource_type" | "resource_id" | "created_at">;
 const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class AuditRepository {
@@ -93,6 +94,46 @@ export class AuditRepository {
     ).all<AuditRow>();
     return page(rows.results.map(mapAuditRow), request.limit);
   }
+
+  async listMemberActivity(memberId: string, role: "admin" | "contributor", request: PageRequest): Promise<ActivityPage> {
+    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
+    const cursorSql = cursor === undefined ? "" : "AND (a.created_at < ? OR (a.created_at = ? AND a.id < ?))";
+    const rows = await this.db.prepare(
+      `SELECT a.id, a.action, a.resource_type, a.resource_id, a.created_at
+       FROM audit_events AS a
+       WHERE (
+         (a.actor_kind = 'member' AND a.actor_id = ? AND a.action IN (
+           'submission.created', 'submission.draft_saved', 'submission.rejected',
+           'submission.revision_requested', 'submission.resubmitted', 'knowledge.downloaded'
+         ))
+         OR (
+           a.resource_type = 'knowledge' AND a.action IN ('knowledge.published', 'knowledge.rolled_back', 'knowledge.restored')
+           AND EXISTS (
+             SELECT 1
+             FROM knowledge_items AS k
+             INNER JOIN spaces AS s ON s.id = k.space_id
+             INNER JOIN revisions AS r ON r.id = k.current_revision_id
+             LEFT JOIN collections AS c ON c.id = k.collection_id
+             WHERE k.id = a.resource_id
+               AND k.status = 'active' AND s.status = 'active'
+               AND (k.collection_id IS NULL OR (c.id = k.collection_id AND c.space_id = k.space_id AND c.status = 'active'))
+               AND (r.visibility = 'shared' OR (? = 'admin' AND r.visibility = 'admin_only'))
+           )
+         )
+       ) ${cursorSql}
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT ?`,
+    ).bind(
+      memberId, role,
+      ...(cursor === undefined ? [] : [new Date(cursor.sort).toISOString(), new Date(cursor.sort).toISOString(), cursor.id]),
+      request.limit + 1,
+    ).all<ActivityRow>();
+    const items = rows.results.slice(0, request.limit).map(mapActivityRow);
+    return {
+      items,
+      ...(rows.results.length > request.limit && items.at(-1) ? { nextCursor: encodePageCursor({ sort: Date.parse(items.at(-1)!.createdAt), id: items.at(-1)!.id }) } : {}),
+    };
+  }
 }
 
 const auditSelect = "SELECT id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at FROM audit_events";
@@ -101,4 +142,17 @@ function page(items: AuditEvent[], limit: number): AuditPage { const result = it
 function mapAuditRow(row: AuditRow): AuditEvent {
   const parsed = JSON.parse(row.metadata) as CreateAuditEvent["metadata"];
   return assertAuditEventInput({ id: row.id, actorKind: row.actor_kind, actorId: row.actor_id, action: row.action, resourceType: row.resource_type, resourceId: row.resource_id, metadata: parsed, createdAt: row.created_at });
+}
+
+function mapActivityRow(row: ActivityRow): ActivityItem {
+  if (!isActivityAction(row.action) || (row.resource_type !== "submission" && row.resource_type !== "knowledge") || !row.resource_id) {
+    throw new Error("Audit activity row is invalid");
+  }
+  return { id: row.id, action: row.action, resourceType: row.resource_type, resourceId: row.resource_id, createdAt: row.created_at };
+}
+
+function isActivityAction(value: string): value is ActivityItem["action"] {
+  return value === "submission.created" || value === "submission.draft_saved" || value === "submission.rejected"
+    || value === "submission.revision_requested" || value === "submission.resubmitted" || value === "knowledge.published"
+    || value === "knowledge.rolled_back" || value === "knowledge.restored" || value === "knowledge.downloaded";
 }

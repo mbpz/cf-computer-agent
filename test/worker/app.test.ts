@@ -166,8 +166,8 @@ function cookieHeader(cookies: string[]): string {
 
 function clearedOAuthCookies(): string[] {
   return [
-    "__Host-oauth-state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
-    "__Host-oauth-verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    "__Host-oauth-state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "__Host-oauth-verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
   ];
 }
 
@@ -442,7 +442,7 @@ describe("Worker application", () => {
     });
     expect(logout.status).toBe(204);
     expect(setCookies(logout)).toEqual([
-      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     ]);
 
     const loggedOut = await fetchApp(app, "/api/session", { headers: { cookie: sessionPair } });
@@ -499,7 +499,7 @@ describe("Worker application", () => {
       },
     });
     expect(setCookies(logout)).toEqual([
-      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+      "__Host-memory-session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
     ]);
     expect(failure.deleteAttempts).toBe(1);
   });

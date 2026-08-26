@@ -82,6 +82,27 @@ export type AuditEvent = CreateAuditEvent;
 export type AuditPage = Page<AuditEvent>;
 export type AuditPageRequest = PageRequest;
 
+export type ActivityAction =
+  | "submission.created"
+  | "submission.draft_saved"
+  | "submission.rejected"
+  | "submission.revision_requested"
+  | "submission.resubmitted"
+  | "knowledge.published"
+  | "knowledge.rolled_back"
+  | "knowledge.restored"
+  | "knowledge.downloaded";
+
+export interface ActivityItem {
+  id: string;
+  action: ActivityAction;
+  resourceType: "submission" | "knowledge";
+  resourceId: string;
+  createdAt: string;
+}
+
+export type ActivityPage = Page<ActivityItem>;
+
 export function assertAuditEventInput(input: unknown): CreateAuditEvent {
   const event = readPlainDataObject(input, new Set([
     "id", "actorKind", "actorId", "action", "resourceType", "resourceId", "metadata", "createdAt",
