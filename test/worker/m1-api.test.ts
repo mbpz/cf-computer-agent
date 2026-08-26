@@ -50,6 +50,19 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "knowledge_timeline") {
+      return {
+        response: JSON.stringify({
+          events: context.sources.map((source, index) => ({
+            date: index === 0 ? "2024-01-02" : "2024-02-03",
+            title: "Documented milestone",
+            description: "Launch latency is documented.",
+            citationIds: [source.citationId],
+          })),
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1219,6 +1232,25 @@ describe("M1 trusted knowledge HTTP journey", () => {
     const result = await response.json<{ items: Array<{ question: string; answer: string | null; citations: Array<{ citationId: string }>; gap: boolean }> }>();
     expect(result.items).toEqual([expect.objectContaining({ answer: "Launch latency is documented.", gap: false, citations: [expect.objectContaining({ citationId: hit!.citationId })] })]);
     expect(JSON.stringify(result)).not.toContain("faqmarker source evidence");
+  });
+
+  it("extracts a cited timeline without forcing unknown dates into an order", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Timeline source", "timelinemarker source evidence", "shared", "timeline-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=timelinemarker");
+    const hit = (await search.json<{ items: Array<{ citationId: string; knowledgeItemId: string }> }>()).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const response = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/timeline`, {
+      method: "POST",
+      body: JSON.stringify({ citationIds: [hit!.citationId] }),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json<{ events: Array<{ title: string; citations: Array<{ citationId: string }> }>; sortStatus: string }>();
+    expect(result.sortStatus).toBe("sorted");
+    expect(result.events).toEqual([expect.objectContaining({ title: "Documented milestone", citations: [expect.objectContaining({ citationId: hit!.citationId })] })]);
+    expect(JSON.stringify(result)).not.toContain("timelinemarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
