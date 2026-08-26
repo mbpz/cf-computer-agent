@@ -58,7 +58,7 @@
 - [ ] `ING-015` P2/M3 相似重复候选；验收：只作建议，不自动合并。
 - [x] `ING-016` P1/M2 原件下载授权；状态：L/W；验收：每次 owner/admin 下载重新查询资产 owner 与 parse 状态，跨 owner 不泄露存在性，parsed 未完成稳定拒绝。证据：`src/assets/service.ts`、`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
 - [x] `ING-017` P1/M2 Content-Disposition 安全文件名；状态：L/W；验收：下载响应使用 ASCII fallback + RFC5987 编码，去除 CRLF、路径和引号注入。证据：`src/routes/member.ts`、`src/routes/admin.ts`、`test/worker/m2-assets.test.ts`。
-- [ ] `ING-018` P1/M7 原件校验任务；验收：定期抽检 hash 并报告损坏，不自动删除。
+- [x] `ING-018` P1/M7 原件校验任务；状态：L；验收：定期抽检 hash 并报告损坏，不自动删除。证据：`src/ops/original-validation.ts`、`test/unit/original-validation.test.ts`；命令：`rtk npx vitest run test/unit/original-validation.test.ts && rtk npm run typecheck`。报告区分 missing/size_mismatch/hash_mismatch/unverified，删除计数固定为 0；无 R2 binding 时标记 `unbound`。
 
 ## PAR — 文档解析
 
