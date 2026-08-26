@@ -382,7 +382,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ### M2
 
-- [ ] `GATE-M2` 支持矩阵所有格式的正常/损坏/空/超限 fixture 通过；R2/Queue/AI 降级可见且可恢复。
+- [ ] `GATE-M2` 状态：degraded_verified（免费层）；`rtk npm run test:m2` 已覆盖支持矩阵所有格式的正常/损坏/空/超限 fixture、Numbers/R2 fail-closed 与任务恢复。完整接受仍要求启用 R2/Queue 后的生产对象、任务和 AI 降级证据，当前不宣称完成。证据：`package.json`、`docs/operations/m2-asset-ingestion.md`；命令：`rtk npm run test:m2`。
 
 ### M3
 

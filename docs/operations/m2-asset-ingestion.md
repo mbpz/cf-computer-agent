@@ -2,6 +2,16 @@
 
 本切片包含两种明确部署档位：默认的**免费文本模式**不声明 R2 binding，文本、Markdown、CSV、JSON 和代码仍可通过提交页进入 D1/DO；启用 R2 订阅后才开启私有二进制原件和解析任务。两种档位都不生成公开对象 URL，也不引入 Queue。适用范围仍是 Cloudflare 免费层、5–20 名受邀成员。
 
+## 免费层 M2 回归门禁
+
+在不绑定支付、不声明 R2/Queue 的部署中，使用下面的本地门禁验证完整格式矩阵和降级边界：
+
+```bash
+rtk npm run test:m2
+```
+
+该命令覆盖 TXT/Markdown/代码、CSV/HTML/XML、PDF、DOCX/XLSX/PPTX、ODT/ODS 的正常、损坏、空内容和超限 fixture，并验证 Numbers 返回 `ASSET_NUMBERS_PARSE_UNSUPPORTED`、二进制入口返回 `ASSET_STORAGE_NOT_CONFIGURED`、解析失败可重试/替代/取消/恢复。它不能替代启用 R2/Queue 后的生产证据，因此 `GATE-M2` 在免费层仍保持未接受状态。
+
 ## 免费文本模式（当前生产默认）
 
 免费文本模式的 `wrangler.jsonc` 不包含 `r2_buckets`。Worker 创建 `AssetService` 时允许 `ORIGINALS` 缺失，并在任何会读取或写入对象的动作前返回稳定错误：
