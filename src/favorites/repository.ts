@@ -11,6 +11,7 @@ type FavoriteRow = {
   visibility: "shared" | "admin_only";
   published_at: string;
   created_at: string;
+  last_visited_at: string | null;
 };
 
 type FavoriteCursor = { v: 1; createdAt: string; knowledgeItemId: string };
@@ -81,12 +82,13 @@ const readableSql = `
   LIMIT 1`;
 const favoriteSelect = `
   SELECT f.knowledge_item_id, k.space_id, k.collection_id, r.id AS revision_id,
-         r.title, r.visibility, r.published_at, f.created_at
+         r.title, r.visibility, r.published_at, f.created_at, v.last_visited_at
   FROM knowledge_favorites f
   JOIN knowledge_items k ON k.id = f.knowledge_item_id
   JOIN revisions r ON r.id = k.current_revision_id AND r.knowledge_item_id = k.id
   JOIN spaces s ON s.id = k.space_id AND s.status = 'active'
   LEFT JOIN collections c ON c.id = k.collection_id AND c.space_id = k.space_id AND c.status = 'active'
+  LEFT JOIN knowledge_visits v ON v.member_id = f.member_id AND v.knowledge_item_id = f.knowledge_item_id
 `;
 
 function mapRow(row: FavoriteRow | null): KnowledgeFavorite | null { return row ? mapRowRequired(row) : null; }
@@ -100,6 +102,7 @@ function mapRowRequired(row: FavoriteRow): KnowledgeFavorite {
     visibility: row.visibility,
     publishedAt: row.published_at,
     createdAt: row.created_at,
+    completed: typeof row.last_visited_at === "string" && row.last_visited_at >= row.created_at,
   };
 }
 

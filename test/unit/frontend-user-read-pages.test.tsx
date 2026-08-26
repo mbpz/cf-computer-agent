@@ -39,6 +39,17 @@ describe("React read-only user pages", () => {
     expect(html).not.toContain("undefined");
   });
 
+  it("renders a private to-read list with completion state", () => {
+    const html = renderToStaticMarkup(<KnowledgePage
+      locale={createLocaleRuntime({ navigatorLanguage: "en" })}
+      state={{ kind: "ready", items: [], nextCursor: null }}
+      favorites={[{ id: "k1", title: "Guide", createdAt: "2026-08-25T00:00:00.000Z", completed: false, visibility: "shared" }]}
+    />);
+    expect(html).toContain("Saved to read");
+    expect(html).toContain("Open the item to mark it as read.");
+    expect(html).not.toContain("undefined");
+  });
+
   it("passes reader Markdown through the supplied safe renderer as content", () => {
     const renderer = vi.fn(() => "<p>safe</p>");
     const html = renderToStaticMarkup(<KnowledgeReaderPage revision={{ id: "r1", title: "Guide", markdown: "# Safe" }} renderMarkdown={renderer} />);

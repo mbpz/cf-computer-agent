@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadKnowledgeFavorite, setKnowledgeFavorite } from "../../frontend/lib/knowledge-reader-data";
+import { loadFavoriteKnowledge } from "../../frontend/lib/knowledge-data";
 
-describe("frontend favorite data boundary", () => {
-  it("uses the member-scoped favorite endpoints and rejects malformed writes", async () => {
-    const requester = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ favorite: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ favorite: { knowledgeItemId: "knowledge-1" } }), { status: 201 }));
-    await expect(loadKnowledgeFavorite("knowledge-1", requester)).resolves.toBe(true);
-    await expect(setKnowledgeFavorite("knowledge-1", true, requester)).resolves.toBe(true);
-    expect(requester).toHaveBeenNthCalledWith(1, "/api/knowledge/knowledge-1/favorite", expect.objectContaining({ credentials: "same-origin" }));
-    expect(requester).toHaveBeenNthCalledWith(2, "/api/knowledge/knowledge-1/favorite", expect.objectContaining({ method: "PUT", credentials: "same-origin" }));
-    await expect(loadKnowledgeFavorite("../secret", requester)).rejects.toThrow("KNOWLEDGE_ID_INVALID");
+describe("frontend favorite reading list boundary", () => {
+  it("keeps private completion state and drops malformed rows", async () => {
+    const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [
+      { knowledgeItemId: "knowledge-1", title: "Guide", createdAt: "2026-08-26T00:00:00.000Z", completed: false, visibility: "shared" },
+      { knowledgeItemId: "broken", title: 42, createdAt: "", completed: "yes", visibility: "shared" },
+    ] }), { status: 200 }));
+    await expect(loadFavoriteKnowledge(requester)).resolves.toEqual([{ id: "knowledge-1", title: "Guide", createdAt: "2026-08-26T00:00:00.000Z", completed: false, visibility: "shared" }]);
+    expect(requester).toHaveBeenCalledWith("/api/knowledge/favorites?limit=20", expect.objectContaining({ credentials: "same-origin" }));
   });
 });
-

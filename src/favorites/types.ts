@@ -14,6 +14,7 @@ export interface KnowledgeFavorite {
   visibility: "shared" | "admin_only";
   publishedAt: string;
   createdAt: string;
+  completed: boolean;
 }
 
 export type FavoritePage = Page<KnowledgeFavorite>;
@@ -25,4 +26,3 @@ export interface FavoritesRepositoryPort {
   add(scope: FavoriteScope, knowledgeItemId: string, createdAt: string): Promise<KnowledgeFavorite>;
   remove(scope: FavoriteScope, knowledgeItemId: string): Promise<boolean>;
 }
-

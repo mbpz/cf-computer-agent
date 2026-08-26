@@ -17,7 +17,7 @@ import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
-import { createKnowledgeRequestController, loadRecentKnowledge, loadRecentResearch, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
+import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
@@ -245,6 +245,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteKnowledgeItem[]>([]);
   const [recentResearch, setRecentResearch] = useState<RecentResearchItem[]>([]);
   const [notes, setNotes] = useState<PrivateKnowledgeNoteListItem[]>([]);
   const [activity, setActivity] = useState<WorkspaceActivityItem[]>([]);
@@ -262,6 +263,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => {
     let active = true;
     void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
+    void loadFavoriteKnowledge().then((items) => { if (active) setFavorites(items); }).catch(() => { if (active) setFavorites([]); });
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
     void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
@@ -306,7 +308,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
     });
   };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
+  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
 function SearchRoute({ locale }: { locale: LocaleRuntime }) {

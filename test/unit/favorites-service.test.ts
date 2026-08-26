@@ -34,7 +34,7 @@ class FakeFavoritesRepository implements FavoritesRepositoryPort {
   }
   async list(): Promise<FavoritePage> { return { items: this.items }; }
   async add(_scope: FavoriteScope, knowledgeItemId: string, createdAt: string): Promise<KnowledgeFavorite> {
-    const item: KnowledgeFavorite = { knowledgeItemId, spaceId: "default", collectionId: null, revisionId: "revision-1", title: "Guide", visibility: "shared", publishedAt: createdAt, createdAt };
+    const item: KnowledgeFavorite = { knowledgeItemId, spaceId: "default", collectionId: null, revisionId: "revision-1", title: "Guide", visibility: "shared", publishedAt: createdAt, createdAt, completed: false };
     this.items.push(item); return item;
   }
   async remove(_scope: FavoriteScope, knowledgeItemId: string): Promise<boolean> {
@@ -43,4 +43,3 @@ class FakeFavoritesRepository implements FavoritesRepositoryPort {
     this.items.splice(index, 1); return true;
   }
 }
-

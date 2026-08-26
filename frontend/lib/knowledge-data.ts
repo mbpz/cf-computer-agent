@@ -21,6 +21,14 @@ export interface RecentKnowledgeItem {
   visitCount: number;
 }
 
+export interface FavoriteKnowledgeItem {
+  id: string;
+  title: string;
+  createdAt: string;
+  completed: boolean;
+  visibility: "shared" | "admin_only";
+}
+
 export type ResearchRunStatus = "draft" | "running" | "paused" | "completed" | "cancelled";
 export type ResearchQuotaState = "available" | "deferred_quota";
 export interface RecentResearchItem {
@@ -76,6 +84,19 @@ export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: A
       lastVisitedAt: item.lastVisitedAt,
       visitCount: Number.isSafeInteger(item.visitCount) && (item.visitCount as number) > 0 ? item.visitCount as number : 1,
     }];
+  });
+}
+
+export async function loadFavoriteKnowledge(requester: Fetcher = fetch, signal?: AbortSignal): Promise<FavoriteKnowledgeItem[]> {
+  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/favorites?limit=20", { requester, signal });
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const item = value as Record<string, unknown>;
+    if (typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
+      || typeof item.title !== "string" || typeof item.createdAt !== "string"
+      || (item.visibility !== "shared" && item.visibility !== "admin_only") || typeof item.completed !== "boolean") return [];
+    return [{ id: item.knowledgeItemId, title: item.title, createdAt: item.createdAt, completed: item.completed, visibility: item.visibility }];
   });
 }
 
