@@ -361,7 +361,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-018` P0/M7 增量导出；状态：L；验收：基于稳定 cursor/checkpoint，无漏项。证据：`src/ops/export-cursor.ts`、`test/unit/export-cursor.test.ts`；命令：`rtk npx vitest run test/unit/export-cursor.test.ts && rtk npm run typecheck`。游标绑定 exportId/category/snapshotSha256，跨快照或跨类别复用 fail-closed；当前为离线分页原语，尚未连接 D1 远程批量读取。
 - [x] `OPS-019` P0/M7 导入 dry-run；状态：L；验收：schema、容量、冲突和权限报告，不写数据。证据：`src/ops/import-dry-run.ts`、`test/unit/import-dry-run.test.ts`；命令：`rtk npx vitest run test/unit/import-dry-run.test.ts && rtk npm run typecheck`。校验导出完整性、记录计数、管理员权限、ID 冲突和容量，报告明确 `writes: none`；当前未连接远程恢复写入。
 - [x] `OPS-020` P0/M7 新环境恢复；状态：L；验收：身份映射、内容、Revision、原件和引用一致。证据：`src/ops/restore-plan.ts`、`test/unit/restore-plan.test.ts`；命令：`rtk npx vitest run test/unit/restore-plan.test.ts && rtk npm run typecheck`。输出依赖有序的恢复计划、身份冲突/缺失和引用完整性错误，明确 `writes: none`；尚未在新远程环境执行恢复。
-- [ ] `OPS-021` P0/M7 FTS/Vectorize 重建；验收：权威数据不改、结果与导出一致。
+- [x] `OPS-021` P0/M7 FTS/Vectorize 重建；状态：L；验收：权威数据不改、结果与导出一致。证据：`src/ops/index-rebuild-plan.ts`、`test/unit/index-rebuild-plan.test.ts`；命令：`rtk npx vitest run test/unit/index-rebuild-plan.test.ts && rtk npm run typecheck`。从导出 Revision/Chunk 输入重建确定性 FTS 文档，孤立 Revision fail-closed；Vectorize 无 binding 时明确 `skipped_unbound`，全程 `writes: none`。
 - [ ] `OPS-022` P0/M7 定期恢复演练；验收：真实命令、时间、差异和失败处理记录。
 - [ ] `OPS-023` P1/M8 结构化日志；验收：request ID、stage/reason、无正文/Secret/OAuth code。
 - [ ] `OPS-024` P1/M8 任务仪表盘；验收：backlog、age、failure、retry、quota。

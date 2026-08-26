@@ -34,6 +34,8 @@ export interface ExportChunk {
   startLine: number;
   endLine: number;
   body: string;
+  searchBody?: string;
+  indexField?: "body" | "code";
   location?: JsonValue;
 }
 
