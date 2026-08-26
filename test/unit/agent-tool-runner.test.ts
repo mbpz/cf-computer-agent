@@ -70,13 +70,17 @@ describe("AgentToolRunner", () => {
     const runner = new AgentToolRunner(members, [tool]);
 
     await expect(runner.run("member-agent", "searchKnowledge", {
-      query: "  durable objects  ", spaceId: "space-1",
+      query: "  durable objects  ",
     })).resolves.toEqual({ items: [{ citationId: "citation-1" }], degraded: false });
     expect(search).toHaveBeenCalledWith(
       { memberId: "member-agent", role: "contributor" },
-      { query: "  durable objects  ", spaceId: "space-1", limit: 8 },
+      { query: "  durable objects  ", limit: 8 },
     );
     await expect(runner.run("member-agent", "searchKnowledge", { query: "x", extra: true }))
+      .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+    await expect(runner.run("member-agent", "searchKnowledge", { query: "x".repeat(20_000) }))
+      .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
+    await expect(runner.run("member-agent", "searchKnowledge", { query: "ok", spaceId: "bad space" }))
       .rejects.toMatchObject({ code: "AGENT_TOOL_ARGUMENTS_INVALID", status: 400 });
   });
 

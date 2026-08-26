@@ -12,6 +12,8 @@ export interface AgentToolDefinition<Args, Result> {
   execute(context: AgentToolContext, args: Args): Promise<Result> | Result;
 }
 
+const MAX_TOOL_ARGUMENT_BYTES = 16 * 1024;
+
 /**
  * The only entry point for agent tools. The member row is deliberately read
  * on every invocation instead of trusting the session/principal snapshot.
@@ -41,6 +43,15 @@ export class AgentToolRunner {
 
     const tool = this.tools.get(name);
     if (!tool) throw new AppError("AGENT_TOOL_NOT_FOUND", "Agent tool was not found", 404);
+
+    try {
+      if (new TextEncoder().encode(JSON.stringify(input)).byteLength > MAX_TOOL_ARGUMENT_BYTES) {
+        throw new AppError("AGENT_TOOL_ARGUMENTS_INVALID", "Agent tool arguments are invalid", 400);
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError("AGENT_TOOL_ARGUMENTS_INVALID", "Agent tool arguments are invalid", 400);
+    }
 
     let args: unknown;
     try {

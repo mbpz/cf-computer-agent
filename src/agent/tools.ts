@@ -140,19 +140,12 @@ export function createSaveResearchDraftTool(
 
 function parseSearchKnowledgeInput(value: unknown): unknown {
   if (!isPlainRecord(value)) throw invalidToolInput();
-  const allowed = new Set(["query", "spaceId", "collectionId"]);
+  const allowed = new Set(["query"]);
   if (Object.keys(value).some((key) => !allowed.has(key))) throw invalidToolInput();
   if (typeof value.query !== "string" || value.query.trim().length === 0 || [...value.query].length > 4_000 || /[\p{Cc}\p{Cf}]/u.test(value.query)) {
     throw invalidToolInput();
   }
-  if (value.spaceId !== undefined && (typeof value.spaceId !== "string" || !ID.test(value.spaceId))) throw invalidToolInput();
-  if (value.collectionId !== undefined && (typeof value.collectionId !== "string" || !ID.test(value.collectionId))) throw invalidToolInput();
-  return {
-    query: value.query,
-    ...(value.spaceId === undefined ? {} : { spaceId: value.spaceId }),
-    ...(value.collectionId === undefined ? {} : { collectionId: value.collectionId }),
-    limit: 8,
-  } satisfies SearchRequest;
+  return { query: value.query, limit: 8 } satisfies SearchRequest;
 }
 
 function parseReadSourceInput(value: unknown): unknown {
