@@ -76,6 +76,8 @@ rtk npx vitest run test/worker/m2-assets.test.ts
 
 上传后点击“开始解析”会触发同一资产的 owner-scoped `POST /api/assets/<assetId>`。Worker 还配置了每 5 分钟一次的 Cron 扫描，自动领取最多 3 个 `queued/failed_retryable` 任务；手动触发和 Cron 使用同一协调器。当前解析器直接处理纯文本、Markdown、CSV、JSON 和 allowlist 代码扩展名；PDF、Office、HTML/XML 和图片在 `env.AI.toMarkdown` 可用时走 Markdown Conversion，再经过本地安全 parser；AI 不可用时任务保留为 `failed_retryable`，不会伪造解析结果。成功结果写入私有 R2 `parsed/<assetId>.md`，D1 任务进入 `succeeded`；非法内容进入 `failed_terminal`，临时 R2/D1/AI 故障最多允许 3 次领取。
 
+解析成功后，owner 可用 `POST /api/assets/<assetId>/submit` 将私有解析结果提交到审核流。请求只携带目标 Space/Collection、可见性、标题和 `Idempotency-Key`；Worker 从受控 R2 读取 parsed Markdown，不接受客户端替换正文。D1 migration `0028_asset_submission_pairing.sql` 为 `assets`/`submissions` 增加双向 nullable 关联及触发器：插入带 `asset_id` 的 Submission 前必须验证同 owner、`parse_jobs.status=succeeded` 且尚未配对，插入后立即回写 `assets.submission_id`；触发器或后续 Source/SourceVersion/审计写入失败会使整个 D1 batch 回滚。重复幂等键返回同一配对 Submission；已配对资产不能再次提交。免费文本模式没有 R2，因此该入口稳定返回 `ASSET_STORAGE_NOT_CONFIGURED`，不会创建任何记录。
+
 ## M2-6 下载与状态
 
 登录成员可通过 `GET /api/assets/<assetId>` 查看自己的资产与 ParseJob 状态；原件和解析结果均不生成公开 URL：

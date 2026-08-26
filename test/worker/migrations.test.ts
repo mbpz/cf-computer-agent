@@ -252,6 +252,7 @@ describe("Phase 1 control-plane migrations", () => {
       "updated_at:TEXT:1:NULL:0",
       "supersedes_submission_id:TEXT:0:NULL:0",
       "requested_visibility:TEXT:1:'shared':0",
+      "asset_id:TEXT:0:NULL:0",
     ], [
       "CHECK(kind IN ('text', 'markdown', 'code', 'rich_text'))",
       "CHECK(status IN ('draft', 'review_pending', 'published', 'rejected', 'revision_requested'))",
@@ -434,6 +435,7 @@ describe("Phase 1 control-plane migrations", () => {
       { from: "requested_space_id", table: "spaces", to: "id" },
       { from: "requested_collection_id", table: "collections", to: "id" },
       { from: "supersedes_submission_id", table: "submissions", to: "id" },
+      { from: "asset_id", table: "assets", to: "id" },
     ]);
     await expectForeignKeys("sources", [
       { from: "owner_id", table: "members", to: "id" },

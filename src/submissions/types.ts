@@ -26,6 +26,8 @@ export interface Submission {
   status: SubmissionStatus;
   title: string;
   content: string;
+  /** Set when a successfully parsed private asset is atomically paired. */
+  assetId?: string | null;
   /** Set only for an immutable resubmission of a prior terminal Submission. */
   supersedesSubmissionId?: string | null;
   review?: SubmissionReview;

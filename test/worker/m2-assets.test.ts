@@ -160,6 +160,61 @@ describe("M2 asset upload boundary", () => {
     await expect(testOriginals().get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
   });
 
+  it("atomically pairs a succeeded asset with its review submission", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "paired.txt", "idempotency-key": "asset-pair-1" },
+      body: "paired source content",
+    });
+    const uploaded = await upload.json<{ asset: { id: string }; job: { status: string } }>();
+    await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+
+    const paired = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "asset-pair-submission-1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared", title: "Paired source",
+      }),
+    });
+    expect(paired.status).toBe(201);
+    const body = await paired.json<{ submission: { id: string; assetId?: string; status: string } }>();
+    expect(body.submission).toMatchObject({ assetId: uploaded.asset.id, status: "review_pending" });
+    await expect(env.DB.prepare("SELECT submission_id FROM assets WHERE id = ?").bind(uploaded.asset.id).first())
+      .resolves.toEqual({ submission_id: body.submission.id });
+    await expect(env.DB.prepare("SELECT asset_id FROM submissions WHERE id = ?").bind(body.submission.id).first())
+      .resolves.toEqual({ asset_id: uploaded.asset.id });
+
+    const replay = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "asset-pair-submission-1" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared", title: "Paired source",
+      }),
+    });
+    expect(replay.status).toBe(201);
+    await expect(replay.json()).resolves.toMatchObject({ submission: { id: body.submission.id, assetId: uploaded.asset.id } });
+  });
+
+  it("does not create a submission while an asset parse is still queued", async () => {
+    const upload = await memberApi("asset-owner", "/api/assets", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-asset-name": "queued.txt", "idempotency-key": "asset-pair-queued" },
+      body: "not ready",
+    });
+    const uploaded = await upload.json<{ asset: { id: string } }>();
+    const response = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "idempotency-key": "asset-pair-submission-queued" },
+      body: JSON.stringify({
+        requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared", title: "Too soon",
+      }),
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "ASSET_RESULT_NOT_READY" } });
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM submissions WHERE asset_id = ?").bind(uploaded.asset.id).first())
+      .resolves.toEqual({ count: 0 });
+  });
+
   it("lets the failed-parse owner submit bounded Markdown as a reviewable alternative", async () => {
     const upload = await memberApi("asset-owner", "/api/assets", {
       method: "POST",

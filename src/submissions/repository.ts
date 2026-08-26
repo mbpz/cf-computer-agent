@@ -21,6 +21,7 @@ export interface PersistedSubmission extends Submission { idempotencyKey: string
 
 export interface CreateSubmissionWithSourceVersion {
   submission: PersistedSubmission;
+  assetId?: string;
   source: Source;
   sourceVersion: SourceVersion;
   audit: CreateAuditEvent;
@@ -49,6 +50,7 @@ type SubmissionRow = {
   status: Submission["status"];
   title: string;
   content: string;
+  asset_id: string | null;
   created_at: string;
   updated_at: string;
   review_decision: SubmissionReview["decision"] | null;
@@ -173,8 +175,8 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     try {
       results = await this.db.batch([
         this.db.prepare(
-          `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, requested_visibility, kind, status, title, content, idempotency_key, created_at, updated_at)
-           SELECT ?, ?, ?, ?, ?, ?, 'review_pending', ?, ?, ?, ?, ?
+          `INSERT INTO submissions (id, submitter_id, requested_space_id, requested_collection_id, requested_visibility, kind, status, title, content, idempotency_key, asset_id, created_at, updated_at)
+           SELECT ?, ?, ?, ?, ?, ?, 'review_pending', ?, ?, ?, ?, ?, ?
            WHERE EXISTS (SELECT 1 FROM spaces WHERE id = ? AND kind != 'legacy' AND read_only = 0 AND status = 'active')
              AND (? IS NULL OR EXISTS (SELECT 1 FROM collections WHERE id = ? AND space_id = ? AND status = 'active'))
              AND NOT EXISTS (
@@ -185,7 +187,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
         ).bind(
           submission.id, submission.submitterId, submission.requestedSpaceId, submission.requestedCollectionId,
           submission.requestedVisibility, submission.kind, submission.title, submission.content, submission.idempotencyKey,
-          submission.createdAt, submission.updatedAt, submission.requestedSpaceId,
+          input.assetId ?? null, submission.createdAt, submission.updatedAt, submission.requestedSpaceId,
           submission.requestedCollectionId, submission.requestedCollectionId, submission.requestedSpaceId,
           sourceVersion.contentSha256, submission.submitterId, submission.requestedSpaceId,
         ),
@@ -415,6 +417,7 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
 const submissionSelect = `SELECT
   s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.requested_visibility,
   s.supersedes_submission_id, s.kind, s.status, s.title, s.content, s.created_at, s.updated_at,
+  s.asset_id,
   r.decision AS review_decision, r.reason_code AS review_reason_code,
   r.reason AS review_note, r.created_at AS review_created_at
 FROM submissions s
@@ -423,6 +426,7 @@ LEFT JOIN reviews r ON r.submission_id = s.id
 const creationSelect = `SELECT
   s.id, s.submitter_id, s.requested_space_id, s.requested_collection_id, s.requested_visibility,
   s.supersedes_submission_id, s.kind, s.status, s.title, s.content, s.created_at, s.updated_at,
+  s.asset_id,
   src.id AS source_id, src.owner_id AS source_owner_id, src.space_id AS source_space_id, src.collection_id AS source_collection_id,
   src.kind AS source_kind, src.title AS source_title, src.created_at AS source_created_at, src.updated_at AS source_updated_at,
   sv.id AS source_version_id, sv.ordinal AS source_version_ordinal, sv.content AS source_version_content,
@@ -499,6 +503,7 @@ function mapSubmissionRow(row: SubmissionRow): Submission {
     status: row.status,
     title: row.title,
     content: row.content,
+    ...(row.asset_id === null ? {} : { assetId: row.asset_id }),
     ...(review ? { review } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -535,6 +540,7 @@ function exactReplayOrThrow(existing: SubmissionCreateResult, input: CreateSubmi
     || existing.submission.requestedSpaceId !== input.submission.requestedSpaceId
     || existing.submission.requestedCollectionId !== input.submission.requestedCollectionId
     || existing.submission.requestedVisibility !== input.submission.requestedVisibility
+    || (existing.submission.assetId ?? null) !== (input.assetId ?? null)
     || (existing.submission.supersedesSubmissionId ?? null) !== (input.submission.supersedesSubmissionId ?? null)
     || existing.submission.kind !== input.submission.kind
     || existing.submission.title !== input.submission.title) {
@@ -555,6 +561,7 @@ function assertSourceCreationBinding(input: CreateSubmissionWithSourceVersion): 
   const { submission, source, sourceVersion, audit } = input;
   assertSubmissionAuditBinding(submission, audit);
   if (!submission.idempotencyKey || source.ownerId !== submission.submitterId
+    || (input.assetId !== undefined && (!/^[A-Za-z0-9_-]{1,128}$/u.test(input.assetId) || submission.assetId !== input.assetId))
     || source.spaceId !== submission.requestedSpaceId || source.collectionId !== submission.requestedCollectionId
     || source.kind !== submission.kind || source.title !== submission.title
     || sourceVersion.sourceId !== source.id || sourceVersion.submissionId !== submission.id

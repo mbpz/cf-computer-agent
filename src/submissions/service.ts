@@ -21,6 +21,7 @@ export interface CreateSubmissionInput { requestedSpaceId: string; requestedColl
 export interface CreateSourceSubmissionInput extends Omit<CreateSubmissionInput, "content"> {
   content?: string;
   contentBase64?: string;
+  assetId?: string;
   idempotencyKey: string;
   language?: string;
   fileLabel?: string;
@@ -117,6 +118,7 @@ export class SubmissionsService {
     const now = this.now().toISOString();
     const submission: PersistedSubmission = {
       id: this.id(), submitterId, ...normalized, idempotencyKey: input.idempotencyKey,
+      ...(input.assetId === undefined ? {} : { assetId: input.assetId }),
       status: "review_pending", createdAt: now, updatedAt: now,
     };
     const source = {
@@ -132,7 +134,7 @@ export class SubmissionsService {
     };
     const audit = submissionAudit(this.id(), submission, now);
     try {
-      return await this.repository.createWithSourceVersion({ submission, source, sourceVersion, audit });
+      return await this.repository.createWithSourceVersion({ submission, source, sourceVersion, audit, ...(input.assetId === undefined ? {} : { assetId: input.assetId }) });
     } catch (error) {
       if (error instanceof SubmissionsRepositoryConflictError) {
         if (error.kind === "target_invalid") {

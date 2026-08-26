@@ -7,6 +7,7 @@ import type { AssetRepositoryPort } from "./service";
 type AssetRow = {
   id: string; owner_id: string; object_key: string; original_name: string; content_type: string;
   byte_size: number; content_sha256: string; idempotency_key: string; status: AssetRecord["status"];
+  submission_id: string | null;
   created_at: string; updated_at: string; job_id: string; job_status: ParseJobRecord["status"];
   attempts: number; last_error_code: string | null; job_created_at: string; job_updated_at: string;
 };
@@ -21,9 +22,9 @@ export class AssetsRepository implements AssetRepositoryPort {
   async insertAssetWithJob(asset: AssetRecord, job: ParseJobRecord): Promise<void> {
     await this.db.batch([
       this.db.prepare(
-        `INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256, idempotency_key, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(asset.id, asset.ownerId, asset.objectKey, asset.originalName, asset.contentType, asset.byteSize, asset.contentSha256, asset.idempotencyKey, asset.status, asset.createdAt, asset.updatedAt),
+        `INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256, idempotency_key, submission_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(asset.id, asset.ownerId, asset.objectKey, asset.originalName, asset.contentType, asset.byteSize, asset.contentSha256, asset.idempotencyKey, asset.submissionId ?? null, asset.status, asset.createdAt, asset.updatedAt),
       this.db.prepare(
         `INSERT INTO parse_jobs (id, asset_id, status, attempts, last_error_code, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -73,7 +74,8 @@ export class AssetsRepository implements AssetRepositoryPort {
       `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
               a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
               j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
-              j.created_at AS job_created_at, j.updated_at AS job_updated_at
+              j.created_at AS job_created_at, j.updated_at AS job_updated_at,
+              a.submission_id
        FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
        WHERE ${where}${statusSql}${cursorSql}
        ORDER BY a.created_at DESC, a.id DESC LIMIT ?`,
@@ -160,7 +162,8 @@ export class AssetsRepository implements AssetRepositoryPort {
       `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
               a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
               j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
-              j.created_at AS job_created_at, j.updated_at AS job_updated_at
+              j.created_at AS job_created_at, j.updated_at AS job_updated_at,
+              a.submission_id
        FROM assets a JOIN parse_jobs j ON j.asset_id = a.id WHERE ${where} LIMIT 1`,
     ).bind(...values).first<AssetRow>();
     return row ? mapRow(row) : null;
@@ -189,7 +192,8 @@ function mapRow(row: AssetRow): AssetWithJob {
     asset: {
       id: row.id, ownerId: row.owner_id, objectKey: row.object_key, originalName: row.original_name,
       contentType: row.content_type, byteSize: row.byte_size, contentSha256: row.content_sha256,
-      idempotencyKey: row.idempotency_key, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
+      idempotencyKey: row.idempotency_key, ...(row.submission_id === null ? {} : { submissionId: row.submission_id }),
+      status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
     },
     job: {
       id: row.job_id, assetId: row.id, status: row.job_status, attempts: row.attempts,

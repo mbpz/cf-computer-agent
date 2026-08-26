@@ -29,6 +29,7 @@ const migrations = [
   ["0025_m5_private_note_shares.sql", "3c8919fe45ec700ff854620f22d71d5f8abd2edaee239910d6041f5985013200"],
   ["0026_site_analytics.sql", "12789e0b8cac6ca81ce59c0980758045176500af21f93c3ba5d640407f1fb356"],
   ["0027_duplicate_candidates.sql", "2c4fdcb548e38e236ec209f2dd6c79ef8a762a3ae512f49bb2cf6c5e64d9022b"],
+  ["0028_asset_submission_pairing.sql", "97e6db8e1b0bb75e3f5216911bd7a3989bf3c8d873d7fe4419cc52ee581417fb"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

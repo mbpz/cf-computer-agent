@@ -97,9 +97,55 @@ export async function routeMemberApi(
 
   const asset = /^\/api\/assets\/([^/]+)$/.exec(url.pathname);
   const assetCancel = /^\/api\/assets\/([^/]+)\/cancel$/.exec(url.pathname);
+  const assetSubmit = /^\/api\/assets\/([^/]+)\/submit$/.exec(url.pathname);
   const assetAlternative = /^\/api\/assets\/([^/]+)\/alternative$/.exec(url.pathname);
   const assetPreview = /^\/api\/assets\/([^/]+)\/preview$/.exec(url.pathname);
   const assetDownload = /^\/api\/assets\/([^/]+)\/(original|parsed)$/.exec(url.pathname);
+  if (assetSubmit) {
+    requireCapability(principal, "submission:create");
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    const member = requireMember(principal);
+    requireNoQuery(url);
+    const assetId = decodePathId(assetSubmit[1]!);
+    const asset = await services.assets.getOwned(member.memberId, assetId);
+    if (asset.job.status !== "succeeded") {
+      throw new AppError("ASSET_RESULT_NOT_READY", "Asset parsing has not completed", 409, true);
+    }
+    const parsed = await services.assets.download(member.memberId, assetId, "parsed");
+    let content: string;
+    try {
+      content = new TextDecoder("utf-8", { fatal: true }).decode(parsed.body);
+    } catch {
+      throw new AppError("ASSET_CONTENT_INVALID", "Parsed asset content is invalid", 422, false);
+    }
+    const input = strictRecord(
+      await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes),
+      ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "title"],
+      "ASSET_SUBMISSION_REQUEST_INVALID",
+    );
+    if (!hasExactKeys(input, ["requestedSpaceId", "requestedCollectionId", "requestedVisibility", "title"])
+      || typeof input.requestedSpaceId !== "string"
+      || (input.requestedCollectionId !== null && typeof input.requestedCollectionId !== "string")
+      || (input.requestedVisibility !== "shared" && input.requestedVisibility !== "admin_only")
+      || typeof input.title !== "string") {
+      throw new AppError("ASSET_SUBMISSION_REQUEST_INVALID", "Request body is invalid", 400);
+    }
+    const result = await services.submissions.createWithSourceVersion(member.memberId, {
+      requestedSpaceId: input.requestedSpaceId,
+      requestedCollectionId: input.requestedCollectionId,
+      requestedVisibility: input.requestedVisibility,
+      kind: "markdown",
+      title: input.title,
+      content,
+      assetId,
+      idempotencyKey: request.headers.get("idempotency-key") || "",
+    });
+    return jsonResponse({
+      submission: result.submission,
+      duplicateCandidate: result.duplicateCandidate,
+      ...(result.similarCandidates && result.similarCandidates.length > 0 ? { similarCandidates: result.similarCandidates } : {}),
+    }, result.submission?.status === "rejected" ? 200 : 201, context.requestId);
+  }
   if (assetCancel) {
     requireCapability(principal, "submission:create");
     if (request.method !== "POST") return methodNotAllowed("POST", context);
@@ -464,6 +510,12 @@ function requireExactQuery(url: URL, allowedKeys: readonly string[]): void {
       throw new AppError("PAGE_INVALID", "Pagination parameters are invalid", 400);
     }
   }
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
 function optionalNullableString(value: unknown): string | null | undefined {

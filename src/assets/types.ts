@@ -12,6 +12,7 @@ export interface AssetRecord {
   byteSize: number;
   contentSha256: string;
   idempotencyKey: string;
+  submissionId?: string | null;
   status: AssetStatus;
   createdAt: string;
   updatedAt: string;
