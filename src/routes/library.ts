@@ -17,6 +17,7 @@ import type { FaqService } from "../ai/faq-service";
 import type { TimelineService } from "../ai/timeline-service";
 import type { BriefService } from "../ai/brief-service";
 import type { ComparisonService } from "../ai/comparison-service";
+import type { ResearchReportService } from "../ai/research-report-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import { strictRecord, stringValue } from "./member";
 
@@ -27,6 +28,7 @@ export interface LibraryRouteServices {
   timelines: TimelineService;
   briefs: BriefService;
   comparisons: ComparisonService;
+  researchReports: ResearchReportService;
   library: LibraryService;
   privateNotes: PrivateNotesService;
 }
@@ -193,6 +195,29 @@ export async function routeLibraryApi(
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
     return jsonResponse(await services.comparisons.compare(scope, knowledgeItemId, citations), 200, context.requestId);
+  }
+
+  const researchRun = /^\/api\/knowledge\/([^/]+)\/research-runs$/.exec(url.pathname);
+  if (researchRun) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(researchRun[1]!);
+    await services.library.detail(scope, knowledgeItemId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goal"], "RESEARCH_RUN_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["goal"]) || typeof input.goal !== "string") throw new AppError("RESEARCH_RUN_REQUEST_INVALID", "Request body is invalid", 400);
+    return jsonResponse({ researchRun: await services.researchReports.start(scope, knowledgeItemId, input.goal) }, 201, context.requestId);
+  }
+
+  const report = /^\/api\/knowledge\/([^/]+)\/report$/.exec(url.pathname);
+  if (report) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(report[1]!);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["researchRunId", "citationIds"], "RESEARCH_REPORT_REQUEST_INVALID");
+    if (!hasExactKeys(input, ["researchRunId", "citationIds"]) || typeof input.researchRunId !== "string" || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("RESEARCH_REPORT_REQUEST_INVALID", "Request body is invalid", 400);
+    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
+    return jsonResponse(await services.researchReports.generate(scope, input.researchRunId, citations), 200, context.requestId);
   }
 
   const related = /^\/api\/knowledge\/([^/]+)\/related$/.exec(url.pathname);

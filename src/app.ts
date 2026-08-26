@@ -44,6 +44,8 @@ import { SourceReparseRepository } from "./sources/reparse-repository";
 import { SourceReparseService } from "./sources/reparse-service";
 import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
+import { ResearchRepository } from "./research/repository";
+import { ResearchReportService } from "./ai/research-report-service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -155,6 +157,7 @@ function createRequestServices(
     timelines: new TimelineService(ai),
     briefs: new BriefService(ai),
     comparisons: new ComparisonService(ai),
+    researchReports: new ResearchReportService(new ResearchRepository(env.DB), ai),
     knowledge: new KnowledgeService(legacyRepository),
     library: new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),

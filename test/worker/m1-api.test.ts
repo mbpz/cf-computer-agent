@@ -91,6 +91,15 @@ const fakeAi = {
         }),
       };
     }
+    if (schemaName === "research_report") {
+      return {
+        response: JSON.stringify({
+          title: "Bounded research report",
+          sections: [{ heading: "Conclusion", body: "The source records a bounded conclusion.", citationIds: [context.sources[0]?.citationId] }],
+          insufficientEvidence: false,
+        }),
+      };
+    }
     return {
       response: JSON.stringify({
         claims: [{
@@ -1319,6 +1328,30 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(result.rows[0]?.cells[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
     expect(result.consensus[0]?.citations).toEqual([expect.objectContaining({ citationId: hit!.citationId })]);
     expect(JSON.stringify(result)).not.toContain("comparisonmarker source evidence");
+  });
+
+  it("binds a research report to an owner run and immutable source revision snapshot", async () => {
+    const selected = await publishSubmission(
+      "contributor", "Research source", "researchmarker source evidence", "shared", "research-source-key1",
+    );
+    const search = await memberApi("contributor", "/api/knowledge/search?q=researchmarker");
+    const hit = (await search.json() as { items: Array<{ citationId: string; knowledgeItemId: string }> }).items
+      .find((item) => item.knowledgeItemId === selected.knowledgeItemId);
+    expect(hit).toBeTruthy();
+    const runResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs`, {
+      method: "POST", body: JSON.stringify({ goal: "验证当前方案" }),
+    });
+    expect(runResponse.status).toBe(201);
+    const run = (await runResponse.json() as { researchRun: { id: string } }).researchRun;
+    const reportResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/report`, {
+      method: "POST", body: JSON.stringify({ researchRunId: run.id, citationIds: [hit!.citationId] }),
+    });
+    expect(reportResponse.status).toBe(200);
+    const report = await reportResponse.json() as { researchRunId: string; version: number; sourceSnapshots: Array<{ citationId: string; revisionId: string; chunkId: string }> };
+    expect(report.researchRunId).toBe(run.id);
+    expect(report.version).toBe(1);
+    expect(report.sourceSnapshots[0]).toEqual(expect.objectContaining({ citationId: hit!.citationId }));
+    expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
   });
 
   it("refuses weak scoped evidence below 0.60 with stable action keys and zero AI calls", async () => {
