@@ -56,6 +56,10 @@ describe("AgentToolRunner", () => {
       .rejects.toMatchObject({ code: "AGENT_TOOL_NOT_FOUND", status: 404 });
     await expect(runner.run("member-agent", "publishKnowledge", { knowledgeItemId: "knowledge-1" }))
       .rejects.toMatchObject({ code: "AGENT_TOOL_NOT_FOUND", status: 404 });
+    for (const forbidden of ["mcp", "shell", "browser"]) {
+      await expect(runner.run("member-agent", forbidden, {}))
+        .rejects.toMatchObject({ code: "AGENT_TOOL_NOT_FOUND", status: 404 });
+    }
     expect(execute).not.toHaveBeenCalled();
   });
 
