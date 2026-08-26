@@ -3,7 +3,7 @@ import { buildKnowledgeExport } from "../../src/ops/export-package";
 import { detectIndexDrift, planFullIndexRebuild } from "../../src/ops/index-drift";
 
 const makePackage = () => buildKnowledgeExport({
-  exportId: "drift-export-1", generatedAt: "2026-08-26T00:00:00.000Z", schemaFingerprint: "migrations-0022",
+  exportId: "drift-export-1", generatedAt: "2026-08-26T00:00:00.000Z", schemaFingerprint: "migrations-0023",
   members: [], spaces: [{ id: "space-1" }], collections: [], submissions: [], reviews: [], sources: [{ id: "source-1" }], sourceVersions: [{ id: "source-version-1", sourceId: "source-1" }],
   knowledgeItems: [{ id: "knowledge-1", spaceId: "space-1", collectionId: null, currentRevisionId: "revision-1", status: "active" as const, searchStatus: "indexed" as const, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
   revisions: [{ id: "revision-1", knowledgeItemId: "knowledge-1", sourceVersionId: "source-version-1", normalizedPath: "/published/revision-1.md", contentSha256: "a".repeat(64), title: "Source", tags: [], visibility: "shared" as const, publishedBy: "publisher-1", publishedAt: "2026-01-01T00:00:00.000Z", markdown: "# Source", chunks: [{ id: "chunk-1", revisionId: "revision-1", ordinal: 0, headingPath: [], startLine: 1, endLine: 1, body: "body" }] }],

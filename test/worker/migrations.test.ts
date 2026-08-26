@@ -1043,6 +1043,28 @@ describe("Phase 1 control-plane migrations", () => {
     ).bind(timestamp).run()).rejects.toThrow();
   });
 
+  it("creates private favorites with indexes and purge-safe cascades", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("knowledge_favorites", [
+      "member_id:TEXT:1:NULL:1",
+      "knowledge_item_id:TEXT:1:NULL:2",
+      "created_at:TEXT:1:NULL:0",
+    ], []);
+    await expectIndex("knowledge_favorites", "knowledge_favorites_member_page", [{ name: "member_id", desc: 0 }, { name: "created_at", desc: 1 }, { name: "knowledge_item_id", desc: 1 }]);
+    const timestamp = "2026-08-26T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('favorite-owner', 'github:favorite-owner', 'favorite-owner@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare(
+      "INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('favorite-knowledge', 'default', NULL, 'active', 'indexed', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare(
+      "INSERT INTO knowledge_favorites (member_id, knowledge_item_id, created_at) VALUES ('favorite-owner', 'favorite-knowledge', ?)",
+    ).bind(timestamp).run();
+    await env.DB.prepare("DELETE FROM knowledge_items WHERE id = 'favorite-knowledge'").run();
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM knowledge_favorites WHERE knowledge_item_id = 'favorite-knowledge'").first()).resolves.toEqual({ count: 0 });
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

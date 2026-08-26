@@ -60,6 +60,8 @@ import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConf
 import { AgentToolRunner } from "./agent/tool-runner";
 import { ReviewCommentsRepository } from "./review-comments/repository";
 import { ReviewCommentsService } from "./review-comments/service";
+import { FavoritesRepository } from "./favorites/repository";
+import { FavoritesService } from "./favorites/service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -221,6 +223,7 @@ function createRequestServices(
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
+    favorites: new FavoritesService(new FavoritesRepository(env.DB)),
   };
 }
 

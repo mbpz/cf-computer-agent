@@ -5,7 +5,7 @@ import { runImportDryRun } from "../../src/ops/import-dry-run";
 const input = () => ({
   exportId: "export-1",
   generatedAt: "2026-08-26T00:00:00.000Z",
-  schemaFingerprint: "migrations-0022",
+  schemaFingerprint: "migrations-0023",
   members: [{ id: "member-1", identitySubject: "github:1", email: "owner@example.test", role: "admin" as const, status: "active" as const, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
   spaces: [{ id: "space-1", slug: "default" }],
   collections: [], submissions: [], reviews: [], sources: [], sourceVersions: [],
@@ -17,7 +17,7 @@ describe("knowledge import dry-run", () => {
   it("accepts an intact package when schema, capacity and permissions fit", async () => {
     const pkg = await buildKnowledgeExport(input());
     const report = await runImportDryRun(pkg, {
-      expectedSchemaFingerprint: "migrations-0022",
+      expectedSchemaFingerprint: "migrations-0023",
       actor: { memberId: "member-1", role: "admin" },
       capacities: { members: 2, spaces: 2, assets: 2, assetBytes: 10 },
     });

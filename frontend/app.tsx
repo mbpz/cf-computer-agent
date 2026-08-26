@@ -16,7 +16,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { createKnowledgeRequestController, type KnowledgePageResult } from "./lib/knowledge-data";
-import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeRevisionDiff, loadRelatedKnowledge, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
+import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
@@ -69,7 +69,9 @@ export function App() {
     setLogoutError(null);
     try {
       await postLogout(session.logoutUrl);
-      window.location.href = "/auth/github";
+      // Return to the anonymous shell. Starting OAuth here would immediately
+      // sign the user back in when GitHub still has an active browser session.
+      window.location.href = "/";
     } catch {
       setLogoutError(frontendText(locale, "SHELL_LOGOUT_FAILED"));
       setLogoutPending(false);
@@ -111,6 +113,7 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
   const [backlinkState, setBacklinkState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly KnowledgeBacklinkItem[] } | { kind: "error" }>({ kind: "idle" });
+  const [favorite, setFavorite] = useState<boolean | null>(null);
   const [retry, setRetry] = useState(0);
   const diffGeneration = useRef(0);
   useEffect(() => {
@@ -121,11 +124,17 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
     setDiffState({ kind: "idle" });
     setRelatedState({ kind: "idle" });
     setBacklinkState({ kind: "idle" });
+    setFavorite(null);
     void request.promise.then(({ generation, revision }) => {
       if (controller.isCurrent(generation)) {
         setState({ kind: "ready", revision });
         setRelatedState({ kind: "loading" });
         setBacklinkState({ kind: "loading" });
+        void loadKnowledgeFavorite(knowledgeItemId).then((value) => {
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setFavorite(value);
+        }).catch(() => {
+          if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setFavorite(false);
+        });
         void loadRelatedKnowledge(knowledgeItemId).then((items) => {
           if (diffGeneration.current === routeGeneration && controller.isCurrent(generation)) setRelatedState({ kind: "ready", items });
         }).catch(() => {
@@ -158,7 +167,13 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
   if (state.kind !== "ready") {
       return <KnowledgeReaderPage locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
-  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} />;
+  const toggleFavorite = async () => {
+    if (favorite === null) return;
+    const next = !favorite;
+    setFavorite(next);
+    try { await setKnowledgeFavorite(knowledgeItemId, next); } catch { setFavorite(!next); }
+  };
+  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {

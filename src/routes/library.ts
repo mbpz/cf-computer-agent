@@ -9,6 +9,7 @@ import {
   type RequestContext,
 } from "../http";
 import type { Principal } from "../identity/principal";
+import { parsePageRequest } from "../pagination";
 import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
@@ -25,6 +26,7 @@ import type { FlashcardService } from "../ai/flashcard-service";
 import type { QuizService } from "../ai/quiz-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import type { SubmissionsService } from "../submissions/service";
+import type { FavoritesService } from "../favorites/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
@@ -43,6 +45,7 @@ export interface LibraryRouteServices {
   library: LibraryService;
   privateNotes: PrivateNotesService;
   submissions: SubmissionsService;
+  favorites: FavoritesService;
 }
 
 export async function routeLibraryApi(
@@ -63,6 +66,29 @@ export async function routeLibraryApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const query = queryRecord(url, ["limit", "cursor", "spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"]);
     return jsonResponse(await services.library.list(scope, pageRequest(query)), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/knowledge/favorites") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const query = queryRecord(url, ["limit", "cursor"]);
+    return jsonResponse(await services.favorites.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
+  }
+
+  const favorite = /^\/api\/knowledge\/([^/]+)\/favorite$/.exec(url.pathname);
+  if (favorite) {
+    requireNoQuery(url);
+    const knowledgeItemId = decodePathId(favorite[1]!);
+    if (request.method === "GET") {
+      return jsonResponse(await services.favorites.get(scope, knowledgeItemId), 200, context.requestId);
+    }
+    if (request.method === "PUT") {
+      return jsonResponse({ favorite: await services.favorites.add(scope, knowledgeItemId) }, 201, context.requestId);
+    }
+    if (request.method === "DELETE") {
+      await services.favorites.remove(scope, knowledgeItemId);
+      return new Response(null, { status: 204, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", "x-request-id": context.requestId } });
+    }
+    return methodNotAllowed("DELETE, GET, PUT", context);
   }
 
   if (url.pathname === "/api/knowledge/search") {

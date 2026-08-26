@@ -4,7 +4,7 @@ import { buildKnowledgeExport, KNOWLEDGE_EXPORT_FORMAT } from "../../src/ops/exp
 const baseInput = () => ({
   exportId: "export-20260826",
   generatedAt: "2026-08-26T00:00:00.000Z",
-  schemaFingerprint: "migrations-0022",
+  schemaFingerprint: "migrations-0023",
   members: [{ id: "member-1", identitySubject: "github:1", email: "owner@example.test", role: "admin" as const, status: "active" as const, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
   spaces: [{ id: "space-1", slug: "default" }],
   collections: [],

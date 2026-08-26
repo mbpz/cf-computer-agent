@@ -47,6 +47,25 @@ export interface KnowledgeRevisionDiff {
   hunks: readonly { oldStart: number; newStart: number; lines: readonly KnowledgeRevisionDiffLine[] }[];
 }
 
+export async function loadKnowledgeFavorite(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<boolean> {
+  assertKnowledgeId(knowledgeItemId);
+  const data = await apiFetch<{ favorite?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, { requester, signal });
+  return data.favorite === true;
+}
+
+export async function setKnowledgeFavorite(knowledgeItemId: string, favorite: boolean, requester: Fetcher = fetch): Promise<boolean> {
+  assertKnowledgeId(knowledgeItemId);
+  if (!favorite) {
+    await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, { requester, method: "DELETE" });
+    return false;
+  }
+  const data = await apiFetch<{ favorite?: { knowledgeItemId?: unknown } }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/favorite`, {
+    requester, method: "PUT", headers: { "content-type": "application/json" },
+  });
+  if (!data.favorite || data.favorite.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_FAVORITE_INVALID");
+  return true;
+}
+
 export interface RelatedKnowledgeItem {
   id: string;
   title: string;
@@ -240,11 +259,15 @@ function normalizeDiff(value: unknown): KnowledgeRevisionDiff | null {
 }
 
 export async function loadKnowledgeRevision(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<KnowledgeRevision> {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ID_INVALID");
+  assertKnowledgeId(knowledgeItemId);
   const data = await apiFetch<{ knowledge?: { currentRevision?: unknown } }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}`, { requester, signal });
   const revision = normalizeRevision(data.knowledge?.currentRevision);
   if (!revision) throw new Error("KNOWLEDGE_REVISION_INVALID");
   return revision;
+}
+
+function assertKnowledgeId(knowledgeItemId: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(knowledgeItemId)) throw new Error("KNOWLEDGE_ID_INVALID");
 }
 
 export function createKnowledgeReaderRequestController(requester: Fetcher = fetch) {

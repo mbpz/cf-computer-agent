@@ -64,5 +64,16 @@ describe("frontend application shell", () => {
     expect(html).toContain("管理");
     expect(html).toContain("成员");
     expect(html).not.toContain("undefined");
+    expect(html).not.toContain("NAV_");
+  });
+
+  it("translates every admin navigation label in English and Chinese", () => {
+    const routes = ["Review queue", "Asset queue", "Members", "Spaces", "Audit log"];
+    const english = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "member:manage", "knowledge:read", "knowledge:review", "space:manage", "audit:read"] }} pathname="/admin" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Admin</p></AppShell>);
+    for (const label of routes) expect(english).toContain(label);
+    expect(english).not.toMatch(/NAV_[A-Z_]+/u);
+    const chinese = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "member:manage", "knowledge:read", "knowledge:review", "space:manage", "audit:read"] }} pathname="/admin" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}><p>管理</p></AppShell>);
+    for (const label of ["审核队列", "原件队列", "成员管理", "空间管理", "审计日志"]) expect(chinese).toContain(label);
+    expect(chinese).not.toMatch(/NAV_[A-Z_]+/u);
   });
 });
