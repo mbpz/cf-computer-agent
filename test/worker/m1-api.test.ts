@@ -1374,6 +1374,10 @@ describe("M1 trusted knowledge HTTP journey", () => {
       method: "POST", body: JSON.stringify({ subquestionId: "q1", query: "成本约束", resultIds: [hit!.citationId], rationale: "该结果直接回答子问题" }),
     });
     expect(queryResponse.status).toBe(201);
+    const pause = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/pause`, { method: "POST", body: "{}" });
+    expect(pause.status).toBe(200);
+    const resumeForReport = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/approve`, { method: "POST", body: "{}" });
+    expect(resumeForReport.status).toBe(200);
     const reportResponse = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/report`, {
       method: "POST", body: JSON.stringify({ researchRunId: run.id, citationIds: [hit!.citationId] }),
     });

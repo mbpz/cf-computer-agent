@@ -221,6 +221,13 @@ export async function routeLibraryApi(
     return jsonResponse({ researchRun: await services.researchReports.approve(scope, decodePathId(researchRunApprove[2]!)) }, 200, context.requestId);
   }
 
+  const researchRunPause = /^\/api\/knowledge\/([^/]+)\/research-runs\/([^/]+)\/pause$/.exec(url.pathname);
+  if (researchRunPause) {
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireNoQuery(url);
+    return jsonResponse({ researchRun: await services.researchReports.pause(scope, decodePathId(researchRunPause[2]!)) }, 200, context.requestId);
+  }
+
   const researchQuery = /^\/api\/knowledge\/([^/]+)\/research-runs\/([^/]+)\/queries$/.exec(url.pathname);
   if (researchQuery) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);

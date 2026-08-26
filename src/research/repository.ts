@@ -32,7 +32,15 @@ export class ResearchRepository implements ResearchReportRepository {
   }
 
   async approveRun(scope: LibraryScope, id: string): Promise<ResearchRun> {
-    const result = await this.db.prepare("UPDATE research_runs SET status = 'running', updated_at = ? WHERE id = ? AND owner_member_id = ? AND status = 'draft'").bind(new Date().toISOString(), id, scope.memberId).run();
+    const result = await this.db.prepare("UPDATE research_runs SET status = 'running', updated_at = ? WHERE id = ? AND owner_member_id = ? AND status IN ('draft', 'paused')").bind(new Date().toISOString(), id, scope.memberId).run();
+    if (!result.meta.changes) throw new AppError("RESEARCH_RUN_NOT_FOUND", "Research run was not found", 404);
+    const run = await this.findRun(scope, id);
+    if (!run) throw new AppError("RESEARCH_RUN_UNAVAILABLE", "Research run is unavailable", 503, true);
+    return run;
+  }
+
+  async pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun> {
+    const result = await this.db.prepare("UPDATE research_runs SET status = 'paused', updated_at = ? WHERE id = ? AND owner_member_id = ? AND status IN ('draft', 'running')").bind(new Date().toISOString(), id, scope.memberId).run();
     if (!result.meta.changes) throw new AppError("RESEARCH_RUN_NOT_FOUND", "Research run was not found", 404);
     const run = await this.findRun(scope, id);
     if (!run) throw new AppError("RESEARCH_RUN_UNAVAILABLE", "Research run is unavailable", 503, true);

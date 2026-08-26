@@ -228,7 +228,7 @@
 - [x] `RES-007` P1/M6 来源比较；状态：L/W；验收：比较表提供逐来源单元格、共同点和差异/冲突，每项均绑定各自 citation；复用 ART-006 的授权重新检查和引用回读接口。证据：`src/ai/comparison-service.ts`、`test/unit/comparison-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/comparison-service.test.ts test/worker/m1-api.test.ts -t 'comparison|Comparison'`。
 - [x] `RES-008` P1/M6 冲突识别；状态：L/W；验收：来源比较输出独立 `conflicts` 段，提示保留时间/版本/事实冲突，不得静默合并；每个冲突逐项引用来源，冲突文本可通过 citation 回读。证据：`src/ai/comparison-service.ts`、`test/unit/comparison-service.test.ts`（冲突段回归）、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/comparison-service.test.ts test/worker/m1-api.test.ts -t 'comparison|Comparison'`。
 - [x] `RES-009` P1/M6 证据缺口；状态：L/W；验收：所有 M5/M6 研究产物在 provider 返回 `insufficientEvidence` 时返回稳定 `KNOWLEDGE_EVIDENCE_INSUFFICIENT`，不产生猜测正文；有内容但 citation 不合法时返回 422。证据：`src/ai/source-summary-service.ts`、`src/ai/faq-service.ts`、`src/ai/timeline-service.ts`、`src/ai/brief-service.ts`、`src/ai/comparison-service.ts`、`src/ai/research-report-service.ts`、`src/ai/flashcard-service.ts`、`src/ai/quiz-service.ts`、对应 unit suites；命令：`rtk npm run test:unit`。
-- [ ] `RES-010` P1/M6 研究暂停；验收：保存已完成步骤和剩余计划。
+- [x] `RES-010` P1/M6 研究暂停；状态：L/W；验收：owner 可将 draft/running ResearchRun 切为 paused；已完成查询、子问题状态、剩余 steps/完成条件和来源范围均保留，暂停不调用 AI；`approve` 可从 paused 恢复到 running。证据：`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；接口：`POST /api/knowledge/:knowledgeItemId/research-runs/:runId/pause`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [ ] `RES-011` P1/M6 研究恢复；验收：重新加载成员权限和 current Revision。
 - [ ] `RES-012` P1/M6 研究取消；验收：终止后续工具，保留可审计草稿。
 - [ ] `RES-013` P1/M6 研究报告；验收：章节、断言和引用完整映射。
