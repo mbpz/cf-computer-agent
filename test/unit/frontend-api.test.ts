@@ -24,5 +24,6 @@ describe("frontend API adapter", () => {
   it("loads the existing session contract", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ member: { id: "m1", email: "a@example.com", role: "contributor" }, capabilities: ["knowledge:read"], logoutUrl: "/auth/logout" }), { status: 200, headers: { "content-type": "application/json" } }));
     await expect(sessionSnapshot(fetcher)).resolves.toMatchObject({ member: { id: "m1" } });
+    expect(fetcher).toHaveBeenCalledWith("/api/session", expect.objectContaining({ cache: "no-store", credentials: "same-origin", headers: { accept: "application/json" } }));
   });
 });

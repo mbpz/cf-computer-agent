@@ -21,4 +21,9 @@ describe("frontend locale adapter", () => {
     expect(runtime.setLocale("fr")).toBe(false);
     expect(runtime.t("UNKNOWN_KEY")).toBe("UNKNOWN_KEY");
   });
+
+  it("does not expose raw navigation keys when a catalog entry is missing", () => {
+    expect(createLocaleRuntime({ navigatorLanguage: "en" }).t("NAV_UNKNOWN")).toBe("Navigation");
+    expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("NAV_UNKNOWN")).toBe("导航");
+  });
 });

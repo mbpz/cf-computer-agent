@@ -6,5 +6,7 @@ export async function postLogout(logoutUrl: string, requester: Fetcher = fetch):
     requester,
     method: "POST",
     credentials: "same-origin",
+    cache: "no-store",
+    headers: { accept: "application/json" },
   });
 }

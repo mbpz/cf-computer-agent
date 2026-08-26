@@ -12,6 +12,7 @@ describe("frontend logout boundary", () => {
     expect(calls).toHaveLength(1);
     expect(String(calls[0]?.input)).toBe("/auth/logout");
     expect(calls[0]?.init).toMatchObject({ method: "POST", credentials: "same-origin" });
+    expect(calls[0]?.init).toMatchObject({ cache: "no-store", headers: { accept: "application/json" } });
   });
 
   it("rejects an invalid logout target before making a request", async () => {

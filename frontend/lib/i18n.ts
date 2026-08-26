@@ -565,6 +565,21 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
 interface LocaleStorage { getItem(key: string): string | null | undefined; setItem(key: string, value: string): void; }
 interface LocaleOptions { navigatorLanguage?: string; storedLocale?: string | null; storage?: LocaleStorage; catalogs?: Partial<Record<FrontendLocale, Record<string, string>>>; }
 
+const navigationFallbacks: Record<FrontendLocale, Record<string, string>> = {
+  en: {
+    NAV_HOME: "Home", NAV_SUBMIT: "Submit", NAV_LIBRARY: "Library", NAV_SEARCH: "Search",
+    NAV_AGENT: "Agent", NAV_MY_SUBMISSIONS: "My Submissions", NAV_ADMINISTRATION: "Administration",
+    NAV_REVIEW_QUEUE: "Review queue", NAV_ASSET_QUEUE: "Asset queue", NAV_MEMBERS: "Members",
+    NAV_SPACES: "Spaces", NAV_AUDIT: "Audit log",
+  },
+  "zh-CN": {
+    NAV_HOME: "首页", NAV_SUBMIT: "提交", NAV_LIBRARY: "知识库", NAV_SEARCH: "搜索",
+    NAV_AGENT: "智能问答", NAV_MY_SUBMISSIONS: "我的提交", NAV_ADMINISTRATION: "管理",
+    NAV_REVIEW_QUEUE: "审核队列", NAV_ASSET_QUEUE: "原件队列", NAV_MEMBERS: "成员管理",
+    NAV_SPACES: "空间管理", NAV_AUDIT: "审计日志",
+  },
+};
+
 export function createLocaleRuntime(options: LocaleOptions = {}) {
   const merged = {
     en: { ...catalogs.en, ...(options.catalogs?.en ?? {}) },
@@ -580,7 +595,12 @@ export function createLocaleRuntime(options: LocaleOptions = {}) {
   const subscribers = new Set<(locale: FrontendLocale) => void>();
   return Object.freeze({
     get locale() { return locale; },
-    t(key: string) { return merged[locale][key] ?? merged.en[key] ?? String(key); },
+    t(key: string) {
+      const value = merged[locale][key] ?? merged.en[key];
+      if (value !== undefined && value !== key && value !== "undefined" && value !== "null") return value;
+      if (key.startsWith("NAV_")) return navigationFallbacks[locale][key] ?? (locale === "zh-CN" ? "导航" : "Navigation");
+      return String(key);
+    },
     setLocale(next: string) {
       if (!isLocale(next) || next === locale) return false;
       locale = next;
