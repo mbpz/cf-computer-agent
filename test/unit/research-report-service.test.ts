@@ -65,6 +65,14 @@ describe("ResearchReportService", () => {
     await expect(new ResearchReportService(repository(), ai({ title: "x", sections: [{ heading: "结论", body: "无依据", citationIds: ["c-9"] }], insufficientEvidence: false })).generate(scope, "run-1", sources)).rejects.toMatchObject({ code: "RESEARCH_REPORT_UNGROUNDED", status: 422 });
   });
 
+  it("does not execute a draft plan before explicit approval", async () => {
+    let calls = 0;
+    const draftRepo = { ...repository(), findRun: async () => ({ ...run, status: "draft" as const }) };
+    await expect(new ResearchReportService(draftRepo, { run: async () => { calls += 1; return { response: "{}" }; } }).generate(scope, "run-1", sources))
+      .rejects.toMatchObject({ code: "RESEARCH_RUN_NOT_FOUND", status: 404 });
+    expect(calls).toBe(0);
+  });
+
   it("returns a gap for insufficient evidence and maps provider failure", async () => {
     const gap = await new ResearchReportService(repository(), ai({ title: "证据不足", sections: [], insufficientEvidence: true })).generate(scope, "run-1", sources);
     expect(gap.messageKey).toBe("KNOWLEDGE_EVIDENCE_INSUFFICIENT");
