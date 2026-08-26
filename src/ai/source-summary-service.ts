@@ -208,7 +208,9 @@ function isCitationSource(value: unknown): value is CitationSource {
     && Number.isSafeInteger(value.endLine)
     && value.endLine >= value.startLine
     && typeof value.body === "string"
-    && validText(value.body, 128 * 1024);
+    && value.body.length > 0
+    && !hasMalformedSurrogate(value.body)
+    && codePointLength(value.body) <= 128 * 1024;
 }
 
 function parseProviderSummary(result: unknown): ProviderSummary {
