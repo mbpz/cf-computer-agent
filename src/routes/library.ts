@@ -218,6 +218,7 @@ export async function routeLibraryApi(
   if (researchRunApprove) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
+    await services.library.detail(scope, decodePathId(researchRunApprove[1]!));
     return jsonResponse({ researchRun: await services.researchReports.approve(scope, decodePathId(researchRunApprove[2]!)) }, 200, context.requestId);
   }
 
