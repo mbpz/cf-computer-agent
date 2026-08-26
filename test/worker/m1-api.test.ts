@@ -1387,6 +1387,8 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(report.version).toBe(1);
     expect(report.sourceSnapshots[0]).toEqual(expect.objectContaining({ citationId: hit!.citationId }));
     expect(JSON.stringify(report)).not.toContain("researchmarker source evidence");
+    const cancel = await memberApi("contributor", `/api/knowledge/${selected.knowledgeItemId}/research-runs/${run.id}/cancel`, { method: "POST", body: "{}" });
+    expect(cancel.status).toBe(200);
   });
 
   it("generates a cited mindmap with readable concept nodes", async () => {

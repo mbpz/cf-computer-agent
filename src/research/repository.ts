@@ -47,6 +47,14 @@ export class ResearchRepository implements ResearchReportRepository {
     return run;
   }
 
+  async cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun> {
+    const result = await this.db.prepare("UPDATE research_runs SET status = 'cancelled', updated_at = ? WHERE id = ? AND owner_member_id = ? AND status IN ('draft', 'running', 'paused')").bind(new Date().toISOString(), id, scope.memberId).run();
+    if (!result.meta.changes) throw new AppError("RESEARCH_RUN_NOT_FOUND", "Research run was not found", 404);
+    const run = await this.findRun(scope, id);
+    if (!run) throw new AppError("RESEARCH_RUN_UNAVAILABLE", "Research run is unavailable", 503, true);
+    return run;
+  }
+
   async recordQuery(input: ResearchQuery): Promise<ResearchQuery> {
     await this.db.prepare("INSERT INTO research_queries (id, research_run_id, subquestion_id, query, result_ids_json, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(input.id, input.researchRunId, input.subquestionId, input.query, JSON.stringify(input.resultIds), input.rationale, input.createdAt).run();
     return input;

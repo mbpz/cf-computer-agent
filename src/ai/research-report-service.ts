@@ -37,7 +37,7 @@ export interface ResearchReportCitation extends SourceSummaryCitation { revision
 export interface ResearchReportSection { heading: string; body: string; citations: ResearchReportCitation[] }
 export interface ResearchReportResult { reportId?: string; researchRunId: string; version?: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; messageKey?: "KNOWLEDGE_EVIDENCE_INSUFFICIENT" }
 export interface ResearchReportSaveInput { id: string; researchRunId: string; version: number; title: string; sections: ResearchReportSection[]; sourceSnapshots: ResearchReportCitation[]; model: string; promptVersion: string; createdAt: string }
-export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
+export interface ResearchReportRepository { createRun(input: { id: string; ownerMemberId: string; knowledgeItemId: string; goal: string; plan: ResearchRunPlan; createdAt: string }): Promise<ResearchRun>; findRun(scope: LibraryScope, id: string): Promise<ResearchRun | null>; approveRun(scope: LibraryScope, id: string): Promise<ResearchRun>; pauseRun(scope: LibraryScope, id: string): Promise<ResearchRun>; cancelRun(scope: LibraryScope, id: string): Promise<ResearchRun>; recordQuery(input: ResearchQuery): Promise<ResearchQuery>; nextVersion(researchRunId: string): Promise<number>; saveReport(input: ResearchReportSaveInput): Promise<{ id: string; version: number }> }
 export interface ResearchReportAiInput { messages: Array<{ role: "system" | "user"; content: string }>; max_tokens: number; temperature: number; response_format: { type: "json_schema"; json_schema: { name: "research_report"; strict: true; schema: typeof RESPONSE_SCHEMA } } }
 export interface ResearchReportAi { run(model: string, input: ResearchReportAiInput): Promise<unknown> }
 
@@ -65,6 +65,13 @@ export class ResearchReportService {
     const run = await this.repository.findRun(scope, researchRunId);
     if (!run || (run.status !== "running" && run.status !== "draft")) throw notFound();
     return this.repository.pauseRun(scope, researchRunId);
+  }
+
+  async cancel(scope: LibraryScope, researchRunId: string): Promise<ResearchRun> {
+    assertScope(scope);
+    const run = await this.repository.findRun(scope, researchRunId);
+    if (!run || (run.status !== "draft" && run.status !== "running" && run.status !== "paused")) throw notFound();
+    return this.repository.cancelRun(scope, researchRunId);
   }
 
   async recordQuery(scope: LibraryScope, input: { researchRunId: string; subquestionId: string; query: string; resultIds: string[]; rationale: string }): Promise<ResearchQuery> {
