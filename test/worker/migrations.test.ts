@@ -1065,6 +1065,24 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(env.DB.prepare("SELECT count(*) AS count FROM knowledge_favorites WHERE knowledge_item_id = 'favorite-knowledge'").first()).resolves.toEqual({ count: 0 });
   });
 
+  it("creates bounded recent visits with private member and knowledge cascades", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("knowledge_visits", [
+      "member_id:TEXT:1:NULL:1",
+      "knowledge_item_id:TEXT:1:NULL:2",
+      "last_visited_at:TEXT:1:NULL:0",
+      "visit_count:INTEGER:1:1:0",
+    ], ["CHECK(visit_count >= 1)"]);
+    await expectIndex("knowledge_visits", "knowledge_visits_member_page", [{ name: "member_id", desc: 0 }, { name: "last_visited_at", desc: 1 }, { name: "knowledge_item_id", desc: 1 }]);
+    const timestamp = "2026-08-26T00:00:00.000Z";
+    await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('recent-owner', 'github:recent-owner', 'recent-owner@example.test', 'contributor', 'active', ?, ?)").bind(timestamp, timestamp).run();
+    await env.DB.prepare("INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('recent-knowledge', 'default', NULL, 'active', 'indexed', ?, ?)").bind(timestamp, timestamp).run();
+    await env.DB.prepare("INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at) VALUES ('recent-owner', 'recent-knowledge', ?)").bind(timestamp).run();
+    await expect(env.DB.prepare("INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at, visit_count) VALUES ('recent-owner', 'recent-knowledge', ?, 0)").bind(timestamp).run()).rejects.toThrow();
+    await env.DB.prepare("DELETE FROM knowledge_items WHERE id = 'recent-knowledge'").run();
+    await expect(env.DB.prepare("SELECT count(*) AS count FROM knowledge_visits").first()).resolves.toEqual({ count: 0 });
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

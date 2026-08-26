@@ -62,6 +62,8 @@ import { ReviewCommentsRepository } from "./review-comments/repository";
 import { ReviewCommentsService } from "./review-comments/service";
 import { FavoritesRepository } from "./favorites/repository";
 import { FavoritesService } from "./favorites/service";
+import { RecentVisitsRepository } from "./recent-visits/repository";
+import { RecentVisitsService } from "./recent-visits/service";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -224,6 +226,7 @@ function createRequestServices(
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
+    recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
   };
 }
 

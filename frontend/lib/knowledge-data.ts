@@ -14,6 +14,13 @@ export interface KnowledgePageResult {
   nextCursor: string | null;
 }
 
+export interface RecentKnowledgeItem {
+  id: string;
+  title: string;
+  lastVisitedAt: string;
+  visitCount: number;
+}
+
 function normalizeItem(value: unknown): KnowledgeListItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -35,6 +42,23 @@ export async function loadKnowledgePage({ cursor, requester = fetch, signal }: {
     items: Array.isArray(data.items) ? data.items.map(normalizeItem).filter((item): item is KnowledgeListItem => item !== null) : [],
     nextCursor: typeof data.nextCursor === "string" && data.nextCursor.length > 0 ? data.nextCursor : null,
   };
+}
+
+export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: AbortSignal): Promise<RecentKnowledgeItem[]> {
+  const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/recent?limit=8", { requester, signal });
+  if (!Array.isArray(data.items)) return [];
+  return data.items.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const item = value as Record<string, unknown>;
+    if (typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
+      || typeof item.title !== "string" || typeof item.lastVisitedAt !== "string") return [];
+    return [{
+      id: item.knowledgeItemId,
+      title: item.title,
+      lastVisitedAt: item.lastVisitedAt,
+      visitCount: Number.isSafeInteger(item.visitCount) && (item.visitCount as number) > 0 ? item.visitCount as number : 1,
+    }];
+  });
 }
 
 export function createKnowledgeRequestController(requester: Fetcher = fetch) {

@@ -27,6 +27,7 @@ import type { QuizService } from "../ai/quiz-service";
 import type { PrivateNotesService } from "../private-notes/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { FavoritesService } from "../favorites/service";
+import type { RecentVisitsService } from "../recent-visits/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
@@ -46,6 +47,7 @@ export interface LibraryRouteServices {
   privateNotes: PrivateNotesService;
   submissions: SubmissionsService;
   favorites: FavoritesService;
+  recentVisits: RecentVisitsService;
 }
 
 export async function routeLibraryApi(
@@ -72,6 +74,12 @@ export async function routeLibraryApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const query = queryRecord(url, ["limit", "cursor"]);
     return jsonResponse(await services.favorites.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
+  }
+
+  if (url.pathname === "/api/knowledge/recent") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const query = queryRecord(url, ["limit", "cursor"]);
+    return jsonResponse(await services.recentVisits.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
   }
 
   const favorite = /^\/api\/knowledge\/([^/]+)\/favorite$/.exec(url.pathname);
@@ -475,11 +483,10 @@ export async function routeLibraryApi(
   if (detail) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireNoQuery(url);
-    return jsonResponse(
-      { knowledge: await services.library.detail(scope, decodePathId(detail[1]!)) },
-      200,
-      context.requestId,
-    );
+    const knowledgeItemId = decodePathId(detail[1]!);
+    const knowledge = await services.library.detail(scope, knowledgeItemId);
+    await services.recentVisits.record(scope, knowledgeItemId);
+    return jsonResponse({ knowledge }, 200, context.requestId);
   }
 
   throw new AppError("NOT_FOUND", "Not found", 404);
