@@ -29,7 +29,7 @@ describe("admin menus API", () => {
   it("lists the tree for administrators and rejects contributors", async () => {
     const allowed = await api("/api/admin/menus", admin);
     expect(allowed.status).toBe(200);
-    const payload = await allowed.json() as { tree: Array<{ key: string; children: Array<{ key: string }> }> };
+    const payload = await allowed.json() as { tree: MenuPayloadNode[] };
     expect(payload.tree.some((item) => item.key === "workspace" && item.children.some((child) => child.key === "custom"))).toBe(true);
     const workspace = payload.tree.find((item) => item.key === "workspace");
     expect(workspace?.children.find((child) => child.key === "knowledge")?.children.map((child) => child.key)).toEqual(["search", "agent"]);
@@ -66,4 +66,9 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
   const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
+}
+
+interface MenuPayloadNode {
+  key: string;
+  children: MenuPayloadNode[];
 }

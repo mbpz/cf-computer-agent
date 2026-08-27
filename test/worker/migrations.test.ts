@@ -1139,6 +1139,60 @@ describe("Phase 1 control-plane migrations", () => {
     ]);
   });
 
+  it("creates privacy-safe site analytics dimensions and lookup indexes", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("site_visit_events", [
+      "id:TEXT:0:NULL:1",
+      "day:TEXT:1:NULL:0",
+      "visit_bucket:TEXT:1:NULL:0",
+      "path:TEXT:1:NULL:0",
+      "visitor_hash:TEXT:1:NULL:0",
+      "member_id:TEXT:0:NULL:0",
+      "created_at:TEXT:1:NULL:0",
+      "ip_display:TEXT:1:'unknown':0",
+      "country:TEXT:0:NULL:0",
+      "region:TEXT:0:NULL:0",
+      "city:TEXT:0:NULL:0",
+      "colo:TEXT:0:NULL:0",
+      "user_agent:TEXT:0:NULL:0",
+    ]);
+    await expectIndex("site_visit_events", "site_visit_region_day", [
+      { name: "country", desc: 0 },
+      { name: "region", desc: 0 },
+      { name: "day", desc: 0 },
+      { name: "created_at", desc: 1 },
+    ]);
+    await expectIndex("site_visit_events", "site_visit_member_time", [
+      { name: "member_id", desc: 0 },
+      { name: "created_at", desc: 1 },
+    ]);
+  });
+
+  it("groups knowledge and governance menus without exceeding four levels", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const rows = await env.DB.prepare(
+      `SELECT id, parent_id, label_key, path, position
+       FROM menus
+       WHERE id IN ('menu-knowledge', 'menu-search', 'menu-agent', 'menu-admin',
+         'menu-governance', 'menu-members', 'menu-roles', 'menu-menus',
+         'menu-spaces', 'menu-audit', 'menu-analytics')
+       ORDER BY id`,
+    ).all<{ id: string; parent_id: string | null; label_key: string; path: string | null; position: number }>();
+    expect(rows.results).toEqual([
+      { id: "menu-admin", parent_id: null, label_key: "NAV_ADMINISTRATION", path: null, position: 1 },
+      { id: "menu-agent", parent_id: "menu-knowledge", label_key: "NAV_KNOWLEDGE_AGENT", path: "/agent", position: 1 },
+      { id: "menu-analytics", parent_id: "menu-governance", label_key: "NAV_SITE_ANALYTICS", path: "/admin/analytics", position: 5 },
+      { id: "menu-audit", parent_id: "menu-governance", label_key: "NAV_AUDIT", path: "/admin/audit", position: 4 },
+      { id: "menu-governance", parent_id: "menu-admin", label_key: "SHELL_GROUP_GOVERNANCE", path: null, position: 4 },
+      { id: "menu-knowledge", parent_id: "menu-workspace", label_key: "NAV_KNOWLEDGE_BASE", path: "/knowledge", position: 1 },
+      { id: "menu-members", parent_id: "menu-governance", label_key: "NAV_MEMBERS", path: "/admin/members", position: 0 },
+      { id: "menu-menus", parent_id: "menu-governance", label_key: "NAV_MENUS", path: "/admin/menus", position: 2 },
+      { id: "menu-roles", parent_id: "menu-governance", label_key: "NAV_ROLES", path: "/admin/roles", position: 1 },
+      { id: "menu-search", parent_id: "menu-knowledge", label_key: "NAV_KNOWLEDGE_SEARCH", path: "/search", position: 0 },
+      { id: "menu-spaces", parent_id: "menu-governance", label_key: "NAV_SPACES", path: "/admin/spaces", position: 3 },
+    ]);
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

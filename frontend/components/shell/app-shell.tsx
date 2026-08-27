@@ -9,6 +9,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/
 import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
 import { matchRoute } from "../../lib/router";
+import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -40,13 +41,9 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "knowledge-base": true, admin: true, governance: true });
   const [theme, setTheme] = useState<ThemeMode>("system");
   useEffect(() => {
-    let stored: ThemeMode = "system";
-    try {
-      const value = window.localStorage.getItem("memory-garden-theme");
-      if (value === "light" || value === "dark" || value === "system") stored = value;
-    } catch { /* storage can be unavailable */ }
+    const stored = readTheme(window.localStorage);
     setTheme(stored);
-    applyTheme(stored);
+    applyTheme(stored, document, window.localStorage);
   }, []);
   const workspaceRoutes = navigationTree("workspace", session);
   const adminRoutes = navigationTree("admin", session);
@@ -85,7 +82,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
             </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={memberLabel} className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initials(memberLabel)}</span><span className="hidden max-w-48 truncate text-sm font-medium sm:inline">{memberLabel}</span><CaretDown size={14} aria-hidden="true" /></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64"><div className="flex items-center gap-3 border-b px-2 py-3"><span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{session.member.role === "admin" ? locale.t("SHELL_ADMIN_ROLE") : locale.t("SHELL_MEMBER_ROLE")}</p></div></div><DropdownMenuItem onClick={() => undefined}><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</DropdownMenuItem><div className="border-t px-2 py-2"><p className="mb-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p><div className="grid grid-cols-3 gap-1"><ThemeButton mode="light" current={theme} onSelect={setTheme} icon={<Sun size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_LIGHT")} /><ThemeButton mode="dark" current={theme} onSelect={setTheme} icon={<Moon size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_DARK")} /><ThemeButton mode="system" current={theme} onSelect={setTheme} label={locale.t("SHELL_THEME_SYSTEM")} /></div></div>{logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}<DropdownMenuItem disabled={logoutPending} onClick={onLogout}>{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent>
+              <DropdownMenuContent align="end" className="w-64"><div className="flex items-center gap-3 border-b px-2 py-3"><span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{session.member.role === "admin" ? locale.t("SHELL_ADMIN_ROLE") : locale.t("SHELL_MEMBER_ROLE")}</p></div></div><DropdownMenuItem onClick={() => onNavigate?.("/settings")}><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</DropdownMenuItem><div className="border-t px-2 py-2"><p className="mb-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p><div className="grid grid-cols-3 gap-1"><ThemeButton mode="light" current={theme} onSelect={setTheme} icon={<Sun size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_LIGHT")} /><ThemeButton mode="dark" current={theme} onSelect={setTheme} icon={<Moon size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_DARK")} /><ThemeButton mode="system" current={theme} onSelect={setTheme} label={locale.t("SHELL_THEME_SYSTEM")} /></div></div>{logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}<DropdownMenuItem disabled={logoutPending} onClick={onLogout}>{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>
           </div>
         </header>
@@ -128,9 +125,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   return [{ id: "admin", route: admin, labelKey: admin.labelKey, children }];
 }
 
-type ThemeMode = "light" | "dark" | "system";
-function ThemeButton({ mode, current, onSelect, icon, label }: { mode: ThemeMode; current: ThemeMode; onSelect: (mode: ThemeMode) => void; icon?: ReactNode; label: string }) { return <button type="button" aria-pressed={current === mode} className={cn("flex items-center justify-center gap-1 rounded border px-1 py-1 text-[11px] hover:bg-accent", current === mode && "border-primary bg-primary/10")} onClick={() => { onSelect(mode); applyTheme(mode); }}>{icon}{label}</button>; }
-function applyTheme(mode: ThemeMode) { if (typeof document === "undefined") return; const dark = mode === "dark" || (mode === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches); document.documentElement.classList.toggle("dark", dark); try { window.localStorage.setItem("memory-garden-theme", mode); } catch { /* storage can be unavailable */ } }
+function ThemeButton({ mode, current, onSelect, icon, label }: { mode: ThemeMode; current: ThemeMode; onSelect: (mode: ThemeMode) => void; icon?: ReactNode; label: string }) { return <button type="button" aria-pressed={current === mode} className={cn("flex items-center justify-center gap-1 rounded border px-1 py-1 text-[11px] hover:bg-accent", current === mode && "border-primary bg-primary/10")} onClick={() => { onSelect(mode); applyTheme(mode, document, window.localStorage); }}>{icon}{label}</button>; }
 function initials(value: string): string { const parts = value.split(/[@.\s_-]+/u).filter(Boolean); return (parts.slice(0, 2).map((part) => part[0]).join("") || "MG").toUpperCase(); }
 
 function Breadcrumb({ pathname, locale }: { pathname: string; locale: LocaleRuntime }) {

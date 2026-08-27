@@ -1,4 +1,4 @@
-export type PageKind = "home" | "knowledge" | "knowledge-reader" | "search" | "agent" | "submit" | "my-submissions" | "admin" | "admin-submissions" | "admin-submission-detail" | "admin-duplicates" | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus" | "admin-spaces" | "admin-audit" | "admin-analytics" | "not-found";
+export type PageKind = "home" | "knowledge" | "knowledge-reader" | "search" | "agent" | "submit" | "my-submissions" | "settings" | "admin" | "admin-submissions" | "admin-submission-detail" | "admin-duplicates" | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus" | "admin-spaces" | "admin-audit" | "admin-analytics" | "not-found";
 
 export function pageKindForPath(pathname: string): PageKind {
   if (pathname === "/") return "home";
@@ -8,6 +8,7 @@ export function pageKindForPath(pathname: string): PageKind {
   if (pathname === "/agent") return "agent";
   if (pathname === "/submit") return "submit";
   if (pathname === "/my-submissions") return "my-submissions";
+  if (pathname === "/settings") return "settings";
   if (pathname === "/admin") return "admin";
   if (pathname === "/admin/submissions") return "admin-submissions";
   if (pathname === "/admin/duplicates") return "admin-duplicates";

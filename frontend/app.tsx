@@ -20,6 +20,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { LoginPage } from "./pages/login-page";
+import { SettingsPage } from "./pages/settings-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
@@ -49,6 +50,7 @@ import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18
 import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
+import type { SessionSnapshot } from "./contracts/api";
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
@@ -130,11 +132,11 @@ export function App() {
     }
   };
   const kind = pageKindForPath(pathname);
-  const page = renderPage(kind, pathname, locale, window.location.search);
+  const page = renderPage(kind, pathname, locale, window.location.search, session);
   return <AppShell session={session} pathname={pathname} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
 }
 
-function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "") {
+function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
   switch (kind) {
     case "home": return <HomeRoute locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} />;
@@ -143,6 +145,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "agent": return <AgentRoute locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} />;
+    case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
     case "admin-roles": return <AdminRolesRoute locale={locale} />;

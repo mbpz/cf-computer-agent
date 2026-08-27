@@ -158,7 +158,7 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 }
 
 const workspaceRoutes = new Set([
-  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
+  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/settings",
   "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
