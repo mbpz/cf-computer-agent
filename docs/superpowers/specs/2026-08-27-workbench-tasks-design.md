@@ -24,7 +24,7 @@
 
 ## 3. 数据模型
 
-### 3.1 迁移 `0030_workspace_tasks.sql`
+### 3.1 迁移 `0032_workspace_tasks.sql`
 
 ```sql
 CREATE TABLE tasks (

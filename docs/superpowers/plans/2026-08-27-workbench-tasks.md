@@ -4,7 +4,7 @@
 
 **Goal:** 为 Memory Garden 工作台新增成员私有的任务模块(个人待办 + 可选关联知识条目),含 D1 存储、原子级 API、shadcn/ui 前端与完整测试。
 
-**Architecture:** 单 Worker 内新增 `src/tasks/` 三层模块(types/repository/service)+ `src/routes/tasks.ts`,经 `createRequestServices()` 注入、`dispatchApiRequest()` 分发。数据存 D1(迁移 0031),强制 `member_id` 隔离;权限沿用 `requireCapability` 字符串能力(`tasks:use`),同时在 permission bitmap 注册 bit 20(`workspace.tasks`)供菜单/角色治理。前端新增 `/tasks` 页面、首页概览卡与知识阅读页入口。
+**Architecture:** 单 Worker 内新增 `src/tasks/` 三层模块(types/repository/service)+ `src/routes/tasks.ts`,经 `createRequestServices()` 注入、`dispatchApiRequest()` 分发。数据存 D1(迁移 0032),强制 `member_id` 隔离;权限沿用 `requireCapability` 字符串能力(`tasks:use`),同时在 permission bitmap 注册 bit 20(`workspace.tasks`)供菜单/角色治理。前端新增 `/tasks` 页面、首页概览卡与知识阅读页入口。
 
 **Tech Stack:** Cloudflare Workers + D1 + TypeScript 严格模式 + React 19 + Tailwind 4 + shadcn/ui(new-york/slate)+ Vitest(`@cloudflare/vitest-pool-workers`)。
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 迁移 append-only:新文件 `migrations/0031_workspace_tasks.sql`,绝不修改历史迁移(注意 0030 已被占用)。
+- 迁移 append-only:新文件 `migrations/0032_workspace_tasks.sql`,绝不修改历史迁移(0030/0031 已被占用)。
 - 时间存储:spec 规定 `tasks` 表时间列一律 epoch ms INTEGER;repository 层映射为 ISO 字符串对外。
 - 隔离:所有 SQL 强制 `member_id`;跨成员访问一律 404(`TASK_NOT_FOUND`),不返回 403。
 - 幂等:创建用客户端 id `INSERT OR IGNORE` + 回读;状态/进度/标签为绝对值语义,重复提交返回当前资源;删除重试的 404 由前端按成功处理。
@@ -27,7 +27,7 @@
 
 ```
 后端
-  migrations/0031_workspace_tasks.sql        (Create) 三张表 + 菜单行
+  migrations/0032_workspace_tasks.sql        (Create) 三张表 + 菜单行
   src/config.ts                              (Modify) 任务上限常量
   src/authorization/permission-bitmap.ts     (Modify) bit 20 "workspace.tasks"
   src/authorization/policy.ts                (Modify) Capability "tasks:use" + mask 投影
@@ -65,10 +65,10 @@
 
 ---
 
-### Task 1: 迁移 0031 + 权限位 + 能力注册
+### Task 1: 迁移 0032 + 权限位 + 能力注册
 
 **Files:**
-- Create: `migrations/0031_workspace_tasks.sql`
+- Create: `migrations/0032_workspace_tasks.sql`
 - Modify: `src/config.ts`(在 `maxBatchReviewActions: 20,` 之后插入)
 - Modify: `src/authorization/permission-bitmap.ts`(PERMISSION_BITS 末尾)
 - Modify: `src/authorization/policy.ts`
@@ -78,7 +78,7 @@
 
 - [ ] **Step 1: 写迁移文件**
 
-`migrations/0031_workspace_tasks.sql`:
+`migrations/0032_workspace_tasks.sql`:
 
 ```sql
 -- Workbench tasks: per-member private todo entities with optional knowledge links.
@@ -158,7 +158,7 @@ Expected: 全部 PASS,tsc 无错误。
 - [ ] **Step 6: Commit**
 
 ```bash
-git add migrations/0031_workspace_tasks.sql src/config.ts src/authorization/permission-bitmap.ts src/authorization/policy.ts
+git add migrations/0032_workspace_tasks.sql src/config.ts src/authorization/permission-bitmap.ts src/authorization/policy.ts
 git commit -m "feat: add workspace tasks migration and permission registration"
 ```
 
@@ -2740,4 +2740,3 @@ git commit -m "docs: record workbench tasks release evidence"
 
 - 规格覆盖:§2 隔离(Task 2/5)、§3 数据模型与状态机(Task 1/2/3)、§3.3 上限(Task 1/3)、§4 API 全部端点(Task 5)、§4.1 幂等(Task 3/5/6)、§5 权限与菜单(Task 1/8)、§6 服务层(Task 2/3/4)、§7 前端(Task 6/7/8/9)、§8 测试验收(Task 2-10)、§9 范围外未引入。
 - 已知实现注意点:cursor 必须 epoch 毫秒数字绑定(Task 2 已修正);`AppError` 构造签名以 `src/http.ts` 为准;组件原语 props 以 `frontend/components/ui/` 实际签名为准。
-
