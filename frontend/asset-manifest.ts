@@ -13,6 +13,7 @@ export const FRONTEND_ASSET_MANIFEST = Object.freeze({
     "/admin/assets",
     "/admin/members",
     "/admin/roles",
+    "/admin/menus",
     "/admin/spaces",
     "/admin/audit",
     "/admin/analytics",

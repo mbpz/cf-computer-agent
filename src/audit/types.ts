@@ -10,6 +10,7 @@ export interface AuditActionMap {
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "role.updated": { resourceType: "role"; metadata: { previousAllowBits: string; allowBits: string } };
+  "menu.updated": { resourceType: "menu"; metadata: { previousPath: string | null; path: string | null; previousStatus: RecordStatus; status: RecordStatus; previousVisible: boolean; visible: boolean } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
   "collection.created": { resourceType: "collection"; metadata: { spaceId: string; status: RecordStatus } };
@@ -48,6 +49,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.identity_linked",
   "member.status_updated",
   "role.updated",
+  "menu.updated",
   "space.created",
   "space.updated",
   "collection.created",
@@ -157,6 +159,15 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["previousAllowBits", "allowBits"]));
       if (!isPermissionMask(metadata.previousAllowBits) || !isPermissionMask(metadata.allowBits)) throw invalidMetadata();
       return safeMetadata({ previousAllowBits: metadata.previousAllowBits, allowBits: metadata.allowBits });
+    }
+    case "menu.updated": {
+      assertResourceType(resourceType, "menu");
+      const metadata = readPlainDataObject(input, new Set(["previousPath", "path", "previousStatus", "status", "previousVisible", "visible"]));
+      if ((metadata.previousPath !== null && !isNonEmptyString(metadata.previousPath))
+        || (metadata.path !== null && !isNonEmptyString(metadata.path))
+        || !isRecordStatus(metadata.previousStatus) || !isRecordStatus(metadata.status)
+        || typeof metadata.previousVisible !== "boolean" || typeof metadata.visible !== "boolean") throw invalidMetadata();
+      return safeMetadata({ previousPath: metadata.previousPath, path: metadata.path, previousStatus: metadata.previousStatus, status: metadata.status, previousVisible: metadata.previousVisible, visible: metadata.visible });
     }
     case "space.created": {
       assertResourceType(resourceType, "space");

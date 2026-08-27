@@ -126,8 +126,11 @@
 - Test: `test/unit/admin-menus-page.test.tsx`
 - Test: `test/worker/admin-menus.test.ts`
 
-- [ ] Step 1: 写 contributor 403、admin 树读取、排序移动、启停和循环拒绝测试。
-- [ ] Step 2: 运行 worker/page 测试确认失败。
+- [x] Step 1: 写 contributor 403、admin 树读取、排序移动、启停和循环拒绝测试。
+- [x] Step 2: 运行 worker/page 测试确认失败。
+- [x] Step 3: 实现菜单树读取、排序/启停/可见性更新 API 和服务端结构校验。
+- [x] Step 4: 接入 `/admin/menus` 工作台页面与 `menu:manage` guard。
+- [x] Step 5: 运行菜单 Worker/page/typecheck 回归；创建/删除操作保留到下一切片。
 - [ ] Step 3: 实现 D1 查询、树构造、move/toggle API 和审计事件。
 - [ ] Step 4: 实现树形页面、父子层级、位置移动、启停和系统节点保护。
 - [ ] Step 5: 运行 `rtk npx vitest run test/worker/admin-menus.test.ts test/unit/admin-menus-page.test.tsx`、typecheck、i18n/WCAG。

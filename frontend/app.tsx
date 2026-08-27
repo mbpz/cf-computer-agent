@@ -3,6 +3,7 @@ import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
 import { AdminRolesPage } from "./pages/admin/roles-page";
+import { AdminMenusPage } from "./pages/admin/menus-page";
 import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
@@ -37,6 +38,7 @@ import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activit
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
 import { loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
+import { loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
@@ -144,6 +146,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
     case "admin-roles": return <AdminRolesRoute locale={locale} />;
+    case "admin-menus": return <AdminMenusRoute locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute locale={locale} />;
@@ -191,6 +194,32 @@ function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
     } finally { setSaving(false); }
   };
   return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} />;
+}
+
+function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; menus: AdminMenu[] } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setState({ kind: "loading" });
+    void loadAdminMenus().then((menus) => { if (active) setState({ kind: "ready", menus }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "ADMIN_MENUS_UNAVAILABLE") }); });
+    return () => { active = false; };
+  }, [locale]);
+  const update = async (menu: AdminMenu, input: { position?: number; status?: "active" | "disabled"; visible?: boolean }) => {
+    if (pendingId) return;
+    setPendingId(menu.id);
+    setError(null);
+    try {
+      const updated = await updateAdminMenu(menu.id, input);
+      setState((previous) => previous.kind === "ready" ? { ...previous, menus: replaceMenu(previous.menus, updated) } : previous);
+    } catch { setError(frontendText(locale, "ADMIN_MENUS_SAVE_ERROR")); } finally { setPendingId(null); }
+  };
+  return <AdminMenusPage locale={locale} state={state} pendingId={pendingId} error={error} onUpdate={(menu, input) => void update(menu, input)} />;
+}
+
+function replaceMenu(menus: readonly AdminMenu[], updated: AdminMenu): AdminMenu[] {
+  return menus.map((menu) => menu.id === updated.id ? { ...updated, children: menu.children } : { ...menu, children: replaceMenu(menu.children, updated) });
 }
 
 function decodeRouteId(pathname: string): string {

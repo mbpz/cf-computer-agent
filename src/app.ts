@@ -17,6 +17,7 @@ import { AuditRepository } from "./audit/repository";
 import { AnalyticsRepository } from "./analytics/repository";
 import { requireCapability } from "./authorization/policy";
 import { RolesRepository } from "./authorization/roles-repository";
+import { MenusRepository } from "./authorization/menus-repository";
 import { APP_CONFIG } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
@@ -37,6 +38,7 @@ import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
 import { routeAdminRolesApi } from "./routes/admin-roles";
+import { routeAdminMenusApi } from "./routes/admin-menus";
 import { routeAgentApi } from "./routes/agent";
 import { clearOAuthCookies, clearWeChatCookie, routeAuth } from "./routes/auth";
 import { routeLibraryApi } from "./routes/library";
@@ -157,7 +159,7 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 
 const workspaceRoutes = new Set([
   "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/spaces", "/admin/audit", "/admin/analytics",
+  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
@@ -175,6 +177,7 @@ function createRequestServices(
   const ai = dependencies.ai || env.AI;
   const audit = new AuditRepository(env.DB);
   const roles = new RolesRepository(env.DB);
+  const menus = new MenusRepository(env.DB);
   const analytics = new AnalyticsRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
@@ -269,6 +272,7 @@ function createRequestServices(
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
     review,
     roles,
+    menus,
   };
 }
 
@@ -299,6 +303,8 @@ async function dispatchApiRequest(
   if (admin) return admin;
   const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });
   if (adminRoles) return adminRoles;
+  const adminMenus = await routeAdminMenusApi(request, url, context, principal, { menus: services.menus, audit: services.audit });
+  if (adminMenus) return adminMenus;
   const library = await routeLibraryApi(request, url, context, principal, services);
   if (library) return library;
   const adminReview = await routeAdminReviewApi(request, url, context, principal, services);

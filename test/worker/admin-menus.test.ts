@@ -1,0 +1,57 @@
+/// <reference types="@cloudflare/vitest-pool-workers/types" />
+
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
+import { MembersRepository } from "../../src/members/repository";
+import { SessionService } from "../../src/identity/session";
+import { MIGRATIONS } from "../fixtures/d1";
+
+describe("admin menus API", () => {
+  let admin = "";
+  let contributor = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare(
+      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
+       ('menu-admin', 'subject-menu-admin', 'menu-admin@example.test', 'admin', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z'),
+       ('menu-contributor', 'subject-menu-contributor', 'menu-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
+    ).run();
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
+    admin = (await sessions.create((await members.findById("menu-admin"))!)).token;
+    contributor = (await sessions.create((await members.findById("menu-contributor"))!)).token;
+    await env.DB.prepare("INSERT INTO menus (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at) VALUES ('menu-custom', 'menu-workspace', 'custom', 'NAV_HOME', '/custom', 'House', 'workspace', 99, '0x0', 'active', 1, 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
+  });
+
+  it("lists the tree for administrators and rejects contributors", async () => {
+    const allowed = await api("/api/admin/menus", admin);
+    expect(allowed.status).toBe(200);
+    const payload = await allowed.json() as { tree: Array<{ key: string; children: Array<{ key: string }> }> };
+    expect(payload.tree.some((item) => item.key === "workspace" && item.children.some((child) => child.key === "custom"))).toBe(true);
+    expect((await api("/api/admin/menus", contributor)).status).toBe(403);
+  });
+
+  it("updates custom status and rejects unsafe tree mutations", async () => {
+    const updated = await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ status: "disabled", visible: false, position: 3 }) });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({ menu: { status: "disabled", visible: false, position: 3 } });
+    expect((await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ labelKey: "NAV_UNKNOWN" }) })).status).toBe(400);
+    expect((await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ path: "/knowledge" }) })).status).toBe(400);
+    expect((await api("/api/admin/menus/menu-home", admin, { method: "PATCH", body: JSON.stringify({ visible: false }) })).status).toBe(409);
+  });
+});
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "application/json");
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("cookie", `__Host-memory-session=${token}`);
+  const request = new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers });
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  await waitOnExecutionContext(context);
+  return response;
+}
