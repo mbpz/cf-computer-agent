@@ -4,13 +4,14 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 分支 | `main` |
-| 最新本地提交 | `14bc765` |
+| 分支 | `workbench-tasks`（`main` 仍指向 `bef4279`） |
+| 发布源码快照 | `14bc765` |
+| 当前本地 HEAD | `614eca1`（仅含证据文档更新） |
 | Worker | `memory-garden-agent` |
 | 自定义域 | `https://memory.crgmhrc.asia` |
 | D1 | `memory-garden-control-plane` (`653c9e43-c7ad-45b8-a109-bc144843bee7`) |
 
-本地 `main` 当前包含角色成员分配、有效权限投影、站点统计维度、四层菜单树、个人菜单、双语 shadcn 工作台，以及工作台任务权限位与 D1 任务表迁移。工作树干净；当前分支尚未 push。
+发布时工作树的 `workbench-tasks` 快照包含角色成员分配、有效权限投影、站点统计维度、四层菜单树、个人菜单、双语 shadcn 工作台，以及工作台任务权限位与 D1 任务表迁移。当前工作树干净；`workbench-tasks` 尚未 push，`main` 未被改写。
 
 ## 0030–0032 迁移内容
 
