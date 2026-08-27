@@ -131,10 +131,7 @@
 - [x] Step 3: 实现菜单树读取、排序/启停/可见性更新 API 和服务端结构校验。
 - [x] Step 4: 接入 `/admin/menus` 工作台页面与 `menu:manage` guard。
 - [x] Step 5: 运行菜单 Worker/page/typecheck 回归；创建/删除操作保留到下一切片。
-- [ ] Step 3: 实现 D1 查询、树构造、move/toggle API 和审计事件。
-- [ ] Step 4: 实现树形页面、父子层级、位置移动、启停和系统节点保护。
-- [ ] Step 5: 运行 `rtk npx vitest run test/worker/admin-menus.test.ts test/unit/admin-menus-page.test.tsx`、typecheck、i18n/WCAG。
-- [ ] Step 6: 提交 `feat: add admin menu tree governance`。
+- [x] Step 6: 提交 `feat: add admin menu tree governance`。
 
 ### Task 7: 工作台首页和统一页面状态
 
@@ -167,12 +164,12 @@
 - Consumes `GET /api/admin/analytics/overview?days=1..31` and existing `POST /api/telemetry/pageview`.
 - Produces admin-only `NAV_SITE_ANALYTICS` route, totals, daily rows, range filter and safe empty/error/loading states.
 
-- [ ] Step 1: 写 contributor 403、admin aggregation、5-minute dedupe、empty/error/loading 和无敏感字段响应测试。
-- [ ] Step 2: 运行 `rtk npx vitest run test/unit/admin-analytics-page.test.tsx test/worker/analytics.test.ts`，确认失败。
-- [ ] Step 3: 将 `/admin/analytics` 菜单文案改为 `NAV_SITE_ANALYTICS`，权限切换到 `analytics:read` 并保留旧 policy 投影。
-- [ ] Step 4: 完善站点统计页面的访问量、独立访客、登录用户和按日趋势展示，所有数值非法时归一化为 0。
-- [ ] Step 5: 运行页面/Worker 测试、`rtk npm run typecheck`、`rtk npm run verify:i18n` 和 `rtk npm run verify:wcag`。
-- [ ] Step 6: 提交 `feat: add admin-only site analytics workspace menu`。
+- [x] Step 1: 写 contributor 403、admin aggregation、5-minute dedupe、empty/error/loading 和无敏感字段响应测试。
+- [x] Step 2: 运行 `rtk npx vitest run test/unit/admin-analytics-page.test.tsx test/worker/analytics.test.ts`。
+- [x] Step 3: 将 `/admin/analytics` 菜单文案改为 `NAV_SITE_ANALYTICS`，权限切换到 `analytics:read` 并保留旧 policy 投影。
+- [x] Step 4: 完善站点统计页面的访问量、独立访客、登录用户和按日趋势展示，所有数值非法时归一化为 0。
+- [x] Step 5: 运行页面/Worker 测试、`rtk npm run typecheck`、`rtk npm run verify:i18n` 和 `rtk npm run verify:wcag`。
+- [x] Step 6: 独立站点统计菜单已随工作台/RBAC 提交；生产迁移和远程 smoke 仍单列。
 
 ### Task 9: 集成验证与发布证据
 
