@@ -27,7 +27,7 @@ rtk npm run build
 - `NAV_KNOWLEDGE_BASE` 是工作区一级菜单；`NAV_SITE_ANALYTICS` 是独立管理员菜单。
 - contributor 不能读取角色、菜单和站点统计 API；管理员才能访问。
 - 权限 mask 使用 BigInt，D1/JSON 只传 `0x...` 字符串。
-- 统计只返回访问量、独立访客、登录用户和按日聚合，不返回 IP、Cookie、visitor hash 或 OAuth 数据。
+- 统计返回访问量、独立访客、登录用户、趋势/页面/地区排行和最近访客；IP 仅为脱敏值，不返回 Cookie、visitor hash 或 OAuth 数据。
 - 系统角色/菜单不可修改；自定义角色/菜单的变更写入审计；非法 i18n key、重复路径、循环和超过 4 层树必须拒绝。
 
 ## 生产发布顺序
@@ -38,7 +38,7 @@ rtk npm run build
 # 1. 先备份普通 D1 表（避免导出 FTS5 virtual table）
 rtk npx wrangler d1 export memory-garden-control-plane --remote --table members --output ./backup/members.sql
 
-# 2. 应用 append-only migrations（当前工作树包含 0029_workspace_rbac.sql）
+# 2. 应用 append-only migrations（当前工作树包含 0030_site_analytics_dimensions.sql、0031_workspace_menu_hierarchy.sql）
 rtk npm run db:migrate:remote
 
 # 3. 构建并上传版本；密钥文件必须位于 .gitignore 且发布后删除

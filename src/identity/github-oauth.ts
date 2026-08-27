@@ -72,6 +72,7 @@ export function createGitHubOAuthClient(
           code_challenge: codeChallenge,
           code_challenge_method: "S256",
           allow_signup: "false",
+          prompt: "select_account",
         }).toString();
         return { authorizationUrl: url.toString(), state, verifier };
       } catch {

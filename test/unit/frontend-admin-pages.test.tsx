@@ -82,7 +82,7 @@ describe("React administrator pages", () => {
   });
 
   it("renders bounded analytics range controls without exposing raw telemetry", () => {
-    const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} days={14} state={{ kind: "ready", data: { range: { from: "2026-08-12", to: "2026-08-25", days: 14 }, totals: { pageViews: 12, uniqueVisitors: 4, loginUsers: 2 }, daily: [] } }} />);
+    const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} days={14} state={{ kind: "ready", data: { range: { from: "2026-08-12", to: "2026-08-25", days: 14 }, totals: { pageViews: 12, uniqueVisitors: 4, loginUsers: 2 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: [] } }} />);
     expect(html).toContain("Last 14 days");
     expect(html).toContain("Refresh");
     expect(html).not.toContain("visitorHash");

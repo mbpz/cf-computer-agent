@@ -5,9 +5,9 @@
 ## 1. 当前能力
 
 - `POST /api/telemetry/pageview`：同源采集页面访问。
-- 每日按 IP + User-Agent 做 SHA-256 哈希，不保存原始 IP。
+- 每日按 IP + User-Agent 做 SHA-256 哈希；新增仅管理员可见的脱敏 IP（IPv4 仅保留前三段、IPv6 仅保留前四段）、国家/地区/城市、colo、UA 和时间维度。
 - 同一访客、同一路径、同一 5 分钟桶只计一次。
-- `GET /api/admin/analytics/overview?days=1..31`：管理员读取访问量、独立访客和登录用户聚合。
+- `GET /api/admin/analytics/overview?days=1..31`：管理员读取访问量、独立访客、登录用户聚合、趋势/页面/地区排行和最近访客明细。
 - 页面入口：`/admin/analytics`。
 
 登录用户量表示统计窗口内产生页面访问的不同 active member 数量，不是 OAuth 按钮点击次数；匿名访问不会计入该项。
@@ -44,9 +44,9 @@ Wrangler 会按顺序应用所有未执行的 append-only migration，可能包�
 1. 部署包含访问统计页面和 migration 兼容代码的 Worker 版本。
 2. 使用匿名浏览器打开首页和知识库页面。
 3. 使用管理员浏览器打开 `/admin/analytics`，切换 7/14/30 天并点击刷新。
-4. 确认页面展示“访问量、独立访客、登录用户量”和每日明细。
+4. 确认页面展示“访问量、独立访客、登录用户量”、趋势图、页面/地区排行和最近访客（脱敏 IP、地区、时间、登录邮箱）。
 5. 用 contributor 会话请求管理员统计接口，必须返回 `403`。
-6. 确认响应和日志不包含原始 IP、`visitorHash`、OAuth code、Cookie 或知识正文。
+6. 确认响应和日志不包含原始 IP、`visitorHash`、OAuth code、Cookie 或知识正文；IP 只显示脱敏值。
 7. 使用第二个成员登录并访问页面，确认登录用户量按不同 member 去重。
 
 ## 4. 失败处理

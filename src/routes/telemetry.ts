@@ -2,7 +2,7 @@ import { AppError, requireNoQuery, jsonResponse, methodNotAllowed, parseJsonRequ
 import { APP_CONFIG } from "../config";
 import type { SessionService } from "../identity/session";
 import type { AnalyticsRepository } from "../analytics/repository";
-import { dailyVisitorHash } from "../analytics/identity";
+import { dailyVisitorHash, visitDimensions } from "../analytics/identity";
 
 export interface TelemetryRouteServices {
   analytics: AnalyticsRepository;
@@ -26,12 +26,14 @@ export async function routeTelemetry(
   const occurredAt = new Date();
   const day = occurredAt.toISOString().slice(0, 10);
   const member = await services.sessions.resolve(request).catch(() => null);
+  const dimensions = visitDimensions(request);
   await services.analytics.recordPageView({
     id: crypto.randomUUID(),
     path,
     visitorHash: await dailyVisitorHash(request, day),
     memberId: member?.id ?? null,
     occurredAt,
+    ...dimensions,
   });
   return jsonResponse({ ok: true }, 202, context.requestId);
 }

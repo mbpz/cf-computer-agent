@@ -31,6 +31,10 @@ describe("admin menus API", () => {
     expect(allowed.status).toBe(200);
     const payload = await allowed.json() as { tree: Array<{ key: string; children: Array<{ key: string }> }> };
     expect(payload.tree.some((item) => item.key === "workspace" && item.children.some((child) => child.key === "custom"))).toBe(true);
+    const workspace = payload.tree.find((item) => item.key === "workspace");
+    expect(workspace?.children.find((child) => child.key === "knowledge")?.children.map((child) => child.key)).toEqual(["search", "agent"]);
+    const adminRoot = payload.tree.find((item) => item.key === "admin");
+    expect(adminRoot?.children.find((child) => child.key === "governance")?.children.map((child) => child.key)).toEqual(["members", "roles", "menus", "spaces", "audit", "site-analytics"]);
     expect((await api("/api/admin/menus", contributor)).status).toBe(403);
   });
 

@@ -35,7 +35,7 @@ export interface MenuUpdateInput {
 export interface MenuCreateInput { key: string; labelKey: string; path?: string | null; parentId?: string | null; icon?: string | null; groupName: "workspace" | "admin"; position: number; requiredBits: string; }
 
 const LABEL_KEYS = new Set([
-  "SHELL_GROUP_WORKSPACE", "SHELL_GROUP_ADMIN", "NAV_HOME", "NAV_SUBMIT", "NAV_KNOWLEDGE_BASE", "NAV_SEARCH", "NAV_AGENT", "NAV_MY_SUBMISSIONS",
+  "SHELL_GROUP_WORKSPACE", "SHELL_GROUP_ADMIN", "SHELL_GROUP_GOVERNANCE", "NAV_HOME", "NAV_SUBMIT", "NAV_KNOWLEDGE_BASE", "NAV_KNOWLEDGE_SEARCH", "NAV_KNOWLEDGE_AGENT", "NAV_SEARCH", "NAV_AGENT", "NAV_MY_SUBMISSIONS",
   "NAV_ADMINISTRATION", "NAV_REVIEW_QUEUE", "NAV_DUPLICATES", "NAV_ASSET_QUEUE", "NAV_MEMBERS", "NAV_ROLES", "NAV_MENUS", "NAV_SPACES", "NAV_SITE_ANALYTICS", "NAV_AUDIT",
 ]);
 

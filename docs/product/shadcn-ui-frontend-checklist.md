@@ -123,3 +123,13 @@
 - [x] FE-077 运行完整 `npm run check` 和 `npm run build:ui`；证据：完整 `npm run check` 通过，Wrangler dry-run 读取 5 个 React 资产文件。
 - [x] FE-078 提交迁移 release commit；证据：`340fefe`（隐私统计、双 provider 登录与 React/shadcn 迁移后的完整 release commit），提交前已通过 `npm run check`、`npm run build:ui`、`git diff --check`。
 - [x] FE-079 暂停的 PAR-020 重新解析重新排期；证据：`docs/product/par-020-replan.md` 固化前置条件、M2 原子顺序和“不覆盖已发布 Revision”的验收边界；解析实现仍保留在 M2 清单。
+
+## 工作台二期：统计、菜单树与个人菜单
+
+- [x] FE-080 GitHub 重新授权：授权 URL 固定 `prompt=select_account`，退出后旧 D1 会话删除、Cookie 清除并由 `/api/session` 复核 401；会话 Cookie 上限 7 天。
+- [x] FE-081 细粒度站点统计：D1 `0030_site_analytics_dimensions.sql` 增加脱敏 IP、国家/地区/城市、colo、UA 和时间字段；管理员接口返回趋势、页面/地区排行与最近访客。
+- [x] FE-082 统计工作台 UI：使用 shadcn Card/Button 与原生可访问表格渲染趋势柱图、排行条和访客明细；匿名/登录用户区分，所有字段有安全 fallback。
+- [x] FE-083 菜单层级迁移：D1 `0031_workspace_menu_hierarchy.sql` 将搜索与 AI 助手归入知识库，并将成员/角色/菜单/空间/审计/统计归入治理节点；树深度由 Worker 限制为最多 4 层。
+- [x] FE-084 工作区导航：AI 知识库作为一级节点、检索/助手为二级节点，管理为独立一级节点并支持展开/收起、权限过滤和移动端平铺导航。
+- [x] FE-085 个人菜单：右上角展示 Logo/头像/邮箱/角色，提供设置入口、退出和 light/dark/system 主题切换，主题偏好写入本地存储。
+- [ ] FE-086 生产应用 0030/0031：执行备份、远程 D1 migration、版本上传、部署和统计/菜单 smoke；完成后补充生产 request ID 与 migration ledger 证据。

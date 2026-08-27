@@ -40,6 +40,7 @@ describe("GitHub OAuth protocol", () => {
       code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
       code_challenge_method: "S256",
       allow_signup: "false",
+      prompt: "select_account",
     });
   });
 

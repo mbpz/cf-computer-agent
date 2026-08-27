@@ -23,7 +23,15 @@ describe("shadcn workspace shell", () => {
     expect(html).toContain('data-shell-sidebar-state="expanded"');
     expect(html).toContain("Collapse sidebar");
     expect(html).toContain("AI knowledge base");
+    expect(html).toContain("Knowledge search");
+    expect(html).toContain("AI assistant");
+    expect(html).toContain("Governance");
     expect(html).toContain("Site analytics");
+    expect(html).toContain("Settings");
+    expect(html).toContain("Light");
+    expect(html).toContain("Dark");
+    expect(html).toContain("data-shell-topbar");
+    expect(html).not.toContain("undefined");
     expect(html).toContain("data-breadcrumb");
   });
 
