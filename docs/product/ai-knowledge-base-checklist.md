@@ -341,6 +341,17 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `EVAL-017` P0/M6 无 AI/额度耗尽集；验收：录入审核阅读不受影响。证据：`test/unit/m6-ai-degraded.test.ts`、`test/unit/research-report-service.test.ts`、`src/ai/answer-service.ts`、`src/submissions/service.ts`、`src/library/service.ts`；命令：`rtk npx vitest run test/unit/m6-ai-degraded.test.ts test/unit/research-report-service.test.ts -t 'degraded|quota|available' && rtk npm run typecheck`。
 - [ ] `EVAL-018` P1/M8 生产合成探针；状态：I/L（生产待授权）；验收：`buildSyntheticProbePlan` 仅接受 HTTPS 自定义域，fixture 自动生成且拒绝 Secret、邮箱、Bearer/OAuth/session 标记，单窗口最多一次运行、请求数上限 8，并强制声明可清理策略。证据：`src/evaluation/synthetic-probe.ts`、`test/unit/synthetic-probe.test.ts`；命令：`rtk npx vitest run test/unit/synthetic-probe.test.ts && rtk npm run typecheck`。尚未执行生产请求，需单独授权并在保留期后完成管理员 purge 证据。
 
+## WORKSPACE — 工作台、权限与站点统计
+
+- [ ] `WS-001` P1/M8 shadcn 工作台壳层；状态：planned；验收：桌面 Sidebar、移动 Sheet、Topbar、面包屑、语言和退出菜单具备 loading/error/empty 状态，保持 GitHub OAuth/session 合同。
+- [ ] `WS-002` P1/M8 AI 知识库一级菜单；状态：planned；验收：`/knowledge` 在 workspace 一级导航中稳定显示，contributor/admin 均按 `knowledge:read` 过滤，路径高亮和祖先展开稳定。
+- [ ] `WS-003` P1/M8 权限位图兼容层；状态：planned；验收：18 个权限固定 bit index，服务端 BigInt 运算，D1/JSON 使用十六进制字符串，`capabilities` 与 mask 投影一致。
+- [ ] `WS-004` P1/M8 管理员角色树；状态：planned；验收：仅 `role:manage` 可创建/修改角色，最后一个 active admin 和系统角色受保护，变更写入审计。
+- [ ] `WS-005` P1/M8 管理员菜单树；状态：planned；验收：仅 `menu:manage` 可读写菜单；循环、重复 path、未知 i18n key、未知权限 bit、超过 4 层和系统节点删除均拒绝。
+- [ ] `WS-006` P1/M8 独立站点统计菜单；状态：planned；验收：`NAV_SITE_ANALYTICS` 作为 admin 独立菜单，`analytics:read` 才可见；页面显示访问总量、独立访客、登录用户和按日趋势，不返回 IP/hash/Cookie/正文/OAuth 信息。
+- [ ] `WS-007` P1/M8 站点统计聚合降级；状态：planned；验收：`0026_site_analytics.sql` 未应用或 D1 暂不可用时显示可恢复错误，不阻断知识库；已应用时 1–31 天范围、5 分钟 visitor/path 去重和管理员 403 回归通过。
+- [ ] `WS-008` P1/M8 工作台 i18n/WCAG；状态：planned；验收：中英文 key 完整、无 `undefined/null` 可见文本、键盘导航和移动布局通过合同测试。
+
 ## OPS — 运维、额度、备份和恢复
 
 - [x] `OPS-001` P0/M0 本地完整门禁；状态：L/W；证据：types、TS、smoke、unit、workerd、dry build。

@@ -1,6 +1,6 @@
 # Memory Garden Roadmap
 
-更新时间：2026-08-22
+更新时间：2026-08-27
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
@@ -83,6 +83,21 @@
 当前进度：SRC-008 owner-scoped 草稿保存、SRC-009 富文本严格清洗与规范 Markdown 转换已在本地/Workerd 完成，SRC-010 文件选择器格式/大小/数量前置契约、SRC-011 拖放/键盘等价入口、SRC-012 有限并发批量队列、SRC-013 剪贴板图片入口、SRC-014 文件夹相对路径 metadata 和 SRC-015 受限 URL 快照已在本地/Workerd 完成；M2-1 原件与任务状态、M2-2 提交页上传入口、M2-3 文本类原件解析状态推进、M2-4 免费 Cron 自动扫描、M2-5 可选 Workers AI Markdown Conversion、M2-6 owner-scoped 原件/解析结果下载、M2-7 “我的原件” owner-scoped 分页历史、M2-8 管理员队列查询/解析预览/失败重试 API、M2-9 管理员资产队列页面、M2-10 强类型扩展名/MIME 一致性校验、M2-11 解析失败原因本地化展示、M2-12 二进制魔数校验与代表性格式矩阵、M2-13 R2 缺失可重试与失败恢复矩阵、M2-14 管理员任务尝试次数/更新时间可观测性、M2-15 D1 跟踪容量断路器与双写补偿测试、M2-16 孤儿 R2 对象预览与二次校验安全回收 API、M2-17 DOC/ODT/ODS/Numbers 格式矩阵与解析降级验证、M2-18 全格式失败矩阵与中断上传补偿验证、M2-19 AI/R2 暂时故障后的有界 Cron/手动恢复重投验证、M2-20 PAR-020 重新解析候选/幂等任务/管理员查询/确认物化/同一 KnowledgeItem 新 Revision 发布已在本地/Workerd 完成，CHK-007 PDF 页、CHK-008 spreadsheet sheet/range、CHK-009 slide/element order 定位、CHK-010 parent-child chunk、CHK-011 overlap、CHK-012 table-aware chunk、CHK-013 管理员分页 chunk 预览、CHK-014 管理员 candidate 修正并生成新 parse version、CHK-015 Chunk 启用/禁用与索引重建、CHK-016 Chunk 关键词/问题建议 metadata、CHK-017 current Revision 去重、CHK-018 Chunk 重建 ID 映射报告、EVAL-003 全格式正常/损坏/空/超限矩阵与 EVAL-004 golden set 已通过；真实文件样本、生产 R2 bucket、0005–0010 migration 和部署仍需单独授权与远程证据。
 
 前端迁移：React + Vite + shadcn/ui 已在本地/Worker dry-run 切换到 `frontend/dist`；旧 `public/` 保留为回滚源。生产 OAuth/session、权限拒绝、跨激活和自定义域 smoke 证据完成前，不删除旧 UI。操作顺序见 `docs/operations/react-frontend-cutover.md`。
+
+## 当前下一阶段 — shadcn 工作台与管理员治理
+
+设计规格：[工作台与 RBAC 位图设计](./docs/superpowers/specs/2026-08-27-workspace-rbac-dashboard-design.md)
+
+实施计划：[工作台与 RBAC 位图实施计划](./docs/superpowers/plans/2026-08-27-workspace-rbac-dashboard.md)
+
+本阶段保持 GitHub OAuth 和 admin/contributor 兼容，新增：
+
+- shadcn 控制台式工作台壳层和 AI 知识库一级菜单。
+- BigInt/十六进制权限位图兼容层。
+- 管理员角色权限树和菜单树治理。
+- 管理员独立“站点统计”菜单：访问量、独立访客、登录用户和按日趋势。
+
+完成条件：`WS-001` 至 `WS-008` 全部达到对应 local/workerd 证据；生产 D1 统计 migration 和生产部署仍需单独记录远程证据。
 
 范围：
 
