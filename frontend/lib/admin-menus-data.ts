@@ -41,3 +41,7 @@ export async function updateAdminMenu(id: string, input: { position?: number; st
   if (!menu) throw new Error("MENU_RESPONSE_INVALID");
   return menu;
 }
+
+export async function deleteAdminMenu(id: string, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch(`/api/admin/menus/${encodeURIComponent(id)}`, { requester, method: "DELETE" });
+}

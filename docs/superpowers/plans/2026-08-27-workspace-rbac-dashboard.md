@@ -130,7 +130,7 @@
 - [x] Step 2: 运行 worker/page 测试确认失败。
 - [x] Step 3: 实现菜单树读取、排序/启停/可见性更新 API 和服务端结构校验。
 - [x] Step 4: 接入 `/admin/menus` 工作台页面与 `menu:manage` guard。
-- [x] Step 5: 运行菜单 Worker/page/typecheck 回归；创建/删除操作保留到下一切片。
+- [x] Step 5: 运行菜单 Worker/page/typecheck 回归，覆盖自定义创建/叶节点删除和系统节点保护。
 - [x] Step 6: 提交 `feat: add admin menu tree governance`。
 
 ### Task 7: 工作台首页和统一页面状态

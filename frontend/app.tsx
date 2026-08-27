@@ -38,7 +38,7 @@ import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activit
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
 import { createAdminRole, loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
-import { loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
+import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
@@ -234,11 +234,24 @@ function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
       setState((previous) => previous.kind === "ready" ? { ...previous, menus: replaceMenu(previous.menus, updated) } : previous);
     } catch { setError(frontendText(locale, "ADMIN_MENUS_SAVE_ERROR")); } finally { setPendingId(null); }
   };
-  return <AdminMenusPage locale={locale} state={state} pendingId={pendingId} error={error} onUpdate={(menu, input) => void update(menu, input)} />;
+  const remove = async (menu: AdminMenu) => {
+    if (pendingId) return;
+    setPendingId(menu.id);
+    setError(null);
+    try {
+      await deleteAdminMenu(menu.id);
+      setState((previous) => previous.kind === "ready" ? { ...previous, menus: removeMenu(previous.menus, menu.id) } : previous);
+    } catch { setError(frontendText(locale, "ADMIN_MENUS_DELETE_ERROR")); } finally { setPendingId(null); }
+  };
+  return <AdminMenusPage locale={locale} state={state} pendingId={pendingId} error={error} onUpdate={(menu, input) => void update(menu, input)} onDelete={(menu) => void remove(menu)} />;
 }
 
 function replaceMenu(menus: readonly AdminMenu[], updated: AdminMenu): AdminMenu[] {
   return menus.map((menu) => menu.id === updated.id ? { ...updated, children: menu.children } : { ...menu, children: replaceMenu(menu.children, updated) });
+}
+
+function removeMenu(menus: readonly AdminMenu[], id: string): AdminMenu[] {
+  return menus.filter((menu) => menu.id !== id).map((menu) => ({ ...menu, children: removeMenu(menu.children, id) }));
 }
 
 function decodeRouteId(pathname: string): string {

@@ -42,6 +42,14 @@ describe("admin menus API", () => {
     expect((await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ path: "/knowledge" }) })).status).toBe(400);
     expect((await api("/api/admin/menus/menu-home", admin, { method: "PATCH", body: JSON.stringify({ visible: false }) })).status).toBe(409);
   });
+
+  it("creates custom entries and only deletes leaf custom entries", async () => {
+    const created = await api("/api/admin/menus", admin, { method: "POST", body: JSON.stringify({ key: "reports", labelKey: "NAV_SITE_ANALYTICS", path: "/reports", parentId: "menu-workspace", groupName: "workspace", position: 30, requiredBits: "0x4000" }) });
+    expect(created.status).toBe(201);
+    const menu = (await created.json() as { menu: { id: string } }).menu;
+    expect((await api(`/api/admin/menus/${menu.id}`, admin, { method: "DELETE" })).status).toBe(200);
+    expect((await api("/api/admin/menus/menu-workspace", admin, { method: "DELETE" })).status).toBe(409);
+  });
 });
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

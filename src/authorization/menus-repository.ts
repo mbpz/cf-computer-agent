@@ -32,6 +32,7 @@ export interface MenuUpdateInput {
   status?: "active" | "disabled";
   visible?: boolean;
 }
+export interface MenuCreateInput { key: string; labelKey: string; path?: string | null; parentId?: string | null; icon?: string | null; groupName: "workspace" | "admin"; position: number; requiredBits: string; }
 
 const LABEL_KEYS = new Set([
   "SHELL_GROUP_WORKSPACE", "SHELL_GROUP_ADMIN", "NAV_HOME", "NAV_SUBMIT", "NAV_KNOWLEDGE_BASE", "NAV_SEARCH", "NAV_AGENT", "NAV_MY_SUBMISSIONS",
@@ -94,6 +95,33 @@ export class MenusRepository {
     }
     return { menu: (await this.find(id))!, previous: current };
   }
+
+  async create(input: MenuCreateInput): Promise<MenuRecord> {
+    const key = boundedKey(input.key);
+    const now = new Date().toISOString();
+    const menu: MenuRecord = { id: `menu-${crypto.randomUUID()}`, parentId: input.parentId ?? null, key, labelKey: input.labelKey, path: input.path ?? null, icon: input.icon ?? null, groupName: input.groupName, position: input.position, requiredBits: serializePermissionMask(parsePermissionMask(input.requiredBits)), status: "active", visible: true, isSystem: false };
+    validateMenu(menu);
+    const all = (await this.list()).items;
+    if (menu.parentId !== null && !all.some((item) => item.id === menu.parentId)) throw new AppError("MENU_PARENT_NOT_FOUND", "Menu parent not found", 400);
+    try {
+      buildMenuTree([...all, menu], (1n << 64n) - 1n);
+      await this.db.prepare("INSERT INTO menus (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 0, ?, ?)").bind(menu.id, menu.parentId, menu.key, menu.labelKey, menu.path, menu.icon, menu.groupName, menu.position, menu.requiredBits, now, now).run();
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed/iu.test(error.message)) throw new AppError("MENU_DUPLICATE", "Menu key or path is already in use", 409);
+      throw error;
+    }
+    return (await this.find(menu.id))!;
+  }
+
+  async remove(id: string): Promise<MenuRecord> {
+    const current = await this.find(id);
+    if (!current) throw new AppError("MENU_NOT_FOUND", "Menu not found", 404);
+    if (current.isSystem) throw new AppError("MENU_SYSTEM_IMMUTABLE", "System menus cannot be changed", 409);
+    const children = await this.db.prepare("SELECT COUNT(*) AS count FROM menus WHERE parent_id = ?").bind(id).first<{ count: number }>();
+    if (Number(children?.count) > 0) throw new AppError("MENU_HAS_CHILDREN", "Menu has child entries", 409);
+    await this.db.prepare("DELETE FROM menus WHERE id = ? AND is_system = 0").bind(id).run();
+    return current;
+  }
 }
 
 function mapMenu(row: MenuDbRow): MenuRecord {
@@ -111,4 +139,10 @@ function validateMenu(menu: MenuRecord): void {
   if (!Number.isSafeInteger(menu.position) || menu.position < 0 || menu.position > 10000) throw new AppError("MENU_POSITION_INVALID", "Menu position is invalid", 400);
   if (menu.status !== "active" && menu.status !== "disabled") throw new AppError("MENU_STATUS_INVALID", "Menu status is invalid", 400);
   if (typeof menu.visible !== "boolean") throw new AppError("MENU_VISIBLE_INVALID", "Menu visibility is invalid", 400);
+  if (menu.groupName !== "workspace" && menu.groupName !== "admin") throw new AppError("MENU_GROUP_INVALID", "Menu group is invalid", 400);
+}
+
+function boundedKey(value: string): string {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9_-]{1,63}$/u.test(value)) throw new AppError("MENU_KEY_INVALID", "Menu key is invalid", 400);
+  return value;
 }
