@@ -7,6 +7,7 @@ export interface AdminRole {
   description: string;
   allowBits: string;
   memberCount: number;
+  assignedMemberIds: string[];
   status: "active" | "disabled";
   isSystem: boolean;
 }
@@ -30,6 +31,9 @@ export function normalizeAdminRole(value: unknown): AdminRole | null {
     description: typeof record.description === "string" ? record.description : "",
     allowBits: record.allowBits.toLowerCase(),
     memberCount: record.memberCount,
+    assignedMemberIds: Array.isArray(record.assignedMemberIds)
+      ? record.assignedMemberIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [],
     status: record.status,
     isSystem: record.isSystem,
   };
@@ -57,4 +61,22 @@ export async function createAdminRole(input: { key: string; name: string; descri
   const role = normalizeAdminRole(data.role);
   if (!role) throw new Error("ROLE_RESPONSE_INVALID");
   return role;
+}
+
+export async function assignAdminRoleMember(roleId: string, memberId: string, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch(`/api/admin/roles/${encodeURIComponent(roleId)}/members`, {
+    requester,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ memberId }),
+  });
+}
+
+export async function unassignAdminRoleMember(roleId: string, memberId: string, requester: Fetcher = fetch): Promise<void> {
+  await apiFetch(`/api/admin/roles/${encodeURIComponent(roleId)}/members`, {
+    requester,
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ memberId }),
+  });
 }

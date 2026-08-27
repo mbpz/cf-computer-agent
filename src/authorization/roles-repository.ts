@@ -9,6 +9,7 @@ export interface RoleRecord {
   description: string;
   allowBits: string;
   memberCount: number;
+  assignedMemberIds: string[];
   status: "active" | "disabled";
   isSystem: boolean;
 }
@@ -20,6 +21,7 @@ type RoleRow = {
   description: string;
   allow_bits: string;
   member_count: number;
+  member_ids: string | null;
   status: RoleRecord["status"];
   is_system: number;
 };
@@ -30,7 +32,9 @@ export class RolesRepository {
   async list(): Promise<{ items: RoleRecord[] }> {
     const rows = await this.db.prepare(
       `SELECT r.id, r.key, r.name, r.description, r.allow_bits,
-              COUNT(rm.member_id) AS member_count, r.status, r.is_system
+              COUNT(rm.member_id) AS member_count,
+              GROUP_CONCAT(rm.member_id) AS member_ids,
+              r.status, r.is_system
        FROM roles AS r
        LEFT JOIN role_members AS rm ON rm.role_id = r.id
        GROUP BY r.id
@@ -83,7 +87,9 @@ export class RolesRepository {
   async find(id: string): Promise<RoleRecord | null> {
     const row = await this.db.prepare(
       `SELECT r.id, r.key, r.name, r.description, r.allow_bits,
-              COUNT(rm.member_id) AS member_count, r.status, r.is_system
+              COUNT(rm.member_id) AS member_count,
+              GROUP_CONCAT(rm.member_id) AS member_ids,
+              r.status, r.is_system
        FROM roles AS r
        LEFT JOIN role_members AS rm ON rm.role_id = r.id
        WHERE r.id = ?
@@ -145,6 +151,9 @@ function mapRole(row: RoleRow): RoleRecord {
     description: row.description,
     allowBits: serializePermissionMask(parsePermissionMask(row.allow_bits)),
     memberCount: Number(row.member_count) || 0,
+    assignedMemberIds: typeof row.member_ids === "string" && row.member_ids.length > 0
+      ? row.member_ids.split(",").filter(Boolean)
+      : [],
     status: row.status,
     isSystem: row.is_system === 1,
   };

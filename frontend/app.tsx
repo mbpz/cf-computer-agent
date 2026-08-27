@@ -38,7 +38,7 @@ import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/a
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
-import { createAdminRole, loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
+import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
@@ -215,7 +215,35 @@ function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
       setState((previous) => previous.kind === "ready" ? { ...previous, roles: [...previous.roles, created] } : previous);
     } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_CREATE_ERROR")); } finally { setSaving(false); }
   };
-  return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} onCreate={(input) => void create(input)} />;
+  const assignMember = async (role: AdminRole, memberId: string) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await assignAdminRoleMember(role.id, memberId);
+      setState((previous) => previous.kind === "ready" ? {
+        ...previous,
+        roles: previous.roles.map((item) => item.id === role.id && !item.assignedMemberIds.includes(memberId)
+          ? { ...item, assignedMemberIds: [...item.assignedMemberIds, memberId], memberCount: item.memberCount + 1 }
+          : item),
+      } : previous);
+    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")); } finally { setSaving(false); }
+  };
+  const unassignMember = async (role: AdminRole, memberId: string) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await unassignAdminRoleMember(role.id, memberId);
+      setState((previous) => previous.kind === "ready" ? {
+        ...previous,
+        roles: previous.roles.map((item) => item.id === role.id
+          ? { ...item, assignedMemberIds: item.assignedMemberIds.filter((id) => id !== memberId), memberCount: Math.max(0, item.memberCount - 1) }
+          : item),
+      } : previous);
+    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")); } finally { setSaving(false); }
+  };
+  return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} onCreate={(input) => void create(input)} onAssignMember={(role, memberId) => void assignMember(role, memberId)} onUnassignMember={(role, memberId) => void unassignMember(role, memberId)} />;
 }
 
 function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
