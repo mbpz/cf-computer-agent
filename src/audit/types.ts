@@ -9,6 +9,7 @@ export interface AuditActionMap {
   "member.login": { resourceType: "member"; metadata: { role: MemberRole } };
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
+  "role.updated": { resourceType: "role"; metadata: { previousAllowBits: string; allowBits: string } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
   "collection.created": { resourceType: "collection"; metadata: { spaceId: string; status: RecordStatus } };
@@ -46,6 +47,7 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.login",
   "member.identity_linked",
   "member.status_updated",
+  "role.updated",
   "space.created",
   "space.updated",
   "collection.created",
@@ -149,6 +151,12 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["previousStatus", "newStatus"]));
       if (!isRecordStatus(metadata.previousStatus) || !isRecordStatus(metadata.newStatus)) throw invalidMetadata();
       return safeMetadata({ previousStatus: metadata.previousStatus, newStatus: metadata.newStatus });
+    }
+    case "role.updated": {
+      assertResourceType(resourceType, "role");
+      const metadata = readPlainDataObject(input, new Set(["previousAllowBits", "allowBits"]));
+      if (!isPermissionMask(metadata.previousAllowBits) || !isPermissionMask(metadata.allowBits)) throw invalidMetadata();
+      return safeMetadata({ previousAllowBits: metadata.previousAllowBits, allowBits: metadata.allowBits });
     }
     case "space.created": {
       assertResourceType(resourceType, "space");
@@ -360,6 +368,15 @@ function isBoundedTitle(value: unknown): value is string {
 }
 function isVisibility(value: unknown): value is "shared" | "admin_only" {
   return value === "shared" || value === "admin_only";
+}
+function isPermissionMask(value: unknown): value is string {
+  if (typeof value !== "string" || !/^0x[0-9a-f]+$/iu.test(value)) return false;
+  try {
+    const mask = BigInt(value);
+    return mask >= 0n && mask <= ((1n << 64n) - 1n);
+  } catch {
+    return false;
+  }
 }
 function isActorKind(value: unknown): value is AuditActorKind { return value === "member" || value === "automation" || value === "system"; }
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

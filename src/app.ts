@@ -16,6 +16,7 @@ import { ComparisonService } from "./ai/comparison-service";
 import { AuditRepository } from "./audit/repository";
 import { AnalyticsRepository } from "./analytics/repository";
 import { requireCapability } from "./authorization/policy";
+import { RolesRepository } from "./authorization/roles-repository";
 import { APP_CONFIG } from "./config";
 import { AppError, createRequestContext, errorResponse, jsonResponse, logRequestFailure, methodNotAllowed, parseJsonRequest, requireSameOrigin, type RequestContext } from "./http";
 import { AutomationAuthenticator } from "./identity/automation";
@@ -35,6 +36,7 @@ import { PrivateNotesRepository } from "./private-notes/repository";
 import { PrivateNotesService } from "./private-notes/service";
 import { routeAdminApi } from "./routes/admin";
 import { routeAdminReviewApi } from "./routes/admin-review";
+import { routeAdminRolesApi } from "./routes/admin-roles";
 import { routeAgentApi } from "./routes/agent";
 import { clearOAuthCookies, clearWeChatCookie, routeAuth } from "./routes/auth";
 import { routeLibraryApi } from "./routes/library";
@@ -155,7 +157,7 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 
 const workspaceRoutes = new Set([
   "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions",
-  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/spaces", "/admin/audit", "/admin/analytics",
+  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
@@ -172,6 +174,7 @@ function createRequestServices(
 ) {
   const ai = dependencies.ai || env.AI;
   const audit = new AuditRepository(env.DB);
+  const roles = new RolesRepository(env.DB);
   const analytics = new AnalyticsRepository(env.DB);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
@@ -265,6 +268,7 @@ function createRequestServices(
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
     review,
+    roles,
   };
 }
 
@@ -293,6 +297,8 @@ async function dispatchApiRequest(
   if (member) return member;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
+  const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });
+  if (adminRoles) return adminRoles;
   const library = await routeLibraryApi(request, url, context, principal, services);
   if (library) return library;
   const adminReview = await routeAdminReviewApi(request, url, context, principal, services);

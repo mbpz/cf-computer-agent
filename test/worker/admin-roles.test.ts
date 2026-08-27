@@ -1,0 +1,58 @@
+/// <reference types="@cloudflare/vitest-pool-workers/types" />
+
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
+import { MembersRepository } from "../../src/members/repository";
+import { SessionService } from "../../src/identity/session";
+import { MIGRATIONS } from "../fixtures/d1";
+
+describe("admin roles API", () => {
+  let admin = "";
+  let contributor = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare(
+      `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
+       ('role-admin', 'subject-role-admin', 'role-admin@example.test', 'admin', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z'),
+       ('role-contributor', 'subject-role-contributor', 'role-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
+    ).run();
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
+    admin = (await sessions.create((await members.findById("role-admin"))!)).token;
+    contributor = (await sessions.create((await members.findById("role-contributor"))!)).token;
+    await env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-editor', 'editor', 'Editor', '', '0x3', 'active', 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
+  });
+
+  it("lists roles for administrators and rejects contributors", async () => {
+    const allowed = await api("/api/admin/roles", admin);
+    expect(allowed.status).toBe(200);
+    const payload = await allowed.json() as { items: Array<{ key: string; allowBits: string }> };
+    expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x7ffff")).toBe(true);
+    expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x3")).toBe(true);
+    const denied = await api("/api/admin/roles", contributor);
+    expect(denied.status).toBe(403);
+  });
+
+  it("updates a custom role mask and rejects malformed input", async () => {
+    const updated = await api("/api/admin/roles/role-editor", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x4001" }) });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({ role: { key: "editor", allowBits: "0x4001" } });
+    const malformed = await api("/api/admin/roles/role-editor", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x-1" }) });
+    expect(malformed.status).toBe(400);
+  });
+});
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("content-type", "application/json");
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("cookie", `__Host-memory-session=${token}`);
+  const request = new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers });
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  await waitOnExecutionContext(context);
+  return response;
+}

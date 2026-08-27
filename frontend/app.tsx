@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
+import { AdminRolesPage } from "./pages/admin/roles-page";
 import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
@@ -35,6 +36,7 @@ import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/a
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
+import { loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
@@ -141,6 +143,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsRoute locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
+    case "admin-roles": return <AdminRolesRoute locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute locale={locale} />;
@@ -164,6 +167,30 @@ function AdminAnalyticsRoute({ locale }: { locale: LocaleRuntime }) {
     return () => { active = false; };
   }, [days, refresh]);
   return <AdminAnalyticsPage locale={locale} state={state} days={days} onDaysChange={setDays} onRefresh={() => setRefresh((value) => value + 1)} />;
+}
+
+function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; roles: AdminRole[] } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setState({ kind: "loading" });
+    void loadAdminRoles().then((roles) => { if (active) setState({ kind: "ready", roles }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "ADMIN_ROLES_UNAVAILABLE") }); });
+    return () => { active = false; };
+  }, [locale]);
+  const save = async (role: AdminRole, allowBits: string) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await updateAdminRole(role.id, { allowBits });
+      setState((previous) => previous.kind === "ready" ? { ...previous, roles: previous.roles.map((item) => item.id === updated.id ? updated : item) } : previous);
+    } catch {
+      setSaveError(frontendText(locale, "ADMIN_ROLES_SAVE_ERROR"));
+    } finally { setSaving(false); }
+  };
+  return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} />;
 }
 
 function decodeRouteId(pathname: string): string {

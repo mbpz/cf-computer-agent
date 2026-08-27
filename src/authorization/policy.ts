@@ -12,7 +12,10 @@ export type Capability =
   | "space:manage"
   | "audit:read"
   | "knowledge:read"
-  | "knowledge:review";
+  | "knowledge:review"
+  | "analytics:read"
+  | "role:manage"
+  | "menu:manage";
 
 const contributorCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
@@ -58,7 +61,10 @@ export function permissionMaskForPrincipal(principal: Principal): string {
 }
 
 export function requireCapability(principal: Principal, capability: Capability): void {
-  if (!capabilitiesFor(principal).includes(capability)) {
+  const adminOnlyWorkspaceCapability = principal.kind === "member"
+    && principal.role === "admin"
+    && (capability === "analytics:read" || capability === "role:manage" || capability === "menu:manage");
+  if (!capabilitiesFor(principal).includes(capability) && !adminOnlyWorkspaceCapability) {
     throw new AppError("FORBIDDEN", "Capability is not permitted", 403);
   }
 }

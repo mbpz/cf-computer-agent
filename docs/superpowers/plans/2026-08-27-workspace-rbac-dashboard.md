@@ -98,17 +98,21 @@
 **Files:**
 - Create: `frontend/pages/admin/roles-page.tsx`
 - Create: `frontend/lib/admin-roles-data.ts`
+- Create: `src/authorization/roles-repository.ts`
+- Create: `src/routes/admin-roles.ts`
 - Modify: `frontend/app.tsx`
 - Modify: `frontend/app-routes.ts`
+- Modify: `src/app.ts`
 - Modify: `frontend/lib/i18n.ts`
 - Test: `test/unit/admin-roles-page.test.tsx`
 
 - [ ] Step 1: 写加载、空、错误、权限矩阵、差异预览和保存禁用态测试。
 - [ ] Step 2: 运行测试确认失败。
-- [ ] Step 3: 实现角色列表、权限分组 checkbox、十六进制 mask 预览和保存确认。
-- [ ] Step 4: 接入 `/admin/roles` 路由和 admin capability guard。
-- [ ] Step 5: 运行页面测试、类型检查和 WCAG 合同。
-- [ ] Step 6: 提交 `feat: add admin role permission matrix`。
+- [x] Step 3: 实现角色列表、权限分组 checkbox、十六进制 mask 预览和保存确认。
+- [x] Step 4: 实现 D1 roles/role_members 查询与更新 API，服务端要求 `role:manage` 并记录审计。
+- [x] Step 5: 接入 `/admin/roles` 路由和 admin capability guard。
+- [x] Step 6: 运行页面/Worker 测试、类型检查和 WCAG 合同。
+- [ ] Step 7: 提交 `feat: add admin role permission matrix`。
 
 ### Task 6: 管理员菜单树页面与 API
 

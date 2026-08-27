@@ -114,6 +114,7 @@ function NavIcon({ path }: { path: string }) {
   if (path === "/admin/submissions") return <NotePencil {...props} />;
   if (path === "/admin/assets") return <Stack {...props} />;
   if (path === "/admin/members") return <UsersThree {...props} />;
+  if (path === "/admin/roles") return <ShieldCheck {...props} />;
   if (path === "/admin/spaces") return <Stack {...props} />;
   if (path === "/admin/audit") return <Scroll {...props} />;
   if (path === "/admin/analytics") return <ChartLine {...props} />;
