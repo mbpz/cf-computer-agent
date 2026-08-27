@@ -142,11 +142,11 @@
 - Modify: `frontend/components/ui/page-state.tsx`
 - Test: `test/unit/workspace-dashboard.test.tsx`
 
-- [ ] Step 1: 写指标卡、最近内容、快捷入口、empty/error/loading 和 undefined 扫描测试。
-- [ ] Step 2: 运行测试确认失败。
-- [ ] Step 3: 实现工作台摘要、AI 知识库入口、最近活动和管理员摘要。
-- [ ] Step 4: 统一 PageState、表格、筛选和按钮状态，移除英文 `NAV_*` 以及 undefined 泄漏。
-- [ ] Step 5: 运行前端单测、`rtk npm run typecheck`、`rtk npm run verify:i18n`、`rtk npm run verify:wcag`。
+- [x] Step 1: 写指标卡、最近内容、快捷入口、empty/error/loading 和 undefined 扫描测试。
+- [x] Step 2: 运行工作台页面测试。
+- [x] Step 3: 实现工作台摘要、AI 知识库入口、最近内容和管理员摘要快捷入口。
+- [x] Step 4: 统一 PageState、表格、筛选和按钮状态，移除英文 `NAV_*` 以及 undefined 泄漏。
+- [x] Step 5: 运行前端单测、`rtk npm run typecheck`、`rtk npm run verify:i18n`、`rtk npm run verify:wcag`。
 - [ ] Step 6: 提交 `feat: complete workspace dashboard states`。
 
 ### Task 8: 独立站点统计菜单与管理员看板

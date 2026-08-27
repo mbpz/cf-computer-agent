@@ -343,7 +343,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ## WORKSPACE — 工作台、权限与站点统计
 
-- [x] `WS-001` P1/M8 shadcn 工作台壳层；状态：L/W；验收：桌面 Sidebar、移动 Sheet、Topbar、面包屑、语言和退出菜单具备 loading/error/empty 状态，保持 GitHub OAuth/session 合同。证据：`frontend/components/shell/app-shell.tsx`、`test/unit/workspace-shell.test.tsx`、`test/unit/frontend-shell.test.tsx`。
+- [x] `WS-001` P1/M8 shadcn 工作台壳层；状态：L/W；验收：桌面 Sidebar、移动 Sheet、Topbar、面包屑、语言和退出菜单具备 loading/error/empty 状态，保持 GitHub OAuth/session 合同。证据：`frontend/components/shell/app-shell.tsx`、`test/unit/workspace-shell.test.tsx`、`test/unit/frontend-shell.test.tsx`、`test/unit/workspace-dashboard.test.tsx`。
 - [x] `WS-002` P1/M8 AI 知识库一级菜单；状态：L/W；验收：`/knowledge` 在 workspace 一级导航中稳定显示，contributor/admin 均按 `knowledge:read` 过滤，路径高亮和祖先展开稳定。证据：`frontend/contracts/routes.ts`、`frontend/components/shell/app-shell.tsx`、`test/unit/frontend-contract.test.ts`。
 - [x] `WS-003` P1/M8 权限位图兼容层；状态：L/W；验收：19 个权限固定 bit index，服务端 BigInt 运算，D1/JSON 使用十六进制字符串，`capabilities` 与 mask 投影一致。证据：`src/authorization/permission-bitmap.ts`、`src/authorization/policy.ts`、`test/unit/permission-bitmap.test.ts`、`test/unit/session-permission-projection.test.ts`。
 - [ ] `WS-004` P1/M8 管理员角色树；状态：I/L；验收：仅 `role:manage` 可创建/修改角色，最后一个 active admin 和系统角色受保护，变更写入审计。当前已完成角色列表、custom role mask 更新、系统角色保护和审计；创建/删除及最后 admin 保护待后续切片。

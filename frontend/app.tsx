@@ -136,7 +136,7 @@ export function App() {
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "") {
   switch (kind) {
-    case "home": return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0 }} />;
+    case "home": return <HomeRoute locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} />;
@@ -157,6 +157,16 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
+}
+
+function HomeRoute({ locale }: { locale: LocaleRuntime }) {
+  const [recent, setRecent] = useState<Array<{ id: string; title: string }>>([]);
+  useEffect(() => {
+    let active = true;
+    void loadRecentKnowledge().then((items) => { if (active) setRecent(items.map((item) => ({ id: item.id, title: item.title }))); }).catch(() => { if (active) setRecent([]); });
+    return () => { active = false; };
+  }, []);
+  return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0, recent }} />;
 }
 
 function AdminAnalyticsRoute({ locale }: { locale: LocaleRuntime }) {
