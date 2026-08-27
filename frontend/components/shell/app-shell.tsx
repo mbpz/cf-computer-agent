@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { BookOpen, ChartLine, DotsThree, Files, House, MagnifyingGlass, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES, requiredCapability, type FrontendCapability } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
@@ -35,6 +36,7 @@ function displayValue(value: unknown, fallback: string) {
 }
 
 export function AppShell({ session, pathname, locale, children, onNavigate, onLogout, logoutPending = false, logoutError = null }: AppShellProps) {
+  const [collapsed, setCollapsed] = useState(false);
   const routes = ROUTES.filter((route) => hasCapability(session, route.capability));
   const workspaceRoutes = routes.filter((route) => route.group === "workspace");
   const adminRoutes = routes.filter((route) => route.group === "admin");
@@ -45,18 +47,24 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2">{locale.t("SHELL_SKIP_MAIN")}</a>
-      <aside data-shell-sidebar className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
-        <div className="flex h-full flex-col p-4">
-          <div className="mb-8 px-2"><p className="text-xs font-semibold tracking-[0.18em] text-muted-foreground">MEMORY GARDEN</p><p className="mt-2 text-sm font-medium">{locale.t("APP_BRAND_EYEBROW")}</p></div>
+      <aside data-shell-sidebar data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"} className={cn("fixed inset-y-0 left-0 z-40 hidden border-r bg-card transition-[width] duration-200 lg:block", collapsed ? "w-16" : "w-64")}>
+        <div className="flex h-full flex-col p-3">
+          <div className={cn("mb-8 flex items-start gap-2", collapsed ? "justify-center" : "justify-between") }>
+            <div className={cn("min-w-0 px-2", collapsed && "sr-only")}><p className="truncate text-xs font-semibold tracking-[0.18em] text-muted-foreground">MEMORY GARDEN</p><p className="mt-2 truncate text-sm font-medium">{locale.t("APP_BRAND_EYEBROW")}</p></div>
+            <Button type="button" variant="ghost" size="icon" data-shell-collapse-toggle aria-expanded={!collapsed} aria-label={locale.t(collapsed ? "SHELL_EXPAND_SIDEBAR" : "SHELL_COLLAPSE_SIDEBAR")} onClick={() => setCollapsed((value) => !value)}>
+              <SidebarSimple size={18} aria-hidden="true" />
+            </Button>
+          </div>
           <nav aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="space-y-6">
-            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} routes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} />
-            {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} routes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} />}
+            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} routes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} />
+            {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} routes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} />}
           </nav>
+          <div className={cn("mt-auto border-t px-2 pt-3 text-[11px] text-muted-foreground", collapsed && "sr-only")}>{locale.t("SHELL_FREE_TIER_LABEL")}</div>
         </div>
       </aside>
-      <div className="lg:pl-64">
+      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-16" : "lg:pl-64")}>
         <header data-shell-topbar className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-8">
-          <div className="flex items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><span className="hidden text-sm text-muted-foreground lg:inline">{locale.t("SHELL_CONTEXT_TITLE")}</span></div>
+          <div className="flex min-w-0 items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><Breadcrumb pathname={pathname} locale={locale} /></div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={locale.t("SHELL_LANGUAGE_LABEL")}><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></DropdownMenuTrigger>
@@ -78,12 +86,42 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   );
 }
 
-function NavGroup({ title, routes, pathname, locale, onNavigate }: { title: string; routes: readonly typeof ROUTES[number][]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
-  return <div><p className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p><div className="space-y-1">{routes.map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { if (onNavigate) { event.preventDefault(); onNavigate(route.path); } }} className={cn("block rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground", pathname === route.path && "bg-accent font-medium text-accent-foreground")}>{locale.t(route.labelKey)}</a>)}</div></div>;
+function NavGroup({ title, routes, pathname, locale, onNavigate, collapsed }: { title: string; routes: readonly typeof ROUTES[number][]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean }) {
+  return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{routes.map((route) => {
+    const label = locale.t(route.labelKey);
+    const active = pathname === route.path || (route.path !== "/" && pathname.startsWith(`${route.path}/`));
+    return <a key={route.path} href={route.path} aria-current={active ? "page" : undefined} title={collapsed ? label : undefined} onClick={(event) => { if (onNavigate) { event.preventDefault(); onNavigate(route.path); } }} className={cn("flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", active && "bg-accent font-medium text-accent-foreground", collapsed && "justify-center px-0")}>
+      <NavIcon path={route.path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
+    </a>;
+  })}</div></div>;
+}
+
+function Breadcrumb({ pathname, locale }: { pathname: string; locale: LocaleRuntime }) {
+  const match = matchRoute(pathname);
+  const label = match ? locale.t(match.labelKey) : locale.t("SHELL_CONTEXT_TITLE");
+  return <nav data-breadcrumb aria-label={locale.t("SHELL_BREADCRUMB")} className="hidden min-w-0 items-center gap-2 text-sm lg:flex"><a href="/" className="text-muted-foreground hover:text-foreground">{locale.t("NAV_HOME")}</a>{pathname !== "/" && <><span aria-hidden="true" className="text-muted-foreground">/</span><span className="truncate font-medium">{label}</span></>}</nav>;
+}
+
+function NavIcon({ path }: { path: string }) {
+  const props = { size: 18, weight: "regular" as const, "aria-hidden": true };
+  if (path === "/") return <House {...props} />;
+  if (path === "/knowledge") return <BookOpen {...props} />;
+  if (path === "/submit") return <UploadSimple {...props} />;
+  if (path === "/search") return <MagnifyingGlass {...props} />;
+  if (path === "/agent") return <Sparkle {...props} />;
+  if (path === "/my-submissions") return <Files {...props} />;
+  if (path === "/admin") return <ShieldCheck {...props} />;
+  if (path === "/admin/submissions") return <NotePencil {...props} />;
+  if (path === "/admin/assets") return <Stack {...props} />;
+  if (path === "/admin/members") return <UsersThree {...props} />;
+  if (path === "/admin/spaces") return <Stack {...props} />;
+  if (path === "/admin/audit") return <Scroll {...props} />;
+  if (path === "/admin/analytics") return <ChartLine {...props} />;
+  return <DotsThree {...props} />;
 }
 
 function MobileNavigation({ routes, pathname, locale, onNavigate }: { routes: readonly typeof ROUTES[number][]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
-  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{routes.map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="block rounded-md px-2 py-2 text-sm hover:bg-accent">{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
+  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{routes.map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={route.path} />{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
 }

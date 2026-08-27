@@ -5,6 +5,7 @@ export type FrontendAccess = { kind: "allow" } | { kind: "redirect"; href: "/aut
 
 export function resolveFrontendAccess({ session, requiredCapability }: { session: SessionSnapshot | null; requiredCapability: FrontendCapability | null }): FrontendAccess {
   if (!session) return { kind: "redirect", href: "/auth/github" };
-  if (requiredCapability && !session.capabilities.includes(requiredCapability)) return { kind: "forbidden" };
+  if (requiredCapability && !session.capabilities.includes(requiredCapability)
+    && !(requiredCapability === "analytics:read" && session.capabilities.includes("audit:read"))) return { kind: "forbidden" };
   return { kind: "allow" };
 }

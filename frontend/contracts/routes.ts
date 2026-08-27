@@ -6,7 +6,10 @@ export type FrontendCapability =
   | "knowledge:review"
   | "member:manage"
   | "space:manage"
-  | "audit:read";
+  | "audit:read"
+  | "analytics:read"
+  | "role:manage"
+  | "menu:manage";
 
 export interface RouteDefinition {
   path: string;
@@ -18,7 +21,7 @@ export interface RouteDefinition {
 export const ROUTES: readonly RouteDefinition[] = Object.freeze([
   { path: "/", labelKey: "NAV_HOME", group: "workspace", capability: null },
   { path: "/submit", labelKey: "NAV_SUBMIT", group: "workspace", capability: "submission:create" },
-  { path: "/knowledge", labelKey: "NAV_LIBRARY", group: "workspace", capability: "knowledge:read" },
+  { path: "/knowledge", labelKey: "NAV_KNOWLEDGE_BASE", group: "workspace", capability: "knowledge:read" },
   { path: "/search", labelKey: "NAV_SEARCH", group: "workspace", capability: "knowledge:read" },
   { path: "/agent", labelKey: "NAV_AGENT", group: "workspace", capability: "knowledge:read" },
   { path: "/my-submissions", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", capability: "submission:read-own" },
@@ -29,7 +32,7 @@ export const ROUTES: readonly RouteDefinition[] = Object.freeze([
   { path: "/admin/members", labelKey: "NAV_MEMBERS", group: "admin", capability: "member:manage" },
   { path: "/admin/spaces", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },
   { path: "/admin/audit", labelKey: "NAV_AUDIT", group: "admin", capability: "audit:read" },
-  { path: "/admin/analytics", labelKey: "NAV_ANALYTICS", group: "admin", capability: "audit:read" },
+  { path: "/admin/analytics", labelKey: "NAV_SITE_ANALYTICS", group: "admin", capability: "analytics:read" },
 ]);
 
 export function requiredCapability(pathname: string): FrontendCapability | null {
