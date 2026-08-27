@@ -792,13 +792,13 @@ const navigationFallbacks: Record<FrontendLocale, Record<string, string>> = {
     NAV_HOME: "Home", NAV_SUBMIT: "Submit", NAV_LIBRARY: "Library", NAV_SEARCH: "Search",
     NAV_AGENT: "Agent", NAV_MY_SUBMISSIONS: "My Submissions", NAV_ADMINISTRATION: "Administration",
     NAV_REVIEW_QUEUE: "Review queue", NAV_ASSET_QUEUE: "Asset queue", NAV_MEMBERS: "Members", NAV_ROLES: "Roles & permissions",
-    NAV_SPACES: "Spaces", NAV_AUDIT: "Audit log", NAV_ANALYTICS: "Analytics", NAV_KNOWLEDGE_BASE: "AI knowledge base", NAV_SITE_ANALYTICS: "Site analytics",
+    NAV_SPACES: "Spaces", NAV_AUDIT: "Audit log", NAV_ANALYTICS: "Analytics", NAV_KNOWLEDGE_BASE: "AI knowledge base", NAV_SITE_ANALYTICS: "Site analytics", NAV_MENUS: "Menu tree",
   },
   "zh-CN": {
     NAV_HOME: "首页", NAV_SUBMIT: "提交", NAV_LIBRARY: "知识库", NAV_SEARCH: "搜索",
     NAV_AGENT: "智能问答", NAV_MY_SUBMISSIONS: "我的提交", NAV_ADMINISTRATION: "管理",
     NAV_REVIEW_QUEUE: "审核队列", NAV_ASSET_QUEUE: "原件队列", NAV_MEMBERS: "成员管理", NAV_ROLES: "角色与权限",
-    NAV_SPACES: "空间管理", NAV_AUDIT: "审计日志", NAV_ANALYTICS: "访问统计", NAV_KNOWLEDGE_BASE: "AI 知识库", NAV_SITE_ANALYTICS: "站点统计",
+    NAV_SPACES: "空间管理", NAV_AUDIT: "审计日志", NAV_ANALYTICS: "访问统计", NAV_KNOWLEDGE_BASE: "AI 知识库", NAV_SITE_ANALYTICS: "站点统计", NAV_MENUS: "菜单树",
   },
 };
 
