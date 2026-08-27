@@ -15,7 +15,7 @@ const automation: Principal = { kind: "automation", role: "automation" };
 
 describe("capabilitiesFor", () => {
   it.each<[Principal, Capability[]]>([
-    [contributor, ["legacy:read", "submission:create", "submission:read-own", "knowledge:read"]],
+    [contributor, ["legacy:read", "submission:create", "submission:read-own", "knowledge:read", "tasks:use"]],
     [admin, [
       "legacy:read",
       "legacy:write",
@@ -27,6 +27,7 @@ describe("capabilitiesFor", () => {
       "audit:read",
       "knowledge:read",
       "knowledge:review",
+      "tasks:use",
     ]],
     [automation, ["legacy:read", "legacy:write"]],
   ])("returns the least-privilege capability set for %#", (principal, expected) => {

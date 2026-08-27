@@ -113,7 +113,7 @@ describe("Phase 1 API permission matrix", () => {
     const sessionBody = await session.json<Record<string, unknown>>();
     expect(sessionBody).toEqual({
       member: { id: "member-contributor", email: "contributor@example.test", role: "contributor" },
-      capabilities: ["legacy:read", "submission:create", "submission:read-own", "knowledge:read"],
+      capabilities: ["legacy:read", "submission:create", "submission:read-own", "knowledge:read", "tasks:use"],
       permissionMask: "0x600c3",
       logoutUrl: "/auth/logout",
     });
