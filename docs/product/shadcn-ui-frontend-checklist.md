@@ -130,6 +130,6 @@
 - [x] FE-081 细粒度站点统计：D1 `0030_site_analytics_dimensions.sql` 增加脱敏 IP、国家/地区/城市、colo、UA 和时间字段；管理员接口返回趋势、页面/地区排行与最近访客。
 - [x] FE-082 统计工作台 UI：使用 shadcn Card/Button 与原生可访问表格渲染趋势柱图、排行条和访客明细；匿名/登录用户区分，所有字段有安全 fallback。
 - [x] FE-083 菜单层级迁移：D1 `0031_workspace_menu_hierarchy.sql` 将搜索与 AI 助手归入知识库，并将成员/角色/菜单/空间/审计/统计归入治理节点；树深度由 Worker 限制为最多 4 层。
-- [x] FE-084 工作区导航：AI 知识库作为一级节点、检索/助手为二级节点，管理为独立一级节点并支持展开/收起、权限过滤和移动端平铺导航。
+- [x] FE-084 工作区导航：AI 知识库作为一级节点、检索/助手为二级节点，管理为独立一级节点并支持展开/收起、权限过滤和移动端平铺导航；`GET /api/navigation` 按 D1 菜单树与成员 permission mask 动态返回，AppShell 加载失败才回退静态树。
 - [x] FE-085 个人菜单：右上角展示 Logo/头像/邮箱/角色，提供设置入口、退出和 light/dark/system 主题切换，主题偏好写入本地存储。
 - [ ] FE-086 生产应用 0030/0031：执行备份、远程 D1 migration、版本上传、部署和统计/菜单 smoke；完成后补充生产 request ID 与 migration ledger 证据。
