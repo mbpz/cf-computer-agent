@@ -43,6 +43,15 @@ describe("admin roles API", () => {
     const malformed = await api("/api/admin/roles/role-editor", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x-1" }) });
     expect(malformed.status).toBe(400);
   });
+
+  it("creates and deletes unassigned custom roles while protecting duplicates", async () => {
+    const created = await api("/api/admin/roles", admin, { method: "POST", body: JSON.stringify({ key: "reviewer", name: "Reviewer", allowBits: "0x9" }) });
+    expect(created.status).toBe(201);
+    const role = (await created.json() as { role: { id: string } }).role;
+    expect((await api("/api/admin/roles", admin, { method: "POST", body: JSON.stringify({ key: "reviewer", name: "Again", allowBits: "0x1" }) })).status).toBe(409);
+    expect((await api(`/api/admin/roles/${role.id}`, admin, { method: "DELETE" })).status).toBe(200);
+    expect((await api("/api/admin/roles/role-admin", admin, { method: "DELETE" })).status).toBe(409);
+  });
 });
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

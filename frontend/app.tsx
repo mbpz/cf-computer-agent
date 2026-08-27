@@ -37,7 +37,7 @@ import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/a
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
-import { loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
+import { createAdminRole, loadAdminRoles, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicateCandidate, type DuplicateDecision } from "./lib/admin-duplicates-data";
@@ -203,7 +203,16 @@ function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
       setSaveError(frontendText(locale, "ADMIN_ROLES_SAVE_ERROR"));
     } finally { setSaving(false); }
   };
-  return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} />;
+  const create = async (input: { key: string; name: string; allowBits: string }) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const created = await createAdminRole(input);
+      setState((previous) => previous.kind === "ready" ? { ...previous, roles: [...previous.roles, created] } : previous);
+    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_CREATE_ERROR")); } finally { setSaving(false); }
+  };
+  return <AdminRolesPage locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} onCreate={(input) => void create(input)} />;
 }
 
 function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {

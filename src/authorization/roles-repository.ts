@@ -53,6 +53,32 @@ export class RolesRepository {
     return (await this.find(id))!;
   }
 
+  async create(input: { key: string; name: string; description?: string; allowBits: string }): Promise<RoleRecord> {
+    const key = boundedKey(input.key);
+    const name = boundedText(input.name, "ROLE_NAME_INVALID");
+    const description = input.description === undefined ? "" : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
+    const allowBits = serializePermissionMask(parsePermissionMask(input.allowBits));
+    const id = `role-${crypto.randomUUID()}`;
+    try {
+      await this.db.prepare(
+        "INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?)",
+      ).bind(id, key, name, description, allowBits, new Date().toISOString(), new Date().toISOString()).run();
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed: roles\.key/iu.test(error.message)) throw new AppError("ROLE_KEY_DUPLICATE", "Role key is already in use", 409);
+      throw error;
+    }
+    return (await this.find(id))!;
+  }
+
+  async remove(id: string): Promise<RoleRecord> {
+    const current = await this.find(id);
+    if (!current) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
+    if (current.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
+    if (current.memberCount > 0) throw new AppError("ROLE_ASSIGNED", "Role is assigned to members", 409);
+    await this.db.prepare("DELETE FROM roles WHERE id = ? AND is_system = 0").bind(id).run();
+    return current;
+  }
+
   async find(id: string): Promise<RoleRecord | null> {
     const row = await this.db.prepare(
       `SELECT r.id, r.key, r.name, r.description, r.allow_bits,
@@ -84,4 +110,9 @@ function boundedText(value: string, code: string): string {
     throw new AppError(code, "Role text is invalid", 400);
   }
   return value.trim();
+}
+
+function boundedKey(value: string): string {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9_-]{1,63}$/u.test(value)) throw new AppError("ROLE_KEY_INVALID", "Role key is invalid", 400);
+  return value;
 }

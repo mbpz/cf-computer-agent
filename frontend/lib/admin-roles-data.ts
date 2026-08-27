@@ -51,3 +51,10 @@ export async function updateAdminRole(roleId: string, input: { name?: string; de
   if (!role) throw new Error("ROLE_RESPONSE_INVALID");
   return role;
 }
+
+export async function createAdminRole(input: { key: string; name: string; description?: string; allowBits: string }, requester: Fetcher = fetch): Promise<AdminRole> {
+  const data = await apiFetch<{ role?: unknown }>("/api/admin/roles", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  const role = normalizeAdminRole(data.role);
+  if (!role) throw new Error("ROLE_RESPONSE_INVALID");
+  return role;
+}

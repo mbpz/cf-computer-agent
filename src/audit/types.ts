@@ -10,6 +10,8 @@ export interface AuditActionMap {
   "member.identity_linked": { resourceType: "member"; metadata: { provider: "github" | "wechat" } };
   "member.status_updated": { resourceType: "member"; metadata: { previousStatus: MemberStatus; newStatus: MemberStatus } };
   "role.updated": { resourceType: "role"; metadata: { previousAllowBits: string; allowBits: string } };
+  "role.created": { resourceType: "role"; metadata: { allowBits: string } };
+  "role.deleted": { resourceType: "role"; metadata: { key: string } };
   "menu.updated": { resourceType: "menu"; metadata: { previousPath: string | null; path: string | null; previousStatus: RecordStatus; status: RecordStatus; previousVisible: boolean; visible: boolean } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
@@ -49,6 +51,8 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "member.identity_linked",
   "member.status_updated",
   "role.updated",
+  "role.created",
+  "role.deleted",
   "menu.updated",
   "space.created",
   "space.updated",
@@ -159,6 +163,18 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["previousAllowBits", "allowBits"]));
       if (!isPermissionMask(metadata.previousAllowBits) || !isPermissionMask(metadata.allowBits)) throw invalidMetadata();
       return safeMetadata({ previousAllowBits: metadata.previousAllowBits, allowBits: metadata.allowBits });
+    }
+    case "role.created": {
+      assertResourceType(resourceType, "role");
+      const metadata = readPlainDataObject(input, new Set(["allowBits"]));
+      if (!isPermissionMask(metadata.allowBits)) throw invalidMetadata();
+      return safeMetadata({ allowBits: metadata.allowBits });
+    }
+    case "role.deleted": {
+      assertResourceType(resourceType, "role");
+      const metadata = readPlainDataObject(input, new Set(["key"]));
+      if (!isNonEmptyString(metadata.key)) throw invalidMetadata();
+      return safeMetadata({ key: metadata.key });
     }
     case "menu.updated": {
       assertResourceType(resourceType, "menu");
