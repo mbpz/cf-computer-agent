@@ -1193,6 +1193,26 @@ describe("Phase 1 control-plane migrations", () => {
     ]);
   });
 
+  it("preserves existing analytics rows while applying the two workbench migrations", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, 29));
+    const timestamp = "2026-08-27T01:02:03.000Z";
+    await env.DB.prepare(
+      `INSERT INTO site_visit_events (id, day, visit_bucket, path, visitor_hash, member_id, created_at)
+       VALUES ('analytics-before-dimensions', '2026-08-27', '2026-08-27T01:00:00Z', '/', 'hash-before', NULL, ?)`,
+    ).bind(timestamp).run();
+
+    await applyD1Migrations(env.DB, MIGRATIONS);
+
+    await expect(env.DB.prepare(
+      "SELECT id, ip_display, country, region FROM site_visit_events WHERE id = 'analytics-before-dimensions'",
+    ).first()).resolves.toEqual({
+      id: "analytics-before-dimensions",
+      ip_display: "unknown",
+      country: null,
+      region: null,
+    });
+  });
+
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {
     const priorMigrations = MIGRATIONS.slice(0, 2);
     await applyD1Migrations(env.DB, priorMigrations);

@@ -37,8 +37,15 @@ rtk npm run build
 生产操作必须由操作者在当前变更窗口明确授权后执行：
 
 ```bash
-# 1. 先备份普通 D1 表（避免导出 FTS5 virtual table）
-rtk npx wrangler d1 export memory-garden-control-plane --remote --table members --output ./backup/members.sql
+# 1. 先备份本次迁移直接影响的普通 D1 表（避免导出 FTS5 virtual table）
+set +x
+BACKUP_DIR="$(mktemp -d -t memory-garden-d1.XXXXXX)"
+chmod 700 "$BACKUP_DIR"
+rtk npx wrangler d1 export memory-garden-control-plane --remote --table site_visit_events --output "$BACKUP_DIR/site_visit_events.sql"
+rtk npx wrangler d1 export memory-garden-control-plane --remote --table menus --output "$BACKUP_DIR/menus.sql"
+rtk npx wrangler d1 export memory-garden-control-plane --remote --table roles --output "$BACKUP_DIR/roles.sql"
+rtk npx wrangler d1 export memory-garden-control-plane --remote --table role_members --output "$BACKUP_DIR/role_members.sql"
+chmod 600 "$BACKUP_DIR"/*.sql
 
 # 2. 应用 append-only migrations（当前工作树包含 0030_site_analytics_dimensions.sql、0031_workspace_menu_hierarchy.sql）
 rtk npm run db:migrate:remote
