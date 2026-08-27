@@ -45,6 +45,16 @@ describe("site analytics", () => {
     const crossOrigin = await api("/api/telemetry/pageview", undefined, { method: "POST", headers: { origin: "https://evil.example" }, body: JSON.stringify({ path: "/" }) });
     expect(crossOrigin.status).toBe(403);
   });
+
+  it("deduplicates the same visitor, path, and five-minute bucket", async () => {
+    const first = await api("/api/telemetry/pageview", undefined, { method: "POST", body: JSON.stringify({ path: "/" }), headers: { "user-agent": "dedupe-browser", "cf-connecting-ip": "203.0.113.11" } });
+    const second = await api("/api/telemetry/pageview", undefined, { method: "POST", body: JSON.stringify({ path: "/" }), headers: { "user-agent": "dedupe-browser", "cf-connecting-ip": "203.0.113.11" } });
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(202);
+    const response = await api("/api/admin/analytics/overview?days=7", admin);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ totals: { pageViews: 1, uniqueVisitors: 1, loginUsers: 0 } });
+  });
 });
 
 async function api(path: string, token: string | undefined, init: RequestInit = {}): Promise<Response> {

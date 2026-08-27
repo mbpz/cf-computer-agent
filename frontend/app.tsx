@@ -42,7 +42,7 @@ import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./c
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
-import { authProviderCapabilities, sessionSnapshot } from "./lib/session";
+import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 
@@ -51,7 +51,6 @@ export function App() {
   const [session, setSession] = useState<Awaited<ReturnType<typeof sessionSnapshot>> | null>(null);
   const [anonymous, setAnonymous] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [authProviders, setAuthProviders] = useState<{ github: boolean; wechat: boolean } | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
   const [localeTick, setLocaleTick] = useState(0);
@@ -78,12 +77,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    void authProviderCapabilities().then((value) => { if (active) setAuthProviders(value); }).catch(() => { if (active) setAuthProviders({ github: false, wechat: false }); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
     if (!session && !anonymous) return;
     void fetch("/api/telemetry/pageview", {
       method: "POST",
@@ -100,8 +93,8 @@ export function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} githubEnabled={authProviders?.github ?? false} wechatEnabled={authProviders?.wechat ?? false} />;
-  if (anonymous) return <LoginPage locale={locale} githubEnabled={authProviders?.github ?? false} wechatEnabled={authProviders?.wechat ?? false} />;
+  if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} />;
+  if (anonymous) return <LoginPage locale={locale} />;
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };

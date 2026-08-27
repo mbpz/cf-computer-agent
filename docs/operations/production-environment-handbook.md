@@ -11,10 +11,10 @@
 
 ```text
 浏览器
-  → GET /auth/github 或 GET /auth/wechat
-  → GitHub state + PKCE S256，或微信 snsapi_login QR OAuth
+  → GET /auth/github
+  → GitHub state + PKCE S256
   → callback 服务端 code exchange
-  → GitHub primary + verified 邮箱，或微信 unionid/openid subject
+  → GitHub primary + verified 邮箱
   → 对应 allowlist + D1 成员/角色校验
   → D1 保存哈希后的会话
   → 浏览器只得到 __Host-memory-session Cookie
@@ -25,7 +25,7 @@
   → 只能访问 legacy health/notes/search/chat，不能成为管理员
 ```
 
-D1 保存成员、会话、空间、投稿、审计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。
+D1 保存成员、会话、空间、投稿、审计、访问统计和防重放 nonce；`KnowledgeBase` Durable Object 保存已发布笔记和索引。D1 migration 与 Durable Object `v1` 都只能向前兼容，不能靠删表、删数据或重置 DO 回滚。微信 OAuth 适配器暂不在前端开放，当前生产登录入口只有 GitHub。
 
 ## 2. 生产配置
 
