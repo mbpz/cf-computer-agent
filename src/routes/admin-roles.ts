@@ -26,6 +26,23 @@ export async function routeAdminRolesApi(request: Request, url: URL, context: Re
     await services.audit.writeAudit({ id: crypto.randomUUID(), actorKind: "member", actorId: principal.memberId, action: "role.created", resourceType: "role", resourceId: role.id, metadata: { allowBits: role.allowBits }, createdAt: new Date().toISOString() });
     return jsonResponse({ role }, 201, context.requestId);
   }
+  const assignment = /^\/api\/admin\/roles\/([^/]+)\/members$/u.exec(url.pathname);
+  if (assignment) {
+    requireCapability(principal, "role:manage");
+    if (principal.kind !== "member" || principal.role !== "admin") throw new AppError("FORBIDDEN", "Administrator access required", 403);
+    if (request.method !== "POST" && request.method !== "DELETE") return methodNotAllowed("POST, DELETE", context);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["memberId"], "ROLE_MEMBER_REQUEST_INVALID");
+    if (typeof input.memberId !== "string" || !input.memberId) throw new AppError("ROLE_MEMBER_REQUEST_INVALID", "Member assignment is invalid", 400);
+    const roleId = decodePathId(assignment[1]!);
+    if (request.method === "POST") {
+      await services.roles.assignMember(roleId, input.memberId);
+      await services.audit.writeAudit({ id: crypto.randomUUID(), actorKind: "member", actorId: principal.memberId, action: "role.member_assigned", resourceType: "role", resourceId: roleId, metadata: { memberId: input.memberId }, createdAt: new Date().toISOString() });
+      return jsonResponse({ assigned: true }, 200, context.requestId);
+    }
+    await services.roles.unassignMember(roleId, input.memberId);
+    await services.audit.writeAudit({ id: crypto.randomUUID(), actorKind: "member", actorId: principal.memberId, action: "role.member_unassigned", resourceType: "role", resourceId: roleId, metadata: { memberId: input.memberId }, createdAt: new Date().toISOString() });
+    return jsonResponse({ assigned: false }, 200, context.requestId);
+  }
   const match = /^\/api\/admin\/roles\/([^/]+)$/.exec(url.pathname);
   if (!match) return undefined;
   requireCapability(principal, "role:manage");

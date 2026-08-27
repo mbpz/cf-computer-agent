@@ -18,6 +18,8 @@ export interface MemberPrincipal {
   identitySubject: string;
   email: string;
   role: "admin" | "contributor";
+  /** Effective D1 role mask, loaded when the authorization store is available. */
+  permissionMask?: bigint;
 }
 
 export interface AutomationPrincipal {
@@ -36,6 +38,9 @@ export interface ResolvePrincipalDependencies {
   sessions: Pick<SessionService, "resolve">;
   automation: Pick<AutomationAuthenticator, "verify">;
   maxBodyBytes: number;
+  permissions?: {
+    permissionMaskForMember(memberId: string, role: Member["role"]): Promise<bigint>;
+  };
 }
 
 export async function resolvePrincipal(
@@ -50,7 +55,11 @@ export async function resolvePrincipal(
     throw authenticationRequired();
   }
   if (hasSession) {
-    return { principal: memberPrincipal(await dependencies.sessions.resolve(request)), request };
+    const member = await dependencies.sessions.resolve(request);
+    const permissionMask = dependencies.permissions
+      ? await dependencies.permissions.permissionMaskForMember(member.id, member.role)
+      : undefined;
+    return { principal: memberPrincipal(member, permissionMask), request };
   }
   if (hasAutomation) {
     const verified = await dependencies.automation.verify(request, dependencies.maxBodyBytes);
@@ -72,13 +81,14 @@ function hasCookieOccurrence(request: Request, name: string): boolean {
   });
 }
 
-function memberPrincipal(member: Member): MemberPrincipal {
+function memberPrincipal(member: Member, permissionMask?: bigint): MemberPrincipal {
   return {
     kind: "member",
     memberId: member.id,
     identitySubject: member.identitySubject,
     email: member.email,
     role: member.role,
+    ...(permissionMask === undefined ? {} : { permissionMask }),
   };
 }
 

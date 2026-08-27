@@ -132,6 +132,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           const resolved = await resolvePrincipal(request, {
             sessions: services.sessions,
             automation: services.automation,
+            permissions: services.roles,
             maxBodyBytes: APP_CONFIG.maxJsonRequestBytes,
           });
           if (resolved.principal.kind === "member" && !isSafeMethod(resolved.request.method)) {

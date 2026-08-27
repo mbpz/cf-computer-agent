@@ -28,6 +28,7 @@ rtk npm run build
 - contributor 不能读取角色、菜单和站点统计 API；管理员才能访问。
 - `/api/navigation` 按当前成员 permission mask 返回可见菜单树；管理员菜单变更在下一次加载工作台时生效。
 - 权限 mask 使用 BigInt，D1/JSON 只传 `0x...` 字符串。
+- 自定义角色通过 `/api/admin/roles/:id/members` 分配/撤销；有效权限为基础角色位图与 active 自定义角色位图的 OR，下一次请求立即生效。
 - 统计返回访问量、独立访客、登录用户、趋势/页面/地区排行和最近访客；IP 仅为脱敏值，不返回 Cookie、visitor hash 或 OAuth 数据。
 - 系统角色/菜单不可修改；自定义角色/菜单的变更写入审计；非法 i18n key、重复路径、循环和超过 4 层树必须拒绝。
 

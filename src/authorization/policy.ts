@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { Principal } from "../identity/principal";
-import { permissionMaskFor, serializePermissionMask } from "./permission-bitmap";
+import { PERMISSION_BITS, hasPermission, permissionMaskFor, serializePermissionMask, type PermissionKey } from "./permission-bitmap";
 
 export type Capability =
   | "legacy:read"
@@ -48,6 +48,7 @@ export function capabilitiesFor(principal: Principal): readonly Capability[] {
  * in capabilitiesFor so existing API consumers do not change behavior. */
 export function permissionMaskForPrincipal(principal: Principal): string {
   if (principal.kind === "automation") return "0x0";
+  if (principal.permissionMask !== undefined) return serializePermissionMask(principal.permissionMask);
   if (principal.role === "admin") {
     return serializePermissionMask(permissionMaskFor([
       "knowledge:read", "knowledge:create", "knowledge:edit", "knowledge:review", "knowledge:publish", "knowledge:delete",
@@ -64,7 +65,29 @@ export function requireCapability(principal: Principal, capability: Capability):
   const adminOnlyWorkspaceCapability = principal.kind === "member"
     && principal.role === "admin"
     && (capability === "analytics:read" || capability === "role:manage" || capability === "menu:manage");
-  if (!capabilitiesFor(principal).includes(capability) && !adminOnlyWorkspaceCapability) {
+  const effectivePermission = principal.kind === "member" && principal.permissionMask !== undefined
+    ? permissionForCapability(capability, principal.permissionMask)
+    : false;
+  if (!capabilitiesFor(principal).includes(capability) && !adminOnlyWorkspaceCapability && !effectivePermission) {
     throw new AppError("FORBIDDEN", "Capability is not permitted", 403);
   }
+}
+
+const capabilityPermission: Partial<Record<Capability, PermissionKey>> = {
+  "knowledge:read": "knowledge:read",
+  "knowledge:review": "knowledge:review",
+  "submission:create": "submission:create",
+  "submission:read-own": "submission:read-own",
+  "submission:read-all": "submission:read-all",
+  "member:manage": "member:manage",
+  "role:manage": "role:manage",
+  "menu:manage": "menu:manage",
+  "space:manage": "space:manage",
+  "audit:read": "audit:read",
+  "analytics:read": "analytics:read",
+};
+
+function permissionForCapability(capability: Capability, mask: bigint): boolean {
+  const key = capabilityPermission[capability];
+  return key === undefined ? false : hasPermission(mask, PERMISSION_BITS[key]);
 }

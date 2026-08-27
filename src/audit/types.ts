@@ -12,6 +12,8 @@ export interface AuditActionMap {
   "role.updated": { resourceType: "role"; metadata: { previousAllowBits: string; allowBits: string } };
   "role.created": { resourceType: "role"; metadata: { allowBits: string } };
   "role.deleted": { resourceType: "role"; metadata: { key: string } };
+  "role.member_assigned": { resourceType: "role"; metadata: { memberId: string } };
+  "role.member_unassigned": { resourceType: "role"; metadata: { memberId: string } };
   "menu.updated": { resourceType: "menu"; metadata: { previousPath: string | null; path: string | null; previousStatus: RecordStatus; status: RecordStatus; previousVisible: boolean; visible: boolean } };
   "space.created": { resourceType: "space"; metadata: { status: RecordStatus } };
   "space.updated": { resourceType: "space"; metadata: { previousStatus: RecordStatus; newStatus: RecordStatus } };
@@ -53,6 +55,8 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "role.updated",
   "role.created",
   "role.deleted",
+  "role.member_assigned",
+  "role.member_unassigned",
   "menu.updated",
   "space.created",
   "space.updated",
@@ -175,6 +179,13 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["key"]));
       if (!isNonEmptyString(metadata.key)) throw invalidMetadata();
       return safeMetadata({ key: metadata.key });
+    }
+    case "role.member_assigned":
+    case "role.member_unassigned": {
+      assertResourceType(resourceType, "role");
+      const metadata = readPlainDataObject(input, new Set(["memberId"]));
+      if (!isNonEmptyString(metadata.memberId)) throw invalidMetadata();
+      return safeMetadata({ memberId: metadata.memberId });
     }
     case "menu.updated": {
       assertResourceType(resourceType, "menu");

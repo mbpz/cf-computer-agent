@@ -1,5 +1,6 @@
 import { AppError } from "../http";
-import { parsePermissionMask, serializePermissionMask } from "./permission-bitmap";
+import { parsePermissionMask, permissionMaskFor, serializePermissionMask } from "./permission-bitmap";
+import type { MemberRole } from "../members/types";
 
 export interface RoleRecord {
   id: string;
@@ -90,6 +91,50 @@ export class RolesRepository {
     ).bind(id).first<RoleRow>();
     return row ? mapRole(row) : null;
   }
+
+  async permissionMaskForMember(memberId: string, fallbackRole: MemberRole): Promise<bigint> {
+    const rows = await this.db.prepare(
+      `SELECT r.allow_bits
+       FROM role_members AS rm
+       INNER JOIN roles AS r ON r.id = rm.role_id
+       WHERE rm.member_id = ? AND r.status = 'active'`,
+    ).bind(memberId).all<{ allow_bits: string }>();
+    return rows.results.reduce(
+      (mask, row) => mask | parsePermissionMask(row.allow_bits),
+      permissionMaskForRole(fallbackRole),
+    );
+  }
+
+  async assignMember(roleId: string, memberId: string): Promise<void> {
+    const role = await this.find(roleId);
+    if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
+    if (role.status !== "active") throw new AppError("ROLE_INACTIVE", "Inactive roles cannot be assigned", 409);
+    const member = await this.db.prepare("SELECT status FROM members WHERE id = ?").bind(memberId).first<{ status: string }>();
+    if (!member) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
+    try {
+      await this.db.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES (?, ?, ?)")
+        .bind(roleId, memberId, new Date().toISOString()).run();
+    } catch (error) {
+      if (error instanceof Error && /UNIQUE constraint failed: role_members/iu.test(error.message)) {
+        throw new AppError("ROLE_MEMBER_EXISTS", "Role is already assigned", 409);
+      }
+      throw error;
+    }
+  }
+
+  async unassignMember(roleId: string, memberId: string): Promise<void> {
+    const role = await this.find(roleId);
+    if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
+    if (role.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System role assignments cannot be changed", 409);
+    const result = await this.db.prepare("DELETE FROM role_members WHERE role_id = ? AND member_id = ?")
+      .bind(roleId, memberId).run();
+    if (result.meta.changes !== 1) throw new AppError("ROLE_MEMBER_NOT_FOUND", "Role assignment not found", 404);
+  }
+}
+
+function permissionMaskForRole(role: MemberRole): bigint {
+  if (role === "admin") return (1n << 19n) - 1n;
+  return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use"]);
 }
 
 function mapRole(row: RoleRow): RoleRecord {

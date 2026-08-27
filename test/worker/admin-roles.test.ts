@@ -23,7 +23,7 @@ describe("admin roles API", () => {
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
     admin = (await sessions.create((await members.findById("role-admin"))!)).token;
     contributor = (await sessions.create((await members.findById("role-contributor"))!)).token;
-    await env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-editor', 'editor', 'Editor', '', '0x3', 'active', 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
+    await env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-editor', 'editor', 'Editor', '', '0x4003', 'active', 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
   });
 
   it("lists roles for administrators and rejects contributors", async () => {
@@ -31,7 +31,7 @@ describe("admin roles API", () => {
     expect(allowed.status).toBe(200);
     const payload = await allowed.json() as { items: Array<{ key: string; allowBits: string }> };
     expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x7ffff")).toBe(true);
-    expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x3")).toBe(true);
+    expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x4003")).toBe(true);
     const denied = await api("/api/admin/roles", contributor);
     expect(denied.status).toBe(403);
   });
@@ -51,6 +51,26 @@ describe("admin roles API", () => {
     expect((await api("/api/admin/roles", admin, { method: "POST", body: JSON.stringify({ key: "reviewer", name: "Again", allowBits: "0x1" }) })).status).toBe(409);
     expect((await api(`/api/admin/roles/${role.id}`, admin, { method: "DELETE" })).status).toBe(200);
     expect((await api("/api/admin/roles/role-admin", admin, { method: "DELETE" })).status).toBe(409);
+  });
+
+  it("assigns custom roles and projects the effective mask into the session", async () => {
+    const assigned = await api("/api/admin/roles/role-editor/members", admin, {
+      method: "POST",
+      body: JSON.stringify({ memberId: "role-contributor" }),
+    });
+    expect(assigned.status).toBe(200);
+    const session = await api("/api/session", contributor);
+    await expect(session.json()).resolves.toMatchObject({ permissionMask: "0x640c3" });
+    const duplicate = await api("/api/admin/roles/role-editor/members", admin, {
+      method: "POST",
+      body: JSON.stringify({ memberId: "role-contributor" }),
+    });
+    expect(duplicate.status).toBe(409);
+    const removed = await api("/api/admin/roles/role-editor/members", admin, {
+      method: "DELETE",
+      body: JSON.stringify({ memberId: "role-contributor" }),
+    });
+    expect(removed.status).toBe(200);
   });
 });
 

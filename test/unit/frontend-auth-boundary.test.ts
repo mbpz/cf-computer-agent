@@ -12,6 +12,18 @@ describe("frontend auth boundary", () => {
     expect(resolveFrontendAccess({ session: { member: { id: "m", email: "a@example.com", role: "contributor" }, capabilities: ["knowledge:read"], logoutUrl: "/auth/logout" }, requiredCapability: "member:manage" })).toEqual({ kind: "forbidden" });
   });
 
+  it("honors an effective permission mask from an assigned custom role", () => {
+    expect(resolveFrontendAccess({
+      session: {
+        member: { id: "m", email: "a@example.com", role: "contributor" },
+        capabilities: ["knowledge:read"],
+        permissionMask: "0x4000",
+        logoutUrl: "/auth/logout",
+      },
+      requiredCapability: "analytics:read",
+    })).toEqual({ kind: "allow" });
+  });
+
   it("allows only the capability returned by the server", () => {
     expect(resolveFrontendAccess({ session: { member: { id: "m", email: "a@example.com", role: "admin" }, capabilities: ["member:manage"], logoutUrl: "/auth/logout" }, requiredCapability: "member:manage" })).toEqual({ kind: "allow" });
     expect(resolveFrontendAccess({ session: { member: { id: "m", email: "a@example.com", role: "admin" }, capabilities: [], logoutUrl: "/auth/logout" }, requiredCapability: "member:manage" })).toEqual({ kind: "forbidden" });
