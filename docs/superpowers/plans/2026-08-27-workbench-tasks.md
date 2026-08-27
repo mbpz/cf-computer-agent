@@ -135,7 +135,8 @@ VALUES ('menu-tasks', 'menu-workspace', 'tasks', 'NAV_TASKS', '/tasks', 'CheckSq
 1. `Capability` union 末尾加 `| "tasks:use"`;
 2. `contributorCapabilities` 数组末尾加 `"tasks:use"`;
 3. `adminCapabilities` 数组末尾加 `"tasks:use"`;
-4. `permissionMaskForPrincipal` 的 admin 列表末尾加 `"workspace.tasks"`,contributor 列表末尾加 `"workspace.tasks"`。
+4. `permissionMaskForPrincipal` 的 admin 列表末尾加 `"workspace.tasks"`,contributor 列表末尾加 `"workspace.tasks"`;
+5. `capabilityPermission` 映射追加一行 `"tasks:use": "workspace.tasks",`——成员被分配角色位掩码后,`requireCapability` 经此映射检查 bit 20。
 
 - [ ] **Step 4: 任务上限常量**
 
@@ -2718,7 +2719,7 @@ Run: `npm run dev`(另开终端 `npm run dev:ui` 或直接访问 dev URL)
 ```markdown
 # 工作台任务模块发布证据(2026-08-27)
 
-- 变更范围:migrations/0031、src/tasks、src/routes/tasks.ts、src/audit/types.ts(task.*)、
+- 变更范围:migrations/0032、src/tasks、src/routes/tasks.ts、src/audit/types.ts(task.*)、
   src/authorization(bit 20 + tasks:use)、frontend(/tasks 页面、首页概览卡、阅读页入口)。
 - 验收命令:`npm run check` 全绿(附终端输出摘要)。
 - 手动冒烟:六项清单全部通过(附每项一句话证据)。
