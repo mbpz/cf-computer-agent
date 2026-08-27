@@ -183,4 +183,4 @@
 - [ ] Step 3: 运行 `rtk npm run verify:i18n`、`rtk npm run verify:wcag`、`rtk npm run build`。
 - [ ] Step 4: 运行现有 GitHub OAuth、退出登录、disabled contributor 和 API 403 回归。
 - [ ] Step 5: 记录版本 ID、脱敏 request ID 和未完成的生产 migration，不把本地证据冒充远程证据。
-- [ ] Step 6: 提交 `docs: add workspace rbac release evidence checklist`。
+- [x] Step 6: 添加 `docs/operations/workspace-rbac-release-checklist.md`；生产版本、migration 和 smoke 证据待远程授权后补录。
