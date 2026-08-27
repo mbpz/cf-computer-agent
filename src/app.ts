@@ -45,6 +45,7 @@ import { routeLibraryApi } from "./routes/library";
 import { routeMemberApi } from "./routes/member";
 import { routeSession } from "./routes/session";
 import { routeTelemetry } from "./routes/telemetry";
+import { routeNavigationApi } from "./routes/navigation";
 import { SpacesRepository } from "./spaces/repository";
 import { SpacesService } from "./spaces/service";
 import { PublicationRepository } from "./publication/repository";
@@ -295,6 +296,8 @@ async function dispatchApiRequest(
 
   const session = routeSession(request, url, context, principal);
   if (session) return session;
+  const navigation = await routeNavigationApi(request, url, context, principal, { menus: services.menus });
+  if (navigation) return navigation;
   const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools);
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);

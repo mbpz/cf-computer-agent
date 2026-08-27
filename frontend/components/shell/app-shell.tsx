@@ -10,6 +10,7 @@ import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
 import { matchRoute } from "../../lib/router";
 import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
+import { loadNavigation, type NavigationDataNode } from "../../lib/navigation-data";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -40,13 +41,24 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "knowledge-base": true, admin: true, governance: true });
   const [theme, setTheme] = useState<ThemeMode>("system");
+  const [serverNavigation, setServerNavigation] = useState<NavigationDataNode[] | null>(null);
   useEffect(() => {
     const stored = readTheme(window.localStorage);
     setTheme(stored);
     applyTheme(stored, document, window.localStorage);
   }, []);
-  const workspaceRoutes = navigationTree("workspace", session);
-  const adminRoutes = navigationTree("admin", session);
+  useEffect(() => {
+    let active = true;
+    setServerNavigation(null);
+    void loadNavigation().then((tree) => { if (active) setServerNavigation(tree); }).catch(() => { if (active) setServerNavigation(null); });
+    return () => { active = false; };
+  }, [session.member.id, session.member.role, session.permissionMask]);
+  const workspaceRoutes = serverNavigation
+    ? serverNavigation.filter((node) => node.groupName === "workspace").map(toNavigationNode)
+    : navigationTree("workspace", session);
+  const adminRoutes = serverNavigation
+    ? serverNavigation.filter((node) => node.groupName === "admin").map(toNavigationNode)
+    : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
   const access = resolveFrontendAccess({ session, requiredCapability: matchRoute(pathname)?.capability ?? requiredCapability(pathname) });
@@ -93,7 +105,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   );
 }
 
-interface NavigationNode { id: string; route?: typeof ROUTES[number]; labelKey: string; children?: NavigationNode[]; }
+interface NavigationNode { id: string; route?: typeof ROUTES[number]; path?: string; labelKey: string; icon?: string | null; children?: NavigationNode[]; }
 
 function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void }) {
   return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={1} />)}</div></div>;
@@ -101,14 +113,19 @@ function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expan
 
 function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onToggle, depth }: { node: NavigationNode; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void; depth: number }) {
   const label = locale.t(node.labelKey);
-  const path = node.route?.path ?? null;
+  const path = node.path ?? node.route?.path ?? null;
   const active = Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname)));
   const hasChildren = Boolean(node.children?.length);
   const content = path ? <a href={path} aria-current={pathname === path ? "page" : undefined} title={collapsed ? label : undefined} onClick={(event) => { event.preventDefault(); onNavigate(path); }} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === path && "bg-accent font-medium text-accent-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span></a> : <button type="button" aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)} title={collapsed ? label : undefined} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", active && "text-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span></button>;
   return <div data-nav-node data-nav-depth={depth}><div className="flex items-center">{content}{hasChildren && !collapsed && <button type="button" className="mr-1 rounded p-1 text-muted-foreground hover:bg-accent" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></button>}</div>{hasChildren && (expanded[node.id] ?? false) && !collapsed && depth < 4 && <div className="ml-4 space-y-1 border-l pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={depth + 1} />)}</div>}</div>;
 }
 
-function isNodeActive(node: NavigationNode, pathname: string): boolean { return Boolean(node.route?.path && (pathname === node.route.path || (node.route.path !== "/" && pathname.startsWith(`${node.route.path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname))); }
+function isNodeActive(node: NavigationNode, pathname: string): boolean { const path = node.path ?? node.route?.path; return Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname))); }
+
+function toNavigationNode(node: NavigationDataNode): NavigationNode {
+  const route = node.path ? ROUTES.find((item) => item.path === node.path) : undefined;
+  return { id: node.id, route, path: node.path ?? undefined, labelKey: node.labelKey, icon: node.icon, children: node.children.map(toNavigationNode) };
+}
 
 function navigationTree(group: "workspace" | "admin", session: SessionSnapshot): NavigationNode[] {
   const route = (path: string) => ROUTES.find((item) => item.path === path);
@@ -160,4 +177,4 @@ function MobileNavigation({ nodes, pathname, locale, onNavigate }: { nodes: Navi
   return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={route.path} />{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
 }
 
-function flattenNavigation(nodes: NavigationNode[]): Array<typeof ROUTES[number]> { return nodes.flatMap((node) => [ ...(node.route ? [node.route] : []), ...(node.children ? flattenNavigation(node.children) : []) ]); }
+function flattenNavigation(nodes: NavigationNode[]): NavigationNode[] { return nodes.flatMap((node) => [ ...(node.path || node.route ? [node] : []), ...(node.children ? flattenNavigation(node.children) : []) ]); }

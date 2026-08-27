@@ -26,6 +26,7 @@ rtk npm run build
 
 - `NAV_KNOWLEDGE_BASE` 是工作区一级菜单；`NAV_SITE_ANALYTICS` 是独立管理员菜单。
 - contributor 不能读取角色、菜单和站点统计 API；管理员才能访问。
+- `/api/navigation` 按当前成员 permission mask 返回可见菜单树；管理员菜单变更在下一次加载工作台时生效。
 - 权限 mask 使用 BigInt，D1/JSON 只传 `0x...` 字符串。
 - 统计返回访问量、独立访客、登录用户、趋势/页面/地区排行和最近访客；IP 仅为脱敏值，不返回 Cookie、visitor hash 或 OAuth 数据。
 - 系统角色/菜单不可修改；自定义角色/菜单的变更写入审计；非法 i18n key、重复路径、循环和超过 4 层树必须拒绝。
@@ -57,6 +58,8 @@ BASE_URL="https://memory.crgmhrc.asia"
 rtk curl -fsS "$BASE_URL/" -o /tmp/memory-garden.html
 rtk curl -fsS "$BASE_URL/api/auth/providers"
 rtk curl -i "$BASE_URL/api/admin/analytics/overview?days=7"  # 未登录应 401
+# 登录后验证服务端菜单树（应按角色权限过滤）
+rtk curl -fsS "$BASE_URL/api/navigation"
 ```
 
 管理员登录后另行记录：

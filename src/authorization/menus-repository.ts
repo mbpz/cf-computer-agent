@@ -43,18 +43,29 @@ export class MenusRepository {
   constructor(private readonly db: D1Database) {}
 
   async list(): Promise<{ items: MenuRecord[]; tree: MenuNode[] }> {
+    const items = await this.readItems();
+    return { items, tree: this.buildTree(items, (1n << 64n) - 1n) };
+  }
+
+  async navigation(permissionMask: bigint): Promise<{ tree: MenuNode[] }> {
+    const items = await this.readItems();
+    return { tree: this.buildTree(items, permissionMask) };
+  }
+
+  private async readItems(): Promise<MenuRecord[]> {
     const rows = await this.db.prepare(
       `SELECT id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system
        FROM menus ORDER BY position ASC, key ASC LIMIT 200`,
     ).all<MenuDbRow>();
-    const items = rows.results.map(mapMenu);
-    let tree: MenuNode[];
+    return rows.results.map(mapMenu);
+  }
+
+  private buildTree(items: MenuRecord[], permissionMask: bigint): MenuNode[] {
     try {
-      tree = buildMenuTree(items, (1n << 64n) - 1n);
+      return buildMenuTree(items, permissionMask);
     } catch {
       throw new AppError("MENU_CONFIGURATION_INVALID", "Menu configuration is invalid", 500, true);
     }
-    return { items, tree };
   }
 
   async find(id: string): Promise<MenuRecord | null> {

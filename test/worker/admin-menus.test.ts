@@ -38,6 +38,25 @@ describe("admin menus API", () => {
     expect((await api("/api/admin/menus", contributor)).status).toBe(403);
   });
 
+  it("serves the permission-filtered navigation tree to members", async () => {
+    const contributorResponse = await api("/api/navigation", contributor);
+    expect(contributorResponse.status).toBe(200);
+    const contributorPayload = await contributorResponse.json() as { tree: MenuPayloadNode[] };
+    expect(contributorPayload.tree.map((node) => node.key)).toEqual(["workspace"]);
+    expect(contributorPayload.tree[0]?.children.map((node) => node.key)).toEqual([
+      "home", "knowledge", "submit", "my-submissions", "custom",
+    ]);
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent"]);
+
+    const adminResponse = await api("/api/navigation", admin);
+    expect(adminResponse.status).toBe(200);
+    const adminPayload = await adminResponse.json() as { tree: MenuPayloadNode[] };
+    expect(adminPayload.tree.map((node) => node.key)).toEqual(["workspace", "admin"]);
+    expect(adminPayload.tree.find((node) => node.key === "admin")?.children.find((node) => node.key === "governance")?.children.map((node) => node.key)).toEqual([
+      "members", "roles", "menus", "spaces", "audit", "site-analytics",
+    ]);
+  });
+
   it("updates custom status and rejects unsafe tree mutations", async () => {
     const updated = await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ status: "disabled", visible: false, position: 3 }) });
     expect(updated.status).toBe(200);
