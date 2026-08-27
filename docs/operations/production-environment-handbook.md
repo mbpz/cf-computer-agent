@@ -5,7 +5,7 @@
 > D1：`memory-garden-control-plane`  
 > 适用 shell：macOS `zsh`
 
-本文是生产配置和部署的唯一核心入口。详细 smoke 与应急恢复分别见 [smoke-test.md](./smoke-test.md) 和 [rollback.md](./rollback.md)。
+本文是生产配置和部署的唯一核心入口。详细 smoke、访问统计验收与应急恢复分别见 [smoke-test.md](./smoke-test.md)、[analytics-production-checklist.md](./analytics-production-checklist.md) 和 [rollback.md](./rollback.md)。
 
 ## 1. 核心逻辑
 
