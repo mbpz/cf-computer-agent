@@ -118,7 +118,14 @@ CREATE INDEX idx_task_links_member ON task_links(member_id, task_id);
 
 INSERT OR IGNORE INTO menus (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at)
 VALUES ('menu-tasks', 'menu-workspace', 'tasks', 'NAV_TASKS', '/tasks', 'CheckSquare', 'workspace', 6, '0x100000', 'active', 1, 1, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z');
+
+-- 系统角色默认掩码补挂 bit 20(经用户确认):全体成员的权限掩码来自 roles 表,
+-- 不补则任务菜单对所有人(含管理员)不可见。幂等:只在旧值上叠加。
+UPDATE roles SET allow_bits = '0x17ffff', updated_at = '1970-01-01T00:00:00.000Z' WHERE id = 'role-admin' AND allow_bits = '0x7ffff';
+UPDATE roles SET allow_bits = '0x1600c3', updated_at = '1970-01-01T00:00:00.000Z' WHERE id = 'role-contributor' AND allow_bits = '0x600c3';
 ```
+
+同时修改 `src/authorization/roles-repository.ts` 中的系统角色代码兜底掩码(admin `0x7ffff` → `0x17ffff`,contributor `0x600c3` → `0x1600c3`),保持代码兜底与迁移一致。相关掩码断言测试(roles/menus/session 方向)按其现有模式同步期望值。
 
 - [ ] **Step 2: 注册 permission bit**
 
