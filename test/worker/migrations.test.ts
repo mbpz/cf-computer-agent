@@ -484,6 +484,7 @@ describe("Phase 1 control-plane migrations", () => {
     await expectForeignKeys("jobs", []);
 
     await expectUniqueConstraints("submissions", [
+      "asset_id|partial=1",
       "submitter_id,idempotency_key|partial=1",
     ]);
     await expectUniqueConstraints("sources", []);

@@ -50,7 +50,7 @@ const expectedMigrations = [
   ["0025_m5_private_note_shares.sql", "3c8919fe45ec700ff854620f22d71d5f8abd2edaee239910d6041f5985013200"],
   ["0026_site_analytics.sql", "12789e0b8cac6ca81ce59c0980758045176500af21f93c3ba5d640407f1fb356"],
   ["0027_duplicate_candidates.sql", "2c4fdcb548e38e236ec209f2dd6c79ef8a762a3ae512f49bb2cf6c5e64d9022b"],
-  ["0028_asset_submission_pairing.sql", "97e6db8e1b0bb75e3f5216911bd7a3989bf3c8d873d7fe4419cc52ee581417fb"],
+  ["0028_asset_submission_pairing.sql", "ee627195ada2958c88b2c9cead561ba8d1337a2f58d74523395378848e46b479"],
   ["0029_workspace_rbac.sql", "f242353cea654bb0eff0b052956128f11d37b215237aad3b3a6897eb4dfb04b8"],
 ];
 const requiredEvidenceBlocks = [
@@ -206,6 +206,12 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
     assert.match(result.output, /^\[pass\] migration-files count=29$/mu);
+});
+
+test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
+  const migration = await readFile(new URL("../migrations/0028_asset_submission_pairing.sql", import.meta.url), "utf8");
+  assert.doesNotMatch(migration, /CREATE\s+TRIGGER/iu);
+  assert.match(migration, /submissions_asset_id_unique/u);
 });
 
 test("fails closed when an unexpected local migration file is present", async () => {

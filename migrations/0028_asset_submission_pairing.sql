@@ -8,33 +8,10 @@ CREATE UNIQUE INDEX assets_submission_id_unique
 ON assets(submission_id)
 WHERE submission_id IS NOT NULL;
 
-CREATE TRIGGER submissions_asset_pairing_guard
-BEFORE INSERT ON submissions
-WHEN NEW.asset_id IS NOT NULL
-BEGIN
-  SELECT CASE WHEN NOT EXISTS (
-    SELECT 1
-    FROM assets a
-    JOIN parse_jobs j ON j.asset_id = a.id
-    WHERE a.id = NEW.asset_id
-      AND a.owner_id = NEW.submitter_id
-      AND a.submission_id IS NULL
-      AND j.status = 'succeeded'
-  ) THEN RAISE(ABORT, 'asset pairing invalid') END;
-END;
-
-CREATE TRIGGER submissions_asset_pairing_link
-AFTER INSERT ON submissions
-WHEN NEW.asset_id IS NOT NULL
-BEGIN
-  UPDATE assets
-  SET submission_id = NEW.id, updated_at = NEW.updated_at
-  WHERE id = NEW.asset_id;
-END;
-
-CREATE TRIGGER submissions_asset_pairing_immutable
-BEFORE UPDATE OF asset_id ON submissions
-WHEN OLD.asset_id IS NOT NEW.asset_id
-BEGIN
-  SELECT RAISE(ABORT, 'asset pairing is immutable');
-END;
+-- D1 remote migrations execute each statement through the SQL API. Compound
+-- trigger definitions are rejected there as incomplete input even though the
+-- local SQLite emulator accepts them. Keep the invariant in the application
+-- batch and add a portable uniqueness guard for races.
+CREATE UNIQUE INDEX submissions_asset_id_unique
+ON submissions(asset_id)
+WHERE asset_id IS NOT NULL;

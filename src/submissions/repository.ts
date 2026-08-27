@@ -159,6 +159,15 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   async createWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult> {
     const { submission, source, sourceVersion, audit } = input;
     assertSourceCreationBinding(input);
+    if (input.assetId !== undefined) {
+      const pairing = await this.db.prepare(
+        `SELECT 1 AS present
+         FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
+         WHERE a.id = ? AND a.owner_id = ? AND a.submission_id IS NULL AND j.status = 'succeeded'
+         LIMIT 1`,
+      ).bind(input.assetId, submission.submitterId).first<{ present: number }>();
+      if (!pairing) throw new SubmissionsRepositoryConflictError("asset_pairing_conflict");
+    }
     const rejectedReplay = await this.findRejectedByIdempotencyKey(submission.submitterId, submission.idempotencyKey!);
     if (rejectedReplay) {
       const candidate = await this.sources.findDuplicateCandidate(
@@ -199,7 +208,9 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     } catch (error) {
       const concurrentReplay = await this.findCreationByIdempotencyKey(submission.submitterId, submission.idempotencyKey);
       if (concurrentReplay) return exactReplayOrThrow(concurrentReplay, input);
-      if (String(error).includes("asset pairing")) throw new SubmissionsRepositoryConflictError("asset_pairing_conflict");
+      if (String(error).includes("asset pairing") || /UNIQUE constraint failed: submissions\.asset_id/iu.test(String(error))) {
+        throw new SubmissionsRepositoryConflictError("asset_pairing_conflict");
+      }
       throw error;
     }
 
@@ -260,6 +271,12 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     }
     if (results[1]?.meta.changes !== 1 || results[2]?.meta.changes !== 1 || results[3]?.meta.changes !== 1) {
       throw new Error("Submission source creation did not fully persist");
+    }
+    if (input.assetId !== undefined) {
+      await this.db.prepare(
+        `UPDATE assets SET submission_id = ?, updated_at = ?
+         WHERE id = ? AND owner_id = ? AND submission_id IS NULL`,
+      ).bind(submission.id, submission.updatedAt, input.assetId, submission.submitterId).run();
     }
     return this.attachSimilarCandidates({ submission: publicSubmission(submission), source, sourceVersion, duplicateCandidate: null }, sourceVersion, submission.submitterId, submission.requestedSpaceId);
   }
