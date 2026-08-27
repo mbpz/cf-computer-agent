@@ -285,6 +285,11 @@ function failingSessionDeleteDatabase(database: D1Database): {
 }
 
 describe("Worker application", () => {
+  it("exposes anonymous OAuth provider capabilities without secrets", async () => {
+    const response = await fetchApp(createApp(), "/api/auth/providers", {}, localEnv({ GITHUB_OAUTH_CLIENT_ID: "", GITHUB_OAUTH_CLIENT_SECRET: "", WECHAT_APP_ID: "", WECHAT_APP_SECRET: "" }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ github: false, wechat: false });
+  });
   beforeEach(async () => {
     await reset();
     await applyD1Migrations(env.DB, MIGRATIONS);

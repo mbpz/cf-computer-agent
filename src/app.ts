@@ -110,6 +110,13 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
 
         const services = createRequestServices(env, ctx, context, dependencies);
         try {
+          if (url.pathname === "/api/auth/providers") {
+            if (request.method !== "GET") return methodNotAllowed("GET", context);
+            return jsonResponse({
+              github: hasOAuthCredentialPair(env.GITHUB_OAUTH_CLIENT_ID, env.GITHUB_OAUTH_CLIENT_SECRET),
+              wechat: services.wechat.isConfigured(),
+            }, 200, context.requestId);
+          }
           if (url.pathname === "/api/telemetry/pageview") {
             const telemetry = await routeTelemetry(request, url, context, {
               analytics: services.analytics,
@@ -138,6 +145,12 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
       }
     },
   };
+}
+
+function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boolean {
+  const valid = (value: unknown, max: number) => typeof value === "string"
+    && value.length > 0 && value.length <= max && /^[\x21-\x7e]+$/u.test(value);
+  return valid(clientId, 256) && valid(clientSecret, 1024);
 }
 
 const workspaceRoutes = new Set([

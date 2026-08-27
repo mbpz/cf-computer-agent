@@ -7,6 +7,8 @@
 > 适用 shell：macOS `zsh`  
 > 本手册处理 GitHub/微信 OAuth 与 automation 配置，不替代 D1 migration、OAuth 验收和生产 smoke。
 
+微信四项配置的最短操作路径见：[微信扫码登录配置（核心手册）](./wechat-oauth-setup.md)。
+
 ## 1. 配置清单
 
 建议在 Cloudflare 中把下表全部保存为 **Secret**。对 Worker 运行时而言 Secret 和文本变量的读取方式相同，但 Secret 保存后不能从 Dashboard 或 Wrangler 重新查看明文。
@@ -28,6 +30,12 @@
 | `BOOTSTRAP_WECHAT_SUBJECT` | allowlist 中预定管理员 subject | 首个微信管理员 | 否 |
 
 微信四项配置是可选扩展，不放入 GitHub/automation 的七项必填 bundle。启用时在 Dashboard 以 **Secret** 单独添加四项；`ALLOWED_WECHAT_SUBJECTS` 使用英文逗号分隔，且必须包含 `BOOTSTRAP_WECHAT_SUBJECT`（如设置）。
+
+### 微信未配置时的表现
+
+如果访问 `/auth/wechat` 返回 `WECHAT_OAUTH_CONFIG_INVALID`，表示 Worker 没有同时读到 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`，不是 GitHub 登录故障。当前前端会先读取 `/api/auth/providers`：未配置时保留 GitHub 登录，并将微信入口显示为“微信登录尚未配置”，不会再把普通用户带到错误 JSON 页面。
+
+若暂时不使用微信，无需添加任何微信 Secret；若要启用，按下文创建网站应用并将四项变量作为 Worker Secret 发布后再验证。
 
 ## 2. 创建 GitHub OAuth App
 

@@ -15,4 +15,10 @@ describe("login page", () => {
     expect(chinese).toContain("微信扫码登录");
     expect(chinese).not.toContain("undefined");
   });
+
+  it("does not offer an unconfigured WeChat provider", () => {
+    const html = renderToStaticMarkup(<LoginPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} wechatEnabled={false} />);
+    expect(html).not.toContain("Scan with WeChat");
+    expect(html).toContain("WeChat sign-in is not configured");
+  });
 });

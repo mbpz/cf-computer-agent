@@ -14,6 +14,6 @@ test("anonymous bootstrap imports the LoginPage component it renders", async () 
 
 test("anonymous and session-error branches stay wired to LoginPage", async () => {
   const source = await appSource();
-  assert.match(source, /return <LoginPage locale=\{locale\} \/>;/u);
-  assert.match(source, /return <LoginPage locale=\{locale\} error=/u);
+  assert.match(source, /return <LoginPage locale=\{locale\}[^>]*\/>;/u);
+  assert.match(source, /return <LoginPage locale=\{locale\} error=[^>]*\/>;/u);
 });

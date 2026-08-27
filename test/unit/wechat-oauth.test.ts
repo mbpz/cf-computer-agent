@@ -4,6 +4,11 @@ import { createWeChatOAuthClient } from "../../src/identity/wechat-oauth";
 describe("WeChat website QR OAuth", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("reports whether the provider is configured without exposing credentials", () => {
+    expect(createWeChatOAuthClient({ appId: "", appSecret: "" }).isConfigured()).toBe(false);
+    expect(createWeChatOAuthClient({ appId: "wx-app", appSecret: "wx-secret" }).isConfigured()).toBe(true);
+  });
+
   it("builds the official QR authorization URL with state", async () => {
     const start = await createWeChatOAuthClient({ appId: "wx-app", appSecret: "wx-secret" }).createStart();
     const url = new URL(start.authorizationUrl);
