@@ -59,6 +59,9 @@ describe("admin roles API", () => {
       body: JSON.stringify({ memberId: "role-contributor" }),
     });
     expect(assigned.status).toBe(200);
+    const listed = await api("/api/admin/roles", admin);
+    const listedPayload = await listed.json() as { items: Array<{ id: string; assignedMemberIds: string[] }> };
+    expect(listedPayload.items.find((item) => item.id === "role-editor")?.assignedMemberIds).toEqual(["role-contributor"]);
     const session = await api("/api/session", contributor);
     await expect(session.json()).resolves.toMatchObject({ permissionMask: "0x640c3" });
     const duplicate = await api("/api/admin/roles/role-editor/members", admin, {
