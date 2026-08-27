@@ -25,6 +25,7 @@ export const PERMISSION_BITS = Object.freeze({
   "duplicate:review": 16,
   "agent:use": 17,
   "search:use": 18,
+  "workspace.tasks": 20,
 } as const);
 
 export type PermissionKey = keyof typeof PERMISSION_BITS;

@@ -15,13 +15,15 @@ export type Capability =
   | "knowledge:review"
   | "analytics:read"
   | "role:manage"
-  | "menu:manage";
+  | "menu:manage"
+  | "tasks:use";
 
 const contributorCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
   "submission:create",
   "submission:read-own",
   "knowledge:read",
+  "tasks:use",
 ]);
 
 const adminCapabilities = Object.freeze<readonly Capability[]>([
@@ -35,6 +37,7 @@ const adminCapabilities = Object.freeze<readonly Capability[]>([
   "audit:read",
   "knowledge:read",
   "knowledge:review",
+  "tasks:use",
 ]);
 
 const automationCapabilities = Object.freeze<readonly Capability[]>(["legacy:read", "legacy:write"]);
@@ -54,10 +57,12 @@ export function permissionMaskForPrincipal(principal: Principal): string {
       "knowledge:read", "knowledge:create", "knowledge:edit", "knowledge:review", "knowledge:publish", "knowledge:delete",
       "submission:create", "submission:read-own", "submission:read-all", "member:manage", "role:manage", "menu:manage",
       "space:manage", "audit:read", "analytics:read", "asset:manage", "duplicate:review", "agent:use", "search:use",
+      "workspace.tasks",
     ]));
   }
   return serializePermissionMask(permissionMaskFor([
     "knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use",
+    "workspace.tasks",
   ]));
 }
 
@@ -85,6 +90,7 @@ const capabilityPermission: Partial<Record<Capability, PermissionKey>> = {
   "space:manage": "space:manage",
   "audit:read": "audit:read",
   "analytics:read": "analytics:read",
+  "tasks:use": "workspace.tasks",
 };
 
 function permissionForCapability(capability: Capability, mask: bigint): boolean {

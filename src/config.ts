@@ -36,6 +36,12 @@ export const APP_CONFIG = {
   maxNoteTagBytes: MAX_NOTE_TAG_BYTES,
   maxNoteTags: MAX_NOTE_TAGS,
   maxBatchReviewActions: 20,
+  maxTasksPerMember: 500,
+  maxTaskTags: 10,
+  maxTaskLinksPerTask: 5,
+  maxTaskTitleChars: 200,
+  maxTaskNotesChars: 5_000,
+  maxTaskTagChars: 32,
   // JSON may encode a one-byte control character as a six-byte `\\u00XX` escape.
   maxJsonRequestBytes: MAX_NOTE_BYTES * MAX_JSON_ESCAPE_BYTES_PER_INPUT_BYTE + MAX_NOTE_JSON_METADATA_BYTES,
   maxQuestionChars: 4_000,
