@@ -29,7 +29,7 @@ describe("knowledge favorites", () => {
     expect(await added.json()).toMatchObject({ favorite: { knowledgeItemId: "knowledge-favorite", completed: false } });
     await expect((await api("/api/knowledge/knowledge-favorite/favorite", sessionA)).json()).resolves.toEqual({ favorite: true });
     await expect((await api("/api/knowledge/favorites?limit=20", sessionA)).json()).resolves.toMatchObject({ items: [{ knowledgeItemId: "knowledge-favorite" }] });
-    await env.DB.prepare("INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at, visit_count) VALUES ('favorite-a', 'knowledge-favorite', ?, 1)").bind("2026-08-27T00:00:00.000Z").run();
+    await env.DB.prepare("INSERT INTO knowledge_visits (member_id, knowledge_item_id, last_visited_at, visit_count) VALUES ('favorite-a', 'knowledge-favorite', ?, 1)").bind(new Date(Date.now() + 86_400_000).toISOString()).run();
     await expect((await api("/api/knowledge/favorites?limit=20", sessionA)).json()).resolves.toMatchObject({ items: [{ knowledgeItemId: "knowledge-favorite", completed: true }] });
     await expect((await api("/api/knowledge/knowledge-favorite/favorite", sessionB)).json()).resolves.toEqual({ favorite: false });
     expect((await api("/api/knowledge/knowledge-favorite/favorite", sessionB, { method: "PUT" })).status).toBe(201);

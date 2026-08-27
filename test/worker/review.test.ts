@@ -31,10 +31,12 @@ describe("knowledge review", () => {
     const response = await api("/api/knowledge/review?period=weekly", contributor);
     expect(response.status).toBe(200);
     const responseBody = await response.json() as Record<string, unknown>;
+    const end = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1));
+    const from = new Date(end.getTime() - 7 * 86_400_000);
     expect(responseBody).toMatchObject({
       period: "weekly",
-      from: "2026-08-20T00:00:00.000Z",
-      to: "2026-08-27T00:00:00.000Z",
+      from: from.toISOString(),
+      to: end.toISOString(),
       items: [
         { knowledgeItemId: "knowledge-review-old", reason: "to_read", favorite: true },
         { knowledgeItemId: "knowledge-review-new", reason: "new", favorite: false },
