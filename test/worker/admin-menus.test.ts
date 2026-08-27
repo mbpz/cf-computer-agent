@@ -44,7 +44,7 @@ describe("admin menus API", () => {
     const contributorPayload = await contributorResponse.json() as { tree: MenuPayloadNode[] };
     expect(contributorPayload.tree.map((node) => node.key)).toEqual(["workspace"]);
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).toEqual([
-      "home", "knowledge", "submit", "my-submissions", "custom",
+      "home", "knowledge", "submit", "my-submissions", "tasks", "custom",
     ]);
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent"]);
 
@@ -52,6 +52,7 @@ describe("admin menus API", () => {
     expect(adminResponse.status).toBe(200);
     const adminPayload = await adminResponse.json() as { tree: MenuPayloadNode[] };
     expect(adminPayload.tree.map((node) => node.key)).toEqual(["workspace", "admin"]);
+    expect(adminPayload.tree.find((node) => node.key === "workspace")?.children.map((node) => node.key)).toContain("tasks");
     expect(adminPayload.tree.find((node) => node.key === "admin")?.children.find((node) => node.key === "governance")?.children.map((node) => node.key)).toEqual([
       "members", "roles", "menus", "spaces", "audit", "site-analytics",
     ]);

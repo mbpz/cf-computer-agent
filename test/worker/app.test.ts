@@ -428,7 +428,7 @@ describe("Worker application", () => {
         "submission:read-all", "member:manage", "space:manage", "audit:read",
         "knowledge:read", "knowledge:review", "tasks:use",
       ],
-      permissionMask: "0x7ffff",
+      permissionMask: "0x17ffff",
       logoutUrl: "/auth/logout",
     });
 

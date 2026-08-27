@@ -139,8 +139,8 @@ export class RolesRepository {
 }
 
 function permissionMaskForRole(role: MemberRole): bigint {
-  if (role === "admin") return (1n << 19n) - 1n;
-  return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use"]);
+  if (role === "admin") return ((1n << 19n) - 1n) | (1n << 20n);
+  return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use", "workspace.tasks"]);
 }
 
 function mapRole(row: RoleRow): RoleRecord {

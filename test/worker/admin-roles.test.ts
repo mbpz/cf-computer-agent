@@ -30,7 +30,7 @@ describe("admin roles API", () => {
     const allowed = await api("/api/admin/roles", admin);
     expect(allowed.status).toBe(200);
     const payload = await allowed.json() as { items: Array<{ key: string; allowBits: string }> };
-    expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x7ffff")).toBe(true);
+    expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x17ffff")).toBe(true);
     expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x4003")).toBe(true);
     const denied = await api("/api/admin/roles", contributor);
     expect(denied.status).toBe(403);
@@ -63,7 +63,7 @@ describe("admin roles API", () => {
     const listedPayload = await listed.json() as { items: Array<{ id: string; assignedMemberIds: string[] }> };
     expect(listedPayload.items.find((item) => item.id === "role-editor")?.assignedMemberIds).toEqual(["role-contributor"]);
     const session = await api("/api/session", contributor);
-    await expect(session.json()).resolves.toMatchObject({ permissionMask: "0x640c3" });
+    await expect(session.json()).resolves.toMatchObject({ permissionMask: "0x1640c3" });
     const duplicate = await api("/api/admin/roles/role-editor/members", admin, {
       method: "POST",
       body: JSON.stringify({ memberId: "role-contributor" }),
