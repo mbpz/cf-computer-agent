@@ -1,4 +1,4 @@
-import { capabilitiesFor } from "../authorization/policy";
+import { capabilitiesFor, permissionMaskForPrincipal } from "../authorization/policy";
 import { AppError, jsonResponse, methodNotAllowed, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 
@@ -15,6 +15,7 @@ export function routeSession(
   return jsonResponse({
     member: { id: principal.memberId, email: principal.email, role: principal.role },
     capabilities: capabilitiesFor(principal),
+    permissionMask: permissionMaskForPrincipal(principal),
     logoutUrl: "/auth/logout",
   }, 200, context.requestId);
 }

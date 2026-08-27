@@ -114,6 +114,7 @@ describe("Phase 1 API permission matrix", () => {
     expect(sessionBody).toEqual({
       member: { id: "member-contributor", email: "contributor@example.test", role: "contributor" },
       capabilities: ["legacy:read", "submission:create", "submission:read-own", "knowledge:read"],
+      permissionMask: "0x600c3",
       logoutUrl: "/auth/logout",
     });
     expect(JSON.stringify(sessionBody)).not.toMatch(/sub-contributor|jwt|token|bootstrap/i);
