@@ -30,6 +30,7 @@ const migrations = [
   ["0026_site_analytics.sql", "12789e0b8cac6ca81ce59c0980758045176500af21f93c3ba5d640407f1fb356"],
   ["0027_duplicate_candidates.sql", "2c4fdcb548e38e236ec209f2dd6c79ef8a762a3ae512f49bb2cf6c5e64d9022b"],
   ["0028_asset_submission_pairing.sql", "97e6db8e1b0bb75e3f5216911bd7a3989bf3c8d873d7fe4419cc52ee581417fb"],
+  ["0029_workspace_rbac.sql", "f242353cea654bb0eff0b052956128f11d37b215237aad3b3a6897eb4dfb04b8"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
@@ -69,6 +70,7 @@ async function verifyLedger(phase, path) {
       migrations.slice(0, 4).map(([name]) => name),
       migrations.slice(0, 5).map(([name]) => name),
       migrations.slice(0, 6).map(([name]) => name),
+      migrations.slice(0, -1).map(([name]) => name),
       migrations.map(([name]) => name),
     ];
   const names = result.results.map((row, index) => {
