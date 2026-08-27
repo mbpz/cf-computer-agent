@@ -5,7 +5,7 @@
 | 字段 | 值 |
 | --- | --- |
 | 分支 | `main` |
-| 最新本地提交 | `8c82274` |
+| 最新本地提交 | `b6742ad` |
 | Worker | `memory-garden-agent` |
 | 自定义域 | `https://memory.crgmhrc.asia` |
 | D1 | `memory-garden-control-plane` (`653c9e43-c7ad-45b8-a109-bc144843bee7`) |
@@ -27,10 +27,10 @@ SHA-256：
 - 空 D1 从 0001 到 0031 全部应用成功。
 - 同一隔离数据库重复执行返回 `No migrations to apply`。
 - 迁移 schema/数据保留测试：15/15 通过。
-- Worker 测试：24 文件、376 项通过。
+- Worker 测试：24 文件、376 项通过；迁移定向测试 15/15 通过。
 - 单元测试：155 文件、1177 项通过。
 - Smoke/契约测试：45 项通过；i18n 13 项通过。
-- TypeScript、i18n、WCAG、Vite UI 构建均通过。
+- TypeScript、i18n、WCAG、Vite UI/Worker dry-run 构建均通过。
 
 ## 生产状态
 
@@ -49,4 +49,3 @@ SHA-256：
 2. 执行 `rtk npm run db:migrate:remote`，确认 0030/0031 均为成功状态。
 3. 上传并提升当前版本，确认自定义域仍指向该版本。
 4. 运行匿名 401、管理员 200、contributor 403、菜单树和退出后 Session 401 smoke，并记录 request ID/Ray ID。
-
