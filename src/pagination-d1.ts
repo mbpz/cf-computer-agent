@@ -13,7 +13,12 @@ export async function queryNumberedPage<T>(
     rowsStatement,
   ]);
   const total = countResult?.results?.[0]?.total;
-  if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0 || !rowsResult) {
+  if (countResult?.success !== true
+    || rowsResult?.success !== true
+    || !Array.isArray(rowsResult.results)
+    || typeof total !== "number"
+    || !Number.isSafeInteger(total)
+    || total < 0) {
     throw new AppError("PAGE_RESULT_INVALID", "Pagination query returned an invalid result", 500);
   }
 

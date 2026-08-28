@@ -53,6 +53,48 @@ describe("D1 numbered pagination", () => {
     await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
       .rejects.toBe(failure);
   });
+
+  it("rejects a failed COUNT result", async () => {
+    const db = {
+      batch: vi.fn(async () => [
+        { ...d1Result([{ total: 41 }]), success: false },
+        d1Result([]),
+      ]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+  });
+
+  it("rejects a failed SELECT result", async () => {
+    const db = {
+      batch: vi.fn(async () => [
+        d1Result([{ total: 41 }]),
+        { ...d1Result([]), success: false },
+      ]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+  });
+
+  it.each([
+    { label: "missing", results: undefined },
+    { label: "null", results: null },
+    { label: "object", results: { id: "row-21" } },
+  ])("rejects $label SELECT rows", async ({ results }) => {
+    const malformedRowsResult = {
+      success: true,
+      meta: {},
+      ...(results === undefined ? {} : { results }),
+    };
+    const db = {
+      batch: vi.fn(async () => [d1Result([{ total: 41 }]), malformedRowsResult]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+  });
 });
 
 function d1Result<T>(results: T[]): D1Result<T> {
