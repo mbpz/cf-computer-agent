@@ -88,6 +88,7 @@ export interface AppDependencies {
   /** Test/preview override; production uses the optional Env.ORIGINALS binding. */
   assetStorage?: R2Bucket | null;
   oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
+  analyticsNow?: () => Date;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -129,6 +130,7 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
             const telemetry = await routeTelemetry(request, url, context, {
               analytics: services.analytics,
               sessions: services.sessions,
+              now: services.analyticsNow,
             });
             if (telemetry) return telemetry;
           }
@@ -183,7 +185,8 @@ function createRequestServices(
   const audit = new AuditRepository(env.DB);
   const roles = new RolesRepository(env.DB);
   const menus = new MenusRepository(env.DB);
-  const analytics = new AnalyticsRepository(env.DB);
+  const analyticsNow = dependencies.analyticsNow ?? (() => new Date());
+  const analytics = new AnalyticsRepository(env.DB, analyticsNow);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
     waitUntil: (promise) => ctx.waitUntil(promise),
@@ -228,6 +231,7 @@ function createRequestServices(
     automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
     audit,
     analytics,
+    analyticsNow,
     citedAnswers: new CitedAnswerService(ai),
     chatConversations: new ChatConversationService(new ChatRepository(env.DB)),
     chatFeedback: new ChatFeedbackService(new ChatRepository(env.DB), new D1ChatFeedbackRepository(env.DB)),

@@ -57,7 +57,10 @@ type VisitorRow = {
 };
 
 export class AnalyticsRepository {
-  constructor(private readonly db: D1Database) {}
+  constructor(
+    private readonly db: D1Database,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
   async recordPageView(input: RecordPageViewInput): Promise<void> {
     const occurredAt = input.occurredAt;
@@ -72,8 +75,9 @@ export class AnalyticsRepository {
     ).bind(input.id, day, bucket, input.path, input.visitorHash, input.memberId, createdAt, input.ip, input.country, input.region, input.city, input.colo, input.userAgent).run();
   }
 
-  async overview(days: number, pagination: NumberedPageRequest, now = new Date()): Promise<AnalyticsOverview> {
+  async overview(days: number, pagination: NumberedPageRequest): Promise<AnalyticsOverview> {
     if (!Number.isSafeInteger(days) || days < 1 || days > 31) throw new AppError("ANALYTICS_RANGE_INVALID", "Analytics range must be between 1 and 31 days", 400);
+    const now = this.now();
     if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError("Analytics clock is invalid");
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
     const start = new Date(end.getTime() - days * 86_400_000);

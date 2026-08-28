@@ -69,8 +69,10 @@ describe("AdminAnalyticsRoute", () => {
     browser.history.replaceState({}, "", "/admin/analytics?days=30&page=3&pageSize=50");
     browser.dispatchEvent(new browser.PopStateEvent("popstate"));
     await flush();
+    const pushState = vi.spyOn(browser.history, "pushState");
     await changeSelect('select[aria-label="Rows per page"]', "100");
     expect(Object.fromEntries(new URLSearchParams(browser.location.search))).toEqual({ days: "30", pageSize: "100" });
+    expect(pushState).toHaveBeenCalledTimes(1);
   });
 
   it("aborts stale requests, keeps ready data pending or failed, and accepts only the latest result", async () => {

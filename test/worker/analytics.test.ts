@@ -7,6 +7,10 @@ import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
 import { MIGRATIONS } from "../fixtures/d1";
 
+const NOW = "2026-08-26T12:00:00.000Z";
+const RANGE_START_DAY = "2026-08-20";
+const RANGE_END_DAY = "2026-08-27";
+
 describe("site analytics", () => {
   let contributor = "";
   let admin = "";
@@ -16,11 +20,11 @@ describe("site analytics", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await env.DB.prepare(
       `INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES
-       ('analytics-contributor', 'subject-analytics-contributor', 'analytics-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z'),
-       ('analytics-admin', 'subject-analytics-admin', 'analytics-admin@example.test', 'admin', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
-    ).run();
+       ('analytics-contributor', 'subject-analytics-contributor', 'analytics-contributor@example.test', 'contributor', 'active', ?, ?),
+       ('analytics-admin', 'subject-analytics-admin', 'analytics-admin@example.test', 'admin', 'active', ?, ?)`,
+    ).bind(NOW, NOW, NOW, NOW).run();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
     contributor = (await sessions.create((await members.findById("analytics-contributor"))!)).token;
     admin = (await sessions.create((await members.findById("analytics-admin"))!)).token;
   });
@@ -63,13 +67,32 @@ describe("site analytics", () => {
   });
 
   it("returns stable numbered visitor details without changing aggregates", async () => {
-    const values = Array.from({ length: 21 }, (_, index) => `('analytics-event-${String(index).padStart(2, "0")}', '2026-08-26', 'bucket-${index}', '/page-${index}', 'visitor-${index}', NULL, '2026-08-26T00:${String(index).padStart(2, "0")}:00.000Z', '203.0.113.0', NULL, NULL, NULL, NULL, NULL)`).join(",");
+    const currentDay = NOW.slice(0, 10);
+    const values = Array.from({ length: 21 }, (_, index) => `('analytics-event-${String(index).padStart(2, "0")}', '${currentDay}', 'bucket-${index}', '/page-${index}', 'visitor-${index}', NULL, '${currentDay}T00:${String(index).padStart(2, "0")}:00.000Z', '203.0.113.0', NULL, NULL, NULL, NULL, NULL)`).join(",");
     await env.DB.prepare(`INSERT INTO site_visit_events (id, day, visit_bucket, path, visitor_hash, member_id, created_at, ip_display, country, region, city, colo, user_agent) VALUES ${values}`).run();
     const response = await api("/api/admin/analytics/overview?days=7&page=2&pageSize=20", admin);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       totals: { pageViews: 21, uniqueVisitors: 21, loginUsers: 0 },
       recentVisitors: { items: [{ path: "/page-0" }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } },
+    });
+  });
+
+  it("includes the start day and excludes the end day of the UTC range", async () => {
+    await env.DB.prepare(
+      `INSERT INTO site_visit_events
+       (id, day, visit_bucket, path, visitor_hash, member_id, created_at, ip_display, country, region, city, colo, user_agent)
+       VALUES
+       ('range-start', ?, 'range-start-bucket', '/range-start', 'range-start-visitor', NULL, ?, '203.0.113.0', NULL, NULL, NULL, NULL, NULL),
+       ('range-end', ?, 'range-end-bucket', '/range-end', 'range-end-visitor', NULL, ?, '203.0.113.0', NULL, NULL, NULL, NULL, NULL)`,
+    ).bind(RANGE_START_DAY, `${RANGE_START_DAY}T00:00:00.000Z`, RANGE_END_DAY, `${RANGE_END_DAY}T00:00:00.000Z`).run();
+
+    const response = await api("/api/admin/analytics/overview?days=7&page=1&pageSize=20", admin);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      range: { from: RANGE_START_DAY, to: "2026-08-26", days: 7 },
+      totals: { pageViews: 1 },
+      recentVisitors: { items: [{ path: "/range-start" }], pagination: { total: 1 } },
     });
   });
 
@@ -91,7 +114,7 @@ async function api(path: string, token: string | undefined, init: RequestInit = 
   if (!headers.has("origin")) headers.set("origin", "https://memory.crgmhrc.asia");
   const request = new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers });
   const context = createExecutionContext();
-  const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  const response = await createApp({ analyticsNow: () => new Date(NOW) }).fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
 }
