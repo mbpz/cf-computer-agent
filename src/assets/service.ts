@@ -15,7 +15,7 @@ import { assertParsedMarkdownSize, assertReadableParsedMarkdown } from "./empty"
 import { classifyAssetParseFailure } from "./errors";
 import { fetchUrlSnapshot } from "./url-snapshot";
 import type { CodeSourceMetadata } from "../sources/types";
-import type { AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
+import type { AdminAssetPage, AdminAssetPageRequest, AssetPage, AssetPageRepositoryRequest, AssetRecord, AssetWithJob, ParseJobRecord, ParseJobStatus } from "./types";
 
 export interface AssetRepositoryPort {
   findByIdempotency(ownerId: string, idempotencyKey: string): Promise<AssetWithJob | null>;
@@ -25,6 +25,7 @@ export interface AssetRepositoryPort {
   cancelOwned(ownerId: string, assetId: string): Promise<{ objectKey: string } | null>;
   listOwned(ownerId: string, request: AssetPageRepositoryRequest): Promise<AssetPage>;
   listAll(request: AssetPageRepositoryRequest): Promise<AssetPage>;
+  listAdminPage(request: AdminAssetPageRequest): Promise<AdminAssetPage>;
   resetParseJob(assetId: string, now: string): Promise<boolean>;
   listProcessable(limit: number): Promise<string[]>;
   sumByteSize(): Promise<number>;
@@ -307,13 +308,8 @@ export class AssetService {
     });
   }
 
-  async listAdmin(request: { limit?: number; cursor?: string; status?: ParseJobStatus } = {}): Promise<AssetPage> {
-    const page = parsePageRequest(request.limit, request.cursor);
-    return this.repository.listAll({
-      ...page,
-      ...(request.status === undefined ? {} : { status: request.status }),
-      cursorKey: await deriveCursorScopeKey("all-assets", { status: request.status ?? null, sort: "created_at-desc-id-desc" }),
-    });
+  async listAdmin(request: AdminAssetPageRequest): Promise<AdminAssetPage> {
+    return this.repository.listAdminPage(request);
   }
 
   async capacity(): Promise<AssetCapacitySnapshot> {

@@ -76,6 +76,11 @@ function repository(): AssetRepositoryPort & { assets: AssetRecord[]; jobs: Pars
         .slice(0, request.limit);
       return { items };
     },
+    async listAdminPage(request: { page: number; pageSize: 20 | 50 | 100; status?: ParseJobRecord["status"] }) {
+      const all = store.assets.map((asset) => ({ asset, job: store.jobs.find((item) => item.assetId === asset.id)! })).filter((item) => request.status === undefined || item.job.status === request.status);
+      const offset = (request.page - 1) * request.pageSize;
+      return { items: all.slice(offset, offset + request.pageSize), pagination: { ...request, total: all.length, totalPages: all.length === 0 ? 0 : Math.ceil(all.length / request.pageSize) } };
+    },
     async resetParseJob(assetId: string, now: string) {
       const job = store.jobs.find((item) => item.assetId === assetId);
       if (!job || !["failed_retryable", "failed_terminal"].includes(job.status)) return false;

@@ -3,17 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicatePage } from "../../frontend/lib/admin-duplicates-data";
 
 describe("frontend admin duplicate data", () => {
-  it("normalizes bounded candidates and drops malformed rows", async () => {
+  it("normalizes a numbered pending-candidate page", async () => {
     const requester = vi.fn(async (input: string | URL | Request) => {
-      expect(String(input)).toBe("/api/admin/duplicates?limit=20");
+      expect(String(input)).toBe("/api/admin/duplicates?page=1&pageSize=20");
       return new Response(JSON.stringify({ items: [
         { submissionId: "s-1", canonicalSubmissionId: "s-0", canonicalSourceId: "src-0", canonicalSourceVersionId: "ver-0", submissionTitle: "New", canonicalTitle: "Old", decision: "pending" },
-        { submissionId: "bad", decision: "pending" },
-      ], nextCursor: "next" }), { status: 200 });
+      ], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }), { status: 200 });
     });
-    await expect(loadAdminDuplicatePage({ requester })).resolves.toEqual({ items: [{
+    await expect(loadAdminDuplicatePage({ page: 1, pageSize: 20, requester })).resolves.toEqual({ items: [{
       submissionId: "s-1", canonicalSubmissionId: "s-0", canonicalSourceId: "src-0", canonicalSourceVersionId: "ver-0", submissionTitle: "New", canonicalTitle: "Old", decision: "pending",
-    }], nextCursor: "next" });
+    }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
   });
 
   it("posts an allowlisted decision and rejects malformed response", async () => {
@@ -29,11 +28,11 @@ describe("frontend admin duplicate data", () => {
   it("invalidates stale paginated requests", async () => {
     const requester = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true })));
     const controller = createAdminDuplicateRequestController(requester);
-    const first = controller.request();
-    const second = controller.request("cursor");
+    const first = controller.request({ page: 1, pageSize: 20 });
+    const second = controller.request({ page: 2, pageSize: 20 });
     expect(controller.isCurrent(first.generation)).toBe(false);
     await expect(first.promise).rejects.toMatchObject({ name: "AbortError" });
-    controller.cancel();
+    controller.dispose();
     await expect(second.promise).rejects.toMatchObject({ name: "AbortError" });
   });
 });

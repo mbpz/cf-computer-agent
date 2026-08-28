@@ -438,12 +438,14 @@ describe("M2 asset upload boundary", () => {
     const contributorList = await memberApi("asset-owner", "/api/admin/assets");
     expect(contributorList.status).toBe(403);
 
-    const adminList = await memberApi("asset-admin", "/api/admin/assets?status=queued&limit=20");
+    const adminList = await memberApi("asset-admin", "/api/admin/assets?status=queued&page=1&pageSize=20");
     expect(adminList.status).toBe(200);
-    await expect(adminList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "queued" } }] });
+    const adminBody = await adminList.json<Record<string, unknown>>();
+    expect(adminBody).toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "queued" } }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    expect(adminBody).not.toHaveProperty("nextCursor");
 
     await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
-    const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_terminal&limit=20");
+    const failedList = await memberApi("asset-admin", "/api/admin/assets?status=failed_terminal&page=1&pageSize=20");
     await expect(failedList.json()).resolves.toMatchObject({ items: [{ asset: { id: uploaded.asset.id }, job: { status: "failed_terminal", attempts: 1, lastErrorCode: "ASSET_PDF_PARSE_UNSUPPORTED" } }] });
 
     const retry = await memberApi("asset-admin", `/api/admin/assets/${uploaded.asset.id}/retry`, { method: "POST" });
@@ -463,6 +465,10 @@ describe("M2 asset upload boundary", () => {
     const previewAfter = await memberApi("asset-admin", `/api/admin/assets/${ready.asset.id}/parsed`);
     expect(previewAfter.status).toBe(200);
     await expect(previewAfter.text()).resolves.toContain("admin preview");
+  });
+
+  it.each(["cursor=legacy", "limit=20", "page=1&page=2", "pageSize=10", "page=501&pageSize=20", "unknown=1", "status=queued&status=processing"])("rejects invalid admin asset pagination query %s", async (query) => {
+    await expectApiError(memberApi("asset-admin", `/api/admin/assets?${query}`), 400, "PAGE_INVALID");
   });
 
   it("keeps orphan preview/reclaim admin-only and validates bounded requests", async () => {

@@ -1,4 +1,4 @@
-import type { Page, PageRequest } from "../pagination";
+import type { NumberedPage, NumberedPageRequest, Page, PageRequest } from "../pagination";
 
 export type AssetStatus = "ready" | "quarantined" | "failed";
 export type ParseJobStatus = "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal";
@@ -34,7 +34,9 @@ export interface AssetWithJob {
 }
 
 export type AssetPage = Page<AssetWithJob>;
+export type AdminAssetPage = NumberedPage<AssetWithJob>;
 export interface AssetPageRepositoryRequest extends PageRequest {
   cursorKey: string;
   status?: ParseJobStatus;
 }
+export interface AdminAssetPageRequest extends NumberedPageRequest { status?: ParseJobStatus; }

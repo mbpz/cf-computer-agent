@@ -155,13 +155,9 @@ describe("Phase 1 API permission matrix", () => {
     expect(ownBody.items).toEqual([createdBody.submission]);
     expect(ownBody.nextCursor).toBeUndefined();
     expect(JSON.stringify(ownBody)).not.toContain("member-other");
-    const copiedAdminCursor = (await (await memberApi("sub-admin", "/api/admin/submissions?limit=1")).json<{
-      nextCursor?: string;
-    }>()).nextCursor;
-    expect(copiedAdminCursor).toBeTruthy();
     const cursorBody = await expectApiError(memberApi(
       "sub-contributor",
-      `/api/submissions/mine?limit=20&cursor=${encodeURIComponent(copiedAdminCursor!)}`,
+      `/api/submissions/mine?limit=20&cursor=${encodeURIComponent(pageCursor(Date.now(), "admin-shaped"))}`,
     ), 400, "PAGE_CURSOR_INVALID");
     expect(JSON.stringify(cursorBody)).not.toContain("member-other");
 
@@ -441,11 +437,19 @@ describe("Phase 1 request boundary", () => {
     [`/api/spaces?cursor=${encodeURIComponent(pageCursor(-1, "space"))}`, "negative-position"],
     [`/api/spaces?cursor=${encodeURIComponent(pageCursor(1_000_001, "space"))}`, "oversized-position"],
     [`/api/submissions/mine?cursor=${encodeURIComponent(pageCursor(-1, "submission"))}`, "negative-submission-time"],
-    [`/api/admin/submissions?cursor=${encodeURIComponent(pageCursor(8_640_000_000_000_001, "submission"))}`, "invalid-submission-date"],
-    [`/api/admin/audit-events?cursor=${encodeURIComponent(pageCursor(-1, "event"))}`, "negative-audit-time"],
-    [`/api/admin/audit-events?cursor=${encodeURIComponent(pageCursor(8_640_000_000_000_001, "event"))}`, "invalid-audit-date"],
   ])("returns stable 400 for %s (%s)", async (path) => {
     await expectApiError(memberApi("sub-admin", path), 400, "PAGE_CURSOR_INVALID");
+  });
+
+  it.each([
+    "/api/admin/submissions?cursor=legacy",
+    "/api/admin/submissions?limit=20",
+    "/api/admin/submissions?page=1&page=2",
+    "/api/admin/submissions?pageSize=10",
+    "/api/admin/submissions?page=501&pageSize=20",
+    "/api/admin/submissions?unknown=1",
+  ])("rejects invalid numbered moderation query %s", async (path) => {
+    await expectApiError(memberApi("sub-admin", path), 400, "PAGE_INVALID");
   });
 });
 

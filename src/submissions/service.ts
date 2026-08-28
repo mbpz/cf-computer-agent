@@ -1,7 +1,7 @@
 import { AppError } from "../http";
 import { decodeSourceBytes } from "../sources/decoder";
 import { recoverHtmlMarkdown } from "../assets/html";
-import { deriveCursorScopeKey, parsePageRequest, type PageRequest } from "../pagination";
+import { deriveCursorScopeKey, parsePageRequest, type NumberedPageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
   SubmissionsRepositoryConflictError,
@@ -13,6 +13,7 @@ import type {
   SubmissionCreateResult,
   SubmissionKind,
   SubmissionPage,
+  SubmissionReviewPage,
   SubmissionPageRequest,
   SubmissionStatusFilter,
 } from "./types";
@@ -253,7 +254,7 @@ export class SubmissionsService {
       }),
     });
   }
-  listPending(request?: PageRequest): Promise<SubmissionPage> { return this.repository.listPending(parsePageRequest(request?.limit, request?.cursor)); }
+  listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> { return this.repository.listPending(request); }
 }
 
 function validateStatusFilter(status: unknown): SubmissionStatusFilter | undefined {

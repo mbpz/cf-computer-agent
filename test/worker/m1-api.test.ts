@@ -1009,13 +1009,13 @@ describe("M1 trusted knowledge HTTP journey", () => {
     const duplicate = await createSubmission("contributor", {
       requestedSpaceId: "default", kind: "markdown", title: "Duplicate route candidate", content: "# Route duplicate\n",
     }, "duplicate-route-key-02");
-    const pending = await memberApi("admin", "/api/admin/duplicates?limit=20");
+    const pending = await memberApi("admin", "/api/admin/duplicates?page=1&pageSize=20");
     expect(pending.status).toBe(200);
     await expect(pending.json()).resolves.toMatchObject({ items: [expect.objectContaining({
       submissionId: duplicate.body.submission.id,
       canonicalSubmissionId: first.body.submission.id,
       decision: "pending",
-    })] });
+    })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
     await expectApiError(memberApi("contributor", "/api/admin/duplicates"), 403, "FORBIDDEN");
     const decision = await memberApi("admin", `/api/admin/duplicates/${duplicate.body.submission.id}/decision`, {
       method: "POST", body: JSON.stringify({ decision: "keep_separate" }),
@@ -1024,7 +1024,10 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(decision.json()).resolves.toMatchObject({ candidate: {
       submissionId: duplicate.body.submission.id, decision: "keep_separate", decidedBy: "member-admin",
     } });
-    await expect(memberApi("admin", "/api/admin/duplicates?limit=20").then((response) => response.json())).resolves.toEqual({ items: [] });
+    await expect(memberApi("admin", "/api/admin/duplicates?page=1&pageSize=20").then((response) => response.json())).resolves.toEqual({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    for (const query of ["cursor=legacy", "limit=20", "page=1&page=2", "pageSize=10", "page=501&pageSize=20", "unknown=1"]) {
+      await expectApiError(memberApi("admin", `/api/admin/duplicates?${query}`), 400, "PAGE_INVALID");
+    }
   });
 
   it("publishes an explicit update as a new immutable Revision on the existing Knowledge Item", async () => {

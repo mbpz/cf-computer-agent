@@ -52,7 +52,7 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/duplicates") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    return jsonResponse(await services.duplicates.listPending(pageRequest(url)), 200, context.requestId);
+    return jsonResponse(await services.duplicates.listPending(parseNumberedPageRequest(url, [])), 200, context.requestId);
   }
 
   const duplicateDecision = /^\/api\/admin\/duplicates\/([^/]+)\/decision$/.exec(url.pathname);
@@ -75,9 +75,10 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/assets") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const pagination = parseNumberedPageRequest(url, ["status"]);
     const status = requireEnumFilter(url, "status", ["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"] as const);
     return jsonResponse(await services.assets.listAdmin({
-      ...pageRequest(url),
+      ...pagination,
       ...(status === undefined ? {} : { status }),
     }), 200, context.requestId);
   }
@@ -156,8 +157,9 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/submissions") {
     requireCapability(principal, "submission:read-all");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const pagination = parseNumberedPageRequest(url, ["status"]);
     requireEnumFilter(url, "status", ["review_pending"]);
-    return jsonResponse(await services.submissions.listPending(pageRequest(url)), 200, context.requestId);
+    return jsonResponse(await services.submissions.listPending(pagination), 200, context.requestId);
   }
 
   const chunkPreview = /^\/api\/admin\/knowledge\/([^/]+)\/revisions\/([^/]+)\/chunks$/.exec(url.pathname);

@@ -1,7 +1,8 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import { AppError } from "../http";
-import { decodeOpaqueCursor, decodePageCursor, encodeOpaqueCursor, type PageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { SourcesRepository } from "../sources/repository";
 import type { Source, SourceVersion } from "../sources/types";
 import { DuplicateCandidatesRepository } from "../duplicates/repository";
@@ -11,6 +12,7 @@ import type {
   SubmissionCreateResult,
   SubmissionPage,
   SubmissionPageRepositoryRequest,
+  SubmissionReviewPage,
   SubmissionReview,
 } from "./types";
 
@@ -37,7 +39,7 @@ export interface SubmissionsRepositoryPort {
   findResubmittable(memberId: string, priorSubmissionId: string): Promise<Submission | null>;
   createResubmissionWithSourceVersion(input: CreateSubmissionWithSourceVersion): Promise<SubmissionCreateResult>;
   listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage>;
-  listPending(request: PageRequest): Promise<SubmissionPage>;
+  listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage>;
 }
 
 type SubmissionRow = {
@@ -374,16 +376,14 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
     return ownedPage(rows.results.map(mapSubmissionRow), request.limit, request.cursorKey);
   }
 
-  async listPending(request: PageRequest): Promise<SubmissionPage> {
-    return this.listPage("WHERE s.status = 'review_pending'", [], request);
-  }
-
-  private async listPage(where: string, values: unknown[], request: PageRequest): Promise<SubmissionPage> {
-    const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
-    const rows = cursor
-      ? await this.db.prepare(`${submissionSelect} ${where} AND (s.created_at < ? OR (s.created_at = ? AND s.id < ?)) ORDER BY s.created_at DESC, s.id DESC LIMIT ?`).bind(...values, timestamp(cursor.sort), timestamp(cursor.sort), cursor.id, request.limit + 1).all<SubmissionRow>()
-      : await this.db.prepare(`${submissionSelect} ${where} ORDER BY s.created_at DESC, s.id DESC LIMIT ?`).bind(...values, request.limit + 1).all<SubmissionRow>();
-    return page(rows.results.map(mapSubmissionRow), request.limit);
+  async listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> {
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare("SELECT COUNT(*) AS total FROM submissions s WHERE s.status = 'review_pending'"),
+      this.db.prepare(`${submissionSelect} WHERE s.status = 'review_pending' ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`).bind(request.pageSize, pageOffset(request)),
+      request,
+      (row) => mapSubmissionRow(row as SubmissionRow),
+    );
   }
 
   async findByIdempotencyKey(submitterId: string, idempotencyKey: string): Promise<SubmissionCreateResult | null> {

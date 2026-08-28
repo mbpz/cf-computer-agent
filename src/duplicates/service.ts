@@ -1,7 +1,7 @@
 import type { DuplicateCandidatePage, DuplicateDecision } from "./types";
 import { DuplicateCandidatesRepository, DuplicateRepositoryConflictError } from "./repository";
 import { AppError } from "../http";
-import type { PageRequest } from "../pagination";
+import type { NumberedPageRequest } from "../pagination";
 
 export class DuplicateCandidatesService {
   constructor(
@@ -9,7 +9,7 @@ export class DuplicateCandidatesService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  listPending(request: PageRequest): Promise<DuplicateCandidatePage> {
+  listPending(request: NumberedPageRequest): Promise<DuplicateCandidatePage> {
     return this.repository.listPending(request);
   }
 

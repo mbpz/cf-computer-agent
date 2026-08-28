@@ -22,15 +22,15 @@ describe("React administrator pages", () => {
   });
 
   it("renders review actions with pending/error state and no hidden authorization claim", () => {
-    const html = renderToStaticMarkup(<ReviewQueuePage state={{ kind: "ready", items: [{ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "pending" }], nextCursor: "next" }} onReview={vi.fn()} />);
+    const html = renderToStaticMarkup(<ReviewQueuePage state={{ kind: "ready", data: { items: [{ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "pending" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } } }} onReview={vi.fn()} />);
     expect(html).toContain("Publish");
     expect(html).toContain("Request changes");
-    expect(html).toContain("Load more");
+    expect(html).not.toContain("Load more");
     expect(html).not.toContain('>next<');
   });
 
   it("renders duplicate decisions without exposing source bodies", () => {
-    const html = renderToStaticMarkup(<DuplicateQueuePage state={{ kind: "ready", items: [{ submissionId: "s-1", canonicalSubmissionId: "s-0", canonicalSourceId: "src-0", canonicalSourceVersionId: "ver-0", submissionTitle: "New entry", canonicalTitle: "Existing entry", decision: "pending" }], nextCursor: null }} />);
+    const html = renderToStaticMarkup(<DuplicateQueuePage state={{ kind: "ready", data: { items: [{ submissionId: "s-1", canonicalSubmissionId: "s-0", canonicalSourceId: "src-0", canonicalSourceVersionId: "ver-0", submissionTitle: "New entry", canonicalTitle: "Existing entry", decision: "pending" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } } }} />);
     expect(html).toContain("Associate");
     expect(html).toContain("Keep separate");
     expect(html).toContain("Reject");
@@ -39,14 +39,14 @@ describe("React administrator pages", () => {
   });
 
   it("renders asset retry and preview affordances", () => {
-    const html = renderToStaticMarkup(<AssetQueuePage assets={[{ id: "asset-1", name: "guide.pdf", status: "failed_retryable", warnings: ["No title"] }]} onRetry={vi.fn()} />);
+    const html = renderToStaticMarkup(<AssetQueuePage data={{ items: [{ id: "asset-1", name: "guide.pdf", status: "failed_retryable", warnings: ["No title"] }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} onRetry={vi.fn()} />);
     expect(html).toContain("Retry");
     expect(html).toContain("Preview");
     expect(html).toContain("No title");
   });
 
   it("renders explicit load failures instead of an empty success state", () => {
-    const assets = renderToStaticMarkup(<AssetQueuePage assets={[]} error="Unable to load assets." />);
+    const assets = renderToStaticMarkup(<AssetQueuePage error="Unable to load assets." />);
     const members = renderToStaticMarkup(<MembersPage members={[]} error="Unable to load members." />);
     expect(assets).toContain("Unable to load assets.");
     expect(assets).not.toContain("No assets");
@@ -62,7 +62,7 @@ describe("React administrator pages", () => {
 
   it("renders a bounded parsed preview and rejects malformed preview payloads", () => {
     const preview = assetPreviewModel({ assetId: "asset-1", originalName: "guide.pdf", markdown: "# Guide\n\nBody", warnings: ["No title"], lineCount: 3, parserSchemaVersion: "v1" });
-    const html = renderToStaticMarkup(<AssetQueuePage assets={[]} preview={preview} />);
+    const html = renderToStaticMarkup(<AssetQueuePage preview={preview} />);
     expect(html).toContain("Parsed preview");
     expect(html).toContain("# Guide");
     expect(html).toContain("No title");
@@ -100,7 +100,7 @@ describe("React administrator pages", () => {
   it("localizes administrator copy through the shared locale runtime", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: 1, assets: 2, members: 3 }} />);
-    const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", items: [], nextCursor: null }} />);
+    const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }} />);
     expect(dashboard).toContain("管理");
     expect(dashboard).toContain("审核队列");
     expect(queue).toContain("暂无待审核提交");

@@ -1,4 +1,4 @@
-import type { Page, PageRequest } from "../pagination";
+import type { NumberedPage, NumberedPageRequest } from "../pagination";
 
 export type DuplicateDecision = "associate" | "keep_separate" | "reject";
 
@@ -15,5 +15,5 @@ export interface DuplicateCandidate {
   decidedAt: string | null;
 }
 
-export type DuplicateCandidatePage = Page<DuplicateCandidate>;
-export type DuplicateCandidatePageRequest = PageRequest;
+export type DuplicateCandidatePage = NumberedPage<DuplicateCandidate>;
+export type DuplicateCandidatePageRequest = NumberedPageRequest;

@@ -1,7 +1,9 @@
 import type { AssetRecord, AssetWithJob, ParseJobRecord } from "./types";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor } from "../pagination";
-import type { AssetPage, AssetPageRepositoryRequest } from "./types";
+import { pageOffset } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
+import type { AdminAssetPage, AdminAssetPageRequest, AssetPage, AssetPageRepositoryRequest } from "./types";
 import type { AssetRepositoryPort } from "./service";
 
 type AssetRow = {
@@ -63,6 +65,25 @@ export class AssetsRepository implements AssetRepositoryPort {
 
   async listAll(request: AssetPageRepositoryRequest): Promise<AssetPage> {
     return this.listPage("1 = 1", [], request);
+  }
+
+  async listAdminPage(request: AdminAssetPageRequest): Promise<AdminAssetPage> {
+    const statusSql = request.status ? " WHERE j.status = ?" : "";
+    const bindings = request.status ? [request.status] : [];
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM assets a JOIN parse_jobs j ON j.asset_id = a.id${statusSql}`).bind(...bindings),
+      this.db.prepare(
+        `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
+                a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
+                j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
+                j.created_at AS job_created_at, j.updated_at AS job_updated_at, a.submission_id
+         FROM assets a JOIN parse_jobs j ON j.asset_id = a.id${statusSql}
+         ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+      ).bind(...bindings, request.pageSize, pageOffset(request)),
+      request,
+      (row) => mapRow(row as AssetRow),
+    );
   }
 
   private async listPage(where: string, values: unknown[], request: AssetPageRepositoryRequest): Promise<AssetPage> {

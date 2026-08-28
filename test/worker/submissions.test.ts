@@ -71,14 +71,11 @@ describe("submissions D1 control plane", () => {
     const first = await service.listOwn("member-a", { limit: 1 });
     const second = await service.listOwn("member-a", { limit: 1, cursor: first.nextCursor });
     expect([...first.items, ...second.items].map((item) => item.submitterId)).toEqual(["member-a", "member-a"]);
-    const copiedAdminCursor = (await service.listPending({ limit: 2 })).nextCursor;
-    await expect(service.listOwn("member-a", { limit: 10, cursor: copiedAdminCursor }))
-      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
     await expect(service.listOwn("member-a", { limit: 1, cursor: "member-b" })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-    await expect(service.listPending({ limit: 10 })).resolves.toMatchObject({ items: expect.arrayContaining([
+    await expect(service.listPending({ page: 1, pageSize: 20 })).resolves.toMatchObject({ items: expect.arrayContaining([
       expect.objectContaining({ submitterId: "member-a", status: "review_pending" }),
       expect.objectContaining({ submitterId: "member-b", status: "review_pending" }),
-    ]) });
+    ]), pagination: { page: 1, pageSize: 20, total: 3, totalPages: 1 } });
   });
 
   it("pages an owner's exact status with a scope-bound opaque cursor and the selective index", async () => {
@@ -315,17 +312,19 @@ describe("submissions D1 control plane", () => {
       () => new Date("2026-08-26T00:01:00.000Z"),
     );
 
-    await expect(service.listPending({ limit: 20 })).resolves.toMatchObject({ items: [{
+    const pending = await service.listPending({ page: 1, pageSize: 20 });
+    expect(pending).toMatchObject({ items: [{
       submissionId: duplicate.submission!.id,
       canonicalSubmissionId: first.submission!.id,
       decision: "pending",
-    }] });
+    }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    expect(pending).not.toHaveProperty("nextCursor");
     await expect(service.decide("member-a", duplicate.submission!.id, "associate")).resolves.toMatchObject({
       decision: "associate", decidedBy: "member-a", canonicalSourceId: first.source!.id,
     });
     await expect(service.decide("member-a", duplicate.submission!.id, "associate")).resolves.toMatchObject({ decision: "associate" });
     await expect(service.decide("member-a", duplicate.submission!.id, "reject")).rejects.toMatchObject({ code: "DUPLICATE_DECISION_CONFLICT" });
-    await expect(service.listPending({ limit: 20 })).resolves.toMatchObject({ items: [] });
+    await expect(service.listPending({ page: 1, pageSize: 20 })).resolves.toMatchObject({ items: [], pagination: { total: 0 } });
     await expect(env.DB.prepare("SELECT action, metadata FROM audit_events WHERE action = 'submission.duplicate_decided'").first()).resolves.toEqual({
       action: "submission.duplicate_decided", metadata: JSON.stringify({ decision: "associate" }),
     });

@@ -1,6 +1,7 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
-import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
+import { pageOffset, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import type { DuplicateCandidate, DuplicateDecision, DuplicateCandidatePage } from "./types";
 
 export type DuplicateRepositoryConflictKind = "not_found" | "decision_conflict";
@@ -20,8 +21,6 @@ type DuplicateRow = {
   decided_by: string | null;
   decided_at: string | null;
 };
-
-const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class DuplicateCandidatesRepository {
   constructor(private readonly db: D1Database, private readonly audit: AuditRepository) {}
@@ -47,12 +46,11 @@ export class DuplicateCandidatesRepository {
     );
   }
 
-  async listPending(request: PageRequest): Promise<DuplicateCandidatePage> {
-    const cursor = request.cursor === undefined
-      ? undefined
-      : decodePageCursor(request.cursor, timestampCursorBounds);
-    const cursorSql = cursor === undefined ? "" : " AND (dc.created_at < ? OR (dc.created_at = ? AND dc.submission_id < ?))";
-    const rows = await this.db.prepare(
+  async listPending(request: NumberedPageRequest): Promise<DuplicateCandidatePage> {
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare("SELECT COUNT(*) AS total FROM duplicate_candidates dc WHERE dc.decision = 'pending'"),
+      this.db.prepare(
       `SELECT dc.submission_id, dc.canonical_submission_id, dc.canonical_source_id,
               dc.canonical_source_version_id, submitted.title AS submission_title,
               canonical.title AS canonical_title, dc.decision, dc.created_at,
@@ -60,22 +58,12 @@ export class DuplicateCandidatesRepository {
        FROM duplicate_candidates dc
        JOIN submissions submitted ON submitted.id = dc.submission_id
        JOIN submissions canonical ON canonical.id = dc.canonical_submission_id
-       WHERE dc.decision = 'pending'${cursorSql}
-       ORDER BY dc.created_at DESC, dc.submission_id DESC LIMIT ?`,
-    ).bind(
-      ...(cursor === undefined ? [] : [new Date(cursor.sort).toISOString(), new Date(cursor.sort).toISOString(), cursor.id]),
-      request.limit + 1,
-    ).all<DuplicateRow>();
-    const items = rows.results.slice(0, request.limit).map(mapRow);
-    return {
-      items,
-      ...(rows.results.length > request.limit && items.length > 0 ? {
-        nextCursor: encodePageCursor({
-          sort: Date.parse(items.at(-1)!.createdAt),
-          id: items.at(-1)!.submissionId,
-        }),
-      } : {}),
-    };
+       WHERE dc.decision = 'pending'
+       ORDER BY dc.created_at DESC, dc.submission_id DESC LIMIT ? OFFSET ?`,
+      ).bind(request.pageSize, pageOffset(request)),
+      request,
+      (row) => mapRow(row as DuplicateRow),
+    );
   }
 
   async decide(

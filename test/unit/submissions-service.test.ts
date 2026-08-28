@@ -304,5 +304,5 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   async listOwned(): Promise<SubmissionPage> { return { items: [] }; }
-  async listPending(): Promise<SubmissionPage> { return { items: [] }; }
+  async listPending(): Promise<import("../../src/submissions/types").SubmissionReviewPage> { return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
 }
