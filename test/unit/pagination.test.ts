@@ -1,14 +1,78 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPageMetadata,
   decodeOpaqueCursor,
   decodePageCursor,
   deriveCursorScopeKey,
   encodeOpaqueCursor,
   encodePageCursor,
+  pageOffset,
+  parseNumberedPageRequest,
   parsePageRequest,
 } from "../../src/pagination";
 
 describe("pagination", () => {
+  it("parses numbered pagination defaults and exact supported sizes", () => {
+    expect(parseNumberedPageRequest(new URL("https://app.test/api/items"), [])).toEqual({ page: 1, pageSize: 20 });
+    expect(parseNumberedPageRequest(new URL("https://app.test/api/items?page=3&pageSize=50"), [])).toEqual({ page: 3, pageSize: 50 });
+    expect(parseNumberedPageRequest(new URL("https://app.test/api/items?page=2&pageSize=100"), [])).toEqual({ page: 2, pageSize: 100 });
+  });
+
+  it("allows each whitelisted filter exactly once", () => {
+    expect(parseNumberedPageRequest(
+      new URL("https://app.test/api/items?status=active&page=2"),
+      ["status"],
+    )).toEqual({ page: 2, pageSize: 20 });
+  });
+
+  it.each([
+    "?page=0",
+    "?page=-1",
+    "?page=1.5",
+    "?page=1e2",
+    "?pageSize=10",
+    "?pageSize=20.0",
+    "?page=1&page=2",
+    "?pageSize=20&pageSize=50",
+    "?status=active&status=closed",
+    "?unknown=1",
+    "?page=101&pageSize=100",
+  ])("rejects invalid numbered query %s", (query) => {
+    expect(() => parseNumberedPageRequest(
+      new URL(`https://app.test/api/items${query}`),
+      ["status"],
+    )).toThrow(expect.objectContaining({ code: "PAGE_INVALID", status: 400 }));
+  });
+
+  it("uses the supplied error code for invalid numbered requests", () => {
+    expect(() => parseNumberedPageRequest(
+      new URL("https://app.test/api/items?page=0"),
+      [],
+      "ITEM_PAGE_INVALID",
+    )).toThrow(expect.objectContaining({ code: "ITEM_PAGE_INVALID", status: 400 }));
+  });
+
+  it("enforces the 10,000-row query window", () => {
+    expect(pageOffset({ page: 100, pageSize: 100 })).toBe(9_900);
+    expect(() => pageOffset({ page: 101, pageSize: 100 }))
+      .toThrow(expect.objectContaining({ code: "PAGE_INVALID", status: 400 }));
+  });
+
+  it("keeps a requested page beyond the total in metadata", () => {
+    expect(buildPageMetadata({ page: 4, pageSize: 20 }, 21)).toEqual({
+      page: 4,
+      pageSize: 20,
+      total: 21,
+      totalPages: 2,
+    });
+    expect(buildPageMetadata({ page: 1, pageSize: 50 }, 0)).toEqual({
+      page: 1,
+      pageSize: 50,
+      total: 0,
+      totalPages: 0,
+    });
+  });
+
   it("encodes an opaque base64url versioned position cursor", () => {
     const cursor = encodePageCursor({ sort: 12, id: "collection-12" });
 

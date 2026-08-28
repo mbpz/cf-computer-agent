@@ -6,9 +6,16 @@ export interface PageCursor { sort: number; id: string; }
 export interface PageCursorBounds { minSort?: number; maxSort?: number; }
 export type CursorScope = Readonly<Record<string, string | number | boolean | null>>;
 
+export const supportedPageSizes = [20, 50, 100] as const;
+export type SupportedPageSize = typeof supportedPageSizes[number];
+export interface NumberedPageRequest { page: number; pageSize: SupportedPageSize; }
+export interface PageMetadata extends NumberedPageRequest { total: number; totalPages: number; }
+export interface NumberedPage<T> { items: T[]; pagination: PageMetadata; }
+
 const defaultPageLimit = 20;
 const maxPageLimit = 50;
 const maxCursorLength = 512;
+const maxNumberedPageOffset = 10_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -17,6 +24,41 @@ export function parsePageRequest(limit: number = defaultPageLimit, cursor?: stri
     throw new AppError("PAGE_INVALID", "Page limit must be an integer from 1 to 50", 400);
   }
   return cursor === undefined ? { limit } : { limit, cursor };
+}
+
+export function parseNumberedPageRequest(
+  url: URL,
+  allowedFilterKeys: readonly string[],
+  errorCode = "PAGE_INVALID",
+): NumberedPageRequest {
+  const allowedKeys = new Set(["page", "pageSize", ...allowedFilterKeys]);
+  for (const key of url.searchParams.keys()) {
+    if (!allowedKeys.has(key) || url.searchParams.getAll(key).length !== 1) throw invalidNumberedPage(errorCode);
+  }
+
+  const page = parsePositiveInteger(url.searchParams.get("page"), 1, errorCode);
+  const requestedPageSize = parsePositiveInteger(url.searchParams.get("pageSize"), 20, errorCode);
+  if (!supportedPageSizes.includes(requestedPageSize as SupportedPageSize)) throw invalidNumberedPage(errorCode);
+
+  const request: NumberedPageRequest = { page, pageSize: requestedPageSize as SupportedPageSize };
+  pageOffset(request, errorCode);
+  return request;
+}
+
+export function pageOffset(request: NumberedPageRequest, errorCode = "PAGE_INVALID"): number {
+  const offset = (request.page - 1) * request.pageSize;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset >= maxNumberedPageOffset) {
+    throw new AppError(errorCode, "Page is outside the query window", 400);
+  }
+  return offset;
+}
+
+export function buildPageMetadata(request: NumberedPageRequest, total: number): PageMetadata {
+  return {
+    ...request,
+    total,
+    totalPages: total === 0 ? 0 : Math.ceil(total / request.pageSize),
+  };
 }
 
 export function encodeOpaqueCursor(value: unknown): string {
@@ -74,3 +116,15 @@ function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 function invalidCursor(): AppError { return new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400); }
+
+function parsePositiveInteger(value: string | null, fallback: number, errorCode: string): number {
+  if (value === null) return fallback;
+  if (!/^[1-9]\d*$/u.test(value)) throw invalidNumberedPage(errorCode);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw invalidNumberedPage(errorCode);
+  return parsed;
+}
+
+function invalidNumberedPage(errorCode: string): AppError {
+  return new AppError(errorCode, "Page parameters are invalid", 400);
+}
