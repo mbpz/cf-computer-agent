@@ -2,6 +2,7 @@ import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
 import { parsePageRequest, type PageRequest } from "../pagination";
 import type { AuditRepository } from "../audit/repository";
+import type { AuditAction, CreateAuditEvent } from "../audit/types";
 import type { TasksRepositoryPort } from "./repository";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskLink, type TaskListFilters, type TaskPage, type TaskStatus, type TaskSummary } from "./types";
 
@@ -48,6 +49,7 @@ export class TasksService {
     });
     const task = await this.repository.findOwned(memberId, normalized.id);
     if (!task) throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
+    if (inserted) await this.emitAudit("task.created", memberId, task.id, { status: "todo", priority: normalized.priority });
     let link: TaskLink | undefined;
     if (normalized.knowledgeItemId) {
       link = (await this.linkKnowledge(memberId, task, normalized.knowledgeItemId)).link;
@@ -76,12 +78,14 @@ export class TasksService {
     const normalized = normalizeUpdate(input);
     const updated = await this.repository.update(memberId, id, { ...normalized, updatedAt: this.now().getTime() });
     if (!updated) throw notFound();
+    await this.emitAudit("task.updated", memberId, updated.id, { priority: normalized.priority });
     return updated;
   }
 
   async delete(memberId: string, id: string): Promise<void> {
     const task = await this.requireOwned(memberId, id);
     if (!await this.repository.delete(memberId, id)) throw notFound();
+    await this.emitAudit("task.deleted", memberId, task.id, { status: task.status });
     return void task;
   }
 
@@ -92,11 +96,13 @@ export class TasksService {
     if (!TRANSITIONS[task.status].includes(next)) {
       throw new AppError("TASK_TRANSITION_INVALID", "Task status transition is invalid", 422);
     }
+    const previousStatus = task.status;
     const now = this.now().getTime();
     const completedAt = next === "done" ? now : null;
     const progress = next === "done" && task.progress < 100 ? 100 : task.progress;
     const updated = await this.repository.updateStatus(memberId, id, next, next === "done" ? completedAt : null, progress, now);
     if (!updated) throw notFound();
+    await this.emitAudit("task.status_changed", memberId, updated.id, { previousStatus, status: next });
     return updated;
   }
 
@@ -111,6 +117,7 @@ export class TasksService {
     if (task.progress === progress) return task; // 幂等
     const updated = await this.repository.updateProgress(memberId, id, progress, this.now().getTime());
     if (!updated) throw notFound();
+    await this.emitAudit("task.progress_changed", memberId, updated.id, { progress });
     return updated;
   }
 
@@ -126,7 +133,10 @@ export class TasksService {
     if (normalized.some((tag) => [...tag].length > APP_CONFIG.maxTaskTagChars || /[\u0000-\u001f\u007f-\u009f]/u.test(tag))) {
       throw invalid("TASK_INVALID", "Task fields are invalid");
     }
+    const current = await this.repository.listTags(memberId, task.id);
+    if (current.length === normalized.length && current.every((tag, index) => tag === normalized[index])) return current;
     await this.repository.replaceTags(memberId, task.id, normalized);
+    await this.emitAudit("task.tags_replaced", memberId, task.id, { count: normalized.length });
     return normalized;
   }
 
@@ -140,7 +150,11 @@ export class TasksService {
 
   async removeLink(memberId: string, taskId: string, linkId: string): Promise<void> {
     await this.requireOwned(memberId, taskId);
+    const links = await this.repository.listLinks(memberId, taskId);
+    const target = links.find((item) => item.id === linkId);
+    if (!target) throw notFound();
     if (!await this.repository.deleteLink(memberId, taskId, linkId)) throw notFound();
+    await this.emitAudit("task.unlinked", memberId, taskId, { knowledgeItemId: target.knowledgeItemId });
   }
 
   private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string): Promise<{ link: TaskLink; created: boolean }> {
@@ -157,7 +171,16 @@ export class TasksService {
     });
     const link = await this.repository.findLink(memberId, task.id, knowledgeItemId);
     if (!link) throw new AppError("TASK_NOT_FOUND", "Task not found", 404, true);
+    if (inserted) await this.emitAudit("task.linked", memberId, task.id, { knowledgeItemId });
     return { link, created: inserted };
+  }
+
+  private async emitAudit(action: AuditAction, memberId: string, taskId: string, metadata: CreateAuditEvent["metadata"]): Promise<void> {
+    if (!this.options.audit) return;
+    await this.options.audit.writeAudit({
+      id: this.id(), actorKind: "member", actorId: memberId, action,
+      resourceType: "task", resourceId: taskId, metadata, createdAt: this.now().toISOString(),
+    } as CreateAuditEvent);
   }
 
   private async requireOwned(memberId: string, id: string): Promise<Task> {

@@ -2,6 +2,7 @@ import type { MemberRole, MemberStatus } from "../members/types";
 import type { Page, PageRequest } from "../pagination";
 import type { RecordStatus } from "../spaces/types";
 import type { SubmissionKind } from "../submissions/types";
+import type { TaskPriority, TaskStatus } from "../tasks/types";
 
 export type AuditActorKind = "member" | "automation" | "system";
 
@@ -45,6 +46,14 @@ export interface AuditActionMap {
   "knowledge.restored": { resourceType: "knowledge"; metadata: { currentRevisionId: string } };
   "knowledge.purged": { resourceType: "knowledge"; metadata: { currentRevisionId: string; purgedRevisionCount: number } };
   "agent.tool_called": { resourceType: "agent_tool"; metadata: { tool: string; resourceIds: string[] } };
+  "task.created": { resourceType: "task"; metadata: { status: TaskStatus; priority: TaskPriority } };
+  "task.updated": { resourceType: "task"; metadata: { priority: TaskPriority } };
+  "task.status_changed": { resourceType: "task"; metadata: { previousStatus: TaskStatus; status: TaskStatus } };
+  "task.progress_changed": { resourceType: "task"; metadata: { progress: number } };
+  "task.tags_replaced": { resourceType: "task"; metadata: { count: number } };
+  "task.deleted": { resourceType: "task"; metadata: { status: TaskStatus } };
+  "task.linked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
+  "task.unlinked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -77,6 +86,14 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "knowledge.restored",
   "knowledge.purged",
   "agent.tool_called",
+  "task.created",
+  "task.updated",
+  "task.status_changed",
+  "task.progress_changed",
+  "task.tags_replaced",
+  "task.deleted",
+  "task.linked",
+  "task.unlinked",
 ]);
 
 export type CreateAuditEvent = {
@@ -374,6 +391,51 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       }
       return safeMetadata({ tool: metadata.tool, resourceIds: [...metadata.resourceIds] });
     }
+    case "task.created": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["status", "priority"]));
+      if (!isTaskStatus(metadata.status) || !isTaskPriority(metadata.priority)) throw invalidMetadata();
+      return safeMetadata({ status: metadata.status, priority: metadata.priority });
+    }
+    case "task.updated": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["priority"]));
+      if (!isTaskPriority(metadata.priority)) throw invalidMetadata();
+      return safeMetadata({ priority: metadata.priority });
+    }
+    case "task.status_changed": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["previousStatus", "status"]));
+      if (!isTaskStatus(metadata.previousStatus) || !isTaskStatus(metadata.status)) throw invalidMetadata();
+      return safeMetadata({ previousStatus: metadata.previousStatus, status: metadata.status });
+    }
+    case "task.progress_changed": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["progress"]));
+      if (typeof metadata.progress !== "number" || !Number.isSafeInteger(metadata.progress)
+        || metadata.progress < 0 || metadata.progress > 100) throw invalidMetadata();
+      return safeMetadata({ progress: metadata.progress });
+    }
+    case "task.tags_replaced": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["count"]));
+      if (typeof metadata.count !== "number" || !Number.isSafeInteger(metadata.count)
+        || metadata.count < 0 || metadata.count > 10) throw invalidMetadata();
+      return safeMetadata({ count: metadata.count });
+    }
+    case "task.deleted": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["status"]));
+      if (!isTaskStatus(metadata.status)) throw invalidMetadata();
+      return safeMetadata({ status: metadata.status });
+    }
+    case "task.linked":
+    case "task.unlinked": {
+      assertResourceType(resourceType, "task");
+      const metadata = readPlainDataObject(input, new Set(["knowledgeItemId"]));
+      if (!isBoundedId(metadata.knowledgeItemId)) throw invalidMetadata();
+      return safeMetadata({ knowledgeItemId: metadata.knowledgeItemId });
+    }
     default:
       throw new TypeError("Audit action is invalid");
   }
@@ -390,6 +452,12 @@ function safeMetadata<T extends CreateAuditEvent["metadata"]>(metadata: T): T {
 function invalidMetadata(): TypeError { return new TypeError("Audit metadata is invalid"); }
 function isSubmissionKind(value: unknown): value is SubmissionKind { return value === "text" || value === "markdown" || value === "code"; }
 function isMemberRole(value: unknown): value is MemberRole { return value === "admin" || value === "contributor"; }
+function isTaskStatus(value: unknown): value is TaskStatus {
+  return value === "todo" || value === "doing" || value === "blocked" || value === "done" || value === "canceled";
+}
+function isTaskPriority(value: unknown): value is TaskPriority {
+  return value === "low" || value === "medium" || value === "high";
+}
 function isRecordStatus(value: unknown): value is RecordStatus { return value === "active" || value === "disabled"; }
 function isNonEmptyString(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
 function isBoundedId(value: unknown): value is string {

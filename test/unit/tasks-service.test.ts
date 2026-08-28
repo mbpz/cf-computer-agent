@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CreateAuditEvent } from "../../src/audit/types";
 import { TasksService } from "../../src/tasks/service";
 import type { TasksRepositoryPort } from "../../src/tasks/repository";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskSummary, TaskUpdate } from "../../src/tasks/types";
@@ -85,6 +86,44 @@ describe("TasksService", () => {
     repository.linkCount = 5;
     await expect(service.addLink("member-a", "task-1", "knowledge-c")).rejects.toMatchObject({ code: "TASK_LINK_LIMIT", status: 409 });
   });
+
+  it("writes audit events for every mutation and skips idempotent replays", async () => {
+    const repository = new FakeTasksRepository();
+    repository.visibleKnowledge.add("knowledge-a");
+    const audit = new FakeAudit();
+    const service = createService(repository, audit);
+    await service.create("member-a", { id: "task-1", title: "Alpha", knowledgeItemId: "knowledge-a" });
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    await service.setProgress("member-a", "task-1", 40);
+    await service.setProgress("member-a", "task-1", 40);
+    await service.setStatus("member-a", "task-1", "doing");
+    await service.setStatus("member-a", "task-1", "doing");
+    await service.replaceTags("member-a", "task-1", ["urgent"]);
+    await service.replaceTags("member-a", "task-1", ["urgent"]);
+    await service.update("member-a", "task-1", { title: "Alpha v2", priority: "high" });
+    await service.addLink("member-a", "task-1", "knowledge-a");
+    const done = await service.setStatus("member-a", "task-1", "done");
+    await service.delete("member-a", "task-1");
+    expect(audit.events.map((event) => event.action)).toEqual([
+      "task.created", "task.linked", "task.progress_changed", "task.status_changed", "task.tags_replaced",
+      "task.updated", "task.status_changed", "task.deleted",
+    ]);
+    expect(audit.events[0]?.metadata).toEqual({ status: "todo", priority: "medium" });
+    expect(audit.events.at(-1)?.metadata).toEqual({ status: done.status });
+    expect(audit.events.find((event) => event.action === "task.status_changed" && event.metadata.previousStatus === "doing")?.metadata)
+      .toEqual({ previousStatus: "doing", status: "done" });
+  });
+
+  it("audits unlinks with the knowledge item id", async () => {
+    const repository = new FakeTasksRepository();
+    const audit = new FakeAudit();
+    const service = createService(repository, audit);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    const link = await service.addLink("member-a", "task-1", "knowledge-a");
+    await service.removeLink("member-a", "task-1", link.id);
+    expect(audit.events.map((event) => event.action)).toEqual(["task.created", "task.linked", "task.unlinked"]);
+    expect(audit.events[2]?.metadata).toEqual({ knowledgeItemId: "knowledge-a" });
+  });
 });
 
 function createService(repository: FakeTasksRepository, audit?: FakeAudit): TasksService {
@@ -98,9 +137,9 @@ function createService(repository: FakeTasksRepository, audit?: FakeAudit): Task
 
 class FakeAudit {
   readonly events: Array<{ action: string; metadata: Record<string, unknown> }> = [];
-  async writeAudit(input: { action: string; metadata: Record<string, unknown> }) {
-    this.events.push({ action: input.action, metadata: input.metadata });
-    return input as never;
+  async writeAudit(input: CreateAuditEvent) {
+    this.events.push({ action: input.action, metadata: input.metadata as unknown as Record<string, unknown> });
+    return input;
   }
 }
 
