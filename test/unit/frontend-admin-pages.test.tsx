@@ -55,7 +55,7 @@ describe("React administrator pages", () => {
   });
 
   it("keeps loaded members visible when a later page fails", () => {
-    const html = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "a@example.com" }]} nextCursor="next" loadMoreError="Unable to load members." />);
+    const html = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "a@example.com" }]} pagination={{ page: 2, pageSize: 20, total: 21, totalPages: 2 }} pageError="Unable to load members." />);
     expect(html).toContain("a@example.com");
     expect(html).toContain("Unable to load members.");
   });
@@ -76,9 +76,10 @@ describe("React administrator pages", () => {
     const spaces = renderToStaticMarkup(<SpacesPage spaces={[{ id: "s1", name: "Personal", slug: "personal", collections: ["Docs"] }]} onCreate={vi.fn()} />);
     expect(spaces).toContain("Personal");
     expect(spaces).toContain("Docs");
-    const audit = renderToStaticMarkup(<AuditPage state={{ kind: "ready", events: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], nextCursor: "cursor-2" }} onLoadMore={vi.fn()} />);
+    const audit = renderToStaticMarkup(<AuditPage state={{ kind: "ready", page: { items: [{ id: "e1", action: "submission.created", actor: "a@example.com", createdAt: "2026-08-25" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } } }} onPageChange={vi.fn()} />);
     expect(audit).toContain("submission.created");
-    expect(audit).toContain("Load more");
+    expect(audit).toContain('aria-label="Page 2"');
+    expect(audit).not.toContain("Load more");
   });
 
   it("renders bounded analytics range controls without exposing raw telemetry", () => {
