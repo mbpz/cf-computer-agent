@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import { createTask, deleteTask, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
+import { dueInfo, taskPriorityKey, taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
+
+function fetchJson(payload: unknown, status = 200): typeof fetch {
+  return (async () => new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+}
+
+describe("tasks data layer", () => {
+  it("loads a normalized page and summary", async () => {
+    const page = await loadTasks({}, fetchJson({ items: [{ id: "task-1", title: "Alpha", status: "doing", progress: 40, priority: "high", dueAt: "2026-08-26T00:00:00.000Z" }], nextCursor: "c" }));
+    expect(page.items[0]).toMatchObject({ id: "task-1", status: "doing", priority: "high", progress: 40 });
+    expect(page.nextCursor).toBe("c");
+    const summary = await loadTaskSummary(fetchJson({ todo: 1, doing: 2, blocked: 0, done: 3, canceled: 0, dueToday: 1, overdue: 0 }));
+    expect(summary.doing).toBe(2);
+  });
+
+  it("creates with a client-generated idempotency key", async () => {
+    let capturedBody = "";
+    const requester = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = String(init?.body ?? "");
+      return new Response(JSON.stringify({ task: { id: "task-1", title: "Alpha", status: "todo", progress: 0, priority: "medium", createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:00.000Z" }, created: true }), { status: 201 });
+    }) as unknown as typeof fetch;
+    const result = await createTask({ title: "Alpha" }, requester);
+    expect(result.task.title).toBe("Alpha");
+    const body = JSON.parse(capturedBody) as { id: unknown };
+    expect(typeof body.id).toBe("string");
+    expect(body.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u);
+  });
+
+  it("treats a 404 on delete as success", async () => {
+    const gone = (async () => new Response(null, { status: 404, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    await expect(deleteTask("task-gone", gone)).resolves.toBeUndefined();
+    const error = (async () => new Response(JSON.stringify({ error: { code: "TASK_NOT_FOUND", message: "x", retryable: false } }), { status: 500 })) as unknown as typeof fetch;
+    await expect(deleteTask("task-broken", error)).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("tasks model", () => {
+  it("maps status and priority to i18n keys", () => {
+    expect(taskStatusKey("todo")).toBe("TASKS_STATUS_TODO");
+    expect(taskStatusKey("canceled")).toBe("TASKS_STATUS_CANCELED");
+    expect(taskPriorityKey("high")).toBe("TASKS_PRIORITY_HIGH");
+  });
+
+  it("classifies due dates relative to today", () => {
+    const today = new Date("2026-08-27T12:00:00.000Z");
+    expect(dueInfo("2026-08-26T00:00:00.000Z", "todo", today).kind).toBe("overdue");
+    expect(dueInfo("2026-08-27T23:00:00.000Z", "doing", today).kind).toBe("today");
+    expect(dueInfo("2026-08-27T23:00:00.000Z", "done", today).kind).toBe("none");
+    expect(dueInfo(null, "todo", today).kind).toBe("none");
+    expect(dueInfo("2026-09-01T00:00:00.000Z", "todo", today).kind).toBe("later");
+  });
+});
