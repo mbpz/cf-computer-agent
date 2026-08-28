@@ -229,9 +229,9 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/members") {
     requireCapability(principal, "member:manage");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const page = parseNumberedPageRequest(url, ["status"]);
     const status = requireEnumFilter(url, "status", ["active", "disabled"]);
-    const page = pageRequest(url);
-    const members = await services.memberRecords.listPage(page.limit, page.cursor, status);
+    const members = await services.memberRecords.listPage(page, status);
     return jsonResponse({
       ...members,
       items: members.items.map(memberDto),
@@ -326,11 +326,9 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/audit-events") {
     requireCapability(principal, "audit:read");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const page = parseNumberedPageRequest(url, ["action"]);
     const action = requireEnumFilter(url, "action", auditActions);
-    return jsonResponse(await services.audit.listAudit(parsePageRequest(
-      pageRequest(url).limit,
-      pageRequest(url).cursor,
-    ), action), 200, context.requestId);
+    return jsonResponse(await services.audit.listAudit(page, action), 200, context.requestId);
   }
 
   const reparseSource = /^\/api\/admin\/source-versions\/([^/]+)\/reparse$/.exec(url.pathname);

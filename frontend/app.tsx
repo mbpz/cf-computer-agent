@@ -32,7 +32,7 @@ import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submiss
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createReviewQueueRequestController, type ReviewQueueItem } from "./lib/admin-review-data";
-import { createAdminMembersRequestController, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
+import { createAdminMembersRequestController, loadAdminMembers, updateMemberStatus, type AdminMember } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
@@ -155,9 +155,9 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute locale={locale} />;
     case "admin-assets": return <AdminAssetsRoute locale={locale} />;
-    case "admin-members": return <AdminMembersRoute locale={locale} />;
+    case "admin-members": return <AdminMembersRoute locale={locale} search={search} />;
     case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
-    case "admin-audit": return <AdminAuditRoute locale={locale} />;
+    case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
     case "not-found": return <NotFoundPage locale={locale} />;
     default: return <AdminForbiddenPage />;
   }
@@ -764,16 +764,21 @@ function AdminDuplicateRoute({ locale }: { locale: LocaleRuntime }) {
   return <DuplicateQueuePage locale={locale} state={state} pendingId={pendingId} onDecision={(id, decision) => void decide(id, decision)} onLoadMore={loadMore} />;
 }
 
-function AdminMembersRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; members: AdminMember[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
+export function AdminMembersRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = parsePageSearch(search);
+  const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [status, setStatus] = useState<"active" | "disabled" | undefined>(() => memberStatusSearch(search));
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: import("./lib/admin-members-data").AdminMembersPage } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pendingIds, setPendingIds] = useState<string[]>([]);
-  const [loadMoreError, setLoadMoreError] = useState<string | undefined>();
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const [actionError, setActionError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createAdminMembersRequestController> | null>(null);
-  useEffect(() => { const controller = createAdminMembersRequestController(); controllerRef.current = controller; const request = controller.request(); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", members: page.items, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale]);
-  const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); setLoadMoreError(undefined); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, members: [...previous.members, ...page.items], nextCursor: page.nextCursor } : previous); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setLoadMoreError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); }); };
-  const changeStatus = async (id: string, status: "active" | "disabled") => { if (pendingIds.includes(id)) return; setPendingIds((ids) => [...ids, id]); setActionError(undefined); try { const member = await updateMemberStatus(id, status); setState((previous) => previous.kind === "ready" ? { ...previous, members: previous.members.map((item) => item.id === id ? member : item) } : previous); } catch { setActionError(frontendText(locale, "ADMIN_MEMBER_STATUS_ERROR")); } finally { setPendingIds((ids) => ids.filter((item) => item !== id)); } };
-  return <MembersPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} loadMoreError={loadMoreError} members={state.kind === "ready" ? state.members : []} nextCursor={state.kind === "ready" ? state.nextCursor : null} pendingIds={pendingIds} actionError={actionError} onLoadMore={loadMore} onStatusChange={changeStatus} />;
+  useEffect(() => { const onPop = () => { const next = parsePageSearch(window.location.search); setPage(next.page); setPageSize(next.pageSize); setStatus(memberStatusSearch(window.location.search)); }; window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  useEffect(() => { const controller = createAdminMembersRequestController(); controllerRef.current = controller; setPending(true); setLocalError(undefined); const request = controller.request({ page, pageSize, status }); void request.promise.then(({ generation, page: data }) => { if (controller.isCurrent(generation)) { setState({ kind: "ready", data }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); } }); return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale, page, pageSize, status]);
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { const nextSearch = writePageSearch(window.location.search, next); window.history.pushState({}, "", `${window.location.pathname}${nextSearch}`); setPage(next.page); setPageSize(next.pageSize); };
+  const changeStatus = async (id: string, nextStatus: "active" | "disabled") => { if (pendingIds.includes(id)) return; setPendingIds((ids) => [...ids, id]); setActionError(undefined); try { const member = await updateMemberStatus(id, nextStatus); if (state.kind === "ready") { const refreshed = await loadAdminMembers({ page, pageSize, status }); if (refreshed.items.length === 0 && refreshed.pagination.total > 0 && page > 1) { navigate({ page: page - 1, pageSize }); } else setState({ kind: "ready", data: { ...refreshed, items: refreshed.items.map((item) => item.id === id ? member : item) } }); } } catch { setActionError(frontendText(locale, "ADMIN_MEMBER_STATUS_ERROR")); } finally { setPendingIds((ids) => ids.filter((item) => item !== id)); } };
+  const changeFilter = (nextStatus: "" | "active" | "disabled") => { const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize })); if (nextStatus) params.set("status", nextStatus); else params.delete("status"); const nextSearch = params.toString(); window.history.pushState({}, "", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`); setStatus(nextStatus || undefined); setPage(1); };
+  return <MembersPage locale={locale} status={status || ""} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} localError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending} pendingIds={pendingIds} actionError={actionError} onStatusFilterChange={changeFilter} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onStatusChange={changeStatus} />;
 }
 
 function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
@@ -786,13 +791,20 @@ function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
   return <SpacesPage locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} onCreate={create} />;
 }
 
-function AdminAuditRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; events: AdminAuditEvent[]; nextCursor: string | null } | { kind: "error"; message: string }>({ kind: "loading" });
+export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [action, setAction] = useState(() => new URLSearchParams(search).get("action") || undefined);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; page: import("./lib/admin-audit-data").AdminAuditPage } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createAdminAuditRequestController> | null>(null);
-  useEffect(() => { const controller = createAdminAuditRequestController(); controllerRef.current = controller; const request = controller.request(); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState({ kind: "ready", events: page.events, nextCursor: page.nextCursor }); }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE") }); }); return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale]);
-  const loadMore = () => { if (state.kind !== "ready" || !state.nextCursor || !controllerRef.current) return; const controller = controllerRef.current; const request = controller.request(state.nextCursor); void request.promise.then(({ generation, page }) => { if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, events: [...previous.events, ...page.events], nextCursor: page.nextCursor } : previous); }); };
-  return <AuditPage locale={locale} state={state} onLoadMore={loadMore} />;
+  useEffect(() => { const onPop = () => { const next = parsePageSearch(window.location.search); setPage(next.page); setPageSize(next.pageSize); setAction(new URLSearchParams(window.location.search).get("action") || undefined); }; window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  useEffect(() => { const controller = createAdminAuditRequestController(); controllerRef.current = controller; setPending(true); setLocalError(undefined); const request = controller.request({ page, pageSize, action }); void request.promise.then(({ generation, page: data }) => { if (controller.isCurrent(generation)) { setState({ kind: "ready", page: data }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE") }); setLocalError(frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")); setPending(false); } }); return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [action, locale, page, pageSize]);
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { const nextSearch = writePageSearch(window.location.search, next); window.history.pushState({}, "", `${window.location.pathname}${nextSearch}`); setPage(next.page); setPageSize(next.pageSize); };
+  const changeFilter = (nextAction: string) => { const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize })); if (nextAction) params.set("action", nextAction); else params.delete("action"); const nextSearch = params.toString(); window.history.pushState({}, "", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`); setAction(nextAction || undefined); setPage(1); };
+  return <AuditPage locale={locale} state={state} action={action || ""} pending={pending} localError={localError} onActionChange={changeFilter} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
+
+function memberStatusSearch(search: string): "active" | "disabled" | undefined { const value = new URLSearchParams(search).get("status"); return value === "active" || value === "disabled" ? value : undefined; }
 
 function AdminAssetsRoute({ locale }: { locale: LocaleRuntime }) {
   const [assets, setAssets] = useState<AdminAsset[]>([]); const [loading, setLoading] = useState(true); const [loadError, setLoadError] = useState<string | undefined>(); const [pending, setPending] = useState<string[]>([]); const [retryError, setRetryError] = useState<string | undefined>(); const [preview, setPreview] = useState<AssetPreviewModel | null>(null); const [previewLoading, setPreviewLoading] = useState(false); const [previewError, setPreviewError] = useState<string | undefined>(); const previewAbort = useRef<AbortController | null>(null);

@@ -1,4 +1,5 @@
-import { decodePageCursor, encodePageCursor, type PageRequest } from "../pagination";
+import { decodePageCursor, encodePageCursor, pageOffset, type NumberedPage, type NumberedPageRequest, type PageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { assertAuditEventInput, type ActivityPage, type ActivityItem, type AuditAction, type AuditEvent, type AuditPage, type CreateAuditEvent } from "./types";
 
 type AuditRow = { id: string; actor_kind: AuditEvent["actorKind"]; actor_id: string | null; action: AuditEvent["action"]; resource_type: AuditEvent["resourceType"]; resource_id: string | null; metadata: string; created_at: string };
@@ -79,20 +80,27 @@ export class AuditRepository {
     );
   }
 
-  async listAudit(request: PageRequest, action?: AuditAction): Promise<AuditPage> {
+  async listAudit(request: NumberedPageRequest, action?: AuditAction): Promise<NumberedPage<AuditEvent>>;
+  async listAudit(request: PageRequest, action?: AuditAction): Promise<AuditPage>;
+  async listAudit(request: NumberedPageRequest | PageRequest, action?: AuditAction): Promise<NumberedPage<AuditEvent> | AuditPage> {
+    if ("limit" in request) return this.listAuditCursor(request, action);
+    const where = action === undefined ? "" : " WHERE action = ?";
+    const bindings = action === undefined ? [] : [action];
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM audit_events${where}`).bind(...bindings),
+      this.db.prepare(`${auditSelect}${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...bindings, request.pageSize, pageOffset(request)),
+      request,
+      (row) => mapAuditRow(row as AuditRow),
+    );
+  }
+
+  private async listAuditCursor(request: PageRequest, action?: AuditAction): Promise<AuditPage> {
     const cursor = request.cursor === undefined ? undefined : decodePageCursor(request.cursor, timestampCursorBounds);
-    const conditions = [
-      ...(action === undefined ? [] : ["action = ?"]),
-      ...(cursor === undefined ? [] : ["(created_at < ? OR (created_at = ? AND id < ?))"]),
-    ];
-    const rows = await this.db.prepare(
-      `${auditSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ?`,
-    ).bind(
-      ...(action === undefined ? [] : [action]),
-      ...(cursor === undefined ? [] : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id]),
-      request.limit + 1,
-    ).all<AuditRow>();
-    return page(rows.results.map(mapAuditRow), request.limit);
+    const conditions = [...(action === undefined ? [] : ["action = ?"]), ...(cursor === undefined ? [] : ["(created_at < ? OR (created_at = ? AND id < ?))"])];
+    const rows = await this.db.prepare(`${auditSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...(action === undefined ? [] : [action]), ...(cursor === undefined ? [] : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id]), request.limit + 1).all<AuditRow>();
+    const items = rows.results.slice(0, request.limit).map(mapAuditRow);
+    return { items, ...(rows.results.length > request.limit ? { nextCursor: encodePageCursor({ sort: Date.parse(items.at(-1)!.createdAt), id: items.at(-1)!.id }) } : {}) };
   }
 
   async listMemberActivity(memberId: string, role: "admin" | "contributor", request: PageRequest): Promise<ActivityPage> {
@@ -138,7 +146,6 @@ export class AuditRepository {
 
 const auditSelect = "SELECT id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at FROM audit_events";
 function timestamp(sort: number): string { return new Date(sort).toISOString(); }
-function page(items: AuditEvent[], limit: number): AuditPage { const result = items.slice(0, limit); return { items: result, ...(items.length > limit ? { nextCursor: encodePageCursor({ sort: Date.parse(result.at(-1)!.createdAt), id: result.at(-1)!.id }) } : {}) }; }
 function mapAuditRow(row: AuditRow): AuditEvent {
   const parsed = JSON.parse(row.metadata) as CreateAuditEvent["metadata"];
   return assertAuditEventInput({ id: row.id, actorKind: row.actor_kind, actorId: row.actor_id, action: row.action, resourceType: row.resource_type, resourceId: row.resource_id, metadata: parsed, createdAt: row.created_at });

@@ -375,8 +375,8 @@ class FakeMembersRepository implements MembersRepositoryPort {
     return linked;
   }
 
-  async listPage(): Promise<{ items: Member[]; nextCursor?: string }> {
-    return { items: [...this.members] };
+  async listPage(pagination: import("../../src/pagination").NumberedPageRequest): Promise<import("../../src/members/types").MemberPage> {
+    return { items: [...this.members], pagination: { ...pagination, total: this.members.length, totalPages: this.members.length ? 1 : 0 } };
   }
 
   async updateContributorStatus(id: string, status: MemberStatus): Promise<Member | null> {

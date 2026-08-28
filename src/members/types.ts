@@ -29,5 +29,5 @@ export interface CreateMember {
 
 export interface MemberPage {
   items: Member[];
-  nextCursor?: string;
+  pagination: import("../pagination").PageMetadata;
 }

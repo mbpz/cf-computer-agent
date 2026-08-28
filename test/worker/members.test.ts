@@ -294,7 +294,7 @@ describe("members D1 control plane", () => {
       .rejects.toMatchObject({ code: "MEMBER_DISABLED", status: 403 });
   });
 
-  it("uses opaque versioned cursors and bounded member pages", async () => {
+  it("returns stable numbered member pages", async () => {
     const repository = new MembersRepository(env.DB);
     for (const id of ["member-a", "member-b", "member-c"]) {
       await repository.insert({
@@ -308,15 +308,12 @@ describe("members D1 control plane", () => {
       });
     }
 
-    const first = await repository.listPage(2);
-    expect(first.items.map((member) => member.id)).toEqual(["member-a", "member-b"]);
-    expect(first.nextCursor).not.toContain("member-b");
-    const second = await repository.listPage(2, first.nextCursor);
-    expect(second.items).toMatchObject([{ id: "member-c" }]);
-    expect(second.nextCursor).toBeUndefined();
+    const first = await repository.listPage({ page: 1, pageSize: 20 });
+    expect(first.items.map((member) => member.id)).toEqual(["member-a", "member-b", "member-c"]);
+    expect(first.pagination).toEqual({ page: 1, pageSize: 20, total: 3, totalPages: 1 });
   });
 
-  it("keeps status-filtered keyset pages bounded and gap-free in D1", async () => {
+  it("counts and sorts status-filtered numbered pages in D1", async () => {
     const repository = new MembersRepository(env.DB);
     for (let index = 0; index < 55; index += 1) {
       const id = `member-${String(index).padStart(2, "0")}`;
@@ -332,48 +329,18 @@ describe("members D1 control plane", () => {
       if (index % 2 === 1) await repository.updateContributorStatus(member.id, "disabled");
     }
 
-    const ids: string[] = [];
-    let cursor: string | undefined;
-    do {
-      const page = await repository.listPage(7, cursor, "disabled");
-      expect(page.items.length).toBeLessThanOrEqual(7);
-      expect(page.items.every((member) => member.status === "disabled")).toBe(true);
-      ids.push(...page.items.map((member) => member.id));
-      cursor = page.nextCursor;
-    } while (cursor);
-
-    expect(ids).toEqual(Array.from({ length: 27 }, (_, index) => `member-${String(index * 2 + 1).padStart(2, "0")}`));
-    expect(new Set(ids)).toHaveLength(27);
-  });
-
-  it.each([NaN, 1.5, 0, 51])("rejects invalid member page limits: %s", async (limit) => {
-    const repository = new MembersRepository(env.DB);
-
-    await expect(repository.listPage(limit)).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    const result = await repository.listPage({ page: 2, pageSize: 20 }, "disabled");
+    expect(result.items.map((member) => member.id)).toEqual(Array.from({ length: 7 }, (_, index) => `member-${String((index + 20) * 2 + 1).padStart(2, "0")}`));
+    expect(result.pagination).toEqual({ page: 2, pageSize: 20, total: 27, totalPages: 2 });
   });
 
   it("rejects an invalid member status filter at the repository boundary", async () => {
     const repository = new MembersRepository(env.DB);
 
-    await expect(repository.listPage(20, undefined, "pending" as never))
+    await expect(repository.listPage({ page: 1, pageSize: 20 }, "pending" as never))
       .rejects.toMatchObject({ code: "FILTER_INVALID", status: 400 });
   });
-
-  it("uses a default page limit and rejects malformed oversized or wrong-version cursors", async () => {
-    const repository = new MembersRepository(env.DB);
-    const oversized = "a".repeat(1025);
-    const wrongVersion = toBase64Url(JSON.stringify({ v: 2, id: "member-a" }));
-
-    await expect(repository.listPage()).resolves.toMatchObject({ items: [] });
-    for (const cursor of ["", "member-a", oversized, wrongVersion]) {
-      await expect(repository.listPage(20, cursor)).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-    }
-  });
 });
-
-function toBase64Url(value: string): string {
-  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 
 function memberInput(id: string, role: "admin" | "contributor") {
   return {

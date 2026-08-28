@@ -1,6 +1,7 @@
 import type { CreateMember, Member, MemberPage, MemberStatus } from "./types";
 import { AppError } from "../http";
-import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, parsePageRequest, type NumberedPageRequest, type Page } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 
@@ -27,7 +28,7 @@ export interface MembersRepositoryPort {
     audit: CreateAuditEvent,
   ): Promise<Member | null>;
   touchLastSeenIfStale(id: string, now: string, staleBefore: string): Promise<boolean>;
-  listPage(limit?: number, cursor?: string, status?: MemberStatus): Promise<MemberPage>;
+  listPage(pagination: NumberedPageRequest, status?: MemberStatus): Promise<MemberPage>;
   updateContributorStatus(id: string, status: MemberStatus, updatedAt?: string): Promise<Member | null>;
   updateContributorStatusWithAudit?(id: string, status: MemberStatus, updatedAt: string, audit: CreateAuditEvent): Promise<Member | null>;
 }
@@ -132,28 +133,34 @@ export class MembersRepository implements MembersRepositoryPort {
     return result.meta.changes > 0;
   }
 
-  async listPage(limit: number = 20, cursor?: string, status?: MemberStatus): Promise<MemberPage> {
-    const pageLimit = parsePageRequest(limit).limit;
+  async listPage(pagination: NumberedPageRequest, status?: MemberStatus): Promise<MemberPage>;
+  async listPage(limit?: number, cursor?: string, status?: MemberStatus): Promise<Page<Member>>;
+  async listPage(paginationOrLimit: NumberedPageRequest | number = 20, statusOrCursor?: MemberStatus | string, legacyStatus?: MemberStatus): Promise<MemberPage | Page<Member>> {
+    if (typeof paginationOrLimit === "number") return this.listCursorPage(paginationOrLimit, statusOrCursor, legacyStatus);
+    const pagination = paginationOrLimit;
+    const status = statusOrCursor as MemberStatus | undefined;
     if (status !== undefined && status !== "active" && status !== "disabled") {
       throw new AppError("FILTER_INVALID", "Filter is invalid", 400);
     }
+    const where = status === undefined ? "" : " WHERE status = ?";
+    const filterBindings = status === undefined ? [] : [status];
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM members${where}`).bind(...filterBindings),
+      this.db.prepare(`${memberSelect}${where} ORDER BY id ASC LIMIT ? OFFSET ?`).bind(...filterBindings, pagination.pageSize, pageOffset(pagination)),
+      pagination,
+      (row) => mapMemberRow(row as MemberRow),
+    );
+  }
+
+  private async listCursorPage(limit: number, cursor?: string, status?: MemberStatus): Promise<Page<Member>> {
+    const pageLimit = parsePageRequest(limit).limit;
+    if (status !== undefined && status !== "active" && status !== "disabled") throw new AppError("FILTER_INVALID", "Filter is invalid", 400);
     const cursorId = cursor === undefined ? undefined : decodeCursor(cursor);
-    const conditions = [
-      ...(status === undefined ? [] : ["status = ?"]),
-      ...(cursorId === undefined ? [] : ["id > ?"]),
-    ];
-    const rows = await this.db.prepare(
-      `${memberSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY id ASC LIMIT ?`,
-    ).bind(
-      ...(status === undefined ? [] : [status]),
-      ...(cursorId === undefined ? [] : [cursorId]),
-      pageLimit + 1,
-    ).all<MemberRow>();
+    const conditions = [...(status === undefined ? [] : ["status = ?"]), ...(cursorId === undefined ? [] : ["id > ?"])];
+    const rows = await this.db.prepare(`${memberSelect}${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY id ASC LIMIT ?`).bind(...(status === undefined ? [] : [status]), ...(cursorId === undefined ? [] : [cursorId]), pageLimit + 1).all<MemberRow>();
     const items = rows.results.slice(0, pageLimit).map(mapMemberRow);
-    return {
-      items,
-      ...(rows.results.length > pageLimit ? { nextCursor: encodeCursor(items.at(-1)!.id) } : {}),
-    };
+    return { items, ...(rows.results.length > pageLimit ? { nextCursor: encodeCursor(items.at(-1)!.id) } : {}) };
   }
 
   async updateContributorStatus(id: string, status: MemberStatus, updatedAt = new Date().toISOString()): Promise<Member | null> {
@@ -192,6 +199,15 @@ export class MembersRepository implements MembersRepositoryPort {
 
 const memberSelect = "SELECT id, access_sub, email, role, status, created_at, updated_at, last_seen_at FROM members";
 
+function encodeCursor(id: string): string { return encodeOpaqueCursor({ v: 1, id }); }
+function decodeCursor(cursor: string): string {
+  const decoded = decodeOpaqueCursor(cursor);
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  const { v, id } = decoded as Record<string, unknown>;
+  if (v !== 1 || typeof id !== "string" || !id) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+  return id;
+}
+
 function classifyMembersConflict(error: unknown): MembersConflictKind | undefined {
   if (!(error instanceof Error)) return undefined;
   const known = new Map<string, MembersConflictKind>([
@@ -203,18 +219,6 @@ function classifyMembersConflict(error: unknown): MembersConflictKind | undefine
     ["D1_ERROR: UNIQUE constraint failed: members.role: SQLITE_CONSTRAINT (extended: SQLITE_CONSTRAINT_UNIQUE)", "active_admin"],
   ]);
   return known.get(error.message);
-}
-
-function encodeCursor(id: string): string {
-  return encodeOpaqueCursor({ v: 1, id });
-}
-
-function decodeCursor(cursor: string): string {
-  const decoded = decodeOpaqueCursor(cursor);
-  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
-  const { v, id } = decoded as Record<string, unknown>;
-  if (v !== 1 || typeof id !== "string" || !id) throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
-  return id;
 }
 
 function mapMember(row: MemberRow | null): Member | null {
