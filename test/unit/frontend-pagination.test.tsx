@@ -57,7 +57,7 @@ describe("frontend pagination", () => {
     expect(onPageChange).toHaveBeenCalledWith(7);
   });
 
-  it("offers exact page sizes and resets to page one when changed", () => {
+  it("offers exact page sizes and delegates atomic reset ownership to the route", () => {
     const onPageChange = vi.fn();
     const onPageSizeChange = vi.fn();
     const html = renderToStaticMarkup(<DataPagination page={4} pageSize={20} total={238} totalPages={12} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />);
@@ -68,7 +68,7 @@ describe("frontend pagination", () => {
     const select = findElementByType(tree, Select)!;
     select.props.onChange({ currentTarget: { value: "50" } });
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
-    expect(onPageChange).toHaveBeenCalledWith(1);
+    expect(onPageChange).not.toHaveBeenCalled();
   });
 
   it("disables every control while pending and exposes responsive mobile controls", () => {
