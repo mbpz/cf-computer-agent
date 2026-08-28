@@ -37,7 +37,7 @@ import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
-import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
+import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalyticsInput } from "./lib/admin-analytics-data";
 import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
@@ -173,7 +173,7 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
   return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0, recent }} />;
 }
 
-function AdminAnalyticsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics }: { locale: LocaleRuntime; search: string; load?: (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview> }) {
   const initial = useMemo(() => analyticsUrlState(search), [search]);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }>({ kind: "loading" });
   const [days, setDays] = useState(initial.days);
@@ -183,8 +183,8 @@ function AdminAnalyticsRoute({ locale, search }: { locale: LocaleRuntime; search
   const [localError, setLocalError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const controller = useMemo(() => createNumberedRequestController(
-    (input: { days: number; page: number; pageSize: SupportedPageSize }, signal) => loadAdminAnalytics({ ...input, signal }),
-  ), []);
+    (input: { days: number; page: number; pageSize: SupportedPageSize }, signal) => load({ ...input, signal }),
+  ), [load]);
 
   useEffect(() => {
     const onPopState = () => {

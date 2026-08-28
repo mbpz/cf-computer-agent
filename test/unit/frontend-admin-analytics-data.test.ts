@@ -22,9 +22,9 @@ describe("admin analytics data", () => {
     expect(result.recentVisitors.items).toHaveLength(1);
   });
 
-  it("rejects the legacy visitor array", async () => {
+  it("rejects malformed numbered visitor metadata", async () => {
     const requester = vi.fn(async () => new Response(JSON.stringify({
-      range: {}, totals: {}, daily: [], breakdowns: {}, recentVisitors: [],
+      range: {}, totals: {}, daily: [], breakdowns: {}, recentVisitors: { items: [], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } },
     }), { status: 200 }));
     await expect(loadAdminAnalytics({ days: 7, page: 1, pageSize: 20 }, requester)).rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
   });
