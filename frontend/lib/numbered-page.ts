@@ -33,7 +33,7 @@ export function normalizeNumberedPage<T>(value: unknown, normalizeItem: (value: 
   const { page, pageSize, total, totalPages } = value.pagination;
   const offset = typeof page === "number" && typeof pageSize === "number" ? (page - 1) * pageSize : Number.NaN;
   const maximumRows = typeof total === "number" && Number.isFinite(offset) ? Math.max(0, Math.min(pageSize as number, total - offset)) : 0;
-  if (!isPositiveSafeInteger(page) || !isSupportedPageSize(pageSize) || !isNonNegativeSafeInteger(total) || !isNonNegativeSafeInteger(totalPages) || !Number.isSafeInteger(offset) || offset >= 10_000 || totalPages !== (total === 0 ? 0 : Math.ceil(total / pageSize)) || value.items.length > maximumRows || (page > totalPages && value.items.length > 0)) invalidResponse();
+  if (!isPositiveSafeInteger(page) || !isSupportedPageSize(pageSize) || !isNonNegativeSafeInteger(total) || !isNonNegativeSafeInteger(totalPages) || !Number.isSafeInteger(offset) || offset >= 10_000 || totalPages !== (total === 0 ? 0 : Math.ceil(total / pageSize)) || value.items.length !== maximumRows) invalidResponse();
   let items: T[];
   try { items = value.items.map(normalizeItem); } catch { invalidResponse(); }
   return { items: items!, pagination: { page, pageSize, total, totalPages } };

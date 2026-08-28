@@ -33,10 +33,10 @@ export const PaginationItem = React.forwardRef<HTMLLIElement, React.LiHTMLAttrib
 PaginationItem.displayName = "PaginationItem";
 
 export interface PaginationLinkProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { isActive?: boolean; }
-export const PaginationLink = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(({ className, type = "button", isActive = false, ...props }, ref) => <button ref={ref} type={type} aria-current={isActive ? "page" : props["aria-current"]} className={cn("inline-flex size-9 items-center justify-center rounded-md border border-input bg-background text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 aria-[current=page]:border-primary aria-[current=page]:bg-accent aria-[current=page]:font-semibold", className)} {...props} />);
+export const PaginationLink = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(({ className, type = "button", isActive = false, "aria-current": _ariaCurrent, ...props }, ref) => <button ref={ref} type={type} {...props} aria-current={isActive ? "page" : undefined} className={cn("inline-flex size-9 items-center justify-center rounded-md border border-input bg-background text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 aria-[current=page]:border-primary aria-[current=page]:bg-accent aria-[current=page]:font-semibold", className)} />);
 PaginationLink.displayName = "PaginationLink";
 
-export const PaginationEllipsis = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => <span aria-hidden="true" className={cn("flex size-9 items-center justify-center text-sm text-muted-foreground", className)} {...props}>…<span className="sr-only">More pages</span></span>;
+export const PaginationEllipsis = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} aria-hidden="true" className={cn("flex size-9 items-center justify-center text-sm text-muted-foreground", className)}>…</span>;
 
 export const PaginationPrevious = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(({ children, ...props }, ref) => <PaginationLink ref={ref} {...props}>{children ?? <><span aria-hidden="true">‹</span><span className="sr-only">Previous page</span></>}</PaginationLink>);
 PaginationPrevious.displayName = "PaginationPrevious";
@@ -47,13 +47,14 @@ PaginationNext.displayName = "PaginationNext";
 export function Pagination({ className, currentPage, pageCount, onPageChange, previousLabel = "Previous page", nextLabel = "Next page", paginationLabel = "Pagination", disabled = false, ...props }: PaginationProps) {
   const safePageCount = Number.isSafeInteger(pageCount) && pageCount > 0 ? pageCount : 0;
   if (!safePageCount) return null;
-  const safeCurrentPage = Number.isSafeInteger(currentPage) ? Math.min(Math.max(currentPage, 1), safePageCount) : 1;
+  const safeCurrentPage = Number.isSafeInteger(currentPage) ? Math.max(currentPage, 1) : 1;
   const tokens = visiblePageTokens(safeCurrentPage, safePageCount);
+  const previousPage = safeCurrentPage > safePageCount ? safePageCount : safeCurrentPage - 1;
   return <nav aria-label={paginationLabel} className={cn("flex items-center gap-1", className)} {...props}>
-    <PaginationPrevious aria-label={previousLabel} disabled={disabled || safeCurrentPage <= 1} onClick={() => onPageChange?.(safeCurrentPage - 1)}><span aria-hidden="true">‹</span><span className="sr-only">{previousLabel}</span></PaginationPrevious>
+    <PaginationPrevious aria-label={previousLabel} disabled={disabled || safeCurrentPage <= 1} onClick={() => onPageChange?.(previousPage)}><span aria-hidden="true">‹</span><span className="sr-only">{previousLabel}</span></PaginationPrevious>
     <PaginationContent>{tokens.map((token, index) => token === "ellipsis"
       ? <PaginationItem key={`ellipsis-${index}`}><PaginationEllipsis /></PaginationItem>
-      : <PaginationItem key={token}><PaginationLink aria-label={`Page ${token}`} isActive={token === safeCurrentPage} disabled={disabled} onClick={() => onPageChange?.(token)}>{token}</PaginationLink></PaginationItem>)}</PaginationContent>
+      : <PaginationItem key={token}><PaginationLink aria-label={`Page ${token}`} isActive={safeCurrentPage <= safePageCount && token === safeCurrentPage} disabled={disabled} onClick={() => onPageChange?.(token)}>{token}</PaginationLink></PaginationItem>)}</PaginationContent>
     <PaginationNext aria-label={nextLabel} disabled={disabled || safeCurrentPage >= safePageCount} onClick={() => onPageChange?.(safeCurrentPage + 1)}><span aria-hidden="true">›</span><span className="sr-only">{nextLabel}</span></PaginationNext>
   </nav>;
 }

@@ -30,6 +30,21 @@ describe("frontend numbered-page state", () => {
     )).toEqual({ items: [{ id: "a" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
   });
 
+  it("requires a complete non-last page", () => {
+    const truncated = { items: Array.from({ length: 19 }, (_, id) => ({ id })), pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } };
+    expect(() => normalizeNumberedPage(truncated, (item) => item)).toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
+  });
+
+  it("accepts the exact last-page item count", () => {
+    const lastPage = { items: [{ id: "last" }], pagination: { page: 2, pageSize: 20, total: 21, totalPages: 2 } };
+    expect(normalizeNumberedPage(lastPage, (item) => item)).toEqual(lastPage);
+  });
+
+  it("accepts an empty legal page beyond the last page", () => {
+    const beyondLast = { items: [], pagination: { page: 4, pageSize: 20, total: 21, totalPages: 2 } };
+    expect(normalizeNumberedPage(beyondLast, (item) => item)).toEqual(beyondLast);
+  });
+
   it.each([
     null,
     { items: [], pagination: null },

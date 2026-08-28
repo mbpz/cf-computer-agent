@@ -28,8 +28,16 @@ describe("frontend pagination", () => {
     const html = renderToStaticMarkup(<nav aria-label="Pages"><PaginationContent><PaginationItem><PaginationPrevious aria-label="Back" /></PaginationItem><PaginationItem><PaginationLink isActive>2</PaginationLink></PaginationItem><PaginationItem><PaginationEllipsis /></PaginationItem><PaginationItem><PaginationNext aria-label="Forward" /></PaginationItem></PaginationContent></nav>);
     expect(html).toContain('aria-label="Back"');
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain("More pages");
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain("More pages");
     expect(html).toContain('aria-label="Forward"');
+  });
+
+  it("keeps controlled active state authoritative over aria-current props", () => {
+    const active = renderToStaticMarkup(<PaginationLink isActive aria-current={undefined}>2</PaginationLink>);
+    const inactive = renderToStaticMarkup(<PaginationLink isActive={false} aria-current="page">2</PaginationLink>);
+    expect(active).toContain('aria-current="page"');
+    expect(inactive).not.toContain("aria-current");
   });
 
   it("renders totals, range, desktop tokens, and invokes page changes", () => {
@@ -39,7 +47,7 @@ describe("frontend pagination", () => {
     );
     expect(html).toContain(">238<");
     expect(html).toContain("101–120");
-    expect(html).toMatch(/aria-current="page"[^>]+aria-label="Page 6"/u);
+    expect(html).toMatch(/<button(?=[^>]*aria-label="Page 6")(?=[^>]*aria-current="page")[^>]*>/u);
     expect(html).toContain("…");
 
     const pagination = Pagination({ currentPage: 6, pageCount: 12, onPageChange });
@@ -82,6 +90,24 @@ describe("frontend pagination", () => {
     expect(html).not.toContain("1–0");
   });
 
+  it("renders a legal beyond-last page without inventing a current desktop page", () => {
+    const onPageChange = vi.fn();
+    const html = renderToStaticMarkup(<DataPagination page={4} pageSize={20} total={21} totalPages={2} onPageChange={onPageChange} onPageSizeChange={vi.fn()} />);
+    expect(html).toContain("0–0");
+    expect(html).toContain("4 / 2");
+    expect(html).not.toContain('aria-current="page"');
+
+    const desktop = Pagination({ currentPage: 4, pageCount: 2, onPageChange });
+    const desktopPrevious = React.Children.toArray(desktop?.props.children)[0] as React.ReactElement<{ onClick: () => void }>;
+    desktopPrevious.props.onClick();
+    expect(onPageChange).toHaveBeenLastCalledWith(2);
+
+    const tree = DataPagination({ page: 4, pageSize: 20, total: 21, totalPages: 2, onPageChange, onPageSizeChange: vi.fn() });
+    const mobilePrevious = findElementsByType(tree, "button").find((element) => element.props["aria-label"] === "Previous page")!;
+    mobilePrevious.props.onClick();
+    expect(onPageChange).toHaveBeenLastCalledWith(2);
+  });
+
   it("provides a native accessible shadcn-style Select primitive", () => {
     const html = renderToStaticMarkup(<Select aria-label="Size" defaultValue="20"><option value="20">20</option></Select>);
     expect(html).toContain('aria-label="Size"');
@@ -97,4 +123,10 @@ function findElementByType(node: React.ReactNode, type: React.ElementType): Reac
     if (found) return found;
   }
   return null;
+}
+
+function findElementsByType(node: React.ReactNode, type: React.ElementType): React.ReactElement<Record<string, any>>[] {
+  if (!React.isValidElement(node)) return [];
+  const matches = node.type === type ? [node as React.ReactElement<Record<string, any>>] : [];
+  return matches.concat(React.Children.toArray((node.props as { children?: React.ReactNode }).children).flatMap((child) => findElementsByType(child, type)));
 }
