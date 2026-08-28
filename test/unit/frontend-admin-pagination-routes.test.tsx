@@ -51,9 +51,26 @@ describe("numbered admin routes", () => {
   });
 
   it("backs up exactly one page and retries once when the filtered page becomes empty", async () => {
-    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2");
+    browser.history.replaceState({}, "", "/admin/members?status=disabled");
+    browser.history.pushState({}, "", "/admin/members?status=disabled&page=2");
+    const pushState = vi.spyOn(browser.history, "pushState");
+    const replaceState = vi.spyOn(browser.history, "replaceState");
     const inputs: LoadAdminMembersInput[] = [];
     const load = async (input: LoadAdminMembersInput) => { inputs.push(input); if (inputs.length === 1) return memberPage(2, 20, 21, [member("last", "disabled")]); if (inputs.length === 2) return memberPage(2, 20, 20, []); return memberPage(1, 20, 20, Array.from({ length: 20 }, (_, index) => member(`m${index}`, "disabled"))); };
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("last", "active")} />)); await flush();
+    await click('button'); await flush();
+    expect(inputs.map(({ page }) => page)).toEqual([2, 2, 1]);
+    expect(replaceState).toHaveBeenCalledTimes(1);
+    expect(pushState).not.toHaveBeenCalled();
+    expect(browser.location.search).not.toContain("page=2");
+    await act(async () => browser.history.back()); await flush();
+    expect(browser.location.search).not.toContain("page=2");
+  });
+
+  it("backs up once and retries once when mutation leaves a total-zero page", async () => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2");
+    const inputs: LoadAdminMembersInput[] = [];
+    const load = async (input: LoadAdminMembersInput) => { inputs.push(input); if (inputs.length === 1) return memberPage(2, 20, 21, [member("last", "disabled")]); return memberPage(input.page, 20, 0, []); };
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("last", "active")} />)); await flush();
     await click('button'); await flush();
     expect(inputs.map(({ page }) => page)).toEqual([2, 2, 1]);

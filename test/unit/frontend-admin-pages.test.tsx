@@ -82,6 +82,13 @@ describe("React administrator pages", () => {
     expect(audit).not.toContain("Load more");
   });
 
+  it("labels each member status action with its target email", () => {
+    const disabled = renderToStaticMarkup(<MembersPage members={[{ id: "m1", email: "disabled@example.com", role: "contributor", status: "disabled" }]} />);
+    const active = renderToStaticMarkup(<MembersPage members={[{ id: "m2", email: "active@example.com", role: "contributor", status: "active" }]} />);
+    expect(disabled).toContain('aria-label="Enable disabled@example.com"');
+    expect(active).toContain('aria-label="Disable active@example.com"');
+  });
+
   it("renders bounded analytics range controls without exposing raw telemetry", () => {
     const html = renderToStaticMarkup(<AdminAnalyticsPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} days={14} state={{ kind: "ready", data: { range: { from: "2026-08-12", to: "2026-08-25", days: 14 }, totals: { pageViews: 12, uniqueVisitors: 4, loginUsers: 2 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } } }} />);
     expect(html).toContain("Last 14 days");
