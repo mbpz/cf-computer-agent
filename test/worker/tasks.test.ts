@@ -1,8 +1,11 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TasksRepository } from "../../src/tasks/repository";
+import { createApp } from "../../src/app";
+import { MembersRepository } from "../../src/members/repository";
+import { SessionService } from "../../src/identity/session";
 import type { TaskCreate, TaskLinkInsert } from "../../src/tasks/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -98,6 +101,134 @@ describe("tasks repository", () => {
     expect(await repository.deleteLink("member-a", "task-1", "link-1")).toBe(false);
   });
 });
+
+describe("tasks HTTP contract", () => {
+  let sessionA = "";
+  let sessionB = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?), (?, ?, ?, 'contributor', 'active', ?, ?)",
+    ).bind(
+      "member-a", "subject-a", "a@example.test", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z",
+      "member-b", "subject-b", "b@example.test", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z",
+    ).run();
+    await seedKnowledge("member-a");
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date() });
+    sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
+    sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
+  });
+
+  it("creates idempotently, lists, updates, transitions, and deletes", async () => {
+    const created = await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha", priority: "high", dueAt: "2026-08-30T00:00:00.000Z" }) });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ task: { id: "task-1", title: "Alpha", status: "todo", priority: "high" }, created: true });
+    const replay = await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ created: false });
+    await expect((await api("/api/tasks?limit=20", sessionA)).json()).resolves.toMatchObject({ items: [{ id: "task-1" }] });
+    await expect((await api("/api/tasks/summary", sessionA)).json()).resolves.toMatchObject({ todo: 1 });
+    await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ task: { id: "task-1" }, tags: [], links: [] });
+    const patched = await api("/api/tasks/task-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Alpha v2", notes: "note", priority: "low", dueAt: null }) });
+    expect(await patched.json()).toMatchObject({ title: "Alpha v2", priority: "low", dueAt: null });
+    const status = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    expect(await status.json()).toMatchObject({ status: "doing" });
+    const progress = await api("/api/tasks/task-1/progress", sessionA, { method: "POST", body: JSON.stringify({ progress: 40 }) });
+    expect(await progress.json()).toMatchObject({ progress: 40 });
+    const tags = await api("/api/tasks/task-1/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["urgent"] }) });
+    expect(await tags.json()).toEqual({ tags: ["urgent"] });
+    const linked = await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
+    expect(await linked.json()).toMatchObject({ link: { knowledgeItemId: "knowledge-a", knowledgeTitle: "Alpha Guide" } });
+    const detail = await api("/api/tasks/task-1", sessionA);
+    expect(await detail.json()).toMatchObject({ tags: ["urgent"], links: [{ knowledgeItemId: "knowledge-a" }] });
+    const linkId = ((await (await api("/api/tasks/task-1", sessionA)).json()) as { links: Array<{ id: string }> }).links[0]!.id;
+    expect((await api(`/api/tasks/task-1/links/${linkId}`, sessionA, { method: "DELETE" })).status).toBe(204);
+    expect((await api("/api/tasks/task-1", sessionA, { method: "DELETE" })).status).toBe(204);
+    expect((await api("/api/tasks?limit=20", sessionA)).status).toBe(200);
+  });
+
+  it("returns 404 for another member's task on every path (IDOR)", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    for (const [path, init] of [
+      ["/api/tasks/task-1", { method: "GET" }],
+      ["/api/tasks/task-1", { method: "PATCH", body: JSON.stringify({ title: "hacked" }) }],
+      ["/api/tasks/task-1", { method: "DELETE" }],
+      ["/api/tasks/task-1/status", { method: "POST", body: JSON.stringify({ status: "doing" }) }],
+      ["/api/tasks/task-1/progress", { method: "POST", body: JSON.stringify({ progress: 10 }) }],
+      ["/api/tasks/task-1/tags", { method: "PUT", body: JSON.stringify({ tags: ["x"] }) }],
+      ["/api/tasks/task-1/links", { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) }],
+    ] as const) expect((await api(path, sessionB, init)).status).toBe(404);
+  });
+
+  it("rejects anonymous, automation, CSRF-forged, and invalid-transition requests", async () => {
+    expect((await api("/api/tasks?limit=20", "")).status).toBe(401);
+    const automationContext = createExecutionContext();
+    const automation = await createApp().fetch!(await signedAutomationRequest("https://memory.crgmhrc.asia/api/tasks?limit=20"), env, automationContext);
+    await waitOnExecutionContext(automationContext);
+    expect(automation.status).toBe(403);
+    const forged = new Request("https://memory.crgmhrc.asia/api/tasks", {
+      method: "POST", headers: { cookie: `__Host-memory-session=${sessionA}`, "content-type": "application/json", origin: "https://evil.example" },
+      body: JSON.stringify({ id: "task-x", title: "Forged" }),
+    });
+    const context = createExecutionContext();
+    const response = await createApp().fetch!(forged as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+    await waitOnExecutionContext(context);
+    expect(response.status).toBe(403);
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "done" }) });
+    const transition = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    expect(transition.status).toBe(422);
+    const audit = await env.DB.prepare("SELECT action FROM audit_events WHERE action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
+    expect(audit.results.map((row) => row.action)).toEqual(["task.created", "task.status_changed", "task.status_changed"]);
+  });
+});
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("cookie", `__Host-memory-session=${token}`);
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("content-type", "application/json");
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+async function signedAutomationRequest(url: string): Promise<Request<unknown, IncomingRequestCfProperties<unknown>>> {
+  const timestamp = String(Math.floor(Date.now() / 1_000));
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = btoa(String.fromCharCode(...nonceBytes)).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/gu, "");
+  const bodyHash = await sha256Hex(new Uint8Array());
+  const parsed = new URL(url);
+  const canonical = ["GET", `${parsed.pathname}${parsed.search}`, timestamp, nonce, bodyHash].join("\n");
+  return new Request(url, { headers: {
+    authorization: "Bearer worker-test-token",
+    "x-automation-id": "fake-automation-client-id",
+    "x-automation-timestamp": timestamp,
+    "x-automation-nonce": nonce,
+    "x-automation-signature": await hmacHex("fake-automation-secret", canonical),
+  } }) as Request<unknown, IncomingRequestCfProperties<unknown>>;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const owned = new Uint8Array(bytes.byteLength);
+  owned.set(bytes);
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", owned.buffer)));
+}
+
+async function hmacHex(secret: string, value: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function taskCreate(overrides: Partial<TaskCreate> = {}): TaskCreate {
   return {

@@ -59,6 +59,9 @@ import { SourceReparseService } from "./sources/reparse-service";
 import { SourcesRepository } from "./sources/repository";
 import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
+import { TasksRepository } from "./tasks/repository";
+import { TasksService } from "./tasks/service";
+import { routeTasksApi } from "./routes/tasks";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
@@ -160,7 +163,7 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 }
 
 const workspaceRoutes = new Set([
-  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/settings",
+  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/settings",
   "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
@@ -269,6 +272,7 @@ function createRequestServices(
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
+    tasks: new TasksService(new TasksRepository(env.DB), { audit }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -303,6 +307,8 @@ async function dispatchApiRequest(
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;
+  const tasks = await routeTasksApi(request, url, context, principal, { tasks: services.tasks });
+  if (tasks) return tasks;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
   const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });
