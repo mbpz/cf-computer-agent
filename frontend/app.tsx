@@ -38,6 +38,7 @@ import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/a
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
 import { loadAdminAnalytics, type AdminAnalyticsOverview } from "./lib/admin-analytics-data";
+import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssets, loadAdminAssetPreview, retryAdminAsset, type AdminAsset } from "./lib/admin-assets-data";
@@ -147,7 +148,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsRoute locale={locale} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
-    case "admin-analytics": return <AdminAnalyticsRoute locale={locale} />;
+    case "admin-analytics": return <AdminAnalyticsRoute locale={locale} search={search} />;
     case "admin-roles": return <AdminRolesRoute locale={locale} />;
     case "admin-menus": return <AdminMenusRoute locale={locale} />;
     case "admin-submissions": return <ReviewQueueRoute locale={locale} />;
@@ -172,17 +173,71 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
   return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0, recent }} />;
 }
 
-function AdminAnalyticsRoute({ locale }: { locale: LocaleRuntime }) {
+function AdminAnalyticsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => analyticsUrlState(search), [search]);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }>({ kind: "loading" });
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState(initial.days);
+  const [page, setPage] = useState(initial.page);
+  const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [pending, setPending] = useState(false);
+  const [localError, setLocalError] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const controller = useMemo(() => createNumberedRequestController(
+    (input: { days: number; page: number; pageSize: SupportedPageSize }, signal) => loadAdminAnalytics({ ...input, signal }),
+  ), []);
+
   useEffect(() => {
-    let active = true;
-    setState({ kind: "loading" });
-    void loadAdminAnalytics(days).then((data) => { if (active) setState({ kind: "ready", data }); }).catch(() => { if (active) setState({ kind: "error" }); });
-    return () => { active = false; };
-  }, [days, refresh]);
-  return <AdminAnalyticsPage locale={locale} state={state} days={days} onDaysChange={setDays} onRefresh={() => setRefresh((value) => value + 1)} />;
+    const onPopState = () => {
+      const next = analyticsUrlState(window.location.search);
+      setDays(next.days);
+      setPage(next.page);
+      setPageSize(next.pageSize);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => () => controller.dispose(), [controller]);
+  useEffect(() => {
+    setLocalError(false);
+    setPending(true);
+    setState((previous) => previous.kind === "ready" ? previous : { kind: "loading" });
+    const request = controller.request({ days, page, pageSize });
+    void request.promise.then((data) => {
+      if (!controller.isCurrent(request.generation)) return;
+      setState({ kind: "ready", data });
+      setPending(false);
+    }).catch(() => {
+      if (!controller.isCurrent(request.generation)) return;
+      setState((previous) => previous.kind === "ready" ? previous : { kind: "error" });
+      setLocalError(true);
+      setPending(false);
+    });
+  }, [controller, days, page, pageSize, refresh]);
+
+  const navigateState = (next: { days: number; page: number; pageSize: SupportedPageSize }) => {
+    const params = new URLSearchParams(writePageSearch(window.location.search, next));
+    params.set("days", String(next.days));
+    const nextSearch = params.toString();
+    window.history.pushState({}, "", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`);
+    setDays(next.days);
+    setPage(next.page);
+    setPageSize(next.pageSize);
+  };
+
+  return <AdminAnalyticsPage locale={locale} state={state} days={days} pending={pending} localError={localError}
+    onDaysChange={(nextDays) => navigateState({ days: nextDays, page: 1, pageSize })}
+    onPageChange={(nextPage) => navigateState({ ...analyticsUrlState(window.location.search), page: nextPage })}
+    onPageSizeChange={(nextPageSize) => navigateState({ days, page: 1, pageSize: nextPageSize })}
+    onRefresh={() => setRefresh((value) => value + 1)} />;
+}
+
+function analyticsUrlState(search: string): { days: number; page: number; pageSize: SupportedPageSize } {
+  const pagination = parsePageSearch(search);
+  const rawDays = new URLSearchParams(search).get("days");
+  const parsedDays = rawDays === null ? 7 : Number(rawDays);
+  const days = Number.isSafeInteger(parsedDays) && parsedDays >= 1 && parsedDays <= 31 ? parsedDays : 7;
+  return { days, ...pagination };
 }
 
 function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {

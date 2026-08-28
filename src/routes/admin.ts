@@ -8,7 +8,7 @@ import type { Principal } from "../identity/principal";
 import type { MembersRepository } from "../members/repository";
 import type { MembersService } from "../members/service";
 import type { Member, MemberStatus } from "../members/types";
-import { parsePageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import { pageRequest, record, strictRecord, stringValue } from "./member";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
@@ -44,8 +44,9 @@ export async function routeAdminApi(
   if (url.pathname === "/api/admin/analytics/overview") {
     requireCapability(principal, "audit:read");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const pagination = parseNumberedPageRequest(url, ["days"], "ANALYTICS_RANGE_INVALID");
     const days = parseAnalyticsDays(url);
-    return jsonResponse(await services.analytics.overview(days), 200, context.requestId);
+    return jsonResponse(await services.analytics.overview(days, pagination), 200, context.requestId);
   }
 
   if (url.pathname === "/api/admin/duplicates") {
@@ -409,9 +410,6 @@ export async function routeAdminApi(
 }
 
 function parseAnalyticsDays(url: URL): number {
-  for (const key of url.searchParams.keys()) {
-    if (key !== "days" || url.searchParams.getAll(key).length !== 1) throw new AppError("ANALYTICS_RANGE_INVALID", "Analytics range is invalid", 400);
-  }
   const raw = url.searchParams.get("days");
   if (raw === null) return 7;
   const days = Number(raw);

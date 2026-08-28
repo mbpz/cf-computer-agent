@@ -1,4 +1,17 @@
 import { apiFetch, type Fetcher } from "./api";
+import { normalizeNumberedPage, type FrontendNumberedPage, type SupportedPageSize } from "./numbered-page";
+
+export interface RecentVisitor {
+  occurredAt: string;
+  path: string;
+  ip: string;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  colo: string | null;
+  userAgent: string | null;
+  member: { id: string; email: string } | null;
+}
 
 export interface AdminAnalyticsOverview {
   range: { from: string; to: string; days: number };
@@ -9,21 +22,13 @@ export interface AdminAnalyticsOverview {
     regions: Array<{ key: string; pageViews: number }>;
     countries: Array<{ key: string; pageViews: number }>;
   };
-  recentVisitors: Array<{
-    occurredAt: string;
-    path: string;
-    ip: string;
-    country: string | null;
-    region: string | null;
-    city: string | null;
-    colo: string | null;
-    userAgent: string | null;
-    member: { id: string; email: string } | null;
-  }>;
+  recentVisitors: FrontendNumberedPage<RecentVisitor>;
 }
 
-export async function loadAdminAnalytics(days = 7, requester: Fetcher = fetch, signal?: AbortSignal): Promise<AdminAnalyticsOverview> {
-  const data = await apiFetch<unknown>(`/api/admin/analytics/overview?days=${days}`, { requester, signal });
+export interface LoadAdminAnalyticsInput { days: number; page: number; pageSize: SupportedPageSize; signal?: AbortSignal; }
+
+export async function loadAdminAnalytics(input: LoadAdminAnalyticsInput, requester: Fetcher = fetch): Promise<AdminAnalyticsOverview> {
+  const data = await apiFetch<unknown>(`/api/admin/analytics/overview?days=${input.days}&page=${input.page}&pageSize=${input.pageSize}`, { requester, signal: input.signal });
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("ANALYTICS_INVALID");
   const value = data as Record<string, unknown>;
   const totals = value.totals;
@@ -31,7 +36,7 @@ export async function loadAdminAnalytics(days = 7, requester: Fetcher = fetch, s
   const daily = value.daily;
   const breakdowns = value.breakdowns;
   const recentVisitors = value.recentVisitors;
-  if (!isRecord(totals) || !isRecord(range) || !Array.isArray(daily) || !isRecord(breakdowns) || !Array.isArray(recentVisitors)) throw new Error("ANALYTICS_INVALID");
+  if (!isRecord(totals) || !isRecord(range) || !Array.isArray(daily) || !isRecord(breakdowns)) throw new Error("ANALYTICS_INVALID");
   const parseBreakdown = (input: unknown): Array<{ key: string; pageViews: number }> => Array.isArray(input)
     ? input.flatMap((item) => isRecord(item) && typeof item.key === "string" ? [{ key: item.key, pageViews: numberValue(item.pageViews) }] : [])
     : [];
@@ -47,12 +52,12 @@ export async function loadAdminAnalytics(days = 7, requester: Fetcher = fetch, s
       regions: parseBreakdown(breakdowns.regions),
       countries: parseBreakdown(breakdowns.countries),
     },
-    recentVisitors: recentVisitors.flatMap((item) => {
-      if (!isRecord(item) || typeof item.occurredAt !== "string" || typeof item.path !== "string" || typeof item.ip !== "string") return [];
+    recentVisitors: normalizeNumberedPage(recentVisitors, (item) => {
+      if (!isRecord(item) || typeof item.occurredAt !== "string" || typeof item.path !== "string" || typeof item.ip !== "string") throw new Error("ANALYTICS_INVALID");
       const member = isRecord(item.member) && typeof item.member.id === "string" && typeof item.member.email === "string"
         ? { id: item.member.id, email: item.member.email }
         : null;
-      return [{
+      return {
         occurredAt: item.occurredAt,
         path: item.path,
         ip: item.ip,
@@ -62,7 +67,7 @@ export async function loadAdminAnalytics(days = 7, requester: Fetcher = fetch, s
         colo: nullableString(item.colo),
         userAgent: nullableString(item.userAgent),
         member,
-      }];
+      };
     }),
   };
 }
