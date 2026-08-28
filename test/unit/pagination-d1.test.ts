@@ -44,6 +44,44 @@ describe("D1 numbered pagination", () => {
       .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
   });
 
+  it.each([
+    { label: "null", results: null },
+    { label: "multiple", results: [{ total: 41 }, { total: 42 }] },
+    { label: "scalar", results: 41 },
+  ])("rejects $label COUNT rows", async ({ results }) => {
+    const db = {
+      batch: vi.fn(async () => [rawD1Result(results), d1Result([])]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+  });
+
+  it("rejects more selected rows than the requested page size", async () => {
+    const rows = Array.from({ length: 21 }, (_, index) => ({ id: `row-${index + 1}` }));
+    const db = {
+      batch: vi.fn(async () => [d1Result([{ total: 41 }]), d1Result(rows)]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, (row) => row))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+  });
+
+  it.each([
+    { label: "null", row: null },
+    { label: "scalar", row: 7 },
+    { label: "array", row: ["row-21"] },
+  ])("rejects a $label selected row before mapping", async ({ row }) => {
+    const mapRow = vi.fn((value: Record<string, unknown>) => value);
+    const db = {
+      batch: vi.fn(async () => [d1Result([{ total: 41 }]), d1Result([row])]),
+    } as unknown as D1Database;
+
+    await expect(queryNumberedPage(db, countStatement, rowsStatement, request, mapRow))
+      .rejects.toMatchObject({ code: "PAGE_RESULT_INVALID", status: 500 });
+    expect(mapRow).not.toHaveBeenCalled();
+  });
+
   it("propagates a batch failure without returning partial data", async () => {
     const failure = new Error("D1 batch failed");
     const db = {
@@ -103,4 +141,12 @@ function d1Result<T>(results: T[]): D1Result<T> {
     meta: {},
     results,
   } as D1Result<T>;
+}
+
+function rawD1Result(results: unknown): D1Result<Record<string, unknown>> {
+  return {
+    success: true,
+    meta: {},
+    results,
+  } as unknown as D1Result<Record<string, unknown>>;
 }

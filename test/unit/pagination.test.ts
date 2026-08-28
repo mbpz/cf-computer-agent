@@ -73,6 +73,27 @@ describe("pagination", () => {
     });
   });
 
+  it.each([
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    -1,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+  ])("rejects invalid metadata total %s", (total) => {
+    expect(() => buildPageMetadata({ page: 1, pageSize: 20 }, total))
+      .toThrow(expect.objectContaining({ code: "PAGE_RESULT_INVALID", status: 500 }));
+  });
+
+  it.each([
+    { page: 0, pageSize: 20 },
+    { page: 1.5, pageSize: 20 },
+    { page: 1, pageSize: 10 },
+    { page: 101, pageSize: 100 },
+  ])("rejects invalid metadata request $page/$pageSize", (request) => {
+    expect(() => buildPageMetadata(request as never, 1))
+      .toThrow(expect.objectContaining({ code: "PAGE_INVALID", status: 400 }));
+  });
+
   it("encodes an opaque base64url versioned position cursor", () => {
     const cursor = encodePageCursor({ sort: 12, id: "collection-12" });
 

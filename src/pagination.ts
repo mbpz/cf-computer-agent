@@ -54,6 +54,12 @@ export function pageOffset(request: NumberedPageRequest, errorCode = "PAGE_INVAL
 }
 
 export function buildPageMetadata(request: NumberedPageRequest, total: number): PageMetadata {
+  if (!Number.isSafeInteger(request.page) || request.page < 1
+    || !supportedPageSizes.includes(request.pageSize)) throw invalidNumberedPage("PAGE_INVALID");
+  pageOffset(request);
+  if (!Number.isSafeInteger(total) || total < 0) {
+    throw new AppError("PAGE_RESULT_INVALID", "Pagination total is invalid", 500);
+  }
   return {
     ...request,
     total,
