@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminAssetsRoute, AdminDuplicateRoute, ReviewQueueRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { ReviewQueuePage } from "../../frontend/pages/admin/review-queue-page";
+import { DuplicateQueuePage } from "../../frontend/pages/admin/duplicate-queue-page";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -93,11 +95,26 @@ describe("moderation numbered routes", () => {
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") return json({ submission: {} }); gets += 1; if (gets > 1) throw new Error("refresh failed"); return numbered([{ id: "review-kept", title: "Review kept", submitterId: "m1", status: "review_pending" }], 2, 21); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Reject"); await flush();
-    expect(container.textContent).toContain("Review kept"); expect(container.querySelector('[role="alert"]')?.textContent).toContain("Unable");
+    expect(container.textContent).toContain("Review kept"); expect(container.querySelector('[role="alert"]')?.textContent).toBe("Unable to load the page."); expect(container.textContent).not.toContain("Unable to save this review decision.");
+  });
+
+  it("keeps the review list and reports action failure when the mutation itself fails", async () => {
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? new Response(null, { status: 500 }) : numbered([{ id: "review-action", title: "Review action", submitterId: "m1", status: "review_pending" }], 2, 21));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Reject"); await flush();
+    expect(container.textContent).toContain("Review action"); expect(container.querySelector('[role="alert"]')?.textContent).toBe("Unable to save this review decision."); expect(container.textContent).not.toContain("Unable to load the page.");
+  });
+
+  it("gives review and duplicate actions target-specific accessible names with ID fallback", async () => {
+    await act(async () => root.render(<ReviewQueuePage state={{ kind: "ready", data: { items: [{ id: "review-title", title: "Review title" }, { id: "review-fallback", title: " " }], pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 } } }} />));
+    expect(buttonNames()).toEqual(expect.arrayContaining(["Publish Review title", "Request changes Review title", "Reject Review title", "Publish review-fallback", "Request changes review-fallback", "Reject review-fallback"]));
+    await act(async () => root.render(<DuplicateQueuePage state={{ kind: "ready", data: { items: [{ ...duplicate("pending", "duplicate-title"), submissionTitle: "Duplicate title" }, { ...duplicate("pending", "duplicate-fallback"), submissionTitle: " " }], pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 } } }} />));
+    expect(buttonNames()).toEqual(expect.arrayContaining(["Associate Duplicate title", "Keep separate Duplicate title", "Reject Duplicate title", "Associate duplicate-fallback", "Keep separate duplicate-fallback", "Reject duplicate-fallback"]));
   });
 
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
   async function changeSelect(selector: string, value: string) { const select = container.querySelector(selector) as HTMLSelectElement; expect(select).toBeTruthy(); await act(async () => { select.value = value; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
+  function buttonNames(): Array<string | null> { return [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")); }
 });
 
 function numbered(items: unknown[], page: number, total: number): Response { return json({ items, pagination: { page, pageSize: 20, total, totalPages: total === 0 ? 0 : Math.ceil(total / 20) } }); }

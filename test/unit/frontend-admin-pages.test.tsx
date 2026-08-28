@@ -25,6 +25,8 @@ describe("React administrator pages", () => {
     const html = renderToStaticMarkup(<ReviewQueuePage state={{ kind: "ready", data: { items: [{ id: "sub-1", title: "Guide", submitter: "a@example.com", status: "pending" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } } }} onReview={vi.fn()} />);
     expect(html).toContain("Publish");
     expect(html).toContain("Request changes");
+    expect(html).toContain('aria-label="Publish Guide"');
+    expect(html).toContain('aria-label="Reject Guide"');
     expect(html).not.toContain("Load more");
     expect(html).not.toContain('>next<');
   });
@@ -35,6 +37,8 @@ describe("React administrator pages", () => {
     expect(html).toContain("Keep separate");
     expect(html).toContain("Reject");
     expect(html).toContain("Existing entry");
+    expect(html).toContain('aria-label="Associate New entry"');
+    expect(html).toContain('aria-label="Keep separate New entry"');
     expect(html).not.toContain("undefined");
   });
 

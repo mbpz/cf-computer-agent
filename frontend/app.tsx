@@ -711,13 +711,26 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
     setPendingId(id);
     setActionError(undefined);
     try {
-      const publish = action === "publish"
-        ? (await loadReviewDetail(id)).publish
-        : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
-      await submitReviewDecision(id, action, publish);
-      if (!sameQuery(actionQuery)) return; const snapshot = actionQuery; const controller = controllerRef.current; if (!controller) return; setPending(true); const request = controller.request(snapshot); const refreshed = await request.promise; if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return; if (refreshed.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true); else { setState({ kind: "ready", data: refreshed }); setPending(false); }
-    } catch {
-      if (sameQuery(actionQuery)) { setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR")); setPending(false); }
+      try {
+        const publish = action === "publish"
+          ? (await loadReviewDetail(id)).publish
+          : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+        await submitReviewDecision(id, action, publish);
+      } catch {
+        if (sameQuery(actionQuery)) setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+        return;
+      }
+      if (!sameQuery(actionQuery)) return;
+      const snapshot = actionQuery; const controller = controllerRef.current; if (!controller) return;
+      setPending(true); setLocalError(undefined); const request = controller.request(snapshot);
+      try {
+        const refreshed = await request.promise;
+        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+        if (refreshed.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true);
+        else { setState({ kind: "ready", data: refreshed }); setPending(false); }
+      } catch (error: unknown) {
+        if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) { setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
+      }
     } finally {
       setPendingId(null);
     }
