@@ -1,6 +1,8 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from "vitest";
 import { buildKnowledgeExport } from "../../src/ops/export-package";
 import { detectIndexDrift, planFullIndexRebuild } from "../../src/ops/index-drift";
+import paginationIndexMigration from "../../migrations/0033_numbered_pagination_indexes.sql?raw";
 
 const makePackage = () => buildKnowledgeExport({
   exportId: "drift-export-1", generatedAt: "2026-08-26T00:00:00.000Z", schemaFingerprint: "migrations-0025",
@@ -11,6 +13,12 @@ const makePackage = () => buildKnowledgeExport({
 });
 
 describe("index drift and rebuild plan", () => {
+  it("keeps numbered pagination indexes append-only in migration 0033", async () => {
+    expect(paginationIndexMigration).toContain("CREATE INDEX IF NOT EXISTS assets_admin_page");
+    expect(paginationIndexMigration).toContain("CREATE INDEX IF NOT EXISTS tasks_member_page");
+    expect(paginationIndexMigration).not.toMatch(/DROP\s+(?:INDEX|TABLE)|ALTER\s+TABLE/iu);
+  });
+
   it("reports current/FTS/vector drift with bounded IDs", async () => {
     const pkg = await makePackage();
     const report = detectIndexDrift(pkg, { currentRevisionByItem: { "knowledge-1": "revision-old" }, ftsRevisionIds: ["revision-old"], vectorRevisionIds: ["revision-old"] });

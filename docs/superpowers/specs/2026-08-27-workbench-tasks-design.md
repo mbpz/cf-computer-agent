@@ -135,7 +135,7 @@ frontend/pages/tasks/
 frontend/lib/tasks-data.ts  # apiFetch 薄封装，含客户端 nanoid 生成（幂等键）
 ```
 
-- 列表分页使用现有 `pagination` 组件，页大小 20、游标分页；切换筛选自动回第一页；不做无限滚动。
+- 任务列表使用服务端数字分页，默认每页 20 条，可选 `20 / 50 / 100`；切换筛选或页大小时回到第一页，不做无限滚动。统一合同、URL 恢复、10,000 条查询窗口及超末页语义见 [2026-08-28 统一分页设计](./2026-08-28-unified-pagination-shell-menu-availability-design.md)。
 - 全部使用现有 shadcn/ui 原语（button/card/dialog/sheet/badge/input/label/tabs/pagination/skeleton/page-state）；加载/空态/错误态走 `page-state` 统一模式。
 - 卡片行显示：优先级徽章、标题、到期日（逾期红/今日黄）、进度条、标签、关联条目数。
 - 知识阅读页操作区加「加入任务」按钮，弹 `task-create-dialog` 创建并关联（创建端点一次请求完成）。

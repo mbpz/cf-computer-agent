@@ -1015,6 +1015,29 @@ describe("Phase 1 control-plane migrations", () => {
     expect(collectionInvalidationPlan).not.toMatch(/SCAN knowledge_items|USE TEMP B-TREE/iu);
   });
 
+  it("uses no-sort indexes for formal admin asset and member task pages", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await env.DB.prepare("ANALYZE").run();
+
+    const assetsPlan = await queryPlan(
+      `SELECT a.id
+       FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
+       ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+      [20, 200],
+    );
+    const tasksPlan = await queryPlan(
+      `SELECT id FROM tasks
+       WHERE member_id = ?
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["member-page-plan", 20, 200],
+    );
+
+    expect(assetsPlan).toContain("assets_admin_page");
+    expect(assetsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(tasksPlan).toContain("tasks_member_page");
+    expect(tasksPlan).not.toMatch(/USE TEMP B-TREE/iu);
+  });
+
   it("creates append-only review comments with bounded bodies and relationships", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     const tables = await env.DB.prepare(

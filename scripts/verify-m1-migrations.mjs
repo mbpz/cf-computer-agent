@@ -33,6 +33,8 @@ const migrations = [
   ["0029_workspace_rbac.sql", "f242353cea654bb0eff0b052956128f11d37b215237aad3b3a6897eb4dfb04b8"],
   ["0030_site_analytics_dimensions.sql", "280a151b5f8c21358ea2dcb7a417eb0f2ac6ee408717322f296864b9a301c3db"],
   ["0031_workspace_menu_hierarchy.sql", "4426af2ccdf9f27350f8420f3775d66ffbaa255043a907b026bb9bcb4c4ef493"],
+  ["0032_workspace_tasks.sql", "17617b3ad9dc5214469fe9dd825c33b872ae2d4049b28c95739edce09e669b08"],
+  ["0033_numbered_pagination_indexes.sql", "77ea66256fa9ce47f8b16ed5e94d78e4656a88cfe30b6882c44670f99e20fc98"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;

@@ -54,6 +54,8 @@ const expectedMigrations = [
   ["0029_workspace_rbac.sql", "f242353cea654bb0eff0b052956128f11d37b215237aad3b3a6897eb4dfb04b8"],
   ["0030_site_analytics_dimensions.sql", "280a151b5f8c21358ea2dcb7a417eb0f2ac6ee408717322f296864b9a301c3db"],
   ["0031_workspace_menu_hierarchy.sql", "4426af2ccdf9f27350f8420f3775d66ffbaa255043a907b026bb9bcb4c4ef493"],
+  ["0032_workspace_tasks.sql", "17617b3ad9dc5214469fe9dd825c33b872ae2d4049b28c95739edce09e669b08"],
+  ["0033_numbered_pagination_indexes.sql", "77ea66256fa9ce47f8b16ed5e94d78e4656a88cfe30b6882c44670f99e20fc98"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -207,7 +209,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-    assert.match(result.output, /^\[pass\] migration-files count=31$/mu);
+    assert.match(result.output, /^\[pass\] migration-files count=33$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
@@ -250,8 +252,8 @@ test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0008_m2_parent_chunks.sql/mu);
     assert.match(result.output, /0009_m2_chunk_status.sql/mu);
-    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql$/mu);
-    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql$/mu);
+    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql$/mu);
+    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql$/mu);
   });
   await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);
