@@ -25,15 +25,16 @@ describe("private task numbered route", () => {
     expect(requests[0]?.signal?.aborted).toBe(true); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests.at(-1)?.url).toContain("pageSize=50");
   });
 
-  it("gives every task action a unique accessible name with an id fallback", async () => {
+  it("distinguishes same-title task actions while preserving reopen and blank-title labels", async () => {
     browser.history.replaceState({}, "", "/tasks");
-    const alpha = createTask("Alpha");
-    const beta = { ...createTask("Beta"), status: "done" as const };
+    const alphaOne = { ...createTask("Alpha"), id: "task-alpha-1" };
+    const alphaTwo = { ...createTask("Alpha"), id: "task-alpha-2" };
+    const beta = { ...createTask("Beta"), id: "task-beta", status: "done" as const };
     const blank = { ...createTask(""), id: "task-blank" };
-    vi.stubGlobal("fetch", async () => Response.json({ items: [alpha, beta, blank], pagination: { page: 1, pageSize: 20, total: 3, totalPages: 1 } }));
+    vi.stubGlobal("fetch", async () => Response.json({ items: [alphaOne, alphaTwo, beta, blank], pagination: { page: 1, pageSize: 20, total: 4, totalPages: 1 } }));
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     const names = [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")).filter((name) => /^(Complete|Reopen|Delete):/u.test(name ?? ""));
-    expect(names).toEqual(expect.arrayContaining(["Complete: Alpha", "Delete: Alpha", "Reopen: Beta", "Delete: Beta", "Complete: task-blank", "Delete: task-blank"]));
+    expect(names).toEqual(expect.arrayContaining(["Complete: Alpha (task-alpha-1)", "Delete: Alpha (task-alpha-1)", "Complete: Alpha (task-alpha-2)", "Delete: Alpha (task-alpha-2)", "Reopen: Beta (task-beta)", "Delete: Beta (task-beta)", "Complete: task-blank", "Delete: task-blank"]));
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -98,7 +99,7 @@ describe("private task numbered route", () => {
       gets += 1; return taskPage(String(input), false, gets === 1 ? "Alpha" : "Latest");
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await act(async () => (container.querySelector('[aria-label="Complete: Alpha"]') as HTMLButtonElement).click());
+    await act(async () => (container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]') as HTMLButtonElement).click());
     await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
     await act(async () => resolveMutation(Response.json(createTask("Alpha")))); await flush(); await flush();
     expect(gets).toBe(2); expect(container.textContent).toContain("Latest");
@@ -111,7 +112,7 @@ describe("private task numbered route", () => {
       gets += 1; return gets === 1 ? taskPage(String(input)) : errorResponse();
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
-    await clickButton("Complete: Alpha"); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
     expect(container.textContent).toContain("Alpha"); expect(container.querySelector('[role="alert"]')).toBeTruthy();
     expect(container.textContent?.toLowerCase()).not.toContain("mutation failed");
   });

@@ -42,7 +42,8 @@ export function TasksPage({ state, filters, locale, pending = false, localError,
     </div>
     {localError && <div role="alert" className="flex items-center gap-3 text-sm text-destructive"><span>{localError}</span><Button type="button" size="sm" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></div>}
     {state.items.length ? <div className="space-y-3">{state.items.map((task) => {
-      const taskLabel = task.title.trim() || task.id;
+      const trimmedTitle = task.title.trim();
+      const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
       const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
       return <Card key={task.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p><Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>{task.notes && <p className="mt-1 truncate text-sm text-muted-foreground">{task.notes}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={actionPendingId === task.id} onClick={() => onStatusChange?.(task.id, task.status === "done" ? "todo" : "done")}>{statusAction}</Button><Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={actionPendingId === task.id} onClick={() => onDelete?.(task.id)}>{frontendText(locale, "TASKS_DELETE")}</Button></div></CardContent></Card>;
     })}</div> : <PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
