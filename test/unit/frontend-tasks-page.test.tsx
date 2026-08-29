@@ -25,6 +25,8 @@ describe("private tasks page", () => {
 
   it("renders retryable initial and local failures", () => {
     expect(renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "error", message: "Unable" }} onRetry={vi.fn()} />)).toContain("Try search again");
-    expect(renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "ready", items: [], pagination: { page: 2, pageSize: 20, total: 0, totalPages: 0 } }} localError="Unable" onRetry={vi.fn()} />)).toContain("Try search again");
+    expect(renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "ready", items: [], pagination: { page: 2, pageSize: 20, total: 0, totalPages: 0 } }} localLoadError="Unable" onRetry={vi.fn()} />)).toContain("Try search again");
+    const actionFailure = renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} actionError="Unable to update the task." onRetry={vi.fn()} />);
+    expect(actionFailure).toContain("Unable to update the task."); expect(actionFailure).not.toContain("Try search again");
   });
 });

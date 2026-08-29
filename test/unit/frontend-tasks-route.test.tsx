@@ -14,7 +14,7 @@ const { Window } = await import("happy-dom");
 describe("private task numbered route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
-  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("restores filters and page on popstate while aborting the stale request", async () => {
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
@@ -51,9 +51,7 @@ describe("private task numbered route", () => {
   it.each([
     ["Status", "blocked", "status"],
     ["Priority", "high", "priority"],
-    ["Tag", "urgent", "tag"],
     ["Due", "today", "due"],
-    ["Search tasks", "alpha", "q"],
   ])("synchronizes %s and resets the page", async (label, value, key) => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => taskPage(String(input)));
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
@@ -70,6 +68,46 @@ describe("private task numbered route", () => {
     await change(container.querySelector('[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
     expect(browser.location.search).toBe("?status=doing&pageSize=50");
     expect(pushState).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([["Search tasks", "q"], ["Tag", "tag"]])("debounces rapid %s changes into one replace transition and one request", async (label, key) => {
+    let gets = 0;
+    const replaceState = vi.spyOn(browser.history, "replaceState"); const pushState = vi.spyOn(browser.history, "pushState");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { gets += 1; return taskPage(String(input)); });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush(); vi.useFakeTimers();
+    const input = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
+    await change(input, "a"); await change(input, "al"); await change(input, "alpha");
+    expect(input.value).toBe("alpha"); expect(gets).toBe(1); expect(replaceState).not.toHaveBeenCalled(); expect(pushState).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(299); }); expect(gets).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); }); await settle();
+    expect(gets).toBe(2); expect(replaceState).toHaveBeenCalledTimes(1); expect(pushState).not.toHaveBeenCalled();
+    expect(browser.location.search).toContain(`${key}=alpha`); expect(browser.location.search).not.toContain("page=2");
+    vi.useRealTimers();
+  });
+
+  it("cancels a pending text filter timer on unmount", async () => {
+    let gets = 0;
+    const replaceState = vi.spyOn(browser.history, "replaceState");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { gets += 1; return taskPage(String(input)); });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush(); vi.useFakeTimers();
+    await change(container.querySelector('[aria-label="Tag"]') as HTMLInputElement, "urgent");
+    await act(async () => root.unmount()); root = createRoot(container);
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(gets).toBe(1); expect(replaceState).not.toHaveBeenCalled(); vi.useRealTimers();
+  });
+
+  it("aborts a debounced list request when unmounted", async () => {
+    let gets = 0; let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      gets += 1; if (gets === 1) return taskPage(String(input));
+      signal = init?.signal ?? undefined; return new Promise<Response>(() => undefined);
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush(); vi.useFakeTimers();
+    await change(container.querySelector('[aria-label="Search tasks"]') as HTMLInputElement, "alpha");
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); }); await settle();
+    expect(gets).toBe(2); expect(signal?.aborted).toBe(false);
+    await act(async () => root.unmount()); root = createRoot(container);
+    expect(signal?.aborted).toBe(true); vi.useRealTimers();
   });
 
   it("retries an initial failure with a new request", async () => {
@@ -114,7 +152,33 @@ describe("private task numbered route", () => {
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Complete: Alpha (task-alpha)"); await flush();
     expect(container.textContent).toContain("Alpha"); expect(container.querySelector('[role="alert"]')).toBeTruthy();
-    expect(container.textContent?.toLowerCase()).not.toContain("mutation failed");
+    expect(container.textContent).toContain("Unable to load the page."); expect(container.textContent).toContain("Try search again");
+    expect(container.textContent).not.toContain("Unable to update the task.");
+  });
+
+  it("reports mutation failures as non-load action errors", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? errorResponse() : taskPage(String(input)));
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
+    expect(container.textContent).toContain("Unable to update the task."); expect(container.textContent).not.toContain("Unable to load the page.");
+    expect(container.textContent).not.toContain("Try search again");
+  });
+
+  it("locks every task mutation control while one mutation is pending", async () => {
+    browser.history.replaceState({}, "", "/tasks"); let mutations = 0; let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    const items = [{ ...createTask("Alpha"), id: "task-alpha" }, { ...createTask("Beta"), id: "task-beta" }];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { mutations += 1; return mutation; }
+      return Response.json({ items, pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 } });
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)");
+    const secondComplete = container.querySelector('[aria-label="Complete: Beta (task-beta)"]') as HTMLButtonElement;
+    const secondDelete = container.querySelector('[aria-label="Delete: Beta (task-beta)"]') as HTMLButtonElement;
+    expect(secondComplete.disabled).toBe(true); expect(secondDelete.disabled).toBe(true);
+    await act(async () => secondComplete.click()); expect(mutations).toBe(1);
+    await act(async () => resolveMutation(Response.json(items[0]))); await flush();
   });
 
   async function clickButton(name: string) {
@@ -135,3 +199,4 @@ async function change(control: HTMLInputElement | HTMLSelectElement, value: stri
   } else { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); }
 }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
+async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }

@@ -677,11 +677,15 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   const [page, setPage] = useState(initialPage.page);
   const [pageSize, setPageSize] = useState(initialPage.pageSize);
   const [filters, setFilters] = useState<TaskFilterState>(initialFilters);
+  const [draftFilters, setDraftFilters] = useState<TaskFilterState>(initialFilters);
   const [retryVersion, setRetryVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: TaskPage }>({ kind: "loading" });
   const [pending, setPending] = useState(false);
-  const [localError, setLocalError] = useState<string | undefined>();
+  const [localLoadError, setLocalLoadError] = useState<string | undefined>();
+  const [actionError, setActionError] = useState<string | undefined>();
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
+  const actionPendingRef = useRef(false);
+  const textFilterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controllerRef = useRef<ReturnType<typeof createTasksRequestController> | null>(null);
   const queryRef = useRef({ page, pageSize, filters });
   const sameQuery = (value: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }) =>
@@ -692,42 +696,54 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     const onPopState = () => {
       const pagination = parsePageSearch(window.location.search);
       const nextFilters = taskFiltersFromSearch(window.location.search);
+      if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
       queryRef.current = { ...pagination, filters: nextFilters };
-      setPage(pagination.page); setPageSize(pagination.pageSize); setFilters(nextFilters); setRetryVersion((value) => value + 1);
+      setPage(pagination.page); setPageSize(pagination.pageSize); setFilters(nextFilters); setDraftFilters(nextFilters); setRetryVersion((value) => value + 1);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  useEffect(() => () => { if (textFilterTimerRef.current) clearTimeout(textFilterTimerRef.current); }, []);
+
   useEffect(() => {
     const controller = createTasksRequestController(); controllerRef.current = controller;
-    const snapshot = { page, pageSize, filters }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
+    const snapshot = { page, pageSize, filters }; queryRef.current = snapshot; setPending(true); setLocalLoadError(undefined);
     const request = controller.request({ page, pageSize, filters: filters as TaskFilters });
     void request.promise.then((data) => {
       if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); }
     }).catch((error: unknown) => {
       if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) {
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-        setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
+        setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
       }
     });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [filters, locale, page, pageSize, retryVersion]);
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
+    if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
     queryRef.current = next;
     const url = taskSearch(next);
     window.history[replace ? "replaceState" : "pushState"]({}, "", `/tasks${url}`);
-    setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters);
+    setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters); setDraftFilters(next.filters);
+  };
+  const changeTextFilters = (nextFilters: TaskFilterState) => {
+    setDraftFilters(nextFilters);
+    if (textFilterTimerRef.current) clearTimeout(textFilterTimerRef.current);
+    textFilterTimerRef.current = setTimeout(() => {
+      textFilterTimerRef.current = null;
+      navigate({ page: 1, pageSize: queryRef.current.pageSize, filters: nextFilters }, true);
+    }, 300);
   };
   const mutate = async (id: string, mutation: () => Promise<unknown>) => {
-    if (actionPendingId) return;
+    if (actionPendingRef.current) return;
     const snapshot = { ...queryRef.current, filters: { ...queryRef.current.filters } };
-    setActionPendingId(id); setLocalError(undefined);
+    actionPendingRef.current = true; setActionPendingId(id); setActionError(undefined); setLocalLoadError(undefined);
     try { await mutation(); }
     catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
-      setActionPendingId(null);
+      if (sameQuery(snapshot) && !isAbort(error)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED"));
+      actionPendingRef.current = false; setActionPendingId(null);
       return;
     }
     try {
@@ -739,11 +755,11 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
       if (data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: snapshot.page - 1 }, true);
       else { setState({ kind: "ready", data }); setPending(false); }
     } catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error)) { setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
-    } finally { setActionPendingId(null); }
+      if (sameQuery(snapshot) && !isAbort(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
+    } finally { actionPendingRef.current = false; setActionPendingId(null); }
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
-  return <TasksPage locale={locale} state={ready} filters={filters} pending={pending} localError={localError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+  return <TasksPage locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
