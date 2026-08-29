@@ -724,8 +724,13 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     if (actionPendingId) return;
     const snapshot = { ...queryRef.current, filters: { ...queryRef.current.filters } };
     setActionPendingId(id); setLocalError(undefined);
+    try { await mutation(); }
+    catch (error: unknown) {
+      if (sameQuery(snapshot) && !isAbort(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      setActionPendingId(null);
+      return;
+    }
     try {
-      await mutation();
       if (!sameQuery(snapshot)) return;
       const controller = controllerRef.current; if (!controller) return;
       setPending(true); const request = controller.request({ page: snapshot.page, pageSize: snapshot.pageSize, filters: snapshot.filters as TaskFilters });
