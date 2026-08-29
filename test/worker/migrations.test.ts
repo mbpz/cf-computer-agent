@@ -2,6 +2,7 @@
 
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { adminAssetRowsSql } from "../../src/assets/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 
 interface TableColumn {
@@ -1019,12 +1020,8 @@ describe("Phase 1 control-plane migrations", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await env.DB.prepare("ANALYZE").run();
 
-    const assetsPlan = await queryPlan(
-      `SELECT a.id
-       FROM assets a JOIN parse_jobs j ON j.asset_id = a.id
-       ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
-      [20, 200],
-    );
+    const assetsPlan = await queryPlan(adminAssetRowsSql(false), [20, 200]);
+    const statusAssetsPlan = await queryPlan(adminAssetRowsSql(true), ["queued", 20, 200]);
     const tasksPlan = await queryPlan(
       `SELECT id FROM tasks
        WHERE member_id = ?
@@ -1034,8 +1031,42 @@ describe("Phase 1 control-plane migrations", () => {
 
     expect(assetsPlan).toContain("assets_admin_page");
     expect(assetsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(statusAssetsPlan).toContain("assets_admin_page");
+    expect(statusAssetsPlan).not.toMatch(/USE TEMP B-TREE/iu);
     expect(tasksPlan).toContain("tasks_member_page");
     expect(tasksPlan).not.toMatch(/USE TEMP B-TREE/iu);
+
+    const timestamp = "2026-08-29T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('asset-plan-owner', 'github:asset-plan-owner', 'asset-plan@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    for (const [id, createdAt, status] of [
+      ["asset-plan-new", "2026-08-29T03:00:00.000Z", "queued"],
+      ["asset-plan-middle", "2026-08-29T02:00:00.000Z", "failed_terminal"],
+      ["asset-plan-old", "2026-08-29T01:00:00.000Z", "queued"],
+    ] as const) {
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256,
+             idempotency_key, status, created_at, updated_at)
+           VALUES (?, 'asset-plan-owner', ?, ?, 'text/plain', 1, ?, ?, 'ready', ?, ?)`,
+        ).bind(id, `staging/${id}`, `${id}.txt`, id.padEnd(64, "0"), id, createdAt, createdAt),
+        env.DB.prepare(
+          `INSERT INTO parse_jobs (id, asset_id, status, attempts, created_at, updated_at)
+           VALUES (?, ?, ?, 0, ?, ?)`,
+        ).bind(`job-${id}`, id, status, createdAt, createdAt),
+      ]);
+    }
+    const filteredCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM assets a JOIN parse_jobs j ON j.asset_id = a.id WHERE j.status = ?",
+    ).bind("queued").first<{ total: number }>();
+    const filteredRows = await env.DB.prepare(adminAssetRowsSql(true))
+      .bind("queued", 20, 0).all<{ id: string; job_status: string }>();
+    expect(filteredCount).toEqual({ total: 2 });
+    expect(filteredRows.results.map(({ id, job_status }) => ({ id, job_status }))).toEqual([
+      { id: "asset-plan-new", job_status: "queued" },
+      { id: "asset-plan-old", job_status: "queued" },
+    ]);
   });
 
   it("creates append-only review comments with bounded bodies and relationships", async () => {

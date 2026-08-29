@@ -14,6 +14,17 @@ type AssetRow = {
   attempts: number; last_error_code: string | null; job_created_at: string; job_updated_at: string;
 };
 
+export function adminAssetRowsSql(hasStatusFilter: boolean): string {
+  const statusSql = hasStatusFilter ? " WHERE j.status = ?" : "";
+  return `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
+                a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
+                j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
+                j.created_at AS job_created_at, j.updated_at AS job_updated_at, a.submission_id
+         FROM assets AS a INDEXED BY assets_admin_page
+         JOIN parse_jobs AS j ON j.asset_id = a.id${statusSql}
+         ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`;
+}
+
 export class AssetsRepository implements AssetRepositoryPort {
   constructor(private readonly db: D1Database) {}
 
@@ -73,14 +84,8 @@ export class AssetsRepository implements AssetRepositoryPort {
     return queryNumberedPage(
       this.db,
       this.db.prepare(`SELECT COUNT(*) AS total FROM assets a JOIN parse_jobs j ON j.asset_id = a.id${statusSql}`).bind(...bindings),
-      this.db.prepare(
-        `SELECT a.id, a.owner_id, a.object_key, a.original_name, a.content_type, a.byte_size,
-                a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
-                j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
-                j.created_at AS job_created_at, j.updated_at AS job_updated_at, a.submission_id
-         FROM assets a JOIN parse_jobs j ON j.asset_id = a.id${statusSql}
-         ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
-      ).bind(...bindings, request.pageSize, pageOffset(request)),
+      this.db.prepare(adminAssetRowsSql(Boolean(request.status)))
+        .bind(...bindings, request.pageSize, pageOffset(request)),
       request,
       (row) => mapRow(row as AssetRow),
     );
