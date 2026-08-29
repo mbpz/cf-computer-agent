@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -102,6 +102,60 @@ test("completed dimensions require evidence and n/a dimensions require a reason"
   assert.throws(() => assertRowContract(missingNaReason), /IDN-002 requires a reason for n\/a/u);
 });
 
+test("partial or done release requires a direct dated evidence marker", () => {
+  const missingMarker = {
+    ID: "OPS-001", 实现: "done", 验证: "done", 发布: "partial", 验收: "pending",
+    证据: "migrations/0032_workspace_tasks.sql", 备注: "",
+  };
+  assert.throws(() => assertRowContract(missingMarker), /OPS-001 requires direct dated release evidence/u);
+
+  const undatedMarker = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/m1-release-template.md`",
+  };
+  assert.throws(() => assertRowContract(undatedMarker), /OPS-001 requires direct dated release evidence/u);
+
+  const datedMarker = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/workspace-rbac-release-2026-08-28.md`",
+  };
+  assert.doesNotThrow(() => assertRowContract(datedMarker));
+});
+
+test("partial or done acceptance requires a direct dated evidence marker", () => {
+  const missingMarker = {
+    ID: "IDN-001", 实现: "done", 验证: "done", 发布: "pending", 验收: "partial",
+    证据: "test/unit/github-oauth.test.ts", 备注: "",
+  };
+  assert.throws(() => assertRowContract(missingMarker), /IDN-001 requires direct dated acceptance evidence/u);
+
+  const datedMarker = {
+    ...missingMarker,
+    证据: "acceptance evidence: `docs/operations/evidence/m1-release-2026-08-23.md`",
+  };
+  assert.doesNotThrow(() => assertRowContract(datedMarker));
+});
+
+test("ledger dependencies must resolve to another row", () => {
+  assert.throws(
+    () => assertDependencyGraph([
+      { ID: "KB-001", 依赖: "IDN-001" },
+      { ID: "IDN-001", 依赖: "MISSING-001" },
+    ]),
+    /IDN-001 has unknown dependency MISSING-001/u,
+  );
+});
+
+test("ledger dependencies must be acyclic", () => {
+  assert.throws(
+    () => assertDependencyGraph([
+      { ID: "KB-004", 依赖: "ADM-002" },
+      { ID: "ADM-002", 依赖: "KB-004" },
+    ]),
+    /ledger dependency cycle: KB-004 -> ADM-002 -> KB-004/u,
+  );
+});
+
 test("delivery status ledger reconciles documentation status claims", () => {
   const { headers, rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
 
@@ -112,6 +166,7 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 
   const ledgerIds = new Set(rows.map((row) => row.ID));
+  assertDependencyGraph(rows);
   for (const route of workspaceRouteCapabilities()) {
     assert.ok(
       rows.some((row) => routeTokens(row).has(route.path)),
@@ -188,6 +243,58 @@ function assertRowContract(row) {
   if (["实现", "验证", "发布", "验收"].some((field) => row[field] === "n/a")) {
     assert.ok(hasWrittenValue(row.备注), `${row.ID} requires a reason for n/a`);
   }
+  if (row.发布 === "partial" || row.发布 === "done") {
+    assertDirectDatedEvidence(row, "release");
+  }
+  if (row.验收 === "partial" || row.验收 === "done") {
+    assertDirectDatedEvidence(row, "acceptance");
+  }
+}
+
+function assertDirectDatedEvidence(row, kind) {
+  const marker = new RegExp(`${kind} evidence:\\s*\`([^\`\\r\\n]+)\``, "gu");
+  const paths = [...(row.证据 ?? "").matchAll(marker)].map((match) => match[1]);
+  const datedEvidencePath = /^docs\/operations\/evidence\/[^/`\r\n]*\d{4}-\d{2}-\d{2}[^/`\r\n]*\.md$/u;
+  assert.ok(
+    paths.some((path) => datedEvidencePath.test(path) && existsSync(resolve(repositoryRoot, path))),
+    `${row.ID} requires direct dated ${kind} evidence`,
+  );
+}
+
+function assertDependencyGraph(rows) {
+  const rowsById = new Map(rows.map((row) => [row.ID, row]));
+  const dependenciesById = new Map();
+  for (const row of rows) {
+    const dependencies = ledgerDependencies(row);
+    for (const dependency of dependencies) {
+      assert.ok(rowsById.has(dependency), `${row.ID} has unknown dependency ${dependency}`);
+    }
+    dependenciesById.set(row.ID, dependencies);
+  }
+
+  const visiting = new Set();
+  const visited = new Set();
+  const stack = [];
+  const visit = (id) => {
+    if (visited.has(id)) return;
+    if (visiting.has(id)) {
+      const cycleStart = stack.indexOf(id);
+      assert.fail(`ledger dependency cycle: ${[...stack.slice(cycleStart), id].join(" -> ")}`);
+    }
+    visiting.add(id);
+    stack.push(id);
+    for (const dependency of dependenciesById.get(id) ?? []) visit(dependency);
+    stack.pop();
+    visiting.delete(id);
+    visited.add(id);
+  };
+  for (const row of rows) visit(row.ID);
+}
+
+function ledgerDependencies(row) {
+  const value = (row.依赖 ?? "").trim();
+  if (value === "" || value === "-" || value === "—") return [];
+  return value.split(",").map((dependency) => dependency.trim()).filter(Boolean);
 }
 
 function hasWrittenValue(value) {
