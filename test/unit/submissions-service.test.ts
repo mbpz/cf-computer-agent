@@ -22,6 +22,16 @@ describe("SubmissionsService", () => {
       .rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
     expect(repository.listOwnedCalls).toBe(0);
   });
+  it.each([
+    { page: 1.5, pageSize: 20 },
+    { page: 1, pageSize: 10 },
+    { page: 501, pageSize: 20 },
+  ])("rejects invalid review pagination before the repository: $page/$pageSize", async (request) => {
+    const repository = new FakeSubmissionsRepository();
+    await expect(serviceFor(repository).listPending(request as never))
+      .rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    expect(repository.listPendingCalls).toBe(0);
+  });
   it.each(m1ParserCases.filter((fixture) => !fixture.expected.ok))(
     "does not persist invalid independent fixture $id",
     async (fixture) => {
@@ -270,6 +280,7 @@ function serviceFor(repository: FakeSubmissionsRepository): SubmissionsService {
 
 class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   listOwnedCalls = 0;
+  listPendingCalls = 0;
   audit: CreateAuditEvent | undefined;
   sourceCreation: CreateSubmissionWithSourceVersion | undefined;
   conflict: SubmissionsRepositoryConflictError | undefined;
@@ -317,5 +328,5 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   async listOwned(): Promise<SubmissionPage> { this.listOwnedCalls += 1; return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
-  async listPending(): Promise<import("../../src/submissions/types").SubmissionReviewPage> { return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
+  async listPending(): Promise<import("../../src/submissions/types").SubmissionReviewPage> { this.listPendingCalls += 1; return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
 }

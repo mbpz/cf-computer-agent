@@ -250,7 +250,9 @@ export class SubmissionsService {
       ...(status === undefined ? {} : { status }),
     });
   }
-  listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> { return this.repository.listPending(request); }
+  async listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> {
+    return this.repository.listPending(normalizeNumberedPageRequest(request));
+  }
 }
 
 function validateStatusFilter(status: unknown): SubmissionStatusFilter | undefined {
