@@ -4,7 +4,6 @@ import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
 import { AdminRolesPage } from "./pages/admin/roles-page";
 import { AdminMenusPage } from "./pages/admin/menus-page";
-import { AdminForbiddenPage } from "./pages/admin/admin-forbidden-page";
 import { ReviewQueuePage } from "./pages/admin/review-queue-page";
 import { ReviewDetailRoute } from "./pages/admin/review-detail-route";
 import { AssetQueuePage } from "./pages/admin/asset-queue-page";
@@ -22,6 +21,7 @@ import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TasksPage } from "./pages/tasks/tasks-page";
 import { LoginPage } from "./pages/login-page";
 import { SettingsPage } from "./pages/settings-page";
+import { ComingSoonPage } from "./pages/coming-soon-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
@@ -156,6 +156,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
+    case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} search={search} />;
     case "admin-roles": return <AdminRolesRoute locale={locale} />;
@@ -168,8 +169,12 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-spaces": return <AdminSpacesRoute locale={locale} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
     case "not-found": return <NotFoundPage locale={locale} />;
-    default: return <AdminForbiddenPage />;
+    default: return assertNever(kind);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled workspace page kind: ${String(value)}`);
 }
 
 function HomeRoute({ locale }: { locale: LocaleRuntime }) {

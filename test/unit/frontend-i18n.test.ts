@@ -26,4 +26,11 @@ describe("frontend locale adapter", () => {
     expect(createLocaleRuntime({ navigatorLanguage: "en" }).t("NAV_UNKNOWN")).toBe("Navigation");
     expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("NAV_UNKNOWN")).toBe("导航");
   });
+
+  it("translates coming-soon navigation and page copy in both catalogs", () => {
+    expect(createLocaleRuntime({ navigatorLanguage: "en" }).t("NAV_COMING_SOON")).toBe("Coming soon");
+    expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("NAV_COMING_SOON")).toBe("建设中");
+    expect(createLocaleRuntime({ navigatorLanguage: "en" }).t("PAGE_COMING_SOON_TITLE")).not.toBe("PAGE_COMING_SOON_TITLE");
+    expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("PAGE_COMING_SOON_TITLE")).not.toBe("PAGE_COMING_SOON_TITLE");
+  });
 });

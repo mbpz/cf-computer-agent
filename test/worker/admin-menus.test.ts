@@ -56,6 +56,10 @@ describe("admin menus API", () => {
     expect(adminPayload.tree.find((node) => node.key === "admin")?.children.find((node) => node.key === "governance")?.children.map((node) => node.key)).toEqual([
       "members", "roles", "menus", "spaces", "audit", "site-analytics",
     ]);
+    const custom = contributorPayload.tree[0]?.children.find((node) => node.key === "custom");
+    expect(custom).toMatchObject({ path: "/custom", availability: "coming_soon", disabledReason: "not_implemented" });
+    const knowledge = contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge");
+    expect(knowledge).toMatchObject({ path: "/knowledge", availability: "ready" });
   });
 
   it("updates custom status and rejects unsafe tree mutations", async () => {
@@ -65,6 +69,18 @@ describe("admin menus API", () => {
     expect((await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ labelKey: "NAV_UNKNOWN" }) })).status).toBe(400);
     expect((await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ path: "/knowledge" }) })).status).toBe(400);
     expect((await api("/api/admin/menus/menu-home", admin, { method: "PATCH", body: JSON.stringify({ visible: false }) })).status).toBe(409);
+  });
+
+  it("does not let database menu edits promote an unimplemented route", async () => {
+    const updated = await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ path: "/notifications" }) });
+    expect(updated.status).toBe(200);
+    const response = await api("/api/navigation", contributor);
+    const payload = await response.json() as { tree: MenuPayloadNode[] };
+    expect(payload.tree[0]?.children.find((node) => node.key === "custom")).toMatchObject({
+      path: "/notifications",
+      availability: "coming_soon",
+      disabledReason: "not_implemented",
+    });
   });
 
   it("creates custom entries and only deletes leaf custom entries", async () => {
@@ -90,5 +106,8 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
 
 interface MenuPayloadNode {
   key: string;
+  path?: string | null;
+  availability?: "ready" | "coming_soon";
+  disabledReason?: "not_implemented";
   children: MenuPayloadNode[];
 }
