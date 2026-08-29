@@ -816,7 +816,7 @@ function knowledgeFilters(search: string) {
   return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind === "text" || kind === "markdown" || kind === "code" ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
 }
 function searchFilters(search: string) {
-  const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const base = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
+  const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const { tagId: _tagId, ...base } = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
   return { ...base, tagIds, ...(tagMode === "and" || tagMode === "or" ? { tagMode } : {}) };
 }
 function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }

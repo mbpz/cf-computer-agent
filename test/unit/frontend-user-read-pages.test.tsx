@@ -37,6 +37,17 @@ describe("React read-only user pages", () => {
     expect(submissions).toContain("<button");
   });
 
+  it("offers accessible retry actions for initial reader failures", () => {
+    const retry = vi.fn();
+    const knowledge = renderToStaticMarkup(<KnowledgePage state={{ kind: "error", message: "Unable" }} onRetry={retry} />);
+    const submissions = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "error", message: "Unable" }} onRetry={retry} />);
+    for (const html of [knowledge, submissions]) {
+      expect(html).toContain('role="alert"');
+      expect(html).toContain("<button");
+      expect(html).toContain("Try search again");
+    }
+  });
+
   it("renders daily/weekly review items without undefined values", () => {
     const html = renderToStaticMarkup(<KnowledgePage
       locale={createLocaleRuntime({ navigatorLanguage: "en" })}
