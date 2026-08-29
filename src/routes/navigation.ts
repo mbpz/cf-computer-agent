@@ -22,9 +22,18 @@ export async function routeNavigationApi(
   if (principal.kind !== "member") throw new AppError("FORBIDDEN", "Member access required", 403);
   const permissionMask = parsePermissionMask(permissionMaskForPrincipal(principal));
   const navigation = await services.menus.navigation(permissionMask);
-  return jsonResponse({ tree: navigation.tree.map(withAvailability) }, 200, context.requestId);
+  return jsonResponse({ tree: navigation.tree.flatMap((node) => {
+    const annotated = withAvailability(node);
+    return annotated ? [annotated] : [];
+  }) }, 200, context.requestId);
 }
 
-function withAvailability(node: MenuNode): MenuNode & ReturnType<typeof menuAvailability> {
-  return { ...node, ...menuAvailability(node.path), children: node.children.map(withAvailability) };
+function withAvailability(node: MenuNode): (MenuNode & { availability: "ready" | "coming_soon"; disabledReason?: "not_implemented" }) | null {
+  const availability = menuAvailability(node.path);
+  if (!availability) return null;
+  const children = node.children.flatMap((child) => {
+    const annotated = withAvailability(child);
+    return annotated ? [annotated] : [];
+  });
+  return { ...node, ...availability, children };
 }

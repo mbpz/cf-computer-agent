@@ -51,8 +51,9 @@ export function routeCapability(pathname: string): WorkspaceRouteCapability | un
   return WORKSPACE_ROUTE_CAPABILITIES.find((route) => route.path === pathname);
 }
 
-export function menuAvailability(pathname: string | null): { availability: MenuAvailability; disabledReason?: "not_implemented" } {
+export function menuAvailability(pathname: string | null): { availability: MenuAvailability; disabledReason?: "not_implemented" } | undefined {
   if (pathname === null) return { availability: "ready" };
-  const availability = routeCapability(pathname)?.availability ?? "coming_soon";
+  const availability = routeCapability(pathname)?.availability;
+  if (!availability) return undefined;
   return availability === "ready" ? { availability } : { availability, disabledReason: "not_implemented" };
 }

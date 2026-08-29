@@ -1,5 +1,5 @@
 import { apiFetch } from "./api";
-import { WORKSPACE_ROUTE_CAPABILITIES, type MenuAvailability } from "../../shared/workspace-route-capabilities";
+import type { MenuAvailability } from "../../shared/workspace-route-capabilities";
 
 export interface NavigationDataNode {
   id: string;
@@ -18,22 +18,7 @@ export async function loadNavigation(): Promise<NavigationDataNode[]> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("NAVIGATION_INVALID");
   const tree = (payload as Record<string, unknown>).tree;
   if (!Array.isArray(tree)) throw new Error("NAVIGATION_INVALID");
-  return mergeCanonicalComingSoon(tree.map((node) => parseNode(node, 1)));
-}
-
-function mergeCanonicalComingSoon(tree: NavigationDataNode[]): NavigationDataNode[] {
-  const paths = new Set(flattenPaths(tree));
-  const workspaceRoot = tree.find((node) => node.groupName === "workspace" && node.path === null);
-  if (!workspaceRoot) return tree;
-  const additions = WORKSPACE_ROUTE_CAPABILITIES
-    .filter((route) => route.group === "workspace" && route.availability === "coming_soon" && !paths.has(route.path))
-    .map((route): NavigationDataNode => ({ id: `capability-${route.id}`, key: route.id, labelKey: route.labelKey, path: route.path, icon: null, groupName: route.group, availability: route.availability, disabledReason: "not_implemented", children: [] }));
-  if (!additions.length) return tree;
-  return tree.map((node) => node === workspaceRoot ? { ...node, children: [...node.children, ...additions] } : node);
-}
-
-function flattenPaths(nodes: readonly NavigationDataNode[]): string[] {
-  return nodes.flatMap((node) => [...(node.path ? [node.path] : []), ...flattenPaths(node.children)]);
+  return tree.map((node) => parseNode(node, 1));
 }
 
 function parseNode(value: unknown, depth: number): NavigationDataNode {

@@ -13,6 +13,7 @@ import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
 import { loadNavigation, type NavigationDataNode } from "../../lib/navigation-data";
 import { Badge } from "../ui/badge";
 import { menuAvailability, type MenuAvailability } from "../../../shared/workspace-route-capabilities";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -63,10 +64,10 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     previousContentScrollKeyRef.current = contentScrollKey;
   }, [contentScrollKey]);
   const workspaceRoutes = serverNavigation
-    ? serverNavigation.filter((node) => node.groupName === "workspace").map(toNavigationNode)
+    ? serverNavigation.filter((node) => node.groupName === "workspace").flatMap(toNavigationNodes)
     : navigationTree("workspace", session);
   const adminRoutes = serverNavigation
-    ? serverNavigation.filter((node) => node.groupName === "admin").map(toNavigationNode)
+    ? serverNavigation.filter((node) => node.groupName === "admin").flatMap(toNavigationNodes)
     : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
@@ -83,10 +84,10 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
               <SidebarSimple size={18} aria-hidden="true" />
             </Button>
           </div>
-          <nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1">
+          <TooltipProvider><nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1">
             <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
-          </nav>
+          </nav></TooltipProvider>
           <div className={cn("shrink-0 border-t px-2 pt-3 text-[11px] text-muted-foreground", collapsed && "sr-only")}>{locale.t("SHELL_FREE_TIER_LABEL")}</div>
         </div>
       </aside>
@@ -127,8 +128,9 @@ function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onTo
   const unavailableLabel = `${label}（${locale.t("NAV_COMING_SOON")}）`;
   const active = Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname)));
   const hasChildren = Boolean(node.children?.length);
+  const unavailableButton = <button type="button" aria-disabled="true" onClick={(event) => event.preventDefault()} className={cn("flex min-w-0 flex-1 cursor-not-allowed items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground opacity-70", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{label}</span>{!collapsed && <Badge variant="outline" className="shrink-0 text-[10px]">{locale.t("NAV_COMING_SOON")}</Badge>}</button>;
   const content = path && unavailable
-    ? <button type="button" disabled aria-disabled="true" title={unavailableLabel} className={cn("flex min-w-0 flex-1 cursor-not-allowed items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground opacity-70", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>{label}</span>{!collapsed && <Badge variant="outline" className="shrink-0 text-[10px]">{locale.t("NAV_COMING_SOON")}</Badge>}</button>
+    ? collapsed ? <Tooltip><TooltipTrigger asChild>{unavailableButton}</TooltipTrigger><TooltipContent>{unavailableLabel}</TooltipContent></Tooltip> : unavailableButton
     : path ? <a href={path} aria-current={pathname === path ? "page" : undefined} title={collapsed ? label : undefined} onClick={(event) => { event.preventDefault(); onNavigate(path); }} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === path && "bg-accent font-medium text-accent-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span></a>
       : <button type="button" aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)} title={collapsed ? label : undefined} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", active && "text-foreground", collapsed && "justify-center px-0")}><NavIcon path={path} /><span className={cn("truncate", collapsed && "sr-only")}>{label}</span></button>;
   return <div data-nav-node data-nav-depth={depth} data-nav-availability={node.availability}><div className="flex items-center">{content}{hasChildren && !collapsed && <button type="button" className="mr-1 rounded p-1 text-muted-foreground hover:bg-accent" aria-label={`${label} ${expanded[node.id] ? "collapse" : "expand"}`} aria-expanded={expanded[node.id] ?? false} onClick={() => onToggle(node.id)}><CaretDown size={14} className={cn("transition-transform", !expanded[node.id] && "-rotate-90")} aria-hidden="true" /></button>}</div>{hasChildren && (expanded[node.id] ?? false) && !collapsed && depth < 4 && <div className="ml-4 space-y-1 border-l pl-2">{node.children!.map((child) => <NavNode key={child.id} node={child} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={depth + 1} />)}</div>}</div>;
@@ -141,13 +143,17 @@ function toNavigationNode(node: NavigationDataNode): NavigationNode {
   return { id: node.id, route, path: node.path ?? undefined, labelKey: node.labelKey, icon: node.icon, availability: node.availability, disabledReason: node.disabledReason, children: node.children.map(toNavigationNode) };
 }
 
+function toNavigationNodes(node: NavigationDataNode): NavigationNode[] {
+  return node.path === null ? node.children.map(toNavigationNode) : [toNavigationNode(node)];
+}
+
 function navigationTree(group: "workspace" | "admin", session: SessionSnapshot): NavigationNode[] {
   const route = (path: string) => ROUTES.find((item) => item.path === path);
   const allowed = (path: string) => { const value = route(path); return value && hasCapability(session, value.capability) ? value : undefined; };
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };
-    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
+    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks")].filter(Boolean) as NavigationNode[];
   }
   const admin = allowed("/admin");
   if (!admin) return [];
