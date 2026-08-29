@@ -23,6 +23,15 @@ describe("frontend application shell", () => {
     expect(html).toContain("Log out");
     expect(html).toContain("Knowledge");
     expect(html).not.toContain("undefined");
+    expect(html).toContain('data-shell-root="true"');
+    expect(html).toContain("lg:h-dvh");
+    expect(html).toContain("lg:overflow-hidden");
+    expect(html).toContain('data-shell-sidebar-scroll="true"');
+    expect(html).toContain("min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain");
+    expect(html).toContain('data-shell-content-scroll="true"');
+    expect(html).toContain("lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain");
+    expect(html).toContain("max-w-[1440px]");
+    expect(html).toContain("lg:px-6 lg:py-5");
   });
 
   it("does not render admin navigation for a contributor", () => {

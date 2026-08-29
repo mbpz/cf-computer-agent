@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BookOpen, CaretDown, ChartLine, DotsThree, Files, GearSix, House, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES, requiredCapability, type FrontendCapability } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
@@ -42,6 +42,8 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "knowledge-base": true, admin: true, governance: true });
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [serverNavigation, setServerNavigation] = useState<NavigationDataNode[] | null>(null);
+  const contentScrollRef = useRef<HTMLElement>(null);
+  const previousPathnameRef = useRef(pathname);
   useEffect(() => {
     const stored = readTheme(window.localStorage);
     setTheme(stored);
@@ -53,6 +55,30 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
     void loadNavigation().then((tree) => { if (active) setServerNavigation(tree); }).catch(() => { if (active) setServerNavigation(null); });
     return () => { active = false; };
   }, [session.member.id, session.member.role, session.permissionMask]);
+  useEffect(() => {
+    if (previousPathnameRef.current !== pathname) contentScrollRef.current?.scrollTo({ top: 0 });
+    previousPathnameRef.current = pathname;
+  }, [pathname]);
+  useEffect(() => {
+    const locationKey = () => `${window.location.pathname}${window.location.search}`;
+    let previousLocationKey = locationKey();
+    const resetForLocationChange = () => {
+      const nextLocationKey = locationKey();
+      if (nextLocationKey === previousLocationKey) return;
+      previousLocationKey = nextLocationKey;
+      contentScrollRef.current?.scrollTo({ top: 0 });
+    };
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    window.history.pushState = function (...args) { originalPushState.apply(this, args); resetForLocationChange(); };
+    window.history.replaceState = function (...args) { originalReplaceState.apply(this, args); resetForLocationChange(); };
+    window.addEventListener("popstate", resetForLocationChange);
+    return () => {
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener("popstate", resetForLocationChange);
+    };
+  }, []);
   const workspaceRoutes = serverNavigation
     ? serverNavigation.filter((node) => node.groupName === "workspace").map(toNavigationNode)
     : navigationTree("workspace", session);
@@ -64,25 +90,25 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const access = resolveFrontendAccess({ session, requiredCapability: matchRoute(pathname)?.capability ?? requiredCapability(pathname) });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div data-shell-root className="min-h-screen bg-background text-foreground lg:h-dvh lg:overflow-hidden">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2">{locale.t("SHELL_SKIP_MAIN")}</a>
       <aside data-shell-sidebar data-shell-sidebar-state={collapsed ? "collapsed" : "expanded"} className={cn("fixed inset-y-0 left-0 z-40 hidden border-r bg-card transition-[width] duration-200 lg:block", collapsed ? "w-16" : "w-64")}>
-        <div className="flex h-full flex-col p-3">
-          <div className={cn("mb-8 flex items-start gap-2", collapsed ? "justify-center" : "justify-between") }>
+        <div className="flex h-full min-h-0 flex-col p-3">
+          <div className={cn("mb-8 flex shrink-0 items-start gap-2", collapsed ? "justify-center" : "justify-between") }>
             <div className={cn("min-w-0 px-2", collapsed && "sr-only")}><p className="truncate text-xs font-semibold tracking-[0.18em] text-muted-foreground">MEMORY GARDEN</p><p className="mt-2 truncate text-sm font-medium">{locale.t("APP_BRAND_EYEBROW")}</p></div>
             <Button type="button" variant="ghost" size="icon" data-shell-collapse-toggle aria-expanded={!collapsed} aria-label={locale.t(collapsed ? "SHELL_EXPAND_SIDEBAR" : "SHELL_COLLAPSE_SIDEBAR")} onClick={() => setCollapsed((value) => !value)}>
               <SidebarSimple size={18} aria-hidden="true" />
             </Button>
           </div>
-          <nav aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="space-y-6">
+          <nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain">
             <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav>
-          <div className={cn("mt-auto border-t px-2 pt-3 text-[11px] text-muted-foreground", collapsed && "sr-only")}>{locale.t("SHELL_FREE_TIER_LABEL")}</div>
+          <div className={cn("shrink-0 border-t px-2 pt-3 text-[11px] text-muted-foreground", collapsed && "sr-only")}>{locale.t("SHELL_FREE_TIER_LABEL")}</div>
         </div>
       </aside>
-      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-16" : "lg:pl-64")}>
-        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-8">
+      <div className={cn("transition-[padding] duration-200 lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
+        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <div className="flex min-w-0 items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><Breadcrumb pathname={pathname} locale={locale} /></div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
@@ -98,8 +124,8 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
             </DropdownMenu>
           </div>
         </header>
-        <div className="lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
-        <main id="main-content" className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl p-4 lg:p-8">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</main>
+        <div data-shell-mobile-scroll className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
+        <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
       </div>
     </div>
   );
@@ -174,7 +200,7 @@ function NavIcon({ path }: { path: string }) {
 function MobileNavigation({ nodes, pathname, locale, onNavigate }: { nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
-  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={route.path} />{locale.t(route.labelKey)}</a>)}</nav></SheetContent></details></Sheet>;
+  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><div data-shell-mobile-scroll className="max-h-dvh overflow-y-auto overscroll-contain"><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={route.path} />{locale.t(route.labelKey)}</a>)}</nav></div></SheetContent></details></Sheet>;
 }
 
 function flattenNavigation(nodes: NavigationNode[]): NavigationNode[] { return nodes.flatMap((node) => [ ...(node.path || node.route ? [node] : []), ...(node.children ? flattenNavigation(node.children) : []) ]); }
