@@ -2,7 +2,7 @@ import { AppError } from "../http";
 import type { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import type { PublishedContentReader } from "../knowledge/types";
-import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, parsePageRequest } from "../pagination";
 import { normalizeSearchQuery } from "./lexical";
 import { SEARCH_POLICY } from "./search-policy";
 import { buildRevisionDiff, type RevisionDiffResult } from "./revision-diff";
@@ -58,11 +58,10 @@ export class LibraryService {
   async list(scope: LibraryScope, request: KnowledgePageRequest = {}): Promise<KnowledgePage> {
     await this.authorize(scope);
     const filters = normalizeFilters(request);
-    const page = parsePageRequest(request.limit, request.cursor);
+    const page = numberedRequest(request);
     const normalized: RepositoryKnowledgePageRequest = {
       ...filters,
       ...page,
-      cursorKey: await cursorKey("library-list", scope, { ...filters }),
     };
     return this.repository.list(scope, normalized);
   }
@@ -148,7 +147,7 @@ export class LibraryService {
     const contentTerms = revision.markdown.replace(/[^\p{L}\p{N}_-]+/gu, " ").trim().split(/\s+/u).slice(0, 2).join(" ");
     const seed = (titleTerms || contentTerms).trim();
     if (!seed) return { items: [] };
-    const results = await this.search(scope, { query: seed, limit: 8 });
+    const results = await this.search(scope, { query: seed, page: 1, pageSize: 20 });
     const seen = new Set<string>([knowledgeItemId]);
     return {
       items: results.items.flatMap((hit) => {
@@ -281,7 +280,7 @@ export class LibraryService {
     }
     const filters = normalizeFilters(request);
     const tagFilter = normalizeSearchTags(request);
-    const page = parsePageRequest(request.limit, request.cursor);
+    const page = numberedRequest(request);
     const query = normalizeSearchQuery(request.query);
     const normalized: RepositorySearchRequest = {
       ...filters,
@@ -290,13 +289,6 @@ export class LibraryService {
       ...tagFilter,
       ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
       policyVersion: SEARCH_POLICY.version,
-      cursorKey: await cursorKey("library-search", scope, {
-        ...filters,
-        query: query.normalizedQuery,
-        ...tagFilter,
-        ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
-        policyVersion: SEARCH_POLICY.version,
-      }),
     };
     return this.repository.search(scope, normalized);
   }
@@ -347,6 +339,15 @@ export class LibraryService {
       })),
     };
   }
+}
+
+function numberedRequest(request: { page?: number; pageSize?: number }): { page: number; pageSize: 20 | 50 | 100 } {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? 20;
+  const normalized = { page, pageSize } as { page: number; pageSize: 20 | 50 | 100 };
+  pageOffset(normalized);
+  if (pageSize !== 20 && pageSize !== 50 && pageSize !== 100) throw new AppError("PAGE_INVALID", "Page parameters are invalid", 400);
+  return normalized;
 }
 
 function normalizeChatScope(value: ChatScope): ChatScope {

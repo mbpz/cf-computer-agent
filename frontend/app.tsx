@@ -140,12 +140,12 @@ export function App() {
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
   switch (kind) {
     case "home": return <HomeRoute locale={locale} />;
-    case "knowledge": return <KnowledgeRoute locale={locale} />;
+    case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
-    case "search": return <SearchRoute locale={locale} />;
+    case "search": return <SearchRoute locale={locale} search={search} />;
     case "agent": return <AgentRoute locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} />;
-    case "my-submissions": return <MySubmissionsRoute locale={locale} />;
+    case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} search={search} />;
@@ -417,8 +417,12 @@ function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
   return <section className="mx-auto max-w-xl py-16"><h1 className="text-2xl font-semibold">{frontendText(locale, "PAGE_NOT_FOUND_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "PAGE_NOT_FOUND_DESCRIPTION")}</p><a className="mt-6 inline-flex text-sm font-medium text-primary hover:underline" href="/">{frontendText(locale, "PAGE_RETURN_HOME")}</a></section>;
 }
 
-function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: readonly { id: string; title?: string; summary?: string; publishedAt?: string; tags?: string[] }[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
+export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => parsePageSearch(search), [search]);
+  const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [urlVersion, setUrlVersion] = useState(0);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: KnowledgePageResult["items"]; pagination: KnowledgePageResult["pagination"] } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createKnowledgeRequestController> | null>(null);
   const [recent, setRecent] = useState<RecentKnowledgeItem[]>([]);
   const [favorites, setFavorites] = useState<FavoriteKnowledgeItem[]>([]);
@@ -428,14 +432,7 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
   const [activityNextCursor, setActivityNextCursor] = useState<string | null>(null);
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>("daily");
   const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
-  const mergePage = useCallback((page: KnowledgePageResult, append: boolean) => {
-    setState((previous) => ({
-      kind: "ready",
-      items: append && previous.kind === "ready" ? [...previous.items, ...page.items] : page.items,
-      nextCursor: page.nextCursor,
-      pending: false,
-    }));
-  }, []);
+  const queryRef = useRef({ page, pageSize });
   useEffect(() => {
     let active = true;
     void loadRecentKnowledge().then((items) => { if (active) setRecent(items); }).catch(() => { if (active) setRecent([]); });
@@ -462,35 +459,25 @@ function KnowledgeRoute({ locale }: { locale: LocaleRuntime }) {
       setActivityNextCursor(page.nextCursor);
     }).catch(() => setActivityNextCursor(cursor));
   };
+  useEffect(() => { const onPop = () => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }; window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => {
-    const controller = createKnowledgeRequestController();
-    controllerRef.current = controller;
-    const first = controller.request(null);
-    void first.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) mergePage(page, false);
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(first.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") });
-    });
-    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, mergePage]);
-  const loadMore = () => {
-    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
-    const controller = controllerRef.current;
-    const next = controller.request(state.nextCursor);
-    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
-    void next.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) mergePage(page, true);
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(next.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
-    });
-  };
-  return <KnowledgePage locale={locale} state={state} onLoadMore={loadMore} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
+    const controller = createKnowledgeRequestController(); controllerRef.current = controller;
+    const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
+    const request = controller.request({ ...snapshot, ...knowledgeFilters(window.location.search) });
+    void request.promise.then((result) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [locale, page, pageSize, urlVersion]);
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; window.history.pushState({}, "", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
-function SearchRoute({ locale }: { locale: LocaleRuntime }) {
+export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
   const [activeQuery, setActiveQuery] = useState(query);
-  const [submitVersion, setSubmitVersion] = useState(0);
+  const [page, setPage] = useState(initialPage.page); const [pageSize, setPageSize] = useState(initialPage.pageSize);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [urlVersion, setUrlVersion] = useState(0);
   const [state, setState] = useState<{
     kind: "loading";
   } | {
@@ -498,13 +485,14 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
     query: string;
     degraded: boolean;
     results: SearchPageResult["items"];
-    nextCursor: string | null;
-    pending?: boolean;
+    pagination: SearchPageResult["pagination"];
   } | {
     kind: "error";
     message: string;
-  }>(() => activeQuery.trim() ? { kind: "loading" } : { kind: "ready", query: "", degraded: false, results: [], nextCursor: null });
+  }>(() => activeQuery.trim() ? { kind: "loading" } : { kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize: initialPage.pageSize, total: 0, totalPages: 0 } });
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createSearchRequestController> | null>(null);
+  const queryRef = useRef({ query: activeQuery, page, pageSize });
   const [savedViews, setSavedViews] = useState<SavedViewItem[]>([]);
   const [savedViewPending, setSavedViewPending] = useState(false);
   const [savedViewError, setSavedViewError] = useState<string | undefined>();
@@ -518,9 +506,10 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => {
     const onPopState = () => {
       const next = new URLSearchParams(window.location.search).get("q") ?? "";
+      const pagination = parsePageSearch(window.location.search);
       setQuery(next);
       setActiveQuery(next);
-      setSubmitVersion((version) => version + 1);
+      queryRef.current = { query: next, ...pagination }; setPage(pagination.page); setPageSize(pagination.pageSize); setUrlVersion((value) => value + 1);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -531,47 +520,30 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
     controllerRef.current = controller;
     const normalized = activeQuery.trim();
     if (!normalized) {
-      setState({ kind: "ready", query: "", degraded: false, results: [], nextCursor: null });
-      return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
+      setState({ kind: "ready", query: "", degraded: false, results: [], pagination: { page: 1, pageSize, total: 0, totalPages: 0 } }); setPending(false);
+      return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
     }
-    setState({ kind: "loading" });
-    const request = controller.request(normalized);
-    void request.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) setState({ kind: "ready", query: normalized, degraded: page.degraded, results: page.items, nextCursor: page.nextCursor });
+    const snapshot = { query: normalized, page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
+    const request = controller.request({ ...snapshot, ...searchFilters(window.location.search) });
+    void request.promise.then((result) => {
+      if (controller.isCurrent(request.generation) && sameSearchQuery(snapshot, queryRef.current)) { setState({ kind: "ready", query: normalized, degraded: result.degraded, results: result.items, pagination: result.pagination }); setPending(false); }
     }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
-        setState({ kind: "error", message: frontendText(locale, "COMMON_SEARCH_UNAVAILABLE") });
+      if (controller.isCurrent(request.generation) && sameSearchQuery(snapshot, queryRef.current) && !isAbort(error)) {
+        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_SEARCH_UNAVAILABLE") }); setLocalError(frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")); setPending(false);
       }
     });
-    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [activeQuery, locale, submitVersion]);
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [activeQuery, locale, page, pageSize, retryVersion, urlVersion]);
 
   const submit = () => {
     const normalized = query.trim();
-    const nextUrl = normalized ? `/search?q=${encodeURIComponent(normalized)}` : "/search";
+    const params = new URLSearchParams(window.location.search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
+    const nextUrl = params.size ? `/search?${params.toString()}` : "/search";
     window.history.pushState({}, "", nextUrl);
     setActiveQuery(normalized);
-    setSubmitVersion((version) => version + 1);
+    setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
   };
-  const loadMore = () => {
-    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
-    const controller = controllerRef.current;
-    const request = controller.request(activeQuery, state.nextCursor);
-    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
-    void request.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? {
-        ...previous,
-        degraded: previous.degraded || page.degraded,
-        results: [...previous.results, ...page.items],
-        nextCursor: page.nextCursor,
-        pending: false,
-      } : previous);
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
-        setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
-      }
-    });
-  };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = { query: activeQuery, ...next }; window.history.pushState({}, "", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
   const saveView = async (name: string) => {
     if (savedViewPending) return;
     setSavedViewPending(true);
@@ -591,7 +563,7 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
     const nextUrl = normalized ? `/search?q=${encodeURIComponent(normalized)}` : "/search";
     window.history.pushState({}, "", nextUrl);
     setActiveQuery(normalized);
-    setSubmitVersion((version) => version + 1);
+    setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
   };
   const removeView = async (id: string) => {
     if (savedViewPending) return;
@@ -606,7 +578,7 @@ function SearchRoute({ locale }: { locale: LocaleRuntime }) {
       setSavedViewPending(false);
     }
   };
-  return <SearchPage locale={locale} query={query} state={state} onQueryChange={setQuery} onSubmit={submit} onLoadMore={loadMore} onRetry={() => setSubmitVersion((version) => version + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
+  return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
 }
 
 function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {
@@ -667,32 +639,30 @@ function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
   return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={setDraft} onSubmit={submit} />;
 }
 
-function MySubmissionsRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; nextCursor: string | null; pending?: boolean } | { kind: "error"; message: string }>({ kind: "loading" });
+export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => parsePageSearch(search), [search]);
+  const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [urlVersion, setUrlVersion] = useState(0);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; pagination: { page: number; pageSize: SupportedPageSize; total: number; totalPages: number } } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
+  const queryRef = useRef({ page, pageSize });
+  useEffect(() => { const onPop = () => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }; window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   useEffect(() => {
     const controller = createMySubmissionsRequestController();
     controllerRef.current = controller;
-    const request = controller.request();
-    void request.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) setState({ kind: "ready", items: page.items, nextCursor: page.nextCursor });
+    const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
+    const status = new URLSearchParams(window.location.search).get("status") ?? undefined;
+    const request = controller.request({ ...snapshot, ...(status ? { status } : {}) });
+    void request.promise.then((result) => {
+      if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); }
     }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
     });
-    return () => { controller.cancel(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale]);
-  const loadMore = () => {
-    if (state.kind !== "ready" || state.pending || !state.nextCursor || !controllerRef.current) return;
-    const controller = controllerRef.current;
-    const request = controller.request(state.nextCursor);
-    setState((previous) => previous.kind === "ready" ? { ...previous, pending: true } : previous);
-    void request.promise.then(({ generation, page }) => {
-      if (controller.isCurrent(generation)) setState((previous) => previous.kind === "ready" ? { ...previous, items: [...previous.items, ...page.items], nextCursor: page.nextCursor, pending: false } : previous);
-    }).catch((error: unknown) => {
-      if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) setState((previous) => previous.kind === "ready" ? { ...previous, pending: false } : previous);
-    });
-  };
-  return <MySubmissionsPage locale={locale} state={state} onLoadMore={loadMore} />;
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [locale, page, pageSize, urlVersion]);
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; window.history.pushState({}, "", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
+  return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
@@ -836,4 +806,15 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
 }
 
 function assetStatusSearch(search: string): AdminAssetStatus | undefined { const value = new URLSearchParams(search).get("status"); return value === "queued" || value === "processing" || value === "succeeded" || value === "failed_retryable" || value === "failed_terminal" ? value : undefined; }
+function samePageQuery(left: { page: number; pageSize: SupportedPageSize }, right: { page: number; pageSize: SupportedPageSize }): boolean { return left.page === right.page && left.pageSize === right.pageSize; }
+function sameSearchQuery(left: { query: string; page: number; pageSize: SupportedPageSize }, right: { query: string; page: number; pageSize: SupportedPageSize }): boolean { return left.query === right.query && samePageQuery(left, right); }
+function knowledgeFilters(search: string) {
+  const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined;
+  const kind = value("kind");
+  return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind === "text" || kind === "markdown" || kind === "code" ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
+}
+function searchFilters(search: string) {
+  const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const base = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
+  return { ...base, tagIds, ...(tagMode === "and" || tagMode === "or" ? { tagMode } : {}) };
+}
 function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }

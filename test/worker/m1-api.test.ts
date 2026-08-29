@@ -624,17 +624,23 @@ it("returns authorized, bounded related knowledge with explainable fields", asyn
       "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a&tagId=tag-b&tagMode=or",
     );
     expect(boundedTags.status).toBe(200);
-    await expect(boundedTags.json()).resolves.toEqual({ items: [], degraded: false });
+    await expect(boundedTags.json()).resolves.toMatchObject({ items: [], degraded: false, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
     await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a"), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&spaceId=default&tagId=tag-a&tagMode=x"), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", `/api/knowledge/search?q=launch&spaceId=default&tagMode=or&${Array.from({ length: 9 }, (_, index) => `tagId=tag-${index}`).join("&")}`), 400, "LIBRARY_REQUEST_INVALID");
-    await expectApiError(memberApi("contributor", "/api/knowledge?limit=51"), 400, "PAGE_INVALID");
-    await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "PAGE_CURSOR_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge?limit=51"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge?cursor=bad"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge?page=1&page=2"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge?page=101&pageSize=100"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&cursor=bad"), 400, "LIBRARY_REQUEST_INVALID");
+    await expectApiError(memberApi("contributor", "/api/knowledge/search?q=launch&pageSize=20&pageSize=50"), 400, "LIBRARY_REQUEST_INVALID");
     await expectApiError(memberApi("contributor", "/api/knowledge/absent?spaceId=default"), 400, "LIBRARY_REQUEST_INVALID");
     expect((await memberApi("contributor", "/api/submissions/mine?status=review_pending")).status).toBe(200);
     expect((await memberApi("contributor", "/api/submissions/mine?status=draft")).status).toBe(200);
     await expectApiError(memberApi("contributor", "/api/submissions/mine?status=published&status=rejected"), 400, "PAGE_INVALID");
     await expectApiError(memberApi("contributor", "/api/submissions/mine?ownerId=member-other"), 400, "PAGE_INVALID");
+    await expectApiError(memberApi("contributor", "/api/submissions/mine?cursor=bad"), 400, "PAGE_INVALID");
+    await expectApiError(memberApi("contributor", "/api/submissions/mine?page=101&pageSize=100"), 400, "PAGE_INVALID");
     await expectApiError(memberApi(
       "contributor",
       "/api/knowledge/item/revisions/revision/download?path=%2Fworkspace%2Fsecret&hash=forged",
@@ -1158,14 +1164,15 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(published.revision.searchStatus).toBe("indexed");
     expect(JSON.stringify(published)).not.toMatch(/contentSha256|normalizedPath/);
 
-    const listResponse = await memberApi("contributor", "/api/knowledge?spaceId=default&limit=20");
+    const listResponse = await memberApi("contributor", "/api/knowledge?spaceId=default&page=1&pageSize=20");
     expect(listResponse.status).toBe(200);
     expectSecurityHeaders(listResponse);
-    const list = await listResponse.json<{ items: Array<{ id: string; revisionId: string }> }>();
+    const list = await listResponse.json<{ items: Array<{ id: string; revisionId: string }>; pagination: { total: number } }>();
     expect(list.items).toEqual([expect.objectContaining({
       id: published.revision.knowledgeItemId,
       revisionId: published.revision.id,
     })]);
+    expect(list.pagination.total).toBe(1);
 
     const detailResponse = await memberApi("contributor", `/api/knowledge/${published.revision.knowledgeItemId}`);
     expect(detailResponse.status).toBe(200);
@@ -1212,11 +1219,12 @@ describe("M1 trusted knowledge HTTP journey", () => {
       metadata: JSON.stringify({ revisionId: published.revision.id }),
     });
 
-    const searchResponse = await memberApi("contributor", "/api/knowledge/search?q=launch%20latency&limit=20");
+    const searchResponse = await memberApi("contributor", "/api/knowledge/search?q=launch%20latency&page=1&pageSize=20");
     expect(searchResponse.status).toBe(200);
-    const search = await searchResponse.json<{ items: Array<{ citationId: string }>; degraded: boolean }>();
+    const search = await searchResponse.json<{ items: Array<{ citationId: string }>; degraded: boolean; pagination: { total: number } }>();
     expect(search.degraded).toBe(false);
     expect(search.items).toHaveLength(1);
+    expect(search.pagination.total).toBe(1);
 
     const chatResponse = await memberApi("contributor", "/api/knowledge/chat", {
       method: "POST",
@@ -1703,7 +1711,7 @@ describe("M1 trusted knowledge HTTP journey", () => {
 
     const degraded = await memberApi("contributor", "/api/knowledge/search?q=launch%20degraded");
     expect(degraded.status).toBe(200);
-    await expect(degraded.json()).resolves.toEqual({ items: [], degraded: true });
+    await expect(degraded.json()).resolves.toEqual({ items: [], degraded: true, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
     const readable = await memberApi("contributor", `/api/knowledge/${shared.knowledgeItemId}`);
     expect(readable.status).toBe(200);
   });

@@ -3,7 +3,7 @@ import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, readBoundedBodyBytes, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import type { AssetService } from "../assets/service";
-import { parsePageRequest, type PageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest, type PageRequest } from "../pagination";
 import type { SpacesService } from "../spaces/service";
 import type { SubmissionsService } from "../submissions/service";
 import type { SubmissionKind, SubmissionPageRequest, SubmissionStatusFilter } from "../submissions/types";
@@ -418,10 +418,10 @@ export async function routeMemberApi(
     requireCapability(principal, "submission:read-own");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     const member = requireMember(principal);
-    requireExactQuery(url, ["limit", "cursor", "status"]);
+    requireExactQuery(url, ["page", "pageSize", "status"]);
     const status = url.searchParams.get("status");
     return jsonResponse(await services.submissions.listOwn(member.memberId, {
-      ...pageRequest(url),
+      ...parseNumberedPageRequest(url, ["status"]),
       ...(status === null ? {} : { status: status as SubmissionStatusFilter }),
     }), 200, context.requestId);
   }

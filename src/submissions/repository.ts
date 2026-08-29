@@ -353,27 +353,16 @@ export class SubmissionsRepository implements SubmissionsRepositoryPort {
   }
 
   async listOwned(submitterId: string, request: SubmissionPageRepositoryRequest): Promise<SubmissionPage> {
-    assertCursorKey(request.cursorKey);
-    const cursor = request.cursor === undefined
-      ? undefined
-      : decodeOwnedSubmissionCursor(request.cursor, request.cursorKey);
     const statusSql = request.status === undefined ? "" : " AND s.status = ?";
-    const cursorSql = cursor === undefined
-      ? ""
-      : " AND (s.created_at < ? OR (s.created_at = ? AND s.id < ?))";
-    const cursorBindings = cursor === undefined
-      ? []
-      : [timestamp(cursor.sort), timestamp(cursor.sort), cursor.id];
-    const rows = await this.db.prepare(
-      `${submissionSelect} WHERE s.submitter_id = ?${statusSql}${cursorSql}
-       ORDER BY s.created_at DESC, s.id DESC LIMIT ?`,
-    ).bind(
-      submitterId,
-      ...(request.status === undefined ? [] : [request.status]),
-      ...cursorBindings,
-      request.limit + 1,
-    ).all<SubmissionRow>();
-    return ownedPage(rows.results.map(mapSubmissionRow), request.limit, request.cursorKey);
+    const bindings = [submitterId, ...(request.status === undefined ? [] : [request.status])];
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM submissions s WHERE s.submitter_id = ?${statusSql}`).bind(...bindings),
+      this.db.prepare(`${submissionSelect} WHERE s.submitter_id = ?${statusSql}
+        ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`).bind(...bindings, request.pageSize, pageOffset(request)),
+      { page: request.page, pageSize: request.pageSize },
+      (row) => mapSubmissionRow(row as SubmissionRow),
+    );
   }
 
   async listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> {

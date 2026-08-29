@@ -39,15 +39,14 @@ export type CreateSubmission = Submission;
 export type SubmissionCreateResult =
   | { submission: Submission; source: Source; sourceVersion: SourceVersion; duplicateCandidate: null; similarCandidates?: readonly SimilarSourceCandidate[] }
   | { submission: Submission; source: null; sourceVersion: null; duplicateCandidate: DuplicateSourceCandidate; similarCandidates?: readonly SimilarSourceCandidate[] };
-export type SubmissionPage = Page<Submission>;
+export type SubmissionPage = (NumberedPage<Submission> & { nextCursor?: undefined }) | (Page<Submission> & { pagination?: undefined });
 export type SubmissionReviewPage = NumberedPage<Submission>;
 export type SubmissionReviewPageRequest = NumberedPageRequest;
-export interface SubmissionPageRequest {
+export interface SubmissionPageRequest extends Partial<NumberedPageRequest> {
   limit?: number;
   cursor?: string;
   status?: SubmissionStatusFilter;
 }
-export interface SubmissionPageRepositoryRequest extends PageRequest {
+export interface SubmissionPageRepositoryRequest extends NumberedPageRequest {
   status?: SubmissionStatusFilter;
-  cursorKey: string;
 }

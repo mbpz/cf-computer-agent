@@ -13,22 +13,23 @@ import { createLocaleRuntime } from "../../frontend/lib/i18n";
 describe("React read-only user pages", () => {
   it("renders loading and empty knowledge states without undefined values", () => {
     expect(renderToStaticMarkup(<HomePage state={{ kind: "loading" }} />)).toContain("aria-busy");
-    const empty = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [], nextCursor: null }} />);
+    const empty = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);
     expect(empty).toContain("No published knowledge");
     expect(empty).not.toContain("undefined");
   });
 
-  it("renders bounded knowledge pages and a load-more affordance", () => {
-    const html = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], nextCursor: "cursor-2" }} onLoadMore={vi.fn()} />);
+  it("renders bounded knowledge pages and numbered pagination", () => {
+    const html = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [{ id: "k1", title: "Guide", summary: "Short", publishedAt: "2026-08-25", tags: ["cf"] }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} onPageChange={vi.fn()} />);
     expect(html).toContain("Guide");
-    expect(html).toContain("Load more");
+    expect(html).toContain('aria-label="Page 2"');
+    expect(html).not.toContain("Load more");
     expect(html).toContain("cf");
   });
 
   it("renders daily/weekly review items without undefined values", () => {
     const html = renderToStaticMarkup(<KnowledgePage
       locale={createLocaleRuntime({ navigatorLanguage: "en" })}
-      state={{ kind: "ready", items: [], nextCursor: null }}
+      state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }}
       review={{ kind: "ready", data: { items: [{ knowledgeItemId: "k1", revisionId: "r1", title: "Guide", publishedAt: "2026-08-25", lastVisitedAt: null, reason: "to_read", favorite: true }] } }}
       reviewPeriod="weekly"
     />);
@@ -42,7 +43,7 @@ describe("React read-only user pages", () => {
   it("renders a private to-read list with completion state", () => {
     const html = renderToStaticMarkup(<KnowledgePage
       locale={createLocaleRuntime({ navigatorLanguage: "en" })}
-      state={{ kind: "ready", items: [], nextCursor: null }}
+      state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }}
       favorites={[{ id: "k1", title: "Guide", createdAt: "2026-08-25T00:00:00.000Z", completed: false, visibility: "shared" }]}
     />);
     expect(html).toContain("Saved to read");
@@ -59,7 +60,7 @@ describe("React read-only user pages", () => {
   });
 
   it("shows degraded search and citation links", () => {
-    const html = renderToStaticMarkup(<SearchPage state={{ kind: "ready", degraded: true, results: [{ id: "r1", knowledgeItemId: "knowledge-1", title: "Guide", snippet: "A match", href: "/knowledge/r1", matchedFields: ["body"] }] }} />);
+    const html = renderToStaticMarkup(<SearchPage state={{ kind: "ready", degraded: true, results: [{ id: "r1", knowledgeItemId: "knowledge-1", title: "Guide", snippet: "A match", href: "/knowledge/r1", matchedFields: ["body"] }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} />);
     expect(html).toContain("Search degraded");
     expect(html).toContain('id="knowledge-search"');
     expect(html).toContain("Search query");
@@ -72,7 +73,7 @@ describe("React read-only user pages", () => {
   it("renders owner saved-view controls without exposing undefined values", () => {
     const html = renderToStaticMarkup(<SearchPage
       locale={createLocaleRuntime()}
-      state={{ kind: "ready", query: "docs", degraded: false, results: [], nextCursor: null }}
+      state={{ kind: "ready", query: "docs", degraded: false, results: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }}
       query="docs"
       savedViews={[{ id: "view-1", name: "Platform docs", updatedAt: "", filters: { v: 1, q: "docs", spaceId: null, collectionId: null, tagIds: [], tagMode: "or" } }]}
       onSaveView={() => undefined}
@@ -104,10 +105,11 @@ describe("React read-only user pages", () => {
     expect(html).not.toContain("undefined");
   });
 
-  it("renders scoped submission status and cursor affordance", () => {
-    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "review_pending" }], nextCursor: "v1.next" }} />);
+  it("renders scoped submission status and numbered pagination", () => {
+    const html = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [{ id: "s1", title: "Guide", status: "review_pending" }], pagination: { page: 1, pageSize: 20, total: 21, totalPages: 2 } }} />);
     expect(html).toContain("Guide");
-    expect(html).toContain("Load more submissions");
+    expect(html).toContain('aria-label="Page 2"');
+    expect(html).not.toContain("Load more submissions");
     expect(html).not.toContain("undefined");
   });
 });

@@ -9,9 +9,9 @@ import {
   type RequestContext,
 } from "../http";
 import type { Principal } from "../identity/principal";
-import { parsePageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import type { LibraryService } from "../library/service";
-import type { ChatScope, LibraryScope, SearchRequest } from "../library/types";
+import type { ChatScope, LibraryFilters, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import type { ChatConversationService } from "../chat/conversation-service";
 import type { ChatFeedbackService } from "../chat/feedback-service";
@@ -68,8 +68,8 @@ export async function routeLibraryApi(
 
   if (url.pathname === "/api/knowledge") {
     if (request.method !== "GET") return methodNotAllowed("GET", context);
-    const query = queryRecord(url, ["limit", "cursor", "spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"]);
-    return jsonResponse(await services.library.list(scope, pageRequest(query)), 200, context.requestId);
+    const filters = libraryFilters(url);
+    return jsonResponse(await services.library.list(scope, { ...filters, ...parseNumberedPageRequest(url, Object.keys(filters), "LIBRARY_REQUEST_INVALID") }), 200, context.requestId);
   }
 
   if (url.pathname === "/api/knowledge/favorites") {
@@ -598,7 +598,7 @@ function invalidChatRequest(): AppError {
 }
 
 function searchRequest(url: URL): SearchRequest {
-  const allowed = ["q", "limit", "cursor", "spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"];
+  const allowed = ["q", "page", "pageSize", "spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"];
   for (const key of url.searchParams.keys()) {
     if (!allowed.includes(key) || (key !== "tagId" && url.searchParams.getAll(key).length !== 1)) {
       throw invalidRequest();
@@ -609,17 +609,28 @@ function searchRequest(url: URL): SearchRequest {
   if ((tagIds.length === 0) !== (tagMode === null)) throw invalidRequest();
   if (tagMode !== null && tagMode !== "and" && tagMode !== "or") throw invalidRequest();
   const query: Record<string, string | undefined> = Object.create(null) as Record<string, string | undefined>;
-  for (const key of ["q", "limit", "cursor", "spaceId", "collectionId", "kind", "authorId", "publishedFrom", "publishedTo"] as const) {
+  for (const key of ["q", "spaceId", "collectionId", "kind", "authorId", "publishedFrom", "publishedTo"] as const) {
     query[key] = url.searchParams.get(key) ?? undefined;
   }
   const tagFilter: Pick<SearchRequest, "tagIds" | "tagMode"> = tagMode === null
     ? {}
     : { tagIds, tagMode };
+  const paginationUrl = new URL(url);
+  for (const key of [...paginationUrl.searchParams.keys()]) {
+    if (key !== "page" && key !== "pageSize") paginationUrl.searchParams.delete(key);
+  }
   return {
     ...pageRequest(query),
+    ...parseNumberedPageRequest(paginationUrl, [], "LIBRARY_REQUEST_INVALID"),
     query: query.q ?? "",
     ...tagFilter,
   };
+}
+
+function libraryFilters(url: URL): LibraryFilters {
+  const keys = ["spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"] as const;
+  const query = queryRecord(url, ["page", "pageSize", ...keys]);
+  return pageRequest(query);
 }
 
 function memberScope(principal: Principal): LibraryScope {

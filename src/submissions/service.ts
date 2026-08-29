@@ -1,7 +1,7 @@
 import { AppError } from "../http";
 import { decodeSourceBytes } from "../sources/decoder";
 import { recoverHtmlMarkdown } from "../assets/html";
-import { deriveCursorScopeKey, parsePageRequest, type NumberedPageRequest } from "../pagination";
+import { pageOffset, type NumberedPageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
   SubmissionsRepositoryConflictError,
@@ -243,15 +243,11 @@ export class SubmissionsService {
 
   async listOwn(submitterId: string, request: SubmissionPageRequest = {}): Promise<SubmissionPage> {
     const status = validateStatusFilter(request.status);
-    const page = parsePageRequest(request.limit, request.cursor);
+    const page = { page: request.page ?? 1, pageSize: request.pageSize ?? 20 } as NumberedPageRequest;
+    pageOffset(page);
     return this.repository.listOwned(submitterId, {
       ...page,
       ...(status === undefined ? {} : { status }),
-      cursorKey: await deriveCursorScopeKey("own-submissions", {
-        memberId: submitterId,
-        status: status ?? null,
-        sort: "created_at-desc-id-desc",
-      }),
     });
   }
   listPending(request: NumberedPageRequest): Promise<SubmissionReviewPage> { return this.repository.listPending(request); }

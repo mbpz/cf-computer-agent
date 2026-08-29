@@ -256,7 +256,7 @@ describe("M1 permission-scoped library", () => {
         markdown: expect.stringContaining("Canonical readable terminal marker"),
       },
     });
-    await expect(service.search(contributor, { query: "terminal marker", limit: 20 })).resolves.toEqual({
+    await expect(service.search(contributor, { query: "terminal marker", limit: 20 })).resolves.toMatchObject({
       items: [],
       degraded: true,
     });
@@ -728,7 +728,7 @@ describe("M1 permission-scoped library", () => {
     expect(prepared.some((sql) => sql.includes(" MATCH ?"))).toBe(false);
   });
 
-  it("binds ChatScope to cursor replay and keeps unrelated corpus growth from changing scoped context", async () => {
+  it("keeps numbered ChatScope results stable across unrelated corpus growth", async () => {
     await seedKnowledge({
       id: "knowledge-chat-invariant-a", revisionId: "revision-chat-invariant-a",
       title: "Launch latency A", visibility: "shared", body: "Launch latency has a measured budget.",
@@ -742,18 +742,8 @@ describe("M1 permission-scoped library", () => {
       kind: "items" as const,
       knowledgeItemIds: ["knowledge-chat-invariant-a", "knowledge-chat-invariant-b"],
     };
-    const before = await service.search(contributor, { query: "launch latency", limit: 1 }, chatScope);
-    expect(before.nextCursor).toBeDefined();
-    await expect(service.search(contributor, {
-      query: "launch latency", limit: 1, cursor: before.nextCursor,
-    }, chatScope)).resolves.toMatchObject({
-      items: [expect.objectContaining({ knowledgeItemId: "knowledge-chat-invariant-b" })],
-    });
-    await expect(service.search(contributor, {
-      query: "launch latency", limit: 1, cursor: before.nextCursor,
-    }, { kind: "space", spaceId: "default" })).rejects.toMatchObject({
-      code: "PAGE_CURSOR_INVALID", status: 400,
-    });
+    const before = await service.search(contributor, { query: "launch latency", page: 1, pageSize: 20 }, chatScope);
+    expect(before.pagination).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
 
     const beforeAll = await service.search(contributor, { query: "launch latency", limit: 8 }, chatScope);
     for (let index = 0; index < 24; index += 1) {
@@ -765,14 +755,10 @@ describe("M1 permission-scoped library", () => {
         body: "Directory contacts and holiday policy.",
       });
     }
-    const after = await service.search(contributor, { query: "launch latency", limit: 1 }, chatScope);
+    const after = await service.search(contributor, { query: "launch latency", page: 1, pageSize: 20 }, chatScope);
     const afterAll = await service.search(contributor, { query: "launch latency", limit: 8 }, chatScope);
-    expect(after.nextCursor).toBe(before.nextCursor);
-    await expect(service.search(contributor, {
-      query: "launch latency", limit: 1, cursor: before.nextCursor,
-    }, chatScope)).resolves.toMatchObject({
-      items: [expect.objectContaining({ knowledgeItemId: "knowledge-chat-invariant-b" })],
-    });
+    expect(after.items.map(({ score: _score, ...hit }) => hit)).toEqual(before.items.map(({ score: _score, ...hit }) => hit));
+    expect(after.pagination).toEqual(before.pagination);
     expect(afterAll.items.map(({ score: _score, ...hit }) => hit))
       .toEqual(beforeAll.items.map(({ score: _score, ...hit }) => hit));
     expect(computeEvidenceConfidence("launch latency", afterAll.items))
@@ -824,7 +810,7 @@ describe("M1 permission-scoped library", () => {
     const contributorAfter = await service.search(contributor, { query: "isolationterm", limit: 1 });
     const adminAfter = await service.search(admin, { query: "isolationterm", limit: 20 });
 
-    expect(contributorBefore.nextCursor).toBeDefined();
+    expect(contributorBefore.pagination?.total).toBe(2);
     expect(contributorAfter).toEqual(contributorBefore);
     expect(adminAfter.items.map((item) => item.knowledgeItemId))
       .not.toEqual(adminBefore.items.map((item) => item.knowledgeItemId));
@@ -917,17 +903,9 @@ describe("M1 permission-scoped library", () => {
     await expect(ids(["tag-absent"], "or")).resolves.toEqual([]);
 
     const first = await service.search(contributor, {
-      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "or", limit: 1,
+      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "or", page: 1, pageSize: 20,
     });
-    expect(first.nextCursor).toBeDefined();
-    await expect(service.search(contributor, {
-      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "or",
-      limit: 2, cursor: first.nextCursor,
-    })).resolves.toMatchObject({ items: expect.any(Array) });
-    await expect(service.search(contributor, {
-      query: "filterterm", spaceId: "default", tagIds: ["tag-a", "tag-b"], tagMode: "and",
-      limit: 1, cursor: first.nextCursor,
-    })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+    expect(first.pagination?.total).toBe(3);
   });
 
   it("fails closed for disabled, absent, and cross-Space single Tag filters in list and search", async () => {
@@ -956,25 +934,22 @@ describe("M1 permission-scoped library", () => {
     });
     const service = serviceWithContent();
 
-    const first = await service.list(contributor, { spaceId: "default", tagId: "tag-active", limit: 1 });
-    expect(first.items).toHaveLength(1);
+    const first = await service.list(contributor, { spaceId: "default", tagId: "tag-active", page: 1, pageSize: 20 });
+    expect(first.items).toHaveLength(2);
     expect(first.items[0]?.id).toMatch(/^knowledge-tag-active-/u);
-    expect(first.nextCursor).toBeDefined();
-    const second = await service.list(contributor, {
-      spaceId: "default", tagId: "tag-active", limit: 1, cursor: first.nextCursor,
-    });
-    expect(new Set([...first.items, ...second.items].map(({ id }) => id))).toEqual(new Set([
+    expect(first.pagination?.total).toBe(2);
+    expect(new Set(first.items.map(({ id }) => id))).toEqual(new Set([
       "knowledge-tag-active-a", "knowledge-tag-active-b",
     ]));
     await expect(service.list(contributor, {
       spaceId: "default", tagId: "tag-disabled", limit: 20,
-    })).resolves.toEqual({ items: [] });
+    })).resolves.toMatchObject({ items: [] });
     await expect(service.list(contributor, {
       spaceId: "default", tagId: "tag-other", limit: 20,
-    })).resolves.toEqual({ items: [] });
+    })).resolves.toMatchObject({ items: [] });
     await expect(service.list(contributor, {
       spaceId: "default", tagId: "tag-absent", limit: 20,
-    })).resolves.toEqual({ items: [] });
+    })).resolves.toMatchObject({ items: [] });
 
     await expect(service.search(contributor, {
       query: "singletagterm", spaceId: "default", tagId: "tag-active", limit: 20,
@@ -989,15 +964,9 @@ describe("M1 permission-scoped library", () => {
       const page = await service.search(contributor, {
         query: "singletagterm", spaceId: "default", tagId, limit: 20,
       });
-      expect(page).toEqual({ items: [], degraded: false });
+      expect(page).toMatchObject({ items: [], degraded: false });
       expect(JSON.stringify(page)).not.toMatch(/disabled-metadata|cross-space-metadata|admin-metadata/u);
     }
-    await expect(service.list(contributor, {
-      spaceId: "default", tagId: "tag-active", limit: 1, cursor: first.nextCursor,
-    })).resolves.toMatchObject({ items: [expect.any(Object)] });
-    await expect(service.list(contributor, {
-      spaceId: "default", tagId: "tag-disabled", limit: 1, cursor: first.nextCursor,
-    })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
 
     const contributorIds = (await service.search(contributor, {
       query: "singletagterm", spaceId: "default", tagId: "tag-active", limit: 20,
@@ -1027,7 +996,7 @@ describe("M1 permission-scoped library", () => {
         .bind(collectionId === "collection-absent" ? null : collectionId).run();
       await expect(service.search(contributor, {
         query: "collectionfilter", spaceId: "default", collectionId,
-      })).resolves.toEqual({ items: [], degraded: false });
+      })).resolves.toMatchObject({ items: [], degraded: false });
     }
   });
 
@@ -1053,7 +1022,7 @@ describe("M1 permission-scoped library", () => {
     });
 
     await expect(service.search(contributor, { query: "collectionactivityterm" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(indexActivityState("knowledge-collection-activity")).resolves.toEqual({
       searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
     });
@@ -1067,7 +1036,7 @@ describe("M1 permission-scoped library", () => {
       status: "active", updatedAt: "2026-08-22T00:02:00.000Z",
     });
     await expect(service.search(contributor, { query: "collectionactivityterm" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(new PublicationRepository(env.DB).processIndexJob("revision-collection-activity"))
       .resolves.toBe("indexed");
     await expect(service.search(contributor, { query: "collectionactivityterm" }))
@@ -1095,7 +1064,7 @@ describe("M1 permission-scoped library", () => {
       status: "active", updatedAt: "2026-08-22T00:02:00.000Z",
     });
     await expect(service.search(contributor, { query: "spaceactivityterm", spaceId: "space-two" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(new PublicationRepository(env.DB).processIndexJob("revision-space-activity"))
       .resolves.toBe("indexed");
     await expect(service.search(contributor, { query: "spaceactivityterm", spaceId: "space-two" }))
@@ -1207,14 +1176,14 @@ describe("M1 permission-scoped library", () => {
     await tags.updateStatus("statusmarker", "disabled", "2026-08-22T00:01:00.000Z");
 
     await expect(service.search(contributor, { query: "statusmarker" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(indexActivityState("knowledge-tag-activity")).resolves.toEqual({
       searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
     });
 
     await tags.updateStatus("statusmarker", "active", "2026-08-22T00:02:00.000Z");
     await expect(service.search(contributor, { query: "statusmarker" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(new PublicationRepository(env.DB).processIndexJob("revision-tag-activity"))
       .resolves.toBe("indexed");
     await expect(service.search(contributor, { query: "statusmarker" }))
@@ -1743,7 +1712,7 @@ describe("M1 permission-scoped library", () => {
     });
     const service = serviceWithContent();
 
-    await expect(service.search(contributor, { query: "readable", limit: 20 })).resolves.toEqual({
+    await expect(service.search(contributor, { query: "readable", limit: 20 })).resolves.toMatchObject({
       items: [],
       degraded: true,
     });
@@ -1753,7 +1722,7 @@ describe("M1 permission-scoped library", () => {
     });
 
     await env.DB.prepare("UPDATE knowledge_items SET search_status = 'indexed' WHERE id = 'knowledge-degraded'").run();
-    await expect(service.search(contributor, { query: "readable", limit: 20 })).resolves.toEqual({
+    await expect(service.search(contributor, { query: "readable", limit: 20 })).resolves.toMatchObject({
       items: [],
       degraded: false,
     });
@@ -1787,13 +1756,13 @@ describe("M1 permission-scoped library", () => {
     const service = serviceWithContent();
 
     await expect(service.search(contributor, { query: "disableddegradedterm" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
 
     await spaces.updateCollection("collection-degraded-disabled", {
       status: "active", updatedAt: "2026-08-22T00:01:00.000Z",
     });
     await expect(service.search(contributor, { query: "disableddegradedterm" }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await expect(indexActivityState("knowledge-disabled-degraded")).resolves.toEqual({
       searchStatus: "pending", jobState: "pending", adminRows: 0, sharedRows: 0,
     });
@@ -1837,32 +1806,16 @@ describe("M1 permission-scoped library", () => {
     });
   });
 
-  it("rejects malformed or scope-mismatched cursors instead of falling back to an unbounded scan", async () => {
+  it("returns deterministic numbered pages without exposing cursors", async () => {
     await seedKnowledge({ id: "knowledge-a", revisionId: "revision-a", title: "A", visibility: "shared", body: "cursor", searchBody: "cursor" });
     await seedKnowledge({ id: "knowledge-b", revisionId: "revision-b", title: "B", visibility: "shared", body: "cursor", searchBody: "cursor" });
     const service = serviceWithContent();
-    const listCursor = (await service.list(contributor, { spaceId: "default", limit: 1 })).nextCursor!;
-    const searchCursor = (await service.search(contributor, { query: "cursor", limit: 1 })).nextCursor!;
-
-    await expect(service.list(contributor, { spaceId: "space-two", limit: 1, cursor: listCursor }))
-      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-    await expect(service.search(contributor, { query: "different", limit: 1, cursor: searchCursor }))
-      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-    await expect(service.search(contributor, { query: "cursor", limit: 1, cursor: `${searchCursor}x` }))
-      .rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-
-    const invalidIds = ["x".repeat(129), "x\u0000y", "\ud800"];
-    for (const id of invalidIds) {
-      const listPayload = decodeOpaqueCursor(listCursor) as Record<string, unknown>;
-      const searchPayload = decodeOpaqueCursor(searchCursor) as Record<string, unknown>;
-      await expect(service.list(contributor, {
-        spaceId: "default", limit: 1, cursor: encodeOpaqueCursor({ ...listPayload, id }),
-      })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-      await expect(service.search(contributor, {
-        query: "cursor", limit: 1,
-        cursor: encodeOpaqueCursor({ ...searchPayload, knowledgeItemId: id }),
-      })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
-    }
+    const list = await service.list(contributor, { spaceId: "default", page: 1, pageSize: 20 });
+    const search = await service.search(contributor, { query: "cursor", page: 1, pageSize: 20 });
+    expect(list).not.toHaveProperty("nextCursor");
+    expect(search).not.toHaveProperty("nextCursor");
+    expect(list.pagination).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
+    expect(search.pagination).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
   });
 
   it("uses both selective active corpora without relational scans at a 10,000-Revision production shape", async () => {
@@ -1872,9 +1825,9 @@ describe("M1 permission-scoped library", () => {
     const service = new LibraryService(new LibraryRepository(database), noContentReader);
 
     await expect(service.list(contributor, { spaceId: "space-empty", limit: 20 }))
-      .resolves.toEqual({ items: [] });
+      .resolves.toMatchObject({ items: [] });
     await expect(service.search(contributor, { query: "not-present", spaceId: "space-empty", limit: 20 }))
-      .resolves.toEqual({ items: [], degraded: false });
+      .resolves.toMatchObject({ items: [], degraded: false });
     await service.list(contributor, { spaceId: "default", tagId: "tag-plan-a", limit: 20 });
     await service.search(contributor, {
       query: "planterm", spaceId: "default", collectionId: "collection-plan",
@@ -1888,26 +1841,25 @@ describe("M1 permission-scoped library", () => {
     await service.search(contributor, {
       query: "planterm", spaceId: "default", tagIds: ["tag-plan-a", "tag-plan-b"], tagMode: "or",
     });
-    const bounded = await service.search(contributor, { query: "planterm", spaceId: "default", limit: 50 });
+    const bounded = await service.search(contributor, { query: "planterm", spaceId: "default", page: 1, pageSize: 50 });
     expect(bounded.items).toHaveLength(50);
-    expect(bounded.nextCursor).toBeDefined();
     const boundedNext = await service.search(contributor, {
-      query: "planterm", spaceId: "default", limit: 50, cursor: bounded.nextCursor,
+      query: "planterm", spaceId: "default", page: 2, pageSize: 50,
     });
     expect(boundedNext.items).toHaveLength(50);
     expect(new Set([...bounded.items, ...boundedNext.items].map((item) => item.chunkId))).toHaveLength(100);
     await service.search(admin, { query: "planterm", spaceId: "default", limit: 50 });
 
-    const listSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC"));
-    const taggedListSql = prepared.find((sql) => sql.includes("ORDER BY k.updated_at DESC")
+    const listSql = prepared.find((sql) => sql.includes("ORDER BY updated_at DESC"));
+    const taggedListSql = prepared.find((sql) => sql.includes("ORDER BY updated_at DESC")
       && sql.includes("JOIN tags active_tag"));
     const degradedSql = prepared.find((sql) => sql.includes("k.search_status = 'search_degraded'"));
     expect(listSql).toBeDefined();
     expect(taggedListSql).toBeDefined();
     expect(degradedSql).toBeDefined();
-    const listPlan = await explain(listSql!, ["member-1", "contributor", "space-empty", 21]);
+    const listPlan = await explain(listSql!, ["member-1", "contributor", "space-empty", 20, 0]);
     const taggedListPlan = await explain(taggedListSql!, [
-      "member-1", "contributor", "default", "tag-plan-a", 21,
+      "member-1", "contributor", "default", "tag-plan-a", 20, 0,
     ]);
     const degradedPlan = await explain(degradedSql!, ["member-1", "contributor", "space-empty"]);
     expect(listPlan).toContain("knowledge_items_space_page");
@@ -1915,26 +1867,26 @@ describe("M1 permission-scoped library", () => {
     expect(taggedListPlan).toContain("sqlite_autoindex_tags_1");
     expect(taggedListPlan).toContain("knowledge_items_space_page");
     expect(degradedPlan).toContain("knowledge_items_degraded_scope");
-    const sharedSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts_shared"));
-    const adminSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts,"));
+    const sharedSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts_shared") && sql.includes("LIMIT ? OFFSET ?"));
+    const adminSearchSql = prepared.filter((sql) => sql.includes("bm25(chunks_fts,") && sql.includes("LIMIT ? OFFSET ?"));
     expect(sharedSearchSql).toHaveLength(7);
     expect(adminSearchSql).toHaveLength(1);
     const collectionPlan = await explain(sharedSearchSql[1]!, [
-      "member-1", "contributor", "\"planterm\"", "default", "collection-plan", "collection-plan", 21,
+      "member-1", "contributor", "\"planterm\"", "default", "collection-plan", "collection-plan", 20, 0,
     ]);
     const singleTagPlan = await explain(sharedSearchSql[2]!, [
-      "member-1", "contributor", "\"planterm\"", "default", "tag-plan-a", 21,
+      "member-1", "contributor", "\"planterm\"", "default", "tag-plan-a", 20, 0,
     ]);
     const andPlan = await explain(sharedSearchSql[3]!, [
       "member-1", "contributor", "\"planterm\"", "default",
-      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
+      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 20, 0,
     ]);
     const orPlan = await explain(sharedSearchSql[4]!, [
       "member-1", "contributor", "\"planterm\"", "default",
-      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 21,
+      "tag-plan-a", "tag-plan-b", "default", "tag-plan-a", "tag-plan-b", 20, 0,
     ]);
     const adminPlan = await explain(adminSearchSql[0]!, [
-      "admin-1", "admin", "\"planterm\"", "default", 51,
+      "admin-1", "admin", "\"planterm\"", "default", 50, 0,
     ]);
     expect(andPlan).toContain("sqlite_autoindex_revision_tags_1");
     expect(orPlan).toContain("sqlite_autoindex_revision_tags_1");
@@ -2103,7 +2055,7 @@ describe("M1 permission-scoped library", () => {
       await expect(repository.findRevision(disabled, "knowledge-real-shared", "revision-real-shared")).resolves.toBeNull();
       await expect(repository.findRevision(contributor, "knowledge-real-secret", "revision-real-secret")).resolves.toBeNull();
       await expect(repository.findCitation(contributor, "revision-real-secret", "revision-real-secret-chunk-0")).resolves.toBeNull();
-      await expect(repository.list(forged, { limit: 20, cursorKey: "a".repeat(64) })).resolves.toEqual({ items: [] });
+      await expect(repository.list(forged, { page: 1, pageSize: 20 })).resolves.toMatchObject({ items: [] });
       await expect(repository.search(forged, {
         normalizedQuery: "secret",
         matchQuery: "\"secret\"",
@@ -2112,13 +2064,13 @@ describe("M1 permission-scoped library", () => {
         policyVersion: 2,
         limit: 20,
         cursorKey: "a".repeat(64),
-      })).resolves.toEqual({ items: [], degraded: false });
+      })).resolves.toMatchObject({ items: [], degraded: false });
       expect(readerCalls).toHaveLength(3);
 
       await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
       await expect(service.detail(contributor, "knowledge-real-shared")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.revision(contributor, "knowledge-real-shared", "revision-real-shared")).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
-      await expect(service.search(contributor, { query: "authorized", limit: 20 })).resolves.toEqual({ items: [], degraded: false });
+      await expect(service.search(contributor, { query: "authorized", limit: 20 })).resolves.toMatchObject({ items: [], degraded: false });
       await expect(service.readCitation(contributor, sharedCitation)).rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });
       await expect(service.download(contributor, "knowledge-real-shared", "revision-real-shared"))
         .rejects.toMatchObject({ code: "KNOWLEDGE_NOT_FOUND" });

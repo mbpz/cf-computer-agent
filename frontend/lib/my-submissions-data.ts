@@ -1,5 +1,5 @@
 import { apiFetch, type Fetcher } from "./api";
-import { createAsyncOwner } from "./async-owner";
+import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export type MySubmissionReviewDecision = "rejected" | "revision_requested";
 export type MySubmissionReviewReasonCode = "not_relevant" | "duplicate" | "unsafe" | "needs_revision";
@@ -9,22 +9,19 @@ export interface MySubmissionReview {
   note: string;
 }
 export interface MySubmissionItem { id: string; title?: string; status?: string; review?: MySubmissionReview; }
-export interface MySubmissionsPageResult { items: MySubmissionItem[]; nextCursor: string | null; }
+export type MySubmissionsPageResult = FrontendNumberedPage<MySubmissionItem>;
+export interface LoadMySubmissionsPageInput extends FrontendPageRequest { status?: string; signal?: AbortSignal; }
 
-export async function loadMySubmissionsPage({ cursor, requester = fetch, signal }: { cursor?: string | null; requester?: Fetcher; signal?: AbortSignal }): Promise<MySubmissionsPageResult> {
-  const params = new URLSearchParams({ limit: "20" });
-  if (cursor) params.set("cursor", cursor);
-  const data = await apiFetch<{ items?: unknown[]; nextCursor?: unknown }>(`/api/submissions/mine?${params.toString()}`, { requester, signal });
-  return {
-    items: Array.isArray(data.items) ? data.items.map(normalizeSubmission).filter((item): item is MySubmissionItem => item !== null) : [],
-    nextCursor: typeof data.nextCursor === "string" && data.nextCursor.length > 0 ? data.nextCursor : null,
-  };
+export async function loadMySubmissionsPage({ page, pageSize, status, requester = fetch, signal }: LoadMySubmissionsPageInput & { requester?: Fetcher }): Promise<MySubmissionsPageResult> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (status) params.set("status", status);
+  return normalizeNumberedPage(await apiFetch(`/api/submissions/mine?${params.toString()}`, { requester, signal }), normalizeSubmission);
 }
 
-function normalizeSubmission(value: unknown): MySubmissionItem | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+function normalizeSubmission(value: unknown): MySubmissionItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("SUBMISSION_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id) return null;
+  if (typeof record.id !== "string" || !record.id) throw new Error("SUBMISSION_RESPONSE_INVALID");
   const review = normalizeReview(record.review);
   return {
     id: record.id,
@@ -50,17 +47,5 @@ function isReviewReasonCode(value: unknown): value is MySubmissionReviewReasonCo
 }
 
 export function createMySubmissionsRequestController(requester: Fetcher = fetch) {
-  let active: AbortController | null = null;
-  const owner = createAsyncOwner();
-  return {
-    request(cursor?: string | null) {
-      active?.abort();
-      active = new AbortController();
-      const generation = owner.claim();
-      const promise = loadMySubmissionsPage({ cursor, requester, signal: active.signal }).then((page) => ({ generation, page }));
-      return { generation, promise };
-    },
-    isCurrent(generation: number) { return owner.isCurrent(generation); },
-    cancel() { owner.invalidate(); active?.abort(); active = null; },
-  };
+  return createNumberedRequestController((input: Omit<LoadMySubmissionsPageInput, "signal">, signal) => loadMySubmissionsPage({ ...input, requester, signal }));
 }

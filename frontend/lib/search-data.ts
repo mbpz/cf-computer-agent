@@ -1,5 +1,5 @@
 import { apiFetch, type Fetcher } from "./api";
-import { createAsyncOwner } from "./async-owner";
+import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export interface SearchResultItem {
   id: string;
@@ -13,28 +13,25 @@ export interface SearchResultItem {
 const MAX_QUERY_CODE_POINTS = 512;
 const MATCHED_FIELDS = new Set(["title", "summary", "tags", "body", "code"]);
 
-export interface SearchPageResult {
-  items: SearchResultItem[];
-  nextCursor: string | null;
-  degraded: boolean;
+export type SearchPageResult = FrontendNumberedPage<SearchResultItem> & { degraded: boolean };
+export interface LoadSearchPageInput extends FrontendPageRequest {
+  query: string; tagIds?: string[]; tagMode?: "and" | "or"; spaceId?: string; collectionId?: string;
+  kind?: "text" | "markdown" | "code"; authorId?: string; publishedFrom?: string; publishedTo?: string; signal?: AbortSignal;
 }
 
-export async function loadSearchPage({ query, cursor, requester = fetch, signal }: { query: string; cursor?: string | null; requester?: Fetcher; signal?: AbortSignal }): Promise<SearchPageResult> {
+export async function loadSearchPage({ query, page, pageSize, tagIds = [], requester = fetch, signal, ...filters }: LoadSearchPageInput & { requester?: Fetcher }): Promise<SearchPageResult> {
   const normalizedQuery = Array.from(typeof query === "string" ? query.trim() : "").slice(0, MAX_QUERY_CODE_POINTS).join("");
-  const params = new URLSearchParams({ q: normalizedQuery, limit: "20" });
-  if (cursor) params.set("cursor", cursor);
-  const data = await apiFetch<{ items?: unknown[]; nextCursor?: unknown; degraded?: unknown }>(`/api/knowledge/search?${params.toString()}`, { requester, signal });
-  return {
-    items: Array.isArray(data.items) ? data.items.map(normalizeSearchItem).filter((item): item is SearchResultItem => item !== null) : [],
-    nextCursor: typeof data.nextCursor === "string" && data.nextCursor.length > 0 ? data.nextCursor : null,
-    degraded: data.degraded === true,
-  };
+  const params = new URLSearchParams({ q: normalizedQuery, page: String(page), pageSize: String(pageSize) });
+  for (const tagId of tagIds) params.append("tagId", tagId);
+  for (const [key, value] of Object.entries(filters)) if (value !== undefined) params.set(key, value);
+  const data = await apiFetch<Record<string, unknown>>(`/api/knowledge/search?${params.toString()}`, { requester, signal });
+  return { ...normalizeNumberedPage(data, normalizeSearchItem), degraded: data.degraded === true };
 }
 
-function normalizeSearchItem(value: unknown): SearchResultItem | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+function normalizeSearchItem(value: unknown): SearchResultItem {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("SEARCH_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  if (typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) return null;
+  if (typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) throw new Error("SEARCH_RESPONSE_INVALID");
   const citation = typeof record.citationId === "string" && record.citationId ? record.citationId : undefined;
   const matchedFields = Array.isArray(record.matchedFields)
     ? record.matchedFields.filter((field): field is string => typeof field === "string" && MATCHED_FIELDS.has(field))
@@ -50,16 +47,5 @@ function normalizeSearchItem(value: unknown): SearchResultItem | null {
 }
 
 export function createSearchRequestController(requester: Fetcher = fetch) {
-  let active: AbortController | null = null;
-  const owner = createAsyncOwner();
-  return {
-    request(query: string, cursor?: string | null) {
-      active?.abort();
-      active = new AbortController();
-      const generation = owner.claim();
-      return { generation, promise: loadSearchPage({ query, cursor, requester, signal: active.signal }).then((page) => ({ generation, page })) };
-    },
-    isCurrent(generation: number) { return owner.isCurrent(generation); },
-    cancel() { owner.invalidate(); active?.abort(); active = null; },
-  };
+  return createNumberedRequestController((input: Omit<LoadSearchPageInput, "signal">, signal) => loadSearchPage({ ...input, requester, signal }));
 }

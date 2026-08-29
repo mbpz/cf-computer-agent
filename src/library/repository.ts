@@ -1,7 +1,8 @@
 import { AppError } from "../http";
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import { metadataSearchText } from "../sources/chunk-metadata";
-import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, parsePageRequest, type NumberedPageRequest, type PageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import { parseSourceLocationJson, type SourceLocation } from "../sources/chunker";
@@ -44,9 +45,7 @@ const visibleSearchStatusSql = `CASE
   ELSE k.search_status
 END`;
 
-export interface RepositoryKnowledgePageRequest extends PageRequest, LibraryFilters {
-  cursorKey: string;
-}
+export interface RepositoryKnowledgePageRequest extends Partial<NumberedPageRequest>, LibraryFilters { limit?: number; cursor?: string; cursorKey?: string; }
 
 export interface RepositorySearchRequest extends RepositoryKnowledgePageRequest {
   normalizedQuery: string;
@@ -344,51 +343,25 @@ export class LibraryRepository implements LibraryRepositoryPort {
   }
 
   async list(scope: LibraryScope, request: RepositoryKnowledgePageRequest): Promise<KnowledgePage> {
-    assertRepositoryPageRequest(request);
-    const cursor = request.cursor === undefined
-      ? undefined
-      : decodeListCursor(request.cursor, request.cursorKey);
+    const pagination = repositoryNumberedRequest(request);
     const filters = filterSql(request, "k", "r");
-    const cursorSql = cursor === undefined ? "" : `
-      AND (k.updated_at < ? OR (k.updated_at = ? AND k.id < ?))`;
-    const cursorBindings = cursor === undefined ? [] : [cursor.updatedAt, cursor.updatedAt, cursor.id];
-    const rows = await this.db.prepare(
-      `WITH authorized_member AS (
-         SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
-       )
-       SELECT k.id, k.space_id, k.collection_id, r.id AS revision_id, r.title, r.tags_json,
-         r.visibility, ${visibleSearchStatusSql} AS search_status, r.published_at, k.updated_at
-       FROM authorized_member am
-       JOIN knowledge_items k
-       JOIN revisions r ON r.id = k.current_revision_id
-       LEFT JOIN jobs current_index_job
-         ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
-       JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
-       WHERE k.status = 'active'
-         AND (r.visibility = 'shared' OR am.role = 'admin')
-         ${filters.sql}${cursorSql}
-       ORDER BY k.updated_at DESC, k.id DESC
-       LIMIT ?`,
-    ).bind(
-      scope.memberId,
-      scope.role,
-      ...filters.bindings,
-      ...cursorBindings,
-      request.limit + 1,
-    ).all<KnowledgeRow>();
-    const items = rows.results.slice(0, request.limit).map(mapKnowledge);
-    const last = items.at(-1);
-    return {
-      items,
-      ...(rows.results.length > request.limit && last ? {
-        nextCursor: encodeOpaqueCursor({
-          v: 1,
-          updatedAt: last.updatedAt,
-          id: last.id,
-          key: request.cursorKey,
-        }),
-      } : {}),
-    };
+    const bindings = [scope.memberId, scope.role, ...filters.bindings];
+    const visibleKnowledgeSql = `WITH authorized_member AS (SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'),
+      visible_knowledge AS (
+        SELECT k.id, k.space_id, k.collection_id, r.id AS revision_id, r.title, r.tags_json,
+          r.visibility, ${visibleSearchStatusSql} AS search_status, r.published_at, k.updated_at
+        FROM authorized_member am JOIN knowledge_items k JOIN revisions r ON r.id = k.current_revision_id
+        LEFT JOIN jobs current_index_job ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
+        JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
+        WHERE k.status = 'active' AND (r.visibility = 'shared' OR am.role = 'admin') ${filters.sql}
+      )`;
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`${visibleKnowledgeSql} SELECT COUNT(*) AS total FROM visible_knowledge`).bind(...bindings),
+      this.db.prepare(`${visibleKnowledgeSql} SELECT * FROM visible_knowledge ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...bindings, pagination.pageSize, pageOffset(pagination)),
+      pagination,
+      (row) => mapKnowledge(row as KnowledgeRow),
+    );
   }
 
   findCurrent(scope: LibraryScope, knowledgeItemId: string): Promise<AuthorizedRevisionRecord | null> {
@@ -462,58 +435,11 @@ export class LibraryRepository implements LibraryRepositoryPort {
 
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {
     assertRepositorySearchRequest(request);
-    const cursor = request.cursor === undefined
-      ? undefined
-      : decodeSearchCursor(request.cursor, request.cursorKey, request.chatScope !== undefined);
+    const pagination = repositoryNumberedRequest(request);
     const filters = searchFilterSql(request, "k", "r");
     const chatScope = chatScopeFilterSql(request.chatScope, "k");
     const searchCorpus = scope.role === "admin" ? "chunks_fts" : "chunks_fts_shared";
-    const stableCursor = cursor !== undefined && !isRankedSearchCursor(cursor) ? cursor : undefined;
-    const rankedCursor = cursor !== undefined && isRankedSearchCursor(cursor) ? cursor : undefined;
-    const anchorCte = stableCursor === undefined ? "" : `, cursor_anchor AS (
-         SELECT score, published_at, knowledge_item_id, revision_id, chunk_id
-         FROM ranked
-         WHERE knowledge_item_id = ? AND revision_id = ? AND chunk_id = ?
-         LIMIT 1
-       )`;
-    const cursorSql = cursor === undefined ? "" : stableCursor !== undefined ? `
-       CROSS JOIN cursor_anchor anchor
-       WHERE ranked.score > anchor.score
-          OR (ranked.score = anchor.score AND ranked.published_at < anchor.published_at)
-          OR (ranked.score = anchor.score AND ranked.published_at = anchor.published_at
-            AND ranked.knowledge_item_id > anchor.knowledge_item_id)
-          OR (ranked.score = anchor.score AND ranked.published_at = anchor.published_at
-            AND ranked.knowledge_item_id = anchor.knowledge_item_id
-            AND ranked.revision_id > anchor.revision_id)
-          OR (ranked.score = anchor.score AND ranked.published_at = anchor.published_at
-            AND ranked.knowledge_item_id = anchor.knowledge_item_id
-            AND ranked.revision_id = anchor.revision_id AND ranked.chunk_id > anchor.chunk_id)` : `
-       WHERE score > ?
-          OR (score = ? AND published_at < ?)
-          OR (score = ? AND published_at = ? AND knowledge_item_id > ?)
-          OR (score = ? AND published_at = ? AND knowledge_item_id = ? AND revision_id > ?)
-          OR (score = ? AND published_at = ? AND knowledge_item_id = ? AND revision_id = ? AND chunk_id > ?)`;
-    const cursorBindings = stableCursor !== undefined
-      ? [stableCursor.knowledgeItemId, stableCursor.revisionId, stableCursor.chunkId]
-      : rankedCursor === undefined ? [] : [
-        rankedCursor.score,
-        rankedCursor.score,
-        rankedCursor.publishedAt,
-        rankedCursor.score,
-        rankedCursor.publishedAt,
-        rankedCursor.knowledgeItemId,
-        rankedCursor.score,
-        rankedCursor.publishedAt,
-        rankedCursor.knowledgeItemId,
-        rankedCursor.revisionId,
-        rankedCursor.score,
-        rankedCursor.publishedAt,
-        rankedCursor.knowledgeItemId,
-        rankedCursor.revisionId,
-        rankedCursor.chunkId,
-      ];
-    const rows = await this.db.prepare(
-      `WITH authorized_member AS (
+    const rankedSql = `WITH authorized_member AS (
          SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
        ), ranked AS (
          SELECT k.id AS knowledge_item_id, k.space_id, k.collection_id,
@@ -543,48 +469,19 @@ export class LibraryRepository implements LibraryRepositoryPort {
            AND (k.collection_id IS NULL OR active_collection.id IS NOT NULL)
            AND (r.visibility = 'shared' OR am.role = 'admin')
            ${filters.sql}${chatScope.sql}
-       )${anchorCte}
-       SELECT ranked.* FROM ranked${cursorSql}
-       ORDER BY ranked.score ASC, ranked.published_at DESC, ranked.knowledge_item_id ASC,
-         ranked.revision_id ASC, ranked.chunk_id ASC
-       LIMIT ?`,
-    ).bind(
-      scope.memberId,
-      scope.role,
-      request.matchQuery,
-      ...filters.bindings,
-      ...chatScope.bindings,
-      ...cursorBindings,
-      request.limit + 1,
-    ).all<SearchRow>();
-    const items = rows.results.slice(0, request.limit).map((row) => mapSearchHit(row, request.termKeys));
-    const last = rows.results.slice(0, request.limit).at(-1);
+       )`;
+    const bindings = [scope.memberId, scope.role, request.matchQuery, ...filters.bindings, ...chatScope.bindings];
+    const page = await queryNumberedPage(
+      this.db,
+      this.db.prepare(`${rankedSql} SELECT COUNT(*) AS total FROM ranked`).bind(...bindings),
+      this.db.prepare(`${rankedSql} SELECT ranked.* FROM ranked
+        ORDER BY ranked.score ASC, ranked.published_at DESC, ranked.knowledge_item_id ASC,
+          ranked.revision_id ASC, ranked.chunk_id ASC LIMIT ? OFFSET ?`).bind(...bindings, pagination.pageSize, pageOffset(pagination)),
+      pagination,
+      (row) => mapSearchHit(row as SearchRow, request.termKeys),
+    );
     const degraded = await this.hasDegraded(scope, request);
-    return {
-      items,
-      degraded,
-      ...(rows.results.length > request.limit && last ? {
-        nextCursor: request.chatScope === undefined
-          ? encodeOpaqueCursor({
-            v: 2,
-            score: last.score,
-            publishedAt: last.published_at,
-            knowledgeItemId: last.knowledge_item_id,
-            revisionId: last.revision_id,
-            chunkId: last.chunk_id,
-            policyVersion: SEARCH_POLICY.version,
-            key: request.cursorKey,
-          })
-          : encodeOpaqueCursor({
-            v: 3,
-            knowledgeItemId: last.knowledge_item_id,
-            revisionId: last.revision_id,
-            chunkId: last.chunk_id,
-            policyVersion: SEARCH_POLICY.version,
-            key: request.cursorKey,
-          }),
-      } : {}),
-    };
+    return { ...page, degraded };
   }
 
   async findCitation(
@@ -1196,7 +1093,7 @@ function isRankedSearchCursor(
 }
 
 function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
-  assertRepositoryPageRequest(request);
+  repositoryNumberedRequest(request);
   if (request.policyVersion !== SEARCH_POLICY.version
     || !Array.isArray(request.terms)
     || !Array.isArray(request.termKeys)
@@ -1227,6 +1124,15 @@ function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   if (request.chatScope !== undefined && !isAuthorizedChatScope(request.chatScope)) {
     throw new AppError("KNOWLEDGE_CHAT_SCOPE_INVALID", "Knowledge chat scope is invalid", 400);
   }
+}
+
+function repositoryNumberedRequest(request: Partial<NumberedPageRequest>): NumberedPageRequest {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? 20;
+  if (pageSize !== 20 && pageSize !== 50 && pageSize !== 100) throw new AppError("PAGE_INVALID", "Page parameters are invalid", 400);
+  const normalized = { page, pageSize } as NumberedPageRequest;
+  pageOffset(normalized);
+  return normalized;
 }
 
 function isAuthorizedChatScope(value: AuthorizedChatScope): boolean {

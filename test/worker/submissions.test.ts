@@ -62,23 +62,22 @@ describe("submissions D1 control plane", () => {
     }
   });
 
-  it("keeps contributor pages ownership-scoped across cursor-shaped inputs while admin pending pages see both users", async () => {
+  it("keeps numbered contributor totals ownership-scoped while admin pending pages see both users", async () => {
     const service = createService();
     await service.create("member-a", { requestedSpaceId: "default", kind: "text", title: "A one", content: "a" });
     await service.create("member-b", { requestedSpaceId: "default", kind: "markdown", title: "B one", content: "b" });
     await service.create("member-a", { requestedSpaceId: "default", kind: "code", title: "A two", content: "c" });
 
-    const first = await service.listOwn("member-a", { limit: 1 });
-    const second = await service.listOwn("member-a", { limit: 1, cursor: first.nextCursor });
-    expect([...first.items, ...second.items].map((item) => item.submitterId)).toEqual(["member-a", "member-a"]);
-    await expect(service.listOwn("member-a", { limit: 1, cursor: "member-b" })).rejects.toMatchObject({ code: "PAGE_CURSOR_INVALID", status: 400 });
+    const own = await service.listOwn("member-a", { page: 1, pageSize: 20 });
+    expect(own.items.map((item) => item.submitterId)).toEqual(["member-a", "member-a"]);
+    expect(own.pagination).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
     await expect(service.listPending({ page: 1, pageSize: 20 })).resolves.toMatchObject({ items: expect.arrayContaining([
       expect.objectContaining({ submitterId: "member-a", status: "review_pending" }),
       expect.objectContaining({ submitterId: "member-b", status: "review_pending" }),
     ]), pagination: { page: 1, pageSize: 20, total: 3, totalPages: 1 } });
   });
 
-  it("pages an owner's exact status with a scope-bound opaque cursor and the selective index", async () => {
+  it("pages an owner's exact status with numbered metadata and the selective index", async () => {
     const statuses: SubmissionStatusFilter[] = [
       "review_pending", "published", "rejected", "revision_requested",
     ];
@@ -101,40 +100,16 @@ describe("submissions D1 control plane", () => {
     const expected = Array.from({ length: 15 }, (_, ordinal) => 56 - ordinal * 4)
       .map((index) => `page-member-a-${String(index).padStart(2, "0")}`)
       .sort((left, right) => right.localeCompare(left));
-    const actual: string[] = [];
-    let cursor: string | undefined;
-    do {
-      const result = await service.listOwn("member-a", { limit: 4, cursor, status: "review_pending" });
-      expect(result.items.every((submission) => submission.submitterId === "member-a"
-        && submission.status === "review_pending")).toBe(true);
-      actual.push(...result.items.map((submission) => submission.id));
-      cursor = result.nextCursor;
-    } while (cursor);
+    const result = await service.listOwn("member-a", { page: 1, pageSize: 20, status: "review_pending" });
+    expect(result.items.every((submission) => submission.submitterId === "member-a" && submission.status === "review_pending")).toBe(true);
+    const actual = result.items.map((submission) => submission.id);
     expect(actual).toEqual(expected);
     expect(new Set(actual).size).toBe(actual.length);
-
-    const first = await service.listOwn("member-a", { limit: 4, status: "published" });
-    expect(first.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/u);
-    const decoded = JSON.parse(atob(first.nextCursor!.replace(/-/gu, "+").replace(/_/gu, "/"))) as Record<string, unknown>;
-    expect(Object.keys(decoded).sort()).toEqual(["id", "key", "sort", "v"]);
-    expect(decoded).not.toHaveProperty("memberId");
-    expect(decoded).not.toHaveProperty("status");
-    await expect(service.listOwn("member-b", {
-      limit: 4, status: "published", cursor: first.nextCursor,
-    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
-    await expect(service.listOwn("member-a", {
-      limit: 4, status: "rejected", cursor: first.nextCursor,
-    })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
-      await expect(service.listOwn("member-a", {
-      limit: 4, status: "draft" as SubmissionStatusFilter,
-    })).resolves.toMatchObject({ items: [] });
-
-    await expect(service.listOwn("member-a", { status: "published" })).resolves.toMatchObject({ items: expect.any(Array) });
-    await expect(service.listOwn("member-a", { limit: 50 })).resolves.toMatchObject({ items: expect.any(Array) });
-    await expect(service.listOwn("member-a", { limit: 51 })).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
-    expect((await service.listOwn("member-a", { status: "published" })).items).toHaveLength(15);
-    expect((await service.listOwn("member-a")).items).toHaveLength(20);
-    expect((await service.listOwn("member-a", { limit: 50 })).items).toHaveLength(50);
+    expect(result.pagination).toEqual({ page: 1, pageSize: 20, total: 15, totalPages: 1 });
+    await expect(service.listOwn("member-a", { page: 1, pageSize: 20, status: "draft" as SubmissionStatusFilter })).resolves.toMatchObject({ items: [] });
+    expect((await service.listOwn("member-a", { page: 1, pageSize: 20, status: "published" })).items).toHaveLength(15);
+    expect((await service.listOwn("member-a", { page: 1, pageSize: 50 })).items).toHaveLength(50);
+    expect((await service.listOwn("member-a", { page: 2, pageSize: 50 })).pagination!.total).toBe(60);
 
     const plan = await env.DB.prepare(
       "EXPLAIN QUERY PLAN SELECT id FROM submissions WHERE submitter_id = ? AND status = ? ORDER BY created_at DESC, id DESC LIMIT ?",

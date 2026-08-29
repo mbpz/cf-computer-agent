@@ -4,21 +4,22 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { SearchResultList, type SearchResultItem } from "../components/search/search-result-list";
 import { PageState } from "../components/ui/page-state";
+import { DataPagination } from "../components/data-pagination";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SavedViewItem } from "../lib/saved-views-data";
 
 export type SearchState =
   | { kind: "loading" }
-  | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; nextCursor?: string | null; pending?: boolean }
+  | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query = "", onQueryChange, onSubmit, onLoadMore, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError }: {
+export function SearchPage({ state, locale, query = "", pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError }: {
   state: SearchState;
   locale?: LocaleRuntime;
   query?: string;
   onQueryChange?: (query: string) => void;
   onSubmit?: () => void;
-  onLoadMore?: () => void;
+  pending?: boolean; localError?: string; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: 20 | 50 | 100) => void;
   onRetry?: () => void;
   savedViews?: readonly SavedViewItem[];
   onSaveView?: (name: string) => void;
@@ -49,9 +50,10 @@ export function SearchPage({ state, locale, query = "", onQueryChange, onSubmit,
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>
       : <>
+        {localError && <p role="alert" className="text-sm text-destructive">{localError}</p>}
         {state.degraded && <PageState kind="degraded" title={frontendText(locale, "SEARCH_DEGRADED")} />}
         {state.results.length ? <SearchResultList locale={locale} results={state.results} /> : <PageState kind="empty" title={frontendText(locale, "SEARCH_EMPTY")} />}
-        {state.nextCursor && <Button variant="outline" disabled={state.pending} onClick={onLoadMore}>{state.pending ? frontendText(locale, "SEARCH_LOADING_MORE") : frontendText(locale, "SEARCH_LOAD_MORE")}</Button>}
+        <DataPagination {...state.pagination} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
       </>}
   </section>;
 }

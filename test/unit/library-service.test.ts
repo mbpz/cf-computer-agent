@@ -17,7 +17,7 @@ import {
   LibraryService,
   normalizeSearchQuery,
 } from "../../src/library/service";
-import type { ChatScope, KnowledgePage, LibraryScope, SearchPage } from "../../src/library/types";
+import type { ChatScope, KnowledgePage, KnowledgePageRequest, LibraryScope, SearchPage } from "../../src/library/types";
 
 const contributor: LibraryScope = { memberId: "member-1", role: "contributor" };
 const admin: LibraryScope = { memberId: "admin-1", role: "admin" };
@@ -182,7 +182,7 @@ describe("LibraryService", () => {
     expect(calls).toEqual(["authorize"]);
   });
 
-  it("normalizes list limits and binds collection and tag filters to a Space", async () => {
+  it("normalizes list pagination and binds collection and tag filters to a Space", async () => {
     const requests: RepositoryKnowledgePageRequest[] = [];
     const repository = repositoryFixture({
       async list(_scope, request) { requests.push(request); return emptyKnowledgePage; },
@@ -190,17 +190,16 @@ describe("LibraryService", () => {
     const service = new LibraryService(repository, noContentReader);
 
     await service.list(contributor, { spaceId: "default" });
-    expect(requests[0]).toMatchObject({ limit: 20, spaceId: "default" });
-    expect(requests[0]?.cursorKey).toMatch(/^[a-f0-9]{64}$/);
+    expect(requests[0]).toMatchObject({ page: 1, pageSize: 20, spaceId: "default" });
 
     for (const request of [
-      { limit: 0 },
-      { limit: 51 },
+      { page: 0 },
+      { pageSize: 51 },
       { collectionId: "collection-1" },
       { tagId: "tag-1" },
       { spaceId: "../default" },
     ]) {
-      await expect(service.list(contributor, request)).rejects.toMatchObject({ status: 400 });
+      await expect(service.list(contributor, request as KnowledgePageRequest)).rejects.toMatchObject({ status: 400 });
     }
     expect(requests).toHaveLength(1);
   });
@@ -279,7 +278,7 @@ describe("LibraryService", () => {
     expect(new Set(normalized.termKeys)).toHaveLength(2);
   });
 
-  it("passes a bounded canonical FTS query and scope-bound cursor key to the repository", async () => {
+  it("passes a bounded canonical FTS query and numbered page to the repository", async () => {
     const requests: RepositorySearchRequest[] = [];
     const page: SearchPage = { items: [], degraded: true };
     const repository = repositoryFixture({
@@ -292,7 +291,8 @@ describe("LibraryService", () => {
       spaceId: "default",
       collectionId: "collection-1",
       tagId: "tag-1",
-      limit: 7,
+      page: 2,
+      pageSize: 20,
     })).resolves.toBe(page);
 
     expect(requests).toEqual([expect.objectContaining({
@@ -303,9 +303,9 @@ describe("LibraryService", () => {
       spaceId: "default",
       collectionId: "collection-1",
       tagId: "tag-1",
-      limit: 7,
+      page: 2,
+      pageSize: 20,
     })]);
-    expect(requests[0]?.cursorKey).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("authorizes an explicit ChatScope before scoped retrieval and passes only the canonical D1 result", async () => {
@@ -388,7 +388,7 @@ describe("LibraryService", () => {
     expect(events).toEqual(["authorize-chat"]);
   });
 
-  it("binds the canonical ChatScope into the search cursor key", async () => {
+  it("binds the canonical ChatScope into numbered search requests", async () => {
     const requests: RepositorySearchRequest[] = [];
     const repository = repositoryFixture({
       async authorizeChatScope(_scope, chatScope) {
@@ -407,7 +407,6 @@ describe("LibraryService", () => {
       spaceId: "default",
     });
 
-    expect(requests[0]!.cursorKey).not.toBe(requests[1]!.cursorKey);
     expect(requests.map(({ chatScope }) => chatScope)).toEqual([
       { kind: "all" },
       { kind: "space", spaceId: "default" },
@@ -432,9 +431,9 @@ describe("LibraryService", () => {
       tagIds: ["tag-a", "tag-z"],
       tagMode: "and",
       policyVersion: 2,
-      limit: 20,
+      page: 1,
+      pageSize: 20,
     })]);
-    const canonicalKey = requests[0]!.cursorKey;
 
     await service.search(contributor, {
       query: "launch",
@@ -442,7 +441,7 @@ describe("LibraryService", () => {
       tagIds: ["tag-a", "tag-z"],
       tagMode: "and",
     });
-    expect(requests[1]!.cursorKey).toBe(canonicalKey);
+    expect(requests[1]).toEqual(requests[0]);
 
     for (const request of [
       { query: "launch", spaceId: "default", tagIds: ["tag-a"] },
@@ -515,7 +514,7 @@ describe("LibraryRepository contract", () => {
     const repository = new LibraryRepository({
       prepare() { prepares += 1; throw new Error("D1 must not be reached"); },
     } as unknown as D1Database);
-    const request = { limit: 500, cursorKey: "a".repeat(64) };
+    const request = { page: 1, pageSize: 500 } as unknown as RepositoryKnowledgePageRequest;
 
     await expect(repository.list(contributor, request)).rejects.toMatchObject({
       code: "PAGE_INVALID",
