@@ -4,6 +4,8 @@ import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminAssetRowsSql } from "../../src/assets/repository";
 import { MIGRATIONS } from "../fixtures/d1";
+import { WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
+import comingSoonMenusMigration from "../../migrations/0034_workspace_coming_soon_menus.sql?raw";
 
 interface TableColumn {
   name: string;
@@ -1300,6 +1302,59 @@ describe("Phase 1 control-plane migrations", () => {
       country: null,
       region: null,
     });
+  });
+
+  it("keeps migration-seeded coming-soon system paths in exact registry sync", async () => {
+    const registryPaths = WORKSPACE_ROUTE_CAPABILITIES
+      .filter((route) => route.availability === "coming_soon")
+      .map((route) => route.path)
+      .sort();
+    const seedRows = [...comingSoonMenusMigration.matchAll(/SELECT\s+'([^']+)'[\s\S]*?'(\/[a-z-]+)'[\s\S]*?WHERE NOT EXISTS/gu)]
+      .map((match) => ({ id: match[1]!, path: match[2]! }));
+    expect(seedRows.map(({ path }) => path).sort()).toEqual(registryPaths);
+
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const placeholders = seedRows.map(() => "?").join(", ");
+    const rows = await env.DB.prepare(
+      `SELECT id, path FROM menus WHERE is_system = 1 AND id IN (${placeholders}) ORDER BY path`,
+    ).bind(...seedRows.map(({ id }) => id)).all<{ id: string; path: string }>();
+    expect(rows.results.map(({ path }) => path)).toEqual(registryPaths);
+  });
+
+  it.each([
+    ["id", "menu-boards", "conflicting-boards-id", "/conflicting-boards-id"],
+    ["key", "conflicting-boards-key", "boards", "/conflicting-boards-key"],
+    ["path", "conflicting-boards-path", "conflicting-boards-path", "/boards"],
+  ])("fails 0034 on an incompatible unique %s conflict", async (_kind, id, key, path) => {
+    const priorMigrations = MIGRATIONS.slice(0, -1);
+    await applyD1Migrations(env.DB, priorMigrations);
+    await env.DB.prepare(
+      `INSERT INTO menus
+       (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at)
+       VALUES (?, 'menu-workspace', ?, 'NAV_HOME', ?, 'House', 'workspace', 99, '0x0', 'active', 1, 0, '1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z')`,
+    ).bind(id, key, path).run();
+
+    await expect(applyD1Migrations(env.DB, MIGRATIONS)).rejects.toThrow();
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM menus WHERE id IN ('menu-notifications', 'menu-messages')").first()).resolves.toEqual({ count: 0 });
+    await expect(env.DB.prepare("SELECT id, key, path, is_system FROM menus WHERE id = ?").bind(id).first()).resolves.toEqual({ id, key, path, is_system: 0 });
+  });
+
+  it("preserves canonical 0034 rows without overriding managed fields", async () => {
+    const priorMigrations = MIGRATIONS.slice(0, -1);
+    await applyD1Migrations(env.DB, priorMigrations);
+    await env.DB.prepare(
+      `INSERT INTO menus
+       (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at)
+       VALUES ('menu-boards', 'menu-workspace', 'boards', 'NAV_BOARDS', '/boards', 'SquaresFour', 'workspace', 42, '0x1', 'disabled', 0, 1, '1970-01-01T00:00:00.000Z', '2026-08-29T00:00:00.000Z')`,
+    ).run();
+
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expect(env.DB.prepare(
+      "SELECT position, required_bits, status, visible, updated_at FROM menus WHERE id = 'menu-boards'",
+    ).first()).resolves.toEqual({ position: 42, required_bits: "0x1", status: "disabled", visible: 0, updated_at: "2026-08-29T00:00:00.000Z" });
+    await expect(env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM menus WHERE id IN ('menu-notifications', 'menu-messages')",
+    ).first()).resolves.toEqual({ count: 2 });
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

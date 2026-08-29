@@ -40,6 +40,7 @@
   "dependencies": {
     "@cloudflare/computer": "0.1.1",
     "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-tooltip": "^1.2.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "3.4.14",
