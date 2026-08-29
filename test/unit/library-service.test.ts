@@ -217,6 +217,30 @@ describe("LibraryService", () => {
     await expect(new LibraryService(repository, noContentReader).list(contributor, { publishedFrom: "2026-02-01T00:00:00.000Z", publishedTo: "2026-01-01T00:00:00.000Z" })).rejects.toMatchObject({ status: 400 });
   });
 
+  it("preserves the bounded result count requested by internal search consumers", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => ({
+      citationId: `citation-${index}`,
+      knowledgeItemId: `knowledge-${index}`,
+    })) as never[];
+    const repository = repositoryFixture({
+      async search() {
+        return {
+          items,
+          degraded: false,
+          pagination: { page: 1, pageSize: 20, total: 20, totalPages: 1 },
+        } as never;
+      },
+    });
+
+    const page = await new LibraryService(repository, noContentReader).search(
+      contributor,
+      { query: "worker", limit: 8 },
+      { kind: "all" },
+    );
+
+    expect(page.items).toHaveLength(8);
+  });
+
   it("quotes normalized Unicode/code terms so FTS operators remain inert", () => {
     expect(normalizeSearchQuery("  ＧｅｔUser_ID  权限治理  ")).toEqual({
       normalizedQuery: "GetUser_ID 权限治理",

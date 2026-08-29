@@ -420,6 +420,7 @@ function NotFoundPage({ locale }: { locale: LocaleRuntime }) {
 export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initial = useMemo(() => parsePageSearch(search), [search]);
   const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [urlVersion, setUrlVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: KnowledgePageResult["items"]; pagination: KnowledgePageResult["pagination"] } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
@@ -466,9 +467,9 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
     const request = controller.request({ ...snapshot, ...knowledgeFilters(window.location.search) });
     void request.promise.then((result) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, page, pageSize, urlVersion]);
+  }, [locale, page, pageSize, retryVersion, urlVersion]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; window.history.pushState({}, "", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
-  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
+  return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
 export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
@@ -642,6 +643,7 @@ function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initial = useMemo(() => parsePageSearch(search), [search]);
   const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [urlVersion, setUrlVersion] = useState(0);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; items: MySubmissionItem[]; pagination: { page: number; pageSize: SupportedPageSize; total: number; totalPages: number } } | { kind: "error"; message: string }>({ kind: "loading" });
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
@@ -660,9 +662,9 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
       if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
     });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
-  }, [locale, page, pageSize, urlVersion]);
+  }, [locale, page, pageSize, retryVersion, urlVersion]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; window.history.pushState({}, "", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
-  return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

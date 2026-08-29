@@ -26,6 +26,17 @@ describe("React read-only user pages", () => {
     expect(html).toContain("cf");
   });
 
+  it("offers retry actions for local reader pagination failures", () => {
+    const page = { page: 1 as const, pageSize: 20 as const, total: 1, totalPages: 1 };
+    const retry = vi.fn();
+    const knowledge = renderToStaticMarkup(<KnowledgePage state={{ kind: "ready", items: [], pagination: page }} localError="Unable" onRetry={retry} />);
+    const search = renderToStaticMarkup(<SearchPage state={{ kind: "ready", degraded: false, results: [], pagination: page }} localError="Unable" onRetry={retry} />);
+    const submissions = renderToStaticMarkup(<MySubmissionsPage state={{ kind: "ready", items: [], pagination: page }} localError="Unable" onRetry={retry} />);
+    expect(knowledge).toContain("Retry");
+    expect(search).toContain("Retry");
+    expect(submissions).toContain("Retry");
+  });
+
   it("renders daily/weekly review items without undefined values", () => {
     const html = renderToStaticMarkup(<KnowledgePage
       locale={createLocaleRuntime({ navigatorLanguage: "en" })}

@@ -280,6 +280,9 @@ export class LibraryService {
     }
     const filters = normalizeFilters(request);
     const tagFilter = normalizeSearchTags(request);
+    const internalLimit = request.limit === undefined
+      ? undefined
+      : parsePageRequest(request.limit, request.cursor).limit;
     const page = numberedRequest(request);
     const query = normalizeSearchQuery(request.query);
     const normalized: RepositorySearchRequest = {
@@ -290,7 +293,10 @@ export class LibraryService {
       ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
       policyVersion: SEARCH_POLICY.version,
     };
-    return this.repository.search(scope, normalized);
+    const result = await this.repository.search(scope, normalized);
+    return internalLimit === undefined
+      ? result
+      : { ...result, items: result.items.slice(0, internalLimit) };
   }
 
   async readCitation(scope: LibraryScope, citationId: string): Promise<CitationSource> {
