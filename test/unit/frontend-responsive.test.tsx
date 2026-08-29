@@ -16,6 +16,7 @@ describe("frontend responsive and motion gates", () => {
     expect(mainClass).toContain("lg:overflow-y-auto");
     expect(html).toContain('data-shell-mobile-scroll="true"');
     expect(html).toContain("max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden");
+    expect(html).toContain("data-shell-mobile-focus-viewport");
   });
 
   it("locks reduced-motion and breakpoint assumptions", () => {

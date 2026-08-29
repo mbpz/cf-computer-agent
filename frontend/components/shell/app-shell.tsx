@@ -43,7 +43,6 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [serverNavigation, setServerNavigation] = useState<NavigationDataNode[] | null>(null);
   const contentScrollRef = useRef<HTMLElement>(null);
-  const previousPathnameRef = useRef(pathname);
   useEffect(() => {
     const stored = readTheme(window.localStorage);
     setTheme(stored);
@@ -56,11 +55,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
     return () => { active = false; };
   }, [session.member.id, session.member.role, session.permissionMask]);
   useEffect(() => {
-    if (previousPathnameRef.current !== pathname) contentScrollRef.current?.scrollTo({ top: 0 });
-    previousPathnameRef.current = pathname;
-  }, [pathname]);
-  useEffect(() => {
-    const locationKey = () => `${window.location.pathname}${window.location.search}`;
+    const locationKey = () => canonicalWorkspaceLocationKey(window.location.pathname, window.location.search);
     let previousLocationKey = locationKey();
     const resetForLocationChange = () => {
       const nextLocationKey = locationKey();
@@ -100,7 +95,7 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
               <SidebarSimple size={18} aria-hidden="true" />
             </Button>
           </div>
-          <nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain">
+          <nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-py-2 px-0.5 py-1">
             <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav>
@@ -124,14 +119,37 @@ export function AppShell({ session, pathname, locale, children, onNavigate, onLo
             </DropdownMenu>
           </div>
         </header>
-        <div data-shell-mobile-scroll className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
-        <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
+        <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
+        <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-py-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
       </div>
     </div>
   );
 }
 
 interface NavigationNode { id: string; route?: typeof ROUTES[number]; path?: string; labelKey: string; icon?: string | null; children?: NavigationNode[]; }
+
+const NUMBERED_PAGE_QUERY_KEYS = ["page", "pageSize"] as const;
+const PRIMARY_WORKSPACE_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "/knowledge": [...NUMBERED_PAGE_QUERY_KEYS, "spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"],
+  "/search": [...NUMBERED_PAGE_QUERY_KEYS, "q", "spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"],
+  "/agent": ["scope", "knowledgeItemId"],
+  "/my-submissions": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
+  "/tasks": [...NUMBERED_PAGE_QUERY_KEYS, "status", "priority", "due", "tag", "q"],
+  "/admin/submissions": NUMBERED_PAGE_QUERY_KEYS,
+  "/admin/duplicates": NUMBERED_PAGE_QUERY_KEYS,
+  "/admin/assets": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
+  "/admin/members": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
+  "/admin/audit": [...NUMBERED_PAGE_QUERY_KEYS, "action"],
+  "/admin/analytics": [...NUMBERED_PAGE_QUERY_KEYS, "days"],
+};
+
+export function canonicalWorkspaceLocationKey(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  const primaryEntries = [...(PRIMARY_WORKSPACE_QUERY_KEYS[pathname] ?? [])]
+    .flatMap((key) => params.getAll(key).sort().map((value) => [key, value] as const))
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) => leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
+  return JSON.stringify([pathname, primaryEntries]);
+}
 
 function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void }) {
   return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={1} />)}</div></div>;
@@ -200,7 +218,7 @@ function NavIcon({ path }: { path: string }) {
 function MobileNavigation({ nodes, pathname, locale, onNavigate }: { nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
-  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><div data-shell-mobile-scroll className="max-h-dvh overflow-y-auto overscroll-contain"><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => <a key={route.path} href={route.path} aria-current={pathname === route.path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(route.path); }} className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={route.path} />{locale.t(route.labelKey)}</a>)}</nav></div></SheetContent></details></Sheet>;
+  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh overflow-y-auto overscroll-contain scroll-py-2 p-0.5"><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => { const path = route.path ?? route.route!.path; return <a key={path} href={path} aria-current={pathname === path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(path); }} className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={path} />{locale.t(route.labelKey)}</a>; })}</nav></div></SheetContent></details></Sheet>;
 }
 
 function flattenNavigation(nodes: NavigationNode[]): NavigationNode[] { return nodes.flatMap((node) => [ ...(node.path || node.route ? [node] : []), ...(node.children ? flattenNavigation(node.children) : []) ]); }
