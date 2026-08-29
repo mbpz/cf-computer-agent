@@ -110,6 +110,7 @@ describe("LibraryService", () => {
       async search() {
         return {
           degraded: false,
+          pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 },
           items: [
             { knowledgeItemId: "knowledge-1", title: "Seed", publishedAt: "2026-08-22", matchedFields: ["title"], citationId: "c1", spaceId: "default", collectionId: null, revisionId: "r1", chunkId: "c1", headingPath: [], startLine: 1, endLine: 1, excerpt: "seed", highlights: [], score: -1 },
             { knowledgeItemId: "knowledge-2", title: "Related", publishedAt: "2026-08-23", matchedFields: ["title", "body"], citationId: "c2", spaceId: "default", collectionId: null, revisionId: "r2", chunkId: "c2", headingPath: [], startLine: 1, endLine: 1, excerpt: "related", highlights: [], score: -2 },
@@ -217,7 +218,7 @@ describe("LibraryService", () => {
     await expect(new LibraryService(repository, noContentReader).list(contributor, { publishedFrom: "2026-02-01T00:00:00.000Z", publishedTo: "2026-01-01T00:00:00.000Z" })).rejects.toMatchObject({ status: 400 });
   });
 
-  it("preserves the bounded result count requested by internal search consumers", async () => {
+  it("preserves the bounded result count requested by the distinct internal search API", async () => {
     const items = Array.from({ length: 20 }, (_, index) => ({
       citationId: `citation-${index}`,
       knowledgeItemId: `knowledge-${index}`,
@@ -232,13 +233,35 @@ describe("LibraryService", () => {
       },
     });
 
-    const page = await new LibraryService(repository, noContentReader).search(
+    const page = await new LibraryService(repository, noContentReader).searchInternal(
       contributor,
       { query: "worker", limit: 8 },
       { kind: "all" },
     );
 
     expect(page.items).toHaveLength(8);
+  });
+
+  it.each([
+    { page: 1.5, pageSize: 20 },
+    { page: 0, pageSize: 20 },
+    { page: Number.MAX_SAFE_INTEGER + 1, pageSize: 20 },
+    { page: 1, pageSize: 10 },
+    { page: 501, pageSize: 20 },
+  ])("rejects invalid formal list pagination at the service boundary: $page/$pageSize", async (request) => {
+    const repository = repositoryFixture();
+    await expect(new LibraryService(repository, noContentReader).list(
+      contributor,
+      request as never,
+    )).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+  });
+
+  it("rejects internal limit semantics on the formal search API", async () => {
+    const repository = repositoryFixture();
+    await expect(new LibraryService(repository, noContentReader).search(
+      contributor,
+      { query: "worker", limit: 8 } as never,
+    )).rejects.toMatchObject({ code: "LIBRARY_REQUEST_INVALID", status: 400 });
   });
 
   it("quotes normalized Unicode/code terms so FTS operators remain inert", () => {
@@ -304,7 +327,7 @@ describe("LibraryService", () => {
 
   it("passes a bounded canonical FTS query and numbered page to the repository", async () => {
     const requests: RepositorySearchRequest[] = [];
-    const page: SearchPage = { items: [], degraded: true };
+    const page: SearchPage = { items: [], degraded: true, pagination: { page: 2, pageSize: 20, total: 0, totalPages: 0 } };
     const repository = repositoryFixture({
       async search(_scope, request) { requests.push(request); return page; },
     });
@@ -352,11 +375,11 @@ describe("LibraryService", () => {
       async search(_scope, request) {
         events.push("search");
         requests.push(request);
-        return { items: [], degraded: false };
+        return emptySearchPage;
       },
     });
 
-    await new LibraryService(repository, noContentReader).search(
+    await new LibraryService(repository, noContentReader).searchInternal(
       contributor,
       { query: "launch latency", limit: 8 },
       requested,
@@ -376,7 +399,7 @@ describe("LibraryService", () => {
     const repository = repositoryFixture({
       async authorizeScope() { events.push("authorize-member"); return true; },
       async authorizeChatScope() { events.push("authorize-chat"); return null; },
-      async search() { events.push("search"); return { items: [], degraded: false }; },
+      async search() { events.push("search"); return emptySearchPage; },
     });
     const service = new LibraryService(repository, noContentReader);
     const invalid = [
@@ -391,7 +414,7 @@ describe("LibraryService", () => {
     ] as unknown as ChatScope[];
 
     for (const chatScope of invalid) {
-      await expect(service.search(contributor, { query: "launch", limit: 8 }, chatScope))
+      await expect(service.searchInternal(contributor, { query: "launch", limit: 8 }, chatScope))
         .rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_INVALID", status: 400 });
     }
     expect(events).toEqual(Array.from({ length: invalid.length }, () => "authorize-member"));
@@ -401,11 +424,11 @@ describe("LibraryService", () => {
     const events: string[] = [];
     const repository = repositoryFixture({
       async authorizeChatScope() { events.push("authorize-chat"); return null; },
-      async search() { events.push("search"); return { items: [], degraded: false }; },
+      async search() { events.push("search"); return emptySearchPage; },
     });
     const service = new LibraryService(repository, noContentReader);
 
-    await expect(service.search(contributor, { query: "launch", limit: 8 }, {
+    await expect(service.searchInternal(contributor, { query: "launch", limit: 8 }, {
       kind: "items",
       knowledgeItemIds: ["knowledge-shared", "knowledge-hidden"],
     })).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_NOT_FOUND", status: 404 });
@@ -420,13 +443,13 @@ describe("LibraryService", () => {
       },
       async search(_scope, request) {
         requests.push(request);
-        return { items: [], degraded: false };
+        return emptySearchPage;
       },
     });
     const service = new LibraryService(repository, noContentReader);
 
-    await service.search(contributor, { query: "launch", limit: 1 }, { kind: "all" });
-    await service.search(contributor, { query: "launch", limit: 1 }, {
+    await service.searchInternal(contributor, { query: "launch", limit: 1 }, { kind: "all" });
+    await service.searchInternal(contributor, { query: "launch", limit: 1 }, {
       kind: "space",
       spaceId: "default",
     });
@@ -440,7 +463,7 @@ describe("LibraryService", () => {
   it("canonicalizes bounded multi-Tag filters and binds the explicit mode and policy", async () => {
     const requests: RepositorySearchRequest[] = [];
     const repository = repositoryFixture({
-      async search(_scope, request) { requests.push(request); return { items: [], degraded: false }; },
+      async search(_scope, request) { requests.push(request); return emptySearchPage; },
     });
     const service = new LibraryService(repository, noContentReader);
 
@@ -546,9 +569,23 @@ describe("LibraryRepository contract", () => {
     });
     expect(prepares).toBe(0);
   });
+
+  it.each([
+    { page: 1.5, pageSize: 20 },
+    { page: 0, pageSize: 20 },
+    { page: Number.MAX_SAFE_INTEGER + 1, pageSize: 20 },
+    { page: 1, pageSize: 10 },
+    { page: 501, pageSize: 20 },
+  ])("rejects invalid direct repository pagination before D1: $page/$pageSize", async (request) => {
+    let prepares = 0;
+    const repository = new LibraryRepository({ prepare() { prepares += 1; throw new Error("D1 must not be reached"); } } as unknown as D1Database);
+    await expect(repository.list(contributor, request as never)).rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    expect(prepares).toBe(0);
+  });
 });
 
-const emptyKnowledgePage: KnowledgePage = { items: [] };
+const emptyKnowledgePage: KnowledgePage = { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } };
+const emptySearchPage: SearchPage = { items: [], degraded: false, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } };
 const noContentReader: PublishedContentReader = {
   async read() { throw new Error("content reader must not be called"); },
 };
@@ -563,7 +600,7 @@ function repositoryFixture(overrides: Partial<LibraryRepositoryPort> = {}): Libr
     async findRevision() { return revisionRecord(); },
     async listRevisionChunks() { return { items: [] }; },
     async setChunkStatus(_scope, _knowledgeItemId, _revisionId, chunkId, status) { return { id: chunkId, status }; },
-    async search() { return { items: [], degraded: false }; },
+    async search() { return emptySearchPage; },
     async findCitation() { return citationRecord(); },
     ...overrides,
   };

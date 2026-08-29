@@ -53,6 +53,20 @@ export function pageOffset(request: NumberedPageRequest, errorCode = "PAGE_INVAL
   return offset;
 }
 
+export function normalizeNumberedPageRequest(
+  request: Partial<NumberedPageRequest> = {},
+  errorCode = "PAGE_INVALID",
+): NumberedPageRequest {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? 20;
+  if (!Number.isSafeInteger(page) || page < 1 || !supportedPageSizes.includes(pageSize as SupportedPageSize)) {
+    throw invalidNumberedPage(errorCode);
+  }
+  const normalized = { page, pageSize: pageSize as SupportedPageSize };
+  pageOffset(normalized, errorCode);
+  return normalized;
+}
+
 export function buildPageMetadata(request: NumberedPageRequest, total: number): PageMetadata {
   if (!Number.isSafeInteger(request.page) || request.page < 1
     || !supportedPageSizes.includes(request.pageSize)) throw invalidNumberedPage("PAGE_INVALID");

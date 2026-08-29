@@ -2,7 +2,7 @@ import { AppError } from "../http";
 import type { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import type { PublishedContentReader } from "../knowledge/types";
-import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, parsePageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, normalizeNumberedPageRequest, parsePageRequest, type NumberedPageRequest } from "../pagination";
 import { normalizeSearchQuery } from "./lexical";
 import { SEARCH_POLICY } from "./search-policy";
 import { buildRevisionDiff, type RevisionDiffResult } from "./revision-diff";
@@ -23,6 +23,8 @@ import type {
   KnowledgeDetail,
   KnowledgePage,
   KnowledgePageRequest,
+  InternalSearchPage,
+  InternalSearchRequest,
   LibraryFilters,
   LibraryScope,
   RevisionDetail,
@@ -57,6 +59,7 @@ export class LibraryService {
 
   async list(scope: LibraryScope, request: KnowledgePageRequest = {}): Promise<KnowledgePage> {
     await this.authorize(scope);
+    if ("limit" in request || "cursor" in request) throw invalidLibraryRequest();
     const filters = normalizeFilters(request);
     const page = numberedRequest(request);
     const normalized: RepositoryKnowledgePageRequest = {
@@ -264,6 +267,7 @@ export class LibraryService {
     chatScope?: ChatScope,
   ): Promise<SearchPage> {
     await this.authorize(scope);
+    if ("limit" in request || "cursor" in request) throw invalidLibraryRequest();
     const requestedChatScope = chatScope === undefined ? undefined : normalizeChatScope(chatScope);
     if (requestedChatScope !== undefined && hasMixedSearchScope(request)) {
       throw invalidChatScope();
@@ -280,9 +284,6 @@ export class LibraryService {
     }
     const filters = normalizeFilters(request);
     const tagFilter = normalizeSearchTags(request);
-    const internalLimit = request.limit === undefined
-      ? undefined
-      : parsePageRequest(request.limit, request.cursor).limit;
     const page = numberedRequest(request);
     const query = normalizeSearchQuery(request.query);
     const normalized: RepositorySearchRequest = {
@@ -293,10 +294,22 @@ export class LibraryService {
       ...(authorizedChatScope === undefined ? {} : { chatScope: authorizedChatScope }),
       policyVersion: SEARCH_POLICY.version,
     };
-    const result = await this.repository.search(scope, normalized);
-    return internalLimit === undefined
-      ? result
-      : { ...result, items: result.items.slice(0, internalLimit) };
+    return this.repository.search(scope, normalized);
+  }
+
+  async searchInternal(
+    scope: LibraryScope,
+    request: InternalSearchRequest,
+    chatScope?: ChatScope,
+  ): Promise<InternalSearchPage> {
+    const { limit, ...formalRequest } = request;
+    const boundedLimit = parsePageRequest(limit ?? 20).limit;
+    const result = await this.search(scope, {
+      ...formalRequest,
+      page: 1,
+      pageSize: boundedLimit <= 20 ? 20 : 50,
+    }, chatScope);
+    return { items: result.items.slice(0, boundedLimit), degraded: result.degraded };
   }
 
   async readCitation(scope: LibraryScope, citationId: string): Promise<CitationSource> {
@@ -347,13 +360,8 @@ export class LibraryService {
   }
 }
 
-function numberedRequest(request: { page?: number; pageSize?: number }): { page: number; pageSize: 20 | 50 | 100 } {
-  const page = request.page ?? 1;
-  const pageSize = request.pageSize ?? 20;
-  const normalized = { page, pageSize } as { page: number; pageSize: 20 | 50 | 100 };
-  pageOffset(normalized);
-  if (pageSize !== 20 && pageSize !== 50 && pageSize !== 100) throw new AppError("PAGE_INVALID", "Page parameters are invalid", 400);
-  return normalized;
+function numberedRequest(request: Partial<NumberedPageRequest>): NumberedPageRequest {
+  return normalizeNumberedPageRequest(request);
 }
 
 function normalizeChatScope(value: ChatScope): ChatScope {
@@ -552,6 +560,10 @@ function ownedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 function knowledgeNotFound(): AppError {
   return new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge was not found", 404);
+}
+
+function invalidLibraryRequest(): AppError {
+  return new AppError("LIBRARY_REQUEST_INVALID", "Library request is invalid", 400);
 }
 
 function invalidCitation(): AppError {

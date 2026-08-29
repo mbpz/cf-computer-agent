@@ -218,7 +218,7 @@ export async function routeLibraryApi(
     await services.chatConversations.startTurn(scope, conversation.id, turnId);
     try {
       const history = await services.chatConversations.history(scope, conversation.id);
-      const hits = await services.library.search(scope, { query: question, limit: 8 }, chatScope);
+      const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
       const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
       if (await services.chatConversations.isCancelled(scope, conversation.id, turnId)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
       await services.chatConversations.appendTurn(scope, conversation.id, { turnId, question, answer: answer.answer, citationIds: answer.citations });

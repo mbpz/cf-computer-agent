@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { LibraryService } from "../library/service";
-import type { LibraryScope, RevisionDetail, SearchPage, SearchRequest } from "../library/types";
+import type { InternalSearchPage, InternalSearchRequest, LibraryScope, RevisionDetail } from "../library/types";
 import type { RevisionDiffResult } from "../library/revision-diff";
 import type { AgentToolDefinition } from "./tool-runner";
 import type { SourcesRepository } from "../sources/repository";
@@ -13,14 +13,14 @@ const ID = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u;
 
 export function createSearchKnowledgeTool(
   library: LibraryService,
-): AgentToolDefinition<unknown, SearchPage> {
+): AgentToolDefinition<unknown, InternalSearchPage> {
   return {
     name: "searchKnowledge",
     parse: parseSearchKnowledgeInput,
     execute: async ({ member }, input) => {
-      const request = input as SearchRequest;
+      const request = input as InternalSearchRequest;
       const scope: LibraryScope = { memberId: member.id, role: member.role };
-      const page = await library.search(scope, request);
+      const page = await library.searchInternal(scope, request);
       return {
         items: page.items.slice(0, 8),
         degraded: page.degraded,
@@ -145,7 +145,7 @@ function parseSearchKnowledgeInput(value: unknown): unknown {
   if (typeof value.query !== "string" || value.query.trim().length === 0 || [...value.query].length > 4_000 || /[\p{Cc}\p{Cf}]/u.test(value.query)) {
     throw invalidToolInput();
   }
-  return { query: value.query, limit: 8 } satisfies SearchRequest;
+  return { query: value.query, limit: 8 } satisfies InternalSearchRequest;
 }
 
 function parseReadSourceInput(value: unknown): unknown {

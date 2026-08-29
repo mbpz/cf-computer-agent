@@ -1,7 +1,7 @@
 import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import { AppError } from "../http";
-import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, type NumberedPageRequest } from "../pagination";
+import { pageOffset, type NumberedPageRequest } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
 import { SourcesRepository } from "../sources/repository";
 import type { Source, SourceVersion } from "../sources/types";
@@ -82,7 +82,6 @@ type CreationRow = SubmissionRow & {
   line_baseline: number;
   source_version_created_at: string;
 };
-const timestampCursorBounds = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
 export class SubmissionsRepository implements SubmissionsRepositoryPort {
   private readonly sources: SourcesRepository;
@@ -447,54 +446,6 @@ const creationSelect = `SELECT
 FROM submissions s
 JOIN source_versions sv ON sv.submission_id = s.id
 JOIN sources src ON src.id = sv.source_id`;
-function timestamp(sort: number): string { return new Date(sort).toISOString(); }
-function page(items: Submission[], limit: number): SubmissionPage {
-  const result = items.slice(0, limit);
-  return {
-    items: result,
-    ...(items.length > limit ? {
-      nextCursor: encodeOpaqueCursor({
-        v: 1, sort: Date.parse(result.at(-1)!.createdAt), id: result.at(-1)!.id,
-      }),
-    } : {}),
-  };
-}
-function ownedPage(items: Submission[], limit: number, cursorKey: string): SubmissionPage {
-  const result = items.slice(0, limit);
-  const last = result.at(-1);
-  return {
-    items: result,
-    ...(items.length > limit && last ? {
-      nextCursor: encodeOpaqueCursor({
-        v: 2, sort: Date.parse(last.createdAt), id: last.id, key: cursorKey,
-      }),
-    } : {}),
-  };
-}
-function decodeOwnedSubmissionCursor(cursor: string, cursorKey: string): { sort: number; id: string } {
-  let record: Record<string, unknown>;
-  try {
-    const decoded = decodeOpaqueCursor(cursor);
-    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
-    record = decoded as Record<string, unknown>;
-    if (Object.keys(record).length !== 4 || record.v !== 2
-      || typeof record.sort !== "number" || !Number.isSafeInteger(record.sort)
-      || record.sort < timestampCursorBounds.minSort || record.sort > timestampCursorBounds.maxSort
-      || typeof record.id !== "string" || record.id.length === 0
-      || typeof record.key !== "string" || !/^[a-f0-9]{64}$/u.test(record.key)) throw new Error();
-  } catch {
-    throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
-  }
-  if (record.key !== cursorKey) {
-    throw new AppError("PAGE_INVALID", "Page cursor does not match the requested scope", 400);
-  }
-  return { sort: record.sort as number, id: record.id as string };
-}
-function assertCursorKey(cursorKey: string): void {
-  if (!/^[a-f0-9]{64}$/u.test(cursorKey)) {
-    throw new AppError("PAGE_INVALID", "Page request is invalid", 400);
-  }
-}
 function mapSubmissionRow(row: SubmissionRow): Submission {
   const review = row.review_decision && row.review_reason_code && row.review_created_at
     ? {

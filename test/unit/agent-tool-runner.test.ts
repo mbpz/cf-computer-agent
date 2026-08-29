@@ -83,7 +83,7 @@ describe("AgentToolRunner", () => {
   it("bounds searchKnowledge and derives the library scope from the reloaded member", async () => {
     const members = repository();
     const search = vi.fn(async () => ({ items: [{ citationId: "citation-1" }], degraded: false, nextCursor: "never-expose" }));
-    const tool = createSearchKnowledgeTool({ search } as never);
+    const tool = createSearchKnowledgeTool({ searchInternal: search } as never);
     const runner = new AgentToolRunner(members, [tool]);
 
     await expect(runner.run("member-agent", "searchKnowledge", {
@@ -152,7 +152,7 @@ describe("AgentToolRunner", () => {
     const searchAudit = { writeAudit: vi.fn(async (event: unknown) => event) };
     const searchRunner = new AgentToolRunner(
       members,
-      [createSearchKnowledgeTool({ search: vi.fn(async () => ({ items: [], degraded: false })) } as never)],
+      [createSearchKnowledgeTool({ searchInternal: vi.fn(async () => ({ items: [], degraded: false })) } as never)],
       { audit: searchAudit },
     );
     await searchRunner.run("member-agent", "searchKnowledge", { query: "private JWT content marker" });

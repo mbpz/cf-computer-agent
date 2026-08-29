@@ -1,7 +1,7 @@
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import type { SourceLocation } from "../sources/chunker";
 import type { CodeSourceMetadata, ParserSchemaVersion } from "../sources/types";
-import type { NumberedPage, NumberedPageRequest, Page } from "../pagination";
+import type { NumberedPage, NumberedPageRequest } from "../pagination";
 
 export type SearchMatchedField = "title" | "summary" | "tags" | "body" | "code";
 
@@ -31,10 +31,17 @@ export interface LibraryFilters {
   publishedTo?: string;
 }
 
-export interface KnowledgePageRequest extends LibraryFilters, Partial<NumberedPageRequest> { limit?: number; cursor?: string; }
+export interface KnowledgePageRequest extends LibraryFilters, Partial<NumberedPageRequest> {}
 
 export interface SearchRequest extends KnowledgePageRequest {
   query: string;
+  tagIds?: string[];
+  tagMode?: "and" | "or";
+}
+
+export interface InternalSearchRequest extends LibraryFilters {
+  query: string;
+  limit?: number;
   tagIds?: string[];
   tagMode?: "and" | "or";
 }
@@ -52,7 +59,7 @@ export interface KnowledgeListItem {
   updatedAt: string;
 }
 
-export type KnowledgePage = (NumberedPage<KnowledgeListItem> & { nextCursor?: undefined }) | (Page<KnowledgeListItem> & { pagination?: undefined });
+export type KnowledgePage = NumberedPage<KnowledgeListItem>;
 
 export interface RelatedKnowledgeItem {
   id: string;
@@ -169,7 +176,8 @@ export interface SearchHit {
   publishedAt: string;
 }
 
-export type SearchPage = ((NumberedPage<SearchHit> & { nextCursor?: undefined }) | (Page<SearchHit> & { pagination?: undefined })) & { degraded: boolean };
+export type SearchPage = NumberedPage<SearchHit> & { degraded: boolean };
+export interface InternalSearchPage { items: SearchHit[]; degraded: boolean; }
 
 export interface CitationSource {
   citationId: string;

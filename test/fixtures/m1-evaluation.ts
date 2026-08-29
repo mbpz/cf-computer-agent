@@ -18,6 +18,7 @@ import { encodeCitationId, LibraryService } from "../../src/library/service";
 import { tokenizeSearchText } from "../../src/library/lexical";
 import type {
   KnowledgePage,
+  InternalSearchPage,
   ChunkPreviewPage,
   ChatScope,
   LibraryScope,
@@ -305,7 +306,7 @@ export async function runM1Evaluation(
     const repository = new EvaluationRepository(evaluation, options.includeTags !== false);
     const library = new LibraryService(repository, UNUSED_CONTENT_READER);
     const provider = new DeterministicEvaluationAi();
-    let search: SearchPage = { items: [], degraded: false };
+    let search: InternalSearchPage = { items: [], degraded: false };
     let answer = "";
     let returnedCitationIds: string[] = [];
     let evidenceConfidence = 0;
@@ -313,7 +314,7 @@ export async function runM1Evaluation(
     const locatedCitationIds: string[] = [];
 
     try {
-      search = await library.search(evaluation.scope, { query: evaluation.query, limit: 5 });
+      search = await library.searchInternal(evaluation.scope, { query: evaluation.query, limit: 5 });
       const response = await new CitedAnswerService(provider).answer(
         evaluation.scope,
         evaluation.query,
@@ -473,7 +474,7 @@ class EvaluationRepository implements LibraryRepositoryPort {
   }
 
   async list(_scope: LibraryScope, _request: RepositoryKnowledgePageRequest): Promise<KnowledgePage> {
-    return { items: [] };
+    return { items: [], pagination: { page: _request.page, pageSize: _request.pageSize, total: 0, totalPages: 0 } };
   }
 
   async findCurrent(): Promise<AuthorizedRevisionRecord | null> {
@@ -510,11 +511,15 @@ class EvaluationRepository implements LibraryRepositoryPort {
   async search(scope: LibraryScope, request: RepositorySearchRequest): Promise<SearchPage> {
     const visible = DOCUMENTS.filter((entry) => entry.visibility === "shared" || scope.role === "admin");
     const matched = visible.filter((entry) => matchesAllTerms(entry, request.termKeys, this.includeTags));
-    const items = matched
+    const ranked = matched
       .map((entry) => toSearchHit(entry, request.termKeys, this.includeTags))
-      .sort((left, right) => left.score - right.score || left.chunkId.localeCompare(right.chunkId))
-      .slice(0, request.limit);
-    return { items, degraded: this.evaluation.degraded === true };
+      .sort((left, right) => left.score - right.score || left.chunkId.localeCompare(right.chunkId));
+    const offset = (request.page - 1) * request.pageSize;
+    return {
+      items: ranked.slice(offset, offset + request.pageSize),
+      degraded: this.evaluation.degraded === true,
+      pagination: { page: request.page, pageSize: request.pageSize, total: ranked.length, totalPages: ranked.length === 0 ? 0 : Math.ceil(ranked.length / request.pageSize) },
+    };
   }
 
   async findCitation(

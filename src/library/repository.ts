@@ -1,7 +1,7 @@
 import { AppError } from "../http";
 import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../indexing/document";
 import { metadataSearchText } from "../sources/chunk-metadata";
-import { decodeOpaqueCursor, encodeOpaqueCursor, pageOffset, parsePageRequest, type NumberedPageRequest, type PageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, normalizeNumberedPageRequest, pageOffset, parsePageRequest, type NumberedPageRequest, type PageRequest } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
@@ -45,7 +45,7 @@ const visibleSearchStatusSql = `CASE
   ELSE k.search_status
 END`;
 
-export interface RepositoryKnowledgePageRequest extends Partial<NumberedPageRequest>, LibraryFilters { limit?: number; cursor?: string; cursorKey?: string; }
+export interface RepositoryKnowledgePageRequest extends NumberedPageRequest, LibraryFilters {}
 
 export interface RepositorySearchRequest extends RepositoryKnowledgePageRequest {
   normalizedQuery: string;
@@ -1126,13 +1126,8 @@ function assertRepositorySearchRequest(request: RepositorySearchRequest): void {
   }
 }
 
-function repositoryNumberedRequest(request: Partial<NumberedPageRequest>): NumberedPageRequest {
-  const page = request.page ?? 1;
-  const pageSize = request.pageSize ?? 20;
-  if (pageSize !== 20 && pageSize !== 50 && pageSize !== 100) throw new AppError("PAGE_INVALID", "Page parameters are invalid", 400);
-  const normalized = { page, pageSize } as NumberedPageRequest;
-  pageOffset(normalized);
-  return normalized;
+function repositoryNumberedRequest(request: NumberedPageRequest): NumberedPageRequest {
+  return normalizeNumberedPageRequest(request);
 }
 
 function isAuthorizedChatScope(value: AuthorizedChatScope): boolean {

@@ -371,7 +371,7 @@ describe("submissions D1 control plane", () => {
       requestedSpaceId: "default", kind: "text", title: "Legacy body", content: "Body", idempotencyKey: "legacy-key-00001",
     });
     expect(created.submission?.id).not.toBe(legacy.id);
-    await expect(createService().listOwn("member-a", { limit: 10 })).resolves.toMatchObject({
+    await expect(createService().listOwn("member-a", { page: 1, pageSize: 20 })).resolves.toMatchObject({
       items: expect.arrayContaining([expect.objectContaining({ id: legacy.id })]),
     });
   });

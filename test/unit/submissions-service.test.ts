@@ -10,6 +10,18 @@ import type { CreateAuditEvent } from "../../src/audit/types";
 import { m1ParserCases } from "../fixtures/m1-parser-cases";
 
 describe("SubmissionsService", () => {
+  it.each([
+    { page: 1.5, pageSize: 20 },
+    { page: -1, pageSize: 20 },
+    { page: Number.MAX_SAFE_INTEGER + 1, pageSize: 20 },
+    { page: 1, pageSize: 10 },
+    { page: 501, pageSize: 20 },
+  ])("rejects invalid owner pagination before the repository: $page/$pageSize", async (request) => {
+    const repository = new FakeSubmissionsRepository();
+    await expect(serviceFor(repository).listOwn("member-a", request as never))
+      .rejects.toMatchObject({ code: "PAGE_INVALID", status: 400 });
+    expect(repository.listOwnedCalls).toBe(0);
+  });
   it.each(m1ParserCases.filter((fixture) => !fixture.expected.ok))(
     "does not persist invalid independent fixture $id",
     async (fixture) => {
@@ -257,6 +269,7 @@ function serviceFor(repository: FakeSubmissionsRepository): SubmissionsService {
 }
 
 class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
+  listOwnedCalls = 0;
   audit: CreateAuditEvent | undefined;
   sourceCreation: CreateSubmissionWithSourceVersion | undefined;
   conflict: SubmissionsRepositoryConflictError | undefined;
@@ -303,6 +316,6 @@ class FakeSubmissionsRepository implements SubmissionsRepositoryPort {
     return { submission, source: input.source, sourceVersion: input.sourceVersion, duplicateCandidate: null };
   }
 
-  async listOwned(): Promise<SubmissionPage> { return { items: [] }; }
+  async listOwned(): Promise<SubmissionPage> { this.listOwnedCalls += 1; return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
   async listPending(): Promise<import("../../src/submissions/types").SubmissionReviewPage> { return { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }; }
 }

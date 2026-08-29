@@ -1,7 +1,7 @@
 import { AppError } from "../http";
 import { decodeSourceBytes } from "../sources/decoder";
 import { recoverHtmlMarkdown } from "../assets/html";
-import { pageOffset, type NumberedPageRequest } from "../pagination";
+import { normalizeNumberedPageRequest, type NumberedPageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
 import {
   SubmissionsRepositoryConflictError,
@@ -243,8 +243,8 @@ export class SubmissionsService {
 
   async listOwn(submitterId: string, request: SubmissionPageRequest = {}): Promise<SubmissionPage> {
     const status = validateStatusFilter(request.status);
-    const page = { page: request.page ?? 1, pageSize: request.pageSize ?? 20 } as NumberedPageRequest;
-    pageOffset(page);
+    if ("limit" in request || "cursor" in request) throw new AppError("PAGE_INVALID", "Page parameters are invalid", 400);
+    const page = normalizeNumberedPageRequest(request);
     return this.repository.listOwned(submitterId, {
       ...page,
       ...(status === undefined ? {} : { status }),

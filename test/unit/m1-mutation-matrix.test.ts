@@ -176,7 +176,7 @@ async function witnesses(): Promise<M1MutationWitness[]> {
   const capturedTags = async (mode: "and" | "or" | "invalid") => {
     const capture = libraryCapture();
     try {
-      await capture.service.search({ memberId: "member", role: "admin" }, {
+      await capture.service.searchInternal({ memberId: "member", role: "admin" }, {
         query: "launch", spaceId: "space", tagIds: ["tag-a", "tag-b"], tagMode: mode === "invalid" ? "xor" as "and" : mode,
       });
       return capture.request()?.tagMode;
@@ -185,7 +185,7 @@ async function witnesses(): Promise<M1MutationWitness[]> {
   const capturedChat = async (scope: unknown) => {
     const capture = libraryCapture();
     try {
-      await capture.service.search({ memberId: "member", role: "admin" }, { query: "launch" }, scope as never);
+      await capture.service.searchInternal({ memberId: "member", role: "admin" }, { query: "launch" }, scope as never);
       return capture.request()?.chatScope;
     } catch { return undefined; }
   };
@@ -325,9 +325,9 @@ describe("M1 behavior-level mutation matrix", () => {
 
   it.each(["and", "or"] as const)("passes Tag %s through LibraryService and rejects a mutated mode", async (mode) => {
     const baseline = libraryCapture();
-    await baseline.service.search({ memberId: "member", role: "admin" }, { query: "launch", spaceId: "space", tagIds: ["tag-a", "tag-b"], tagMode: mode });
+    await baseline.service.searchInternal({ memberId: "member", role: "admin" }, { query: "launch", spaceId: "space", tagIds: ["tag-a", "tag-b"], tagMode: mode });
     expect(baseline.request()).toMatchObject({ tagIds: ["tag-a", "tag-b"], tagMode: mode });
-    await expect(baseline.service.search({ memberId: "member", role: "admin" }, { query: "launch", spaceId: "space", tagIds: ["tag-a"], tagMode: `${mode}-mutated` as "and" })).rejects.toMatchObject({ code: "LIBRARY_REQUEST_INVALID" });
+    await expect(baseline.service.searchInternal({ memberId: "member", role: "admin" }, { query: "launch", spaceId: "space", tagIds: ["tag-a"], tagMode: `${mode}-mutated` as "and" })).rejects.toMatchObject({ code: "LIBRARY_REQUEST_INVALID" });
   });
 
   it.each([
@@ -335,9 +335,9 @@ describe("M1 behavior-level mutation matrix", () => {
     ["collection", { kind: "collection", collectionId: "collection" }], ["items", { kind: "items", knowledgeItemIds: ["item"] }],
   ] as const)("authorizes the %s chat scope and rejects its independently malformed mutation", async (_id, scope) => {
     const baseline = libraryCapture();
-    await baseline.service.search({ memberId: "member", role: "admin" }, { query: "launch" }, scope as never);
+    await baseline.service.searchInternal({ memberId: "member", role: "admin" }, { query: "launch" }, scope as never);
     expect(baseline.request()?.chatScope).toEqual(scope);
-    await expect(baseline.service.search({ memberId: "member", role: "admin" }, { query: "launch" }, { ...scope, unexpected: true } as never)).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_INVALID" });
+    await expect(baseline.service.searchInternal({ memberId: "member", role: "admin" }, { query: "launch" }, { ...scope, unexpected: true } as never)).rejects.toMatchObject({ code: "KNOWLEDGE_CHAT_SCOPE_INVALID" });
   });
 
   it("passes submission status through the public service and rejects a mutated status", async () => {
