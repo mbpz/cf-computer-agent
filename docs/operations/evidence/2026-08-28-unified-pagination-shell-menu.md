@@ -27,7 +27,7 @@ No remote D1 migration was applied.
 4. `rtk npm run test:i18n`: exit 0; 13/13 tests passed.
 5. `rtk npm run verify:i18n`: exit 0; 434 keys, 55 placeholders, 6 files.
 6. `rtk npm run build`: exit 0. Vite production build, build-secret scan, legacy audit, and Wrangler deploy dry-run passed. The existing large-chunk warning remains non-blocking.
-7. `rtk npx vitest run test/unit/frontend-pagination.test.tsx test/unit/frontend-shell.test.tsx test/unit/frontend-app-routes.test.ts test/worker/tasks.test.ts test/worker/analytics.test.ts`: exit 0; 48/48 tests passed.
+7. `rtk npx vitest run test/unit/frontend-pagination.test.tsx test/unit/frontend-shell.test.tsx test/unit/frontend-app-routes.test.ts test/worker/tasks.test.ts test/worker/analytics.test.ts`: exit 0; 49/49 tests passed.
 8. `rtk npx vitest run test/unit/pagination.test.ts test/unit/pagination-d1.test.ts test/worker/members.test.ts test/unit/members-service.test.ts test/unit/frontend-shell.test.tsx test/unit/frontend-responsive.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-menu-keyboard.test.tsx test/unit/frontend-app-routes.test.ts test/unit/frontend-navigation-data.test.ts test/worker/admin-menus.test.ts`: exit 0; 140/140 tests passed.
 9. `rtk npx vitest run test/unit/frontend-pagination.test.tsx test/unit/frontend-locale-pages.test.tsx test/unit/frontend-submit-pages.test.tsx test/unit/m6-agent-trajectory.test.ts test/unit/agent-tool-runner.test.ts test/unit/frontend-menu-keyboard.test.tsx test/unit/frontend-shell.test.tsx test/unit/frontend-a11y.test.tsx`: exit 0; 56/56 tests passed.
 10. `rtk npx vitest run test/worker/phase1.test.ts`: exit 0; 54/54 tests passed.
