@@ -44,7 +44,7 @@ describe("admin menus API", () => {
     const contributorPayload = await contributorResponse.json() as { tree: MenuPayloadNode[] };
     expect(contributorPayload.tree.map((node) => node.key)).toEqual(["workspace"]);
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).toEqual([
-      "home", "knowledge", "submit", "my-submissions", "tasks",
+      "home", "knowledge", "submit", "my-submissions", "tasks", "boards", "notifications", "messages",
     ]);
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent"]);
 
@@ -59,6 +59,22 @@ describe("admin menus API", () => {
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "custom")).toBeUndefined();
     const knowledge = contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge");
     expect(knowledge).toMatchObject({ path: "/knowledge", availability: "ready" });
+    for (const key of ["boards", "notifications", "messages"]) {
+      expect(contributorPayload.tree[0]?.children.find((node) => node.key === key)).toMatchObject({
+        availability: "coming_soon",
+        disabledReason: "not_implemented",
+      });
+    }
+  });
+
+  it("keeps seeded coming-soon visibility under database control", async () => {
+    await env.DB.prepare("UPDATE menus SET visible = 0 WHERE id = 'menu-notifications'").run();
+    const response = await api("/api/navigation", contributor);
+    const payload = await response.json() as { tree: MenuPayloadNode[] };
+    const keys = payload.tree[0]?.children.map((node) => node.key);
+    expect(keys).toContain("boards");
+    expect(keys).toContain("messages");
+    expect(keys).not.toContain("notifications");
   });
 
   it("updates custom status and rejects unsafe tree mutations", async () => {
@@ -71,11 +87,9 @@ describe("admin menus API", () => {
   });
 
   it("filters unknown database paths instead of presenting them as coming soon", async () => {
-    const updated = await api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify({ path: "/notifications" }) });
-    expect(updated.status).toBe(200);
     const response = await api("/api/navigation", contributor);
     const payload = await response.json() as { tree: MenuPayloadNode[] };
-    expect(payload.tree[0]?.children.find((node) => node.key === "custom")).toMatchObject({ path: "/notifications", availability: "coming_soon", disabledReason: "not_implemented" });
+    expect(payload.tree[0]?.children.find((node) => node.key === "custom")).toBeUndefined();
 
     await env.DB.prepare("UPDATE menus SET path = '/totally-unknown' WHERE id = 'menu-custom'").run();
     const unknownResponse = await api("/api/navigation", contributor);
