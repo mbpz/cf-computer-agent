@@ -164,6 +164,23 @@ describe("private task numbered route", () => {
     expect(container.textContent).not.toContain("Try search again");
   });
 
+  it("clears a stale action error when debounced query navigation starts", async () => {
+    let listRequests = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return errorResponse();
+      listRequests += 1;
+      return listRequests === 1 ? taskPage(String(input)) : new Promise<Response>(() => undefined);
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
+    expect(container.textContent).toContain("Unable to update the task.");
+    vi.useFakeTimers(); await change(container.querySelector('[aria-label="Search tasks"]') as HTMLInputElement, "beta");
+    expect(container.textContent).toContain("Unable to update the task."); expect(listRequests).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); }); await settle();
+    expect(listRequests).toBe(2); expect(container.textContent).not.toContain("Unable to update the task.");
+    vi.useRealTimers();
+  });
+
   it("locks every task mutation control while one mutation is pending", async () => {
     browser.history.replaceState({}, "", "/tasks"); let mutations = 0; let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });

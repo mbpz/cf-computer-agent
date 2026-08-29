@@ -722,6 +722,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   }, [filters, locale, page, pageSize, retryVersion]);
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
+    setActionError(undefined);
     if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
     queryRef.current = next;
     const url = taskSearch(next);
