@@ -1,4 +1,5 @@
 import { ApiRequestError, apiFetch, type Fetcher } from "./api";
+import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export interface TaskItem {
   id: string;
@@ -16,26 +17,35 @@ export interface TaskItem {
 export interface TaskLinkItem { id: string; taskId: string; knowledgeItemId: string; knowledgeTitle: string | null; createdAt: string; }
 export interface TaskSummary { todo: number; doing: number; blocked: number; done: number; canceled: number; dueToday: number; overdue: number; }
 export interface TaskFilters { status?: string; priority?: string; tag?: string; due?: string; q?: string; }
-export interface TaskPage { items: TaskItem[]; nextCursor?: string; }
+export type TaskPage = FrontendNumberedPage<TaskItem>;
 export interface TaskDetail { task: TaskItem; tags: string[]; links: TaskLinkItem[]; }
 export interface TaskCreateInput { title: string; notes?: string; priority?: string; dueAt?: string | null; knowledgeItemId?: string; }
 
-function taskQuery(filters: TaskFilters, cursor?: string): string {
-  const params = new URLSearchParams();
-  params.set("limit", "20");
+function taskQuery(filters: TaskFilters, pagination: FrontendPageRequest): string {
+  const params = new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize) });
   if (filters.status) params.set("status", filters.status);
   if (filters.priority) params.set("priority", filters.priority);
   if (filters.tag) params.set("tag", filters.tag);
   if (filters.due) params.set("due", filters.due);
   if (filters.q) params.set("q", filters.q);
-  if (cursor) params.set("cursor", cursor);
   return `/api/tasks?${params.toString()}`;
 }
 
-export async function loadTasks(filters: TaskFilters, requester: Fetcher = fetch, cursor?: string): Promise<TaskPage> {
-  const data = await apiFetch<{ items?: unknown[]; nextCursor?: string }>(taskQuery(filters, cursor), { requester });
-  const items = Array.isArray(data.items) ? data.items.map(normalizeTask).filter((item): item is TaskItem => item !== null) : [];
-  return { items, ...(data.nextCursor ? { nextCursor: data.nextCursor } : {}) };
+export async function loadTasks(
+  filters: TaskFilters,
+  pagination: FrontendPageRequest,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<TaskPage> {
+  return normalizeNumberedPage(
+    await apiFetch(taskQuery(filters, pagination), { requester, signal }),
+    normalizeTaskStrict,
+  );
+}
+
+export function createTasksRequestController(requester: Fetcher = fetch) {
+  return createNumberedRequestController((input: { filters: TaskFilters } & FrontendPageRequest, signal) =>
+    loadTasks(input.filters, input, requester, signal));
 }
 
 export async function loadTaskSummary(requester: Fetcher = fetch): Promise<TaskSummary> {
@@ -103,6 +113,12 @@ function normalizeTask(value: unknown): TaskItem | null {
     createdAt: typeof record.createdAt === "string" ? record.createdAt : "",
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
   };
+}
+
+function normalizeTaskStrict(value: unknown): TaskItem {
+  const task = normalizeTask(value);
+  if (!task) throw new Error("TASK_RESPONSE_INVALID");
+  return task;
 }
 
 function isStatus(value: unknown): value is TaskItem["status"] {

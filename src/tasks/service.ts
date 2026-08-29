@@ -1,6 +1,6 @@
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
-import { parsePageRequest, type PageRequest } from "../pagination";
+import { normalizeNumberedPageRequest, type NumberedPageRequest } from "../pagination";
 import type { AuditRepository } from "../audit/repository";
 import type { AuditAction, CreateAuditEvent } from "../audit/types";
 import type { TasksRepositoryPort } from "./repository";
@@ -62,10 +62,10 @@ export class TasksService {
     return { task, tags: await this.repository.listTags(memberId, task.id), links: await this.repository.listLinks(memberId, task.id) };
   }
 
-  async list(memberId: string, request?: PageRequest & { filters?: TaskListFilters }): Promise<TaskPage> {
+  async list(memberId: string, filters: TaskListFilters = {}, pagination: Partial<NumberedPageRequest> = {}): Promise<TaskPage> {
     return this.repository.list(memberId, {
-      ...parsePageRequest(request?.limit, request?.cursor),
-      filters: normalizeFilters(request?.filters),
+      ...normalizeNumberedPageRequest(pagination, "TASK_PAGE_INVALID"),
+      filters: normalizeFilters(filters),
     });
   }
 

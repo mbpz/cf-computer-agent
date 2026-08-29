@@ -2,9 +2,10 @@ import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
+import { parseNumberedPageRequest } from "../pagination";
 import type { TasksService } from "../tasks/service";
 import type { TaskDueFilter, TaskListFilters, TaskPriority, TaskStatus } from "../tasks/types";
-import { pageRequest, strictRecord } from "./member";
+import { strictRecord } from "./member";
 
 export interface TasksRouteServices { tasks: TasksService; }
 
@@ -21,8 +22,13 @@ export async function routeTasksApi(
 
   if (url.pathname === "/api/tasks") {
     if (request.method === "GET") {
-      requireExactQuery(url, ["limit", "cursor", "status", "priority", "tag", "due", "q"]);
-      return jsonResponse(await services.tasks.list(member.memberId, { ...pageRequest(url), filters: taskFilters(url) }), 200, context.requestId);
+      const filterKeys = ["status", "priority", "tag", "due", "q"];
+      requireExactQuery(url, ["page", "pageSize", ...filterKeys]);
+      return jsonResponse(await services.tasks.list(
+        member.memberId,
+        taskFilters(url),
+        parseNumberedPageRequest(url, filterKeys, "TASK_PAGE_INVALID"),
+      ), 200, context.requestId);
     }
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     requireNoQuery(url);

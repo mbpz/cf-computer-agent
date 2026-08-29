@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTask, deleteTask, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
+import { createTask, createTasksRequestController, deleteTask, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
 import { dueInfo, taskPriorityKey, taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 
 function fetchJson(payload: unknown, status = 200): typeof fetch {
@@ -8,11 +8,33 @@ function fetchJson(payload: unknown, status = 200): typeof fetch {
 
 describe("tasks data layer", () => {
   it("loads a normalized page and summary", async () => {
-    const page = await loadTasks({}, fetchJson({ items: [{ id: "task-1", title: "Alpha", status: "doing", progress: 40, priority: "high", dueAt: "2026-08-26T00:00:00.000Z" }], nextCursor: "c" }));
+    const page = await loadTasks({}, { page: 1, pageSize: 20 }, fetchJson({ items: [{ id: "task-1", title: "Alpha", status: "doing", progress: 40, priority: "high", dueAt: "2026-08-26T00:00:00.000Z" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }));
     expect(page.items[0]).toMatchObject({ id: "task-1", status: "doing", priority: "high", progress: 40 });
-    expect(page.nextCursor).toBe("c");
+    expect(page.pagination.total).toBe(1);
     const summary = await loadTaskSummary(fetchJson({ todo: 1, doing: 2, blocked: 0, done: 3, canceled: 0, dueToday: 1, overdue: 0 }));
     expect(summary.doing).toBe(2);
+  });
+
+  it("serializes all filters with numbered pagination and an abort signal", async () => {
+    const requester = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("/api/tasks?page=2&pageSize=50&status=doing&priority=high&tag=urgent&due=today&q=alpha");
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return Response.json({ items: [], pagination: { page: 2, pageSize: 50, total: 1, totalPages: 1 } });
+    }) as unknown as typeof fetch;
+    const result = await loadTasks({ status: "doing", priority: "high", tag: "urgent", due: "today", q: "alpha" }, { page: 2, pageSize: 50 }, requester, new AbortController().signal);
+    expect(result.pagination.page).toBe(2);
+  });
+
+  it("aborts the previous task page request and invalidates its generation", async () => {
+    const requester = ((_: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))))) as unknown as typeof fetch;
+    const controller = createTasksRequestController(requester);
+    const first = controller.request({ filters: {}, page: 1, pageSize: 20 });
+    const second = controller.request({ filters: {}, page: 2, pageSize: 20 });
+    expect(controller.isCurrent(first.generation)).toBe(false);
+    expect(controller.isCurrent(second.generation)).toBe(true);
+    await expect(first.promise).rejects.toMatchObject({ name: "AbortError" });
+    controller.dispose();
+    await expect(second.promise).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("creates with a client-generated idempotency key", async () => {

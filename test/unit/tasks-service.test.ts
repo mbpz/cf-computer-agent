@@ -8,6 +8,27 @@ import type { PageRequest } from "../../src/pagination";
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 describe("TasksService", () => {
+  it("returns member-scoped numbered totals for task filters", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-a-1", title: "A1" });
+    await service.create("member-a", { id: "task-a-2", title: "A2" });
+    await service.create("member-b", { id: "task-b-1", title: "B1" });
+    await service.setStatus("member-a", "task-a-1", "doing");
+    await service.setStatus("member-a", "task-a-2", "doing");
+    await service.setStatus("member-b", "task-b-1", "doing");
+    const page = await service.list("member-a", { status: "doing" }, { page: 1, pageSize: 20 });
+    expect(page.pagination.total).toBe(2);
+    expect(page.items.every((task) => task.memberId === "member-a")).toBe(true);
+  });
+
+  it.each([{ page: 1.5, pageSize: 20 }, { page: 1, pageSize: 10 }, { page: 501, pageSize: 20 }])(
+    "rejects invalid numbered pagination before repository access",
+    async (pagination) => {
+      await expect(createService(new FakeTasksRepository()).list("member-a", {}, pagination as never))
+        .rejects.toMatchObject({ code: "TASK_PAGE_INVALID", status: 400 });
+    },
+  );
   it("creates with a client id, replays the same id idempotently, and audits once", async () => {
     const repository = new FakeTasksRepository();
     const audit = new FakeAudit();
@@ -165,7 +186,11 @@ class FakeTasksRepository implements TasksRepositoryPort {
     return task && task.memberId === memberId ? task : null;
   }
   async list(memberId: string, request: TaskListRequest): Promise<TaskPage> {
-    return { items: [...this.tasks.values()].filter((task) => task.memberId === memberId).slice(0, request.limit) };
+    const items = [...this.tasks.values()].filter((task) => task.memberId === memberId
+      && (!request.filters.status || task.status === request.filters.status)
+      && (!request.filters.priority || task.priority === request.filters.priority)
+      && (!request.filters.q || task.title.toLowerCase().includes(request.filters.q.toLowerCase())));
+    return { items: items.slice((request.page - 1) * request.pageSize, request.page * request.pageSize), pagination: { page: request.page, pageSize: request.pageSize, total: items.length, totalPages: items.length ? Math.ceil(items.length / request.pageSize) : 0 } };
   }
   async update(memberId: string, id: string, input: TaskUpdate) {
     const task = await this.findOwned(memberId, id);

@@ -1,5 +1,5 @@
-import { AppError } from "../http";
-import { decodeOpaqueCursor, encodeOpaqueCursor } from "../pagination";
+import { normalizeNumberedPageRequest, pageOffset } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskSummary, TaskUpdate } from "./types";
 
 export interface TasksRepositoryPort {
@@ -51,7 +51,7 @@ export class TasksRepository implements TasksRepositoryPort {
   }
 
   async list(memberId: string, request: TaskListRequest): Promise<TaskPage> {
-    const cursor = request.cursor === undefined ? undefined : decodeListCursor(request.cursor);
+    const pagination = normalizeNumberedPageRequest(request, "TASK_PAGE_INVALID");
     const conditions = ["member_id = ?"];
     const bindings: (string | number)[] = [memberId];
     const { filters } = request;
@@ -70,16 +70,15 @@ export class TasksRepository implements TasksRepositoryPort {
       if (filters.due === "overdue") { conditions.push(`due_at < ? AND status IN ${OPEN_STATUSES}`); bindings.push(startOfDay); }
     }
     if (filters.q) { conditions.push("title LIKE ? ESCAPE '\\'"); bindings.push(`%${escapeLike(filters.q)}%`); }
-    if (cursor) { conditions.push("(created_at < ? OR (created_at = ? AND id < ?))"); bindings.push(cursor.createdAt, cursor.createdAt, cursor.id); }
-    const rows = await this.db.prepare(
-      `SELECT ${taskColumns} FROM tasks WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC, id DESC LIMIT ?`,
-    ).bind(...bindings, request.limit + 1).all<TaskRow>();
-    const items = rows.results.slice(0, request.limit).map((row) => mapTaskRow(row)!);
-    const lastRow = rows.results[request.limit - 1];
-    return {
-      items,
-      ...(rows.results.length > request.limit && lastRow ? { nextCursor: encodeOpaqueCursor({ v: 1, createdAt: lastRow.created_at, id: lastRow.id }) } : {}),
-    };
+    const where = conditions.join(" AND ");
+    return queryNumberedPage(
+      this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM tasks WHERE ${where}`).bind(...bindings),
+      this.db.prepare(`SELECT ${taskColumns} FROM tasks WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .bind(...bindings, pagination.pageSize, pageOffset(pagination, "TASK_PAGE_INVALID")),
+      pagination,
+      (row) => mapTaskRow(row as TaskRow),
+    );
   }
 
   async update(memberId: string, id: string, input: TaskUpdate): Promise<Task | null> {
@@ -230,22 +229,6 @@ function mapLinkRow(row: LinkRow): TaskLink {
     knowledgeTitle: row.title,
     createdAt: new Date(row.created_at).toISOString(),
   };
-}
-
-type TaskListCursor = { v: 1; createdAt: number; id: string };
-
-function decodeListCursor(value: string): TaskListCursor {
-  try {
-    const decoded = decodeOpaqueCursor(value);
-    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error();
-    const record = decoded as Record<string, unknown>;
-    if (Object.keys(record).length !== 3 || record.v !== 1 || typeof record.id !== "string"
-      || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(record.id)
-      || !Number.isSafeInteger(record.createdAt) || (record.createdAt as number) < 0) throw new Error();
-    return { v: 1, createdAt: record.createdAt as number, id: record.id };
-  } catch {
-    throw new AppError("TASK_PAGE_INVALID", "Task page cursor is invalid", 400);
-  }
 }
 
 function escapeLike(value: string): string {

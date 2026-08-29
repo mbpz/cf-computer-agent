@@ -41,28 +41,29 @@ describe("tasks repository", () => {
     expect(await repository.countByMember("member-a")).toBe(1);
   });
 
-  it("lists with status/tag/due/q filters and a stable cursor", async () => {
+  it("lists with status/tag/due/q filters and stable numbered pages", async () => {
     const repository = new TasksRepository(env.DB);
     await seedTasks(repository);
-    const all = await repository.list("member-a", { limit: 10, filters: {} });
+    const all = await repository.list("member-a", { page: 1, pageSize: 20, filters: {} });
     expect(all.items).toHaveLength(4);
-    expect(all.nextCursor).toBeUndefined();
-    const doing = await repository.list("member-a", { limit: 10, filters: { status: "doing" } });
+    expect(all.pagination.total).toBe(4);
+    const doing = await repository.list("member-a", { page: 1, pageSize: 20, filters: { status: "doing" } });
     expect(doing.items.map((task) => task.id)).toEqual(["task-2"]);
-    const tagged = await repository.list("member-a", { limit: 10, filters: { tag: "urgent" } });
+    const tagged = await repository.list("member-a", { page: 1, pageSize: 20, filters: { tag: "urgent" } });
     expect(tagged.items.map((task) => task.id)).toEqual(["task-1"]);
-    const overdue = await repository.list("member-a", { limit: 10, filters: { due: "overdue" } });
+    const overdue = await repository.list("member-a", { page: 1, pageSize: 20, filters: { due: "overdue" } });
     expect(overdue.items.map((task) => task.id)).toEqual(["task-3"]);
-    const today = await repository.list("member-a", { limit: 10, filters: { due: "today" } });
+    const today = await repository.list("member-a", { page: 1, pageSize: 20, filters: { due: "today" } });
     expect(today.items.map((task) => task.id)).toEqual(["task-2"]);
-    const noDue = await repository.list("member-a", { limit: 10, filters: { due: "none" } });
+    const noDue = await repository.list("member-a", { page: 1, pageSize: 20, filters: { due: "none" } });
     expect(noDue.items.map((task) => task.id)).toEqual(["task-4"]);
-    const searched = await repository.list("member-a", { limit: 10, filters: { q: "alpha" } });
+    const searched = await repository.list("member-a", { page: 1, pageSize: 20, filters: { q: "alpha" } });
     expect(searched.items.map((task) => task.id)).toEqual(["task-1"]);
-    const paged = await repository.list("member-a", { limit: 2, filters: {} });
-    expect(paged.items.map((task) => task.id)).toEqual(["task-4", "task-3"]);
-    const next = await repository.list("member-a", { limit: 2, filters: {}, cursor: paged.nextCursor });
-    expect(next.items.map((task) => task.id)).toEqual(["task-2", "task-1"]);
+    const paged = await repository.list("member-a", { page: 1, pageSize: 20, filters: {} });
+    expect(paged.items.map((task) => task.id)).toEqual(["task-4", "task-3", "task-2", "task-1"]);
+    const beyond = await repository.list("member-a", { page: 2, pageSize: 20, filters: {} });
+    expect(beyond.items).toEqual([]);
+    expect(beyond.pagination).toEqual({ page: 2, pageSize: 20, total: 4, totalPages: 1 });
   });
 
   it("summarizes status counts, due-today and overdue for open tasks only", async () => {
@@ -129,7 +130,7 @@ describe("tasks HTTP contract", () => {
     const replay = await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
     expect(replay.status).toBe(200);
     expect(await replay.json()).toMatchObject({ created: false });
-    await expect((await api("/api/tasks?limit=20", sessionA)).json()).resolves.toMatchObject({ items: [{ id: "task-1" }] });
+    await expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).json()).resolves.toMatchObject({ items: [{ id: "task-1" }], pagination: { total: 1 } });
     await expect((await api("/api/tasks/summary", sessionA)).json()).resolves.toMatchObject({ todo: 1 });
     await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ task: { id: "task-1" }, tags: [], links: [] });
     const patched = await api("/api/tasks/task-1", sessionA, { method: "PATCH", body: JSON.stringify({ title: "Alpha v2", notes: "note", priority: "low", dueAt: null }) });
@@ -147,7 +148,30 @@ describe("tasks HTTP contract", () => {
     const linkId = ((await (await api("/api/tasks/task-1", sessionA)).json()) as { links: Array<{ id: string }> }).links[0]!.id;
     expect((await api(`/api/tasks/task-1/links/${linkId}`, sessionA, { method: "DELETE" })).status).toBe(204);
     expect((await api("/api/tasks/task-1", sessionA, { method: "DELETE" })).status).toBe(204);
-    expect((await api("/api/tasks?limit=20", sessionA)).status).toBe(200);
+    expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).status).toBe(200);
+  });
+
+  it("strictly paginates every task filter without leaking another member's total", async () => {
+    const today = Date.now() - (Date.now() % DAY) + 3_600_000;
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-a", title: "Alpha", priority: "high", dueAt: new Date(today).toISOString() }) });
+    await api("/api/tasks", sessionB, { method: "POST", body: JSON.stringify({ id: "task-b", title: "Alpha", priority: "high" }) });
+    await api("/api/tasks/task-a/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    await api("/api/tasks/task-a/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["urgent"] }) });
+    for (const query of ["status=doing", "priority=high", "tag=urgent", "due=today", "q=Alpha"]) {
+      const response = await api(`/api/tasks?page=1&pageSize=20&${query}`, sessionA);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ items: [{ id: "task-a", memberId: "member-a" }], pagination: { total: 1 } });
+    }
+    const beyond = await api("/api/tasks?page=2&pageSize=20&status=doing", sessionA);
+    await expect(beyond.json()).resolves.toMatchObject({ items: [], pagination: { page: 2, pageSize: 20, total: 1, totalPages: 1 } });
+    for (const path of [
+      "/api/tasks?cursor=bad",
+      "/api/tasks?page=1&page=2",
+      "/api/tasks?pageSize=20&pageSize=50",
+      "/api/tasks?page=501&pageSize=20",
+      "/api/tasks?unknown=x",
+      "/api/tasks?status=doing&status=todo",
+    ]) expect((await api(path, sessionA)).status).toBe(400);
   });
 
   it("returns 404 for another member's task on every path (IDOR)", async () => {
@@ -164,9 +188,9 @@ describe("tasks HTTP contract", () => {
   });
 
   it("rejects anonymous, automation, CSRF-forged, and invalid-transition requests", async () => {
-    expect((await api("/api/tasks?limit=20", "")).status).toBe(401);
+    expect((await api("/api/tasks?page=1&pageSize=20", "")).status).toBe(401);
     const automationContext = createExecutionContext();
-    const automation = await createApp().fetch!(await signedAutomationRequest("https://memory.crgmhrc.asia/api/tasks?limit=20"), env, automationContext);
+    const automation = await createApp().fetch!(await signedAutomationRequest("https://memory.crgmhrc.asia/api/tasks?page=1&pageSize=20"), env, automationContext);
     await waitOnExecutionContext(automationContext);
     expect(automation.status).toBe(403);
     const forged = new Request("https://memory.crgmhrc.asia/api/tasks", {

@@ -5,7 +5,7 @@ import { pageKindForPath } from "../../frontend/app-routes";
 describe("React app route dispatch", () => {
   it.each([
     ["/", "home"], ["/knowledge", "knowledge"], ["/search", "search"], ["/agent", "agent"],
-    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/admin", "admin"],
+    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/admin", "admin"],
     ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
   ])("dispatches %s", (path, expected) => {

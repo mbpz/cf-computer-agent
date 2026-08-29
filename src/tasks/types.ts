@@ -1,4 +1,4 @@
-import type { Page, PageRequest } from "../pagination";
+import type { NumberedPage, NumberedPageRequest } from "../pagination";
 
 export type TaskStatus = "todo" | "doing" | "blocked" | "done" | "canceled";
 export type TaskPriority = "low" | "medium" | "high";
@@ -64,11 +64,11 @@ export interface TaskListFilters {
   q?: string;
 }
 
-export interface TaskListRequest extends PageRequest {
+export interface TaskListRequest extends NumberedPageRequest {
   filters: TaskListFilters;
 }
 
-export type TaskPage = Page<Task>;
+export type TaskPage = NumberedPage<Task>;
 
 export interface TaskSummary {
   todo: number;

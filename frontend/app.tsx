@@ -19,6 +19,7 @@ import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
+import { TasksPage } from "./pages/tasks/tasks-page";
 import { LoginPage } from "./pages/login-page";
 import { SettingsPage } from "./pages/settings-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
@@ -31,6 +32,8 @@ import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
+import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskPage } from "./lib/tasks-data";
+import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
@@ -146,6 +149,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "agent": return <AgentRoute locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
+    case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} search={search} />;
@@ -667,6 +671,76 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
   return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
+export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initialPage = useMemo(() => parsePageSearch(search), [search]);
+  const initialFilters = useMemo(() => taskFiltersFromSearch(search), [search]);
+  const [page, setPage] = useState(initialPage.page);
+  const [pageSize, setPageSize] = useState(initialPage.pageSize);
+  const [filters, setFilters] = useState<TaskFilterState>(initialFilters);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: TaskPage }>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [localError, setLocalError] = useState<string | undefined>();
+  const [actionPendingId, setActionPendingId] = useState<string | null>(null);
+  const controllerRef = useRef<ReturnType<typeof createTasksRequestController> | null>(null);
+  const queryRef = useRef({ page, pageSize, filters });
+  const sameQuery = (value: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }) =>
+    value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize
+      && JSON.stringify(value.filters) === JSON.stringify(queryRef.current.filters);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const pagination = parsePageSearch(window.location.search);
+      const nextFilters = taskFiltersFromSearch(window.location.search);
+      queryRef.current = { ...pagination, filters: nextFilters };
+      setPage(pagination.page); setPageSize(pagination.pageSize); setFilters(nextFilters); setRetryVersion((value) => value + 1);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const controller = createTasksRequestController(); controllerRef.current = controller;
+    const snapshot = { page, pageSize, filters }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
+    const request = controller.request({ page, pageSize, filters: filters as TaskFilters });
+    void request.promise.then((data) => {
+      if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); }
+    }).catch((error: unknown) => {
+      if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) {
+        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
+      }
+    });
+    return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
+  }, [filters, locale, page, pageSize, retryVersion]);
+
+  const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
+    queryRef.current = next;
+    const url = taskSearch(next);
+    window.history[replace ? "replaceState" : "pushState"]({}, "", `/tasks${url}`);
+    setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters);
+  };
+  const mutate = async (id: string, mutation: () => Promise<unknown>) => {
+    if (actionPendingId) return;
+    const snapshot = { ...queryRef.current, filters: { ...queryRef.current.filters } };
+    setActionPendingId(id); setLocalError(undefined);
+    try {
+      await mutation();
+      if (!sameQuery(snapshot)) return;
+      const controller = controllerRef.current; if (!controller) return;
+      setPending(true); const request = controller.request({ page: snapshot.page, pageSize: snapshot.pageSize, filters: snapshot.filters as TaskFilters });
+      const data = await request.promise;
+      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      if (data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: snapshot.page - 1 }, true);
+      else { setState({ kind: "ready", data }); setPending(false); }
+    } catch (error: unknown) {
+      if (sameQuery(snapshot) && !isAbort(error)) { setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
+    } finally { setActionPendingId(null); }
+  };
+  const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
+  return <TasksPage locale={locale} state={ready} filters={filters} pending={pending} localError={localError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+}
+
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error"; message: string }>({ kind: "loading" });
@@ -818,5 +892,25 @@ function knowledgeFilters(search: string) {
 function searchFilters(search: string) {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const { tagId: _tagId, ...base } = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
   return { ...base, tagIds, ...(tagMode === "and" || tagMode === "or" ? { tagMode } : {}) };
+}
+function taskFiltersFromSearch(search: string): TaskFilterState {
+  const params = new URLSearchParams(search);
+  const status = params.get("status"); const priority = params.get("priority"); const due = params.get("due");
+  return {
+    ...(status === "todo" || status === "doing" || status === "blocked" || status === "done" || status === "canceled" ? { status } : {}),
+    ...(priority === "low" || priority === "medium" || priority === "high" ? { priority } : {}),
+    ...(due === "today" || due === "overdue" || due === "none" ? { due } : {}),
+    ...(params.get("tag") ? { tag: params.get("tag")! } : {}),
+    ...(params.get("q") ? { q: params.get("q")! } : {}),
+  };
+}
+function taskSearch(input: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }): string {
+  const params = new URLSearchParams();
+  for (const key of ["status", "priority", "tag", "due", "q"] as const) {
+    const value = input.filters[key]; if (value) params.set(key, value);
+  }
+  const pagination = new URLSearchParams(writePageSearch("", { page: input.page, pageSize: input.pageSize }));
+  for (const [key, value] of pagination) params.set(key, value);
+  return params.size ? `?${params}` : "";
 }
 function isAbort(error: unknown): boolean { return error instanceof DOMException && error.name === "AbortError"; }
