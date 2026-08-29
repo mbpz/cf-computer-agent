@@ -150,15 +150,16 @@ describe("Phase 1 API permission matrix", () => {
       },
       duplicateCandidate: null,
     });
-    const own = await memberApi("sub-contributor", "/api/submissions/mine?limit=1");
-    const ownBody = await own.json<{ items: Array<{ submitterId: string }>; nextCursor?: string }>();
+    const own = await memberApi("sub-contributor", "/api/submissions/mine?page=1&pageSize=20");
+    const ownBody = await own.json<{ items: Array<{ submitterId: string }>; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>();
     expect(ownBody.items).toEqual([createdBody.submission]);
-    expect(ownBody.nextCursor).toBeUndefined();
+    expect(ownBody.pagination).toEqual({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
+    expect(ownBody).not.toHaveProperty("nextCursor");
     expect(JSON.stringify(ownBody)).not.toContain("member-other");
     const cursorBody = await expectApiError(memberApi(
       "sub-contributor",
       `/api/submissions/mine?limit=20&cursor=${encodeURIComponent(pageCursor(Date.now(), "admin-shaped"))}`,
-    ), 400, "PAGE_CURSOR_INVALID");
+    ), 400, "PAGE_INVALID");
     expect(JSON.stringify(cursorBody)).not.toContain("member-other");
 
     await expectOk(memberApi("sub-contributor", "/api/notes"));
@@ -436,9 +437,13 @@ describe("Phase 1 request boundary", () => {
     ["/api/spaces?cursor=", "empty"],
     [`/api/spaces?cursor=${encodeURIComponent(pageCursor(-1, "space"))}`, "negative-position"],
     [`/api/spaces?cursor=${encodeURIComponent(pageCursor(1_000_001, "space"))}`, "oversized-position"],
-    [`/api/submissions/mine?cursor=${encodeURIComponent(pageCursor(-1, "submission"))}`, "negative-submission-time"],
   ])("returns stable 400 for %s (%s)", async (path) => {
     await expectApiError(memberApi("sub-admin", path), 400, "PAGE_CURSOR_INVALID");
+  });
+
+  it("rejects a legacy cursor on the numbered member submissions route", async () => {
+    const cursor = encodeURIComponent(pageCursor(-1, "submission"));
+    await expectApiError(memberApi("sub-admin", `/api/submissions/mine?cursor=${cursor}`), 400, "PAGE_INVALID");
   });
 
   it.each([

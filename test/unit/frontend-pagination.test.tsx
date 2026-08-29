@@ -90,6 +90,17 @@ describe("frontend pagination", () => {
     expect(html).not.toContain("1–0");
   });
 
+  it("normalizes missing legacy metadata to a valid empty first page", () => {
+    const html = renderToStaticMarkup(
+      <DataPagination {...({} as never)} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />,
+    );
+    expect(html).toContain(">0<");
+    expect(html).toContain("0–0");
+    expect(html).toContain("0 / 0");
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("NaN");
+  });
+
   it("renders a legal beyond-last page without inventing a current desktop page", () => {
     const onPageChange = vi.fn();
     const html = renderToStaticMarkup(<DataPagination page={4} pageSize={20} total={21} totalPages={2} onPageChange={onPageChange} onPageSizeChange={vi.fn()} />);

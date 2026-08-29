@@ -45,6 +45,8 @@ describe("React submission and asset pages", () => {
     expect(html).toContain("Duplicate");
     expect(html).toContain("Reviewer note");
     expect(html).toContain("已有正式条目");
+    expect(html).toContain(">1<");
+    expect(html).toContain("1 / 1");
     expect(html).not.toContain("undefined");
     expect(html).not.toContain("reviewerId");
   });

@@ -5,10 +5,11 @@ import { Pagination } from "./ui/pagination";
 import { Select, SelectOption } from "./ui/select";
 
 export interface DataPaginationProps extends React.HTMLAttributes<HTMLDivElement> {
-  page: number;
-  pageSize: SupportedPageSize;
-  total: number;
-  totalPages: number;
+  page?: number;
+  pageSize?: SupportedPageSize;
+  total?: number;
+  totalPages?: number;
+  visibleCount?: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: SupportedPageSize) => void;
   pending?: boolean;
@@ -21,7 +22,14 @@ export interface DataPaginationProps extends React.HTMLAttributes<HTMLDivElement
 
 const pageSizes: readonly SupportedPageSize[] = [20, 50, 100];
 
-export function DataPagination({ className, page, pageSize, total, totalPages, onPageChange, onPageSizeChange, pending = false, totalLabel = "Total", rangeLabel = "Visible", pageSizeLabel = "Rows per page", previousLabel = "Previous page", nextLabel = "Next page", ...props }: DataPaginationProps) {
+export function DataPagination({ className, page: rawPage, pageSize: rawPageSize, total: rawTotal, totalPages: rawTotalPages, visibleCount = 0, onPageChange, onPageSizeChange, pending = false, totalLabel = "Total", rangeLabel = "Visible", pageSizeLabel = "Rows per page", previousLabel = "Previous page", nextLabel = "Next page", ...props }: DataPaginationProps) {
+  const page = Number.isSafeInteger(rawPage) && rawPage! > 0 ? rawPage! : 1;
+  const pageSize = pageSizes.includes(rawPageSize as SupportedPageSize) ? rawPageSize! : 20;
+  const fallbackTotal = Number.isSafeInteger(visibleCount) && visibleCount > 0 ? visibleCount : 0;
+  const total = Number.isSafeInteger(rawTotal) && rawTotal! >= 0 ? rawTotal! : fallbackTotal;
+  const totalPages = Number.isSafeInteger(rawTotalPages) && rawTotalPages! >= 0
+    ? rawTotalPages!
+    : total === 0 ? 0 : Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
   const hasVisibleRows = total > 0 && offset < total;
   const rangeStart = hasVisibleRows ? offset + 1 : 0;

@@ -19,8 +19,12 @@ describe("M6 agent trajectory evaluation", () => {
   it.each(M6_AGENT_TRAJECTORIES)("enforces trajectory $id", async (trajectory) => {
     let member = { ...baseMember, status: trajectory.memberStatus };
     const members = { findById: async () => member };
+    const searches: Array<{ scope: { memberId: string; role: string }; request: unknown }> = [];
     const runner = new AgentToolRunner(members, [
-      createSearchKnowledgeTool({ search: async () => ({ items: [], degraded: false }) } as never),
+      createSearchKnowledgeTool({ searchInternal: async (scope: { memberId: string; role: string }, request: unknown) => {
+        searches.push({ scope, request });
+        return { items: [], degraded: false };
+      } } as never),
     ]);
 
     try {
@@ -28,6 +32,8 @@ describe("M6 agent trajectory evaluation", () => {
       expect(trajectory.expected.ok).toBe(true);
       expect(result.steps).toBe(trajectory.expected.steps);
       expect(result.stopped).toBe(trajectory.expected.stopped);
+      expect(searches).toHaveLength(trajectory.expected.steps ?? 0);
+      expect(searches.every(({ scope }) => scope.memberId === baseMember.id && scope.role === baseMember.role)).toBe(true);
     } catch (error) {
       expect(trajectory.expected.ok).toBe(false);
       expect(error).toMatchObject({ code: trajectory.expected.errorCode });
