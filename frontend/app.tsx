@@ -694,6 +694,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
 
   useEffect(() => {
     const onPopState = () => {
+      setActionError(undefined);
       const pagination = parsePageSearch(window.location.search);
       const nextFilters = taskFiltersFromSearch(window.location.search);
       if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }

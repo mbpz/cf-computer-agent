@@ -25,6 +25,22 @@ describe("private task numbered route", () => {
     expect(requests[0]?.signal?.aborted).toBe(true); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests.at(-1)?.url).toContain("pageSize=50");
   });
 
+  it("clears a stale action error when browser history restores a query", async () => {
+    let listRequests = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return errorResponse();
+      listRequests += 1;
+      return listRequests < 3 ? taskPage(String(input)) : new Promise<Response>(() => undefined);
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
+    expect(container.textContent).toContain("Unable to update the task.");
+    await act(async () => browser.history.back()); await flush();
+    expect(browser.location.search).toContain("status=doing"); expect(listRequests).toBe(3);
+    expect(container.textContent).not.toContain("Unable to update the task.");
+  });
+
   it("distinguishes same-title task actions while preserving reopen and blank-title labels", async () => {
     browser.history.replaceState({}, "", "/tasks");
     const alphaOne = { ...createTask("Alpha"), id: "task-alpha-1" };
