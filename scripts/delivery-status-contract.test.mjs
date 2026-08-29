@@ -40,8 +40,8 @@ test("workspace route registry extraction is complete despite property ordering"
   const fixturePath = resolve(fixtureDirectory, "workspace-route-capabilities.ts");
   writeFileSync(fixturePath, `
     export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
-      { availability: "ready", path: "/first", id: "first", pageKind: "home" },
-      { id: "second", pageKind: "coming-soon", path: "/second", availability: "coming_soon" },
+      { availability: "ready", path: "/first", id: "first", pageKind: "home", capability: null },
+      { id: "second", pageKind: "coming-soon", path: "/second", availability: "coming_soon", capability: null },
     ]);
   `);
   try {
@@ -55,6 +55,35 @@ test("workspace route registry extraction is complete despite property ordering"
   } finally {
     rmSync(fixtureDirectory, { recursive: true, force: true });
   }
+});
+
+test("actual workspace route registry extraction includes every ready and coming-soon route", () => {
+  assert.deepEqual(
+    workspaceRouteCapabilities(),
+    [
+      { path: "/", availability: "ready" },
+      { path: "/submit", availability: "ready" },
+      { path: "/knowledge", availability: "ready" },
+      { path: "/search", availability: "ready" },
+      { path: "/agent", availability: "ready" },
+      { path: "/my-submissions", availability: "ready" },
+      { path: "/tasks", availability: "ready" },
+      { path: "/settings", availability: "ready" },
+      { path: "/admin", availability: "ready" },
+      { path: "/admin/submissions", availability: "ready" },
+      { path: "/admin/duplicates", availability: "ready" },
+      { path: "/admin/assets", availability: "ready" },
+      { path: "/admin/members", availability: "ready" },
+      { path: "/admin/roles", availability: "ready" },
+      { path: "/admin/menus", availability: "ready" },
+      { path: "/admin/spaces", availability: "ready" },
+      { path: "/admin/audit", availability: "ready" },
+      { path: "/admin/analytics", availability: "ready" },
+      { path: "/boards", availability: "coming_soon" },
+      { path: "/notifications", availability: "coming_soon" },
+      { path: "/messages", availability: "coming_soon" },
+    ],
+  );
 });
 
 test("route coverage uses exact structured route markers", () => {
@@ -223,12 +252,13 @@ function workspaceRouteCapabilityRecord(entry, index) {
     assert.ok(isPropertyAssignment(property), `workspace route registry entry ${index} must use property assignments`);
     assert.ok(property.name, `workspace route registry entry ${index} property name is required`);
     assert.ok(isIdentifier(property.name) || isStringLiteral(property.name), `workspace route registry entry ${index} property name is invalid`);
-    assert.ok(isStringLiteral(property.initializer), `workspace route registry entry ${index} property value must be a string literal`);
-    properties.set(property.name.text, property.initializer.text);
+    properties.set(property.name.text, property.initializer);
   }
-  assert.ok(properties.has("path"), `workspace route registry entry ${index} requires path`);
-  assert.ok(properties.has("availability"), `workspace route registry entry ${index} requires availability`);
-  return { path: properties.get("path"), availability: properties.get("availability") };
+  const path = properties.get("path");
+  const availability = properties.get("availability");
+  assert.ok(isStringLiteral(path), `workspace route registry entry ${index} requires string path`);
+  assert.ok(isStringLiteral(availability), `workspace route registry entry ${index} requires string availability`);
+  return { path: path.text, availability: availability.text };
 }
 
 function unwrapExpression(expression) {
