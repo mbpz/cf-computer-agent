@@ -20,7 +20,7 @@ export function adminAssetRowsSql(hasStatusFilter: boolean): string {
                 a.content_sha256, a.idempotency_key, a.status, a.created_at, a.updated_at,
                 j.id AS job_id, j.status AS job_status, j.attempts, j.last_error_code,
                 j.created_at AS job_created_at, j.updated_at AS job_updated_at, a.submission_id
-         FROM assets AS a INDEXED BY assets_admin_page
+         FROM assets AS a
          JOIN parse_jobs AS j ON j.asset_id = a.id${statusSql}
          ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`;
 }

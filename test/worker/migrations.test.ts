@@ -1016,8 +1016,42 @@ describe("Phase 1 control-plane migrations", () => {
     expect(collectionInvalidationPlan).not.toMatch(/SCAN knowledge_items|USE TEMP B-TREE/iu);
   });
 
-  it("uses no-sort indexes for formal admin asset and member task pages", async () => {
+  it("chooses representative indexes for formal admin asset and member task pages", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
+    const timestamp = "2026-08-29T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('asset-plan-owner', 'github:asset-plan-owner', 'asset-plan@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 500
+       )
+       INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256,
+         idempotency_key, status, created_at, updated_at)
+       SELECT printf('asset-plan-%04d', value), 'asset-plan-owner', printf('staging/asset-plan-%04d', value),
+         printf('asset-plan-%04d.txt', value), 'text/plain', 1, printf('%064d', value),
+         printf('asset-plan-%04d', value), 'ready', printf('2026-08-29T00:00:%04dZ', value), printf('2026-08-29T00:00:%04dZ', value)
+       FROM sequence`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO parse_jobs (id, asset_id, status, attempts, created_at, updated_at)
+       SELECT 'job-' || id, id, CASE WHEN id IN ('asset-plan-0001', 'asset-plan-0500') THEN 'queued' ELSE 'succeeded' END,
+         0, created_at, updated_at FROM assets WHERE owner_id = 'asset-plan-owner'`,
+    ).run();
+    await env.DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 500
+       )
+       INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+       SELECT printf('task-plan-%04d', value), 'asset-plan-owner', printf('Task %04d', value), '',
+         CASE WHEN value <= 5 THEN 'blocked' ELSE 'todo' END, 0,
+         CASE WHEN value % 10 = 0 THEN 'high' ELSE 'medium' END, NULL, value, value
+       FROM sequence`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO task_tags (task_id, member_id, tag)
+       SELECT id, member_id, 'focus' FROM tasks WHERE member_id = 'asset-plan-owner' AND created_at % 20 = 0`,
+    ).run();
     await env.DB.prepare("ANALYZE").run();
 
     const assetsPlan = await queryPlan(adminAssetRowsSql(false), [20, 200]);
@@ -1026,37 +1060,38 @@ describe("Phase 1 control-plane migrations", () => {
       `SELECT id FROM tasks
        WHERE member_id = ?
        ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
-      ["member-page-plan", 20, 200],
+      ["asset-plan-owner", 20, 200],
+    );
+    const statusTasksPlan = await queryPlan(
+      `SELECT id FROM tasks
+       WHERE member_id = ? AND status = ?
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["asset-plan-owner", "blocked", 20, 0],
+    );
+    const priorityTasksPlan = await queryPlan(
+      `SELECT id FROM tasks
+       WHERE member_id = ? AND priority = ?
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["asset-plan-owner", "high", 20, 0],
+    );
+    const tagTasksPlan = await queryPlan(
+      `SELECT id FROM tasks
+       WHERE member_id = ? AND id IN (SELECT task_id FROM task_tags WHERE member_id = ? AND tag = ?)
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["asset-plan-owner", "asset-plan-owner", "focus", 20, 0],
     );
 
     expect(assetsPlan).toContain("assets_admin_page");
     expect(assetsPlan).not.toMatch(/USE TEMP B-TREE/iu);
-    expect(statusAssetsPlan).toContain("assets_admin_page");
-    expect(statusAssetsPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(statusAssetsPlan).toContain("parse_jobs_status_page");
     expect(tasksPlan).toContain("tasks_member_page");
     expect(tasksPlan).not.toMatch(/USE TEMP B-TREE/iu);
-
-    const timestamp = "2026-08-29T00:00:00.000Z";
-    await env.DB.prepare(
-      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('asset-plan-owner', 'github:asset-plan-owner', 'asset-plan@example.test', 'contributor', 'active', ?, ?)",
-    ).bind(timestamp, timestamp).run();
-    for (const [id, createdAt, status] of [
-      ["asset-plan-new", "2026-08-29T03:00:00.000Z", "queued"],
-      ["asset-plan-middle", "2026-08-29T02:00:00.000Z", "failed_terminal"],
-      ["asset-plan-old", "2026-08-29T01:00:00.000Z", "queued"],
-    ] as const) {
-      await env.DB.batch([
-        env.DB.prepare(
-          `INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256,
-             idempotency_key, status, created_at, updated_at)
-           VALUES (?, 'asset-plan-owner', ?, ?, 'text/plain', 1, ?, ?, 'ready', ?, ?)`,
-        ).bind(id, `staging/${id}`, `${id}.txt`, id.padEnd(64, "0"), id, createdAt, createdAt),
-        env.DB.prepare(
-          `INSERT INTO parse_jobs (id, asset_id, status, attempts, created_at, updated_at)
-           VALUES (?, ?, ?, 0, ?, ?)`,
-        ).bind(`job-${id}`, id, status, createdAt, createdAt),
-      ]);
-    }
+    expect(statusTasksPlan).toContain("tasks_member_page");
+    expect(statusTasksPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(priorityTasksPlan).toContain("tasks_member_page");
+    expect(priorityTasksPlan).not.toMatch(/USE TEMP B-TREE/iu);
+    expect(tagTasksPlan).toContain("LIST SUBQUERY");
+    expect(tagTasksPlan).not.toMatch(/SCAN tasks\b/iu);
     const filteredCount = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM assets a JOIN parse_jobs j ON j.asset_id = a.id WHERE j.status = ?",
     ).bind("queued").first<{ total: number }>();
@@ -1064,8 +1099,8 @@ describe("Phase 1 control-plane migrations", () => {
       .bind("queued", 20, 0).all<{ id: string; job_status: string }>();
     expect(filteredCount).toEqual({ total: 2 });
     expect(filteredRows.results.map(({ id, job_status }) => ({ id, job_status }))).toEqual([
-      { id: "asset-plan-new", job_status: "queued" },
-      { id: "asset-plan-old", job_status: "queued" },
+      { id: "asset-plan-0500", job_status: "queued" },
+      { id: "asset-plan-0001", job_status: "queued" },
     ]);
   });
 

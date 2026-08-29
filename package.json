@@ -10,7 +10,7 @@
     "db:migrate:local": "wrangler d1 migrations apply memory-garden-control-plane --local",
     "db:migrate:remote": "wrangler d1 migrations apply memory-garden-control-plane --remote",
     "test": "npm run test:smoke && npm run test:unit && npm run test:worker",
-    "test:smoke": "node --test scripts/smoke.test.mjs scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs scripts/build-secrets.test.mjs scripts/frontend-legacy-audit.test.mjs scripts/frontend-app-contract.test.mjs scripts/wcag-contract.test.mjs && npm run test:i18n && npm run verify:i18n",
+    "test:smoke": "node --test scripts/smoke.test.mjs scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs scripts/build-secrets.test.mjs scripts/frontend-legacy-audit.test.mjs scripts/frontend-app-contract.test.mjs scripts/formal-pagination-contract.test.mjs scripts/wcag-contract.test.mjs && npm run test:i18n && npm run verify:i18n",
     "test:i18n": "node --test scripts/i18n-contract.test.mjs",
     "verify:i18n": "node scripts/verify-i18n.mjs",
     "test:ops:m1": "node --test scripts/automation-probe.test.mjs scripts/m1-release-contract.test.mjs",
