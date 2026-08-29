@@ -23,9 +23,10 @@ describe("frontend accessibility gates", () => {
     const shell = renderToStaticMarkup(<AppShell session={session} pathname="/knowledge" locale={createLocaleRuntime()}><button type="button">Edge action</button></AppShell>);
     const sidebar = shell.match(/<nav data-shell-sidebar-scroll[^>]*class="([^"]+)"/u)?.[1] ?? "";
     const content = shell.match(/<main[^>]*data-shell-content-scroll[^>]*class="([^"]+)"/u)?.[1] ?? "";
-    expect(sidebar).toContain("scroll-py-2");
-    expect(sidebar).toContain("px-0.5");
-    expect(content).toContain("scroll-py-2");
+    expect(sidebar).toContain("scroll-p-1");
+    expect(sidebar).toContain("p-1");
+    expect(content).toContain("scroll-p-1");
+    expect(shell).toContain("max-w-[1440px] p-4");
     expect(shell).toContain("focus-visible:ring-2");
     expect(shell).toContain("data-shell-mobile-scroll");
     expect(shell).toContain("overscroll-contain");

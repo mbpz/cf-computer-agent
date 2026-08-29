@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { act, useState } from "react";
+import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AppShell } from "../../frontend/components/shell/app-shell";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { canonicalWorkspaceLocationKey, readWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -82,12 +83,16 @@ describe("shadcn workspace shell", () => {
   it("resets exactly once through the real navigation link and App onNavigate pattern", async () => {
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo });
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
     function AppNavigationHarness() {
-      const [pathname, setPathname] = useState("/");
-      const navigate = (path: string) => { window.history.pushState({}, "", path); setPathname(path); };
-      return <AppShell session={admin} pathname={pathname} locale={createLocaleRuntime()} onNavigate={navigate}><p>{pathname}</p></AppShell>;
+      const [location, setLocation] = useState(readWorkspaceLocation);
+      useEffect(() => { const update = () => setLocation(readWorkspaceLocation()); window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update); return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update); }, []);
+      return <AppShell session={admin} pathname={location.pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={createLocaleRuntime()} onNavigate={(path) => writeWorkspaceHistory("push", path)}><p>{location.pathname}</p></AppShell>;
     }
     await act(async () => root.render(<AppNavigationHarness />));
+    expect(window.history.pushState).toBe(originalPushState);
+    expect(window.history.replaceState).toBe(originalReplaceState);
     scrollTo.mockClear();
 
     const knowledgeLink = container.querySelector('a[href="/knowledge"]') as HTMLAnchorElement;
@@ -98,21 +103,35 @@ describe("shadcn workspace shell", () => {
     expect(container.querySelector("[data-shell-content-scroll]")).not.toBeNull();
   });
 
+  it("resets exactly once when a pathname prop changes without a history write", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo });
+    const renderShell = (pathname: string) => <AppShell session={admin} pathname={pathname} locale={createLocaleRuntime()}><p>{pathname}</p></AppShell>;
+    await act(async () => root.render(renderShell("/knowledge")));
+    scrollTo.mockClear();
+
+    await act(async () => root.render(renderShell("/tasks")));
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
   it("resets for canonical primary queries but ignores modal URL state and ordinary rerenders", async () => {
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo });
     window.history.replaceState({}, "", "/knowledge");
-    const shell = <AppShell session={admin} pathname="/knowledge" locale={createLocaleRuntime()}><p>Knowledge</p></AppShell>;
-    await act(async () => root.render(shell));
+    function AppLocationHarness() {
+      const [location, setLocation] = useState(readWorkspaceLocation);
+      useEffect(() => { const update = () => setLocation(readWorkspaceLocation()); window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update); return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update); }, []);
+      return <AppShell session={admin} pathname={location.pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={createLocaleRuntime()}><p>{window.location.search}</p></AppShell>;
+    }
+    await act(async () => root.render(<AppLocationHarness />));
     scrollTo.mockClear();
 
-    await act(async () => root.render(<AppShell session={admin} pathname="/knowledge" locale={createLocaleRuntime()}><p>Modal state changed</p></AppShell>));
+    await act(async () => writeWorkspaceHistory("push", "/knowledge?dialog=item-1"));
     expect(scrollTo).not.toHaveBeenCalled();
 
-    await act(async () => window.history.pushState({}, "", "/knowledge?dialog=item-1"));
-    expect(scrollTo).not.toHaveBeenCalled();
-
-    await act(async () => window.history.pushState({}, "", "/knowledge?dialog=item-1&page=2&pageSize=50"));
+    await act(async () => writeWorkspaceHistory("push", "/knowledge?dialog=item-1&page=2&pageSize=50"));
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
@@ -125,8 +144,8 @@ describe("shadcn workspace shell", () => {
     const dialog = container.querySelector('[role="dialog"]');
     const focusViewport = dialog?.querySelector("[data-shell-mobile-focus-viewport]");
     expect(focusViewport).not.toBeNull();
-    expect(focusViewport?.getAttribute("class")).toContain("scroll-py-2");
-    expect(focusViewport?.getAttribute("class")).toContain("p-0.5");
+    expect(focusViewport?.getAttribute("class")).toContain("scroll-p-1");
+    expect(focusViewport?.getAttribute("class")).toContain("p-1");
     expect(focusViewport?.querySelector('button[aria-label="Close navigation"]')).not.toBeNull();
   });
 });
