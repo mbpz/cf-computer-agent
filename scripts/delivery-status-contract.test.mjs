@@ -102,38 +102,70 @@ test("completed dimensions require evidence and n/a dimensions require a reason"
   assert.throws(() => assertRowContract(missingNaReason), /IDN-002 requires a reason for n\/a/u);
 });
 
-test("partial or done release requires a direct dated evidence marker", () => {
+test("partial or done release requires a scoped dated evidence marker", () => {
+  const expectedError = /OPS-001 requires .*dated release evidence/u;
   const missingMarker = {
     ID: "OPS-001", 实现: "done", 验证: "done", 发布: "partial", 验收: "pending",
     证据: "migrations/0032_workspace_tasks.sql", 备注: "",
   };
-  assert.throws(() => assertRowContract(missingMarker), /OPS-001 requires direct dated release evidence/u);
+  assert.throws(() => assertRowContract(missingMarker), expectedError);
 
-  const undatedMarker = {
+  const genericDatedPath = {
     ...missingMarker,
-    证据: "release evidence: `docs/operations/evidence/m1-release-template.md`",
+    证据: "docs/operations/evidence/workspace-rbac-release-2026-08-28.md",
   };
-  assert.throws(() => assertRowContract(undatedMarker), /OPS-001 requires direct dated release evidence/u);
+  assert.throws(() => assertRowContract(genericDatedPath), expectedError);
 
-  const datedMarker = {
+  const legacyPathOnlyMarker = {
     ...missingMarker,
     证据: "release evidence: `docs/operations/evidence/workspace-rbac-release-2026-08-28.md`",
   };
-  assert.doesNotThrow(() => assertRowContract(datedMarker));
+  assert.throws(() => assertRowContract(legacyPathOnlyMarker), expectedError);
+
+  const emptyScope = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/workspace-rbac-release-2026-08-28.md` [scope: ]",
+  };
+  assert.throws(() => assertRowContract(emptyScope), expectedError);
+
+  const placeholderScope = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/workspace-rbac-release-2026-08-28.md` [scope: pending]",
+  };
+  assert.throws(() => assertRowContract(placeholderScope), expectedError);
+
+  const undatedMarker = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/m1-release-template.md` [scope: migrations 0001 through 0032 applied]",
+  };
+  assert.throws(() => assertRowContract(undatedMarker), expectedError);
+
+  const scopedDatedMarker = {
+    ...missingMarker,
+    证据: "release evidence: `docs/operations/evidence/workspace-rbac-release-2026-08-28.md` [scope: migrations 0001 through 0032 applied]",
+  };
+  assert.doesNotThrow(() => assertRowContract(scopedDatedMarker));
 });
 
-test("partial or done acceptance requires a direct dated evidence marker", () => {
+test("partial or done acceptance requires a scoped dated evidence marker", () => {
+  const expectedError = /IDN-001 requires .*dated acceptance evidence/u;
   const missingMarker = {
     ID: "IDN-001", 实现: "done", 验证: "done", 发布: "pending", 验收: "partial",
     证据: "test/unit/github-oauth.test.ts", 备注: "",
   };
-  assert.throws(() => assertRowContract(missingMarker), /IDN-001 requires direct dated acceptance evidence/u);
+  assert.throws(() => assertRowContract(missingMarker), expectedError);
 
-  const datedMarker = {
+  const legacyPathOnlyMarker = {
     ...missingMarker,
     证据: "acceptance evidence: `docs/operations/evidence/m1-release-2026-08-23.md`",
   };
-  assert.doesNotThrow(() => assertRowContract(datedMarker));
+  assert.throws(() => assertRowContract(legacyPathOnlyMarker), expectedError);
+
+  const scopedDatedMarker = {
+    ...missingMarker,
+    证据: "acceptance evidence: `docs/operations/evidence/m1-release-2026-08-23.md` [scope: GitHub callback and authenticated session journey]",
+  };
+  assert.doesNotThrow(() => assertRowContract(scopedDatedMarker));
 });
 
 test("ledger dependencies must resolve to another row", () => {
@@ -244,20 +276,30 @@ function assertRowContract(row) {
     assert.ok(hasWrittenValue(row.备注), `${row.ID} requires a reason for n/a`);
   }
   if (row.发布 === "partial" || row.发布 === "done") {
-    assertDirectDatedEvidence(row, "release");
+    assertScopedDatedEvidence(row, "release");
   }
   if (row.验收 === "partial" || row.验收 === "done") {
-    assertDirectDatedEvidence(row, "acceptance");
+    assertScopedDatedEvidence(row, "acceptance");
   }
 }
 
-function assertDirectDatedEvidence(row, kind) {
-  const marker = new RegExp(`${kind} evidence:\\s*\`([^\`\\r\\n]+)\``, "gu");
-  const paths = [...(row.证据 ?? "").matchAll(marker)].map((match) => match[1]);
+function assertScopedDatedEvidence(row, kind) {
+  const marker = new RegExp(
+    `${kind} evidence:\\s*\`([^\`\\r\\n]+)\`\\s*\\[scope:\\s*([^\\]\\r\\n]+?)\\s*\\]`,
+    "gu",
+  );
+  const entries = [...(row.证据 ?? "").matchAll(marker)].map((match) => ({
+    path: match[1],
+    scope: match[2]?.trim(),
+  }));
   const datedEvidencePath = /^docs\/operations\/evidence\/[^/`\r\n]*\d{4}-\d{2}-\d{2}[^/`\r\n]*\.md$/u;
   assert.ok(
-    paths.some((path) => datedEvidencePath.test(path) && existsSync(resolve(repositoryRoot, path))),
-    `${row.ID} requires direct dated ${kind} evidence`,
+    entries.some(({ path, scope }) =>
+      datedEvidencePath.test(path) &&
+      existsSync(resolve(repositoryRoot, path)) &&
+      hasCapabilityScope(scope)
+    ),
+    `${row.ID} requires scoped dated ${kind} evidence`,
   );
 }
 
@@ -299,6 +341,11 @@ function ledgerDependencies(row) {
 
 function hasWrittenValue(value) {
   return !PLACEHOLDER_VALUES.has((value ?? "").trim().toLowerCase());
+}
+
+function hasCapabilityScope(value) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return hasWrittenValue(normalized) && !STATUS_VALUES.has(normalized);
 }
 
 function routeTokens(row) {
