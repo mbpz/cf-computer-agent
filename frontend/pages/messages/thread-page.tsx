@@ -46,6 +46,7 @@ function DiscussionComposer({ locale, thread, replyTo, onCancelReply, onSend }: 
   const submitControllerRef = useRef<ReturnType<typeof createDiscussionSubmitController> | null>(null);
   if (!submitControllerRef.current) submitControllerRef.current = createDiscussionSubmitController();
   const currentInput = discussionComposerInput(thread, body, replyTo);
+  submitControllerRef.current.observe(currentInput);
   const currentFingerprintRef = useRef<string | null>(null);
   currentFingerprintRef.current = currentInput ? discussionSendFingerprint(currentInput) : null;
   const submit = async (event: FormEvent) => {
@@ -56,7 +57,10 @@ function DiscussionComposer({ locale, thread, replyTo, onCancelReply, onSend }: 
     setStatus("pending");
     try {
       const accepted = await submitControllerRef.current!.submit(input, onSend);
-      if (!accepted) return;
+      if (!accepted) {
+        setStatus("idle");
+        return;
+      }
       if (currentFingerprintRef.current !== submittedFingerprint) {
         setStatus("idle");
         return;

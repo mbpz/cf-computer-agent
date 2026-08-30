@@ -89,6 +89,32 @@ describe("discussion routes", () => {
     ]);
   });
 
+  it("permanently invalidates a failed attempt after body, reply, or mention semantics leave and return", async () => {
+    const keys = ["key-1", "key-2", "key-3", "key-4"];
+    const sent: string[] = [];
+    const controller = createDiscussionSubmitController(() => keys.shift()!);
+    const sender = async (input: { clientKey: string }) => {
+      sent.push(input.clientKey);
+      throw new Error("response lost");
+    };
+    const original = { context: { kind: "task" as const, id: "task-1" }, body: "Original", mentionMemberIds: ["member-2"] };
+
+    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
+    controller.observe({ ...original, body: "Edited" });
+    controller.observe(original);
+    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
+
+    controller.observe({ ...original, replyToMessageId: "message-1" });
+    controller.observe(original);
+    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
+
+    controller.observe({ ...original, mentionMemberIds: ["member-3"] });
+    controller.observe(original);
+    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
+
+    expect(sent).toEqual(["key-1", "key-2", "key-3", "key-4"]);
+  });
+
   it("rotates the client key after a successful send even when the next message has identical semantics", async () => {
     const keys = ["key-1", "key-2"];
     const sent: string[] = [];
@@ -225,6 +251,68 @@ describe("discussion routes", () => {
 
     expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Keep this draft");
     expect(container.textContent).toContain("Replying to member-1");
+  });
+
+  it("does not clear a restored draft after reply semantics leave and return while send is pending", async () => {
+    let resolveSend!: (response: Response) => void;
+    const delayedSend = new Promise<Response>((resolve) => { resolveSend = resolve; });
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/discussions/thread-1") return Promise.resolve(Response.json(thread()));
+      if (path === "/api/discussions/thread-1/messages?limit=20") return Promise.resolve(Response.json({ items: [message()] }));
+      if (path === "/api/discussions/messages" && init?.method === "POST") return delayedSend;
+      return Promise.reject(new Error(`unexpected request: ${path}`));
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("[data-message-id='message-1']") !== null);
+    const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+    await changeReactTextarea(textarea, "Keep restored draft");
+    await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
+    await act(async () => (container.querySelector("[data-message-id='message-1'] button") as HTMLButtonElement).click());
+    await act(async () => (container.querySelector("form button[type='button']") as HTMLButtonElement).click());
+
+    resolveSend(Response.json({
+      thread: thread(),
+      message: message({ id: "message-2", sequence: 2, body: "Keep restored draft", clientKey: "client-2" }),
+      created: true,
+    }, { status: 201 }));
+    await waitFor(() => textarea.disabled === false);
+
+    expect(textarea.value).toBe("Keep restored draft");
+    expect(container.textContent).not.toContain("Replying to member-1");
+  });
+
+  it("uses a new client key after a failed send is edited and then restored in the real composer", async () => {
+    const sent: Array<{ body: string; clientKey: string }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/discussions/thread-1") return Response.json(thread());
+      if (path === "/api/discussions/thread-1/messages?limit=20") return Response.json({ items: [message()] });
+      if (path === "/api/discussions/messages" && init?.method === "POST") {
+        sent.push(JSON.parse(String(init.body)) as { body: string; clientKey: string });
+        if (sent.length === 1) throw new Error("response lost");
+        return Response.json({
+          thread: thread(),
+          message: message({ id: "message-2", sequence: 2, body: "Original", clientKey: sent[1]!.clientKey }),
+          created: true,
+        }, { status: 201 });
+      }
+      throw new Error(`unexpected request: ${path}`);
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+
+    await changeReactTextarea(textarea, "Original");
+    await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
+    await waitFor(() => sent.length === 1 && textarea.disabled === false);
+    await changeReactTextarea(textarea, "Edited");
+    await changeReactTextarea(textarea, "Original");
+    await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
+    await waitFor(() => sent.length === 2);
+
+    expect(sent.map(({ body }) => body)).toEqual(["Original", "Original"]);
+    expect(sent[1]!.clientKey).not.toBe(sent[0]!.clientKey);
   });
 
   it("synchronizes internal cursor state when the sidebar re-enters the canonical messages route", async () => {

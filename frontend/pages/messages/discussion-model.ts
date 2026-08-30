@@ -72,6 +72,10 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
   let pending = false;
   let attempt: { fingerprint: string; clientKey: string } | null = null;
   return {
+    observe(input: Omit<DiscussionSendInput, "clientKey"> | null): void {
+      const fingerprint = input ? discussionSendFingerprint(input) : null;
+      if (attempt && attempt.fingerprint !== fingerprint) attempt = null;
+    },
     async submit(
       input: Omit<DiscussionSendInput, "clientKey">,
       sender: (input: DiscussionSendInput) => Promise<unknown>,
@@ -83,7 +87,8 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
       pending = true;
       try {
         await sender({ ...input, clientKey: currentAttempt.clientKey });
-        if (attempt === currentAttempt) attempt = null;
+        if (attempt !== currentAttempt) return false;
+        attempt = null;
         return true;
       } finally {
         pending = false;
