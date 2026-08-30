@@ -224,6 +224,54 @@ describe("notifications HTTP contract", () => {
     expect(after.items.find(({ id }) => id === "a-knowledge-missing")).toMatchObject({ targetKind: null, targetId: null, readAt: null });
   });
 
+  it("matches knowledge deep links to the detail authorization matrix", async () => {
+    await seedNotificationKnowledge();
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-b'").run();
+    const repository = new NotificationsRepository(env.DB);
+    await repository.insert(notificationInsert({
+      id: "a-knowledge-matrix",
+      recipientMemberId: "member-a",
+      targetKind: "knowledge_item",
+      targetId: "notification-knowledge",
+      deduplicationKey: "a-knowledge-matrix",
+      createdAt: NOW + 5,
+    }));
+    await repository.insert(notificationInsert({
+      id: "b-knowledge-matrix",
+      recipientMemberId: "member-b",
+      targetKind: "knowledge_item",
+      targetId: "notification-knowledge",
+      deduplicationKey: "b-knowledge-matrix",
+      createdAt: NOW + 5,
+    }));
+
+    expect((await api("/api/knowledge/notification-knowledge", sessionA)).status).toBe(200);
+    expect((await api("/api/knowledge/notification-knowledge", sessionB)).status).toBe(200);
+    expect(await notificationTarget("a-knowledge-matrix", sessionA)).toEqual({
+      targetKind: "knowledge_item",
+      targetId: "notification-knowledge",
+    });
+    expect(await notificationTarget("b-knowledge-matrix", sessionB)).toEqual({
+      targetKind: "knowledge_item",
+      targetId: "notification-knowledge",
+    });
+
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only', published_by = 'member-a' WHERE id = 'notification-revision'").run();
+    expect((await api("/api/knowledge/notification-knowledge", sessionA)).status).toBe(404);
+    expect((await api("/api/knowledge/notification-knowledge", sessionB)).status).toBe(200);
+    expect(await notificationTarget("a-knowledge-matrix", sessionA)).toEqual({ targetKind: null, targetId: null });
+    expect(await notificationTarget("b-knowledge-matrix", sessionB)).toEqual({
+      targetKind: "knowledge_item",
+      targetId: "notification-knowledge",
+    });
+
+    await env.DB.prepare("UPDATE knowledge_items SET status = 'trashed' WHERE id = 'notification-knowledge'").run();
+    expect((await api("/api/knowledge/notification-knowledge", sessionA)).status).toBe(404);
+    expect((await api("/api/knowledge/notification-knowledge", sessionB)).status).toBe(404);
+    expect(await notificationTarget("a-knowledge-matrix", sessionA)).toEqual({ targetKind: null, targetId: null });
+    expect(await notificationTarget("b-knowledge-matrix", sessionB)).toEqual({ targetKind: null, targetId: null });
+  });
+
   it("fails closed for unknown, duplicate, malformed pagination and filter query values", async () => {
     for (const path of [
       "/api/notifications?cursor=bad",
@@ -337,14 +385,37 @@ function notificationInsert(overrides: Partial<NotificationInsert> = {}): Notifi
 }
 
 async function seedNotificationKnowledge(): Promise<void> {
-  const hash = "d".repeat(64);
+  const markdown = "# Knowledge";
+  const hash = await sha256Hex(new TextEncoder().encode(markdown));
   const now = "2026-08-30T00:00:00.000Z";
-  await env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES ('notification-submission', 'member-a', 'default', 'markdown', 'published', 'Notification Knowledge', '# Knowledge', ?, ?)").bind(now, now).run();
+  await env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES ('notification-submission', 'member-a', 'default', 'markdown', 'published', 'Notification Knowledge', ?, ?, ?)").bind(markdown, now, now).run();
   await env.DB.prepare("INSERT INTO sources (id, owner_id, space_id, kind, title, created_at, updated_at) VALUES ('notification-source', 'member-a', 'default', 'markdown', 'Notification Knowledge', ?, ?)").bind(now, now).run();
-  await env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('notification-source-version', 'notification-source', 'notification-submission', 1, '# Knowledge', ?, 'm1-v1', ?)").bind(hash, now).run();
+  await env.DB.prepare("INSERT INTO source_versions (id, source_id, submission_id, ordinal, content, content_sha256, parser_version, created_at) VALUES ('notification-source-version', 'notification-source', 'notification-submission', 1, ?, ?, 'm1-v1', ?)").bind(markdown, hash, now).run();
   await env.DB.prepare("INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('notification-knowledge', 'default', NULL, 'active', 'indexed', ?, ?)").bind(now, now).run();
-  await env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('notification-revision', 'notification-knowledge', 'notification-source-version', '/workspace/published/default/notification-knowledge/revision.md', ?, 'Notification Knowledge', '[]', 'shared', 'member-a', ?)").bind(hash, now).run();
+  await env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('notification-revision', 'notification-knowledge', 'notification-source-version', '/workspace/published/default/notification-knowledge/notification-revision.md', ?, 'Notification Knowledge', '[]', 'shared', 'member-a', ?)").bind(hash, now).run();
   await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'notification-revision' WHERE id = 'notification-knowledge'").run();
+  await env.DB.prepare(
+    `INSERT INTO chunks
+     (id, revision_id, ordinal, heading_path, start_line, end_line, body, search_title, search_tags, search_body, index_field, location_json)
+     VALUES ('notification-chunk', 'notification-revision', 0, '["Knowledge"]', 1, 1, 'Knowledge', 'Notification Knowledge', '', 'knowledge', 'body', '{}')`,
+  ).run();
+  const result = await env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("personal")).commitPublishedContent({
+    spaceId: "default",
+    knowledgeItemId: "notification-knowledge",
+    revisionId: "notification-revision",
+    contentSha256: hash,
+    markdown,
+  });
+  if (!result.ok) throw new Error(`failed to seed published content: ${result.error.code}`);
+}
+
+async function notificationTarget(id: string, token: string): Promise<{ targetKind: unknown; targetId: unknown }> {
+  const page = await (await api("/api/notifications?page=1&pageSize=20", token)).json() as {
+    items: Array<{ id: string; targetKind: unknown; targetId: unknown }>;
+  };
+  const notification = page.items.find((item) => item.id === id);
+  if (!notification) throw new Error(`notification ${id} was not listed`);
+  return { targetKind: notification.targetKind, targetId: notification.targetId };
 }
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

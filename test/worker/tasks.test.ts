@@ -145,6 +145,12 @@ describe("tasks repository", () => {
     expect(await repository.isKnowledgeVisible("member-a", "knowledge-a")).toBe(true);
     expect(await repository.isKnowledgeVisible("member-b", "knowledge-a")).toBe(true); // shared 对所有成员可见
     expect(await repository.isKnowledgeVisible("member-a", "knowledge-missing")).toBe(false);
+
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'task-revision'").run();
+    expect(await repository.isKnowledgeVisible("member-a", "knowledge-a")).toBe(false);
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-b'").run();
+    expect(await repository.isKnowledgeVisible("member-b", "knowledge-a")).toBe(true);
+
     expect(await repository.deleteLink("member-a", "task-1", "link-1")).toBe(true);
     expect(await repository.deleteLink("member-a", "task-1", "link-1")).toBe(false);
   });

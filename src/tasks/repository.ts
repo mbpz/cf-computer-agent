@@ -1,5 +1,11 @@
 import { normalizeNumberedPageRequest, pageOffset } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
+import {
+  ACTIVE_KNOWLEDGE_ITEM_SQL,
+  ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL,
+  authorizedKnowledgeMemberCteSql,
+  readableKnowledgeRevisionSql,
+} from "../library/read-authorization";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "./types";
 
 export interface TasksRepositoryPort {
@@ -220,10 +226,15 @@ export class TasksRepository implements TasksRepositoryPort {
 
   async isKnowledgeVisible(memberId: string, knowledgeItemId: string): Promise<boolean> {
     const row = await this.db.prepare(
-      `SELECT 1 AS visible FROM knowledge_items ki
-       JOIN revisions r ON r.id = ki.current_revision_id
-       WHERE ki.id = ? AND ki.status = 'active' AND (r.visibility = 'shared' OR r.published_by = ?) LIMIT 1`,
-    ).bind(knowledgeItemId, memberId).first<{ visible: number }>();
+      `WITH ${authorizedKnowledgeMemberCteSql(false)}
+       SELECT 1 AS visible FROM authorized_member am
+       JOIN knowledge_items k
+       JOIN revisions r ON r.id = k.current_revision_id
+       ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+       WHERE k.id = ? AND ${ACTIVE_KNOWLEDGE_ITEM_SQL}
+         AND ${readableKnowledgeRevisionSql()}
+       LIMIT 1`,
+    ).bind(memberId, knowledgeItemId).first<{ visible: number }>();
     return row !== null;
   }
 }

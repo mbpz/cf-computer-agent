@@ -3,6 +3,12 @@ import { buildIndexChunkFields, buildIndexDocument, type IndexTag } from "../ind
 import { metadataSearchText } from "../sources/chunk-metadata";
 import { decodeOpaqueCursor, encodeOpaqueCursor, normalizeNumberedPageRequest, pageOffset, parsePageRequest, type NumberedPageRequest, type PageRequest } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
+import {
+  ACTIVE_KNOWLEDGE_ITEM_SQL,
+  ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL,
+  authorizedKnowledgeMemberCteSql,
+  readableKnowledgeRevisionSql,
+} from "./read-authorization";
 import type { KnowledgeVisibility, SearchStatus } from "../publication/types";
 import { MAX_REVISION_CHUNKS } from "../sources/limits";
 import { parseSourceLocationJson, type SourceLocation } from "../sources/chunker";
@@ -693,9 +699,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
       : "r.id = ? AND r.knowledge_item_id = k.id";
     const revisionBinding = revisionId === undefined ? [] : [revisionId];
     const rows = await this.db.prepare(
-      `WITH authorized_member AS (
-         SELECT role FROM members WHERE id = ? AND role = ? AND status = 'active'
-       ), authorized_revision AS (
+      `WITH ${authorizedKnowledgeMemberCteSql(true)}, authorized_revision AS (
          SELECT k.id, k.space_id, k.collection_id, k.status,
            ${visibleSearchStatusSql} AS search_status, k.updated_at,
            k.current_revision_id, r.id AS revision_id, r.source_version_id, r.normalized_path,
@@ -706,7 +710,7 @@ export class LibraryRepository implements LibraryRepositoryPort {
               AND previous.id != r.id
               AND (previous.published_at < r.published_at
                 OR (previous.published_at = r.published_at AND previous.id < r.id))
-              AND (previous.visibility = 'shared' OR am.role = 'admin')
+              AND ${readableKnowledgeRevisionSql("previous")}
             ORDER BY previous.published_at DESC, previous.id DESC
             LIMIT 1) AS previous_revision_id
          FROM authorized_member am
@@ -715,9 +719,9 @@ export class LibraryRepository implements LibraryRepositoryPort {
          LEFT JOIN jobs current_index_job
            ON current_index_job.kind = 'index_revision' AND current_index_job.resource_id = k.current_revision_id
          JOIN revisions r ON ${requestedRevision}
-         JOIN spaces s ON s.id = k.space_id AND s.status = 'active' AND s.kind != 'legacy'
-         WHERE k.id = ? AND k.status = 'active'
-           AND (r.visibility = 'shared' OR am.role = 'admin')
+         ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+         WHERE k.id = ? AND ${ACTIVE_KNOWLEDGE_ITEM_SQL}
+           AND ${readableKnowledgeRevisionSql()}
        )
        SELECT ar.*, sv.ordinal AS source_version_ordinal, sv.parser_schema_version,
          sv.code_language, sv.file_label, sv.line_baseline,
