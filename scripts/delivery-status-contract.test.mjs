@@ -118,21 +118,29 @@ const FRONTEND_LEDGER_DIMENSION_CLAIMS = [
   {
     column: "实现",
     name: "implementation",
+    englishQualifiers: ["implementation"],
+    chineseQualifiers: ["实现"],
     claim: "(?:\\bimplemented\\b|\\bready\\b|\\bimplementation\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|ready)\\b|已实现(?:完成)?|实现(?:完成|就绪)|(?<!不)可用)",
   },
   {
     column: "验证",
     name: "verification",
+    englishQualifiers: ["verification"],
+    chineseQualifiers: ["验证"],
     claim: "(?:\\bverified\\b|\\btested\\b|\\bverification\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|\\btests?\\s+passed\\b|已验证|验证(?:完成|通过)|已测试|测试(?:完成|通过))",
   },
   {
     column: "发布",
     name: "release",
+    englishQualifiers: ["release", "deployment", "migration"],
+    chineseQualifiers: ["发布", "部署", "迁移"],
     claim: "(?:\\breleased\\b|\\bdeployed\\b|\\bmigrated\\b|\\brelease\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|\\bdeployment\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|\\bmigration\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|已发布|发布完成|已部署|部署完成|已迁移|迁移完成)",
   },
   {
     column: "验收",
     name: "acceptance",
+    englishQualifiers: ["browser acceptance", "acceptance"],
+    chineseQualifiers: ["浏览器验收", "验收"],
     claim: "(?:\\bbrowser[- ]accepted\\b|\\baccepted\\b|\\bacceptance\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|\\bbrowser acceptance\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|已验收|验收完成|浏览器验收(?:完成|通过))",
   },
 ];
@@ -588,14 +596,56 @@ test("frontend checklist rejects stale pending backend and route completion pros
     );
   }
 
-  for (const qualifiedClaim of [
-    "TSK-001 implementation complete.",
-    "TSK-001 verification completed.",
-  ]) {
-    assert.doesNotThrow(
-      () => assertFrontendCollaborationContract(`${checklist}\n${qualifiedClaim}\n`, rows),
-      `a done dimension must not be mistaken for bare overall completion: ${qualifiedClaim}`,
-    );
+  const qualifiedCompletionCases = [
+    {
+      column: "实现",
+      name: "implementation",
+      claims: [
+        "implementation complete", "complete implementation", "implementation is complete",
+        "实现完成", "完成实现", "实现已完成", "已完成实现",
+      ],
+    },
+    {
+      column: "验证",
+      name: "verification",
+      claims: [
+        "verification complete", "complete verification", "verification is complete",
+        "验证完成", "完成验证", "验证已完成", "已完成验证",
+      ],
+    },
+    {
+      column: "发布",
+      name: "release",
+      claims: [
+        "release complete", "complete release", "release is complete",
+        "发布完成", "完成发布", "发布已完成", "已完成发布",
+      ],
+    },
+    {
+      column: "验收",
+      name: "acceptance",
+      claims: [
+        "acceptance complete", "complete acceptance", "acceptance is complete",
+        "验收完成", "完成验收", "验收已完成", "已完成验收",
+      ],
+    },
+  ];
+  for (const dimension of qualifiedCompletionCases) {
+    const namedDimensionDoneRows = rows.map((row) => row.ID === "NTF-001"
+      ? { ...row, [dimension.column]: "done" }
+      : row);
+    for (const claim of dimension.claims) {
+      const mutation = `${checklist}\nNTF-001 ${claim}.\n`;
+      assert.doesNotThrow(
+        () => assertFrontendCollaborationContract(mutation, namedDimensionDoneRows),
+        `qualified ${dimension.name} completion must not require aggregate completion: ${claim}`,
+      );
+      assert.throws(
+        () => assertFrontendCollaborationContract(mutation, rows),
+        new RegExp(`NTF-001 must not claim ${dimension.name} while ledger ${dimension.column} is pending`, "u"),
+        `qualified ${dimension.name} completion must be checked against that dimension: ${claim}`,
+      );
+    }
   }
 
   for (const contradictoryClaim of [
@@ -646,6 +696,35 @@ test("frontend checklist rejects stale pending backend and route completion pros
     () => assertFrontendCollaborationContract(`${checklist}\nNTF-001 complete.\n`, undocumentedNaRows),
     /NTF-001 must not claim overall completion until all applicable ledger dimensions are done/u,
   );
+});
+
+test("frontend completion negation is limited to the predicate it directly modifies", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+
+  for (const directlyNegatedClaim of [
+    "NTF-001 is partial and is not complete.",
+    "NTF-001 can regress and cannot be considered complete.",
+    "NTF-001 可以回归且尚未完成。",
+  ]) {
+    assert.doesNotThrow(
+      () => assertFrontendCollaborationContract(`${checklist}\n${directlyNegatedClaim}\n`, rows),
+      `direct negation must apply after a conjunction: ${directlyNegatedClaim}`,
+    );
+  }
+
+  for (const positiveCompletion of [
+    "NTF-001 is not partial and is complete.",
+    "NTF-001 cannot regress and remains complete.",
+    "NTF-001 is not partial. NTF-001 remains complete.",
+    "NTF-001 不能回归且保持完成。",
+  ]) {
+    assert.throws(
+      () => assertFrontendCollaborationContract(`${checklist}\n${positiveCompletion}\n`, rows),
+      /NTF-001 must not claim overall completion until all applicable ledger dimensions are done/u,
+      `conjunction or sentence boundary must end negation scope: ${positiveCompletion}`,
+    );
+  }
 });
 
 test("AI knowledge section mappings resolve to canonical ledger IDs and Roadmap stages", () => {
@@ -956,7 +1035,13 @@ function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
         FRONTEND_OVERALL_COMPLETION_CLAIM,
         `${id} must not claim overall completion until all applicable ledger dimensions are done`,
         64,
-        true,
+        ({ claimIndex, claim }) => handleDimensionQualifiedCompletion(
+          checklist,
+          claimIndex,
+          claim.length,
+          [row],
+          (dimension) => `${id} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+        ),
       );
     }
   }
@@ -982,7 +1067,13 @@ function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
         FRONTEND_OVERALL_COMPLETION_CLAIM,
         `${path} must not claim overall completion until all applicable ledger dimensions are done`,
         12,
-        true,
+        ({ claimIndex, claim }) => handleDimensionQualifiedCompletion(
+          checklist,
+          claimIndex,
+          claim.length,
+          [row],
+          (dimension) => `${path} must not claim ${dimension.name} while ledger ${ledgerId} ${dimension.column} is ${row[dimension.column]}`,
+        ),
       );
     }
   }
@@ -1006,7 +1097,13 @@ function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
         FRONTEND_OVERALL_COMPLETION_CLAIM,
         `${name} must not claim overall completion until all applicable ledger dimensions are done`,
         64,
-        true,
+        ({ claimIndex, claim }) => handleDimensionQualifiedCompletion(
+          checklist,
+          claimIndex,
+          claim.length,
+          domainRows,
+          (dimension) => `${name} must not claim ${dimension.name} while ledger ${dimension.column} is not done`,
+        ),
       );
     }
   }
@@ -1024,10 +1121,10 @@ function assertNoPositiveDimensionClaim(
   dimension,
   message,
   reverseDistance = 64,
-  skipDimensionQualifiedCompletion = false,
+  handlePositiveClaim,
 ) {
-  const forwardBetween = "[^\\r\\n。；;，,]{0,64}";
-  const reverseBetween = `[^\\r\\n。；;，,]{0,${reverseDistance}}`;
+  const forwardBetween = "[^\\r\\n.!?。！？；;，,]{0,64}?";
+  const reverseBetween = `[^\\r\\n.!?。！？；;，,]{0,${reverseDistance}}`;
   const patterns = [
     new RegExp(`${subject}${forwardBetween}(?<claim>${dimension.claim})`, "giu"),
     new RegExp(`(?<claim>${dimension.claim})${reverseBetween}${subject}`, "giu"),
@@ -1037,32 +1134,126 @@ function assertNoPositiveDimensionClaim(
       const claim = match.groups?.claim;
       assert.ok(claim, `${dimension.name} claim parser must capture its claim`);
       const claimIndex = match.index + match[0].indexOf(claim);
-      if (isClearlyNegatedOrPendingClaim(markdown.slice(Math.max(0, claimIndex - 96), claimIndex))) continue;
-      if (skipDimensionQualifiedCompletion && isDimensionQualifiedCompletion(markdown, claimIndex, claim.length)) continue;
+      if (isClearlyNegatedOrPendingClaim(markdown, claimIndex)) continue;
+      if (handlePositiveClaim?.({ claimIndex, claim })) continue;
       assert.fail(message);
     }
   }
 }
 
-function isClearlyNegatedOrPendingClaim(prefix) {
-  const clause = prefix.split(/[\r\n。；;，,]/u).at(-1)?.trimEnd() ?? "";
-  const englishNegation = /(?:\b(?:cannot|can't|must\s+not|should\s+not|is\s+not|are\s+not|not\s+yet|still\s+not|never|pending)\b)(?<between>(?:\s+[\p{L}\p{N}_'-]+){0,5})\s*$/iu.exec(clause);
-  if (englishNegation && !/\b(?:but|however|now|currently)\b/iu.test(englishNegation.groups?.between ?? "")) {
-    return true;
-  }
-  if (/\bnot\s*$/iu.test(clause)) return true;
-
-  const chineseNegation = /(?:尚未|不能|不得|不应|还未|未|不是|并非|不可|不|待)(?<between>[\p{Script=Han}A-Za-z0-9_\s-]{0,16})$/u.exec(clause);
-  return Boolean(chineseNegation && !/(?:但|但是|然而|现已|如今|当前)/u.test(chineseNegation.groups?.between ?? ""));
+function handleDimensionQualifiedCompletion(markdown, claimIndex, claimLength, rows, messageForDimension) {
+  const dimension = dimensionQualifiedCompletion(markdown, claimIndex, claimLength);
+  if (!dimension) return false;
+  assert.ok(
+    rows.every((row) => row[dimension.column] === "done"),
+    messageForDimension(dimension),
+  );
+  return true;
 }
 
-function isDimensionQualifiedCompletion(markdown, claimIndex, claimLength) {
-  const prefix = markdown.slice(Math.max(0, claimIndex - 48), claimIndex);
-  const suffix = markdown.slice(claimIndex + claimLength, claimIndex + claimLength + 32);
-  const englishDimension = "(?:implementation|verification|release|deployment|migration|acceptance|browser\\s+acceptance)";
-  const chineseDimension = "(?:实现|验证|发布|部署|迁移|验收|浏览器验收)";
-  return new RegExp(`(?:${englishDimension}(?:\\s+(?:is|was))?|${chineseDimension}(?:已经|已)?)\\s*$`, "iu").test(prefix)
-    || new RegExp(`^\\s*(?:${englishDimension}\\b|${chineseDimension})`, "iu").test(suffix);
+function dimensionQualifiedCompletion(markdown, claimIndex, claimLength) {
+  const prefix = predicatePrefix(markdown, claimIndex);
+  const suffix = predicateSuffix(markdown, claimIndex + claimLength);
+  const prefixTokens = englishTokens(prefix);
+  const suffixTokens = englishTokens(suffix);
+
+  for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+    for (const qualifier of dimension.englishQualifiers) {
+      const qualifierTokens = englishTokens(qualifier);
+      if (
+        [[], ["is"], ["was"], ["remains"]].some((link) =>
+          endsWithTokens(prefixTokens, [...qualifierTokens, ...link])
+        ) || startsWithTokens(suffixTokens, qualifierTokens)
+      ) {
+        return dimension;
+      }
+    }
+  }
+
+  const compactPrefix = prefix.replace(/\s+/gu, "");
+  const compactSuffix = suffix.replace(/\s+/gu, "");
+  for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+    for (const qualifier of dimension.chineseQualifiers) {
+      if (
+        [qualifier, `${qualifier}已`, `${qualifier}已经`].some((candidate) => compactPrefix.endsWith(candidate)) ||
+        compactSuffix.startsWith(qualifier)
+      ) {
+        return dimension;
+      }
+    }
+  }
+  return undefined;
+}
+
+function isClearlyNegatedOrPendingClaim(markdown, claimIndex) {
+  const prefix = predicatePrefix(markdown, claimIndex);
+  const tokens = englishTokens(prefix);
+  while (["entirely", "fully", "completely", "yet"].includes(tokens.at(-1))) tokens.pop();
+  if (["not", "never", "pending"].includes(tokens.at(-1))) return true;
+
+  const modalComplements = [
+    [], ["be"], ["be", "considered"], ["be", "considered", "as"],
+    ["be", "marked"], ["be", "marked", "as"],
+    ["be", "described"], ["be", "described", "as"],
+    ["be", "treated"], ["be", "treated", "as"],
+  ];
+  for (const modal of [["cannot"], ["can't"], ["must", "not"], ["should", "not"]]) {
+    if (modalComplements.some((complement) => endsWithTokens(tokens, [...modal, ...complement]))) return true;
+  }
+
+  const compactPrefix = prefix.replace(/\s+/gu, "");
+  const directNegators = ["尚未", "还未", "未", "不是", "并非", "不", "待"];
+  const directComplements = ["", "整体", "真正", "完整", "完全", "达到", "达到完整"];
+  if (directNegators.some((negator) =>
+    directComplements.some((complement) => compactPrefix.endsWith(`${negator}${complement}`))
+  )) return true;
+
+  const modalNegators = ["不能", "不得", "不应", "不可"];
+  const chineseModalComplements = [
+    "", "被视为", "视为", "被标记为", "标记为", "被描述为", "描述为", "被认定为", "认定为",
+  ];
+  return modalNegators.some((negator) =>
+    chineseModalComplements.some((complement) => compactPrefix.endsWith(`${negator}${complement}`))
+  );
+}
+
+function predicatePrefix(markdown, endIndex) {
+  const window = markdown.slice(Math.max(0, endIndex - 96), endIndex);
+  return window.slice(lastPredicateBoundaryEnd(window));
+}
+
+function predicateSuffix(markdown, startIndex) {
+  const window = markdown.slice(startIndex, startIndex + 48);
+  const boundary = firstPredicateBoundaryStart(window);
+  return window.slice(0, boundary);
+}
+
+function lastPredicateBoundaryEnd(value) {
+  let boundaryEnd = 0;
+  for (const match of value.matchAll(/[\r\n.!?。！？；;，,]|\b(?:and|or|but|however)\b|(?:但是|然而|并且|且|但|而|和|并(?!非))/giu)) {
+    boundaryEnd = match.index + match[0].length;
+  }
+  return boundaryEnd;
+}
+
+function firstPredicateBoundaryStart(value) {
+  const match = /[\r\n.!?。！？；;，,]|\b(?:and|or|but|however)\b|(?:但是|然而|并且|且|但|而|和|并(?!非))/iu.exec(value);
+  return match?.index ?? value.length;
+}
+
+function englishTokens(value) {
+  return [...value.toLowerCase().matchAll(/[\p{L}\p{N}_]+(?:['-][\p{L}\p{N}_]+)*/gu)]
+    .map((match) => match[0]);
+}
+
+function endsWithTokens(tokens, suffix) {
+  if (suffix.length > tokens.length) return false;
+  return suffix.every((token, index) => token === tokens[tokens.length - suffix.length + index]);
+}
+
+function startsWithTokens(tokens, prefix) {
+  if (prefix.length > tokens.length) return false;
+  return prefix.every((token, index) => token === tokens[index]);
 }
 
 function escapeRegExp(value) {
