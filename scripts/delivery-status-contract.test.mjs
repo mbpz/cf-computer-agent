@@ -100,10 +100,21 @@ const FRONTEND_PENDING_ATOM_CONTRACTS = [
   { id: "FE-NTF-002", dependencies: ["NTF-002", "NTF-003", "NTF-005"] },
   { id: "FE-BRD-001", dependencies: ["TSK-001", "BRD-001", "BRD-003", "BRD-004"] },
   { id: "FE-BRD-002", dependencies: ["BRD-002", "BRD-004", "BRD-006"] },
-  { id: "FE-MSG-001", dependencies: ["MSG-001", "MSG-002"] },
-  { id: "FE-MSG-002", dependencies: ["MSG-003", "MSG-005"] },
+  { id: "FE-MSG-001", dependencies: ["MSG-001", "MSG-002", "MSG-005"] },
+  { id: "FE-MSG-002", dependencies: ["MSG-003"] },
   { id: "FE-ACC-001", dependencies: ["TSK-010", "NTF-006", "BRD-007", "MSG-006", "ADM-011"] },
 ];
+const FRONTEND_PENDING_ROUTE_CONTRACTS = [
+  { path: "/notifications", ledgerId: "NTF-001" },
+  { path: "/boards", ledgerId: "BRD-001" },
+  { path: "/messages", ledgerId: "MSG-001" },
+];
+const FRONTEND_PENDING_DOMAIN_CONTRACTS = [
+  { name: "notification backend", ledgerPrefix: "NTF-", claim: "(?:通知(?:后端|服务端)|notifications?\\s+backend)" },
+  { name: "board backend", ledgerPrefix: "BRD-", claim: "(?:看板(?:后端|服务端)|boards?\\s+backend)" },
+  { name: "message backend", ledgerPrefix: "MSG-", claim: "(?:消息(?:后端|服务端)|messages?\\s+backend)" },
+];
+const FRONTEND_COMPLETION_CLAIM = "(?:ready|implemented|completed|done|released|accepted|deployed|已实现(?:完成)?|实现完成|已完成|已发布|已验收|已部署|后端就绪|(?<!不)可用)";
 const HISTORICAL_GATE_COLUMNS = ["历史 Gate", "当前结论", "新阶段", "历史证据（非权威）", "当前状态权威"];
 const HISTORICAL_GATE_AUTHORITY = "当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准";
 const HISTORICAL_GATE_CONTRACTS = [
@@ -403,20 +414,68 @@ test("frontend checklist owns frontend surfaces without claiming backend deliver
 test("frontend collaboration atoms stay unchecked and resolve backend ledger dependencies", () => {
   const checklist = readFileSync(frontendChecklistPath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
-  const ledgerIds = new Set(rows.map((row) => row.ID));
-  const atoms = [...checklist.matchAll(
-    /^- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
-  )].map((match) => ({ id: match[1], dependencies: match[2].split("、") }));
+  assertFrontendCollaborationContract(checklist, rows);
 
-  assert.deepEqual(atoms, FRONTEND_PENDING_ATOM_CONTRACTS);
-  for (const atom of atoms) {
-    for (const dependency of atom.dependencies) {
-      assert.ok(ledgerIds.has(dependency), `${atom.id} dependency ${dependency} requires a ledger row`);
-    }
-  }
-  assert.match(
-    checklist,
-    /即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。/u,
+  const missingRevocationDependency = checklist.replace(
+    "[MSG-001、MSG-002、MSG-005](./delivery-status-ledger.md)",
+    "[MSG-001、MSG-002](./delivery-status-ledger.md)",
+  );
+  assert.notEqual(missingRevocationDependency, checklist, "MSG-005 dependency fixture must mutate the checklist");
+  assert.throws(
+    () => assertFrontendCollaborationContract(missingRevocationDependency, rows),
+    /frontend collaboration atoms must match canonical dependencies/u,
+  );
+
+  const duplicateCheckedAtom = `${checklist}\n- [x] \`FE-NTF-001\` stale checked duplicate\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(duplicateCheckedAtom, rows),
+    /FE-NTF-001 must have exactly one checkbox row/u,
+  );
+
+  const duplicateUncheckedAtom = `${checklist}\n- [ ] \`FE-BRD-001\` stale unchecked duplicate\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(duplicateUncheckedAtom, rows),
+    /FE-BRD-001 must have exactly one checkbox row/u,
+  );
+
+  const checkedCanonicalAtom = checklist.replace("- [ ] `FE-MSG-002`", "- [x] `FE-MSG-002`");
+  assert.notEqual(checkedCanonicalAtom, checklist, "checked canonical atom fixture must mutate the checklist");
+  assert.throws(
+    () => assertFrontendCollaborationContract(checkedCanonicalAtom, rows),
+    /FE-MSG-002 must remain unchecked/u,
+  );
+
+  const acceptanceRow = checklist.match(/^- \[ \] `FE-ACC-001` .+$/mu)?.[0];
+  assert.ok(acceptanceRow, "FE-ACC-001 section fixture requires its canonical row");
+  const atomOutsideSection = checklist
+    .replace(`${acceptanceRow}\n`, "")
+    .replace("## 工作台协作前端待办（R2）", `${acceptanceRow}\n\n## 工作台协作前端待办（R2）`);
+  assert.throws(
+    () => assertFrontendCollaborationContract(atomOutsideSection, rows),
+    /FE-ACC-001 checkbox row must occur only in ## 工作台协作前端待办（R2）/u,
+  );
+});
+
+test("frontend checklist rejects stale pending backend and route completion prose", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+
+  const staleBackendCompletion = `${checklist}\nNTF-001、NTF-002 后端已实现完成。\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(staleBackendCompletion, rows),
+    /NTF-001 must not claim completion while ledger implementation is pending/u,
+  );
+
+  const staleRouteCompletion = `${checklist}\n\`\/notifications\` ready。\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(staleRouteCompletion, rows),
+    /\/notifications must not claim readiness while its ledger route is pending/u,
+  );
+
+  const staleDomainCompletion = `${checklist}\n通知后端已实现完成。\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(staleDomainCompletion, rows),
+    /notification backend must not claim completion while its ledger domain is pending/u,
   );
 });
 
@@ -650,6 +709,116 @@ function parseMarkdownTable(markdown) {
     rows.push(Object.fromEntries(headers.map((header, index) => [header, cells[index]])));
   }
   return { headers, rows };
+}
+
+function assertFrontendCollaborationContract(checklist, rows) {
+  const rowsById = new Map(rows.map((row) => [row.ID, row]));
+  const ledgerIds = new Set(rows.map((row) => row.ID));
+  const checkboxRows = [...checklist.matchAll(
+    /^- \[([ x])\] `?(FE-(?:NTF|BRD|MSG|ACC)-\d{3})`?(?:\s|$)/gmu,
+  )].map((match) => ({ id: match[2], checked: match[1] === "x", index: match.index }));
+  for (const { id } of FRONTEND_PENDING_ATOM_CONTRACTS) {
+    const matches = checkboxRows.filter((row) => row.id === id);
+    assert.equal(matches.length, 1, `${id} must have exactly one checkbox row`);
+    assert.equal(matches[0].checked, false, `${id} must remain unchecked`);
+  }
+  assert.equal(
+    checkboxRows.length,
+    FRONTEND_PENDING_ATOM_CONTRACTS.length,
+    "frontend collaboration checkbox rows must be exactly seven canonical atoms",
+  );
+
+  const sectionHeading = "## 工作台协作前端待办（R2）";
+  const sectionHeadings = [...checklist.matchAll(/^## 工作台协作前端待办（R2）$/gmu)];
+  assert.equal(sectionHeadings.length, 1, "frontend collaboration section must occur exactly once");
+  const sectionStart = sectionHeadings[0].index + sectionHeadings[0][0].length;
+  const nextHeadingOffset = checklist.slice(sectionStart).search(/^## /mu);
+  const sectionEnd = nextHeadingOffset === -1 ? checklist.length : sectionStart + nextHeadingOffset;
+  for (const row of checkboxRows) {
+    assert.ok(
+      row.index >= sectionStart && row.index < sectionEnd,
+      `${row.id} checkbox row must occur only in ${sectionHeading}`,
+    );
+  }
+
+  const section = checklist.slice(sectionStart, sectionEnd);
+  const atoms = [...section.matchAll(
+    /^- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
+  )].map((match) => ({ id: match[1], dependencies: match[2].split("、") }));
+
+  assert.deepEqual(
+    atoms,
+    FRONTEND_PENDING_ATOM_CONTRACTS,
+    "frontend collaboration atoms must match canonical dependencies",
+  );
+  for (const atom of atoms) {
+    for (const dependency of atom.dependencies) {
+      assert.ok(ledgerIds.has(dependency), `${atom.id} dependency ${dependency} requires a ledger row`);
+    }
+  }
+  assert.match(
+    checklist,
+    /即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。/u,
+  );
+  assertNoPendingFrontendCompletionClaims(checklist, rowsById);
+}
+
+function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
+  const pendingDependencyIds = new Set(
+    FRONTEND_PENDING_ATOM_CONTRACTS
+      .flatMap(({ dependencies }) => dependencies)
+      .filter((id) => rowsById.get(id)?.实现 === "pending"),
+  );
+  for (const id of pendingDependencyIds) {
+    const escapedId = escapeRegExp(id);
+    const forwardClaim = new RegExp(
+      `(?:\`?${escapedId}\`?)[^\\r\\n。；]{0,48}${FRONTEND_COMPLETION_CLAIM}`,
+      "iu",
+    );
+    const reverseClaim = new RegExp(
+      `${FRONTEND_COMPLETION_CLAIM}[^\\r\\n。；]{0,48}(?:\`?${escapedId}\`?)`,
+      "iu",
+    );
+    assert.ok(
+      !forwardClaim.test(checklist) && !reverseClaim.test(checklist),
+      `${id} must not claim completion while ledger implementation is pending`,
+    );
+  }
+
+  for (const { path, ledgerId } of FRONTEND_PENDING_ROUTE_CONTRACTS) {
+    if (rowsById.get(ledgerId)?.实现 !== "pending") continue;
+    const escapedPath = escapeRegExp(path);
+    const routeClaim = new RegExp(
+      `\`?${escapedPath}\`?\\s*(?:(?:is|为|已经|已)\\s*)?${FRONTEND_COMPLETION_CLAIM}`,
+      "iu",
+    );
+    assert.ok(
+      !routeClaim.test(checklist),
+      `${path} must not claim readiness while its ledger route is pending`,
+    );
+  }
+
+  for (const { name, ledgerPrefix, claim } of FRONTEND_PENDING_DOMAIN_CONTRACTS) {
+    const domainRows = [...rowsById.values()].filter((row) => row.ID.startsWith(ledgerPrefix));
+    assert.ok(domainRows.length > 0, `${name} requires ledger rows`);
+    if (!domainRows.some((row) => row.实现 === "pending")) continue;
+    const forwardClaim = new RegExp(
+      `${claim}[^\\r\\n。；]{0,32}${FRONTEND_COMPLETION_CLAIM}`,
+      "iu",
+    );
+    const reverseClaim = new RegExp(
+      `${FRONTEND_COMPLETION_CLAIM}[^\\r\\n。；]{0,32}${claim}`,
+      "iu",
+    );
+    assert.ok(
+      !forwardClaim.test(checklist) && !reverseClaim.test(checklist),
+      `${name} must not claim completion while its ledger domain is pending`,
+    );
+  }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function splitTableRow(line) {

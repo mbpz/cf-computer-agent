@@ -158,8 +158,8 @@
 - [ ] `FE-NTF-002` 通知目标导航、目标失效反馈以及可重试且幂等的 read-state UI；前端映射：`NTF-004`；后端总账依赖：[NTF-002、NTF-003、NTF-005](./delivery-status-ledger.md)。
 - [ ] `FE-BRD-001` task-backed board columns、filters 与紧凑响应式布局，不复制第二套任务权威数据；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[TSK-001、BRD-001、BRD-003、BRD-004](./delivery-status-ledger.md)。
 - [ ] `FE-BRD-002` 键盘可访问的拖拽/重排、optimistic feedback、并发失败提示与 rollback；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[BRD-002、BRD-004、BRD-006](./delivery-status-ledger.md)。
-- [ ] `FE-MSG-001` 任务/知识 contextual thread list、conversation/message 完整数字分页和撤权后的不可读状态；前端映射：`MSG-004`、`WB-PAGE`；后端总账依赖：[MSG-001、MSG-002](./delivery-status-ledger.md)。
-- [ ] `FE-MSG-002` composer client idempotency、retry、failed/duplicate state、键盘发送与焦点公告；前端映射：`MSG-004`、`WB-A11Y`；后端总账依赖：[MSG-003、MSG-005](./delivery-status-ledger.md)。
+- [ ] `FE-MSG-001` 任务/知识 contextual thread list、conversation/message 完整数字分页和参与者撤权后的不可读状态；前端映射：`MSG-004`、`WB-PAGE`；后端总账依赖：[MSG-001、MSG-002、MSG-005](./delivery-status-ledger.md)。
+- [ ] `FE-MSG-002` composer client idempotency、retry、failed/duplicate state、键盘发送与焦点公告；本 atom 不定义参与者撤权后的发送行为，撤权 authority 与 thread 不可读状态由 `FE-MSG-001` 消费 `MSG-005`；前端映射：`MSG-004`、`WB-A11Y`；后端总账依赖：[MSG-003](./delivery-status-ledger.md)。
 - [ ] `FE-ACC-001` admin/contributor signed browser acceptance matrix，覆盖任务、通知、看板、消息、管理页、拒绝路径、分页、键盘和失败恢复；前端映射：`ADM-011`；后端总账依赖：[TSK-010、NTF-006、BRD-007、MSG-006、ADM-011](./delivery-status-ledger.md)。
 
 即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。只有[交付状态总账](./delivery-status-ledger.md)中的对应实现、验证、发布、验收证据可以改变交付结论。
