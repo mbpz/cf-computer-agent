@@ -94,6 +94,32 @@ describe("tasks repository", () => {
     expect(summary).toEqual({ todo: 2, doing: 1, blocked: 0, done: 1, canceled: 0, dueToday: 1, overdue: 1 });
   });
 
+  it("allocates one stable status intent for the CAS winner and scopes delivery to its recipient", async () => {
+    const repository = new TasksRepository(env.DB);
+    await repository.insert(taskCreate({ id: "task-intent", memberId: "member-a" }));
+
+    await expect(repository.compareAndSetStatus(
+      "member-a", "task-intent", "todo", "doing", null, 0, NOW + 1,
+    )).resolves.toBe(true);
+    await expect(repository.compareAndSetStatus(
+      "member-a", "task-intent", "todo", "doing", null, 0, NOW + 2,
+    )).resolves.toBe(false);
+    await expect(repository.listPendingStatusNotifications("member-b", "task-intent", 10)).resolves.toEqual([]);
+    await expect(repository.listPendingStatusNotifications("member-a", "task-intent", 10)).resolves.toEqual([{
+      id: "task-status:task-intent:todo:doing:v1",
+      recipientMemberId: "member-a",
+      taskId: "task-intent",
+      previousStatus: "todo",
+      status: "doing",
+      deduplicationKey: "task:task-intent:status:todo:doing:v1",
+      createdAt: new Date(NOW + 1).toISOString(),
+    }]);
+    await expect(repository.markStatusNotificationDelivered("member-b", "task-status:task-intent:todo:doing:v1", NOW + 2)).resolves.toBe(false);
+    await expect(repository.markStatusNotificationDelivered("member-a", "task-status:task-intent:todo:doing:v1", NOW + 2)).resolves.toBe(true);
+    await expect(repository.markStatusNotificationDelivered("member-a", "task-status:task-intent:todo:doing:v1", NOW + 3)).resolves.toBe(false);
+    await expect(repository.listPendingStatusNotifications("member-a", "task-intent", 10)).resolves.toEqual([]);
+  });
+
   it("replaces tags, keeps them member-scoped, and cascades on delete", async () => {
     const repository = new TasksRepository(env.DB);
     await repository.insert(taskCreate({ id: "task-1", memberId: "member-a" }));
@@ -235,6 +261,35 @@ describe("tasks HTTP contract", () => {
       target_id: "task-1",
       payload_json: '{"previousStatus":"todo","status":"doing"}',
     }]);
+  });
+
+  it("lets one CAS winner define the logical event for concurrent identical status requests", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-race", title: "Race" }) });
+
+    const [left, right] = await Promise.all([
+      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) }),
+      api("/api/tasks/task-race/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) }),
+    ]);
+
+    expect([left.status, right.status]).toEqual([200, 200]);
+    await expect(left.json()).resolves.toMatchObject({ status: "doing" });
+    await expect(right.json()).resolves.toMatchObject({ status: "doing" });
+    const audit = await env.DB.prepare(
+      "SELECT action FROM audit_events WHERE action = 'task.status_changed' AND resource_id = ? ORDER BY id",
+    ).bind("task-race").all<{ action: string }>();
+    expect(audit.results).toHaveLength(1);
+    const notifications = await env.DB.prepare(
+      "SELECT id, deduplication_key FROM notifications WHERE recipient_member_id = ? AND target_id = ? ORDER BY id",
+    ).bind("member-a", "task-race").all<{ id: string; deduplication_key: string }>();
+    expect(notifications.results).toHaveLength(1);
+    expect(notifications.results[0]?.deduplication_key).toMatch(/^task:task-race:status:todo:doing:/u);
+    const intents = await env.DB.prepare(
+      `SELECT deduplication_key, delivered_at FROM task_status_notification_intents
+       WHERE recipient_member_id = ? AND task_id = ? ORDER BY id`,
+    ).bind("member-a", "task-race").all<{ deduplication_key: string; delivered_at: number | null }>();
+    expect(intents.results).toHaveLength(1);
+    expect(intents.results[0]?.deduplication_key).toBe(notifications.results[0]?.deduplication_key);
+    expect(intents.results[0]?.delivered_at).not.toBeNull();
   });
 
   it("rejects anonymous, automation, CSRF-forged, and invalid-transition requests", async () => {

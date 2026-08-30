@@ -143,12 +143,18 @@ export class NotificationsRepository implements NotificationsRepositoryPort {
     const startOfDay = observedAt - (observedAt % 86_400_000);
     const endOfDay = startOfDay + 86_400_000;
     const rows = await this.db.prepare(
-      `SELECT id AS task_id, due_at
-       FROM tasks
-       WHERE member_id = ? AND status IN ('todo', 'doing', 'blocked')
-         AND due_at IS NOT NULL AND due_at < ?
-       ORDER BY due_at, id LIMIT ?`,
-    ).bind(recipientMemberId, endOfDay, limit).all<{ task_id: string; due_at: number }>();
+      `SELECT t.id AS task_id, t.due_at
+       FROM tasks t
+       WHERE t.member_id = ? AND t.status IN ('todo', 'doing', 'blocked')
+         AND t.due_at IS NOT NULL AND t.due_at < ?
+         AND NOT EXISTS (
+           SELECT 1 FROM notifications n
+           WHERE n.recipient_member_id = ?
+             AND n.deduplication_key = 'task:' || t.id || ':' ||
+               CASE WHEN t.due_at < ? THEN 'overdue' ELSE 'due' END || ':' || t.due_at
+         )
+       ORDER BY t.due_at, t.id LIMIT ?`,
+    ).bind(recipientMemberId, endOfDay, recipientMemberId, startOfDay, limit).all<{ task_id: string; due_at: number }>();
     return rows.results.map(({ task_id, due_at }) => ({ taskId: task_id, dueAt: due_at }));
   }
 }

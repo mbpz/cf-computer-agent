@@ -1476,6 +1476,74 @@ describe("Phase 1 control-plane migrations", () => {
     ], { partial: 1, sqlFragment: "WHERE read_at IS NULL" });
   });
 
+  it("creates a recipient-owned task status intent atomically for the CAS winner", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const taskColumns = await env.DB.prepare("PRAGMA table_info(tasks)").all<{ name: string; notnull: number; dflt_value: string | null }>();
+    expect(taskColumns.results).toContainEqual(expect.objectContaining({ name: "status_version", notnull: 1, dflt_value: "0" }));
+    await expectTableSchema("task_status_notification_intents", [
+      "id:TEXT:0:NULL:1",
+      "recipient_member_id:TEXT:1:NULL:0",
+      "task_id:TEXT:1:NULL:0",
+      "previous_status:TEXT:1:NULL:0",
+      "status:TEXT:1:NULL:0",
+      "deduplication_key:TEXT:1:NULL:0",
+      "delivered_at:INTEGER:0:NULL:0",
+      "created_at:INTEGER:1:NULL:0",
+    ], [
+      "UNIQUE (recipient_member_id, deduplication_key)",
+      "CHECK(delivered_at IS NULL OR delivered_at >= created_at)",
+    ]);
+    await expectForeignKeys("task_status_notification_intents", [
+      { from: "recipient_member_id", table: "members", to: "id" },
+      { from: "task_id", table: "tasks", to: "id" },
+    ]);
+    await expectIndex(
+      "task_status_notification_intents",
+      "idx_task_status_notification_intents_recipient_pending",
+      [
+        { name: "recipient_member_id", desc: 0 }, { name: "task_id", desc: 0 },
+        { name: "created_at", desc: 0 }, { name: "id", desc: 0 },
+      ],
+      { partial: 1, sqlFragment: "WHERE delivered_at IS NULL" },
+    );
+    const trigger = await env.DB.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_tasks_status_notification_intent'",
+    ).first<{ sql: string }>();
+    expect(trigger?.sql).toContain("AFTER UPDATE OF status ON tasks");
+
+    const timestamp = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('intent-member', 'github:intent-member', 'intent@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp).run();
+    await env.DB.prepare(
+      `INSERT INTO tasks
+       (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+       VALUES ('intent-task', 'intent-member', 'Intent', '', 'todo', 0, 'medium', NULL, 1, 1)`,
+    ).run();
+    const winner = await env.DB.prepare(
+      `UPDATE tasks SET status = 'doing', status_version = status_version + 1, updated_at = 2
+       WHERE member_id = 'intent-member' AND id = 'intent-task' AND status = 'todo'`,
+    ).run();
+    const loser = await env.DB.prepare(
+      `UPDATE tasks SET status = 'doing', status_version = status_version + 1, updated_at = 3
+       WHERE member_id = 'intent-member' AND id = 'intent-task' AND status = 'todo'`,
+    ).run();
+    expect(winner.meta.changes).toBeGreaterThan(0);
+    expect(loser.meta.changes).toBe(0);
+    await expect(env.DB.prepare(
+      `SELECT recipient_member_id, task_id, previous_status, status, deduplication_key, delivered_at, created_at
+       FROM task_status_notification_intents WHERE recipient_member_id = 'intent-member'`,
+    ).all()).resolves.toMatchObject({ results: [{
+      recipient_member_id: "intent-member",
+      task_id: "intent-task",
+      previous_status: "todo",
+      status: "doing",
+      deduplication_key: "task:intent-task:status:todo:doing:v1",
+      delivered_at: null,
+      created_at: 2,
+    }] });
+  });
+
   it("enforces notification deduplication and byte-bounded persisted fields", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     const timestamp = "2026-08-30T00:00:00.000Z";
@@ -1496,7 +1564,7 @@ describe("Phase 1 control-plane migrations", () => {
     await expect(insert("notification-dedupe", "notify-a", "x".repeat(257), '{}')).rejects.toThrow();
   });
 
-  it("uses recipient indexes for notification list, type, and unread paths without scans", async () => {
+  it("uses recipient indexes for notification lists, mutations, status outbox, CAS, and lazy due without scans", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     const listPlan = await queryPlan(
       `SELECT id, recipient_member_id, event_type, actor_member_id, target_kind, target_id,
@@ -1515,12 +1583,65 @@ describe("Phase 1 control-plane migrations", () => {
       "SELECT COUNT(*) AS unread FROM notifications WHERE recipient_member_id = ? AND read_at IS NULL",
       ["member-a"],
     );
+    const markReadPlan = await queryPlan(
+      "UPDATE notifications SET read_at = ? WHERE recipient_member_id = ? AND id = ? AND read_at IS NULL",
+      [1_777_777_000_001, "member-a", "notification-a"],
+    );
+    const markManyReadPlan = await queryPlan(
+      `UPDATE notifications SET read_at = ?
+       WHERE recipient_member_id = ? AND id IN (
+         SELECT id FROM notifications
+         WHERE recipient_member_id = ? AND read_at IS NULL
+           AND id IN (SELECT value FROM json_each(?))
+         ORDER BY created_at DESC, id DESC LIMIT ?
+       )`,
+      [1_777_777_000_001, "member-a", "member-a", '["notification-a"]', 100],
+    );
+    const casPlan = await queryPlan(
+      `UPDATE tasks
+       SET status = ?, completed_at = ?, progress = ?, updated_at = ?, status_version = status_version + 1
+       WHERE member_id = ? AND id = ? AND status = ?`,
+      ["doing", null, 0, 1_777_777_000_001, "member-a", "task-a", "todo"],
+    );
+    const pendingIntentPlan = await queryPlan(
+      `SELECT id, recipient_member_id, task_id, previous_status, status, deduplication_key, created_at
+       FROM task_status_notification_intents
+       WHERE recipient_member_id = ? AND task_id = ? AND delivered_at IS NULL
+       ORDER BY created_at, id LIMIT ?`,
+      ["member-a", "task-a", 10],
+    );
+    const markIntentDeliveredPlan = await queryPlan(
+      `UPDATE task_status_notification_intents SET delivered_at = ?
+       WHERE recipient_member_id = ? AND id = ? AND delivered_at IS NULL`,
+      [1_777_777_000_001, "member-a", "intent-a"],
+    );
+    const lazyDuePlan = await queryPlan(
+      `SELECT t.id AS task_id, t.due_at
+       FROM tasks t
+       WHERE t.member_id = ? AND t.status IN ('todo', 'doing', 'blocked')
+         AND t.due_at IS NOT NULL AND t.due_at < ?
+         AND NOT EXISTS (
+           SELECT 1 FROM notifications n
+           WHERE n.recipient_member_id = ?
+             AND n.deduplication_key = 'task:' || t.id || ':' ||
+               CASE WHEN t.due_at < ? THEN 'overdue' ELSE 'due' END || ':' || t.due_at
+         )
+       ORDER BY t.due_at, t.id LIMIT ?`,
+      ["member-a", 1_777_820_800_000, "member-a", 1_777_734_400_000, 10],
+    );
 
     expect(listPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_created (recipient_member_id=?)");
     expect(typePlan).toContain("SEARCH notifications USING COVERING INDEX idx_notifications_recipient_type_created (recipient_member_id=? AND event_type=?)");
     expect(unreadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
-    for (const plan of [listPlan, typePlan, unreadPlan]) {
-      expect(plan).not.toMatch(/SCAN notifications|USE TEMP B-TREE/iu);
+    expect(markReadPlan).toContain("SEARCH notifications USING INDEX sqlite_autoindex_notifications_1 (id=?)");
+    expect(markManyReadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
+    expect(casPlan).toContain("SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)");
+    expect(pendingIntentPlan).toContain("SEARCH task_status_notification_intents USING INDEX idx_task_status_notification_intents_recipient_pending (recipient_member_id=? AND task_id=?)");
+    expect(markIntentDeliveredPlan).toContain("SEARCH task_status_notification_intents USING INDEX sqlite_autoindex_task_status_notification_intents_1 (id=?)");
+    expect(lazyDuePlan).toContain("SEARCH t USING INDEX idx_tasks_member_status_due (member_id=? AND status=? AND due_at>? AND due_at<?)");
+    expect(lazyDuePlan).toContain("SEARCH n USING COVERING INDEX sqlite_autoindex_notifications_2 (recipient_member_id=? AND deduplication_key=?)");
+    for (const plan of [listPlan, typePlan, unreadPlan, markReadPlan, markManyReadPlan, casPlan, pendingIntentPlan, markIntentDeliveredPlan, lazyDuePlan]) {
+      expect(plan).not.toMatch(/SCAN (?:notifications|tasks|t|n|task_status_notification_intents)\b/iu);
     }
   });
 });

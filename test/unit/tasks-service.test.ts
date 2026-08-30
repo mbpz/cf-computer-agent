@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CreateAuditEvent } from "../../src/audit/types";
 import { TasksService } from "../../src/tasks/service";
 import type { TasksRepositoryPort } from "../../src/tasks/repository";
-import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskSummary, TaskUpdate } from "../../src/tasks/types";
+import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "../../src/tasks/types";
 import type { PageRequest } from "../../src/pagination";
 import type { NotificationEventInput } from "../../src/notifications/types";
 
@@ -90,7 +90,26 @@ describe("TasksService", () => {
       targetId: "task-1",
       payload: { previousStatus: "todo", status: "doing" },
     });
-    expect(notifications.events[0]?.deduplicationKey).toMatch(/^task:task-1:status:todo:doing:generated-\d+$/u);
+    expect(notifications.events[0]?.deduplicationKey).toBe("task:task-1:status:todo:doing:v1");
+  });
+
+  it("repairs the pending status notification on same-status replay after emit fails", async () => {
+    const repository = new FakeTasksRepository();
+    const audit = new FakeAudit();
+    const notifications = new FakeNotificationSink(1);
+    const service = createService(repository, audit, notifications);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+
+    await expect(service.setStatus("member-a", "task-1", "doing")).rejects.toThrow("notification unavailable");
+    await expect(service.setStatus("member-a", "task-1", "doing")).resolves.toMatchObject({ status: "doing" });
+
+    expect(audit.events.filter((event) => event.action === "task.status_changed")).toHaveLength(1);
+    expect(notifications.events).toHaveLength(1);
+    expect(notifications.events[0]).toMatchObject({
+      recipientMemberId: "member-a",
+      targetId: "task-1",
+      payload: { previousStatus: "todo", status: "doing" },
+    });
   });
 
   it("validates progress bounds, non-terminal states, and idempotent updates", async () => {
@@ -181,7 +200,14 @@ function createService(repository: FakeTasksRepository, audit?: FakeAudit, notif
 
 class FakeNotificationSink {
   readonly events: NotificationEventInput[] = [];
-  async emit(event: NotificationEventInput): Promise<void> { this.events.push(event); }
+  constructor(private failuresRemaining = 0) {}
+  async emit(event: NotificationEventInput): Promise<void> {
+    if (this.failuresRemaining > 0) {
+      this.failuresRemaining -= 1;
+      throw new Error("notification unavailable");
+    }
+    this.events.push(event);
+  }
 }
 
 class FakeAudit {
@@ -196,6 +222,8 @@ class FakeTasksRepository implements TasksRepositoryPort {
   tasks = new Map<string, Task>();
   tags = new Map<string, string[]>();
   links = new Map<string, TaskLink>();
+  pendingStatusNotifications = new Map<string, TaskStatusNotificationIntent>();
+  statusVersions = new Map<string, number>();
   visibleKnowledge = new Set<string>(["knowledge-a"]);
   count = 0;
   linkCount = 0;
@@ -226,11 +254,33 @@ class FakeTasksRepository implements TasksRepositoryPort {
     Object.assign(task, { title: input.title, notes: input.notes, priority: input.priority, updatedAt: new Date(input.updatedAt).toISOString() });
     return task;
   }
-  async updateStatus(memberId: string, id: string, status: Task["status"], completedAt: number | null, progress: number, updatedAt: number) {
+  async compareAndSetStatus(memberId: string, id: string, expectedStatus: Task["status"], status: Task["status"], completedAt: number | null, progress: number, updatedAt: number) {
     const task = await this.findOwned(memberId, id);
-    if (!task) return null;
+    if (!task || task.status !== expectedStatus) return false;
+    const version = (this.statusVersions.get(id) ?? 0) + 1;
+    this.statusVersions.set(id, version);
     Object.assign(task, { status, progress, completedAt: completedAt === null ? null : new Date(completedAt).toISOString(), updatedAt: new Date(updatedAt).toISOString() });
-    return task;
+    const intentId = `task-status:${id}:${expectedStatus}:${status}:v${version}`;
+    this.pendingStatusNotifications.set(intentId, {
+      id: intentId,
+      recipientMemberId: memberId,
+      taskId: id,
+      previousStatus: expectedStatus,
+      status,
+      deduplicationKey: `task:${id}:status:${expectedStatus}:${status}:v${version}`,
+      createdAt: new Date(updatedAt).toISOString(),
+    });
+    return true;
+  }
+  async listPendingStatusNotifications(memberId: string, taskId: string, limit: number) {
+    return [...this.pendingStatusNotifications.values()]
+      .filter((intent) => intent.recipientMemberId === memberId && intent.taskId === taskId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+      .slice(0, limit);
+  }
+  async markStatusNotificationDelivered(memberId: string, intentId: string) {
+    const intent = this.pendingStatusNotifications.get(intentId);
+    return intent?.recipientMemberId === memberId ? this.pendingStatusNotifications.delete(intentId) : false;
   }
   async updateProgress(memberId: string, id: string, progress: number, updatedAt: number) {
     const task = await this.findOwned(memberId, id);

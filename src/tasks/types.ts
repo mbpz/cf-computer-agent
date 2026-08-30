@@ -40,6 +40,16 @@ export interface TaskUpdate {
   updatedAt: number;
 }
 
+export interface TaskStatusNotificationIntent {
+  id: string;
+  recipientMemberId: string;
+  taskId: string;
+  previousStatus: TaskStatus;
+  status: TaskStatus;
+  deduplicationKey: string;
+  createdAt: string;
+}
+
 export interface TaskLink {
   id: string;
   taskId: string;

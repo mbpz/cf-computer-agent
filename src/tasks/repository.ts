@@ -1,13 +1,15 @@
 import { normalizeNumberedPageRequest, pageOffset } from "../pagination";
 import { queryNumberedPage } from "../pagination-d1";
-import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskSummary, TaskUpdate } from "./types";
+import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "./types";
 
 export interface TasksRepositoryPort {
   insert(input: TaskCreate): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<Task | null>;
   list(memberId: string, request: TaskListRequest): Promise<TaskPage>;
   update(memberId: string, id: string, input: TaskUpdate): Promise<Task | null>;
-  updateStatus(memberId: string, id: string, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<Task | null>;
+  compareAndSetStatus(memberId: string, id: string, expectedStatus: TaskStatus, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<boolean>;
+  listPendingStatusNotifications(memberId: string, taskId: string, limit: number): Promise<TaskStatusNotificationIntent[]>;
+  markStatusNotificationDelivered(memberId: string, intentId: string, deliveredAt: number): Promise<boolean>;
   updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Task | null>;
   delete(memberId: string, id: string): Promise<boolean>;
   countByMember(memberId: string): Promise<number>;
@@ -29,6 +31,10 @@ type TaskRow = {
 };
 type LinkRow = { id: string; task_id: string; knowledge_item_id: string; title: string | null; created_at: number };
 type SummaryRow = { status: TaskStatus; due_at: number | null };
+type TaskStatusNotificationIntentRow = {
+  id: string; recipient_member_id: string; task_id: string; previous_status: TaskStatus;
+  status: TaskStatus; deduplication_key: string; created_at: number;
+};
 
 const taskColumns = "id, member_id, title, notes, status, progress, priority, due_at, completed_at, created_at, updated_at";
 const OPEN_STATUSES = "('todo', 'doing', 'blocked')";
@@ -88,11 +94,32 @@ export class TasksRepository implements TasksRepositoryPort {
     return result.meta.changes === 1 ? this.findOwned(memberId, id) : null;
   }
 
-  async updateStatus(memberId: string, id: string, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<Task | null> {
+  async compareAndSetStatus(memberId: string, id: string, expectedStatus: TaskStatus, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<boolean> {
     const result = await this.db.prepare(
-      `UPDATE tasks SET status = ?, completed_at = ?, progress = ?, updated_at = ? WHERE member_id = ? AND id = ?`,
-    ).bind(status, completedAt, progress, updatedAt, memberId, id).run();
-    return result.meta.changes === 1 ? this.findOwned(memberId, id) : null;
+      `UPDATE tasks
+       SET status = ?, completed_at = ?, progress = ?, updated_at = ?, status_version = status_version + 1
+       WHERE member_id = ? AND id = ? AND status = ?`,
+    ).bind(status, completedAt, progress, updatedAt, memberId, id, expectedStatus).run();
+    // D1 includes the trigger's outbox INSERT in meta.changes for a winner.
+    return result.meta.changes > 0;
+  }
+
+  async listPendingStatusNotifications(memberId: string, taskId: string, limit: number): Promise<TaskStatusNotificationIntent[]> {
+    const rows = await this.db.prepare(
+      `SELECT id, recipient_member_id, task_id, previous_status, status, deduplication_key, created_at
+       FROM task_status_notification_intents
+       WHERE recipient_member_id = ? AND task_id = ? AND delivered_at IS NULL
+       ORDER BY created_at, id LIMIT ?`,
+    ).bind(memberId, taskId, limit).all<TaskStatusNotificationIntentRow>();
+    return rows.results.map(mapStatusNotificationIntent);
+  }
+
+  async markStatusNotificationDelivered(memberId: string, intentId: string, deliveredAt: number): Promise<boolean> {
+    const result = await this.db.prepare(
+      `UPDATE task_status_notification_intents SET delivered_at = ?
+       WHERE recipient_member_id = ? AND id = ? AND delivered_at IS NULL`,
+    ).bind(deliveredAt, memberId, intentId).run();
+    return result.meta.changes === 1;
   }
 
   async updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Task | null> {
@@ -227,6 +254,18 @@ function mapLinkRow(row: LinkRow): TaskLink {
     taskId: row.task_id,
     knowledgeItemId: row.knowledge_item_id,
     knowledgeTitle: row.title,
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+function mapStatusNotificationIntent(row: TaskStatusNotificationIntentRow): TaskStatusNotificationIntent {
+  return {
+    id: row.id,
+    recipientMemberId: row.recipient_member_id,
+    taskId: row.task_id,
+    previousStatus: row.previous_status,
+    status: row.status,
+    deduplicationKey: row.deduplication_key,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }

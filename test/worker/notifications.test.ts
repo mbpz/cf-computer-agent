@@ -3,6 +3,7 @@
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { NotificationsRepository } from "../../src/notifications/repository";
+import { NotificationsService } from "../../src/notifications/service";
 import type { NotificationInsert } from "../../src/notifications/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -89,6 +90,34 @@ describe("notifications repository", () => {
     await expect(repository.listDueCandidates("member-a", NOW, 1)).resolves.toEqual([
       { taskId: "overdue", dueAt: NOW - 86_400_000 },
     ]);
+  });
+
+  it("advances beyond the first lazy-due window without starving candidates 11 through 21", async () => {
+    const repository = new NotificationsRepository(env.DB);
+    for (let index = 0; index < 21; index += 1) {
+      await env.DB.prepare(
+        `INSERT INTO tasks
+         (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+         VALUES (?, 'member-a', ?, '', 'todo', 0, 'medium', ?, ?, ?)`,
+      ).bind(`starved-${String(index).padStart(2, "0")}`, `Starved ${index}`, NOW - 86_400_000 - index, NOW, NOW).run();
+    }
+    const service = new NotificationsService(repository, {
+      now: () => new Date(NOW),
+      dueSource: repository,
+      targetAuthorizer: {
+        async canReadTarget(recipientMemberId, targetKind, targetId) {
+          if (targetKind !== "task") return false;
+          const row = await env.DB.prepare(
+            "SELECT 1 AS visible FROM tasks WHERE member_id = ? AND id = ? LIMIT 1",
+          ).bind(recipientMemberId, targetId).first<{ visible: number }>();
+          return row !== null;
+        },
+      },
+    });
+
+    await expect(service.summary("member-a")).resolves.toEqual({ unread: 10 });
+    await expect(service.summary("member-a")).resolves.toEqual({ unread: 20 });
+    await expect(service.summary("member-a")).resolves.toEqual({ unread: 21 });
   });
 });
 

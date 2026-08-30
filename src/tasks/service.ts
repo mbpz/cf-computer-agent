@@ -94,7 +94,10 @@ export class TasksService {
   async setStatus(memberId: string, id: string, status: unknown): Promise<Task> {
     const task = await this.requireOwned(memberId, id);
     const next = normalizeStatus(status);
-    if (task.status === next) return task; // 绝对值语义:重复提交即成功
+    if (task.status === next) {
+      await this.deliverPendingStatusNotifications(memberId, task.id);
+      return task; // 绝对值语义:重复提交即成功,同时修复 pending intent
+    }
     if (!TRANSITIONS[task.status].includes(next)) {
       throw new AppError("TASK_TRANSITION_INVALID", "Task status transition is invalid", 422);
     }
@@ -102,22 +105,16 @@ export class TasksService {
     const now = this.now().getTime();
     const completedAt = next === "done" ? now : null;
     const progress = next === "done" && task.progress < 100 ? 100 : task.progress;
-    const updated = await this.repository.updateStatus(memberId, id, next, next === "done" ? completedAt : null, progress, now);
-    if (!updated) throw notFound();
-    await this.emitAudit("task.status_changed", memberId, updated.id, { previousStatus, status: next });
-    if (this.options.notifications) {
-      const occurrenceId = this.id();
-      await this.options.notifications.emit({
-        recipientMemberId: memberId,
-        eventType: "task.status_changed",
-        actorMemberId: memberId,
-        targetKind: "task",
-        targetId: updated.id,
-        payload: { previousStatus, status: next },
-        deduplicationKey: `task:${updated.id}:status:${previousStatus}:${next}:${occurrenceId}`,
-      });
+    const won = await this.repository.compareAndSetStatus(
+      memberId, id, previousStatus, next, next === "done" ? completedAt : null, progress, now,
+    );
+    const current = await this.requireOwned(memberId, id);
+    if (!won && current.status !== next) {
+      throw new AppError("TASK_STATUS_CONFLICT", "Task status changed concurrently", 409, true);
     }
-    return updated;
+    if (won) await this.emitAudit("task.status_changed", memberId, current.id, { previousStatus, status: next });
+    await this.deliverPendingStatusNotifications(memberId, current.id);
+    return current;
   }
 
   async setProgress(memberId: string, id: string, progress: unknown): Promise<Task> {
@@ -195,6 +192,27 @@ export class TasksService {
       id: this.id(), actorKind: "member", actorId: memberId, action,
       resourceType: "task", resourceId: taskId, metadata, createdAt: this.now().toISOString(),
     } as CreateAuditEvent);
+  }
+
+  private async deliverPendingStatusNotifications(memberId: string, taskId: string): Promise<void> {
+    if (!this.options.notifications) return;
+    const intents = await this.repository.listPendingStatusNotifications(
+      memberId,
+      taskId,
+      APP_CONFIG.maxTaskStatusNotificationDrain,
+    );
+    for (const intent of intents) {
+      await this.options.notifications.emit({
+        recipientMemberId: intent.recipientMemberId,
+        eventType: "task.status_changed",
+        actorMemberId: intent.recipientMemberId,
+        targetKind: "task",
+        targetId: intent.taskId,
+        payload: { previousStatus: intent.previousStatus, status: intent.status },
+        deduplicationKey: intent.deduplicationKey,
+      });
+      await this.repository.markStatusNotificationDelivered(memberId, intent.id, this.now().getTime());
+    }
   }
 
   private async requireOwned(memberId: string, id: string): Promise<Task> {
