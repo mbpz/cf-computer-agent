@@ -6,9 +6,9 @@
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
 
-总账成熟度：`atoms=75`; `implementation=done:48,partial:4,pending:23,n/a:0`; `verification=done:51,partial:0,pending:24,n/a:0`; `release=done:0,partial:28,pending:47,n/a:0`; `acceptance=done:0,partial:8,pending:67,n/a:0`
+总账成熟度：`atoms=84`; `implementation=done:48,partial:4,pending:32,n/a:0`; `verification=done:51,partial:0,pending:33,n/a:0`; `release=done:0,partial:28,pending:56,n/a:0`; `acceptance=done:0,partial:8,pending:76,n/a:0`
 
-**范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只消费已归属能力，不重复拥有其原子。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
+**范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
 明确排除：`IDN-002` 是可选 WeChat OAuth，当前 GitHub allowlist 已满足私有成员入口；在出现明确产品需求和独立发布/验收计划前，它可选且不在 R0–R6 范围内。
 
@@ -24,14 +24,14 @@
 
 范围：`IDN-001`、`IDN-003`、`IDN-004`、`IDN-005`、`IDN-006`、`WB-001`、`WB-002`、`WB-PAGE`、`WB-SCROLL`、`WB-SETTINGS`、`WB-A11Y`、`ADM-001`、`ADM-005`、`ADM-006`、`ADM-007`、`ADM-009`、`ADM-010`、`ADM-011`、`OPS-001`、`OPS-002`、`OPS-003`、`OPS-004`、`OPS-005`、`OPS-006`、`OPS-007`、`OPS-009`。
 
-前置依赖：只使用追加式 migration 和现有身份边界；先确认远程 0033/0034 状态，再记录与分页、任务、Shell、菜单相符的 Worker 版本。脱敏审计、正式数字分页和可访问性基础在协作、治理和管理域消费它们前先完成归属与证据收口。
+前置依赖：当前阶段没有更早的 R 阶段原子；只使用追加式 migration 和现有身份边界。
 
 退出标准：
 
-- [ ] current-main 完整 gate、远程 migration 状态、100% Worker 版本、bindings 与可前向兼容回滚点都有日期化证据。
-- [ ] admin 与 contributor 分别完成登录、拒绝路径和退出后 session 旅程；signed automation 同时覆盖有效签名与拒绝路径。
-- [ ] Shell、成员/角色/菜单、站点统计、审计分页和可访问性在真实角色旅程中验证，且不从匿名 smoke、旧候选或本地 PASS 推断发布/验收。
-- [ ] Workers、D1、Durable Objects、Workers AI、Vectorize 与 Queues 的免费层边界和降级已在发布前复核；`@cloudflare/computer` 仍按 Preview 对待。
+- [ ] current-main gate、远程 migration、100% Worker 版本与回滚点均有日期化证据（owned: `OPS-002`、`OPS-003`、`OPS-004`、`OPS-007`; consumed: -）
+- [ ] admin/contributor 登录、拒绝、退出后 session 与 signed automation 旅程均完成（owned: `IDN-001`、`IDN-003`、`IDN-004`、`IDN-006`、`OPS-005`、`OPS-006`; consumed: -）
+- [ ] Shell、成员/角色/菜单、统计、审计分页和可访问性在真实角色旅程中验证（owned: `WB-001`、`WB-002`、`WB-PAGE`、`WB-SCROLL`、`WB-SETTINGS`、`WB-A11Y`、`ADM-001`、`ADM-005`、`ADM-006`、`ADM-007`、`ADM-009`、`ADM-010`、`ADM-011`; consumed: -）
+- [ ] 免费层边界、降级和 Computer Preview 约束在发布前复核（owned: `OPS-009`; consumed: -）
 
 ## R1 — AI 知识库核心与受控摄取
 
@@ -41,14 +41,14 @@
 
 范围：`KB-001`、`KB-002`、`KB-003`、`KB-004`、`KB-005`、`KB-006`、`KB-007`、`KB-008`、`ADM-002`、`ADM-003`、`ADM-004`。
 
-前置依赖：R0 的成员隔离、对象可见性、正式分页、生产证据和额度保护；审核、搜索、阅读与引用回读始终重新校验 active member、visibility 与 current Revision。
+前置依赖：消费 `IDN-004`、`IDN-005`、`WB-PAGE`、`OPS-009` 的成员隔离、正式分页和免费层边界。
 
 退出标准：
 
-- [ ] 不绑定 R2 时，文本、Markdown 和代码录入仍可完成提交、解析、审核、发布、搜索、阅读与引用问答；二进制上传保持 fail-closed，而不是降级为无授权存储。
-- [ ] 启用私有 R2 后，真实文件样本、原件/解析资产队列、预览、下载、重试与安全回收均通过；每项远程 migration、Worker/assets 版本和成员角色旅程有范围匹配的生产证据。
-- [ ] AI、R2 或 Queue 暂时故障时，录入不会产生可见半成品；任务保留可追踪状态并能有限重试/扫描恢复，容量断路器在写入前明确拒绝或降级。
-- [ ] contributor 提交到可见知识、管理员审核到发布、两者搜索到精确引用回读的目标环境旅程均完成，且无证据/低相关回答明确拒答。
+- [ ] 免费文本模式完成提交、解析、审核、发布、搜索、阅读和引用问答；无 R2 时二进制上传 fail-closed（owned: `KB-001`、`KB-002`、`KB-003`、`KB-004`、`KB-005`、`KB-006`、`KB-007`、`KB-008`、`ADM-002`; consumed: `IDN-004`、`IDN-005`、`WB-PAGE`）
+- [ ] 启用私有 R2 后，真实文件、资产队列、预览、下载、重试和安全回收有范围匹配的生产证据（owned: `KB-003`、`ADM-004`; consumed: `OPS-009`）
+- [ ] AI、R2 或 Queue 故障不产生可见半成品，任务可有限重试/扫描恢复并受容量断路器保护（owned: `KB-003`、`KB-004`、`ADM-004`; consumed: `OPS-009`）
+- [ ] contributor 提交到可见知识、管理员审核到发布、两者搜索到精确引用回读均完成（owned: `ADM-003`; consumed: `IDN-004`、`IDN-005`）
 
 ## R2 — 任务、通知、看板与上下文消息
 
@@ -58,45 +58,45 @@
 
 范围：`TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`。
 
-前置依赖：R0 已拥有成员隔离、完整数字分页、脱敏审计与可访问性基础；任务先提供关联、幂等、状态和进度，通知以 recipient/event key 去重，看板只引用任务数据并提供键盘等价排序，消息先绑定任务或知识上下文并二次校验参与者权限。
+前置依赖：消费 `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`、`KB-006` 的隔离、分页、可访问性、审计与知识上下文。
 
 退出标准：
 
-- [ ] admin 与 contributor 的任务旅程覆盖创建、关联、筛选、分页、幂等重放、空/错态、审计降噪、保留/恢复和跨成员拒绝。
-- [ ] 通知在重复事件、未读重试、目标失效和保留清理下保持隔离与可审计；看板并发排序可回滚且不复制任务正文。
-- [ ] 上下文消息覆盖参与者撤权、分页、重复发送、故障恢复和 signed browser 验收；开放私信不在本阶段范围内。
+- [ ] 任务覆盖创建、关联、筛选、分页、幂等、空/错态、审计、保留/恢复和跨成员拒绝（owned: `TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`; consumed: `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
+- [ ] 通知在重复事件、未读重试、目标失效和保留清理下保持隔离与可审计（owned: `NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`; consumed: `IDN-004`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
+- [ ] 看板和上下文消息覆盖键盘排序、并发回滚、撤权、分页、重放和 signed browser 验收（owned: `TSK-001`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`; consumed: `KB-006`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
 
-## R3 — Space 与 Collection 治理
+## R3 — 治理、版本、回收与审计
 
 状态：planned
 
-目标：在已具备角色、菜单和脱敏审计基础上，完成 Space/Collection 的显式治理与审计原子性；Revision、回收和任务保留继续消费 R1/R2 已拥有的能力，不重复声明其完成度。
+目标：补齐批量治理、Revision diff/rollback、回收站、恢复、最终清理、审计和失败恢复，所有写操作保持成员隔离、可审阅且不依赖人工修改数据库。
 
-范围：`ADM-008`。
+范围：`ADM-008`、`GOV-001`、`KB-011`、`KB-012`。
 
-前置依赖：R0 的角色权限位图、成员隔离、菜单治理和审计列表；R1 的受控发布模型与 R2 的任务/消息对象关系都只作为消费者边界，不形成反向依赖。
+前置依赖：消费 `ADM-006`、`ADM-009`、`KB-004`、`TSK-009` 的角色治理、脱敏审计、不可变发布和任务保留边界。
 
 退出标准：
 
-- [ ] Space/Collection 创建、授权、修改和拒绝路径具备原子审计、分页可读性和成员隔离证据。
-- [ ] 批量审核、Revision diff/rollback、回收/最终清理和任务保留只在各自拥有阶段的原子完成后被组合验收，不通过重复 Roadmap 归属掩盖缺口。
-- [ ] 真实管理员治理与拒绝路径在目标环境验收，历史候选的 partial 证据不被升级为完整结论。
+- [ ] 批量治理提供逐项结果、幂等重放、并发失败恢复和脱敏审计（owned: `ADM-008`、`GOV-001`; consumed: `ADM-006`、`ADM-009`）
+- [ ] Revision diff/rollback 仅切换 current 原子并保留不可变历史与审计（owned: `KB-011`; consumed: `KB-004`、`ADM-009`）
+- [ ] 回收站、恢复与最终清理保持成员隔离、tombstone 审计和派生索引一致性（owned: `KB-012`; consumed: `ADM-009`、`TSK-009`）
 
 ## R4 — 成熟检索、阅读器与评测
 
 状态：planned
 
-目标：在 R1 核心检索/阅读闭环之上，交付 Saved View 等私人检索工作流，并把后续成熟检索与量化评测需求先记录为总账原子再实施。
+目标：完成成熟过滤、来源定位、相关知识、反向链接、混合检索降级和量化评测，并在阅读器与引用旅程中持续执行权限重校验。
 
-范围：`KB-010`。
+范围：`KB-010`、`RET-001`、`RET-002`、`RET-003`、`EVAL-001`。
 
-前置依赖：R1 的已发布知识闭环和 R0 的成员隔离、免费层降级边界；所有 Saved View、阅读器定位和引用回读都重新校验 active member、visibility 与 current Revision。
+前置依赖：消费 `IDN-005`、`KB-005`、`KB-006`、`KB-007`、`OPS-009` 的成员隔离、核心检索/阅读、引用回读和免费层降级边界。
 
 退出标准：
 
-- [ ] 私有笔记、收藏、最近访问和 Saved View 均按成员隔离，并在撤权、空态、错误恢复和分页场景下验证。
-- [ ] 过滤、来源定位、相关知识、反向链接、混合检索和评测在开始实现前均有独立总账原子、质量目标和权限泄露回归标准。
-- [ ] Vectorize 或 Workers AI 不可用时，FTS5-only 的核心搜索/阅读旅程仍可用并明确降级。
+- [ ] 过滤与来源定位覆盖 Space/Collection/Tag/type/author/time、精确位置和可见性重校验（owned: `KB-010`、`RET-001`; consumed: `IDN-005`、`KB-005`、`KB-006`）
+- [ ] 相关知识与反向链接可解释、可撤权且不从静态链接推断授权（owned: `RET-002`; consumed: `KB-006`）
+- [ ] 混合检索与量化评测在 Vectorize/AI 不可用时回退 FTS5-only，并检验 Recall、MRR、引用支持和权限泄露（owned: `RET-003`、`EVAL-001`; consumed: `KB-007`、`OPS-009`）
 
 ## R5 — 来源工作台、研究产物与有界 Agent
 
@@ -106,26 +106,26 @@
 
 范围：`KB-009`。
 
-前置依赖：R1 的引用回读、可见性重校验和降级边界，以及 R4 的私人来源工作流；新增研究产物原子必须先写入总账，不能由 Roadmap 文字替代实现、发布或验收状态。
+前置依赖：消费 `IDN-005`、`KB-007`、`KB-010` 的引用回读、可见性重校验和私人来源工作流；新增研究产物原子必须先写入总账。
 
 退出标准：
 
-- [ ] 选中来源、会话与产物均保留来源 Revision、权限与审计关联，并在撤权后不可读取。
-- [ ] Agent 只使用批准的只读知识工具，产生 draft/可审核产物；任何越权网络、Shell、代码、浏览器、发布、删除或改权限尝试均被拒绝并有回归测试。
-- [ ] 计划确认、预算/额度耗尽、断线、取消和恢复不会重复副作用，且会明确向用户展示 deferred 或证据缺口。
+- [ ] 选中来源、会话与产物保留来源 Revision、权限与审计关联，并在撤权后不可读取（owned: `KB-009`; consumed: `IDN-005`、`KB-010`）
+- [ ] Agent 仅使用批准的只读知识工具并产出 draft/可审核产物，越权操作被拒绝（owned: `KB-009`; consumed: `KB-007`）
+- [ ] 计划确认、额度耗尽、断线、取消和恢复不重复副作用，并显示 deferred 或证据缺口（owned: `KB-009`; consumed: `OPS-009`）
 
-## R6 — 导出、恢复与 1.0 证据
+## R6 — 导出、恢复、容量保护与 1.0
 
 状态：planned
 
-目标：证明权威数据可迁移、派生索引可重建，并以完整生产与角色证据作为 1.0 声明的前提。
+目标：完成导出包、全新环境恢复演练、R2/D1 容量保护、运行手册和完整生产验收后，再声明 1.0。
 
-范围：`OPS-008`。
+范围：`OPS-008`、`OPS-010`、`OPS-011`。
 
-前置依赖：R0 的 current-main 版本、回滚和免费层证据，以及 R1–R5 各自总账原子的发布/验收收口。导出、恢复和容量演练必须使用受控、脱敏数据，不把生产原始数据导出到本地。
+前置依赖：消费 `OPS-001`、`OPS-005`、`OPS-009`、`ADM-004`、`ADM-011`、`EVAL-001` 的升级、角色验收、免费层、资产摄取、可访问性和评测证据；所有演练使用受控脱敏数据，不导出生产原始数据到本地。
 
 退出标准：
 
-- [ ] 全量/增量导出、导入 dry-run、全新环境恢复、hash/Revision/Citation/权限抽样对账和索引重建均有演练证据与回滚说明。
-- [ ] 导出和恢复同时验证 R2 协作数据、R3 治理数据、R4 私人检索状态和 R5 研究产物的成员隔离与可追溯性。
-- [ ] 上传→审核→发布→搜索→问答→治理→导出/恢复的关键旅程完成 admin/contributor 浏览器验收、可访问性检查和 current-main 发布证据后，才可声明 1.0。
+- [ ] 导出与恢复覆盖全量/增量包、导入 dry-run、全新环境、hash/Revision/Citation/权限对账与索引重建（owned: `OPS-008`; consumed: `OPS-001`）
+- [ ] R2/D1 容量保护覆盖真实阈值、预警、写入断路器、有限重试和恢复重投（owned: `OPS-010`; consumed: `ADM-004`、`OPS-009`）
+- [ ] 完整生产验收、运行手册、角色浏览器旅程、可访问性、恢复和质量证据齐备后才可声明 1.0（owned: `OPS-011`; consumed: `OPS-005`、`ADM-011`、`EVAL-001`）

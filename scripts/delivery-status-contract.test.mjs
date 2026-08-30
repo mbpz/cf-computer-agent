@@ -27,7 +27,16 @@ const REQUIRED_COLUMNS = [
   "ID", "功能", "优先级", "实现", "验证", "发布", "验收", "依赖", "证据", "备注",
 ];
 const PLACEHOLDER_VALUES = new Set(["", "-", "—", "n/a", "tbd", "todo", "待补", "待补充"]);
-const ROADMAP_STAGE_IDS = ["R0", "R1", "R2", "R3", "R4", "R5", "R6"];
+const ROADMAP_STAGE_CONTRACTS = [
+  { id: "R0", title: "状态收口、身份与工作台基础", status: "active" },
+  { id: "R1", title: "AI 知识库核心与受控摄取", status: "planned" },
+  { id: "R2", title: "任务、通知、看板与上下文消息", status: "planned" },
+  { id: "R3", title: "治理、版本、回收与审计", status: "planned" },
+  { id: "R4", title: "成熟检索、阅读器与评测", status: "planned" },
+  { id: "R5", title: "来源工作台、研究产物与有界 Agent", status: "planned" },
+  { id: "R6", title: "导出、恢复、容量保护与 1.0", status: "planned" },
+];
+const ROADMAP_STAGE_IDS = ROADMAP_STAGE_CONTRACTS.map((stage) => stage.id);
 const LEGACY_ROADMAP_IDS = new Set(["GATE-M0", "GATE-M1", "WS-001", "WS-008"]);
 const EXPLICITLY_DEFERRED_ROADMAP_IDS = new Set(["IDN-002"]);
 const ROADMAP_MATURITY_DIMENSIONS = [
@@ -36,6 +45,11 @@ const ROADMAP_MATURITY_DIMENSIONS = [
   ["release", "发布"],
   ["acceptance", "验收"],
 ];
+const STAGE_EXIT_CONCEPTS = new Map([
+  ["R3", [/批量治理/u, /Revision diff\/rollback/u, /回收站.*最终清理/u]],
+  ["R4", [/过滤.*来源定位/u, /相关知识.*反向链接/u, /混合检索.*量化评测/u]],
+  ["R6", [/导出.*恢复/u, /R2\/D1.*容量保护/u, /完整生产验收.*1\.0/u]],
+]);
 
 test("ledger table parsing preserves escaped and code-span pipes", () => {
   assert.deepEqual(
@@ -226,10 +240,12 @@ test("Roadmap derives its exact R0-R6 stage contract from the delivery ledger", 
   const stages = parseRoadmapStages(roadmap);
 
   assertRoadmapStageOrder(stages);
-  assertRoadmapStageSections(stages);
+  const stageContracts = assertRoadmapStageSections(stages);
+  assertRoadmapStageIdentity(stageContracts);
   assertRoadmapMaturitySummary(roadmap, rows);
-  const owners = assertRoadmapOwnership(stages, rows, roadmap);
+  const owners = assertRoadmapOwnership(stageContracts, rows, roadmap);
   assertRoadmapDependencyStageOrder(owners, rows);
+  assertRoadmapConsumedMappings(stageContracts, owners);
 });
 
 test("Roadmap contract rejects stage-order, section, maturity, and dependency mutations", () => {
@@ -265,6 +281,26 @@ test("Roadmap contract rejects stage-order, section, maturity, and dependency mu
       [{ ID: "ADM-009", 依赖: "-" }, { ID: "TSK-008", 依赖: "ADM-009" }],
     ),
     /TSK-008 depends on ADM-009 in a later stage/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageIdentity(ROADMAP_STAGE_CONTRACTS.map((stage) => ({ ...stage, status: stage.id === "R1" ? "active" : stage.status }))),
+    /R1 status must be planned/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageSections([{ id: "R0", title: "fixture", content: "\n状态：active\n状态：blocked\n目标：x\n范围：`OPS-001`\n前置依赖：x\n退出标准：\n\n- [ ] x（owned: `OPS-001`; consumed: -）\n" }]),
+    /R0 requires exactly one 状态 field/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageIdentity(ROADMAP_STAGE_CONTRACTS.map((stage) => ({ ...stage, title: stage.id === "R3" ? "无关旅程" : stage.title }))),
+    /R3 title must be 治理、版本、回收与审计/u,
+  );
+  assert.throws(
+    () => assertRoadmapExitConcepts([{ id: "R3", exits: [{ text: "无关工作" }, { text: "Revision diff/rollback" }, { text: "回收站与最终清理" }] }]),
+    /R3 exit 1 must express 批量治理/u,
+  );
+  assert.throws(
+    () => parseRoadmapExitItems({ id: "R3", content: "\n退出标准：\n\n- [ ] 批量治理（owned: `GOV-001`; consumed: `ADM-009`）\n- [x] Revision diff/rollback（owned: `KB-011`; consumed: `KB-004`）\n" }),
+    /R3 exit 2 must be unchecked/u,
   );
 });
 
@@ -492,7 +528,7 @@ function parseRoadmapStages(roadmap) {
     assert.ok(stageMatch, `Roadmap top-level heading must be an R-stage: ${heading}`);
     const contentStart = match.index + match[0].length;
     const contentEnd = headings[index + 1]?.index ?? roadmap.length;
-    return { id: stageMatch[1], content: roadmap.slice(contentStart, contentEnd) };
+    return { id: stageMatch[1], title: stageMatch[2], content: roadmap.slice(contentStart, contentEnd) };
   });
   return stages;
 }
@@ -506,16 +542,60 @@ function assertRoadmapStageOrder(stages) {
 }
 
 function assertRoadmapStageSections(stages) {
+  return stages.map((stage) => ({
+    ...stage,
+    status: roadmapStageField(stage, "状态"),
+    goal: roadmapStageField(stage, "目标"),
+    scope: roadmapStageField(stage, "范围"),
+    dependencies: roadmapStageField(stage, "前置依赖"),
+    exits: parseRoadmapExitItems(stage),
+  }));
+}
+
+function roadmapStageField(stage, label) {
+  const matches = [...stage.content.matchAll(new RegExp(`^${label}：(.*)$`, "gmu"))];
+  assert.equal(matches.length, 1, `${stage.id} requires exactly one ${label} field`);
+  const value = matches[0][1].trim();
+  assert.ok(value, `${stage.id} requires a non-empty ${label} section`);
+  return value;
+}
+
+function parseRoadmapExitItems(stage) {
+  const headers = [...stage.content.matchAll(/^退出标准：$/gmu)];
+  assert.equal(headers.length, 1, `${stage.id} requires exactly one 退出标准 field`);
+  const body = stage.content.slice(headers[0].index + headers[0][0].length).trim();
+  const lines = body.split(/\r?\n/u).filter(Boolean);
+  assert.ok(lines.length > 0, `${stage.id} requires an unchecked 退出标准 checklist`);
+  return lines.map((line, index) => {
+    const match = /^- \[([ x])\] (.+?)（owned: (.*?); consumed: (.*?)）$/u.exec(line);
+    assert.ok(match, `${stage.id} exit ${index + 1} requires owned/consumed ID mappings`);
+    assert.equal(match[1], " ", `${stage.id} exit ${index + 1} must be unchecked`);
+    const owned = roadmapBacktickIds(match[3]);
+    const consumed = match[4].trim() === "-" ? [] : roadmapBacktickIds(match[4]);
+    assert.ok(owned.length > 0, `${stage.id} exit ${index + 1} requires an owned ID`);
+    assert.ok(match[4].trim() === "-" || consumed.length > 0, `${stage.id} exit ${index + 1} requires consumed IDs or -`);
+    return { text: match[2], owned, consumed };
+  });
+}
+
+function assertRoadmapStageIdentity(stages) {
+  assert.equal(stages.length, ROADMAP_STAGE_CONTRACTS.length, "Roadmap stage contracts must be complete");
+  for (const [index, expected] of ROADMAP_STAGE_CONTRACTS.entries()) {
+    const stage = stages[index];
+    assert.equal(stage.id, expected.id, `Roadmap stage ${index + 1} ID must be ${expected.id}`);
+    assert.equal(stage.title, expected.title, `${stage.id} title must be ${expected.title}`);
+    assert.equal(stage.status, expected.status, `${stage.id} status must be ${expected.status}`);
+  }
+}
+
+function assertRoadmapExitConcepts(stages) {
   for (const stage of stages) {
-    assert.match(stage.content, /^状态：(active|planned|blocked)$/mu, `${stage.id} requires a valid 状态 section`);
-    for (const section of ["目标", "范围", "前置依赖"]) {
-      assert.match(stage.content, new RegExp(`^${section}：(\\S.*)$`, "mu"), `${stage.id} requires a non-empty ${section} section`);
+    const concepts = STAGE_EXIT_CONCEPTS.get(stage.id);
+    if (!concepts) continue;
+    assert.equal(stage.exits.length, concepts.length, `${stage.id} requires ${concepts.length} mapped exits`);
+    for (const [index, concept] of concepts.entries()) {
+      assert.match(stage.exits[index].text, concept, `${stage.id} exit ${index + 1} must express ${concept.source}`);
     }
-    assert.match(
-      stage.content,
-      /^退出标准：\r?\n\r?\n(?:- \[ \] \S.*\r?\n?)+/mu,
-      `${stage.id} requires an unchecked 退出标准 checklist`,
-    );
   }
 }
 
@@ -552,8 +632,7 @@ function assertRoadmapOwnership(stages, rows, roadmap) {
   const ledgerIds = new Set(rows.map((row) => row.ID));
   const owners = new Map();
   for (const stage of stages) {
-    const scopeLine = new RegExp("^范围：(\\S.*)$", "mu").exec(stage.content)?.[1] ?? "";
-    const ids = roadmapBacktickIds(scopeLine);
+    const ids = roadmapBacktickIds(stage.scope);
     assert.ok(ids.length > 0, `${stage.id} requires a non-empty 范围 section`);
     for (const id of ids) {
       assert.ok(ledgerIds.has(id), `${stage.id} scope ID ${id} requires a ledger row`);
@@ -576,6 +655,27 @@ function assertRoadmapOwnership(stages, rows, roadmap) {
     assert.ok(owners.has(row.ID), `${row.ID} requires exactly one R-stage owner`);
   }
   return owners;
+}
+
+function assertRoadmapConsumedMappings(stages, owners) {
+  const stageIndex = new Map(ROADMAP_STAGE_IDS.map((stage, index) => [stage, index]));
+  for (const stage of stages) {
+    const consumed = [
+      ...roadmapBacktickIds(stage.dependencies),
+      ...stage.exits.flatMap((exit) => exit.consumed),
+    ];
+    for (const id of consumed) {
+      const owner = owners.get(id);
+      assert.ok(owner, `${stage.id} consumes ${id}, which requires an R-stage owner`);
+      assert.ok(stageIndex.get(owner) < stageIndex.get(stage.id), `${stage.id} consumes ${id} from a non-earlier stage`);
+    }
+    for (const exit of stage.exits) {
+      for (const id of exit.owned) {
+        assert.equal(owners.get(id), stage.id, `${stage.id} exit must own ${id}`);
+      }
+    }
+  }
+  assertRoadmapExitConcepts(stages);
 }
 
 function assertRoadmapDependencyStageOrder(owners, rows) {
