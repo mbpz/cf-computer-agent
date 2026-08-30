@@ -27,6 +27,15 @@ const REQUIRED_COLUMNS = [
   "ID", "功能", "优先级", "实现", "验证", "发布", "验收", "依赖", "证据", "备注",
 ];
 const PLACEHOLDER_VALUES = new Set(["", "-", "—", "n/a", "tbd", "todo", "待补", "待补充"]);
+const ROADMAP_STAGE_IDS = ["R0", "R1", "R2", "R3", "R4", "R5", "R6"];
+const LEGACY_ROADMAP_IDS = new Set(["GATE-M0", "GATE-M1", "WS-001", "WS-008"]);
+const EXPLICITLY_DEFERRED_ROADMAP_IDS = new Set(["IDN-002"]);
+const ROADMAP_MATURITY_DIMENSIONS = [
+  ["implementation", "实现"],
+  ["verification", "验证"],
+  ["release", "发布"],
+  ["acceptance", "验收"],
+];
 
 test("ledger table parsing preserves escaped and code-span pipes", () => {
   assert.deepEqual(
@@ -211,13 +220,52 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 });
 
-test("Roadmap uses the approved R0-R6 vertical journey structure", () => {
+test("Roadmap derives its exact R0-R6 stage contract from the delivery ledger", () => {
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
   const roadmap = readFileSync(roadmapPath, "utf8");
+  const stages = parseRoadmapStages(roadmap);
 
-  for (const stage of ["R0", "R1", "R2", "R3", "R4", "R5", "R6"]) {
-    assert.match(roadmap, new RegExp(`^## ${stage} — `, "m"));
-  }
-  assert.doesNotMatch(roadmap, /^## M[0-9]+ — /m);
+  assertRoadmapStageOrder(stages);
+  assertRoadmapStageSections(stages);
+  assertRoadmapMaturitySummary(roadmap, rows);
+  const owners = assertRoadmapOwnership(stages, rows, roadmap);
+  assertRoadmapDependencyStageOrder(owners, rows);
+});
+
+test("Roadmap contract rejects stage-order, section, maturity, and dependency mutations", () => {
+  assert.throws(
+    () => assertRoadmapStageOrder(parseRoadmapStages(roadmapStageFixture(["R0", "R1", "R1", "R3", "R4", "R5", "R6"]))),
+    /Roadmap delivery stages must be exactly R0, R1, R2, R3, R4, R5, R6/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageOrder(parseRoadmapStages(roadmapStageFixture(["R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7"]))),
+    /Roadmap delivery stages must be exactly R0, R1, R2, R3, R4, R5, R6/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageOrder(parseRoadmapStages(roadmapStageFixture(["R0", "R2", "R1", "R3", "R4", "R5", "R6"]))),
+    /Roadmap delivery stages must be exactly R0, R1, R2, R3, R4, R5, R6/u,
+  );
+
+  const maturityFixtureRows = [{ ID: "KB-001", 实现: "done", 验证: "done", 发布: "pending", 验收: "pending" }];
+  const roadmap = readFileSync(roadmapPath, "utf8");
+  assert.throws(
+    () => assertRoadmapMaturitySummary(
+      "总账成熟度：`atoms=0`; `implementation=done:1,partial:0,pending:0,n/a:0`; `verification=done:1,partial:0,pending:0,n/a:0`; `release=done:0,partial:0,pending:1,n/a:0`; `acceptance=done:0,partial:0,pending:1,n/a:0`",
+      maturityFixtureRows,
+    ),
+    /Roadmap maturity summary must match the delivery ledger/u,
+  );
+  assert.throws(
+    () => assertRoadmapStageSections(parseRoadmapStages(roadmap.replace(/^范围：.*$/mu, "范围："))),
+    /R0 requires a non-empty 范围 section/u,
+  );
+  assert.throws(
+    () => assertRoadmapDependencyStageOrder(
+      new Map([["ADM-009", "R3"], ["TSK-008", "R2"]]),
+      [{ ID: "ADM-009", 依赖: "-" }, { ID: "TSK-008", 依赖: "ADM-009" }],
+    ),
+    /TSK-008 depends on ADM-009 in a later stage/u,
+  );
 });
 
 function parseMarkdownTable(markdown) {
@@ -433,4 +481,120 @@ function unwrapExpression(expression) {
 
 function roadmapBacktickIds(roadmap) {
   return [...roadmap.matchAll(/`([A-Z][A-Z0-9]*-[A-Z0-9]+)`/gu)].map((match) => match[1]);
+}
+
+function parseRoadmapStages(roadmap) {
+  const headings = [...roadmap.matchAll(/^## ([^\r\n]+)$/gmu)];
+  assert.ok(headings.length > 0, "Roadmap delivery stages are required");
+  const stages = headings.map((match, index) => {
+    const heading = match[1];
+    const stageMatch = /^(R\d+) — (.+)$/u.exec(heading);
+    assert.ok(stageMatch, `Roadmap top-level heading must be an R-stage: ${heading}`);
+    const contentStart = match.index + match[0].length;
+    const contentEnd = headings[index + 1]?.index ?? roadmap.length;
+    return { id: stageMatch[1], content: roadmap.slice(contentStart, contentEnd) };
+  });
+  return stages;
+}
+
+function assertRoadmapStageOrder(stages) {
+  assert.deepEqual(
+    stages.map((stage) => stage.id),
+    ROADMAP_STAGE_IDS,
+    "Roadmap delivery stages must be exactly R0, R1, R2, R3, R4, R5, R6",
+  );
+}
+
+function assertRoadmapStageSections(stages) {
+  for (const stage of stages) {
+    assert.match(stage.content, /^状态：(active|planned|blocked)$/mu, `${stage.id} requires a valid 状态 section`);
+    for (const section of ["目标", "范围", "前置依赖"]) {
+      assert.match(stage.content, new RegExp(`^${section}：(\\S.*)$`, "mu"), `${stage.id} requires a non-empty ${section} section`);
+    }
+    assert.match(
+      stage.content,
+      /^退出标准：\r?\n\r?\n(?:- \[ \] \S.*\r?\n?)+/mu,
+      `${stage.id} requires an unchecked 退出标准 checklist`,
+    );
+  }
+}
+
+function assertRoadmapMaturitySummary(roadmap, rows) {
+  assert.deepEqual(
+    roadmapMaturitySummary(roadmap),
+    ledgerMaturitySummary(rows),
+    "Roadmap maturity summary must match the delivery ledger",
+  );
+}
+
+function roadmapMaturitySummary(roadmap) {
+  const match = /^总账成熟度：`atoms=(\d+)`; `implementation=done:(\d+),partial:(\d+),pending:(\d+),n\/a:(\d+)`; `verification=done:(\d+),partial:(\d+),pending:(\d+),n\/a:(\d+)`; `release=done:(\d+),partial:(\d+),pending:(\d+),n\/a:(\d+)`; `acceptance=done:(\d+),partial:(\d+),pending:(\d+),n\/a:(\d+)`$/mu.exec(roadmap);
+  assert.ok(match, "Roadmap requires a structured 总账成熟度 summary");
+  const values = match.slice(1).map(Number);
+  const summary = { atoms: values.shift() };
+  for (const [dimension] of ROADMAP_MATURITY_DIMENSIONS) {
+    summary[dimension] = Object.fromEntries(["done", "partial", "pending", "n/a"].map((status) => [status, values.shift()]));
+  }
+  return summary;
+}
+
+function ledgerMaturitySummary(rows) {
+  const summary = { atoms: rows.length };
+  for (const [dimension, column] of ROADMAP_MATURITY_DIMENSIONS) {
+    summary[dimension] = Object.fromEntries(
+      ["done", "partial", "pending", "n/a"].map((status) => [status, rows.filter((row) => row[column] === status).length]),
+    );
+  }
+  return summary;
+}
+
+function assertRoadmapOwnership(stages, rows, roadmap) {
+  const ledgerIds = new Set(rows.map((row) => row.ID));
+  const owners = new Map();
+  for (const stage of stages) {
+    const scopeLine = new RegExp("^范围：(\\S.*)$", "mu").exec(stage.content)?.[1] ?? "";
+    const ids = roadmapBacktickIds(scopeLine);
+    assert.ok(ids.length > 0, `${stage.id} requires a non-empty 范围 section`);
+    for (const id of ids) {
+      assert.ok(ledgerIds.has(id), `${stage.id} scope ID ${id} requires a ledger row`);
+      assert.ok(!LEGACY_ROADMAP_IDS.has(id), `${stage.id} must not own legacy ledger ID ${id}`);
+      assert.ok(!EXPLICITLY_DEFERRED_ROADMAP_IDS.has(id), `${stage.id} must not own explicitly deferred ID ${id}`);
+      assert.ok(!owners.has(id), `${id} must have exactly one R-stage owner`);
+      owners.set(id, stage.id);
+    }
+  }
+  for (const row of rows) {
+    if (LEGACY_ROADMAP_IDS.has(row.ID)) {
+      assert.ok(!owners.has(row.ID), `legacy ledger ID ${row.ID} must not have an R-stage owner`);
+      continue;
+    }
+    if (EXPLICITLY_DEFERRED_ROADMAP_IDS.has(row.ID)) {
+      assert.ok(!owners.has(row.ID), `explicitly deferred ID ${row.ID} must not have an R-stage owner`);
+      assert.match(roadmap, new RegExp("^明确排除：.*`" + row.ID + "`.*可选.*不在.*R0–R6", "mu"), `${row.ID} requires an explicit optional-roadmap rationale`);
+      continue;
+    }
+    assert.ok(owners.has(row.ID), `${row.ID} requires exactly one R-stage owner`);
+  }
+  return owners;
+}
+
+function assertRoadmapDependencyStageOrder(owners, rows) {
+  const stageIndex = new Map(ROADMAP_STAGE_IDS.map((stage, index) => [stage, index]));
+  for (const row of rows) {
+    const owner = owners.get(row.ID);
+    if (!owner) continue;
+    for (const dependency of ledgerDependencies(row)) {
+      if (LEGACY_ROADMAP_IDS.has(dependency)) continue;
+      const dependencyOwner = owners.get(dependency);
+      assert.ok(dependencyOwner, `${row.ID} dependency ${dependency} requires an R-stage owner`);
+      assert.ok(
+        stageIndex.get(dependencyOwner) <= stageIndex.get(owner),
+        `${row.ID} depends on ${dependency} in a later stage`,
+      );
+    }
+  }
+}
+
+function roadmapStageFixture(ids) {
+  return ids.map((id) => `## ${id} — fixture`).join("\n\n");
 }
