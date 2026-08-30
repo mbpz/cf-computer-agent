@@ -47,6 +47,27 @@ test("formal numbered pagination scopes use compiler AST boundaries", () => {
   }
 });
 
+test("every shared pagination caller passes its page locale without English defaults", () => {
+  const pagePaths = formalLists.map(([, , pagePath]) => pagePath);
+  const absolutePaths = ["frontend/components/data-pagination.tsx", ...pagePaths].map((path) => resolve(repositoryRoot, path));
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: absolutePaths });
+  try {
+    const component = sourceFile(snapshot, "frontend/components/data-pagination.tsx");
+    assert.match(component.text, /frontendPaginationLabels/u);
+    assert.doesNotMatch(component.text, /(?:totalLabel|rangeLabel|pageSizeLabel|previousLabel|nextLabel)\s*=\s*"/u);
+    for (const pagePath of pagePaths) {
+      const page = sourceFile(snapshot, pagePath);
+      const calls = collectNodes(page, (node) => isJsxSelfClosingElement(node) && node.tagName.getText(page) === "DataPagination");
+      assert.equal(calls.length, 1, `${pagePath} DataPagination caller`);
+      assert.match(calls[0].getText(page), /\blocale=\{locale\}/u, `${pagePath} locale forwarding`);
+    }
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
+});
+
 function sourceFile(snapshot, relativePath) {
   const absolutePath = resolve(repositoryRoot, relativePath);
   const project = snapshot.getDefaultProjectForFile(absolutePath);

@@ -50,7 +50,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
       const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
       return <Card key={task.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p><Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>{task.notes && <p className="mt-1 truncate text-sm text-muted-foreground">{task.notes}</p>}</div><div className="flex flex-wrap gap-2"><Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onStatusChange?.(task.id, task.status === "done" ? "todo" : "done")}>{statusAction}</Button><Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onDelete?.(task.id)}>{frontendText(locale, "TASKS_DELETE")}</Button></div></CardContent></Card>;
     })}</div> : <PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
-    <DataPagination {...state.pagination} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
+    <DataPagination {...state.pagination} locale={locale} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
   </section>;
 }
 

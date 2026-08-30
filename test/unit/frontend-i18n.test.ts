@@ -33,4 +33,25 @@ describe("frontend locale adapter", () => {
     expect(createLocaleRuntime({ navigatorLanguage: "en" }).t("PAGE_COMING_SOON_TITLE")).not.toBe("PAGE_COMING_SOON_TITLE");
     expect(createLocaleRuntime({ navigatorLanguage: "zh-CN" }).t("PAGE_COMING_SOON_TITLE")).not.toBe("PAGE_COMING_SOON_TITLE");
   });
+
+  it("provides exact bilingual pagination keys and placeholders", () => {
+    const english = createLocaleRuntime({ navigatorLanguage: "en" });
+    const chinese = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
+    expect(english.t("PAGINATION_NAVIGATION")).toBe("Pagination navigation");
+    expect(chinese.t("PAGINATION_NAVIGATION")).toBe("分页导航");
+    expect(english.t("PAGINATION_TOTAL")).toBe("Total");
+    expect(chinese.t("PAGINATION_TOTAL")).toBe("总计");
+    expect(english.t("PAGINATION_VISIBLE")).toBe("Visible");
+    expect(chinese.t("PAGINATION_VISIBLE")).toBe("当前显示");
+    expect(english.t("PAGINATION_ROWS_PER_PAGE")).toBe("Rows per page");
+    expect(chinese.t("PAGINATION_ROWS_PER_PAGE")).toBe("每页行数");
+    expect(english.t("PAGINATION_PREVIOUS_PAGE")).toBe("Previous page");
+    expect(chinese.t("PAGINATION_PREVIOUS_PAGE")).toBe("上一页");
+    expect(english.t("PAGINATION_NEXT_PAGE")).toBe("Next page");
+    expect(chinese.t("PAGINATION_NEXT_PAGE")).toBe("下一页");
+    expect(english.t("PAGINATION_PAGE_LABEL")).toBe("Page {page}");
+    expect(chinese.t("PAGINATION_PAGE_LABEL")).toBe("第 {page} 页");
+    expect(english.t("PAGINATION_MOBILE_SUMMARY")).toBe("{page} / {totalPages}");
+    expect(chinese.t("PAGINATION_MOBILE_SUMMARY")).toBe("{page} / {totalPages}");
+  });
 });

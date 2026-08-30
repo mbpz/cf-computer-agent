@@ -46,6 +46,14 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     TASKS_PRIORITY_LOW: "Low",
     TASKS_PRIORITY_MEDIUM: "Medium",
     TASKS_PRIORITY_HIGH: "High",
+    PAGINATION_NAVIGATION: "Pagination navigation",
+    PAGINATION_TOTAL: "Total",
+    PAGINATION_VISIBLE: "Visible",
+    PAGINATION_ROWS_PER_PAGE: "Rows per page",
+    PAGINATION_PREVIOUS_PAGE: "Previous page",
+    PAGINATION_NEXT_PAGE: "Next page",
+    PAGINATION_PAGE_LABEL: "Page {page}",
+    PAGINATION_MOBILE_SUMMARY: "{page} / {totalPages}",
     NAV_ADMINISTRATION: "Administration",
     NAV_REVIEW_QUEUE: "Review queue",
     NAV_DUPLICATES: "Duplicate candidates",
@@ -535,6 +543,14 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     TASKS_PRIORITY_LOW: "低",
     TASKS_PRIORITY_MEDIUM: "中",
     TASKS_PRIORITY_HIGH: "高",
+    PAGINATION_NAVIGATION: "分页导航",
+    PAGINATION_TOTAL: "总计",
+    PAGINATION_VISIBLE: "当前显示",
+    PAGINATION_ROWS_PER_PAGE: "每页行数",
+    PAGINATION_PREVIOUS_PAGE: "上一页",
+    PAGINATION_NEXT_PAGE: "下一页",
+    PAGINATION_PAGE_LABEL: "第 {page} 页",
+    PAGINATION_MOBILE_SUMMARY: "{page} / {totalPages}",
     NAV_ADMINISTRATION: "管理",
     NAV_REVIEW_QUEUE: "审核队列",
     NAV_DUPLICATES: "重复候选",
@@ -1045,6 +1061,34 @@ export function createLocaleRuntime(options: LocaleOptions = {}) {
 
 export function frontendText(locale: Pick<LocaleRuntime, "t"> | undefined, key: string): string {
   return locale?.t(key) ?? catalogs.en[key] ?? key;
+}
+
+export interface FrontendPaginationLabels {
+  navigationLabel: string;
+  totalLabel: string;
+  rangeLabel: string;
+  pageSizeLabel: string;
+  previousLabel: string;
+  nextLabel: string;
+  pageLabel(page: number): string;
+  mobileSummary(page: number, totalPages: number): string;
+}
+
+export function frontendPaginationLabels(locale: Pick<LocaleRuntime, "t"> | undefined): FrontendPaginationLabels {
+  return {
+    navigationLabel: frontendText(locale, "PAGINATION_NAVIGATION"),
+    totalLabel: frontendText(locale, "PAGINATION_TOTAL"),
+    rangeLabel: frontendText(locale, "PAGINATION_VISIBLE"),
+    pageSizeLabel: frontendText(locale, "PAGINATION_ROWS_PER_PAGE"),
+    previousLabel: frontendText(locale, "PAGINATION_PREVIOUS_PAGE"),
+    nextLabel: frontendText(locale, "PAGINATION_NEXT_PAGE"),
+    pageLabel: (page) => formatFrontendText(locale, "PAGINATION_PAGE_LABEL", { page }),
+    mobileSummary: (page, totalPages) => formatFrontendText(locale, "PAGINATION_MOBILE_SUMMARY", { page, totalPages }),
+  };
+}
+
+function formatFrontendText(locale: Pick<LocaleRuntime, "t"> | undefined, key: string, values: Record<string, number>): string {
+  return frontendText(locale, key).replace(/\{(\w+)\}/gu, (_, name: string) => String(values[name] ?? ""));
 }
 
 function isLocale(value: unknown): value is FrontendLocale {
