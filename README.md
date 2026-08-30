@@ -4,9 +4,9 @@ Memory Garden is a private personal workbench for a small invited team on Cloudf
 
 ## Current maturity
 
-- User-isolated tasks are implemented and locally verified; the task UI remains **partial** while detail, retention, and production role journeys are completed.
-- Unified numbered pagination, independent scrolling, the compact shadcn Shell, and administrator governance are implemented and locally verified.
-- Boards, notifications, and messages are **Coming Soon**. They are planned as task- and knowledge-context features, not as existing collaboration services.
+- The member-isolated Tasks core, task-backed Boards, recipient-owned Notifications, and task/knowledge-context Messages are implemented and locally verified on this branch. Retention/cleanup policy and production role journeys remain open; general direct messages are out of scope.
+- Shared numbered pagination is fully localized in English and Simplified Chinese. The compact shadcn Shell keeps navigation and content independently scrollable, places account/settings/theme/logout controls in the desktop/mobile sidebar account area, and leaves only language selection in the top-right area.
+- These collaboration routes are locally `ready`; that means an executable API/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser.
 - **Current-main release and acceptance are determined only by the [delivery status ledger](./docs/product/delivery-status-ledger.md).** A README statement, local gate, historical candidate, or anonymous smoke does not establish a current production release or signed browser acceptance.
 
 The ledger records implementation, verification, release, and acceptance separately for every product atom. The [Roadmap](./ROADMAP.md) gives the delivery order; the specialist checklists give local implementation detail:
@@ -26,7 +26,7 @@ Browser UI → GitHub OAuth → Worker API → D1 control plane
                                          └─ grounded answer with citations
 ```
 
-The knowledge-base core supports text, Markdown, and code submissions; controlled review and publication; owner-scoped lists; FTS search; reader/citation retrieval; and grounded answers. The workbench provides the shell, navigation, settings, tasks, and admin areas for members, roles, menus, spaces, audit, and analytics.
+The knowledge-base core supports text, Markdown, and code submissions; controlled review and publication; owner-scoped lists; FTS search; reader/citation retrieval; and grounded answers. The workbench provides the shell, navigation, settings, Tasks, task-backed Boards, recipient-owned Notifications, contextual Messages, and admin areas for members, roles, menus, spaces, audit, and analytics. Collaboration correctness requires only Workers, D1, and static assets; it does not require Queue, KV, Durable Objects, WebSockets, or a paid scheduler.
 
 GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup. D1 then governs the member record, hashed session, role, active/disabled status, and capability. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
 
@@ -57,6 +57,9 @@ Remote automation smoke is an authorized post-deploy check, not browser acceptan
 - Session and member scope: `GET /api/session`, `GET /api/spaces`, `POST /api/submissions`, `GET /api/submissions/mine`
 - Knowledge: `GET /api/knowledge`, `GET /api/knowledge/search`, `GET /api/knowledge/:id`, `GET /api/knowledge/citations/:id`, `POST /api/knowledge/chat`
 - Tasks: `/api/tasks*` for active members with `tasks:use`; member isolation, idempotent writes, and numbered pagination.
+- Boards: `/boards` projects the member-scoped task API into four independently paginated columns; it creates no board table or second task authority.
+- Notifications: `/api/notifications*` for the authenticated recipient only; deduplicated event materialization, unread summary, numbered pagination, and bounded idempotent read mutations.
+- Contextual messages: `/api/discussions*` for currently authorized task or knowledge contexts; stable cursor pagination, idempotent send, replies, and eligible mentions without general DMs.
 - Administration: `/api/admin/*` for active administrators only
 - Legacy automation compatibility: `GET /api/health`, `GET`/`POST /api/notes`, `GET /api/search`, `POST /api/chat`
 

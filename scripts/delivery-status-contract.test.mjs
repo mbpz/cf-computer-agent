@@ -24,6 +24,10 @@ const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-fr
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const readmePath = resolve(repositoryRoot, "README.md");
+const collaborationEvidencePath = resolve(
+  repositoryRoot,
+  "docs/operations/evidence/2026-08-30-workbench-collaboration.md",
+);
 
 const README_REQUIRED_LINKS = [
   "ROADMAP.md",
@@ -68,7 +72,7 @@ const PLACEHOLDER_VALUES = new Set(["", "-", "—", "n/a", "tbd", "todo", "待�
 const ROADMAP_STAGE_CONTRACTS = [
   { id: "R0", title: "状态收口、身份与工作台基础", status: "active" },
   { id: "R1", title: "AI 知识库核心与受控摄取", status: "planned" },
-  { id: "R2", title: "任务、通知、看板与上下文消息", status: "planned" },
+  { id: "R2", title: "任务、通知、看板与上下文消息", status: "active" },
   { id: "R3", title: "治理、版本、回收与审计", status: "planned" },
   { id: "R4", title: "成熟检索、阅读器与评测", status: "planned" },
   { id: "R5", title: "来源工作台、研究产物与有界 Agent", status: "planned" },
@@ -77,6 +81,29 @@ const ROADMAP_STAGE_CONTRACTS = [
 const ROADMAP_STAGE_IDS = ROADMAP_STAGE_CONTRACTS.map((stage) => stage.id);
 const LEGACY_ROADMAP_IDS = new Set(["GATE-M0", "GATE-M1", "WS-001", "WS-008"]);
 const EXPLICITLY_DEFERRED_ROADMAP_IDS = new Set(["IDN-002"]);
+const COLLABORATION_ROUTE_CONTRACTS = [
+  { path: "/tasks", ledgerId: "TSK-001" },
+  { path: "/boards", ledgerId: "BRD-001" },
+  { path: "/notifications", ledgerId: "NTF-001" },
+  { path: "/messages", ledgerId: "MSG-001" },
+];
+const COLLABORATION_LOCAL_DONE_IDS = [
+  "TSK-001", "TSK-002", "TSK-003", "TSK-004", "TSK-005", "TSK-006", "TSK-007", "TSK-008",
+  "BRD-001", "BRD-002", "BRD-003", "BRD-004", "BRD-005", "BRD-006",
+  "NTF-001", "NTF-002", "NTF-003", "NTF-004",
+  "MSG-001", "MSG-002", "MSG-003", "MSG-004",
+];
+const COLLABORATION_PARTIAL_POLICY_IDS = ["NTF-005", "MSG-005"];
+const COLLABORATION_RELEASE_NOT_DONE_IDS = [
+  ...COLLABORATION_LOCAL_DONE_IDS,
+  ...COLLABORATION_PARTIAL_POLICY_IDS,
+  "TSK-009", "TSK-010", "BRD-007", "NTF-006", "MSG-006",
+];
+const COLLABORATION_MIGRATIONS = [
+  "0035_workbench_collaboration_menus.sql",
+  "0036_workbench_notifications.sql",
+  "0037_workbench_discussions.sql",
+];
 const ROADMAP_MATURITY_DIMENSIONS = [
   ["implementation", "实现"],
   ["verification", "验证"],
@@ -103,7 +130,14 @@ const KNOWLEDGE_SECTION_CONTRACTS = [
   { section: "AGT", ids: ["IDN-005", "KB-009", "OPS-009"] },
   {
     section: "COL",
-    ids: ["IDN-005", "KB-002", "KB-009", "KB-010", "WB-001", "WB-A11Y", "ADM-002", "ADM-009", "ADM-010"],
+    ids: [
+      "IDN-005", "KB-002", "KB-009", "KB-010", "WB-001", "WB-A11Y",
+      "TSK-001", "TSK-002", "TSK-003", "TSK-004", "TSK-005", "TSK-006", "TSK-007", "TSK-008",
+      "NTF-001", "NTF-002", "NTF-003", "NTF-004", "NTF-005",
+      "BRD-001", "BRD-002", "BRD-003", "BRD-004", "BRD-005", "BRD-006",
+      "MSG-001", "MSG-002", "MSG-003", "MSG-004", "MSG-005",
+      "ADM-002", "ADM-009", "ADM-010",
+    ],
   },
   { section: "AUTH", ids: ["IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006"] },
   { section: "I18N", ids: ["WB-A11Y", "ADM-011"] },
@@ -131,14 +165,14 @@ const KNOWLEDGE_PENDING_ATOMS = [
   "AUTH-019", "EVAL-018",
   "OPS-008", "OPS-009", "OPS-010", "OPS-012", "OPS-013",
 ];
-const FRONTEND_PENDING_ATOM_CONTRACTS = [
-  { id: "FE-NTF-001", dependencies: ["NTF-001", "NTF-002", "NTF-003"] },
-  { id: "FE-NTF-002", dependencies: ["NTF-002", "NTF-003", "NTF-005"] },
-  { id: "FE-BRD-001", dependencies: ["TSK-001", "BRD-001", "BRD-003", "BRD-004"] },
-  { id: "FE-BRD-002", dependencies: ["BRD-002", "BRD-004", "BRD-006"] },
-  { id: "FE-MSG-001", dependencies: ["MSG-001", "MSG-002", "MSG-005"] },
-  { id: "FE-MSG-002", dependencies: ["MSG-003"] },
-  { id: "FE-ACC-001", dependencies: ["TSK-010", "NTF-006", "BRD-007", "MSG-006", "ADM-011"] },
+const FRONTEND_COLLABORATION_ATOM_CONTRACTS = [
+  { id: "FE-NTF-001", checked: true, dependencies: ["NTF-001", "NTF-002", "NTF-003"] },
+  { id: "FE-NTF-002", checked: true, dependencies: ["NTF-002", "NTF-003", "NTF-005"] },
+  { id: "FE-BRD-001", checked: true, dependencies: ["TSK-001", "BRD-001", "BRD-003", "BRD-004"] },
+  { id: "FE-BRD-002", checked: true, dependencies: ["BRD-002", "BRD-004", "BRD-006"] },
+  { id: "FE-MSG-001", checked: true, dependencies: ["MSG-001", "MSG-002", "MSG-005"] },
+  { id: "FE-MSG-002", checked: true, dependencies: ["MSG-003"] },
+  { id: "FE-ACC-001", checked: false, dependencies: ["TSK-010", "NTF-006", "BRD-007", "MSG-006", "ADM-011"] },
 ];
 const FRONTEND_PENDING_ROUTE_CONTRACTS = [
   { path: "/notifications", ledgerId: "NTF-001" },
@@ -284,6 +318,7 @@ test("actual workspace route registry extraction includes every ready and coming
       { path: "/agent", availability: "ready" },
       { path: "/my-submissions", availability: "ready" },
       { path: "/tasks", availability: "ready" },
+      { path: "/boards", availability: "ready" },
       { path: "/settings", availability: "ready" },
       { path: "/admin", availability: "ready" },
       { path: "/admin/submissions", availability: "ready" },
@@ -295,9 +330,8 @@ test("actual workspace route registry extraction includes every ready and coming
       { path: "/admin/spaces", availability: "ready" },
       { path: "/admin/audit", availability: "ready" },
       { path: "/admin/analytics", availability: "ready" },
-      { path: "/boards", availability: "coming_soon" },
-      { path: "/notifications", availability: "coming_soon" },
-      { path: "/messages", availability: "coming_soon" },
+      { path: "/notifications", availability: "ready" },
+      { path: "/messages", availability: "ready" },
     ],
   );
 });
@@ -427,6 +461,43 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 });
 
+test("collaboration delivery is locally ready while release and acceptance remain pending", () => {
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const rowsById = new Map(rows.map((row) => [row.ID, row]));
+  const routes = new Map(workspaceRouteCapabilities().map((route) => [route.path, route.availability]));
+
+  for (const { path, ledgerId } of COLLABORATION_ROUTE_CONTRACTS) {
+    assert.equal(routes.get(path), "ready", `${path} must be a ready executable route`);
+    assert.equal(rowsById.get(ledgerId)?.实现, "done", `${ledgerId} must record local implementation`);
+    assert.equal(rowsById.get(ledgerId)?.验证, "done", `${ledgerId} must record local verification`);
+  }
+
+  for (const id of COLLABORATION_LOCAL_DONE_IDS) {
+    const row = rowsById.get(id);
+    assert.ok(row, `${id} collaboration ledger row is required`);
+    assert.equal(row.实现, "done", `${id} local implementation must be done`);
+    assert.equal(row.验证, "done", `${id} local verification must be done`);
+  }
+  for (const id of COLLABORATION_PARTIAL_POLICY_IDS) {
+    const row = rowsById.get(id);
+    assert.ok(row, `${id} collaboration policy row is required`);
+    assert.equal(row.实现, "partial", `${id} must preserve its unimplemented retention/deletion policy gap`);
+    assert.equal(row.验证, "done", `${id} implemented subset must be locally verified`);
+  }
+  for (const id of COLLABORATION_RELEASE_NOT_DONE_IDS) {
+    const row = rowsById.get(id);
+    assert.ok(row, `${id} collaboration ledger row is required`);
+    assert.notEqual(row.发布, "done", `${id} must not claim current-main integration or production release complete`);
+    assert.equal(row.验收, "pending", `${id} must not claim signed browser acceptance`);
+  }
+
+  const evidence = readFileSync(collaborationEvidencePath, "utf8");
+  for (const migration of COLLABORATION_MIGRATIONS) {
+    assert.match(evidence, new RegExp(`\\b${escapeRegExp(migration)}\\b`, "u"), `${migration} requires local evidence`);
+  }
+  assertCollaborationEvidenceBoundary(evidence);
+});
+
 test("README derives bounded workbench claims from the delivery ledger", () => {
   const readme = readFileSync(readmePath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
@@ -436,22 +507,12 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
     {
       name: "fully completed task UI",
       appended: "\nUser-isolated tasks and the task UI are fully complete.\n",
-      expectedError: /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
-    },
-    {
-      name: "implemented collaboration surfaces",
-      appended: "\nBoards, notifications, and messages are fully implemented and available now.\n",
-      expectedError: /boards must not claim readiness while BRD ledger implementation is pending/u,
-    },
-    {
-      name: "ready notifications",
-      appended: "\nNotifications are ready.\n",
-      expectedError: /notifications must not claim readiness while NTF ledger implementation is pending/u,
+      expectedError: /tasks must not claim overall completion while task implementation or acceptance gaps remain/u,
     },
     {
       name: "completed messages",
       appended: "\nMessages are fully completed.\n",
-      expectedError: /messages must not claim readiness while MSG ledger implementation is pending/u,
+      expectedError: /messages must not claim overall completion while MSG implementation gaps remain/u,
     },
     {
       name: "completed current-main production acceptance",
@@ -485,22 +546,17 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
     {
       name: "perfect-tense task completion",
       appended: "\nUser-isolated tasks and the task UI have been fully completed.\n",
-      expectedError: /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+      expectedError: /tasks must not claim overall completion while task implementation or acceptance gaps remain/u,
     },
     {
       name: "perfect-tense board completion",
       appended: "\nBoards have been completed already.\n",
-      expectedError: /boards must not claim readiness while BRD ledger implementation is pending/u,
-    },
-    {
-      name: "current notification implementation",
-      appended: "\nNotifications are now implemented.\n",
-      expectedError: /notifications must not claim readiness while NTF ledger implementation is pending/u,
+      expectedError: /boards must not claim overall completion while BRD implementation gaps remain/u,
     },
     {
       name: "production-ready messages",
       appended: "\nMessages are production-ready.\n",
-      expectedError: /messages must not claim readiness while MSG ledger implementation is pending/u,
+      expectedError: /messages must not claim production readiness while MSG release gaps remain/u,
     },
     {
       name: "perfect-tense current-main release",
@@ -526,6 +582,18 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
   }
 
   for (const { name, appended } of [
+    { name: "implemented collaboration surfaces", appended: "\nBoards, notifications, and messages are implemented and available locally.\n" },
+    { name: "ready notifications", appended: "\nNotifications are ready locally.\n" },
+    { name: "current notification implementation", appended: "\nNotifications are now implemented.\n" },
+  ]) {
+    assert.doesNotThrow(
+      () => assertReadmeContract(`${readme}${appended}`, rows),
+      `${name} must be allowed after its core ledger implementation is done`,
+    );
+  }
+
+  const pendingBoardRows = rows.map((row) => row.ID === "BRD-001" ? { ...row, 实现: "pending" } : row);
+  for (const { name, appended } of [
     { name: "negative perfect tense", appended: "\nUser-isolated tasks and the task UI have not been completed.\n" },
     { name: "negative production readiness", appended: "\nMessages are not production-ready.\n" },
     { name: "negative pending readiness", appended: "\nNotifications are not yet ready.\n" },
@@ -546,8 +614,8 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
     { name: "aggregate collaboration subject list", appended: "\nBoards, notifications, and messages are ready.\n" },
   ]) {
     assert.throws(
-      () => assertReadmeContract(`${readme}${appended}`, rows),
-      /boards must not claim readiness while BRD ledger implementation is pending/u,
+      () => assertReadmeContract(`${readme}${appended}`, pendingBoardRows),
+      /boards must not claim local readiness while BRD-001 implementation is pending/u,
       `${name} must remain a positive boards readiness claim`,
     );
   }
@@ -586,7 +654,7 @@ test("README rejects bare plural task completion", () => {
   ]) {
     assert.throws(
       () => assertReadmeContract(`${readme}\n${mutation}\n`, rows),
-      /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+      /tasks must not claim overall completion while task implementation or acceptance gaps remain/u,
       `bare plural Tasks clause subject must remain bounded by the task ledger rows: ${mutation}`,
     );
   }
@@ -627,12 +695,15 @@ function assertReadmeContract(readme, rows) {
   }
 
   assert.match(readme, /personal workbench.*AI knowledge base.*first major module/ui);
-  assert.match(maturity, /^- User-isolated tasks are implemented and locally verified; the task UI remains \*\*partial\*\* while detail, retention, and production role journeys are completed\.$/mu);
-  assert.match(maturity, /^- Unified numbered pagination, independent scrolling, the compact shadcn Shell, and administrator governance are implemented and locally verified\.$/mu);
-  assert.match(maturity, /^- Boards, notifications, and messages are \*\*Coming Soon\*\*\./mu);
+  assert.match(maturity, /^- The member-isolated Tasks core, task-backed Boards, recipient-owned Notifications, and task\/knowledge-context Messages are implemented and locally verified on this branch\./mu);
+  assert.match(maturity, /^- Shared numbered pagination is fully localized in English and Simplified Chinese\./mu);
+  assert.match(maturity, /^- These collaboration routes are locally `ready`; that means an executable API\/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser\.$/mu);
   assert.match(maturity, /^- \*\*Current-main release and acceptance are determined only by the \[delivery status ledger\]\(\.\/docs\/product\/delivery-status-ledger\.md\)\.\*\*/mu);
   assert.match(product, /GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup\. D1 then governs the member record, hashed session, role, active\/disabled status, and capability\./u);
   assert.match(api, /^- Tasks: `\/api\/tasks\*` for active members with `tasks:use`; member isolation, idempotent writes, and numbered pagination\.$/mu);
+  assert.match(api, /^- Notifications: `\/api\/notifications\*` for the authenticated recipient only;/mu);
+  assert.match(api, /^- Contextual messages: `\/api\/discussions\*` for currently authorized task or knowledge contexts;/mu);
+  assert.match(product, /Collaboration correctness requires only Workers, D1, and static assets;/u);
   assert.match(readmeSection(readme, "Free-tier boundary and degradation"), /R2.*Vectorize.*Queue.*Workers AI.*optional.*degrade.*do not block.*free text core/ui);
 
   assert.doesNotMatch(readme, /\bM\d+\b/u, "README must not duplicate milestone prose or counts");
@@ -653,26 +724,46 @@ function assertReadmeContract(readme, rows) {
       readme,
       README_TASK_UI_SUBJECT,
       README_FINAL_CLAIM,
-      "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
+      "tasks must not claim overall completion while task implementation or acceptance gaps remain",
     );
     assertNoPositiveReadmeClaim(
       readme,
       README_TASKS_CLAUSE_SUBJECT,
       README_FINAL_CLAIM,
-      "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
+      "tasks must not claim overall completion while task implementation or acceptance gaps remain",
       { clauseSubject: true },
     );
   }
 
-  for (const [name, prefix] of [["boards", "BRD-"], ["notifications", "NTF-"], ["messages", "MSG-"]]) {
+  for (const [name, prefix, coreId] of [
+    ["boards", "BRD-", "BRD-001"],
+    ["notifications", "NTF-", "NTF-001"],
+    ["messages", "MSG-", "MSG-001"],
+  ]) {
     const domainRows = rows.filter((row) => row.ID.startsWith(prefix));
     assert.ok(domainRows.length > 0, `${name} ledger domain is required`);
+    if (ledgerRow(rows, coreId).实现 !== "done") {
+      assertNoPositiveReadmeClaim(
+        readme,
+        name,
+        "(?:ready|implemented|available)",
+        `${name} must not claim local readiness while ${coreId} implementation is pending`,
+      );
+    }
     if (domainRows.some((row) => row.实现 !== "done")) {
       assertNoPositiveReadmeClaim(
         readme,
         name,
-        README_POSITIVE_CLAIM,
-        `${name} must not claim readiness while ${prefix.slice(0, -1)} ledger implementation is pending`,
+        "(?:complete(?:d)?|done)",
+        `${name} must not claim overall completion while ${prefix.slice(0, -1)} implementation gaps remain`,
+      );
+    }
+    if (domainRows.some((row) => row.发布 !== "done")) {
+      assertNoPositiveReadmeClaim(
+        readme,
+        name,
+        "(?:production-ready|ready-for-production)",
+        `${name} must not claim production readiness while ${prefix.slice(0, -1)} release gaps remain`,
       );
     }
   }
@@ -820,7 +911,7 @@ test("frontend checklist owns frontend surfaces without claiming backend deliver
   );
   assert.match(
     checklist,
-    /复选框仅表示“前端实现 \+ 本地\/UI 合同验证”完成；不表示对应后端已经 ready。/u,
+    /复选框仅表示“前端实现 \+ 本地\/UI 合同验证”完成；对应后端与路由是否 ready 必须同时由\[交付状态总账\]\(\.\/delivery-status-ledger\.md\)和共享 route registry 证明。/u,
   );
   assert.match(checklist, /\[交付状态总账\]\(\.\/delivery-status-ledger\.md\)/u);
 
@@ -831,7 +922,7 @@ test("frontend checklist owns frontend surfaces without claiming backend deliver
   }
 });
 
-test("frontend collaboration atoms stay unchecked and resolve backend ledger dependencies", () => {
+test("frontend collaboration atoms record local UI completion and resolve backend ledger dependencies", () => {
   const checklist = readFileSync(frontendChecklistPath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
   assertFrontendCollaborationContract(checklist, rows);
@@ -870,21 +961,21 @@ test("frontend collaboration atoms stay unchecked and resolve backend ledger dep
     /FE-ACC-001 must have exactly one checkbox row/u,
   );
 
-  const checkedCanonicalAtom = checklist.replace("- [ ] `FE-MSG-002`", "- [x] `FE-MSG-002`");
-  assert.notEqual(checkedCanonicalAtom, checklist, "checked canonical atom fixture must mutate the checklist");
+  const uncheckedCanonicalAtom = checklist.replace("- [x] `FE-MSG-002`", "- [ ] `FE-MSG-002`");
+  assert.notEqual(uncheckedCanonicalAtom, checklist, "unchecked canonical atom fixture must mutate the checklist");
   assert.throws(
-    () => assertFrontendCollaborationContract(checkedCanonicalAtom, rows),
-    /FE-MSG-002 must remain unchecked/u,
+    () => assertFrontendCollaborationContract(uncheckedCanonicalAtom, rows),
+    /FE-MSG-002 checked state must match local UI evidence/u,
   );
 
   const acceptanceRow = checklist.match(/^- \[ \] `FE-ACC-001` .+$/mu)?.[0];
   assert.ok(acceptanceRow, "FE-ACC-001 section fixture requires its canonical row");
   const atomOutsideSection = checklist
     .replace(`${acceptanceRow}\n`, "")
-    .replace("## 工作台协作前端待办（R2）", `${acceptanceRow}\n\n## 工作台协作前端待办（R2）`);
+    .replace("## 工作台协作前端（R2）", `${acceptanceRow}\n\n## 工作台协作前端（R2）`);
   assert.throws(
     () => assertFrontendCollaborationContract(atomOutsideSection, rows),
-    /FE-ACC-001 checkbox row must occur only in ## 工作台协作前端待办（R2）/u,
+    /FE-ACC-001 checkbox row must occur only in ## 工作台协作前端（R2）/u,
   );
 });
 
@@ -892,16 +983,15 @@ test("frontend checklist rejects stale pending backend and route completion pros
   const checklist = readFileSync(frontendChecklistPath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
 
-  const staleBackendCompletion = `${checklist}\nNTF-001、NTF-002 后端已实现完成。\n`;
+  const staleBackendCompletion = `${checklist}\nNTF-006 implementation complete.\n`;
   assert.throws(
     () => assertFrontendCollaborationContract(staleBackendCompletion, rows),
-    /NTF-001 must not claim implementation while ledger 实现 is pending/u,
+    /NTF-006 must not claim implementation while ledger 实现 is pending/u,
   );
 
-  const staleRouteCompletion = `${checklist}\n\`\/notifications\` ready。\n`;
-  assert.throws(
-    () => assertFrontendCollaborationContract(staleRouteCompletion, rows),
-    /\/notifications must not claim implementation while ledger NTF-001 实现 is pending/u,
+  const readyRoute = `${checklist}\n\`\/notifications\` ready。\n`;
+  assert.doesNotThrow(
+    () => assertFrontendCollaborationContract(readyRoute, rows),
   );
 
   const staleDomainCompletion = `${checklist}\n通知后端已实现完成。\n`;
@@ -911,10 +1001,10 @@ test("frontend checklist rejects stale pending backend and route completion pros
   );
 
   for (const claim of ["verified", "tested"]) {
-    const staleVerification = `${checklist}\nNTF-001 ${claim}。\n`;
+    const staleVerification = `${checklist}\nNTF-006 ${claim}。\n`;
     assert.throws(
       () => assertFrontendCollaborationContract(staleVerification, rows),
-      /NTF-001 must not claim verification while ledger 验证 is pending/u,
+      /NTF-006 must not claim verification while ledger 验证 is pending/u,
     );
   }
 
@@ -934,7 +1024,7 @@ test("frontend checklist rejects stale pending backend and route completion pros
     );
   }
 
-  const explicitlyPendingProse = `${checklist}\nNTF-001 implementation pending; not implemented; not ready.\nNTF-001 verification pending; not verified; not tested.\nTSK-001 release pending; not released; not deployed; not migrated.\nADM-011 acceptance pending; not accepted; not browser-accepted.\n`;
+  const explicitlyPendingProse = `${checklist}\nNTF-006 implementation pending; not implemented; not ready.\nNTF-006 verification pending; not verified; not tested.\nTSK-001 release pending; not released; not deployed; not migrated.\nADM-011 acceptance pending; not accepted; not browser-accepted.\n`;
   assert.doesNotThrow(() => assertFrontendCollaborationContract(explicitlyPendingProse, rows));
 
   for (const claim of ["done", "completed", "complete", "已完成", "完成"]) {
@@ -1018,7 +1108,10 @@ test("frontend checklist rejects stale pending backend and route completion pros
     },
   ];
   for (const dimension of qualifiedCompletionCases) {
-    const namedDimensionDoneRows = rows.map((row) => row.ID === "NTF-001"
+    const namedDimensionPendingRows = rows.map((row) => row.ID === "NTF-001"
+      ? { ...row, [dimension.column]: "pending" }
+      : row);
+    const namedDimensionDoneRows = namedDimensionPendingRows.map((row) => row.ID === "NTF-001"
       ? { ...row, [dimension.column]: "done" }
       : row);
     for (const claim of dimension.claims) {
@@ -1028,7 +1121,7 @@ test("frontend checklist rejects stale pending backend and route completion pros
         `qualified ${dimension.name} completion must not require aggregate completion: ${claim}`,
       );
       assert.throws(
-        () => assertFrontendCollaborationContract(mutation, rows),
+        () => assertFrontendCollaborationContract(mutation, namedDimensionPendingRows),
         new RegExp(`NTF-001 must not claim ${dimension.name} while ledger ${dimension.column} is pending`, "u"),
         `qualified ${dimension.name} completion must be checked against that dimension: ${claim}`,
       );
@@ -1139,11 +1232,11 @@ test("frontend reverse subject association stops before another subject predicat
 test("frontend own-subject stale completion remains rejected within its predicate", () => {
   const checklist = readFileSync(frontendChecklistPath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
-  const staleOwnPredicate = `${checklist}\nTSK-001 remains pending and NTF-001 implementation complete.\n`;
+  const staleOwnPredicate = `${checklist}\nTSK-001 remains pending and NTF-006 implementation complete.\n`;
 
   assert.throws(
     () => assertFrontendCollaborationContract(staleOwnPredicate, rows),
-    /NTF-001 must not claim implementation while ledger 实现 is pending/u,
+    /NTF-006 must not claim implementation while ledger 实现 is pending/u,
   );
 });
 
@@ -1379,25 +1472,59 @@ function parseMarkdownTable(markdown) {
   return { headers, rows };
 }
 
+function assertCollaborationEvidenceBoundary(evidence) {
+  const columns = [
+    "Surface", "Local implementation", "Local verification", "Main integration", "Push/PR",
+    "Deployment", "Remote migrations", "Production smoke", "Secrets operations", "Signed browser acceptance",
+  ];
+  const lines = evidence.split(/\r?\n/u);
+  const headerIndex = lines.findIndex((line) => splitTableRow(line).join("|") === columns.join("|"));
+  assert.notEqual(headerIndex, -1, "collaboration evidence requires a structured delivery-boundary table");
+  assert.match(lines[headerIndex + 1] ?? "", /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/u);
+  const rows = [];
+  for (const line of lines.slice(headerIndex + 2)) {
+    if (!line.trimStart().startsWith("|")) break;
+    const cells = splitTableRow(line);
+    assert.equal(cells.length, columns.length, "delivery-boundary row has the required columns");
+    rows.push(Object.fromEntries(columns.map((column, index) => [column, cells[index]])));
+  }
+  assert.deepEqual(
+    rows,
+    ["Tasks", "Boards", "Notifications", "Messages"].map((surface) => ({
+      Surface: surface,
+      "Local implementation": "done",
+      "Local verification": "done",
+      "Main integration": "pending",
+      "Push/PR": "not performed",
+      Deployment: "not performed",
+      "Remote migrations": "not performed",
+      "Production smoke": "not performed",
+      "Secrets operations": "not performed",
+      "Signed browser acceptance": "not performed",
+    })),
+    "collaboration evidence must keep local, integration, release, and acceptance states separate",
+  );
+}
+
 function assertFrontendCollaborationContract(checklist, rows) {
   const rowsById = new Map(rows.map((row) => [row.ID, row]));
   const ledgerIds = new Set(rows.map((row) => row.ID));
   const checkboxRows = [...checklist.matchAll(
     /^[ \t]*- \[([ xX])\] `?(FE-(?:NTF|BRD|MSG|ACC)-\d{3})`?(?:\s|$)/gmu,
   )].map((match) => ({ id: match[2], checked: match[1].toLowerCase() === "x", index: match.index }));
-  for (const { id } of FRONTEND_PENDING_ATOM_CONTRACTS) {
+  for (const { id, checked } of FRONTEND_COLLABORATION_ATOM_CONTRACTS) {
     const matches = checkboxRows.filter((row) => row.id === id);
     assert.equal(matches.length, 1, `${id} must have exactly one checkbox row`);
-    assert.equal(matches[0].checked, false, `${id} must remain unchecked`);
+    assert.equal(matches[0].checked, checked, `${id} checked state must match local UI evidence`);
   }
   assert.equal(
     checkboxRows.length,
-    FRONTEND_PENDING_ATOM_CONTRACTS.length,
+    FRONTEND_COLLABORATION_ATOM_CONTRACTS.length,
     "frontend collaboration checkbox rows must be exactly seven canonical atoms",
   );
 
-  const sectionHeading = "## 工作台协作前端待办（R2）";
-  const sectionHeadings = [...checklist.matchAll(/^## 工作台协作前端待办（R2）$/gmu)];
+  const sectionHeading = "## 工作台协作前端（R2）";
+  const sectionHeadings = [...checklist.matchAll(/^## 工作台协作前端（R2）$/gmu)];
   assert.equal(sectionHeadings.length, 1, "frontend collaboration section must occur exactly once");
   const sectionStart = sectionHeadings[0].index + sectionHeadings[0][0].length;
   const nextHeadingOffset = checklist.slice(sectionStart).search(/^## /mu);
@@ -1411,12 +1538,16 @@ function assertFrontendCollaborationContract(checklist, rows) {
 
   const section = checklist.slice(sectionStart, sectionEnd);
   const atoms = [...section.matchAll(
-    /^[ \t]*- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
-  )].map((match) => ({ id: match[1], dependencies: match[2].split("、") }));
+    /^[ \t]*- \[([ xX])\] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
+  )].map((match) => ({
+    id: match[2],
+    checked: match[1].toLowerCase() === "x",
+    dependencies: match[3].split("、"),
+  }));
 
   assert.deepEqual(
     atoms,
-    FRONTEND_PENDING_ATOM_CONTRACTS,
+    FRONTEND_COLLABORATION_ATOM_CONTRACTS,
     "frontend collaboration atoms must match canonical dependencies",
   );
   for (const atom of atoms) {
@@ -1426,14 +1557,14 @@ function assertFrontendCollaborationContract(checklist, rows) {
   }
   assert.match(
     checklist,
-    /即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。/u,
+    /已勾选 frontend atom 只证明前端实现与本地\/UI 合同；不能单独把后端、migration、发布或验收提升为完成。/u,
   );
   assertNoPendingFrontendCompletionClaims(checklist, rowsById);
 }
 
 function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
   const dependencyIds = new Set(
-    FRONTEND_PENDING_ATOM_CONTRACTS.flatMap(({ dependencies }) => dependencies),
+    FRONTEND_COLLABORATION_ATOM_CONTRACTS.flatMap(({ dependencies }) => dependencies),
   );
   for (const id of dependencyIds) {
     const row = rowsById.get(id);

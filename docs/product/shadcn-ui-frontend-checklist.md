@@ -2,7 +2,7 @@
 
 > 范围：Cloudflare 免费层、5–20 人私有知识库。每个条目必须独立完成 RED → GREEN → `git diff --check` → commit。
 
-本清单只拥有：组件、路由、交互状态、响应式行为、可访问性与前端发布接线。不拥有后端实现、数据模型、migration、生产发布或 signed browser 验收状态。复选框仅表示“前端实现 + 本地/UI 合同验证”完成；不表示对应后端已经 ready。实现、验证、发布、验收四维状态只以[交付状态总账](./delivery-status-ledger.md)为准。
+本清单只拥有：组件、路由、交互状态、响应式行为、可访问性与前端发布接线。不拥有后端实现、数据模型、migration、生产发布或 signed browser 验收状态。复选框仅表示“前端实现 + 本地/UI 合同验证”完成；对应后端与路由是否 ready 必须同时由[交付状态总账](./delivery-status-ledger.md)和共享 route registry 证明。实现、验证、发布、验收四维状态只以总账为准。
 
 ## 当前前端交付映射
 
@@ -10,9 +10,9 @@
 
 - **shadcn Shell 与组件原语：已验证。** Sidebar、Sheet、Topbar、菜单、PageState、Tooltip portal 和键盘/焦点合同映射 `WB-001`、`WB-002`、`WB-A11Y`；证据：`frontend/components/shell/app-shell.tsx`、`frontend/components/ui/tooltip.tsx`；命令：`rtk npx vitest run test/unit/frontend-shell.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-menu-keyboard.test.tsx` 与 `rtk npm run verify:wcag`。
 - **独立滚动与紧凑响应式布局：已验证。** 桌面 sidebar/content 独立滚动、移动导航 viewport 和 320/768/1280 布局映射 `WB-SCROLL`、`WB-A11Y`；证据：`frontend/components/shell/app-shell.tsx`；命令：`rtk npx vitest run test/unit/frontend-shell.test.tsx test/unit/frontend-responsive.test.tsx test/unit/frontend-a11y.test.tsx`。
-- **完整数字分页与 URL/history：已验证。** Knowledge、Search、My Submissions、任务、审核、重复候选、资产、成员、审计、统计均使用 `page`/`pageSize`、`total`/`totalPages` 和 URL/popstate 恢复，映射 `WB-PAGE`、`TSK-006`、`ADM-002`、`ADM-003`、`ADM-004`、`ADM-005`、`ADM-009`、`ADM-010`；命令：`rtk npx vitest run test/unit/frontend-pagination.test.tsx test/unit/frontend-reader-pagination-routes.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx test/unit/frontend-admin-pagination-routes.test.tsx test/unit/frontend-admin-analytics-route.test.tsx`。
-- **私有任务页面与 mutation 恢复：已验证 frontend slice。** 任务筛选、分页、创建/状态/进度/标签/关联、删除、过期响应保护和失败重试映射 `TSK-002`、`TSK-005`、`TSK-006`、`TSK-007`，并依赖后端 `TSK-001`；命令：`rtk npx vitest run test/unit/frontend-tasks-data.test.ts test/unit/frontend-tasks-page.test.tsx test/unit/frontend-tasks-route.test.tsx`。这不提升 `TSK-002` 的整体实现状态，也不证明任何任务行已发布或验收。
-- **route capability registry 与 Coming Soon：已验证。** `shared/workspace-route-capabilities.ts` 统一 ready/coming-soon，`/tasks` 可用，`/notifications`、`/boards`、`/messages` 明确不可用，映射 `WB-002`、`ADM-007`、`NTF-001`、`NTF-003`、`BRD-001`、`MSG-001`；命令：`rtk npm run verify:delivery-status` 与 `rtk npx vitest run test/unit/frontend-app-routes.test.ts`。Coming Soon 只证明入口诚实，不证明功能存在。
+- **本地化完整数字分页与 URL/history：已验证。** Knowledge、Search、My Submissions、任务、看板、通知、审核、重复候选、资产、成员、审计、统计均使用 locale-backed shared pagination；numbered surfaces 使用 `page`/`pageSize`、`total`/`totalPages`，Messages 使用服务端稳定 cursor，并保持 URL/popstate、页长重置与 stale cancellation。映射 `WB-PAGE`、`TSK-006`、`BRD-004`、`NTF-003`、`MSG-002`、`ADM-002`、`ADM-003`、`ADM-004`、`ADM-005`、`ADM-009`、`ADM-010`。
+- **私有任务页面与 mutation 恢复：已验证 frontend slice。** 任务筛选、分页、创建/状态/进度/标签/关联、删除、过期响应保护和失败重试映射 `TSK-002`、`TSK-005`、`TSK-006`、`TSK-007`，并依赖后端 `TSK-001`；命令：`rtk npx vitest run test/unit/frontend-tasks-data.test.ts test/unit/frontend-tasks-page.test.tsx test/unit/frontend-tasks-route.test.tsx`。当前总账记录本地实现/验证 done，但任何任务发布或验收状态均未因此改变。
+- **协作 route capability registry：已验证。** `shared/workspace-route-capabilities.ts` 将 `/tasks`、`/boards`、`/notifications`、`/messages` 统一为本地 `ready`，stale server tree 不能移除必需入口，`workspace.tasks` 继续保护 Tasks/Boards；ready 只证明可执行 API/UI vertical，不证明 main 集成、发布或验收。
 - **管理员页面：已验证 frontend slice。** Dashboard/拒绝页、审核、重复候选、资产、成员、角色、菜单、Space/Collection、审计和 analytics 页面分别映射 `ADM-001`、`ADM-002`、`ADM-003`、`ADM-004`、`ADM-005`、`ADM-006`、`ADM-007`、`ADM-008`、`ADM-009`、`ADM-010`、`ADM-011`；命令：`rtk npx vitest run test/unit/frontend-admin-pages.test.tsx test/unit/frontend-admin-pagination-routes.test.tsx test/unit/frontend-admin-analytics-route.test.tsx`。analytics 为 `ADM-010`；signed browser 仍由 `ADM-011` 和总账验收维度收口。
 
 ## 基线与规格
@@ -65,7 +65,7 @@
 - [x] FE-036a 知识库列表接入完整数字分页、AbortController 取消旧请求、generation stale-response 防护和同页重复加载禁用；证据：`frontend/lib/knowledge-data.ts`、`frontend/app.tsx`、`test/unit/frontend-knowledge-data.test.ts`、`test/unit/frontend-reader-pagination-routes.test.tsx`。
 - [x] FE-037 实现 stale mutation owner guard；证据：`createAsyncOwner` 已覆盖读取分页、搜索、Agent、提交列表和管理员列表请求，mutation 保留单项 pending 与过期响应保护。
 - [x] FE-037a 抽出 `createAsyncOwner` token 原语并接入审核详情 mutation、知识库分页请求；证据：`frontend/lib/async-owner.ts`、`review-detail-route.tsx`、`knowledge-data.ts`、`frontend-async-owner.test.ts` 2/2，相关数据/审核 focused 回归 8/8。
-- [x] FE-038 实现共享 route capability registry、ready/coming-soon 分流、未知路由 404 和参数路由 contract；证据：`shared/workspace-route-capabilities.ts`、`frontend/lib/router.ts`、`test/unit/frontend-app-routes.test.ts`、`scripts/delivery-status-contract.test.mjs`；总账映射：`WB-002`、`ADM-007`。`/notifications`、`/boards`、`/messages` 仍为 Coming Soon。
+- [x] FE-038 实现共享 route capability registry、ready/coming-soon 分流、未知路由 404 和参数路由 contract；证据：`shared/workspace-route-capabilities.ts`、`frontend/lib/router.ts`、`test/unit/frontend-app-routes.test.ts`、`scripts/delivery-status-contract.test.mjs`；总账映射：`WB-002`、`ADM-007`。`/tasks`、`/boards`、`/notifications`、`/messages` 已具备本地可执行页面；该 `ready` 结论不代表 main 集成、发布或验收完成。
 
 ## 用户页面
 
@@ -145,21 +145,21 @@
 - [x] FE-082 统计工作台 UI：使用 shadcn Card/Button 与原生可访问表格渲染趋势柱图、排行条和访客明细；匿名/登录用户区分，所有字段有安全 fallback。
 - [x] FE-083 菜单层级 frontend rendering：搜索/助手归入知识库，成员/角色/菜单/空间/审计/统计归入治理节点，最多四层均可渲染；证据：`frontend/components/shell/app-shell.tsx`、Shell tests；总账映射：`WB-002`、`ADM-007`。`0031_workspace_menu_hierarchy.sql` 与服务端约束归总账。
 - [x] FE-084 工作区导航：AI 知识库作为一级节点、检索/助手为二级节点，管理为独立一级节点并支持展开/收起、权限过滤和移动端平铺导航；frontend 消费 `/api/navigation`，失败才回退静态 registry；总账映射：`WB-002`、`ADM-007`。server-owned availability 是否已发布以总账为准。
-- [x] FE-085 个人菜单：右上角展示 Logo/头像/邮箱/角色，提供设置入口、退出和 light/dark/system 主题切换，主题偏好写入本地存储。
+- [x] FE-085 账户区：桌面 Sidebar 底部与移动 Sheet 展示身份/邮箱/角色，提供设置、退出和 light/dark/system 主题切换及 pending/error feedback；顶栏只保留语言，主题偏好写入本地存储。
 - [x] FE-085a 角色成员分配 frontend slice：角色页展示已分配成员 ID，并通过 shadcn Input/Button 调用管理员分配/移除接口；系统角色保持只读，失败状态有本地化提示；总账映射：`ADM-006`。后端 mutation、审计与生产角色验收不由本勾选框证明。
 - [ ] FE-086 current-main frontend Assets release wiring 与 analytics/menu signed browser smoke；前置总账：`WB-002`、`ADM-007`、`ADM-010`、`ADM-011`。远程 D1 migration、Worker deploy、流量切换与后端 smoke 不属于本清单，状态回到[交付状态总账](./delivery-status-ledger.md)。
-- [x] FE-087 私有任务页面 frontend slice：筛选与完整数字分页同步 URL/history，创建使用客户端幂等键，删除 404 视为已完成，mutation 后刷新不会覆盖新查询，失败保留当前列表并可重试；证据：`frontend/pages/tasks/tasks-page.tsx`、`frontend/lib/tasks-data.ts`、`test/unit/frontend-tasks-data.test.ts`、`test/unit/frontend-tasks-page.test.tsx`、`test/unit/frontend-tasks-route.test.tsx`；总账映射：`TSK-002`、`TSK-005`、`TSK-006`、`TSK-007`，后端依赖 `TSK-001`。本勾选框不改变 `TSK-002` 的 `partial` 实现状态或任何发布/验收状态。
+- [x] FE-087 私有任务页面 frontend slice：筛选与完整数字分页同步 URL/history，创建使用客户端幂等键，删除 404 视为已完成，mutation 后刷新不会覆盖新查询，失败保留当前列表并可重试；证据：`frontend/pages/tasks/tasks-page.tsx`、`frontend/lib/tasks-data.ts`、`test/unit/frontend-tasks-data.test.ts`、`test/unit/frontend-tasks-page.test.tsx`、`test/unit/frontend-tasks-route.test.tsx`；总账映射：`TSK-002`、`TSK-005`、`TSK-006`、`TSK-007`，后端依赖 `TSK-001`。本勾选框不改变任何发布/验收状态。
 
-## 工作台协作前端待办（R2）
+## 工作台协作前端（R2）
 
-以下 atom 全部保持 unchecked。每行的“后端总账依赖”是开始或验收该 frontend slice 的必要条件，不是本清单拥有的工作。
+前六个 atom 已完成前端实现与本地/UI 合同验证；`FE-ACC-001` 仍 pending。每行的“后端总账依赖”用于对账，不代表本清单拥有后端、migration、发布或验收状态。
 
-- [ ] `FE-NTF-001` 通知收件箱、未读过滤/计数、完整数字分页以及 empty/error/loading 状态；前端映射：`NTF-003`、`NTF-004`、`WB-PAGE`、`WB-A11Y`；后端总账依赖：[NTF-001、NTF-002、NTF-003](./delivery-status-ledger.md)。
-- [ ] `FE-NTF-002` 通知目标导航、目标失效反馈以及可重试且幂等的 read-state UI；前端映射：`NTF-004`；后端总账依赖：[NTF-002、NTF-003、NTF-005](./delivery-status-ledger.md)。
-- [ ] `FE-BRD-001` task-backed board columns、filters 与紧凑响应式布局，不复制第二套任务权威数据；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[TSK-001、BRD-001、BRD-003、BRD-004](./delivery-status-ledger.md)。
-- [ ] `FE-BRD-002` 键盘可访问的拖拽/重排、optimistic feedback、并发失败提示与 rollback；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[BRD-002、BRD-004、BRD-006](./delivery-status-ledger.md)。
-- [ ] `FE-MSG-001` 任务/知识 contextual thread list、conversation/message 完整数字分页和参与者撤权后的不可读状态；前端映射：`MSG-004`、`WB-PAGE`；后端总账依赖：[MSG-001、MSG-002、MSG-005](./delivery-status-ledger.md)。
-- [ ] `FE-MSG-002` composer client idempotency、retry、failed/duplicate state、键盘发送与焦点公告；本 atom 不定义参与者撤权后的发送行为，撤权 authority 与 thread 不可读状态由 `FE-MSG-001` 消费 `MSG-005`；前端映射：`MSG-004`、`WB-A11Y`；后端总账依赖：[MSG-003](./delivery-status-ledger.md)。
+- [x] `FE-NTF-001` 通知收件箱、未读过滤/计数、完整数字分页以及 empty/error/loading 状态；前端映射：`NTF-003`、`NTF-004`、`WB-PAGE`、`WB-A11Y`；后端总账依赖：[NTF-001、NTF-002、NTF-003](./delivery-status-ledger.md)。
+- [x] `FE-NTF-002` 通知目标导航、目标失效反馈以及可重试且幂等的 read-state UI；前端映射：`NTF-004`；后端总账依赖：[NTF-002、NTF-003、NTF-005](./delivery-status-ledger.md)。
+- [x] `FE-BRD-001` task-backed board columns、filters 与紧凑响应式布局，不复制第二套任务权威数据；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[TSK-001、BRD-001、BRD-003、BRD-004](./delivery-status-ledger.md)。
+- [x] `FE-BRD-002` 键盘可访问的状态移动、optimistic feedback、并发失败提示与精确 rollback；拖拽不是正确性前提；前端映射：`BRD-005`、`WB-A11Y`；后端总账依赖：[BRD-002、BRD-004、BRD-006](./delivery-status-ledger.md)。
+- [x] `FE-MSG-001` 任务/知识 contextual thread list、稳定有界 conversation/message pagination 和目标撤权后的不可读状态；前端映射：`MSG-004`、`WB-PAGE`；后端总账依赖：[MSG-001、MSG-002、MSG-005](./delivery-status-ledger.md)。
+- [x] `FE-MSG-002` composer client idempotency、retry、failed/duplicate state、键盘发送与焦点公告；撤权 authority 与 thread 不可读状态由 `FE-MSG-001` 消费 `MSG-005`；前端映射：`MSG-004`、`WB-A11Y`；后端总账依赖：[MSG-003](./delivery-status-ledger.md)。
 - [ ] `FE-ACC-001` admin/contributor signed browser acceptance matrix，覆盖任务、通知、看板、消息、管理页、拒绝路径、分页、键盘和失败恢复；前端映射：`ADM-011`；后端总账依赖：[TSK-010、NTF-006、BRD-007、MSG-006、ADM-011](./delivery-status-ledger.md)。
 
-即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。只有[交付状态总账](./delivery-status-ledger.md)中的对应实现、验证、发布、验收证据可以改变交付结论。
+已勾选 frontend atom 只证明前端实现与本地/UI 合同；不能单独把后端、migration、发布或验收提升为完成。只有[交付状态总账](./delivery-status-ledger.md)中的对应实现、验证、发布、验收证据可以改变交付结论。
