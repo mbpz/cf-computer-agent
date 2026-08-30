@@ -37,15 +37,23 @@ const README_CLAIM_MODIFIERS = "(?:(?:now|already|fully|all)\\s+)*";
 const README_POSITIVE_CLAIM = "(?:ready|implemented|available|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_FINAL_CLAIM = "(?:ready|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_CLAIM_BETWEEN = "(?:(?!\\b(?:but|however|yet|while)\\b)[^.\\n;]){0,96}?";
+const README_TASK_SUBJECT = "(?:user-isolated tasks(?: and (?:the )?task UI)?|tasks|task UI)";
+const README_CURRENT_MAIN_RELEASE_ACCEPTANCE_SUBJECT = "current-main (?:production )?release and (?:(?:signed )?browser )?acceptance";
+const README_CURRENT_MAIN_RELEASE_SUBJECT = "current-main (?:production )?release";
+const README_CURRENT_MAIN_ACCEPTANCE_SUBJECT = "current-main (?:(?:signed )?browser )?acceptance";
 const README_AGGREGATE_SUBJECTS = new Set([
   "boards",
   "notifications",
   "messages",
   "user-isolated tasks",
+  "tasks",
   "the task ui",
   "task ui",
   "current-main production release",
+  "current-main release",
   "signed browser acceptance",
+  "browser acceptance",
+  "acceptance",
 ]);
 
 const STATUS_VALUES = new Set(["done", "partial", "pending", "n/a"]);
@@ -541,6 +549,46 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
   }
 });
 
+test("README rejects aggregate current-main release and acceptance completion", () => {
+  const readme = readFileSync(readmePath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+
+  assert.throws(
+    () => assertReadmeContract(`${readme}\nCurrent-main release and acceptance are complete.\n`, rows),
+    /README must not claim current-main production release or browser acceptance complete/u,
+    "recognized aggregate current-main release and acceptance must remain ledger-bounded",
+  );
+  for (const contrast of [
+    "Current-main release and acceptance are not complete.",
+    "Current-main release and acceptance remain pending.",
+  ]) {
+    assert.doesNotThrow(
+      () => assertReadmeContract(`${readme}\n${contrast}\n`, rows),
+      `negative or pending aggregate current-main status must remain allowed: ${contrast}`,
+    );
+  }
+});
+
+test("README rejects bare plural task completion", () => {
+  const readme = readFileSync(readmePath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+
+  assert.throws(
+    () => assertReadmeContract(`${readme}\nTasks are complete.\n`, rows),
+    /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+    "bare plural Tasks must remain bounded by the task ledger rows",
+  );
+  for (const contrast of [
+    "Tasks are not complete.",
+    "Tasks remain pending.",
+  ]) {
+    assert.doesNotThrow(
+      () => assertReadmeContract(`${readme}\n${contrast}\n`, rows),
+      `negative or pending bare plural task status must remain allowed: ${contrast}`,
+    );
+  }
+});
+
 function assertReadmeContract(readme, rows) {
   const maturity = readmeSection(readme, "Current maturity");
   const product = readmeSection(readme, "Product and architecture");
@@ -576,7 +624,7 @@ function assertReadmeContract(readme, rows) {
   if (taskUi.实现 !== "done" || taskRetention.实现 !== "done" || taskAcceptance.验收 !== "done") {
     assertNoPositiveReadmeClaim(
       readme,
-      "(?:user-isolated tasks(?: and (?:the )?task UI)?|task UI)",
+      README_TASK_SUBJECT,
       README_FINAL_CLAIM,
       "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
     );
@@ -598,15 +646,15 @@ function assertReadmeContract(readme, rows) {
   if (rows.some((row) => row.发布 !== "done") || rows.some((row) => row.验收 !== "done")) {
     for (const { subject, message } of [
       {
-        subject: "current-main production release and signed browser acceptance",
+        subject: README_CURRENT_MAIN_RELEASE_ACCEPTANCE_SUBJECT,
         message: "README must not claim current-main production release or browser acceptance complete",
       },
       {
-        subject: "current-main (?:production )?release",
+        subject: README_CURRENT_MAIN_RELEASE_SUBJECT,
         message: "README must not claim current-main production release complete",
       },
       {
-        subject: "current-main (?:signed )?browser acceptance",
+        subject: README_CURRENT_MAIN_ACCEPTANCE_SUBJECT,
         message: "README must not claim current-main browser acceptance complete",
       },
       {
