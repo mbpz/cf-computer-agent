@@ -3,6 +3,8 @@
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { adminAssetRowsSql } from "../../src/assets/repository";
+import { buildDiscussionThreadListQueries } from "../../src/discussions/authorization";
+import { encodePageCursor } from "../../src/pagination";
 import { MIGRATIONS } from "../fixtures/d1";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
 import comingSoonMenusMigration from "../../migrations/0034_workspace_coming_soon_menus.sql?raw";
@@ -1649,12 +1651,34 @@ describe("Phase 1 control-plane migrations", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     const tables = await env.DB.prepare(
       `SELECT name FROM sqlite_master WHERE type = 'table'
-       AND name IN ('discussion_threads', 'discussion_participants', 'discussion_messages') ORDER BY name`,
+       AND name IN ('discussion_threads', 'discussion_thread_access', 'discussion_participants', 'discussion_messages') ORDER BY name`,
     ).all<{ name: string }>();
     expect(tables.results.map(({ name }) => name)).toEqual([
       "discussion_messages",
       "discussion_participants",
+      "discussion_thread_access",
       "discussion_threads",
+    ]);
+    await expectTableSchema("discussion_thread_access", [
+      "principal_kind:TEXT:1:NULL:1",
+      "principal_id:TEXT:1:NULL:2",
+      "thread_id:TEXT:1:NULL:3",
+      "created_at:INTEGER:1:NULL:0",
+    ], [
+      "check(principal_kind in ('task_member', 'knowledge'))",
+      "primary key(principal_kind, principal_id, thread_id)",
+    ]);
+    await expectForeignKeys("discussion_thread_access", [
+      { from: "thread_id", table: "discussion_threads", to: "id" },
+    ]);
+    await expectIndex("discussion_thread_access", "idx_discussion_thread_access_principal_page", [
+      { name: "principal_kind", desc: 0 },
+      { name: "principal_id", desc: 0 },
+      { name: "created_at", desc: 1 },
+      { name: "thread_id", desc: 1 },
+    ]);
+    await expectIndex("discussion_thread_access", "idx_discussion_thread_access_thread", [
+      { name: "thread_id", desc: 0 },
     ]);
     await expectUniqueConstraints("discussion_threads", ["context_kind,context_id|partial=0"]);
     await expectUniqueConstraints("discussion_messages", [
@@ -1691,15 +1715,20 @@ describe("Phase 1 control-plane migrations", () => {
 
   it("uses bounded discussion indexes for context lookup, participant lookup, thread pages, history, and idempotency", async () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
+    const firstPageQueries = buildDiscussionThreadListQueries("member-a", { limit: 20 });
+    const cursorPageQueries = buildDiscussionThreadListQueries("member-a", {
+      limit: 20,
+      cursor: encodePageCursor({ sort: 1_777_777_000_000, id: "thread-z" }),
+    });
+    expect(firstPageQueries).toHaveLength(2);
+    expect(cursorPageQueries).toHaveLength(2);
+    const productionThreadPlans = await Promise.all(
+      [...firstPageQueries, ...cursorPageQueries].map(({ sql, bindings }) =>
+        queryPlan(sql, bindings)),
+    );
     const contextPlan = await queryPlan(
       "SELECT id FROM discussion_threads WHERE context_kind = ? AND context_id = ? LIMIT 1",
       ["task", "task-a"],
-    );
-    const threadPagePlan = await queryPlan(
-      `SELECT id FROM discussion_threads
-       WHERE created_at < ? OR (created_at = ? AND id < ?)
-       ORDER BY created_at DESC, id DESC LIMIT ?`,
-      [1_777_777_000_000, 1_777_777_000_000, "thread-z", 21],
     );
     const participantPlan = await queryPlan(
       "SELECT thread_id FROM discussion_participants WHERE member_id = ? ORDER BY thread_id LIMIT ?",
@@ -1730,7 +1759,6 @@ describe("Phase 1 control-plane migrations", () => {
     );
 
     expect(contextPlan).toContain("SEARCH discussion_threads USING INDEX sqlite_autoindex_discussion_threads_2 (context_kind=? AND context_id=?)");
-    expect(threadPagePlan).toContain("SCAN discussion_threads USING COVERING INDEX idx_discussion_threads_created");
     expect(participantPlan).toContain("SEARCH discussion_participants USING COVERING INDEX idx_discussion_participants_member_thread (member_id=?)");
     expect(historyPlan).toContain("SEARCH discussion_messages USING COVERING INDEX idx_discussion_messages_thread_sequence (thread_id=?)");
     expect(replayPlan).toContain("SEARCH discussion_messages USING INDEX sqlite_autoindex_discussion_messages_4 (author_member_id=? AND client_key=?)");
@@ -1738,7 +1766,13 @@ describe("Phase 1 control-plane migrations", () => {
     expect(taskAuthorizationPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");
-    for (const plan of [contextPlan, threadPagePlan, participantPlan, historyPlan, replayPlan, taskAuthorizationPlan, eligibleMembersPlan]) {
+    for (const plan of productionThreadPlans) {
+      expect(plan).toContain("SEARCH discussion_thread_access USING COVERING INDEX idx_discussion_thread_access_principal_page (principal_kind=? AND principal_id=?)");
+      expect(plan).toContain("SEARCH dt USING INDEX sqlite_autoindex_discussion_threads_1 (id=?)");
+      expect(plan).not.toContain("USE TEMP B-TREE");
+      expect(plan).not.toMatch(/SCAN (?:discussion_threads|discussion_thread_access)\b/iu);
+    }
+    for (const plan of [contextPlan, participantPlan, historyPlan, replayPlan, taskAuthorizationPlan, eligibleMembersPlan]) {
       expect(plan).not.toMatch(/SCAN (?:discussion_threads|discussion_participants|discussion_messages)\b(?! USING)/iu);
     }
   });

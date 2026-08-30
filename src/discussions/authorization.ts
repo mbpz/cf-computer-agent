@@ -16,6 +16,52 @@ import type { DiscussionContext, DiscussionThread, DiscussionThreadPage } from "
 
 const TIMESTAMP_CURSOR_BOUNDS = { minSort: 0, maxSort: 8_640_000_000_000_000 } as const;
 
+export interface DiscussionThreadListQuery {
+  sql: string;
+  bindings: Array<string | number>;
+}
+
+export function buildDiscussionThreadListQueries(
+  memberId: string,
+  request: PageRequest,
+): DiscussionThreadListQuery[] {
+  const cursor = request.cursor === undefined
+    ? undefined
+    : decodePageCursor(request.cursor, TIMESTAMP_CURSOR_BOUNDS);
+  const cursorSql = cursor
+    ? " AND (discussion_thread_access.created_at < ? OR (discussion_thread_access.created_at = ? AND discussion_thread_access.thread_id < ?))"
+    : "";
+  const bindings = (): Array<string | number> => [
+    memberId,
+    ...(cursor ? [cursor.sort, cursor.sort, cursor.id] : []),
+    request.limit + 1,
+  ];
+  const selectedColumns = discussionThreadColumns
+    .split(",")
+    .map((column) => `dt.${column.trim()}`)
+    .join(", ");
+  const query = (principalKind: "task_member" | "knowledge", principalIdSql: string): DiscussionThreadListQuery => ({
+    sql: `WITH authorized_member AS (
+      SELECT id, role FROM members WHERE id = ? AND status = 'active'
+    )
+    SELECT ${selectedColumns}
+    FROM authorized_member am
+    JOIN discussion_thread_access INDEXED BY idx_discussion_thread_access_principal_page
+      ON discussion_thread_access.principal_kind = '${principalKind}'
+     AND discussion_thread_access.principal_id = ${principalIdSql}
+    JOIN discussion_threads dt ON dt.id = discussion_thread_access.thread_id
+    WHERE 1 = 1${cursorSql}
+    ORDER BY discussion_thread_access.created_at DESC,
+             discussion_thread_access.thread_id DESC
+    LIMIT ?`,
+    bindings: bindings(),
+  });
+  return [
+    query("task_member", "am.id"),
+    query("knowledge", "CASE WHEN am.role = 'admin' THEN 'admin' ELSE 'shared' END"),
+  ];
+}
+
 export class DiscussionTargetAuthorization implements DiscussionAuthorizationPort {
   constructor(private readonly db: D1Database) {}
 
@@ -55,38 +101,19 @@ export class DiscussionTargetAuthorization implements DiscussionAuthorizationPor
   }
 
   async listThreads(memberId: string, request: PageRequest): Promise<DiscussionThreadPage> {
-    const cursor = request.cursor === undefined
-      ? undefined
-      : decodePageCursor(request.cursor, TIMESTAMP_CURSOR_BOUNDS);
-    const bindings: Array<string | number> = [memberId, memberId];
-    const cursorSql = cursor
-      ? " AND (dt.created_at < ? OR (dt.created_at = ? AND dt.id < ?))"
-      : "";
-    if (cursor) bindings.push(cursor.sort, cursor.sort, cursor.id);
-    const rows = await this.db.prepare(
-      `WITH ${authorizedKnowledgeMemberCteSql(false)}
-       SELECT ${discussionThreadColumns.split(",").map((column) => `dt.${column.trim()}`).join(", ")}
-       FROM discussion_threads dt CROSS JOIN authorized_member am
-       WHERE (
-         (dt.context_kind = 'task' AND EXISTS (
-           SELECT 1 FROM tasks t WHERE t.id = dt.context_id AND t.member_id = ?
-         ))
-         OR
-         (dt.context_kind = 'knowledge' AND EXISTS (
-           SELECT 1 FROM knowledge_items k
-           JOIN revisions r ON r.id = k.current_revision_id
-           ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
-           WHERE k.id = dt.context_id AND ${ACTIVE_KNOWLEDGE_ITEM_SQL}
-             AND ${readableKnowledgeRevisionSql()}
-         ))
-       )${cursorSql}
-       ORDER BY dt.created_at DESC, dt.id DESC LIMIT ?`,
-    ).bind(...bindings, request.limit + 1).all<DiscussionThreadRow>();
-    const items = rows.results.slice(0, request.limit).map(mapDiscussionThreadRow);
+    const queries = buildDiscussionThreadListQueries(memberId, request);
+    const results = await this.db.batch<DiscussionThreadRow>(queries.map(({ sql, bindings }) =>
+      this.db.prepare(sql).bind(...bindings)));
+    const rows = results.flatMap(({ results: queryRows }) => queryRows).sort((left, right) => {
+      if (left.created_at !== right.created_at) return right.created_at - left.created_at;
+      if (left.id === right.id) return 0;
+      return left.id < right.id ? 1 : -1;
+    }).slice(0, request.limit + 1);
+    const items = rows.slice(0, request.limit).map(mapDiscussionThreadRow);
     const last = items.at(-1);
     return {
       items,
-      ...(rows.results.length > request.limit && last
+      ...(rows.length > request.limit && last
         ? { nextCursor: encodePageCursor({ sort: Date.parse(last.createdAt), id: last.id }) }
         : {}),
     };

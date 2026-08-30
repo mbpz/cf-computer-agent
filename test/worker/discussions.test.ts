@@ -2,7 +2,10 @@
 
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { DiscussionTargetAuthorization } from "../../src/discussions/authorization";
+import {
+  buildDiscussionThreadListQueries,
+  DiscussionTargetAuthorization,
+} from "../../src/discussions/authorization";
 import { DiscussionsRepository } from "../../src/discussions/repository";
 import { DiscussionsService, type DiscussionNotificationSink } from "../../src/discussions/service";
 import type { NotificationEventInput } from "../../src/notifications/types";
@@ -53,6 +56,143 @@ describe("contextual discussions", () => {
     await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-b'").run();
     await expect(service.getThread("member-b", knowledgeMessage.thread.id))
       .rejects.toMatchObject({ code: "DISCUSSION_NOT_FOUND", status: 404 });
+  });
+
+  it("keeps bounded thread access keys synchronized with canonical task and knowledge visibility", async () => {
+    await seedTask("task-a", "member-a");
+    await seedTask("task-b", "member-b");
+    const service = createService();
+    const taskA = await service.sendMessage("member-a", {
+      context: { kind: "task", id: "task-a" },
+      body: "Task A",
+      clientKey: "access-task-a",
+    });
+    const taskB = await service.sendMessage("member-b", {
+      context: { kind: "task", id: "task-b" },
+      body: "Task B",
+      clientKey: "access-task-b",
+    });
+    const knowledge = await service.sendMessage("member-a", {
+      context: { kind: "knowledge", id: "knowledge-a" },
+      body: "Shared knowledge",
+      clientKey: "access-knowledge",
+    });
+
+    await expectAccessKeys([
+      ["knowledge", "admin", knowledge.thread.id],
+      ["knowledge", "shared", knowledge.thread.id],
+      ["task_member", "member-a", taskA.thread.id],
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+
+    await env.DB.prepare("UPDATE tasks SET member_id = 'member-b' WHERE id = 'task-a'").run();
+    await expectAccessKeys([
+      ["knowledge", "admin", knowledge.thread.id],
+      ["knowledge", "shared", knowledge.thread.id],
+      ["task_member", "member-b", taskA.thread.id],
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'discussion-revision'").run();
+    await expectAccessKeys([
+      ["knowledge", "admin", knowledge.thread.id],
+      ["task_member", "member-b", taskA.thread.id],
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+    await expect(service.listThreads("member-a", { limit: 20 })).resolves.toEqual({ items: [] });
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-a'").run();
+    await expect(service.listThreads("member-a", { limit: 20 })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: knowledge.thread.id })],
+    });
+
+    await env.DB.prepare("UPDATE knowledge_items SET status = 'trashed' WHERE id = 'knowledge-a'").run();
+    await expectAccessKeys([
+      ["task_member", "member-b", taskA.thread.id],
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+    await env.DB.prepare("UPDATE knowledge_items SET status = 'active' WHERE id = 'knowledge-a'").run();
+    await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
+    await expectAccessKeys([
+      ["task_member", "member-b", taskA.thread.id],
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+
+    await env.DB.prepare("DELETE FROM tasks WHERE id = 'task-a'").run();
+    await expectAccessKeys([
+      ["task_member", "member-b", taskB.thread.id],
+    ]);
+  });
+
+  it("keeps production thread page reads bounded when global invisible threads grow", async () => {
+    for (let index = 1; index <= 3; index += 1) {
+      const taskId = `visible-task-${index}`;
+      await seedTask(taskId, "member-a");
+      await env.DB.prepare(
+        `INSERT INTO discussion_threads
+         (id, context_kind, context_id, creator_member_id, last_sequence, created_at, updated_at)
+         VALUES (?, 'task', ?, 'member-a', 0, ?, ?)`,
+      ).bind(`visible-thread-${index}`, taskId, NOW - index, NOW - index).run();
+    }
+    const [taskQuery] = buildDiscussionThreadListQueries("member-a", { limit: 20 });
+    const before = await env.DB.prepare(taskQuery.sql)
+      .bind(...taskQuery.bindings)
+      .all<{ id: string }>();
+
+    const invisibleStatements: D1PreparedStatement[] = [];
+    for (let index = 1; index <= 150; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      invisibleStatements.push(
+        env.DB.prepare(
+          `INSERT INTO tasks
+           (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+           VALUES (?, 'member-b', ?, '', 'todo', 0, 'medium', NULL, ?, ?)`,
+        ).bind(`invisible-task-${suffix}`, suffix, NOW + index, NOW + index),
+        env.DB.prepare(
+          `INSERT INTO discussion_threads
+           (id, context_kind, context_id, creator_member_id, last_sequence, created_at, updated_at)
+           VALUES (?, 'task', ?, 'member-b', 0, ?, ?)`,
+        ).bind(`invisible-thread-${suffix}`, `invisible-task-${suffix}`, NOW + index, NOW + index),
+      );
+    }
+    await env.DB.batch(invisibleStatements);
+
+    const after = await env.DB.prepare(taskQuery.sql)
+      .bind(...taskQuery.bindings)
+      .all<{ id: string }>();
+    expect(before.results.map(({ id }) => id)).toEqual([
+      "visible-thread-1",
+      "visible-thread-2",
+      "visible-thread-3",
+    ]);
+    expect(after.results).toEqual(before.results);
+    expect(before.meta.rows_read).toBeTypeOf("number");
+    expect(after.meta.rows_read).toBeLessThanOrEqual(before.meta.rows_read + 2);
+    expect(after.meta.rows_read).toBeLessThan(20);
+
+    const visibleStatements: D1PreparedStatement[] = [];
+    for (let index = 1; index <= 100; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      visibleStatements.push(
+        env.DB.prepare(
+          `INSERT INTO tasks
+           (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at)
+           VALUES (?, 'member-a', ?, '', 'todo', 0, 'medium', NULL, ?, ?)`,
+        ).bind(`bounded-task-${suffix}`, suffix, NOW + 1_000 + index, NOW + 1_000 + index),
+        env.DB.prepare(
+          `INSERT INTO discussion_threads
+           (id, context_kind, context_id, creator_member_id, last_sequence, created_at, updated_at)
+           VALUES (?, 'task', ?, 'member-a', 0, ?, ?)`,
+        ).bind(`bounded-thread-${suffix}`, `bounded-task-${suffix}`, NOW + 1_000 + index, NOW + 1_000 + index),
+      );
+    }
+    await env.DB.batch(visibleStatements);
+    const bounded = await env.DB.prepare(taskQuery.sql)
+      .bind(...taskQuery.bindings)
+      .all<{ id: string }>();
+    expect(bounded.results).toHaveLength(21);
+    expect(bounded.results.at(0)?.id).toBe("bounded-thread-100");
+    expect(bounded.results.at(-1)?.id).toBe("bounded-thread-080");
+    expect(bounded.meta.rows_read).toBeLessThan(60);
   });
 
   it("allocates one sequence per committed message and converges concurrent author/client-key replay", async () => {
@@ -112,6 +252,11 @@ describe("contextual discussions", () => {
         clientKey: `thread-${index}`,
       });
     }
+    const knowledgeThread = await service.sendMessage("member-a", {
+      context: { kind: "knowledge", id: "knowledge-a" },
+      body: "Knowledge thread mixed into task pages",
+      clientKey: "thread-knowledge",
+    });
     const threadFirst = await service.listThreads("member-a", { limit: 20 });
     await seedTask("task-22", "member-a");
     await service.sendMessage("member-a", {
@@ -121,8 +266,10 @@ describe("contextual discussions", () => {
     });
     const threadSecond = await service.listThreads("member-a", { limit: 20, cursor: threadFirst.nextCursor });
     expect(threadFirst.items).toHaveLength(20);
-    expect(threadSecond.items).toHaveLength(1);
-    expect(new Set([...threadFirst.items, ...threadSecond.items].map(({ id }) => id)).size).toBe(21);
+    expect(threadSecond.items).toHaveLength(2);
+    const pagedThreadIds = new Set([...threadFirst.items, ...threadSecond.items].map(({ id }) => id));
+    expect(pagedThreadIds.size).toBe(22);
+    expect(pagedThreadIds.has(knowledgeThread.thread.id)).toBe(true);
 
     const context = { kind: "task", id: "task-01" } as const;
     for (let index = 1; index <= 24; index += 1) {
@@ -241,4 +388,17 @@ async function seedKnowledge(): Promise<void> {
   await env.DB.prepare("INSERT INTO knowledge_items (id, space_id, current_revision_id, status, search_status, created_at, updated_at) VALUES ('knowledge-a', 'default', NULL, 'active', 'indexed', ?, ?)").bind(now, now).run();
   await env.DB.prepare("INSERT INTO revisions (id, knowledge_item_id, source_version_id, normalized_path, content_sha256, title, tags_json, visibility, published_by, published_at) VALUES ('discussion-revision', 'knowledge-a', 'discussion-version', '/workspace/published/default/knowledge-a/discussion-revision.md', ?, 'Discussion Knowledge', '[]', 'shared', 'member-a', ?)").bind(hash, now).run();
   await env.DB.prepare("UPDATE knowledge_items SET current_revision_id = 'discussion-revision' WHERE id = 'knowledge-a'").run();
+}
+
+async function expectAccessKeys(expected: string[][]): Promise<void> {
+  const rows = await env.DB.prepare(
+    `SELECT principal_kind, principal_id, thread_id
+     FROM discussion_thread_access
+     ORDER BY principal_kind, principal_id, thread_id`,
+  ).all<{ principal_kind: string; principal_id: string; thread_id: string }>();
+  expect(rows.results.map(({ principal_kind, principal_id, thread_id }) => [
+    principal_kind,
+    principal_id,
+    thread_id,
+  ])).toEqual(expected);
 }
