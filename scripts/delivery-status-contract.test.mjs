@@ -33,6 +33,10 @@ const README_REQUIRED_LINKS = [
   "docs/operations/production-environment-handbook.md",
   "docs/operations/evidence/",
 ];
+const README_CLAIM_MODIFIERS = "(?:(?:now|already|fully|all)\\s+)*";
+const README_POSITIVE_CLAIM = "(?:ready|implemented|available|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
+const README_FINAL_CLAIM = "(?:ready|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
+const README_CLAIM_BETWEEN = "(?:(?!\\b(?:but|however|yet|while)\\b)[^.\\n;]){0,96}?";
 
 const STATUS_VALUES = new Set(["done", "partial", "pending", "n/a"]);
 const REQUIRED_COLUMNS = [
@@ -454,6 +458,61 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
       `${name} must be rejected even when the canonical README paragraphs remain present`,
     );
   }
+
+  for (const { name, appended, expectedError } of [
+    {
+      name: "perfect-tense task completion",
+      appended: "\nUser-isolated tasks and the task UI have been fully completed.\n",
+      expectedError: /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+    },
+    {
+      name: "perfect-tense board completion",
+      appended: "\nBoards have been completed already.\n",
+      expectedError: /boards must not claim readiness while BRD ledger implementation is pending/u,
+    },
+    {
+      name: "current notification implementation",
+      appended: "\nNotifications are now implemented.\n",
+      expectedError: /notifications must not claim readiness while NTF ledger implementation is pending/u,
+    },
+    {
+      name: "production-ready messages",
+      appended: "\nMessages are production-ready.\n",
+      expectedError: /messages must not claim readiness while MSG ledger implementation is pending/u,
+    },
+    {
+      name: "perfect-tense current-main release",
+      appended: "\nCurrent-main production release has been fully completed.\n",
+      expectedError: /README must not claim current-main production release complete/u,
+    },
+    {
+      name: "already completed current-main browser acceptance",
+      appended: "\nCurrent-main signed browser acceptance has already been completed.\n",
+      expectedError: /README must not claim current-main browser acceptance complete/u,
+    },
+    {
+      name: "ready-for-production current main",
+      appended: "\nCurrent-main is ready-for-production.\n",
+      expectedError: /README must not claim current-main production readiness complete/u,
+    },
+  ]) {
+    assert.throws(
+      () => assertReadmeContract(`${readme}${appended}`, rows),
+      expectedError,
+      `${name} must be rejected as a ledger-conflicting positive claim`,
+    );
+  }
+
+  for (const { name, appended } of [
+    { name: "negative perfect tense", appended: "\nUser-isolated tasks and the task UI have not been completed.\n" },
+    { name: "negative production readiness", appended: "\nMessages are not production-ready.\n" },
+    { name: "negative pending readiness", appended: "\nNotifications are not yet ready.\n" },
+  ]) {
+    assert.doesNotThrow(
+      () => assertReadmeContract(`${readme}${appended}`, rows),
+      `${name} must not be misclassified as a positive delivery claim`,
+    );
+  }
 });
 
 function assertReadmeContract(readme, rows) {
@@ -478,7 +537,7 @@ function assertReadmeContract(readme, rows) {
   assert.doesNotMatch(readme, /\bM\d+\b/u, "README must not duplicate milestone prose or counts");
   assert.doesNotMatch(readme, /(?:M1 的 23|76 P0\/M1|M1 实现完成|远程验证待完成)/u);
   assert.doesNotMatch(readme, /D1\s+(?:decides|controls|governs)\s+allowlist membership/ui, "D1 must not be assigned the pre-login allowlist decision");
-  assert.doesNotMatch(readme, /\b\d+\s+(?:product\s+)?atoms?\s+(?:are\s+)?(?:all\s+)?(?:fully\s+)?(?:complete(?:d)?|done)\b/ui, "README must not present an atom count as current overall completion");
+  assert.doesNotMatch(readme, readmePositiveClaim("\\d+\\s+(?:product\\s+)?atoms?", README_FINAL_CLAIM), "README must not present an atom count as current overall completion");
 
   const taskUi = ledgerRow(rows, "TSK-002");
   const taskRetention = ledgerRow(rows, "TSK-009");
@@ -486,7 +545,7 @@ function assertReadmeContract(readme, rows) {
   if (taskUi.实现 !== "done" || taskRetention.实现 !== "done" || taskAcceptance.验收 !== "done") {
     assert.doesNotMatch(
       readme,
-      /\b(?:user-isolated tasks(?: and the task UI)?|task UI) (?:are|is) (?:fully )?(?:complete(?:d)?|done)\b/ui,
+      readmePositiveClaim("(?:user-isolated tasks(?: and (?:the )?task UI)?|task UI)", README_FINAL_CLAIM),
       "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
     );
   }
@@ -497,7 +556,7 @@ function assertReadmeContract(readme, rows) {
     if (domainRows.some((row) => row.实现 !== "done")) {
       assert.doesNotMatch(
         readme,
-        new RegExp(`\\b${name}\\b[^.\\n]{0,96}\\b(?:are|is|remain)\\s+(?:fully\\s+)?(?:ready|implemented|available(?:\\s+now)?|complete(?:d)?|done)\\b`, "iu"),
+        readmePositiveClaim(name),
         `${name} must not claim readiness while ${prefix.slice(0, -1)} ledger implementation is pending`,
       );
     }
@@ -506,21 +565,35 @@ function assertReadmeContract(readme, rows) {
   if (rows.some((row) => row.发布 !== "done") || rows.some((row) => row.验收 !== "done")) {
     for (const { claim, message } of [
       {
-        claim: /\bcurrent-main production release and signed browser acceptance (?:are|is) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        claim: readmePositiveClaim("current-main production release and signed browser acceptance", README_FINAL_CLAIM),
         message: "README must not claim current-main production release or browser acceptance complete",
       },
       {
-        claim: /\bcurrent-main (?:production )?release (?:is|has|remains) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        claim: readmePositiveClaim("current-main (?:production )?release", README_FINAL_CLAIM),
         message: "README must not claim current-main production release complete",
       },
       {
-        claim: /\bcurrent-main (?:signed )?browser acceptance (?:is|has|remains) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        claim: readmePositiveClaim("current-main (?:signed )?browser acceptance", README_FINAL_CLAIM),
         message: "README must not claim current-main browser acceptance complete",
+      },
+      {
+        claim: readmePositiveClaim("current-main", README_FINAL_CLAIM),
+        message: "README must not claim current-main production readiness complete",
       },
     ]) {
       assert.doesNotMatch(readme, claim, message);
     }
   }
+}
+
+function readmePositiveClaim(subject, claim = README_POSITIVE_CLAIM) {
+  return new RegExp(
+    `\\b(?:${subject})\\b${README_CLAIM_BETWEEN}\\b(?:`
+      + `(?:is|are|remain)\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
+      + `|(?:has|have)\\s+${README_CLAIM_MODIFIERS}been\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
+      + `)\\b`,
+    "iu",
+  );
 }
 
 function readmeSection(readme, heading) {
