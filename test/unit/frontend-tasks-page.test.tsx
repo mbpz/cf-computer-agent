@@ -32,12 +32,14 @@ describe("private tasks page", () => {
   });
 
   it("renders a semantic loading state and a localized empty state", () => {
-    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const loading = renderToStaticMarkup(<TasksPage locale={locale} filters={{}} state={{ kind: "loading" }} />);
     const empty = renderToStaticMarkup(<TasksPage locale={locale} filters={{}} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);
 
     expect(loading).toContain('aria-busy="true"');
     expect(empty).toContain(frontendText(locale, "TASKS_EMPTY"));
-    expect(empty).toContain('Total <span class="font-medium text-foreground">0</span><span aria-hidden="true"> · </span>Visible <span class="font-medium text-foreground">0–0</span>');
+    expect(empty).toContain(frontendText(locale, "PAGINATION_TOTAL"));
+    expect(empty).toContain(frontendText(locale, "PAGINATION_VISIBLE"));
+    expect(empty).toContain("0–0");
   });
 });

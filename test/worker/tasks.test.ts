@@ -197,6 +197,8 @@ describe("tasks HTTP contract", () => {
 
   it("returns 404 for another member's task on every path (IDOR)", async () => {
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    const linked = await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
+    const linkId = ((await linked.json()) as { link: { id: string } }).link.id;
     for (const [path, init] of [
       ["/api/tasks/task-1", { method: "GET" }],
       ["/api/tasks/task-1", { method: "PATCH", body: JSON.stringify({ title: "hacked" }) }],
@@ -205,7 +207,22 @@ describe("tasks HTTP contract", () => {
       ["/api/tasks/task-1/progress", { method: "POST", body: JSON.stringify({ progress: 10 }) }],
       ["/api/tasks/task-1/tags", { method: "PUT", body: JSON.stringify({ tags: ["x"] }) }],
       ["/api/tasks/task-1/links", { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) }],
+      [`/api/tasks/task-1/links/${linkId}`, { method: "DELETE" }],
     ] as const) expect((await api(path, sessionB, init)).status).toBe(404);
+    await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ links: [{ id: linkId }] });
+  });
+
+  it("accepts identical status replays without adding an audit event", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    const first = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+    const replay = await api("/api/tasks/task-1/status", sessionA, { method: "POST", body: JSON.stringify({ status: "doing" }) });
+
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toMatchObject({ status: "doing" });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toMatchObject({ status: "doing" });
+    const audit = await env.DB.prepare("SELECT action FROM audit_events WHERE action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
+    expect(audit.results.map((row) => row.action)).toEqual(["task.created", "task.status_changed"]);
   });
 
   it("rejects anonymous, automation, CSRF-forged, and invalid-transition requests", async () => {
