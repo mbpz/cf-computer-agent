@@ -148,6 +148,7 @@ const FRONTEND_OVERALL_COMPLETION_CLAIM = {
   name: "overall completion",
   claim: "(?:\\bdone\\b|\\bcompleted\\b|\\bcomplete\\b|已完成|完成)",
 };
+const FRONTEND_PREDICATE_BOUNDARY = "(?:[\\r\\n.!?。！？；;，,]|\\b(?:and|or|but|however|yet|while)\\b|(?:但是|然而|同时|且|和|或|但|而))";
 const HISTORICAL_GATE_COLUMNS = ["历史 Gate", "当前结论", "新阶段", "历史证据（非权威）", "当前状态权威"];
 const HISTORICAL_GATE_AUTHORITY = "当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准";
 const HISTORICAL_GATE_CONTRACTS = [
@@ -649,8 +650,8 @@ test("frontend checklist rejects stale pending backend and route completion pros
   }
 
   for (const contradictoryClaim of [
-    "NTF-001 cannot be considered pending but is now complete.",
-    "NTF-001 尚未发布但现已完成。",
+    "NTF-001 cannot be considered pending but NTF-001 is now complete.",
+    "NTF-001 尚未发布但 NTF-001 现已完成。",
   ]) {
     assert.throws(
       () => assertFrontendCollaborationContract(`${checklist}\n${contradictoryClaim}\n`, rows),
@@ -703,9 +704,9 @@ test("frontend completion negation is limited to the predicate it directly modif
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
 
   for (const directlyNegatedClaim of [
-    "NTF-001 is partial and is not complete.",
-    "NTF-001 can regress and cannot be considered complete.",
-    "NTF-001 可以回归且尚未完成。",
+    "NTF-001 is partial and NTF-001 is not complete.",
+    "NTF-001 can regress and NTF-001 cannot be considered complete.",
+    "NTF-001 可以回归且 NTF-001 尚未完成。",
   ]) {
     assert.doesNotThrow(
       () => assertFrontendCollaborationContract(`${checklist}\n${directlyNegatedClaim}\n`, rows),
@@ -714,10 +715,10 @@ test("frontend completion negation is limited to the predicate it directly modif
   }
 
   for (const positiveCompletion of [
-    "NTF-001 is not partial and is complete.",
-    "NTF-001 cannot regress and remains complete.",
+    "NTF-001 is not partial and NTF-001 is complete.",
+    "NTF-001 cannot regress and NTF-001 remains complete.",
     "NTF-001 is not partial. NTF-001 remains complete.",
-    "NTF-001 不能回归且保持完成。",
+    "NTF-001 不能回归且 NTF-001 保持完成。",
   ]) {
     assert.throws(
       () => assertFrontendCollaborationContract(`${checklist}\n${positiveCompletion}\n`, rows),
@@ -725,6 +726,39 @@ test("frontend completion negation is limited to the predicate it directly modif
       `conjunction or sentence boundary must end negation scope: ${positiveCompletion}`,
     );
   }
+});
+
+test("frontend forward subject association stops before another subject predicate", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const separatePredicates = `${checklist}\nNTF-001 remains pending and TSK-001 implementation complete.\n`;
+
+  assert.doesNotThrow(
+    () => assertFrontendCollaborationContract(separatePredicates, rows),
+    "TSK-001 implementation completion must not be attributed forward to NTF-001",
+  );
+});
+
+test("frontend reverse subject association stops before another subject predicate", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const separatePredicates = `${checklist}\nTSK-001 implementation complete and NTF-001 remains pending.\n`;
+
+  assert.doesNotThrow(
+    () => assertFrontendCollaborationContract(separatePredicates, rows),
+    "TSK-001 implementation completion must not be attributed in reverse to NTF-001",
+  );
+});
+
+test("frontend own-subject stale completion remains rejected within its predicate", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const staleOwnPredicate = `${checklist}\nTSK-001 remains pending and NTF-001 implementation complete.\n`;
+
+  assert.throws(
+    () => assertFrontendCollaborationContract(staleOwnPredicate, rows),
+    /NTF-001 must not claim implementation while ledger 实现 is pending/u,
+  );
 });
 
 test("AI knowledge section mappings resolve to canonical ledger IDs and Roadmap stages", () => {
@@ -1123,8 +1157,9 @@ function assertNoPositiveDimensionClaim(
   reverseDistance = 64,
   handlePositiveClaim,
 ) {
-  const forwardBetween = "[^\\r\\n.!?。！？；;，,]{0,64}?";
-  const reverseBetween = `[^\\r\\n.!?。！？；;，,]{0,${reverseDistance}}`;
+  const predicateCharacter = `(?:(?!${FRONTEND_PREDICATE_BOUNDARY})[\\s\\S])`;
+  const forwardBetween = `${predicateCharacter}{0,64}?`;
+  const reverseBetween = `${predicateCharacter}{0,${reverseDistance}}`;
   const patterns = [
     new RegExp(`${subject}${forwardBetween}(?<claim>${dimension.claim})`, "giu"),
     new RegExp(`(?<claim>${dimension.claim})${reverseBetween}${subject}`, "giu"),
@@ -1230,14 +1265,14 @@ function predicateSuffix(markdown, startIndex) {
 
 function lastPredicateBoundaryEnd(value) {
   let boundaryEnd = 0;
-  for (const match of value.matchAll(/[\r\n.!?。！？；;，,]|\b(?:and|or|but|however)\b|(?:但是|然而|并且|且|但|而|和|并(?!非))/giu)) {
+  for (const match of value.matchAll(new RegExp(FRONTEND_PREDICATE_BOUNDARY, "giu"))) {
     boundaryEnd = match.index + match[0].length;
   }
   return boundaryEnd;
 }
 
 function firstPredicateBoundaryStart(value) {
-  const match = /[\r\n.!?。！？；;，,]|\b(?:and|or|but|however)\b|(?:但是|然而|并且|且|但|而|和|并(?!非))/iu.exec(value);
+  const match = new RegExp(FRONTEND_PREDICATE_BOUNDARY, "iu").exec(value);
   return match?.index ?? value.length;
 }
 
