@@ -154,6 +154,15 @@ describe("shadcn workspace shell", () => {
     expect(dialog?.textContent).toContain("Log out");
   });
 
+  it("does not restore Tasks through the navigation-load failure fallback without its permission", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const session = { ...admin, capabilities: ["knowledge:read"], permissionMask: "0x0" };
+    await act(async () => root.render(<AppShell session={session} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(container.querySelector('a[href="/tasks"]')).toBeNull();
+  });
+
   it("keeps collapsed desktop account actions visible and keyboard reachable", async () => {
     const onNavigate = vi.fn();
     const onLogout = vi.fn();

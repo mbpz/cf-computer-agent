@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BookOpen, CaretDown, ChartLine, DotsThree, Files, GearSix, House, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, UploadSimple, UsersThree } from "@phosphor-icons/react";
-import { ROUTES, requiredCapability, type FrontendCapability } from "../../contracts/routes";
+import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
 import { Button } from "../ui/button";
@@ -9,6 +9,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/
 import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
 import { matchRoute } from "../../lib/router";
+import { routeAccessAllowed } from "../../lib/route-access";
 import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
 import { loadNavigation, mergeRequiredWorkspaceNavigation, type NavigationDataNode } from "../../lib/navigation-data";
 import { Badge } from "../ui/badge";
@@ -31,10 +32,6 @@ export interface AppShellProps {
   onLogout?: () => void;
   logoutPending?: boolean;
   logoutError?: string | null;
-}
-
-function hasCapability(session: SessionSnapshot, capability: FrontendCapability | null) {
-  return capability === null || session.capabilities.includes(capability);
 }
 
 function displayValue(value: unknown, fallback: string) {
@@ -72,7 +69,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
-  const access = resolveFrontendAccess({ session, requiredCapability: matchRoute(pathname)?.capability ?? requiredCapability(pathname) });
+  const access = resolveFrontendAccess({ session, route: matchRoute(pathname) });
 
   return (
     <div data-shell-root className="min-h-screen bg-background text-foreground lg:h-dvh lg:overflow-hidden">
@@ -148,7 +145,7 @@ function toNavigationNodes(node: NavigationDataNode): NavigationNode[] {
 
 function navigationTree(group: "workspace" | "admin", session: SessionSnapshot): NavigationNode[] {
   const route = (path: string) => ROUTES.find((item) => item.path === path);
-  const allowed = (path: string) => { const value = route(path); return value && hasCapability(session, value.capability) ? value : undefined; };
+  const allowed = (path: string) => { const value = route(path); return value && routeAccessAllowed(session, value) ? value : undefined; };
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };

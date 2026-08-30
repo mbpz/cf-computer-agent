@@ -1,7 +1,7 @@
 import { apiFetch } from "./api";
 import type { SessionSnapshot } from "../contracts/api";
 import { WORKSPACE_ROUTE_CAPABILITIES, menuAvailability, type MenuAvailability, type WorkspaceRouteCapability } from "../../shared/workspace-route-capabilities";
-import { PERMISSION_BITS, hasPermission, parsePermissionMask } from "../../src/authorization/permission-bitmap";
+import { routeAccessAllowed } from "./route-access";
 
 export interface NavigationDataNode {
   id: string;
@@ -30,7 +30,7 @@ const REQUIRED_COLLABORATION_PATHS: ReadonlySet<string> = new Set(
 
 export function mergeRequiredWorkspaceNavigation(serverTree: readonly NavigationDataNode[], session: SessionSnapshot): NavigationDataNode[] {
   const tree = serverTree.map(withoutSettings);
-  const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id) && routeAllowedForSession(route, session));
+  const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id) && routeAccessAllowed(session, route));
   const workspaceIndex = tree.findIndex((node) => node.groupName === "workspace" && node.path === null);
   const workspace = workspaceIndex === -1 ? emptyWorkspaceNode() : tree[workspaceIndex]!;
   const existingByPath = new Map(workspace.children.map((node) => [node.path, node]));
@@ -48,17 +48,6 @@ function withoutSettings(node: NavigationDataNode): NavigationDataNode {
     ...node,
     children: node.children.filter((child) => child.path !== "/settings" && child.key !== "settings").map(withoutSettings),
   };
-}
-
-function routeAllowedForSession(route: WorkspaceRouteCapability, session: SessionSnapshot): boolean {
-  if (route.capability !== null && !session.capabilities.includes(route.capability)) return false;
-  if (route.requiredPermission === undefined) return true;
-  if (!session.permissionMask) return false;
-  try {
-    return hasPermission(parsePermissionMask(session.permissionMask), PERMISSION_BITS[route.requiredPermission]);
-  } catch {
-    return false;
-  }
 }
 
 function requiredNavigationNode(route: WorkspaceRouteCapability, existing?: NavigationDataNode): NavigationDataNode {

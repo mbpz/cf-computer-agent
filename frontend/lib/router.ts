@@ -1,10 +1,12 @@
 import { ROUTES, type FrontendCapability, type RouteDefinition } from "../contracts/routes";
+import type { PermissionKey } from "../../src/authorization/permission-bitmap";
 
 export interface RouteMatch {
   path: string;
   labelKey: string;
   group: RouteDefinition["group"];
   capability: FrontendCapability | null;
+  requiredPermission?: PermissionKey;
   params: Readonly<Record<string, string>>;
 }
 

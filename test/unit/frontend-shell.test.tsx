@@ -70,6 +70,25 @@ describe("frontend application shell", () => {
     expect(html).not.toContain("Admin content must not render");
   });
 
+  it("hides Tasks in the initial fallback and forbids its direct page without the task permission", () => {
+    const session = { ...contributor, permissionMask: "0x0" };
+    const navigation = renderToStaticMarkup(<AppShell session={session} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>);
+    const direct = renderToStaticMarkup(<AppShell session={session} pathname="/tasks" locale={createLocaleRuntime()}><p>Task content must not render</p></AppShell>);
+
+    expect(navigation).not.toContain('href="/tasks"');
+    expect(direct).toContain("403: Access denied");
+    expect(direct).not.toContain("Task content must not render");
+  });
+
+  it("keeps Tasks in the initial fallback and allows its direct page with the task permission", () => {
+    const session = { ...contributor, permissionMask: "0x100000" };
+    const navigation = renderToStaticMarkup(<AppShell session={session} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>);
+    const direct = renderToStaticMarkup(<AppShell session={session} pathname="/tasks" locale={createLocaleRuntime()}><p>Task content</p></AppShell>);
+
+    expect(navigation).toContain('href="/tasks"');
+    expect(direct).toContain("Task content");
+  });
+
   it("applies the same guard to parameterized admin review routes", () => {
     const html = renderToStaticMarkup(
       <AppShell session={contributor} pathname="/admin/submissions/sub-1" locale={createLocaleRuntime()}>
