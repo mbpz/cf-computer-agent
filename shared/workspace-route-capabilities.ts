@@ -4,7 +4,7 @@ export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions"
-  | "tasks" | "boards" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
+  | "tasks" | "boards" | "notifications" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
 
@@ -46,7 +46,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "admin-spaces", path: "/admin/spaces", pageKind: "admin-spaces", availability: "ready", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },
   { id: "admin-audit", path: "/admin/audit", pageKind: "admin-audit", availability: "ready", labelKey: "NAV_AUDIT", group: "admin", capability: "audit:read" },
   { id: "admin-analytics", path: "/admin/analytics", pageKind: "admin-analytics", availability: "ready", labelKey: "NAV_SITE_ANALYTICS", group: "admin", capability: "analytics:read" },
-  { id: "notifications", path: "/notifications", pageKind: "coming-soon", availability: "coming_soon", labelKey: "NAV_NOTIFICATIONS", group: "workspace", capability: null },
+  { id: "notifications", path: "/notifications", pageKind: "notifications", availability: "ready", labelKey: "NAV_NOTIFICATIONS", group: "workspace", capability: null },
   { id: "messages", path: "/messages", pageKind: "coming-soon", availability: "coming_soon", labelKey: "NAV_MESSAGES", group: "workspace", capability: null },
 ] as const satisfies readonly WorkspaceRouteCapability[]);
 

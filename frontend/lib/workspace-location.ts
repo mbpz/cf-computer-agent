@@ -12,6 +12,7 @@ const PRIMARY_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/agent": ["scope", "knowledgeItemId"],
   "/my-submissions": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
   "/tasks": [...NUMBERED_PAGE_QUERY_KEYS, "status", "priority", "due", "tag", "q"],
+  "/notifications": [...NUMBERED_PAGE_QUERY_KEYS, "read", "type"],
   "/admin/submissions": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/duplicates": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/assets": [...NUMBERED_PAGE_QUERY_KEYS, "status"],

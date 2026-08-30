@@ -63,6 +63,7 @@ import { TasksRepository } from "./tasks/repository";
 import { TasksService } from "./tasks/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
+import { routeNotificationsApi } from "./routes/notifications";
 import { routeTasksApi } from "./routes/tasks";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
@@ -167,7 +168,7 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 }
 
 const workspaceRoutes = new Set([
-  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/settings",
+  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/notifications", "/settings",
   "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
@@ -328,6 +329,8 @@ async function dispatchApiRequest(
   if (member) return member;
   const tasks = await routeTasksApi(request, url, context, principal, { tasks: services.tasks });
   if (tasks) return tasks;
+  const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
+  if (notifications) return notifications;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
   const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });

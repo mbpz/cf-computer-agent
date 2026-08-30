@@ -1,7 +1,10 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
+import { SessionService } from "../../src/identity/session";
+import { MembersRepository } from "../../src/members/repository";
 import { NotificationsRepository } from "../../src/notifications/repository";
 import { NotificationsService } from "../../src/notifications/service";
 import type { NotificationInsert } from "../../src/notifications/types";
@@ -121,6 +124,149 @@ describe("notifications repository", () => {
   });
 });
 
+describe("notifications HTTP contract", () => {
+  let sessionA = "";
+  let sessionB = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const timestamp = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-a', 'subject-a', 'a@example.test', 'contributor', 'active', ?, ?), ('member-b', 'subject-b', 'b@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp, timestamp, timestamp).run();
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(timestamp) });
+    sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
+    sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
+    const repository = new NotificationsRepository(env.DB);
+    await repository.insert(notificationInsert({ id: "a-status", recipientMemberId: "member-a", deduplicationKey: "a-status", createdAt: NOW + 2 }));
+    await repository.insert(notificationInsert({ id: "a-due", recipientMemberId: "member-a", eventType: "task.due", deduplicationKey: "a-due", createdAt: NOW + 1 }));
+    await repository.insert(notificationInsert({ id: "b-private", recipientMemberId: "member-b", deduplicationKey: "b-private", createdAt: NOW + 3 }));
+  });
+
+  it("returns canonical recipient-owned list and summary envelopes with strict filters", async () => {
+    const list = await api("/api/notifications?page=1&pageSize=20&read=false&type=task.due", sessionA);
+    expect(list.status).toBe(200);
+    expect(list.headers.get("cache-control")).toBe("no-store");
+    expect(await list.json()).toEqual({
+      items: [{
+        id: "a-due",
+        recipientMemberId: "member-a",
+        eventType: "task.due",
+        actorMemberId: "member-a",
+        targetKind: "task",
+        targetId: "task-a",
+        payload: { previousStatus: "todo", status: "doing" },
+        deduplicationKey: "a-due",
+        readAt: null,
+        createdAt: new Date(NOW + 1).toISOString(),
+      }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
+
+    const summary = await api("/api/notifications/summary", sessionA);
+    expect(summary.status).toBe(200);
+    expect(await summary.json()).toEqual({ unread: 2 });
+  });
+
+  it("fails closed for unknown, duplicate, malformed pagination and filter query values", async () => {
+    for (const path of [
+      "/api/notifications?cursor=bad",
+      "/api/notifications?page=1&page=2",
+      "/api/notifications?pageSize=20&pageSize=50",
+      "/api/notifications?page=501&pageSize=20",
+      "/api/notifications?read=unread",
+      "/api/notifications?read=false&read=true",
+      "/api/notifications?type=unknown",
+      "/api/notifications?type=task.due&type=task.overdue",
+      "/api/notifications/summary?read=false",
+    ]) {
+      const response = await api(path, sessionA);
+      expect(response.status, path).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { retryable: false },
+      });
+    }
+  });
+
+  it("requires an authenticated member principal", async () => {
+    expect((await api("/api/notifications?page=1&pageSize=20", "")).status).toBe(401);
+    const context = createExecutionContext();
+    const response = await createApp().fetch!(
+      await signedAutomationRequest("https://memory.crgmhrc.asia/api/notifications?page=1&pageSize=20"),
+      env,
+      context,
+    );
+    await waitOnExecutionContext(context);
+    expect(response.status).toBe(403);
+  });
+
+  it("marks one notification replay-safely and returns 404 across recipients", async () => {
+    const unexpectedBody = await api("/api/notifications/a-status/read", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ read: true }),
+    });
+    expect(unexpectedBody.status).toBe(400);
+    await expect(unexpectedBody.json()).resolves.toMatchObject({
+      error: { code: "NOTIFICATION_READ_INVALID", retryable: false },
+    });
+
+    const first = await api("/api/notifications/a-status/read", sessionA, { method: "POST" });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json() as Record<string, unknown>;
+    expect(firstBody).toMatchObject({ id: "a-status", recipientMemberId: "member-a" });
+    expect(typeof firstBody.readAt).toBe("string");
+
+    const replay = await api("/api/notifications/a-status/read", sessionA, { method: "POST" });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(firstBody);
+
+    const crossUser = await api("/api/notifications/a-status/read", sessionB, { method: "POST" });
+    expect(crossUser.status).toBe(404);
+    await expect(crossUser.json()).resolves.toMatchObject({
+      error: { code: "NOTIFICATION_NOT_FOUND", retryable: false },
+    });
+  });
+
+  it("marks only a bounded visible ID set and converges on bulk replay", async () => {
+    const first = await api("/api/notifications/read", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ ids: ["a-status", "b-private"] }),
+    });
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ marked: 1 });
+    const replay = await api("/api/notifications/read", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ ids: ["a-status", "b-private"] }),
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ marked: 0 });
+    expect(await (await api("/api/notifications/summary", sessionA)).json()).toEqual({ unread: 1 });
+    expect(await (await api("/api/notifications/summary", sessionB)).json()).toEqual({ unread: 1 });
+  });
+
+  it("rejects unbounded, empty, malformed, and non-canonical bulk bodies", async () => {
+    const oversized = Array.from({ length: 101 }, (_unused, index) => `notification-${index}`);
+    for (const body of [
+      {},
+      { ids: [] },
+      { ids: "a-status" },
+      { ids: [1] },
+      { ids: oversized },
+      { ids: ["a-status"], limit: 1 },
+      { eventType: "task.status_changed" },
+      { ids: ["a-status"], createdBefore: new Date().toISOString() },
+    ]) {
+      const response = await api("/api/notifications/read", sessionA, { method: "POST", body: JSON.stringify(body) });
+      expect(response.status, JSON.stringify(body)).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "NOTIFICATION_BULK_INVALID", retryable: false },
+      });
+    }
+  });
+});
+
 function notificationInsert(overrides: Partial<NotificationInsert> = {}): NotificationInsert {
   return {
     id: "notification-1",
@@ -134,4 +280,51 @@ function notificationInsert(overrides: Partial<NotificationInsert> = {}): Notifi
     createdAt: NOW,
     ...overrides,
   };
+}
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("cookie", `__Host-memory-session=${token}`);
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("content-type", "application/json");
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(
+    new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>,
+    env,
+    context,
+  );
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+async function signedAutomationRequest(url: string): Promise<Request<unknown, IncomingRequestCfProperties<unknown>>> {
+  const timestamp = String(Math.floor(Date.now() / 1_000));
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = btoa(String.fromCharCode(...nonceBytes)).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/gu, "");
+  const bodyHash = await sha256Hex(new Uint8Array());
+  const parsed = new URL(url);
+  const canonical = ["GET", `${parsed.pathname}${parsed.search}`, timestamp, nonce, bodyHash].join("\n");
+  return new Request(url, { headers: {
+    authorization: "Bearer worker-test-token",
+    "x-automation-id": "fake-automation-client-id",
+    "x-automation-timestamp": timestamp,
+    "x-automation-nonce": nonce,
+    "x-automation-signature": await hmacHex("fake-automation-secret", canonical),
+  } }) as Request<unknown, IncomingRequestCfProperties<unknown>>;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const owned = new Uint8Array(bytes.byteLength);
+  owned.set(bytes);
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", owned.buffer)));
+}
+
+async function hmacHex(secret: string, value: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return hex(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value))));
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

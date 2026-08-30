@@ -62,12 +62,14 @@ describe("admin menus API", () => {
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "boards")).toMatchObject({
       availability: "ready",
     });
-    for (const key of ["notifications", "messages"]) {
-      expect(contributorPayload.tree[0]?.children.find((node) => node.key === key)).toMatchObject({
-        availability: "coming_soon",
-        disabledReason: "not_implemented",
-      });
-    }
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "notifications")).toMatchObject({
+      availability: "ready",
+    });
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "notifications")?.disabledReason).toBeUndefined();
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "messages")).toMatchObject({
+      availability: "coming_soon",
+      disabledReason: "not_implemented",
+    });
   });
 
   it("keeps seeded coming-soon visibility under database control", async () => {

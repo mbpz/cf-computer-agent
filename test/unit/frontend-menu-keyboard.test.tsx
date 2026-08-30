@@ -50,12 +50,14 @@ describe("dropdown keyboard contract", () => {
     expect(html).toContain('tabindex="-1"');
   });
 
-  it("uses server navigation for the disabled item and opens its collapsed shadcn tooltip from keyboard focus", async () => {
+  it("promotes notifications while retaining keyboard-safe disabled server navigation", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ tree: [{
       id: "menu-workspace", key: "workspace", labelKey: "SHELL_GROUP_WORKSPACE", path: null, icon: null, groupName: "workspace", availability: "ready", children: [{
         id: "menu-home", key: "home", labelKey: "NAV_HOME", path: "/", icon: "House", groupName: "workspace", availability: "ready", children: [],
       }, {
         id: "menu-notifications", key: "notifications", labelKey: "NAV_NOTIFICATIONS", path: "/notifications", icon: null, groupName: "workspace", availability: "coming_soon", disabledReason: "not_implemented", children: [],
+      }, {
+        id: "menu-messages", key: "messages", labelKey: "NAV_MESSAGES", path: "/messages", icon: null, groupName: "workspace", availability: "coming_soon", disabledReason: "not_implemented", children: [],
       }],
     }] }), { status: 200, headers: { "content-type": "application/json" } })));
     const host = browser.document.createElement("div") as unknown as HTMLDivElement;
@@ -63,33 +65,34 @@ describe("dropdown keyboard contract", () => {
     const root = createRoot(host);
     act(() => root.render(<AppShell session={{ member: { id: "m1", email: "member@example.test", role: "contributor" }, capabilities: ["knowledge:read"], permissionMask: "0x0", logoutUrl: "/logout" }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}><div /></AppShell>));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-    const expandedNotification = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("通知"))!;
-    expect(expandedNotification.textContent).toContain("通知");
-    expect(expandedNotification.textContent).toContain("建设中");
-    expect(host.querySelector('a[href="/notifications"]')).toBeNull();
-    expect(expandedNotification.getAttribute("title")).toBeNull();
+    expect(host.querySelector('a[href="/notifications"]')?.textContent).toContain("通知");
+    const expandedMessage = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("消息"))!;
+    expect(expandedMessage.textContent).toContain("消息");
+    expect(expandedMessage.textContent).toContain("建设中");
+    expect(host.querySelector('a[href="/messages"]')).toBeNull();
+    expect(expandedMessage.getAttribute("title")).toBeNull();
     const collapse = host.querySelector<HTMLButtonElement>("[data-shell-collapse-toggle]")!;
     await act(async () => collapse.click());
-    const notification = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("通知"))!;
+    const message = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("消息"))!;
     await act(async () => {
-      notification.focus();
-      notification.dispatchEvent(new browser.FocusEvent("focusin", { bubbles: true }));
+      message.focus();
+      message.dispatchEvent(new browser.FocusEvent("focusin", { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     const tooltip = browser.document.body.querySelector<HTMLElement>('[role="tooltip"]');
-    expect(tooltip?.textContent).toContain("通知");
+    expect(tooltip?.textContent).toContain("消息");
     expect(tooltip?.textContent).toContain("建设中");
-    expect(notification.getAttribute("aria-describedby")).toBe(tooltip?.id);
+    expect(message.getAttribute("aria-describedby")).toBe(tooltip?.id);
     expect(host.querySelector('[role="tooltip"]')).toBeNull();
 
-    await act(async () => notification.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await act(async () => message.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(browser.document.body.querySelector('[role="tooltip"]')).toBeNull();
 
-    await act(async () => notification.dispatchEvent(new browser.PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" })));
+    await act(async () => message.dispatchEvent(new browser.PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" })));
     const hoverTooltip = browser.document.body.querySelector<HTMLElement>('[role="tooltip"]');
     expect(hoverTooltip).not.toBeNull();
     await act(async () => {
-      notification.dispatchEvent(new browser.PointerEvent("pointerleave", { bubbles: true, pointerType: "mouse" }));
+      message.dispatchEvent(new browser.PointerEvent("pointerleave", { bubbles: true, pointerType: "mouse" }));
       hoverTooltip!.dispatchEvent(new browser.PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });

@@ -20,6 +20,7 @@ import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TasksPage } from "./pages/tasks/tasks-page";
 import { BoardsPage } from "./pages/boards/boards-page";
+import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { LoginPage } from "./pages/login-page";
 import { SettingsPage } from "./pages/settings-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
@@ -36,6 +37,8 @@ import { createMySubmissionsRequestController, type MySubmissionItem } from "./l
 import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
+import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
+import { parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
@@ -158,6 +161,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
+    case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
@@ -775,6 +779,114 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
   return <TasksPage locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+}
+
+export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => parseNotificationSearch(search), [search]);
+  const [query, setQuery] = useState<NotificationQuery>(initial);
+  const [state, setState] = useState<NotificationsPageState>({ kind: "loading" });
+  const [summary, setSummary] = useState<NotificationSummary | null>(null);
+  const [pending, setPending] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | undefined>();
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
+  const actionGenerationRef = useRef(0);
+  const activeRef = useRef(true);
+
+  useEffect(() => {
+    const controller = controllerRef.current ?? createNotificationsRequestController();
+    controllerRef.current = controller;
+    setPending(true);
+    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
+    const snapshot = query;
+    const request = controller.request(snapshot);
+    void request.promise.then(({ page, summary: nextSummary }) => {
+      if (!controller.isCurrent(request.generation) || !sameNotificationQuery(queryRef.current, snapshot)) return;
+      const lastPage = Math.max(1, page.pagination.totalPages);
+      if (snapshot.page > lastPage) {
+        const next = { ...snapshot, page: lastPage };
+        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(window.location.search, next)}`);
+        queryRef.current = next; setQuery(next);
+        return;
+      }
+      setState({ kind: "ready", items: page.items, pagination: page.pagination });
+      setSummary(nextSummary);
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || !sameNotificationQuery(queryRef.current, snapshot) || isAbort(error)) return;
+      setState({ kind: "error" }); setPending(false);
+    });
+  }, [query, retryVersion]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const next = parseNotificationSearch(window.location.search);
+      actionGenerationRef.current += 1;
+      setActionPending(false); setActionError(undefined);
+      queryRef.current = next; setQuery(next);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      actionGenerationRef.current += 1;
+      controllerRef.current?.dispose();
+      controllerRef.current = null;
+    };
+  }, []);
+
+  const navigate = (next: NotificationQuery, replace = false) => {
+    actionGenerationRef.current += 1;
+    setActionPending(false); setActionError(undefined);
+    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`);
+    queryRef.current = next; setQuery(next);
+  };
+
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (actionPending) return;
+    actionGenerationRef.current += 1;
+    const generation = actionGenerationRef.current;
+    setActionPending(true); setActionError(undefined);
+    try {
+      await operation();
+      if (!activeRef.current || generation !== actionGenerationRef.current) return;
+      setRetryVersion((value) => value + 1);
+    } catch (error: unknown) {
+      if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
+        setActionError(frontendText(locale, "NOTIFICATIONS_ACTION_FAILED"));
+      }
+    } finally {
+      if (activeRef.current && generation === actionGenerationRef.current) setActionPending(false);
+    }
+  };
+
+  return <NotificationsPage
+    locale={locale}
+    state={state}
+    summary={summary}
+    filters={query.filters}
+    pending={pending}
+    actionPending={actionPending}
+    actionError={actionError}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onFilterChange={(filters: NotificationFilters) => navigate({ page: 1, pageSize: query.pageSize, filters })}
+    onPageChange={(page) => navigate({ ...query, page })}
+    onPageSizeChange={(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })}
+    onMarkRead={(id) => void mutate(() => markNotificationRead(id))}
+    onMarkVisibleRead={(ids) => void mutate(() => markVisibleNotificationsRead(ids))}
+  />;
+}
+
+function sameNotificationQuery(left: NotificationQuery, right: NotificationQuery): boolean {
+  return left.page === right.page && left.pageSize === right.pageSize
+    && left.filters.read === right.filters.read && left.filters.eventType === right.filters.eventType;
 }
 
 export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
