@@ -1,6 +1,7 @@
 import { apiFetch } from "./api";
 import type { SessionSnapshot } from "../contracts/api";
 import { WORKSPACE_ROUTE_CAPABILITIES, menuAvailability, type MenuAvailability, type WorkspaceRouteCapability } from "../../shared/workspace-route-capabilities";
+import { PERMISSION_BITS, hasPermission, parsePermissionMask } from "../../src/authorization/permission-bitmap";
 
 export interface NavigationDataNode {
   id: string;
@@ -23,11 +24,11 @@ export async function loadNavigation(): Promise<NavigationDataNode[]> {
 }
 
 const REQUIRED_COLLABORATION_ROUTE_IDS = new Set(["tasks", "boards", "notifications", "messages"]);
-const REQUIRED_COLLABORATION_PATHS = new Set(
+const REQUIRED_COLLABORATION_PATHS: ReadonlySet<string> = new Set(
   WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id)).map((route) => route.path),
 );
 
-export function mergeRequiredWorkspaceNavigation(serverTree: readonly NavigationDataNode[], session: Pick<SessionSnapshot, "capabilities">): NavigationDataNode[] {
+export function mergeRequiredWorkspaceNavigation(serverTree: readonly NavigationDataNode[], session: SessionSnapshot): NavigationDataNode[] {
   const tree = serverTree.map(withoutSettings);
   const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id) && routeAllowedForSession(route, session));
   const workspaceIndex = tree.findIndex((node) => node.groupName === "workspace" && node.path === null);
@@ -49,8 +50,15 @@ function withoutSettings(node: NavigationDataNode): NavigationDataNode {
   };
 }
 
-function routeAllowedForSession(route: WorkspaceRouteCapability, session: Pick<SessionSnapshot, "capabilities">): boolean {
-  return route.capability === null || session.capabilities.includes(route.capability);
+function routeAllowedForSession(route: WorkspaceRouteCapability, session: SessionSnapshot): boolean {
+  if (route.capability !== null && !session.capabilities.includes(route.capability)) return false;
+  if (route.requiredPermission === undefined) return true;
+  if (!session.permissionMask) return false;
+  try {
+    return hasPermission(parsePermissionMask(session.permissionMask), PERMISSION_BITS[route.requiredPermission]);
+  } catch {
+    return false;
+  }
 }
 
 function requiredNavigationNode(route: WorkspaceRouteCapability, existing?: NavigationDataNode): NavigationDataNode {

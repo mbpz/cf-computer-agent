@@ -1,3 +1,5 @@
+import type { PermissionKey } from "../src/authorization/permission-bitmap";
+
 export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
@@ -21,6 +23,7 @@ export interface WorkspaceRouteCapability {
   labelKey: string;
   group: WorkspaceRouteGroup;
   capability: WorkspaceCapability | null;
+  requiredPermission?: PermissionKey;
 }
 
 export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
@@ -30,7 +33,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", capability: "knowledge:read" },
   { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", capability: "knowledge:read" },
   { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", capability: "submission:read-own" },
-  { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", capability: null },
+  { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", capability: null, requiredPermission: "workspace.tasks" },
   { id: "settings", path: "/settings", pageKind: "settings", availability: "ready", labelKey: "SHELL_SETTINGS", group: "workspace", capability: null },
   { id: "admin", path: "/admin", pageKind: "admin", availability: "ready", labelKey: "NAV_ADMINISTRATION", group: "admin", capability: "submission:read-all" },
   { id: "admin-submissions", path: "/admin/submissions", pageKind: "admin-submissions", availability: "ready", labelKey: "NAV_REVIEW_QUEUE", group: "admin", capability: "knowledge:review" },

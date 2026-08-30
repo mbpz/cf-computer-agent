@@ -5,7 +5,7 @@ import { loadNavigation, mergeRequiredWorkspaceNavigation } from "../../frontend
 describe("frontend navigation availability", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("merges required collaboration routes after parsing a stale server tree", async () => {
+  async function loadStaleTree() {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ tree: [{
       id: "workspace", key: "workspace", labelKey: "SHELL_GROUP_WORKSPACE", path: null, icon: null,
       groupName: "workspace", availability: "ready", children: [{
@@ -19,18 +19,34 @@ describe("frontend navigation availability", () => {
         groupName: "workspace", availability: "coming_soon", disabledReason: "not_implemented", children: [],
       }],
     }] }), { status: 200, headers: { "content-type": "application/json" } })));
+    return loadNavigation();
+  }
 
-    const tree = mergeRequiredWorkspaceNavigation(await loadNavigation(), {
+  it("does not restore Tasks from a stale server tree without its canonical permission bit", async () => {
+    const tree = mergeRequiredWorkspaceNavigation(await loadStaleTree(), {
       member: { id: "member-1", email: "reader@example.test", role: "contributor" },
       capabilities: [],
+      permissionMask: "0x0",
       logoutUrl: "/auth/logout",
     });
     const children = tree[0]!.children;
-    expect(children.map((node) => node.path)).toEqual(["/", "/tasks", "/boards", "/notifications", "/messages"]);
+    expect(children.map((node) => node.path)).toEqual(["/", "/boards", "/notifications", "/messages"]);
     expect(children.find((node) => node.path === "/settings")).toBeUndefined();
-    expect(children.find((node) => node.path === "/tasks")).toMatchObject({ availability: "ready" });
+    expect(children.find((node) => node.path === "/tasks")).toBeUndefined();
     for (const path of ["/boards", "/notifications", "/messages"]) {
       expect(children.find((node) => node.path === path)).toMatchObject({ availability: "coming_soon", disabledReason: "not_implemented" });
     }
+  });
+
+  it("restores Tasks from a stale server tree when its canonical permission bit is present", async () => {
+    const tree = mergeRequiredWorkspaceNavigation(await loadStaleTree(), {
+      member: { id: "member-1", email: "reader@example.test", role: "contributor" },
+      capabilities: [],
+      permissionMask: "0x100000",
+      logoutUrl: "/auth/logout",
+    });
+
+    expect(tree[0]!.children.map((node) => node.path)).toEqual(["/", "/tasks", "/boards", "/notifications", "/messages"]);
+    expect(tree[0]!.children.find((node) => node.path === "/tasks")).toMatchObject({ availability: "ready" });
   });
 });

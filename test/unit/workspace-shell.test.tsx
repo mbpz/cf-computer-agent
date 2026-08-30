@@ -153,4 +153,49 @@ describe("shadcn workspace shell", () => {
     expect(dialog?.textContent).toContain("Settings");
     expect(dialog?.textContent).toContain("Log out");
   });
+
+  it("keeps collapsed desktop account actions visible and keyboard reachable", async () => {
+    const onNavigate = vi.fn();
+    const onLogout = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate} onLogout={onLogout}><p>Home</p></AppShell>));
+
+    const collapse = container.querySelector("[data-shell-collapse-toggle]") as HTMLButtonElement;
+    await act(async () => collapse.click());
+
+    expect(container.querySelector("[data-shell-account-footer]")).toBeNull();
+    const accountTrigger = container.querySelector("[data-shell-collapsed-account-trigger]") as HTMLElement;
+    expect(accountTrigger).not.toBeNull();
+    expect(accountTrigger.tagName).toBe("SUMMARY");
+    expect(accountTrigger.tabIndex).not.toBe(-1);
+    expect(accountTrigger.getAttribute("class")).not.toContain("sr-only");
+    await act(async () => { accountTrigger.focus(); accountTrigger.click(); });
+    expect(document.activeElement).toBe(accountTrigger);
+
+    const menu = container.querySelector("[data-shell-collapsed-account-menu]") as HTMLElement;
+    expect(menu).not.toBeNull();
+    expect(menu.textContent).toContain("admin@example.com");
+    expect(menu.textContent).toContain("Settings");
+    const settings = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Settings"))!;
+    await act(async () => settings.click());
+    expect(onNavigate).toHaveBeenCalledWith("/settings");
+
+    const dark = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Dark"))!;
+    await act(async () => dark.click());
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    const logout = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Log out"))!;
+    await act(async () => logout.click());
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves logout pending and error states in collapsed desktop account actions", async () => {
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} logoutPending logoutError="Logout failed"><p>Home</p></AppShell>));
+    await act(async () => (container.querySelector("[data-shell-collapse-toggle]") as HTMLButtonElement).click());
+    await act(async () => (container.querySelector("[data-shell-collapsed-account-trigger]") as HTMLElement).click());
+
+    const menu = container.querySelector("[data-shell-collapsed-account-menu]") as HTMLElement;
+    expect(menu.querySelector('[role="alert"]')?.textContent).toBe("Logout failed");
+    const logout = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Signing out"));
+    expect(logout).toBeDefined();
+    expect(logout?.disabled).toBe(true);
+  });
 });
