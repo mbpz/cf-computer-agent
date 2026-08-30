@@ -665,11 +665,15 @@ test("derives exact M1 atom truth from the historical gate mapping and verifies 
     assert.notEqual(mutatedRow, gateM1Row, `GATE-M1 mutation target is required: ${search}`);
     return checklist.replace(gateM1Row, mutatedRow);
   };
+  const duplicateM1 = "| GATE-M1 | current main 已完成 | R0/R1 | 证据已删除 | 当前状态已完成 |";
   for (const gateMutation of [
     mutateGateM1("| GATE-M1 |", "| GATE-M9 |"),
     mutateGateM1("| R0/R1 |", "| R1 |"),
     mutateGateM1("`docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M1 证据）", "证据已删除"),
     mutateGateM1("当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准", "当前状态已完成"),
+    `${checklist}\n${duplicateM1}\n`,
+    `${checklist}\n<!-- duplicate authority marker: GATE-M1 -->\n`,
+    `${checklist}\n\`\`\`text\nduplicate authority marker: GATE-M1\n\`\`\`\n`,
     `${checklist}\n- [x] \`GATE-M1\` obsolete mixed completion signal\n`,
   ]) {
     assert.notEqual(gateMutation, checklist);

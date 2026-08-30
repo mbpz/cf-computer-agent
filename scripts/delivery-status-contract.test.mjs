@@ -391,11 +391,13 @@ test("historical gate mapping preserves canonical evidence without claiming curr
 
   const m4 = HISTORICAL_GATE_CONTRACTS.find(({ id }) => id === "GATE-M4");
   assert.ok(m4);
+  const duplicateM1 = "| GATE-M1 | current main 已完成 | R0/R1 | 证据已删除 | 当前状态已完成 |";
   for (const mutation of [
     replaceHistoricalGateRow(checklist, m4, { evidence: "证据已删除" }),
     replaceHistoricalGateRow(checklist, m4, { authority: "当前状态已完成" }),
     replaceHistoricalGateRow(checklist, m4, { id: "GATE-M9" }),
     replaceHistoricalGateRow(checklist, m4, { stage: "R5" }),
+    `${checklist}\n${duplicateM1}\n`,
   ]) {
     assert.throws(() => assertHistoricalGateContract(mutation));
   }
@@ -484,6 +486,15 @@ function replaceHistoricalGateRow(markdown, contract, overrides) {
 
 function assertHistoricalGateContract(markdown) {
   const lines = markdown.split(/\r?\n/u);
+  const historicalGateRows = [...markdown.matchAll(/^\| (GATE-M[0-8]) \|/gmu)];
+  assert.equal(historicalGateRows.length, HISTORICAL_GATE_CONTRACTS.length, "historical gate rows must occur exactly once across the checklist");
+  for (const { id } of HISTORICAL_GATE_CONTRACTS) {
+    assert.equal(
+      historicalGateRows.filter((match) => match[1] === id).length,
+      1,
+      `${id} must occur exactly once across the checklist`,
+    );
+  }
   const headerIndex = lines.findIndex((line) => splitTableRow(line).join("|") === HISTORICAL_GATE_COLUMNS.join("|"));
   assert.notEqual(headerIndex, -1, "historical gate table header is required");
   assert.match(lines[headerIndex + 1] ?? "", /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/u, "historical gate divider is required");

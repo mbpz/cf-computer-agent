@@ -172,8 +172,11 @@ async function verifyTruth(checklist, report) {
   const atomIds = new Set(atoms.map(({ id }) => id));
   const checked = atoms.filter((atom) => atom.checked);
   const unchecked = atoms.filter((atom) => !atom.checked);
-  const historicalGateHeaders = checklistText.split(/\r?\n/u).filter((line) => line === historicalGateHeader);
-  const historicalGates = checklistText.split(/\r?\n/u).filter((line) => line === historicalGateM1Row);
+  const checklistLines = checklistText.split(/\r?\n/u);
+  const historicalGateHeaders = checklistLines.filter((line) => line === historicalGateHeader);
+  const historicalGates = checklistLines.filter((line) => line.startsWith("| GATE-M1 |"));
+  const canonicalHistoricalGates = checklistLines.filter((line) => line === historicalGateM1Row);
+  const gateM1Occurrences = [...checklistText.matchAll(/\bGATE-M1\b/gu)];
   const gateCheckboxes = [...checklistText.matchAll(/^- \[[ x]\] `GATE-M1`(?:\s|$)/gmu)];
   if (atoms.length !== 76
     || atomIds.size !== atoms.length
@@ -181,6 +184,8 @@ async function verifyTruth(checklist, report) {
     || unchecked.length !== 0
     || historicalGateHeaders.length !== 1
     || historicalGates.length !== 1
+    || canonicalHistoricalGates.length !== 1
+    || gateM1Occurrences.length !== 1
     || gateCheckboxes.length !== 0) {
     throw new Error("M1 checklist counts do not match the reviewed truth");
   }
