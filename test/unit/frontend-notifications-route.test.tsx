@@ -80,6 +80,39 @@ describe("notification inbox route", () => {
     ]);
   });
 
+  it("converges the current unread summary when mark-read commits after filter navigation", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const delayedMutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    let committed = false;
+    const pageTitles: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (init?.method === "POST") return delayedMutation;
+      if (path.endsWith("/summary")) return Response.json({ unread: committed ? 1 : 2 });
+      const read = new URL(path, "https://app.test").searchParams.get("read");
+      const title = read === "true" ? (committed ? "Converged read page" : "Early read page") : "Unread page";
+      pageTitles.push(title);
+      return Response.json({ items: [notification({ payload: { title } })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    });
+    browser.history.replaceState({}, "", "/notifications");
+    await renderRoute();
+    expect(container.textContent).toContain("Unread 2");
+
+    await click("Mark as read");
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read");
+    await flush();
+    expect(container.textContent).toContain("Early read page");
+    expect(container.textContent).toContain("Unread 2");
+
+    committed = true;
+    await act(async () => resolveMutation(Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" }))));
+    await waitForText("Converged read page");
+    expect(browser.location.search).toBe("?read=read");
+    expect(container.textContent).toContain("Converged read page");
+    expect(container.textContent).toContain("Unread 1");
+    expect(pageTitles).toContain("Early read page");
+  });
+
   async function renderRoute() {
     await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
@@ -102,3 +135,9 @@ function pageResponse(url: string, title: string): Response {
 async function change(control: HTMLSelectElement, value: string) { await act(async () => { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
+async function waitForText(text: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flush();
+    if (document.body.textContent?.includes(text)) return;
+  }
+}

@@ -40,6 +40,7 @@ export function notificationEventKey(eventType: NotificationEventType): string {
 }
 
 export function notificationTargetHref(target: Pick<NotificationItem, "targetKind" | "targetId">): string | null {
+  if (target.targetKind === null || target.targetId === null) return null;
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(target.targetId)) return null;
   if (target.targetKind === "knowledge_item") return `/knowledge/${encodeURIComponent(target.targetId)}`;
   if (target.targetKind === "task") return "/tasks";

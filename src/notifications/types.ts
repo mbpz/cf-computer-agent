@@ -29,6 +29,11 @@ export interface Notification {
   createdAt: string;
 }
 
+export type NotificationView = Omit<Notification, "targetKind" | "targetId"> & {
+  targetKind: NotificationTargetKind | null;
+  targetId: string | null;
+};
+
 export interface NotificationInsert {
   id: string;
   recipientMemberId: string;
@@ -50,7 +55,8 @@ export interface NotificationListRequest extends NumberedPageRequest {
   filters: NotificationListFilters;
 }
 
-export type NotificationPage = NumberedPage<Notification>;
+export type StoredNotificationPage = NumberedPage<Notification>;
+export type NotificationPage = NumberedPage<NotificationView>;
 export interface NotificationSummary { unread: number; }
 
 export interface NotificationBulkReadSelection {

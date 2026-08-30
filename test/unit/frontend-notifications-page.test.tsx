@@ -36,6 +36,25 @@ describe("notification inbox model", () => {
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "knowledge-1" })).toBe("/knowledge/knowledge-1");
     expect(notificationTargetHref({ targetKind: "discussion_thread", targetId: "thread-1" })).toBe("/messages");
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "javascript:alert(1)" })).toBeNull();
+    expect(notificationTargetHref({ targetKind: null, targetId: null })).toBeNull();
+  });
+
+  it("keeps inaccessible notification history visible without an actionable target link", () => {
+    const locale = createLocaleRuntime();
+    const html = renderToStaticMarkup(<NotificationsPage
+      locale={locale}
+      state={{ kind: "ready", items: [notification({ targetKind: null, targetId: null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }}
+      summary={{ unread: 1 }}
+      filters={{}}
+      onRetry={vi.fn()}
+      onFilterChange={vi.fn()}
+      onPageChange={vi.fn()}
+      onPageSizeChange={vi.fn()}
+      onMarkRead={vi.fn()}
+      onMarkVisibleRead={vi.fn()}
+    />);
+    expect(html).toContain("Due soon");
+    expect(html).not.toContain(frontendText(locale, "NOTIFICATIONS_OPEN"));
   });
 });
 

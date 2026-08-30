@@ -19,8 +19,8 @@ export interface NotificationItem {
   recipientMemberId: string;
   eventType: NotificationEventType;
   actorMemberId: string | null;
-  targetKind: NotificationTargetKind;
-  targetId: string;
+  targetKind: NotificationTargetKind | null;
+  targetId: string | null;
   payload: NotificationPayload;
   deduplicationKey: string;
   readAt: string | null;
@@ -108,8 +108,7 @@ function normalizeNotification(value: unknown): NotificationItem {
   if (!isId(value.id) || !isId(value.recipientMemberId)
     || (value.actorMemberId !== null && !isId(value.actorMemberId))
     || !NOTIFICATION_EVENT_TYPES.includes(value.eventType as NotificationEventType)
-    || (value.targetKind !== "task" && value.targetKind !== "discussion_thread" && value.targetKind !== "knowledge_item")
-    || !isId(value.targetId)
+    || !isCanonicalTarget(value.targetKind, value.targetId)
     || typeof value.deduplicationKey !== "string" || !value.deduplicationKey || value.deduplicationKey.length > 256
     || (value.readAt !== null && !isCanonicalDate(value.readAt))
     || !isCanonicalDate(value.createdAt)) invalidNotification();
@@ -126,6 +125,12 @@ function normalizeNotification(value: unknown): NotificationItem {
     readAt: value.readAt,
     createdAt: value.createdAt,
   } as NotificationItem;
+}
+
+function isCanonicalTarget(targetKind: unknown, targetId: unknown): boolean {
+  if (targetKind === null || targetId === null) return targetKind === null && targetId === null;
+  return (targetKind === "task" || targetKind === "discussion_thread" || targetKind === "knowledge_item")
+    && isId(targetId);
 }
 
 function normalizePayload(value: unknown): NotificationPayload {

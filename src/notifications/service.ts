@@ -18,6 +18,7 @@ import {
   type NotificationPayloadValue,
   type NotificationSummary,
   type NotificationTargetKind,
+  type NotificationView,
 } from "./types";
 
 const DAY = 86_400_000;
@@ -60,10 +61,26 @@ export class NotificationsService {
     const pagination = normalizeNumberedPageRequest(page, "NOTIFICATION_PAGE_INVALID");
     const normalizedFilters = normalizeListFilters(filters);
     await this.materializeDue(recipientMemberId);
-    return this.repository.list(recipientMemberId, {
+    const result = await this.repository.list(recipientMemberId, {
       ...pagination,
       filters: normalizedFilters,
     });
+    const access = new Map<string, boolean>();
+    const items: NotificationView[] = [];
+    for (const notification of result.items) {
+      const key = `${notification.targetKind}\0${notification.targetId}`;
+      let allowed = access.get(key);
+      if (allowed === undefined) {
+        allowed = await this.options.targetAuthorizer.canReadTarget(
+          recipientMemberId,
+          notification.targetKind,
+          notification.targetId,
+        );
+        access.set(key, allowed);
+      }
+      items.push(projectTarget(notification, allowed));
+    }
+    return { ...result, items };
   }
 
   async summary(memberId: string): Promise<NotificationSummary> {
@@ -72,13 +89,17 @@ export class NotificationsService {
     return this.repository.summary(recipientMemberId);
   }
 
-  async markRead(memberId: string, id: string): Promise<Notification> {
+  async markRead(memberId: string, id: string): Promise<NotificationView> {
     const recipientMemberId = normalizeId(memberId);
     const notificationId = normalizeId(id);
     await this.repository.markRead(recipientMemberId, notificationId, this.now().getTime());
     const notification = await this.repository.findOwned(recipientMemberId, notificationId);
     if (!notification) throw notFound();
-    return notification;
+    return projectTarget(notification, await this.options.targetAuthorizer.canReadTarget(
+      recipientMemberId,
+      notification.targetKind,
+      notification.targetId,
+    ));
   }
 
   async markManyRead(memberId: string, boundedFilter: NotificationBulkReadFilter): Promise<{ marked: number }> {
@@ -139,6 +160,10 @@ export class NotificationsService {
       });
     }
   }
+}
+
+function projectTarget(notification: Notification, allowed: boolean): NotificationView {
+  return allowed ? notification : { ...notification, targetKind: null, targetId: null };
 }
 
 function normalizeEvent(event: NotificationEventInput): {

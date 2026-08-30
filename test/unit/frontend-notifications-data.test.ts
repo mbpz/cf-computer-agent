@@ -39,6 +39,8 @@ describe("notifications data layer", () => {
       notification({ unexpected: true }),
       notification({ readAt: "not-a-date" }),
       notification({ createdAt: "not-a-date" }),
+      notification({ targetKind: null, targetId: "knowledge-1" }),
+      notification({ targetKind: "knowledge_item", targetId: null }),
     ]) {
       const requester = jsonRequester({ items: [row], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
       await expect(loadNotifications({}, { page: 1, pageSize: 20 }, requester)).rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
@@ -46,6 +48,16 @@ describe("notifications data layer", () => {
     for (const summary of [{}, { unread: -1 }, { unread: 1.5 }, { unread: "1" }]) {
       await expect(loadNotificationSummary(jsonRequester(summary))).rejects.toThrow("NOTIFICATION_SUMMARY_INVALID");
     }
+  });
+
+  it("accepts only the canonical null target pair for unavailable targets", async () => {
+    const requester = jsonRequester({
+      items: [notification({ targetKind: null, targetId: null })],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    });
+    await expect(loadNotifications({}, { page: 1, pageSize: 20 }, requester)).resolves.toMatchObject({
+      items: [{ targetKind: null, targetId: null }],
+    });
   });
 
   it("aborts both requests and invalidates an older generation", async () => {

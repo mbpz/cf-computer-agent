@@ -793,7 +793,7 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
   const queryRef = useRef(query);
   queryRef.current = query;
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
-  const actionGenerationRef = useRef(0);
+  const actionPendingRef = useRef(false);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -824,8 +824,7 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
   useEffect(() => {
     const onPopState = () => {
       const next = parseNotificationSearch(window.location.search);
-      actionGenerationRef.current += 1;
-      setActionPending(false); setActionError(undefined);
+      setActionError(undefined);
       queryRef.current = next; setQuery(next);
     };
     window.addEventListener("popstate", onPopState);
@@ -836,34 +835,32 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
     activeRef.current = true;
     return () => {
       activeRef.current = false;
-      actionGenerationRef.current += 1;
+      actionPendingRef.current = false;
       controllerRef.current?.dispose();
       controllerRef.current = null;
     };
   }, []);
 
   const navigate = (next: NotificationQuery, replace = false) => {
-    actionGenerationRef.current += 1;
-    setActionPending(false); setActionError(undefined);
+    setActionError(undefined);
     writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`);
     queryRef.current = next; setQuery(next);
   };
 
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (actionPending) return;
-    actionGenerationRef.current += 1;
-    const generation = actionGenerationRef.current;
+    if (actionPendingRef.current) return;
+    actionPendingRef.current = true;
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
-      if (!activeRef.current || generation !== actionGenerationRef.current) return;
-      setRetryVersion((value) => value + 1);
+      if (activeRef.current) setRetryVersion((value) => value + 1);
     } catch (error: unknown) {
-      if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
+      if (activeRef.current && !isAbort(error)) {
         setActionError(frontendText(locale, "NOTIFICATIONS_ACTION_FAILED"));
       }
     } finally {
-      if (activeRef.current && generation === actionGenerationRef.current) setActionPending(false);
+      actionPendingRef.current = false;
+      if (activeRef.current) setActionPending(false);
     }
   };
 

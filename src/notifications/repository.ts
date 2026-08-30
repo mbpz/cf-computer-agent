@@ -7,7 +7,7 @@ import type {
   NotificationEventType,
   NotificationInsert,
   NotificationListRequest,
-  NotificationPage,
+  StoredNotificationPage,
   NotificationPayload,
   NotificationSummary,
   NotificationTargetKind,
@@ -17,7 +17,7 @@ export interface NotificationsRepositoryPort {
   insert(input: NotificationInsert): Promise<boolean>;
   findByDeduplicationKey(recipientMemberId: string, deduplicationKey: string): Promise<Notification | null>;
   findOwned(recipientMemberId: string, id: string): Promise<Notification | null>;
-  list(recipientMemberId: string, request: NotificationListRequest): Promise<NotificationPage>;
+  list(recipientMemberId: string, request: NotificationListRequest): Promise<StoredNotificationPage>;
   summary(recipientMemberId: string): Promise<NotificationSummary>;
   markRead(recipientMemberId: string, id: string, readAt: number): Promise<boolean>;
   markManyRead(recipientMemberId: string, selection: NotificationBulkReadSelection, readAt: number): Promise<number>;
@@ -76,7 +76,7 @@ export class NotificationsRepository implements NotificationsRepositoryPort {
     ).bind(recipientMemberId, id).first<NotificationRow>());
   }
 
-  async list(recipientMemberId: string, request: NotificationListRequest): Promise<NotificationPage> {
+  async list(recipientMemberId: string, request: NotificationListRequest): Promise<StoredNotificationPage> {
     const pagination = normalizeNumberedPageRequest(request, "NOTIFICATION_PAGE_INVALID");
     const conditions = ["recipient_member_id = ?"];
     const bindings: Array<string | number> = [recipientMemberId];

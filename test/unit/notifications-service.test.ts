@@ -8,8 +8,8 @@ import type {
   NotificationEventInput,
   NotificationInsert,
   NotificationListRequest,
-  NotificationPage,
   NotificationSummary,
+  StoredNotificationPage,
 } from "../../src/notifications/types";
 
 const NOW = new Date("2026-08-30T12:00:00.000Z");
@@ -84,6 +84,28 @@ describe("NotificationsService", () => {
     expect(replay).toEqual(first);
     await expect(service.markRead("member-b", id)).rejects.toMatchObject({ code: "NOTIFICATION_NOT_FOUND", status: 404 });
     await expect(service.summary("member-a")).resolves.toEqual({ unread: 0 });
+  });
+
+  it("keeps notification history but redacts target capability after access is revoked", async () => {
+    const repository = new FakeNotificationsRepository();
+    const authorizer = new FakeTargetAuthorizer(true);
+    const service = createService(repository, { targetAuthorizer: authorizer });
+    const emitted = await service.emit(eventInput());
+    authorizer.allowed = false;
+
+    const page = await service.list("member-a", {}, { page: 1, pageSize: 20 });
+    expect(page.items).toEqual([{
+      ...emitted.notification,
+      targetKind: null,
+      targetId: null,
+    }]);
+    await expect(service.summary("member-a")).resolves.toEqual({ unread: 1 });
+    await expect(service.markRead("member-a", emitted.notification!.id)).resolves.toMatchObject({
+      id: emitted.notification!.id,
+      targetKind: null,
+      targetId: null,
+      readAt: NOW.toISOString(),
+    });
   });
 
   it("bounds visible-id and filtered bulk reads before repository access", async () => {
@@ -170,7 +192,7 @@ function createService(
 
 class FakeTargetAuthorizer implements NotificationTargetAuthorizer {
   readonly checks: Array<{ recipientMemberId: string; targetKind: string; targetId: string }> = [];
-  constructor(private readonly allowed: boolean) {}
+  constructor(public allowed: boolean) {}
   async canReadTarget(recipientMemberId: string, targetKind: string, targetId: string): Promise<boolean> {
     this.checks.push({ recipientMemberId, targetKind, targetId });
     return this.allowed;
@@ -214,7 +236,7 @@ class FakeNotificationsRepository implements NotificationsRepositoryPort {
   async findOwned(recipientMemberId: string, id: string) {
     return this.notifications.find((item) => item.recipientMemberId === recipientMemberId && item.id === id) ?? null;
   }
-  async list(recipientMemberId: string, request: NotificationListRequest): Promise<NotificationPage> {
+  async list(recipientMemberId: string, request: NotificationListRequest): Promise<StoredNotificationPage> {
     const items = this.notifications.filter((item) => item.recipientMemberId === recipientMemberId
       && (!request.filters.eventType || item.eventType === request.filters.eventType)
       && (request.filters.read === undefined || (item.readAt !== null) === request.filters.read));
