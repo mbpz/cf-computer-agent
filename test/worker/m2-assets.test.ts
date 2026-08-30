@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { APP_CONFIG } from "../../src/config";
 import { SessionService } from "../../src/identity/session";
@@ -14,6 +14,8 @@ const sessions = new Map<string, string>();
 beforeEach(async () => {
   await reset();
   await applyD1Migrations(env.DB, MIGRATIONS);
+  vi.useFakeTimers({ now: Date.parse(now) });
+  sessions.clear();
   const members = new MembersRepository(env.DB);
   for (const id of ["asset-owner", "asset-other", "asset-admin"]) {
     const member = await members.insert({
@@ -30,7 +32,19 @@ beforeEach(async () => {
   }
 });
 
+afterEach(() => {
+  sessions.clear();
+  vi.useRealTimers();
+});
+
 describe("M2 asset upload boundary", () => {
+  it("keeps fixture sessions valid when the application resolves them", async () => {
+    const response = await memberApi("asset-owner", "/api/session");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ member: { id: "asset-owner" } });
+  });
+
   it("exposes capacity only to administrators and reports free-tier storage as disabled", async () => {
     const contributor = await memberApi("asset-owner", "/api/admin/assets/capacity", undefined, createApp({ assetStorage: null }));
     expect(contributor.status).toBe(403);

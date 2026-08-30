@@ -44,6 +44,14 @@ function localEnv(overrides: Partial<Env> = {}): Env {
   } as Env;
 }
 
+function isolatedKnowledgeNamespace(name: string): Env["KNOWLEDGE"] {
+  const id = env.KNOWLEDGE.idFromName(name);
+  return {
+    idFromName: () => id,
+    get: (...args: Parameters<Env["KNOWLEDGE"]["get"]>) => env.KNOWLEDGE.get(...args),
+  } as unknown as Env["KNOWLEDGE"];
+}
+
 async function signedAutomationRequest(url: string, init: RequestInit = {}): Promise<Request<unknown, IncomingRequestCfProperties<unknown>>> {
   const headers = new Headers(init.headers);
   if (!headers.has("content-type")) headers.set("content-type", "application/json");
@@ -899,7 +907,8 @@ describe("Worker application", () => {
 
   it("does not encode unexpected journal corruption as a domain error", async () => {
     const sensitiveMarker = "journal-sensitive-marker-do-not-log";
-    const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName(APP_CONFIG.workspaceName));
+    const knowledge = isolatedKnowledgeNamespace(`journal-corruption-${crypto.randomUUID()}`);
+    const stub = knowledge.get(knowledge.idFromName(APP_CONFIG.workspaceName));
     await runInDurableObject(stub, (_instance, state) => {
       state.storage.sql.exec(
         "INSERT INTO memory_garden_note_journal (workspace, note_json, content) VALUES (?, ?, ?)",
@@ -918,12 +927,19 @@ describe("Worker application", () => {
 
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      const response = await api("/api/notes");
+      const response = await fetchSignedApp(createApp(), "/api/notes", {}, localEnv({ KNOWLEDGE: knowledge }));
       const body = await expectError(response, 500, "INTERNAL_ERROR");
       expect(JSON.stringify(body)).not.toContain(sensitiveMarker);
       expect(JSON.stringify(error.mock.calls)).not.toContain(sensitiveMarker);
     } finally {
       error.mockRestore();
     }
+  });
+
+  it("keeps the default workspace usable after journal-corruption coverage", async () => {
+    const response = await api("/api/notes");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ notes: [] });
   });
 });

@@ -6,7 +6,7 @@
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
 
-总账成熟度：`atoms=84`; `implementation=done:48,partial:4,pending:32,n/a:0`; `verification=done:51,partial:0,pending:33,n/a:0`; `release=done:0,partial:28,pending:56,n/a:0`; `acceptance=done:0,partial:8,pending:76,n/a:0`
+总账成熟度：`atoms=84`; `implementation=done:49,partial:4,pending:31,n/a:0`; `verification=done:52,partial:0,pending:32,n/a:0`; `release=done:0,partial:28,pending:56,n/a:0`; `acceptance=done:0,partial:8,pending:76,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
