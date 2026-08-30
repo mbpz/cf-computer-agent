@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -28,6 +29,7 @@ const collaborationEvidencePath = resolve(
   repositoryRoot,
   "docs/operations/evidence/2026-08-30-workbench-collaboration.md",
 );
+const migrationVerifierPath = resolve(repositoryRoot, "scripts/verify-m1-migrations.mjs");
 
 const README_REQUIRED_LINKS = [
   "ROADMAP.md",
@@ -98,11 +100,6 @@ const COLLABORATION_RELEASE_NOT_DONE_IDS = [
   ...COLLABORATION_LOCAL_DONE_IDS,
   ...COLLABORATION_PARTIAL_POLICY_IDS,
   "TSK-009", "TSK-010", "BRD-007", "NTF-006", "MSG-006",
-];
-const COLLABORATION_MIGRATIONS = [
-  "0035_workbench_collaboration_menus.sql",
-  "0036_workbench_notifications.sql",
-  "0037_workbench_discussions.sql",
 ];
 const ROADMAP_MATURITY_DIMENSIONS = [
   ["implementation", "实现"],
@@ -492,9 +489,7 @@ test("collaboration delivery is locally ready while release and acceptance remai
   }
 
   const evidence = readFileSync(collaborationEvidencePath, "utf8");
-  for (const migration of COLLABORATION_MIGRATIONS) {
-    assert.match(evidence, new RegExp(`\\b${escapeRegExp(migration)}\\b`, "u"), `${migration} requires local evidence`);
-  }
+  assertCollaborationMigrationEvidence(evidence, reviewedMigrationManifest());
   assertCollaborationEvidenceBoundary(evidence);
 });
 
@@ -1470,6 +1465,68 @@ function parseMarkdownTable(markdown) {
     rows.push(Object.fromEntries(headers.map((header, index) => [header, cells[index]])));
   }
   return { headers, rows };
+}
+
+function reviewedMigrationManifest() {
+  const result = spawnSync(process.execPath, [migrationVerifierPath, "--manifest-json"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+  });
+  assert.equal(
+    result.status,
+    0,
+    `migration verifier must expose its reviewed manifest as structured JSON: ${result.stderr || result.stdout}`,
+  );
+  const manifest = JSON.parse(result.stdout);
+  assert.ok(Array.isArray(manifest), "reviewed migration manifest must be an array");
+  return manifest;
+}
+
+function assertCollaborationMigrationEvidence(evidence, manifest) {
+  assert.equal(manifest.length, 37, "reviewed migration manifest must contain 37 migrations");
+  const numbered = manifest.map((entry) => {
+    assert.deepEqual(Object.keys(entry).sort(), ["name", "sha256"], "manifest entries must be name/hash records");
+    assert.match(entry.name, /^\d{4}_[a-z0-9_]+\.sql$/u, "migration names must be numbered SQL files");
+    assert.match(entry.sha256, /^[a-f0-9]{64}$/u, "migration hashes must be SHA-256 values");
+    return { ...entry, number: Number.parseInt(entry.name.slice(0, 4), 10) };
+  });
+  assert.deepEqual(
+    numbered.map(({ number }) => number),
+    Array.from({ length: 37 }, (_, index) => index + 1),
+    "reviewed migrations must be continuously numbered 0001 through 0037",
+  );
+
+  const collaborationMigrations = numbered.filter(({ number }) => number >= 35 && number <= 37);
+  assert.deepEqual(
+    collaborationMigrations.map(({ number }) => number),
+    [35, 36, 37],
+    "collaboration delivery requires reviewed migrations 0035 through 0037",
+  );
+
+  const evidenceRows = new Map(
+    [...evidence.matchAll(/^- `([^`]+\.sql)`: ([^\n]+)$/gmu)]
+      .map((match) => [match[1], match[2]]),
+  );
+  for (const { name } of collaborationMigrations) {
+    assert.ok(evidenceRows.has(name), `${name} requires migration-specific local evidence`);
+  }
+
+  const menuEvidence = evidenceRows.get(collaborationMigrations[0].name);
+  assert.match(menuEvidence, /deterministic.*menu ordering/iu, "0035 evidence must describe deterministic menu ordering");
+  assert.match(
+    menuEvidence,
+    /(?:status.*(?:preserv|retain)|(?:preserv|retain).*status)/iu,
+    "0035 evidence must state that existing status is preserved",
+  );
+  assert.doesNotMatch(menuEvidence, /readiness|ready/iu, "0035 must not be credited with route readiness");
+  assert.match(
+    evidence,
+    /readiness.*shared route registry.*frontend navigation merge/iu,
+    "route readiness must be attributed to the shared route registry and frontend navigation merge",
+  );
+
+  const migrationCount = evidence.match(/cover (\d+) migrations/u)?.[1];
+  assert.equal(Number.parseInt(migrationCount ?? "", 10), manifest.length, "evidence migration count must match the reviewed manifest");
 }
 
 function assertCollaborationEvidenceBoundary(evidence) {

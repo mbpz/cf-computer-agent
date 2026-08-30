@@ -23,9 +23,10 @@ Evidence date retained from the approved plan: 2026-08-30. Reconciliation and fi
 
 ## Migration evidence
 
-- `0035_workbench_collaboration_menus.sql`: deterministic first-level collaboration menu readiness and ordering; prior migrations remain unchanged.
+- `0035_workbench_collaboration_menus.sql`: deterministic first-level collaboration menu ordering; existing menu status is preserved and prior migrations remain unchanged.
 - `0036_workbench_notifications.sql`: recipient-owned notifications, deduplication, bounded read indexes, and retryable task notification intents.
 - `0037_workbench_discussions.sql`: contextual threads/messages, stable sequence/idempotency constraints, and bounded authorization projections.
+- Menu readiness comes from the shared route registry and frontend navigation merge, not from `0035`.
 - Local migration verifier and Worker migration/query-plan tests cover 37 migrations. No remote migration was applied.
 
 ## Implemented contracts

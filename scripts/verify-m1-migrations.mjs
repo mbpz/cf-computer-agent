@@ -58,6 +58,10 @@ async function verifyFiles() {
   console.log(`[pass] migration-files count=${migrations.length}`);
 }
 
+function printManifest() {
+  console.log(JSON.stringify(migrations.map(([name, sha256]) => ({ name, sha256 }))));
+}
+
 async function verifyLedger(phase, path) {
   if (!path) throw new Error("Missing ledger path");
   const information = await stat(path);
@@ -134,7 +138,9 @@ function hasExactKeys(value, keys) {
 try {
   const [mode, path, ...extra] = process.argv.slice(2);
   if (extra.length > 0) throw new Error("Unexpected arguments");
-  if (mode === "--files" && path === undefined) {
+  if (mode === "--manifest-json" && path === undefined) {
+    printManifest();
+  } else if (mode === "--files" && path === undefined) {
     await verifyFiles();
   } else if (mode === "--ledger-before" && path !== undefined) {
     await verifyLedger("before", path);
@@ -146,9 +152,11 @@ try {
     throw new Error("Invalid verifier mode");
   }
 } catch {
-  const mode = process.argv[2] === "--files"
-    ? "migration-files"
-    : process.argv[2] === "--legacy-pending" ? "legacy-pending" : "migration-ledger";
+  const mode = process.argv[2] === "--manifest-json"
+    ? "migration-manifest"
+    : process.argv[2] === "--files"
+      ? "migration-files"
+      : process.argv[2] === "--legacy-pending" ? "legacy-pending" : "migration-ledger";
   console.error(`[fail] ${mode}`);
   process.exitCode = 1;
 }
