@@ -211,6 +211,15 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 });
 
+test("Roadmap uses the approved R0-R6 vertical journey structure", () => {
+  const roadmap = readFileSync(roadmapPath, "utf8");
+
+  for (const stage of ["R0", "R1", "R2", "R3", "R4", "R5", "R6"]) {
+    assert.match(roadmap, new RegExp(`^## ${stage} — `, "m"));
+  }
+  assert.doesNotMatch(roadmap, /^## M[0-9]+ — /m);
+});
+
 function parseMarkdownTable(markdown) {
   const lines = markdown.split(/\r?\n/u);
   const headerIndex = lines.findIndex((line) => splitTableRow(line).join("|") === REQUIRED_COLUMNS.join("|"));
