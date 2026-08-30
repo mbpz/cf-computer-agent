@@ -19,7 +19,7 @@ Implemented the task-backed `/boards` route as a ready workspace surface. The bo
 - Writes: `setTaskStatus(id, status)` using the existing task transition and idempotency contract.
 - Authority and isolation: unchanged task API ownership checks and `workspace.tasks` route permission; Boards adds no storage or server authority.
 - Pagination: bounded `20 | 50 | 100` page sizes with independent URL state (`todoPage`, `doingPage`, and corresponding page-size keys). A column request aborts and rejects stale generations without reloading unaffected columns.
-- Status actions: native keyboard-operable selects expose only legal non-canceled transitions. Drag-and-drop is intentionally not implemented.
+- Status actions: native keyboard-operable selects expose legal transitions, including canceled for nonterminal visible tasks. Drag-and-drop is intentionally not implemented.
 - Optimism: moves update visible source/target columns immediately, roll back exactly on mutation failure, and refresh the affected columns after success.
 - States: loading, initial error, retained-data error, empty, retry, pagination, and mutation failure copy are backed by English and Simplified Chinese catalogs.
 - Canceled tasks: never queried as a primary column and are defensively filtered from visible board items.
@@ -78,3 +78,30 @@ Implemented the task-backed `/boards` route as a ready workspace surface. The bo
 
 - This section ships with the scoped follow-up commit `fix: harden task board mutations`.
 - Browser acceptance and deployment remain outside this task. The existing Vite chunk warning above 500 kB, Worker failure-fixture diagnostics, and local AI-binding warnings remain non-blocking.
+
+## Fix round 2
+
+### RED / GREEN
+
+- Full-target-page RED reproduced a failed move restoring only 19 of the original 20 destination items because the optimistic prepend had evicted the last item. GREEN records the evicted item, index, and destination ownership in the mutation delta, then restores the exact identifiers, order, and total without duplicates.
+- Same-query retry RED reproduced a retry superseded by mutation failure remaining permanently pending at request attempt 3. GREEN assigns a new per-column request revision to every query and retry start and schedules replacement from the current pending/superseded request state; the authoritative replacement completes at attempt 4.
+- A controlled inverse-guard mutation reproduced both A-to-B-to-A stale inverse corruption and an old failure changing newer same-query authoritative data, each yielding 21 visible items. GREEN requires exact query, request revision, and mutation ownership before applying an inverse, so an old request incarnation cannot modify a newer one.
+- Round 1 behavior remains covered: canceled actions, mutations while the destination is loading or errored, last-page convergence with preserved sibling query parameters, stale-success protection, StrictMode, and unmount handling all remain green.
+
+### Interfaces and scope
+
+- Read/write authority remains the existing `loadTasks` / `TasksService.list` and `setTaskStatus` interfaces; task API ownership continues to provide user isolation.
+- `/boards` remains ready with four visible columns. No board table, migration, repository, API, or duplicate task authority was added.
+- The fix is limited to request/mutation coordination in `frontend/app.tsx`, focused route regressions, and this report.
+
+### Verification
+
+- Board focused suite: 2 files and 23/23 tests passed.
+- Full unit gate: 169 files and 1,388 tests passed.
+- Worker gate: 26 files and 409 tests passed; the production UI build completed.
+- `verify:i18n` passed with 434 keys, 55 placeholders, and 6 locale files; `typecheck` and `git diff --check` passed.
+
+### Fix-round commit and concerns
+
+- This section ships with the scoped follow-up commit `fix: isolate task board request ownership`.
+- Browser acceptance and deployment remain outside this task. Existing Vite chunk-size, Worker failure-fixture, and local AI-binding warnings remain non-blocking.

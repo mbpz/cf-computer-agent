@@ -788,15 +788,16 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   columnsRef.current = columns;
   const queriesRef = useRef(queries);
   queriesRef.current = queries;
-  const columnGenerationsRef = useRef<Record<BoardStatus, number>>({ todo: 0, doing: 0, blocked: 0, done: 0 });
+  const requestStatesRef = useRef<Record<BoardStatus, BoardRequestState>>(initialBoardRequestStates());
+  const mutationOwnersRef = useRef<Record<BoardStatus, number | null>>({ todo: null, doing: null, blocked: null, done: null });
   const actionPendingRef = useRef(false);
   const actionGenerationRef = useRef(0);
   const activeRef = useRef(true);
 
-  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, columnGenerationsRef, setQueries, setColumns);
-  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, columnGenerationsRef, setQueries, setColumns);
-  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, columnGenerationsRef, setQueries, setColumns);
-  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, columnGenerationsRef, setQueries, setColumns);
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
 
   useEffect(() => {
     const onPopState = () => {
@@ -827,23 +828,26 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     if (optimistic === before) return;
     const sourceQuery = { ...queriesRef.current[source] };
     const targetQuery = isBoardStatus(target) ? { ...queriesRef.current[target] } : undefined;
-    columnGenerationsRef.current[source] += 1;
-    const sourceGeneration = columnGenerationsRef.current[source];
     const targetChanged = isBoardStatus(target) && optimistic[target] !== before[target];
-    if (targetChanged) columnGenerationsRef.current[target] += 1;
-    const targetGeneration = targetChanged ? columnGenerationsRef.current[target] : undefined;
-    const delta: BoardMutationDelta = {
-      task, source, sourceQuery, sourceGeneration,
-      sourceIndex: before[source].kind === "ready" ? before[source].items.findIndex((item) => item.id === task.id) : -1,
-      sourceWasPending: before[source].kind === "ready" && before[source].pending,
-      ...(isBoardStatus(target) ? {
-        target, targetQuery: targetQuery!, targetChanged, targetGeneration,
-        targetWasPending: before[target].kind === "ready" && before[target].pending,
-      } : {}),
-    };
+    const targetBefore = isBoardStatus(target) ? before[target] : undefined;
+    const targetEvicted = targetChanged && targetBefore?.kind === "ready" && targetBefore.pagination.page === 1
+      && targetBefore.items.length === targetBefore.pagination.pageSize ? targetBefore.items.at(-1) : undefined;
+    const targetEvictedIndex = targetEvicted && targetBefore?.kind === "ready" ? targetBefore.items.length - 1 : undefined;
     actionPendingRef.current = true;
     actionGenerationRef.current += 1;
     const generation = actionGenerationRef.current;
+    mutationOwnersRef.current[source] = generation;
+    if (targetChanged) mutationOwnersRef.current[target] = generation;
+    const delta: BoardMutationDelta = {
+      task, source, sourceQuery, owner: generation,
+      sourceRequestRevision: requestStatesRef.current[source].revision,
+      sourceIndex: before[source].kind === "ready" ? before[source].items.findIndex((item) => item.id === task.id) : -1,
+      ...(isBoardStatus(target) ? {
+        target, targetQuery: targetQuery!, targetChanged,
+        targetRequestRevision: requestStatesRef.current[target].revision,
+        ...(targetEvicted ? { targetEvicted, targetEvictedIndex } : {}),
+      } : {}),
+    };
     setActionPendingId(task.id); setActionError(undefined); setColumns(optimistic); columnsRef.current = optimistic;
     try {
       await setTaskStatus(task.id, target);
@@ -852,17 +856,22 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     } catch (error: unknown) {
       if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
         const sourceMatches = sameBoardQuery(queriesRef.current[source], delta.sourceQuery)
-          && columnGenerationsRef.current[source] === delta.sourceGeneration;
+          && requestStatesRef.current[source].revision === delta.sourceRequestRevision
+          && mutationOwnersRef.current[source] === delta.owner;
         const targetMatches = delta.target !== undefined && delta.targetChanged
           && sameBoardQuery(queriesRef.current[delta.target], delta.targetQuery!)
-          && columnGenerationsRef.current[delta.target] === delta.targetGeneration;
-        if (sourceMatches) columnGenerationsRef.current[source] += 1;
-        if (targetMatches && delta.target) columnGenerationsRef.current[delta.target] += 1;
+          && requestStatesRef.current[delta.target].revision === delta.targetRequestRevision
+          && mutationOwnersRef.current[delta.target] === delta.owner;
+        if (sourceMatches) mutationOwnersRef.current[source] = null;
+        if (targetMatches && delta.target) mutationOwnersRef.current[delta.target] = null;
         setColumns((current) => rollbackBoardMove(current, delta, sourceMatches, targetMatches));
         setRetryVersions((current) => {
           const next = { ...current };
-          if (!sourceMatches || delta.sourceWasPending) next[source] += 1;
-          if (delta.target && (delta.targetWasPending || !sameBoardQuery(queriesRef.current[delta.target], delta.targetQuery!) || (delta.targetChanged && !targetMatches))) next[delta.target] += 1;
+          if (!sourceMatches && needsBoardReplacement(source, delta.sourceQuery, queriesRef, requestStatesRef, columnsRef)) next[source] += 1;
+          if (delta.target && delta.targetChanged && !targetMatches
+            && needsBoardReplacement(delta.target, delta.targetQuery!, queriesRef, requestStatesRef, columnsRef)) next[delta.target] += 1;
+          if (sourceMatches && (requestStatesRef.current[source].pending || requestStatesRef.current[source].superseded)) next[source] += 1;
+          if (delta.target && targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)) next[delta.target] += 1;
           return next;
         });
         setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
@@ -886,18 +895,26 @@ function useBoardColumnRequest(
   query: { page: number; pageSize: SupportedPageSize },
   retryVersion: number,
   queriesRef: { current: BoardPagination },
-  columnGenerationsRef: { current: Record<BoardStatus, number> },
+  requestStatesRef: { current: Record<BoardStatus, BoardRequestState> },
+  mutationOwnersRef: { current: Record<BoardStatus, number | null> },
   setQueries: Dispatch<SetStateAction<BoardPagination>>,
   setColumns: Dispatch<SetStateAction<BoardColumnStates>>,
 ) {
   useEffect(() => {
     const controller = createTasksRequestController();
-    const querySnapshot = { ...query }; const columnGeneration = columnGenerationsRef.current[status];
+    const querySnapshot = { ...query };
+    const revision = requestStatesRef.current[status].revision + 1;
+    const owner = mutationOwnersRef.current[status];
+    requestStatesRef.current[status] = { revision, pending: true, superseded: false };
     setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: true, loadError: false } : { kind: "loading" } }));
     const request = controller.request({ page: query.page, pageSize: query.pageSize, filters: { status } });
     void request.promise.then((data) => {
-      if (!controller.isCurrent(request.generation) || !sameBoardQuery(queriesRef.current[status], querySnapshot)
-        || columnGenerationsRef.current[status] !== columnGeneration) return;
+      if (!controller.isCurrent(request.generation) || requestStatesRef.current[status].revision !== revision) return;
+      if (!sameBoardQuery(queriesRef.current[status], querySnapshot) || mutationOwnersRef.current[status] !== owner) {
+        requestStatesRef.current[status] = { revision, pending: false, superseded: true }; return;
+      }
+      requestStatesRef.current[status] = { revision, pending: false, superseded: false };
+      mutationOwnersRef.current[status] = null;
       const lastPage = Math.max(1, data.pagination.totalPages);
       if (querySnapshot.page > lastPage) {
         const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
@@ -908,8 +925,11 @@ function useBoardColumnRequest(
       }
       setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
     }).catch((error: unknown) => {
-      if (!controller.isCurrent(request.generation) || !sameBoardQuery(queriesRef.current[status], querySnapshot)
-        || columnGenerationsRef.current[status] !== columnGeneration || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || requestStatesRef.current[status].revision !== revision || isAbort(error)) return;
+      if (!sameBoardQuery(queriesRef.current[status], querySnapshot) || mutationOwnersRef.current[status] !== owner) {
+        requestStatesRef.current[status] = { revision, pending: false, superseded: true }; return;
+      }
+      requestStatesRef.current[status] = { revision, pending: false, superseded: false };
       setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: false, loadError: true } : { kind: "error" } }));
     });
     return () => controller.dispose();
@@ -920,18 +940,30 @@ function initialBoardColumns(): BoardColumnStates {
   return { todo: { kind: "loading" }, doing: { kind: "loading" }, blocked: { kind: "loading" }, done: { kind: "loading" } };
 }
 
+interface BoardRequestState { revision: number; pending: boolean; superseded: boolean }
+
+function initialBoardRequestStates(): Record<BoardStatus, BoardRequestState> {
+  return {
+    todo: { revision: 0, pending: false, superseded: false },
+    doing: { revision: 0, pending: false, superseded: false },
+    blocked: { revision: 0, pending: false, superseded: false },
+    done: { revision: 0, pending: false, superseded: false },
+  };
+}
+
 interface BoardMutationDelta {
   task: TaskItem;
+  owner: number;
   source: BoardStatus;
   sourceQuery: { page: number; pageSize: SupportedPageSize };
-  sourceGeneration: number;
+  sourceRequestRevision: number;
   sourceIndex: number;
-  sourceWasPending: boolean;
   target?: BoardStatus;
   targetQuery?: { page: number; pageSize: SupportedPageSize };
   targetChanged?: boolean;
-  targetGeneration?: number;
-  targetWasPending?: boolean;
+  targetRequestRevision?: number;
+  targetEvicted?: TaskItem;
+  targetEvictedIndex?: number;
 }
 
 function moveTaskBetweenColumns(columns: BoardColumnStates, task: TaskItem, source: BoardStatus, target: BoardTargetStatus): BoardColumnStates {
@@ -976,8 +1008,12 @@ function rollbackBoardMove(columns: BoardColumnStates, delta: BoardMutationDelta
   if (restoreTarget && delta.target) {
     const targetColumn = next[delta.target];
     if (targetColumn.kind === "ready") {
+      const items = targetColumn.items.filter((item) => item.id !== delta.task.id);
+      if (delta.targetEvicted && !items.some((item) => item.id === delta.targetEvicted!.id)) {
+        items.splice(Math.min(delta.targetEvictedIndex ?? items.length, items.length), 0, delta.targetEvicted);
+      }
       const total = Math.max(0, targetColumn.pagination.total - 1);
-      next = { ...next, [delta.target]: { ...targetColumn, items: targetColumn.items.filter((item) => item.id !== delta.task.id), pagination: { ...targetColumn.pagination, total, totalPages: total === 0 ? 0 : Math.ceil(total / targetColumn.pagination.pageSize) } } };
+      next = { ...next, [delta.target]: { ...targetColumn, items, pagination: { ...targetColumn.pagination, total, totalPages: total === 0 ? 0 : Math.ceil(total / targetColumn.pagination.pageSize) } } };
     }
   }
   return next;
@@ -985,6 +1021,18 @@ function rollbackBoardMove(columns: BoardColumnStates, delta: BoardMutationDelta
 
 function sameBoardQuery(left: { page: number; pageSize: SupportedPageSize }, right: { page: number; pageSize: SupportedPageSize }): boolean {
   return left.page === right.page && left.pageSize === right.pageSize;
+}
+
+function needsBoardReplacement(
+  status: BoardStatus,
+  mutationQuery: { page: number; pageSize: SupportedPageSize },
+  queriesRef: { current: BoardPagination },
+  requestStatesRef: { current: Record<BoardStatus, BoardRequestState> },
+  columnsRef: { current: BoardColumnStates },
+): boolean {
+  const requestState = requestStatesRef.current[status]; const column = columnsRef.current[status];
+  return !sameBoardQuery(queriesRef.current[status], mutationQuery) || requestState.pending || requestState.superseded
+    || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

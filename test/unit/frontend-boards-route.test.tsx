@@ -72,6 +72,28 @@ describe("task-backed boards route", () => {
     expect(container.textContent).toContain("Unable to move the task.");
   });
 
+  it("restores the exact evicted item and order when a full target page move fails", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return mutation;
+      if (statusFromUrl(url) === "todo") return pageResponseFor(url, 1, "Alpha");
+      if (statusFromUrl(url) === "doing") return pageResponseFor(url, 20, "Target");
+      return pageResponseFor(url, 0, "Empty");
+    });
+    await renderBoard();
+    const originalTargetIds = Array.from({ length: 20 }, (_unused, index) => index === 0 ? "doing-task" : `doing-task-${index}`);
+    expect(boardTaskIds(column("doing"))).toEqual(originalTargetIds);
+
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    expect(boardTaskIds(column("doing"))).toEqual(["todo-task", ...originalTargetIds.slice(0, 19)]);
+    await act(async () => resolveMutation(errorResponse())); await flush();
+
+    expect(boardTaskIds(column("doing"))).toEqual(originalTargetIds);
+    expect(column("doing").textContent).toContain("Total 20");
+  });
+
   it("cancels from a visible source without requesting or rendering a canceled column", async () => {
     let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
@@ -192,6 +214,86 @@ describe("task-backed boards route", () => {
     expect(column("todo").textContent).not.toContain("Alpha");
     expect(column("doing").textContent).toContain("Doing 50 authoritative");
     expect(column("blocked").textContent).toContain("Blocked authoritative");
+  });
+
+  it("replaces a same-query retry superseded by mutation failure instead of remaining pending", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    const never = new Promise<Response>(() => undefined); let todoAttempts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return mutation;
+      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
+      todoAttempts += 1;
+      if (todoAttempts === 2) return errorResponse();
+      if (todoAttempts === 3) return never;
+      return pageResponseFor(url, 1, "Alpha");
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
+    expect(column("todo").textContent).toContain("Unable to load this task column.");
+
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
+    expect(todoAttempts).toBe(3);
+    expect(column("todo").querySelector('[aria-busy="true"]')).toBeTruthy();
+
+    await act(async () => resolveMutation(errorResponse())); await flush(); await flush();
+    expect(todoAttempts).toBe(4);
+    expect(column("todo").textContent).toContain("Alpha");
+    expect(column("todo").querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it("does not apply an old inverse after source query A to B to A loads a new incarnation", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; }); let pageOneAttempts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return mutation;
+      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
+      if (pageFromUrl(url) === 2) return pageResponseWithPrefix(url, 40, "page-b", "Page B");
+      pageOneAttempts += 1;
+      return pageOneAttempts === 1 ? pageResponseFor(url, 41, "Alpha") : pageResponseWithPrefix(url, 40, "new-a", "New A");
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+
+    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    await act(async () => (column("todo").querySelector('[aria-label="Page 1"]') as HTMLButtonElement).click()); await flush();
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
+    expect(boardTaskIds(column("todo"))[0]).toBe("new-a-0");
+
+    await act(async () => resolveMutation(errorResponse())); await flush();
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
+    expect(boardTaskIds(column("todo"))[0]).toBe("new-a-0");
+    expect(boardTaskIds(column("todo"))).not.toContain("todo-task");
+    expect(column("todo").textContent).toContain("Total 40");
+  });
+
+  it("does not let an old failure inverse modify newer same-query authoritative data", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; }); let todoAttempts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return mutation;
+      if (statusFromUrl(url) !== "todo") return pageResponseFor(url, 0, "Empty");
+      todoAttempts += 1;
+      if (todoAttempts === 2) return errorResponse();
+      if (todoAttempts === 3) return pageResponseWithPrefix(url, 20, "new-authoritative", "New authoritative");
+      return pageResponseFor(url, 1, "Alpha");
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+    await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
+    expect(boardTaskIds(column("todo"))[0]).toBe("new-authoritative-0");
+
+    await act(async () => resolveMutation(errorResponse())); await flush();
+    expect(boardTaskIds(column("todo"))).toHaveLength(20);
+    expect(boardTaskIds(column("todo"))[0]).toBe("new-authoritative-0");
+    expect(boardTaskIds(column("todo"))).not.toContain("todo-task");
+    expect(column("todo").textContent).toContain("Total 20");
   });
 
   it("does not let an old success refresh overwrite a later optimistic mutation", async () => {
@@ -371,12 +473,22 @@ function pageResponseFor(url: string, total: number, title: string): Response {
   return Response.json({ items, pagination: { page, pageSize, total, totalPages: total === 0 ? 0 : Math.ceil(total / pageSize) } });
 }
 
+function pageResponseWithPrefix(url: string, total: number, idPrefix: string, title: string): Response {
+  const parsed = new URL(url, "https://app.test"); const status = parsed.searchParams.get("status") as TaskItem["status"];
+  const page = Number(parsed.searchParams.get("page") ?? "1"); const pageSize = Number(parsed.searchParams.get("pageSize") ?? "20");
+  const offset = (page - 1) * pageSize; const count = Math.max(0, Math.min(pageSize, total - offset));
+  const items = Array.from({ length: count }, (_unused, index) => task(status, `${title} ${index + 1}`, `${idPrefix}-${index}`));
+  return Response.json({ items, pagination: { page, pageSize, total, totalPages: total === 0 ? 0 : Math.ceil(total / pageSize) } });
+}
+
 function task(status: TaskItem["status"], title: string, id: string): TaskItem {
   return { id, title, notes: "", status, progress: 0, priority: "medium", dueAt: null, completedAt: null, createdAt: "2026-08-30T00:00:00.000Z", updatedAt: "2026-08-30T00:00:00.000Z" };
 }
 
 function statusFromUrl(url: string): string | null { return new URL(url, "https://app.test").searchParams.get("status"); }
 function pageFromUrl(url: string): number { return Number(new URL(url, "https://app.test").searchParams.get("page")); }
+function boardTaskIds(column: HTMLElement): string[] { return [...column.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task")!); }
+function buttonByText(column: HTMLElement, text: string): HTMLButtonElement { return [...column.querySelectorAll("button")].find((button) => button.textContent?.includes(text)) as HTMLButtonElement; }
 function errorResponse(): Response { return Response.json({ error: { code: "TEST_ERROR", message: "failed", retryable: true } }, { status: 500 }); }
 async function change(select: HTMLSelectElement, value: string) { await act(async () => { select.value = value; select.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
