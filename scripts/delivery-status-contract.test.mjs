@@ -37,6 +37,16 @@ const README_CLAIM_MODIFIERS = "(?:(?:now|already|fully|all)\\s+)*";
 const README_POSITIVE_CLAIM = "(?:ready|implemented|available|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_FINAL_CLAIM = "(?:ready|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_CLAIM_BETWEEN = "(?:(?!\\b(?:but|however|yet|while)\\b)[^.\\n;]){0,96}?";
+const README_AGGREGATE_SUBJECTS = new Set([
+  "boards",
+  "notifications",
+  "messages",
+  "user-isolated tasks",
+  "the task ui",
+  "task ui",
+  "current-main production release",
+  "signed browser acceptance",
+]);
 
 const STATUS_VALUES = new Set(["done", "partial", "pending", "n/a"]);
 const REQUIRED_COLUMNS = [
@@ -507,10 +517,26 @@ test("README derives bounded workbench claims from the delivery ledger", () => {
     { name: "negative perfect tense", appended: "\nUser-isolated tasks and the task UI have not been completed.\n" },
     { name: "negative production readiness", appended: "\nMessages are not production-ready.\n" },
     { name: "negative pending readiness", appended: "\nNotifications are not yet ready.\n" },
+    {
+      name: "mixed-subject readiness",
+      appended: "\nBoards are not ready, and the knowledge base is ready for local use.\n",
+    },
   ]) {
     assert.doesNotThrow(
       () => assertReadmeContract(`${readme}${appended}`, rows),
       `${name} must not be misclassified as a positive delivery claim`,
+    );
+  }
+
+  for (const { name, appended } of [
+    { name: "repeated explicit board subject", appended: "\nBoards are not ready, and Boards are ready.\n" },
+    { name: "same-subject coordinated predicate", appended: "\nBoards are not ready, and are ready.\n" },
+    { name: "aggregate collaboration subject list", appended: "\nBoards, notifications, and messages are ready.\n" },
+  ]) {
+    assert.throws(
+      () => assertReadmeContract(`${readme}${appended}`, rows),
+      /boards must not claim readiness while BRD ledger implementation is pending/u,
+      `${name} must remain a positive boards readiness claim`,
     );
   }
 });
@@ -537,15 +563,21 @@ function assertReadmeContract(readme, rows) {
   assert.doesNotMatch(readme, /\bM\d+\b/u, "README must not duplicate milestone prose or counts");
   assert.doesNotMatch(readme, /(?:M1 的 23|76 P0\/M1|M1 实现完成|远程验证待完成)/u);
   assert.doesNotMatch(readme, /D1\s+(?:decides|controls|governs)\s+allowlist membership/ui, "D1 must not be assigned the pre-login allowlist decision");
-  assert.doesNotMatch(readme, readmePositiveClaim("\\d+\\s+(?:product\\s+)?atoms?", README_FINAL_CLAIM), "README must not present an atom count as current overall completion");
+  assertNoPositiveReadmeClaim(
+    readme,
+    "\\d+\\s+(?:product\\s+)?atoms?",
+    README_FINAL_CLAIM,
+    "README must not present an atom count as current overall completion",
+  );
 
   const taskUi = ledgerRow(rows, "TSK-002");
   const taskRetention = ledgerRow(rows, "TSK-009");
   const taskAcceptance = ledgerRow(rows, "TSK-010");
   if (taskUi.实现 !== "done" || taskRetention.实现 !== "done" || taskAcceptance.验收 !== "done") {
-    assert.doesNotMatch(
+    assertNoPositiveReadmeClaim(
       readme,
-      readmePositiveClaim("(?:user-isolated tasks(?: and (?:the )?task UI)?|task UI)", README_FINAL_CLAIM),
+      "(?:user-isolated tasks(?: and (?:the )?task UI)?|task UI)",
+      README_FINAL_CLAIM,
       "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
     );
   }
@@ -554,46 +586,94 @@ function assertReadmeContract(readme, rows) {
     const domainRows = rows.filter((row) => row.ID.startsWith(prefix));
     assert.ok(domainRows.length > 0, `${name} ledger domain is required`);
     if (domainRows.some((row) => row.实现 !== "done")) {
-      assert.doesNotMatch(
+      assertNoPositiveReadmeClaim(
         readme,
-        readmePositiveClaim(name),
+        name,
+        README_POSITIVE_CLAIM,
         `${name} must not claim readiness while ${prefix.slice(0, -1)} ledger implementation is pending`,
       );
     }
   }
 
   if (rows.some((row) => row.发布 !== "done") || rows.some((row) => row.验收 !== "done")) {
-    for (const { claim, message } of [
+    for (const { subject, message } of [
       {
-        claim: readmePositiveClaim("current-main production release and signed browser acceptance", README_FINAL_CLAIM),
+        subject: "current-main production release and signed browser acceptance",
         message: "README must not claim current-main production release or browser acceptance complete",
       },
       {
-        claim: readmePositiveClaim("current-main (?:production )?release", README_FINAL_CLAIM),
+        subject: "current-main (?:production )?release",
         message: "README must not claim current-main production release complete",
       },
       {
-        claim: readmePositiveClaim("current-main (?:signed )?browser acceptance", README_FINAL_CLAIM),
+        subject: "current-main (?:signed )?browser acceptance",
         message: "README must not claim current-main browser acceptance complete",
       },
       {
-        claim: readmePositiveClaim("current-main", README_FINAL_CLAIM),
+        subject: "current-main",
         message: "README must not claim current-main production readiness complete",
       },
     ]) {
-      assert.doesNotMatch(readme, claim, message);
+      assertNoPositiveReadmeClaim(readme, subject, README_FINAL_CLAIM, message);
     }
   }
 }
 
-function readmePositiveClaim(subject, claim = README_POSITIVE_CLAIM) {
-  return new RegExp(
+function assertNoPositiveReadmeClaim(readme, subject, claim, message) {
+  assert.ok(!hasPositiveReadmeClaim(readme, subject, claim), message);
+}
+
+function hasPositiveReadmeClaim(readme, subject, claim = README_POSITIVE_CLAIM) {
+  const positivePredicate = new RegExp(
     `\\b(?:${subject})\\b${README_CLAIM_BETWEEN}\\b(?:`
       + `(?:is|are|remain)\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
       + `|(?:has|have)\\s+${README_CLAIM_MODIFIERS}been\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
       + `)\\b`,
     "iu",
   );
+  return readmeClaimClauses(readme).some((clause) => positivePredicate.test(clause));
+}
+
+function readmeClaimClauses(readme) {
+  return readme
+    .split(/(?<=[.\n;])/u)
+    .flatMap((clause) => splitCoordinatedReadmeClause(clause));
+}
+
+function splitCoordinatedReadmeClause(clause) {
+  const clauses = [];
+  let start = 0;
+
+  for (const match of clause.matchAll(/\band\b/giu)) {
+    const before = clause.slice(start, match.index);
+    const after = clause.slice(match.index + match[0].length);
+    if (startsExplicitSubjectPredicate(after) && !isAggregateSubjectList(before, after)) {
+      clauses.push(before);
+      start = match.index + match[0].length;
+    }
+  }
+
+  clauses.push(clause.slice(start));
+  return clauses;
+}
+
+function startsExplicitSubjectPredicate(text) {
+  return explicitSubjectBeforePredicate(text) !== undefined;
+}
+
+function isAggregateSubjectList(before, after) {
+  const rightSubject = explicitSubjectBeforePredicate(after);
+  if (!rightSubject) return false;
+
+  const subjects = [
+    ...before.trim().split(",").map((subject) => subject.trim()).filter(Boolean),
+    rightSubject,
+  ];
+  return subjects.every((subject) => README_AGGREGATE_SUBJECTS.has(subject.toLowerCase()));
+}
+
+function explicitSubjectBeforePredicate(text) {
+  return /^\s*((?:the\s+)?[a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*){0,5})\s+(?:is|are|remain|has|have)\b/iu.exec(text)?.[1];
 }
 
 function readmeSection(readme, heading) {
