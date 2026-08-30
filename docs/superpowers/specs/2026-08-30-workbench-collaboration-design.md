@@ -49,7 +49,7 @@ The primary journey is:
 ### Boards
 
 - `/boards` becomes a ready route and uses the task service as its sole data source.
-- Columns are `pending`, `in_progress`, `blocked`, and `completed`, matching canonical task statuses.
+- Columns are `todo`, `doing`, `blocked`, and `done`, matching canonical task statuses. Canceled tasks remain available through filters but do not form a primary board column.
 - Board filters share task query semantics. Each column has bounded server-side pagination or cursor-like incremental loading built on the existing numbered-page contract; the UI must not load an unbounded task set.
 - Moving a task between columns calls the existing idempotent status mutation. Optimistic UI must roll back on failure and ignore stale responses.
 - Board access and task visibility are identical to task-list access and visibility.
