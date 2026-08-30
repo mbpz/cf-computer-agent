@@ -3,6 +3,7 @@ import type { FrontendPageMetadata, FrontendPageRequest, SupportedPageSize } fro
 
 export const BOARD_STATUSES = ["todo", "doing", "blocked", "done"] as const;
 export type BoardStatus = (typeof BOARD_STATUSES)[number];
+export type BoardTargetStatus = TaskItem["status"];
 export type BoardPagination = Record<BoardStatus, FrontendPageRequest>;
 
 export type BoardColumnState =
@@ -12,14 +13,14 @@ export type BoardColumnState =
 
 export type BoardColumnStates = Record<BoardStatus, BoardColumnState>;
 
-const transitions: Record<BoardStatus, readonly BoardStatus[]> = {
-  todo: ["doing", "done"],
-  doing: ["todo", "blocked", "done"],
-  blocked: ["todo", "doing", "done"],
+const transitions: Record<BoardStatus, readonly BoardTargetStatus[]> = {
+  todo: ["doing", "done", "canceled"],
+  doing: ["todo", "blocked", "done", "canceled"],
+  blocked: ["todo", "doing", "done", "canceled"],
   done: ["todo"],
 };
 
-export function boardStatusTargets(status: BoardStatus): readonly BoardStatus[] {
+export function boardStatusTargets(status: BoardStatus): readonly BoardTargetStatus[] {
   return transitions[status];
 }
 

@@ -16,9 +16,9 @@ import type { TaskItem } from "../../frontend/lib/tasks-data";
 describe("task-backed board model", () => {
   it("uses the four canonical non-canceled columns and legal task transitions", () => {
     expect(BOARD_STATUSES).toEqual(["todo", "doing", "blocked", "done"]);
-    expect(boardStatusTargets("todo")).toEqual(["doing", "done"]);
-    expect(boardStatusTargets("doing")).toEqual(["todo", "blocked", "done"]);
-    expect(boardStatusTargets("blocked")).toEqual(["todo", "doing", "done"]);
+    expect(boardStatusTargets("todo")).toEqual(["doing", "done", "canceled"]);
+    expect(boardStatusTargets("doing")).toEqual(["todo", "blocked", "done", "canceled"]);
+    expect(boardStatusTargets("blocked")).toEqual(["todo", "doing", "done", "canceled"]);
     expect(boardStatusTargets("done")).toEqual(["todo"]);
   });
 
@@ -81,7 +81,7 @@ describe("task-backed boards page", () => {
     expect(html).toContain('<option value="todo">To do</option>');
     expect(html).toContain('<option value="blocked">Blocked</option>');
     expect(html).toContain('<option value="done">Done</option>');
-    expect(html).not.toContain('<option value="canceled">');
+    expect(html).toContain('<option value="canceled">Canceled</option>');
     expect(html).toContain("disabled");
     expect(html).not.toContain("draggable=");
   });

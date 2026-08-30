@@ -9,7 +9,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 import type { TaskItem } from "../../lib/tasks-data";
 import { taskPriorityKey, taskStatusKey } from "../tasks/tasks-model";
-import { BOARD_STATUSES, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus } from "./board-model";
+import { BOARD_STATUSES, boardStatusTargets, visibleBoardItems, type BoardColumnStates, type BoardStatus, type BoardTargetStatus } from "./board-model";
 
 export function BoardsPage({ locale, columns, actionError, actionPendingId = null, onRetry, onPageChange, onPageSizeChange, onStatusChange }: {
   locale: LocaleRuntime;
@@ -19,7 +19,7 @@ export function BoardsPage({ locale, columns, actionError, actionPendingId = nul
   onRetry: (status: BoardStatus) => void;
   onPageChange: (status: BoardStatus, page: number) => void;
   onPageSizeChange: (status: BoardStatus, pageSize: SupportedPageSize) => void;
-  onStatusChange: (task: TaskItem, status: BoardStatus) => void;
+  onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   return <section className="space-y-5">
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "BOARDS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "BOARDS_DESCRIPTION")}</p></div>
@@ -38,7 +38,7 @@ function BoardColumn({ status, state, locale, actionPendingId, onRetry, onPageCh
   onRetry: (status: BoardStatus) => void;
   onPageChange: (status: BoardStatus, page: number) => void;
   onPageSizeChange: (status: BoardStatus, pageSize: SupportedPageSize) => void;
-  onStatusChange: (task: TaskItem, status: BoardStatus) => void;
+  onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const heading = frontendText(locale, taskStatusKey(status));
   return <article data-board-column={status} className="min-w-0 space-y-3 rounded-lg border bg-muted/20 p-3">
@@ -57,7 +57,7 @@ function ReadyColumn({ status, state, locale, actionPendingId, onRetry, onPageCh
   onRetry: (status: BoardStatus) => void;
   onPageChange: (status: BoardStatus, page: number) => void;
   onPageSizeChange: (status: BoardStatus, pageSize: SupportedPageSize) => void;
-  onStatusChange: (task: TaskItem, status: BoardStatus) => void;
+  onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const items = visibleBoardItems(status, state.items);
   return <>
@@ -84,7 +84,7 @@ function TaskCard({ task, status, locale, disabled, optimistic, onStatusChange }
   return <Card data-board-task={task.id} data-optimistic={optimistic || undefined}>
     <CardContent className="space-y-3 p-3">
       <div className="space-y-1"><h3 className="break-words text-sm font-medium">{title}</h3><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>
-      <Select aria-label={actionLabel} value="" disabled={disabled} onChange={(event) => onStatusChange(task, event.currentTarget.value as BoardStatus)}>
+      <Select aria-label={actionLabel} value="" disabled={disabled} onChange={(event) => onStatusChange(task, event.currentTarget.value as BoardTargetStatus)}>
         <SelectOption value="" disabled>{frontendText(locale, "BOARDS_MOVE_TO")}</SelectOption>
         {boardStatusTargets(status).map((target) => <SelectOption key={target} value={target}>{frontendText(locale, taskStatusKey(target))}</SelectOption>)}
       </Select>

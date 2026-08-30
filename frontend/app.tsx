@@ -35,7 +35,7 @@ import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSub
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
-import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus } from "./pages/boards/board-model";
+import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
@@ -786,17 +786,23 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const [actionError, setActionError] = useState<string | undefined>();
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
+  const queriesRef = useRef(queries);
+  queriesRef.current = queries;
+  const columnGenerationsRef = useRef<Record<BoardStatus, number>>({ todo: 0, doing: 0, blocked: 0, done: 0 });
   const actionPendingRef = useRef(false);
   const actionGenerationRef = useRef(0);
   const activeRef = useRef(true);
 
-  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, setColumns);
-  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, setColumns);
-  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, setColumns);
-  useBoardColumnRequest("done", queries.done, retryVersions.done, setColumns);
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, columnGenerationsRef, setQueries, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, columnGenerationsRef, setQueries, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, columnGenerationsRef, setQueries, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, columnGenerationsRef, setQueries, setColumns);
 
   useEffect(() => {
-    const onPopState = () => { setActionError(undefined); setQueries(parseBoardSearch(window.location.search)); };
+    const onPopState = () => {
+      const next = parseBoardSearch(window.location.search);
+      queriesRef.current = next; setActionError(undefined); setQueries(next);
+    };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
@@ -809,27 +815,57 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
     setActionError(undefined);
     writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(window.location.search, status, next)}`);
-    setQueries((current) => ({ ...current, [status]: next }));
+    const nextQueries = { ...queriesRef.current, [status]: next };
+    queriesRef.current = nextQueries; setQueries(nextQueries);
   };
 
-  const move = async (task: TaskItem, target: BoardStatus) => {
+  const move = async (task: TaskItem, target: BoardTargetStatus) => {
     if (actionPendingRef.current || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
     const source = task.status as BoardStatus;
-    const snapshot = columnsRef.current;
-    const optimistic = moveTaskBetweenColumns(snapshot, task, source, target);
-    if (optimistic === snapshot) return;
+    const before = columnsRef.current;
+    const optimistic = moveTaskBetweenColumns(before, task, source, target);
+    if (optimistic === before) return;
+    const sourceQuery = { ...queriesRef.current[source] };
+    const targetQuery = isBoardStatus(target) ? { ...queriesRef.current[target] } : undefined;
+    columnGenerationsRef.current[source] += 1;
+    const sourceGeneration = columnGenerationsRef.current[source];
+    const targetChanged = isBoardStatus(target) && optimistic[target] !== before[target];
+    if (targetChanged) columnGenerationsRef.current[target] += 1;
+    const targetGeneration = targetChanged ? columnGenerationsRef.current[target] : undefined;
+    const delta: BoardMutationDelta = {
+      task, source, sourceQuery, sourceGeneration,
+      sourceIndex: before[source].kind === "ready" ? before[source].items.findIndex((item) => item.id === task.id) : -1,
+      sourceWasPending: before[source].kind === "ready" && before[source].pending,
+      ...(isBoardStatus(target) ? {
+        target, targetQuery: targetQuery!, targetChanged, targetGeneration,
+        targetWasPending: before[target].kind === "ready" && before[target].pending,
+      } : {}),
+    };
     actionPendingRef.current = true;
     actionGenerationRef.current += 1;
     const generation = actionGenerationRef.current;
     setActionPendingId(task.id); setActionError(undefined); setColumns(optimistic); columnsRef.current = optimistic;
     try {
-      const updated = await setTaskStatus(task.id, target);
+      await setTaskStatus(task.id, target);
       if (!activeRef.current || generation !== actionGenerationRef.current) return;
-      setColumns((current) => replaceBoardTask(current, { ...updated, status: target }, target));
-      setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, [target]: current[target] + 1 }));
+      setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, ...(isBoardStatus(target) ? { [target]: current[target] + 1 } : {}) }));
     } catch (error: unknown) {
       if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
-        columnsRef.current = snapshot; setColumns(snapshot); setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+        const sourceMatches = sameBoardQuery(queriesRef.current[source], delta.sourceQuery)
+          && columnGenerationsRef.current[source] === delta.sourceGeneration;
+        const targetMatches = delta.target !== undefined && delta.targetChanged
+          && sameBoardQuery(queriesRef.current[delta.target], delta.targetQuery!)
+          && columnGenerationsRef.current[delta.target] === delta.targetGeneration;
+        if (sourceMatches) columnGenerationsRef.current[source] += 1;
+        if (targetMatches && delta.target) columnGenerationsRef.current[delta.target] += 1;
+        setColumns((current) => rollbackBoardMove(current, delta, sourceMatches, targetMatches));
+        setRetryVersions((current) => {
+          const next = { ...current };
+          if (!sourceMatches || delta.sourceWasPending) next[source] += 1;
+          if (delta.target && (delta.targetWasPending || !sameBoardQuery(queriesRef.current[delta.target], delta.targetQuery!) || (delta.targetChanged && !targetMatches))) next[delta.target] += 1;
+          return next;
+        });
+        setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
       }
     } finally {
       if (activeRef.current && generation === actionGenerationRef.current) {
@@ -845,39 +881,78 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     onStatusChange={(task, status) => void move(task, status)} />;
 }
 
-function useBoardColumnRequest(status: BoardStatus, query: { page: number; pageSize: SupportedPageSize }, retryVersion: number, setColumns: Dispatch<SetStateAction<BoardColumnStates>>) {
+function useBoardColumnRequest(
+  status: BoardStatus,
+  query: { page: number; pageSize: SupportedPageSize },
+  retryVersion: number,
+  queriesRef: { current: BoardPagination },
+  columnGenerationsRef: { current: Record<BoardStatus, number> },
+  setQueries: Dispatch<SetStateAction<BoardPagination>>,
+  setColumns: Dispatch<SetStateAction<BoardColumnStates>>,
+) {
   useEffect(() => {
     const controller = createTasksRequestController();
+    const querySnapshot = { ...query }; const columnGeneration = columnGenerationsRef.current[status];
     setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: true, loadError: false } : { kind: "loading" } }));
     const request = controller.request({ page: query.page, pageSize: query.pageSize, filters: { status } });
     void request.promise.then((data) => {
-      if (!controller.isCurrent(request.generation)) return;
+      if (!controller.isCurrent(request.generation) || !sameBoardQuery(queriesRef.current[status], querySnapshot)
+        || columnGenerationsRef.current[status] !== columnGeneration) return;
+      const lastPage = Math.max(1, data.pagination.totalPages);
+      if (querySnapshot.page > lastPage) {
+        const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
+        const nextQueries = { ...queriesRef.current, [status]: nextQuery };
+        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(window.location.search, status, nextQuery)}`);
+        queriesRef.current = nextQueries; setQueries(nextQueries);
+        return;
+      }
       setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
     }).catch((error: unknown) => {
-      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
+      if (!controller.isCurrent(request.generation) || !sameBoardQuery(queriesRef.current[status], querySnapshot)
+        || columnGenerationsRef.current[status] !== columnGeneration || isAbort(error)) return;
       setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: false, loadError: true } : { kind: "error" } }));
     });
     return () => controller.dispose();
-  }, [query.page, query.pageSize, retryVersion, setColumns, status]);
+  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status]);
 }
 
 function initialBoardColumns(): BoardColumnStates {
   return { todo: { kind: "loading" }, doing: { kind: "loading" }, blocked: { kind: "loading" }, done: { kind: "loading" } };
 }
 
-function moveTaskBetweenColumns(columns: BoardColumnStates, task: TaskItem, source: BoardStatus, target: BoardStatus): BoardColumnStates {
-  const sourceColumn = columns[source]; const targetColumn = columns[target];
-  if (sourceColumn.kind !== "ready" || targetColumn.kind !== "ready" || !sourceColumn.items.some((item) => item.id === task.id)) return columns;
+interface BoardMutationDelta {
+  task: TaskItem;
+  source: BoardStatus;
+  sourceQuery: { page: number; pageSize: SupportedPageSize };
+  sourceGeneration: number;
+  sourceIndex: number;
+  sourceWasPending: boolean;
+  target?: BoardStatus;
+  targetQuery?: { page: number; pageSize: SupportedPageSize };
+  targetChanged?: boolean;
+  targetGeneration?: number;
+  targetWasPending?: boolean;
+}
+
+function moveTaskBetweenColumns(columns: BoardColumnStates, task: TaskItem, source: BoardStatus, target: BoardTargetStatus): BoardColumnStates {
+  const sourceColumn = columns[source];
+  if (sourceColumn.kind !== "ready" || !sourceColumn.items.some((item) => item.id === task.id)) return columns;
   const moved = { ...task, status: target };
   const sourceTotal = Math.max(0, sourceColumn.pagination.total - 1);
-  const targetTotal = targetColumn.pagination.total + 1;
-  return {
+  const withoutSource = {
     ...columns,
     [source]: {
       ...sourceColumn,
       items: sourceColumn.items.filter((item) => item.id !== task.id),
       pagination: { ...sourceColumn.pagination, total: sourceTotal, totalPages: sourceTotal === 0 ? 0 : Math.ceil(sourceTotal / sourceColumn.pagination.pageSize) },
     },
+  };
+  if (!isBoardStatus(target)) return withoutSource;
+  const targetColumn = columns[target];
+  if (targetColumn.kind !== "ready") return withoutSource;
+  const targetTotal = targetColumn.pagination.total + 1;
+  return {
+    ...withoutSource,
     [target]: {
       ...targetColumn,
       items: targetColumn.pagination.page === 1 ? [moved, ...targetColumn.items].slice(0, targetColumn.pagination.pageSize) : targetColumn.items,
@@ -886,10 +961,30 @@ function moveTaskBetweenColumns(columns: BoardColumnStates, task: TaskItem, sour
   };
 }
 
-function replaceBoardTask(columns: BoardColumnStates, task: TaskItem, status: BoardStatus): BoardColumnStates {
-  const column = columns[status];
-  if (column.kind !== "ready") return columns;
-  return { ...columns, [status]: { ...column, items: column.items.map((item) => item.id === task.id ? task : item) } };
+function isBoardStatus(status: BoardTargetStatus): status is BoardStatus {
+  return BOARD_STATUSES.includes(status as BoardStatus);
+}
+
+function rollbackBoardMove(columns: BoardColumnStates, delta: BoardMutationDelta, restoreSource: boolean, restoreTarget: boolean): BoardColumnStates {
+  let next = columns;
+  const sourceColumn = next[delta.source];
+  if (restoreSource && sourceColumn.kind === "ready" && !sourceColumn.items.some((item) => item.id === delta.task.id)) {
+    const items = [...sourceColumn.items]; items.splice(Math.min(Math.max(delta.sourceIndex, 0), items.length), 0, delta.task);
+    const total = sourceColumn.pagination.total + 1;
+    next = { ...next, [delta.source]: { ...sourceColumn, items, pagination: { ...sourceColumn.pagination, total, totalPages: Math.ceil(total / sourceColumn.pagination.pageSize) } } };
+  }
+  if (restoreTarget && delta.target) {
+    const targetColumn = next[delta.target];
+    if (targetColumn.kind === "ready") {
+      const total = Math.max(0, targetColumn.pagination.total - 1);
+      next = { ...next, [delta.target]: { ...targetColumn, items: targetColumn.items.filter((item) => item.id !== delta.task.id), pagination: { ...targetColumn.pagination, total, totalPages: total === 0 ? 0 : Math.ceil(total / targetColumn.pagination.pageSize) } } };
+    }
+  }
+  return next;
+}
+
+function sameBoardQuery(left: { page: number; pageSize: SupportedPageSize }, right: { page: number; pageSize: SupportedPageSize }): boolean {
+  return left.page === right.page && left.pageSize === right.pageSize;
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
