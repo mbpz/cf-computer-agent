@@ -6,6 +6,7 @@ import { adminAssetRowsSql } from "../../src/assets/repository";
 import { MIGRATIONS } from "../fixtures/d1";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
 import comingSoonMenusMigration from "../../migrations/0034_workspace_coming_soon_menus.sql?raw";
+import workbenchCollaborationMenusMigration from "../../migrations/0035_workbench_collaboration_menus.sql?raw";
 
 interface TableColumn {
   name: string;
@@ -1326,7 +1327,7 @@ describe("Phase 1 control-plane migrations", () => {
     ["key", "conflicting-boards-key", "boards", "/conflicting-boards-key"],
     ["path", "conflicting-boards-path", "conflicting-boards-path", "/boards"],
   ])("fails 0034 on an incompatible unique %s conflict", async (_kind, id, key, path) => {
-    const priorMigrations = MIGRATIONS.slice(0, -1);
+    const priorMigrations = MIGRATIONS.slice(0, -2);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1340,7 +1341,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("preserves canonical 0034 rows without overriding managed fields", async () => {
-    const priorMigrations = MIGRATIONS.slice(0, -1);
+    const priorMigrations = MIGRATIONS.slice(0, -2);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1351,10 +1352,31 @@ describe("Phase 1 control-plane migrations", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await expect(env.DB.prepare(
       "SELECT position, required_bits, status, visible, updated_at FROM menus WHERE id = 'menu-boards'",
-    ).first()).resolves.toEqual({ position: 42, required_bits: "0x1", status: "disabled", visible: 0, updated_at: "2026-08-29T00:00:00.000Z" });
+    ).first()).resolves.toEqual({ position: 7, required_bits: "0x1", status: "disabled", visible: 0, updated_at: "2026-08-29T00:00:00.000Z" });
     await expect(env.DB.prepare(
       "SELECT COUNT(*) AS count FROM menus WHERE id IN ('menu-notifications', 'menu-messages')",
     ).first()).resolves.toEqual({ count: 2 });
+  });
+
+  it("adds 0035 as an idempotent position-only collaboration menu migration", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -1));
+    await env.DB.prepare("UPDATE menus SET position = 42, visible = 0, status = 'disabled' WHERE id = 'menu-boards'").run();
+    const migrationSql = workbenchCollaborationMenusMigration.replace(/^--.*$/gmu, "");
+    await env.DB.prepare(migrationSql).run();
+    await env.DB.prepare(migrationSql).run();
+
+    await expect(env.DB.prepare(
+      "SELECT id, position, visible, status FROM menus WHERE id IN ('menu-tasks', 'menu-boards', 'menu-notifications', 'menu-messages') ORDER BY position, id",
+    ).all()).resolves.toEqual({
+      results: [
+        { id: "menu-tasks", position: 6, visible: 1, status: "active" },
+        { id: "menu-boards", position: 7, visible: 0, status: "disabled" },
+        { id: "menu-notifications", position: 8, visible: 1, status: "active" },
+        { id: "menu-messages", position: 9, visible: 1, status: "active" },
+      ],
+      success: true,
+      meta: expect.any(Object),
+    });
   });
 
   it("aborts 0003 before schema changes when a legacy review_pending row has no SourceVersion", async () => {

@@ -147,5 +147,10 @@ describe("shadcn workspace shell", () => {
     expect(focusViewport?.getAttribute("class")).toContain("scroll-p-1");
     expect(focusViewport?.getAttribute("class")).toContain("p-1");
     expect(focusViewport?.querySelector('button[aria-label="Close navigation"]')).not.toBeNull();
+    expect(dialog?.querySelector("[data-shell-mobile-account-footer]")).not.toBeNull();
+    expect(dialog?.textContent).toContain("admin@example.com");
+    expect(dialog?.textContent).toContain("Administrator");
+    expect(dialog?.textContent).toContain("Settings");
+    expect(dialog?.textContent).toContain("Log out");
   });
 });

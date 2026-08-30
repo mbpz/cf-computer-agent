@@ -11,16 +11,31 @@ const contributor = {
 };
 
 describe("frontend application shell", () => {
-  it("keeps navigation left and account controls in the top-right", () => {
+  it("keeps only language controls in the top-right and puts account actions in the desktop footer", () => {
     const html = renderToStaticMarkup(
-      <AppShell session={contributor} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+      <AppShell session={contributor} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })} logoutPending logoutError="Session ended">
         <h1>Knowledge</h1>
       </AppShell>,
     );
+    const topbar = html.match(/<header data-shell-topbar[\s\S]*?<\/header>/u)?.[0] ?? "";
+    const primaryNavigation = html.match(/<nav data-shell-sidebar-scroll[\s\S]*?<\/nav>/u)?.[0] ?? "";
     expect(html).toContain("data-shell-sidebar");
     expect(html).toContain("data-shell-topbar");
-    expect(html).toContain('aria-label="Language"');
-    expect(html).toContain("Log out");
+    expect(topbar).toContain('aria-label="Language"');
+    expect(topbar).not.toContain("reader@example.com");
+    expect(topbar).not.toContain("Settings");
+    expect(topbar).not.toContain("Signing out");
+    expect(html).toContain("data-shell-account-footer");
+    expect(html).toContain("reader@example.com");
+    expect(html).toContain("Member");
+    expect(html).toContain("Settings");
+    expect(html).toContain("Light");
+    expect(html).toContain("Dark");
+    expect(html).toContain("System");
+    expect(html).toContain("Signing out");
+    expect(html).toContain("Session ended");
+    expect(primaryNavigation).not.toContain("Settings");
+    expect(html).not.toContain("Cloudflare free tier");
     expect(html).toContain("Knowledge");
     expect(html).not.toContain("undefined");
     expect(html).toContain('data-shell-root="true"');
@@ -28,6 +43,7 @@ describe("frontend application shell", () => {
     expect(html).toContain("lg:overflow-hidden");
     expect(html).toContain('data-shell-sidebar-scroll="true"');
     expect(html).toContain("min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1");
+    expect(html).toContain("shrink-0 border-t");
     expect(html).toContain('data-shell-content-scroll="true"');
     expect(html).toContain("lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain");
     expect(html).toContain("max-w-[1440px]");

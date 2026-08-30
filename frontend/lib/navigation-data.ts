@@ -1,5 +1,6 @@
 import { apiFetch } from "./api";
-import type { MenuAvailability } from "../../shared/workspace-route-capabilities";
+import type { SessionSnapshot } from "../contracts/api";
+import { WORKSPACE_ROUTE_CAPABILITIES, menuAvailability, type MenuAvailability, type WorkspaceRouteCapability } from "../../shared/workspace-route-capabilities";
 
 export interface NavigationDataNode {
   id: string;
@@ -19,6 +20,63 @@ export async function loadNavigation(): Promise<NavigationDataNode[]> {
   const tree = (payload as Record<string, unknown>).tree;
   if (!Array.isArray(tree)) throw new Error("NAVIGATION_INVALID");
   return tree.map((node) => parseNode(node, 1));
+}
+
+const REQUIRED_COLLABORATION_ROUTE_IDS = new Set(["tasks", "boards", "notifications", "messages"]);
+const REQUIRED_COLLABORATION_PATHS = new Set(
+  WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id)).map((route) => route.path),
+);
+
+export function mergeRequiredWorkspaceNavigation(serverTree: readonly NavigationDataNode[], session: Pick<SessionSnapshot, "capabilities">): NavigationDataNode[] {
+  const tree = serverTree.map(withoutSettings);
+  const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id) && routeAllowedForSession(route, session));
+  const workspaceIndex = tree.findIndex((node) => node.groupName === "workspace" && node.path === null);
+  const workspace = workspaceIndex === -1 ? emptyWorkspaceNode() : tree[workspaceIndex]!;
+  const existingByPath = new Map(workspace.children.map((node) => [node.path, node]));
+  const nonCollaboration = workspace.children.filter((node) => !REQUIRED_COLLABORATION_ROUTE_IDS.has(node.key) && !REQUIRED_COLLABORATION_PATHS.has(node.path ?? ""));
+  const children = [
+    ...nonCollaboration,
+    ...requiredRoutes.map((route) => requiredNavigationNode(route, existingByPath.get(route.path))),
+  ];
+  const mergedWorkspace = { ...workspace, children };
+  return workspaceIndex === -1 ? [mergedWorkspace, ...tree] : tree.map((node, index) => index === workspaceIndex ? mergedWorkspace : node);
+}
+
+function withoutSettings(node: NavigationDataNode): NavigationDataNode {
+  return {
+    ...node,
+    children: node.children.filter((child) => child.path !== "/settings" && child.key !== "settings").map(withoutSettings),
+  };
+}
+
+function routeAllowedForSession(route: WorkspaceRouteCapability, session: Pick<SessionSnapshot, "capabilities">): boolean {
+  return route.capability === null || session.capabilities.includes(route.capability);
+}
+
+function requiredNavigationNode(route: WorkspaceRouteCapability, existing?: NavigationDataNode): NavigationDataNode {
+  return {
+    id: existing?.id ?? route.id,
+    key: route.id,
+    labelKey: route.labelKey,
+    path: route.path,
+    icon: existing?.icon ?? null,
+    groupName: "workspace",
+    ...menuAvailability(route.path)!,
+    children: existing?.children ?? [],
+  };
+}
+
+function emptyWorkspaceNode(): NavigationDataNode {
+  return {
+    id: "workspace",
+    key: "workspace",
+    labelKey: "SHELL_GROUP_WORKSPACE",
+    path: null,
+    icon: null,
+    groupName: "workspace",
+    availability: "ready",
+    children: [],
+  };
 }
 
 function parseNode(value: unknown, depth: number): NavigationDataNode {

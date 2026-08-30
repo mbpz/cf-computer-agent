@@ -10,7 +10,7 @@ import { cn } from "../../lib/utils";
 import { resolveFrontendAccess } from "../../lib/auth-boundary";
 import { matchRoute } from "../../lib/router";
 import { applyTheme, readTheme, type ThemeMode } from "../../lib/theme";
-import { loadNavigation, type NavigationDataNode } from "../../lib/navigation-data";
+import { loadNavigation, mergeRequiredWorkspaceNavigation, type NavigationDataNode } from "../../lib/navigation-data";
 import { Badge } from "../ui/badge";
 import { menuAvailability, type MenuAvailability } from "../../../shared/workspace-route-capabilities";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
@@ -63,11 +63,12 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     if (previousContentScrollKeyRef.current !== contentScrollKey) contentScrollRef.current?.scrollTo({ top: 0 });
     previousContentScrollKeyRef.current = contentScrollKey;
   }, [contentScrollKey]);
-  const workspaceRoutes = serverNavigation
-    ? serverNavigation.filter((node) => node.groupName === "workspace").flatMap(toNavigationNodes)
+  const mergedNavigation = serverNavigation ? mergeRequiredWorkspaceNavigation(serverNavigation, session) : null;
+  const workspaceRoutes = mergedNavigation
+    ? mergedNavigation.filter((node) => node.groupName === "workspace").flatMap(toNavigationNodes)
     : navigationTree("workspace", session);
-  const adminRoutes = serverNavigation
-    ? serverNavigation.filter((node) => node.groupName === "admin").flatMap(toNavigationNodes)
+  const adminRoutes = mergedNavigation
+    ? mergedNavigation.filter((node) => node.groupName === "admin").flatMap(toNavigationNodes)
     : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const navigate = (path: string) => onNavigate?.(path);
@@ -88,13 +89,13 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav></TooltipProvider>
-          <div className={cn("shrink-0 border-t px-2 pt-3 text-[11px] text-muted-foreground", collapsed && "sr-only")}>{locale.t("SHELL_FREE_TIER_LABEL")}</div>
+          <div data-shell-account-footer className={cn("shrink-0 border-t pt-3", collapsed && "sr-only")}><AccountControls memberLabel={memberLabel} session={session} locale={locale} theme={theme} onThemeChange={setTheme} onNavigate={navigate} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
         </div>
       </aside>
       <div className={cn("transition-[padding] duration-200 lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
         <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <div className="flex min-w-0 items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><Breadcrumb pathname={pathname} locale={locale} /></div>
-          <div className="flex items-center gap-2">
+          <div data-shell-topbar-actions className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={locale.t("SHELL_LANGUAGE_LABEL")}><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></DropdownMenuTrigger>
               <DropdownMenuContent>
@@ -102,13 +103,9 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
                 <DropdownMenuItem onClick={() => locale.setLocale("zh-CN")}>{locale.t("SHELL_LANGUAGE_ZH_CN")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger aria-label={memberLabel} className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initials(memberLabel)}</span><span className="hidden max-w-48 truncate text-sm font-medium sm:inline">{memberLabel}</span><CaretDown size={14} aria-hidden="true" /></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64"><div className="flex items-center gap-3 border-b px-2 py-3"><span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{session.member.role === "admin" ? locale.t("SHELL_ADMIN_ROLE") : locale.t("SHELL_MEMBER_ROLE")}</p></div></div><DropdownMenuItem onClick={() => onNavigate?.("/settings")}><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</DropdownMenuItem><div className="border-t px-2 py-2"><p className="mb-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p><div className="grid grid-cols-3 gap-1"><ThemeButton mode="light" current={theme} onSelect={setTheme} icon={<Sun size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_LIGHT")} /><ThemeButton mode="dark" current={theme} onSelect={setTheme} icon={<Moon size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_DARK")} /><ThemeButton mode="system" current={theme} onSelect={setTheme} label={locale.t("SHELL_THEME_SYSTEM")} /></div></div>{logoutError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{logoutError}</p>}<DropdownMenuItem disabled={logoutPending} onClick={onLogout}>{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</DropdownMenuItem></DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </header>
-        <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} /></div>
+        <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} onThemeChange={setTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
         <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
       </div>
     </div>
@@ -153,7 +150,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };
-    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks")].filter(Boolean) as NavigationNode[];
+    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
   }
   const admin = allowed("/admin");
   if (!admin) return [];
@@ -192,10 +189,14 @@ function NavIcon({ path }: { path: string }) {
   return <DotsThree {...props} />;
 }
 
-function MobileNavigation({ nodes, pathname, locale, onNavigate }: { nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void }) {
+function AccountControls({ memberLabel, session, locale, theme, onThemeChange, onNavigate, onLogout, logoutPending, logoutError }: { memberLabel: string; session: SessionSnapshot; locale: LocaleRuntime; theme: ThemeMode; onThemeChange: (mode: ThemeMode) => void; onNavigate: (path: string) => void; onLogout?: () => void; logoutPending: boolean; logoutError: string | null }) {
+  return <div data-shell-account-controls className="space-y-3 px-2 pb-2"><div className="flex min-w-0 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{initials(memberLabel)}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{memberLabel}</p><p className="text-xs text-muted-foreground">{session.member.role === "admin" ? locale.t("SHELL_ADMIN_ROLE") : locale.t("SHELL_MEMBER_ROLE")}</p></div></div><button type="button" onClick={() => onNavigate("/settings")} className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-accent"><GearSix size={16} aria-hidden="true" />{locale.t("SHELL_SETTINGS")}</button><div><p className="mb-2 text-xs font-medium text-muted-foreground">{locale.t("SHELL_THEME")}</p><div className="grid grid-cols-3 gap-1"><ThemeButton mode="light" current={theme} onSelect={onThemeChange} icon={<Sun size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_LIGHT")} /><ThemeButton mode="dark" current={theme} onSelect={onThemeChange} icon={<Moon size={14} aria-hidden="true" />} label={locale.t("SHELL_THEME_DARK")} /><ThemeButton mode="system" current={theme} onSelect={onThemeChange} label={locale.t("SHELL_THEME_SYSTEM")} /></div></div>{logoutError && <p role="alert" className="text-xs text-destructive">{logoutError}</p>}<button type="button" disabled={logoutPending} onClick={onLogout} className="flex min-h-10 w-full items-center rounded-md px-2 text-sm text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-70">{logoutPending ? locale.t("SHELL_LOGGING_OUT") : locale.t("SHELL_LOGOUT")}</button></div>;
+}
+
+function MobileNavigation({ nodes, pathname, locale, onNavigate, memberLabel, session, theme, onThemeChange, onLogout, logoutPending, logoutError }: { nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; memberLabel: string; session: SessionSnapshot; theme: ThemeMode; onThemeChange: (mode: ThemeMode) => void; onLogout?: () => void; logoutPending: boolean; logoutError: string | null }) {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
-  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent><div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh overflow-y-auto overscroll-contain scroll-p-1 p-1"><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => { const path = route.path ?? route.route!.path; return route.availability === "coming_soon" ? <button key={path} type="button" disabled aria-disabled="true" className="flex min-h-10 w-full cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground opacity-70"><NavIcon path={path} /><span className="min-w-0 flex-1 truncate">{locale.t(route.labelKey)}</span><Badge variant="outline">{locale.t("NAV_COMING_SOON")}</Badge></button> : <a key={path} href={path} aria-current={pathname === path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(path); }} className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={path} />{locale.t(route.labelKey)}</a>; })}</nav></div></SheetContent></details></Sheet>;
+  return <Sheet open={open} onOpenChange={setOpen}><details open={open} className="border-b bg-card"><summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium" onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }}>{locale.t("SHELL_OPEN_NAVIGATION")}</summary><SheetContent className="flex min-h-0 flex-col p-0"><div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-p-1 p-4"><div className="flex items-start justify-between"><SheetHeader><SheetTitle>{locale.t("SHELL_WORKSPACE_NAVIGATION")}</SheetTitle></SheetHeader><SheetClose aria-label={locale.t("SHELL_CLOSE_NAVIGATION")}>×</SheetClose></div><nav className="mt-6 space-y-1">{flattenNavigation(nodes).map((route) => { const path = route.path ?? route.route!.path; return route.availability === "coming_soon" ? <button key={path} type="button" disabled aria-disabled="true" className="flex min-h-10 w-full cursor-not-allowed items-center gap-3 rounded-md px-2 py-2 text-left text-sm text-muted-foreground opacity-70"><NavIcon path={path} /><span className="min-w-0 flex-1 truncate">{locale.t(route.labelKey)}</span><Badge variant="outline">{locale.t("NAV_COMING_SOON")}</Badge></button> : <a key={path} href={path} aria-current={pathname === path ? "page" : undefined} onClick={(event) => { event.preventDefault(); setOpen(false); onNavigate(path); }} className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"><NavIcon path={path} />{locale.t(route.labelKey)}</a>; })}</nav></div><div data-shell-mobile-account-footer className="shrink-0 border-t pt-3"><AccountControls memberLabel={memberLabel} session={session} locale={locale} theme={theme} onThemeChange={onThemeChange} onNavigate={(path) => { setOpen(false); onNavigate(path); }} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div></SheetContent></details></Sheet>;
 }
 
 function flattenNavigation(nodes: NavigationNode[]): NavigationNode[] { return nodes.flatMap((node) => [ ...(node.path || node.route ? [node] : []), ...(node.children ? flattenNavigation(node.children) : []) ]); }

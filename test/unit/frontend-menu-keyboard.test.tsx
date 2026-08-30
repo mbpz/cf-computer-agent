@@ -63,7 +63,7 @@ describe("dropdown keyboard contract", () => {
     const root = createRoot(host);
     act(() => root.render(<AppShell session={{ member: { id: "m1", email: "member@example.test", role: "contributor" }, capabilities: ["knowledge:read"], permissionMask: "0x0", logoutUrl: "/logout" }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}><div /></AppShell>));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-    const expandedNotification = host.querySelector<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')!;
+    const expandedNotification = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("通知"))!;
     expect(expandedNotification.textContent).toContain("通知");
     expect(expandedNotification.textContent).toContain("建设中");
     expect(host.querySelector('a[href="/notifications"]')).toBeNull();
