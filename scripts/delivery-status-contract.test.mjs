@@ -23,6 +23,16 @@ const knowledgeChecklistPath = resolve(repositoryRoot, "docs/product/ai-knowledg
 const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-frontend-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
+const readmePath = resolve(repositoryRoot, "README.md");
+
+const README_REQUIRED_LINKS = [
+  "ROADMAP.md",
+  "docs/product/delivery-status-ledger.md",
+  "docs/product/ai-knowledge-base-checklist.md",
+  "docs/product/shadcn-ui-frontend-checklist.md",
+  "docs/operations/production-environment-handbook.md",
+  "docs/operations/evidence/",
+];
 
 const STATUS_VALUES = new Set(["done", "partial", "pending", "n/a"]);
 const REQUIRED_COLUMNS = [
@@ -389,6 +399,26 @@ test("delivery status ledger reconciles documentation status claims", () => {
   for (const id of roadmapBacktickIds(readFileSync(roadmapPath, "utf8"))) {
     assert.ok(ledgerIds.has(id), `Roadmap ID ${id} requires a ledger row`);
   }
+});
+
+test("README is a current workbench entrypoint rather than a milestone ledger", () => {
+  const readme = readFileSync(readmePath, "utf8");
+
+  for (const link of README_REQUIRED_LINKS) {
+    assert.match(readme, new RegExp(`\\]\\(\\./${escapeRegExp(link)}\\)`, "u"), `README requires ./${link}`);
+    assert.ok(existsSync(resolve(repositoryRoot, link)), `README target ./${link} must exist`);
+  }
+
+  assert.match(readme, /personal workbench.*AI knowledge base.*first major module/ui);
+  assert.match(readme, /user-isolated tasks.*implemented.*locally verified/ui);
+  assert.match(readme, /task UI remains.*partial/ui);
+  assert.match(readme, /unified numbered pagination.*independent scrolling.*compact shadcn Shell.*administrator governance.*implemented.*locally verified/ui);
+  assert.match(readme, /boards.*notifications.*messages.*Coming Soon/ui);
+  assert.match(readme, /current-main.*release.*acceptance.*only.*delivery status ledger/ui);
+  assert.match(readme, /R2.*Vectorize.*Queue.*Workers AI.*optional.*degrade.*do not block.*free text core/ui);
+
+  assert.doesNotMatch(readme, /\bM\d+\b/u, "README must not duplicate milestone prose or counts");
+  assert.doesNotMatch(readme, /(?:M1 的 23|76 P0\/M1|M1 实现完成|远程验证待完成)/u);
 });
 
 test("AI knowledge checklist separates local completion from delivery status", () => {

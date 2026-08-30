@@ -1,98 +1,68 @@
 # Memory Garden Agent
 
-一个使用 GitHub OAuth 登录、部署在 Cloudflare 免费层上的个人知识库 Agent。Phase 1 的成员、空间、投稿和审计控制面使用 D1；已发布的旧版笔记仍保存在 `@cloudflare/computer` 的 SQLite-backed Durable Object 虚拟文件系统中。
+Memory Garden is a private personal workbench for a small invited team on Cloudflare's free tier. The AI knowledge base is its first major module: submit and govern sources, search and read them, then ask grounded questions with citations. The workbench adds personal execution and administration without turning local verification into a production claim.
 
-M1 的 23 个本地/Workerd 产品原子已全部通过固定、无 Provider 的验收门禁。生产 `0004` migration、精确版本部署、双语浏览器旅程和 D1 成本证据尚未执行；`OPS-015` 与 `GATE-M1` 保持未勾选。当前精确状态是 **M1 实现完成；远程验证待完成**，不是生产验收。
+## Current maturity
 
-## 产品演进文档
+- User-isolated tasks are implemented and locally verified; the task UI remains **partial** while detail, retention, and production role journeys are completed.
+- Unified numbered pagination, independent scrolling, the compact shadcn Shell, and administrator governance are implemented and locally verified.
+- Boards, notifications, and messages are **Coming Soon**. They are planned as task- and knowledge-context features, not as existing collaboration services.
+- **Current-main release and acceptance are determined only by the [delivery status ledger](./docs/product/delivery-status-ledger.md).** A README statement, local gate, historical candidate, or anonymous smoke does not establish a current production release or signed browser acceptance.
 
-- [AI 知识操作系统设计规格](./docs/superpowers/specs/2026-08-21-ai-knowledge-system-design.md)：当前产品、权限、架构、免费层和里程碑权威定义。
-- [国外 AI 知识库标杆矩阵](./docs/product/ai-knowledge-base-benchmark.md)：NotebookLM、Glean、Notion、Perplexity、Onyx、RAGFlow、Dify、AnythingLLM、Khoj 的取舍证据。
-- [原子级交付 Checklist](./docs/product/ai-knowledge-base-checklist.md)：按来源、解析、治理、检索、引用、Agent、评测和运维拆解的实现与验收项。
-- [Roadmap](./ROADMAP.md)：M0–M8 纵向交付顺序和退出标准。
+The ledger records implementation, verification, release, and acceptance separately for every product atom. The [Roadmap](./ROADMAP.md) gives the delivery order; the specialist checklists give local implementation detail:
 
-## 架构
+- [AI knowledge-base checklist](./docs/product/ai-knowledge-base-checklist.md)
+- [shadcn/ui frontend checklist](./docs/product/shadcn-ui-frontend-checklist.md)
+- [Production environment handbook](./docs/operations/production-environment-handbook.md)
+- [Current evidence index](./docs/operations/evidence/)
+
+## Product and architecture
 
 ```text
 Browser UI → GitHub OAuth → Worker API → D1 control plane
                                       └─ personal Durable Object
-                                         ├─ Computer VFS: /workspace/notes/*.md
-                                         ├─ Computer VFS: /workspace/.memory/index.json
-                                         └─ keyword retrieval → Workers AI → cited answer
+                                         ├─ source and note storage
+                                         ├─ search index
+                                         └─ grounded answer with citations
 ```
 
-为什么不在 Phase 1 引入更多产品：D1 只保存成员、空间、投稿和审计控制面；已发布笔记仍由 Durable Object 保存，避免把旧版内容迁移为双写。R2、Vectorize 与执行后端不属于本阶段。
+The knowledge-base core supports text, Markdown, and code submissions; controlled review and publication; owner-scoped lists; FTS search; reader/citation retrieval; and grounded answers. The workbench provides the shell, navigation, settings, tasks, and admin areas for members, roles, menus, spaces, audit, and analytics.
 
-> `@cloudflare/computer` 官方目前标注为 Preview，不适合承诺生产稳定性。本项目是可部署 MVP，并通过适配边界把未来迁移限制在存储层。
+GitHub OAuth is the browser identity boundary: the callback must resolve to a primary, verified email, and D1 decides allowlist membership, role, status, and capability. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
 
-## 功能
+`@cloudflare/computer` remains Preview, so it is kept behind storage boundaries rather than treated as a production-stability guarantee.
 
-- Markdown 笔记写入、更新、标签与列表索引
-- 中英文关键词检索，标题/标签加权
-- RAG 问答，只将命中的笔记片段交给 Workers AI
-- `[1]` 形式引用与原始来源卡片
-- 浏览器身份只来自验证后的 GitHub OAuth 回调与 D1 会话；角色、状态和能力由 D1 决定
-- 自动化同时需要 HMAC 签名和 `APP_TOKEN`，且只能访问兼容 smoke 路径，绝不是管理员
-- 单 Worker 静态界面，无 Pages、外部数据库或第三方模型费用
-- 默认免费文本模式：不声明 R2 binding，文本、Markdown、代码直接走 D1/DO；二进制原件上传会稳定返回 `ASSET_STORAGE_NOT_CONFIGURED`
-
-## 本地运行
+## Local development and verification
 
 ```bash
 npm install
-rtk npm run test:m1
+rtk npm run verify:delivery-status
+rtk npm run test:smoke
 rtk npm run check
 rtk npm run dev
 ```
 
-`rtk npm run test:m1` 是固定的 parser/chunker/publication/library/citation/API/UI/evaluation 门禁；其中 24 条评测语料使用确定性本地 fake，不请求 Provider。`rtk npm run check` 继续包含全部 smoke、unit、Workerd 测试、生成类型、TypeScript 和 Wrangler dry build，不会被 M1 子门禁替代。两者都不会验证已部署 Durable Object 的持久性、生产域名或 Provider 成熟度。
+`rtk npm run check` is the full local gate: contracts, smoke, unit and Workerd tests, generated types, TypeScript, and a Wrangler dry build. It is evidence for local verification only. Use the [production environment handbook](./docs/operations/production-environment-handbook.md) for configuration, migration, deployment, rollback, and recorded release evidence.
 
-本地 Workers AI 调用通常需要远程绑定和 Cloudflare 登录；纯检索单元测试不需要账户。生产 OAuth、七项配置、密钥生成、D1、版本上传、部署和故障复盘统一见 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。不要把 `GITHUB_OAUTH_CLIENT_SECRET`、`BOOTSTRAP_ADMIN_EMAIL`、`ALLOWED_MEMBER_EMAILS`、`AUTOMATION_SECRET` 或 `APP_TOKEN` 写进 `wrangler.jsonc`、`.dev.vars`、命令行参数或日志。
+Do not place `GITHUB_OAUTH_CLIENT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOWED_MEMBER_EMAILS`, `AUTOMATION_SECRET`, or `APP_TOKEN` in the repository, `wrangler.jsonc`, `.dev.vars`, command lines, logs, screenshots, or chat. Keep production values as Worker secrets.
 
-静态浏览器文件由 Vite 输出到 `frontend/dist/`，由 Worker 的 `ASSETS` binding 提供；旧 `public/` 仅作为回滚源，`/api/*` 仍由 Worker 路由、认证和安全响应头处理。
+## Deployment and operations
 
-文件能力分为两个显式部署档位。当前生产档位是无需支付配置的**免费文本模式**：提交页保留原件入口说明，但会禁用二进制上传，避免产生伪造任务或半成品数据。只有在 Cloudflare 账户完成 R2 订阅后，才可恢复完整 PDF/Office/图片原件链路。详细行为、切换边界和验证命令见 [M2 原件运维手册](./docs/operations/m2-asset-ingestion.md)。
+Deploy only through the handbook's ordered preflight: verify the exact commit, run the current local gate, back up D1, inspect and apply approved forward-only migrations, upload the exact Worker/assets version, and capture scoped release and role-journey acceptance evidence. Do not use a README command as a substitute for that procedure, and do not expose a workers.dev or preview URL as the formal entrypoint.
 
-M2 各格式的本地解析、固定错误码和降级边界见 [M2 格式支持与解析降级矩阵](./docs/product/m2-format-support-matrix.md)。
+Remote automation smoke is an authorized post-deploy check, not browser acceptance. It uses interactive credentials, protects headers and payloads, and is limited to health, legacy notes/search, and cited-answer compatibility routes. See the [smoke-test procedure](./docs/operations/smoke-test.md).
 
-前端已进入 React + Vite + shadcn/ui 渐进式切换阶段。当前 Worker Assets 使用 `frontend/dist`，旧 `public/` 仍作为回滚源；发布、生产 smoke、回滚和旧 UI 清理顺序见 [React 前端切换手册](./docs/operations/react-frontend-cutover.md)。
+## API boundary
 
-## 部署
+- Session and member scope: `GET /api/session`, `GET /api/spaces`, `POST /api/submissions`, `GET /api/submissions/mine`
+- Knowledge: `GET /api/knowledge`, `GET /api/knowledge/search`, `GET /api/knowledge/:id`, `GET /api/knowledge/citations/:id`, `POST /api/knowledge/chat`
+- Administration: `/api/admin/*` for active administrators only
+- Legacy automation compatibility: `GET /api/health`, `GET`/`POST /api/notes`, `GET /api/search`, `POST /api/chat`
 
-首次部署前必须完整执行 [生产核心运维手册](./docs/operations/production-environment-handbook.md)。M1 发布还必须使用 [M1 精确发布手册](./docs/operations/m1-release.md) 和其 [生产证据模板](./docs/operations/evidence/m1-release-template.md)：D1 导出、完整本地门禁、检查并前向应用 `0003`、上传包含完整七项 Secret 的候选版本、检查精确版本后再部署，最后完成 OAuth/session、M1 浏览器旅程、权限拒绝、signed automation、跨激活读取和 D1 成本证据。不要使用或公开 workers.dev/preview URL，也不要从 README 绕过该顺序直接运行部署命令。
+Browser clients never hold the automation token or OAuth client secret. Member and object visibility are rechecked server-side; write paths use idempotency and redacted audit metadata where the ledgered feature requires them.
 
-## API
+## Free-tier boundary and degradation
 
-- `GET /api/session`（GitHub OAuth 会话成员）
-- `GET /api/spaces`、`POST /api/submissions`、`GET /api/submissions/mine`（GitHub OAuth 会话成员）
-- `GET /api/knowledge`、`GET /api/knowledge/search`、`GET /api/knowledge/:id`、`GET /api/knowledge/citations/:id`、`POST /api/knowledge/chat`（active member，服务端权限范围）
-- `/api/admin/*`（仅 active admin）
-- `GET /api/health`、`GET /api/notes`、`POST /api/notes`、`GET /api/search?q=...`、`POST /api/chat`（legacy；自动化只可使用这些路径）
+The free text core works without paid storage: text, Markdown, and code use the Worker, D1, Durable Object, and FTS path. R2, Vectorize, Queue, and Workers AI are optional enhancements; when unavailable, they degrade safely and do not block the free text core. Binary originals require the configured storage path and otherwise fail explicitly rather than creating partial data.
 
-浏览器不提交或保存 APP token、OAuth client secret 或自动化 secret。自动化以 `Authorization: Bearer <APP_TOKEN>` 和每请求 HMAC-SHA256 签名通过 Worker 验证。单条 legacy 笔记限制 128 KiB；这是应用保护阈值，不是平台上限。
-
-## 远程 smoke 验证
-
-仅在 GitHub OAuth 部署授权后运行 automation smoke。它交互式读取 `AUTOMATION_CLIENT_ID`、`AUTOMATION_SECRET` 与 `APP_TOKEN`；脚本不会打印三者、请求头、笔记正文或完整 Agent 回答。远程 URL 必须为 HTTPS；仅本地 contract 测试可通过 `MEMORY_GARDEN_ALLOW_HTTP_LOCAL=true` 使用 `localhost`、`127.0.0.0/8` 或 `::1` 的 HTTP 地址，其他 HTTP 地址一律拒绝。
-
-```bash
-read -rs AUTOMATION_CLIENT_ID
-export AUTOMATION_CLIENT_ID
-read -rs AUTOMATION_SECRET
-export AUTOMATION_SECRET
-read -rs APP_TOKEN
-export APP_TOKEN
-export MEMORY_GARDEN_BASE_URL=https://memory.crgmhrc.asia
-rtk npm run smoke
-unset AUTOMATION_CLIENT_ID AUTOMATION_SECRET APP_TOKEN MEMORY_GARDEN_BASE_URL
-```
-
-Smoke 只验证 automation 可用的 health、创建、列表、检索和带来源的问答；它不发送无认证请求，也不会调用管理员 API。每次会写入一条 `smoke-<uuid>` 笔记；Phase 3 的回收站/删除能力完成前，它会保留。正式入口仅为自定义域：配置意图为 production 与 preview workers.dev URL 都关闭，授权部署后仍需在控制台验证。详见 [smoke-test.md](./docs/operations/smoke-test.md)。
-
-## 免费层边界
-
-平台不会保证“永远免费”。当前设计只依赖 Workers、SQLite-backed Durable Objects 和 Workers AI 的免费额度；超过每日额度时请求会失败而不会自动扩展成本。Smoke 的问答请求会消耗 Workers AI 配额，故只能在明确授权的已部署环境执行。仓库没有绑卡、预算或账户级设置能力，也无法强制账户零计费；部署者仍应在 Cloudflare 控制台确认计划、预算保护和用量。详见 [ROADMAP.md](./ROADMAP.md)。
-
-## 数据与隐私
-
-这是单组织、5–20 人私有知识库设计。不要在未配置 GitHub OAuth、D1 成员控制面和 automation APP token 的情况下公开地址。操作者已于 2026-08-21 确认自定义域 GitHub OAuth 登录成功，但成功 callback 的正式脱敏证据、signed automation、disabled contributor、workers.dev 关闭状态、Durable Object 跨激活恢复以及完整 M1 生产旅程仍需归档；不要据此宣称生产成熟度。M1 审核发布链路目前只有本地/Workerd 证据；完整附件管线、批量导出和新环境恢复仍未实现，正式导入不可替代的重要资料前应等待 Roadmap M7。
+Free tier is an account policy, not a perpetual-price guarantee. The deployer must review Cloudflare plan limits, usage, and budget protections before production changes. Capacity protection, recovery drills, and full production acceptance remain governed by the [Roadmap](./ROADMAP.md) and the [delivery status ledger](./docs/product/delivery-status-ledger.md).
