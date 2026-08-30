@@ -66,6 +66,27 @@ describe("tasks repository", () => {
     expect(beyond.pagination).toEqual({ page: 2, pageSize: 20, total: 4, totalPages: 1 });
   });
 
+  it("uses the task id as a deterministic tie-breaker across numbered pages", async () => {
+    const repository = new TasksRepository(env.DB);
+    for (let index = 0; index < 21; index += 1) {
+      await repository.insert(taskCreate({
+        id: `task-tie-${String(index).padStart(2, "0")}`,
+        memberId: "member-a",
+        createdAt: NOW,
+        updatedAt: NOW,
+      }));
+    }
+
+    const first = await repository.list("member-a", { page: 1, pageSize: 20, filters: {} });
+    const second = await repository.list("member-a", { page: 2, pageSize: 20, filters: {} });
+    const ids = [...first.items, ...second.items].map((task) => task.id);
+
+    expect(first.pagination).toEqual({ page: 1, pageSize: 20, total: 21, totalPages: 2 });
+    expect(second.pagination).toEqual({ page: 2, pageSize: 20, total: 21, totalPages: 2 });
+    expect(ids).toEqual(Array.from({ length: 21 }, (_unused, index) => `task-tie-${String(20 - index).padStart(2, "0")}`));
+    expect(new Set(ids).size).toBe(21);
+  });
+
   it("summarizes status counts, due-today and overdue for open tasks only", async () => {
     const repository = new TasksRepository(env.DB);
     await seedTasks(repository);

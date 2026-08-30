@@ -2,6 +2,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { TasksPage } from "../../frontend/pages/tasks/tasks-page";
 
 describe("private tasks page", () => {
@@ -28,5 +29,15 @@ describe("private tasks page", () => {
     expect(renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "ready", items: [], pagination: { page: 2, pageSize: 20, total: 0, totalPages: 0 } }} localLoadError="Unable" onRetry={vi.fn()} />)).toContain("Try search again");
     const actionFailure = renderToStaticMarkup(<TasksPage filters={{}} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} actionError="Unable to update the task." onRetry={vi.fn()} />);
     expect(actionFailure).toContain("Unable to update the task."); expect(actionFailure).not.toContain("Try search again");
+  });
+
+  it("renders a semantic loading state and a localized empty state", () => {
+    const locale = createLocaleRuntime({ navigatorLanguage: "en" });
+    const loading = renderToStaticMarkup(<TasksPage locale={locale} filters={{}} state={{ kind: "loading" }} />);
+    const empty = renderToStaticMarkup(<TasksPage locale={locale} filters={{}} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);
+
+    expect(loading).toContain('aria-busy="true"');
+    expect(empty).toContain(frontendText(locale, "TASKS_EMPTY"));
+    expect(empty).toContain('Total <span class="font-medium text-foreground">0</span><span aria-hidden="true"> · </span>Visible <span class="font-medium text-foreground">0–0</span>');
   });
 });
