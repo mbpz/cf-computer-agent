@@ -1305,21 +1305,24 @@ describe("Phase 1 control-plane migrations", () => {
     });
   });
 
-  it("keeps migration-seeded coming-soon system paths in exact registry sync", async () => {
-    const registryPaths = WORKSPACE_ROUTE_CAPABILITIES
+  it("keeps historical collaboration menu seeds registered while current coming-soon paths stay seeded", async () => {
+    const registeredPaths = new Set<string>(WORKSPACE_ROUTE_CAPABILITIES.map((route) => route.path));
+    const comingSoonPaths = WORKSPACE_ROUTE_CAPABILITIES
       .filter((route) => route.availability === "coming_soon")
       .map((route) => route.path)
       .sort();
     const seedRows = [...comingSoonMenusMigration.matchAll(/SELECT\s+'([^']+)'[\s\S]*?'(\/[a-z-]+)'[\s\S]*?WHERE NOT EXISTS/gu)]
       .map((match) => ({ id: match[1]!, path: match[2]! }));
-    expect(seedRows.map(({ path }) => path).sort()).toEqual(registryPaths);
+    const seedPaths = seedRows.map(({ path }) => path).sort();
+    expect(seedPaths.every((path) => registeredPaths.has(path))).toBe(true);
+    expect(comingSoonPaths.every((path) => seedPaths.includes(path))).toBe(true);
 
     await applyD1Migrations(env.DB, MIGRATIONS);
     const placeholders = seedRows.map(() => "?").join(", ");
     const rows = await env.DB.prepare(
       `SELECT id, path FROM menus WHERE is_system = 1 AND id IN (${placeholders}) ORDER BY path`,
     ).bind(...seedRows.map(({ id }) => id)).all<{ id: string; path: string }>();
-    expect(rows.results.map(({ path }) => path)).toEqual(registryPaths);
+    expect(rows.results.map(({ path }) => path)).toEqual(seedPaths);
   });
 
   it.each([

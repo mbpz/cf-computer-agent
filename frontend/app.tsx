@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
 import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
@@ -19,6 +19,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TasksPage } from "./pages/tasks/tasks-page";
+import { BoardsPage } from "./pages/boards/boards-page";
 import { LoginPage } from "./pages/login-page";
 import { SettingsPage } from "./pages/settings-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
@@ -32,8 +33,9 @@ import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
-import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskPage } from "./lib/tasks-data";
+import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
+import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus } from "./pages/boards/board-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
@@ -155,6 +157,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
+    case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
@@ -772,6 +775,121 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
   return <TasksPage locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+}
+
+export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => parseBoardSearch(search), [search]);
+  const [queries, setQueries] = useState<BoardPagination>(initial);
+  const [columns, setColumns] = useState<BoardColumnStates>(initialBoardColumns);
+  const [retryVersions, setRetryVersions] = useState<Record<BoardStatus, number>>(() => ({ todo: 0, doing: 0, blocked: 0, done: 0 }));
+  const [actionPendingId, setActionPendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | undefined>();
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+  const actionPendingRef = useRef(false);
+  const actionGenerationRef = useRef(0);
+  const activeRef = useRef(true);
+
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, setColumns);
+
+  useEffect(() => {
+    const onPopState = () => { setActionError(undefined); setQueries(parseBoardSearch(window.location.search)); };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; actionGenerationRef.current += 1; };
+  }, []);
+
+  const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
+    setActionError(undefined);
+    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(window.location.search, status, next)}`);
+    setQueries((current) => ({ ...current, [status]: next }));
+  };
+
+  const move = async (task: TaskItem, target: BoardStatus) => {
+    if (actionPendingRef.current || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
+    const source = task.status as BoardStatus;
+    const snapshot = columnsRef.current;
+    const optimistic = moveTaskBetweenColumns(snapshot, task, source, target);
+    if (optimistic === snapshot) return;
+    actionPendingRef.current = true;
+    actionGenerationRef.current += 1;
+    const generation = actionGenerationRef.current;
+    setActionPendingId(task.id); setActionError(undefined); setColumns(optimistic); columnsRef.current = optimistic;
+    try {
+      const updated = await setTaskStatus(task.id, target);
+      if (!activeRef.current || generation !== actionGenerationRef.current) return;
+      setColumns((current) => replaceBoardTask(current, { ...updated, status: target }, target));
+      setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, [target]: current[target] + 1 }));
+    } catch (error: unknown) {
+      if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
+        columnsRef.current = snapshot; setColumns(snapshot); setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+      }
+    } finally {
+      if (activeRef.current && generation === actionGenerationRef.current) {
+        actionPendingRef.current = false; setActionPendingId(null);
+      }
+    }
+  };
+
+  return <BoardsPage locale={locale} columns={columns} actionError={actionError} actionPendingId={actionPendingId}
+    onRetry={(status) => setRetryVersions((current) => ({ ...current, [status]: current[status] + 1 }))}
+    onPageChange={(status, page) => navigate(status, { page, pageSize: queries[status].pageSize })}
+    onPageSizeChange={(status, pageSize) => navigate(status, { page: 1, pageSize })}
+    onStatusChange={(task, status) => void move(task, status)} />;
+}
+
+function useBoardColumnRequest(status: BoardStatus, query: { page: number; pageSize: SupportedPageSize }, retryVersion: number, setColumns: Dispatch<SetStateAction<BoardColumnStates>>) {
+  useEffect(() => {
+    const controller = createTasksRequestController();
+    setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: true, loadError: false } : { kind: "loading" } }));
+    const request = controller.request({ page: query.page, pageSize: query.pageSize, filters: { status } });
+    void request.promise.then((data) => {
+      if (!controller.isCurrent(request.generation)) return;
+      setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || isAbort(error)) return;
+      setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: false, loadError: true } : { kind: "error" } }));
+    });
+    return () => controller.dispose();
+  }, [query.page, query.pageSize, retryVersion, setColumns, status]);
+}
+
+function initialBoardColumns(): BoardColumnStates {
+  return { todo: { kind: "loading" }, doing: { kind: "loading" }, blocked: { kind: "loading" }, done: { kind: "loading" } };
+}
+
+function moveTaskBetweenColumns(columns: BoardColumnStates, task: TaskItem, source: BoardStatus, target: BoardStatus): BoardColumnStates {
+  const sourceColumn = columns[source]; const targetColumn = columns[target];
+  if (sourceColumn.kind !== "ready" || targetColumn.kind !== "ready" || !sourceColumn.items.some((item) => item.id === task.id)) return columns;
+  const moved = { ...task, status: target };
+  const sourceTotal = Math.max(0, sourceColumn.pagination.total - 1);
+  const targetTotal = targetColumn.pagination.total + 1;
+  return {
+    ...columns,
+    [source]: {
+      ...sourceColumn,
+      items: sourceColumn.items.filter((item) => item.id !== task.id),
+      pagination: { ...sourceColumn.pagination, total: sourceTotal, totalPages: sourceTotal === 0 ? 0 : Math.ceil(sourceTotal / sourceColumn.pagination.pageSize) },
+    },
+    [target]: {
+      ...targetColumn,
+      items: targetColumn.pagination.page === 1 ? [moved, ...targetColumn.items].slice(0, targetColumn.pagination.pageSize) : targetColumn.items,
+      pagination: { ...targetColumn.pagination, total: targetTotal, totalPages: Math.ceil(targetTotal / targetColumn.pagination.pageSize) },
+    },
+  };
+}
+
+function replaceBoardTask(columns: BoardColumnStates, task: TaskItem, status: BoardStatus): BoardColumnStates {
+  const column = columns[status];
+  if (column.kind !== "ready") return columns;
+  return { ...columns, [status]: { ...column, items: column.items.map((item) => item.id === task.id ? task : item) } };
 }
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

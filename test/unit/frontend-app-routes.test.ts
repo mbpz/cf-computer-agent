@@ -6,7 +6,7 @@ import { WORKSPACE_ROUTE_CAPABILITIES, routeCapability } from "../../shared/work
 describe("React app route dispatch", () => {
   it.each([
     ["/", "home"], ["/knowledge", "knowledge"], ["/search", "search"], ["/agent", "agent"],
-    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/admin", "admin"],
+    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/boards", "boards"], ["/admin", "admin"],
     ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
   ])("dispatches %s", (path, expected) => {
@@ -21,10 +21,10 @@ describe("React app route dispatch", () => {
   it("distinguishes registered coming-soon routes from unknown paths", () => {
     expect(routeCapability("/knowledge")?.availability).toBe("ready");
     expect(routeCapability("/tasks")?.availability).toBe("ready");
+    expect(routeCapability("/boards")).toMatchObject({ availability: "ready", pageKind: "boards", requiredPermission: "workspace.tasks" });
     expect(routeCapability("/notifications")?.availability).toBe("coming_soon");
     expect(pageKindForPath("/notifications")).toBe("coming-soon");
     expect(pageKindForPath("/messages")).toBe("coming-soon");
-    expect(pageKindForPath("/boards")).toBe("coming-soon");
   });
 
   it("dispatches every canonical ready route to its registered component kind", () => {

@@ -4,7 +4,7 @@ export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions"
-  | "tasks" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
+  | "tasks" | "boards" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
 
@@ -34,6 +34,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", capability: "knowledge:read" },
   { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", capability: "submission:read-own" },
   { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", capability: null, requiredPermission: "workspace.tasks" },
+  { id: "boards", path: "/boards", pageKind: "boards", availability: "ready", labelKey: "NAV_BOARDS", group: "workspace", capability: null, requiredPermission: "workspace.tasks" },
   { id: "settings", path: "/settings", pageKind: "settings", availability: "ready", labelKey: "SHELL_SETTINGS", group: "workspace", capability: null },
   { id: "admin", path: "/admin", pageKind: "admin", availability: "ready", labelKey: "NAV_ADMINISTRATION", group: "admin", capability: "submission:read-all" },
   { id: "admin-submissions", path: "/admin/submissions", pageKind: "admin-submissions", availability: "ready", labelKey: "NAV_REVIEW_QUEUE", group: "admin", capability: "knowledge:review" },
@@ -45,7 +46,6 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "admin-spaces", path: "/admin/spaces", pageKind: "admin-spaces", availability: "ready", labelKey: "NAV_SPACES", group: "admin", capability: "space:manage" },
   { id: "admin-audit", path: "/admin/audit", pageKind: "admin-audit", availability: "ready", labelKey: "NAV_AUDIT", group: "admin", capability: "audit:read" },
   { id: "admin-analytics", path: "/admin/analytics", pageKind: "admin-analytics", availability: "ready", labelKey: "NAV_SITE_ANALYTICS", group: "admin", capability: "analytics:read" },
-  { id: "boards", path: "/boards", pageKind: "coming-soon", availability: "coming_soon", labelKey: "NAV_BOARDS", group: "workspace", capability: null },
   { id: "notifications", path: "/notifications", pageKind: "coming-soon", availability: "coming_soon", labelKey: "NAV_NOTIFICATIONS", group: "workspace", capability: null },
   { id: "messages", path: "/messages", pageKind: "coming-soon", availability: "coming_soon", labelKey: "NAV_MESSAGES", group: "workspace", capability: null },
 ] as const satisfies readonly WorkspaceRouteCapability[]);

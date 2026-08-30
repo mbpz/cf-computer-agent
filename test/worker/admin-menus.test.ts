@@ -59,7 +59,10 @@ describe("admin menus API", () => {
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "custom")).toBeUndefined();
     const knowledge = contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge");
     expect(knowledge).toMatchObject({ path: "/knowledge", availability: "ready" });
-    for (const key of ["boards", "notifications", "messages"]) {
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "boards")).toMatchObject({
+      availability: "ready",
+    });
+    for (const key of ["notifications", "messages"]) {
       expect(contributorPayload.tree[0]?.children.find((node) => node.key === key)).toMatchObject({
         availability: "coming_soon",
         disabledReason: "not_implemented",

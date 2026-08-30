@@ -30,10 +30,11 @@ describe("frontend navigation availability", () => {
       logoutUrl: "/auth/logout",
     });
     const children = tree[0]!.children;
-    expect(children.map((node) => node.path)).toEqual(["/", "/boards", "/notifications", "/messages"]);
+    expect(children.map((node) => node.path)).toEqual(["/", "/notifications", "/messages"]);
     expect(children.find((node) => node.path === "/settings")).toBeUndefined();
     expect(children.find((node) => node.path === "/tasks")).toBeUndefined();
-    for (const path of ["/boards", "/notifications", "/messages"]) {
+    expect(children.find((node) => node.path === "/boards")).toBeUndefined();
+    for (const path of ["/notifications", "/messages"]) {
       expect(children.find((node) => node.path === path)).toMatchObject({ availability: "coming_soon", disabledReason: "not_implemented" });
     }
   });
@@ -48,5 +49,6 @@ describe("frontend navigation availability", () => {
 
     expect(tree[0]!.children.map((node) => node.path)).toEqual(["/", "/tasks", "/boards", "/notifications", "/messages"]);
     expect(tree[0]!.children.find((node) => node.path === "/tasks")).toMatchObject({ availability: "ready" });
+    expect(tree[0]!.children.find((node) => node.path === "/boards")).toMatchObject({ availability: "ready" });
   });
 });
