@@ -6,7 +6,8 @@ import { WORKSPACE_ROUTE_CAPABILITIES, routeCapability } from "../../shared/work
 describe("React app route dispatch", () => {
   it.each([
     ["/", "home"], ["/knowledge", "knowledge"], ["/search", "search"], ["/agent", "agent"],
-    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/boards", "boards"], ["/notifications", "notifications"], ["/admin", "admin"],
+    ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/boards", "boards"], ["/notifications", "notifications"],
+    ["/messages", "messages"], ["/messages/thread-1", "message-thread"], ["/admin", "admin"],
     ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
   ])("dispatches %s", (path, expected) => {
@@ -16,6 +17,7 @@ describe("React app route dispatch", () => {
   it("keeps unknown and non-UI paths out of the React shell", () => {
     expect(pageKindForPath("/unknown")).toBe("not-found");
     expect(pageKindForPath("/api/session")).toBe("not-found");
+    expect(pageKindForPath(`/messages/${"x".repeat(129)}`)).toBe("not-found");
   });
 
   it("distinguishes registered coming-soon routes from unknown paths", () => {
@@ -24,7 +26,9 @@ describe("React app route dispatch", () => {
     expect(routeCapability("/boards")).toMatchObject({ availability: "ready", pageKind: "boards", requiredPermission: "workspace.tasks" });
     expect(routeCapability("/notifications")).toMatchObject({ availability: "ready", pageKind: "notifications" });
     expect(pageKindForPath("/notifications")).toBe("notifications");
-    expect(pageKindForPath("/messages")).toBe("coming-soon");
+    expect(routeCapability("/messages")).toMatchObject({ availability: "ready", pageKind: "messages" });
+    expect(pageKindForPath("/messages")).toBe("messages");
+    expect(pageKindForPath("/messages/thread-1")).toBe("message-thread");
   });
 
   it("dispatches every canonical ready route to its registered component kind", () => {

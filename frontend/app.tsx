@@ -21,6 +21,8 @@ import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TasksPage } from "./pages/tasks/tasks-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
+import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
+import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
 import { SettingsPage } from "./pages/settings-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
@@ -39,6 +41,8 @@ import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
 import { parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
+import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
+import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
 import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
@@ -162,6 +166,8 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
+    case "messages": return <MessagesRoute locale={locale} search={search} />;
+    case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
@@ -879,6 +885,133 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
     onMarkRead={(id) => void mutate(() => markNotificationRead(id))}
     onMarkVisibleRead={(ids) => void mutate(() => markVisibleNotificationsRead(ids))}
   />;
+}
+
+export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const initial = useMemo(() => parseDiscussionSearch(search), [search]);
+  const [query, setQuery] = useState<DiscussionSearch>(initial);
+  const [state, setState] = useState<MessagesPageState>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const controllerRef = useRef<ReturnType<typeof createDiscussionRequestController<DiscussionSearch, Awaited<ReturnType<typeof loadDiscussionThreads>>>> | null>(null);
+
+  useEffect(() => {
+    if (query.context) {
+      controllerRef.current?.dispose();
+      controllerRef.current = null;
+      let active = true;
+      setPending(true); setState({ kind: "loading" });
+      void ensureDiscussionThread(query.context).then(({ thread }) => {
+        if (!active) return;
+        writeWorkspaceHistory("replace", `/messages/${encodeURIComponent(thread.id)}`);
+      }).catch(() => { if (active) { setState({ kind: "error" }); setPending(false); } });
+      return () => { active = false; };
+    }
+    const controller = controllerRef.current ?? createDiscussionRequestController((input: DiscussionSearch, signal) =>
+      loadDiscussionThreads({ limit: input.limit, ...(input.cursor ? { cursor: input.cursor } : {}) }, fetch, signal));
+    controllerRef.current = controller;
+    setPending(true);
+    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
+    const snapshot = query;
+    const request = controller.request(snapshot);
+    void request.promise.then((page) => {
+      if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot)) return;
+      setState({ kind: "ready", items: page.items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
+      setState({ kind: "error" }); setPending(false);
+    });
+  }, [query, retryVersion]);
+
+  useEffect(() => {
+    const onPopState = () => { const next = parseDiscussionSearch(window.location.search); queryRef.current = next; setQuery(next); };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+  useEffect(() => () => { controllerRef.current?.dispose(); controllerRef.current = null; }, []);
+
+  const navigate = (next: DiscussionSearch) => {
+    writeWorkspaceHistory("push", `/messages${writeDiscussionSearch(window.location.search, next)}`);
+    queryRef.current = next; setQuery(next);
+  };
+  return <MessagesPage locale={locale} state={state} page={query.page} limit={query.limit} pending={pending}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
+    onPrevious={() => window.history.back()}
+    onLimitChange={(limit) => navigate({ page: 1, limit })} />;
+}
+
+export function DiscussionThreadRoute({ locale, threadId, search }: { locale: LocaleRuntime; threadId: string; search: string }) {
+  const initial = useMemo(() => parseDiscussionSearch(search), [search]);
+  const [query, setQuery] = useState<DiscussionSearch>(initial);
+  const [state, setState] = useState<ThreadPageState>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const activeRef = useRef(true);
+  const controllerRef = useRef<ReturnType<typeof createDiscussionRequestController<DiscussionSearch, { thread: Awaited<ReturnType<typeof loadDiscussionThread>>; messages: Awaited<ReturnType<typeof loadDiscussionMessages>> }>> | null>(null);
+
+  useEffect(() => {
+    controllerRef.current?.dispose();
+    const controller = createDiscussionRequestController(async (input: DiscussionSearch, signal) => {
+      const [thread, messages] = await Promise.all([
+        loadDiscussionThread(threadId, fetch, signal),
+        loadDiscussionMessages(threadId, { limit: input.limit, ...(input.cursor ? { cursor: input.cursor } : {}) }, fetch, signal),
+      ]);
+      return { thread, messages };
+    });
+    controllerRef.current = controller;
+    setPending(true);
+    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
+    const snapshot = query;
+    const request = controller.request(snapshot);
+    void request.promise.then(({ thread, messages }) => {
+      if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot)) return;
+      setState({ kind: "ready", thread, messages: messages.items, ...(messages.nextCursor ? { nextCursor: messages.nextCursor } : {}) });
+      setPending(false);
+    }).catch((error: unknown) => {
+      if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
+      setState({ kind: "error" }); setPending(false);
+    });
+    return () => {
+      controller.dispose();
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [query, retryVersion, threadId]);
+
+  useEffect(() => {
+    activeRef.current = true;
+    const onPopState = () => { const next = parseDiscussionSearch(window.location.search); queryRef.current = next; setQuery(next); };
+    window.addEventListener("popstate", onPopState);
+    return () => { activeRef.current = false; window.removeEventListener("popstate", onPopState); controllerRef.current?.dispose(); controllerRef.current = null; };
+  }, []);
+
+  const navigate = (next: DiscussionSearch, replace = false) => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `/messages/${encodeURIComponent(threadId)}${writeDiscussionSearch(window.location.search, next)}`);
+    queryRef.current = next; setQuery(next);
+  };
+  const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
+    await sendDiscussionMessage(input);
+    if (!activeRef.current) return;
+    if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
+    else setRetryVersion((value) => value + 1);
+  };
+  return <ThreadPage locale={locale} state={state} page={query.page} limit={query.limit} pending={pending}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onRefresh={() => setRetryVersion((value) => value + 1)}
+    onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
+    onPrevious={() => window.history.back()}
+    onLimitChange={(limit) => navigate({ page: 1, limit })}
+    onSend={send} />;
+}
+
+function sameDiscussionSearch(left: DiscussionSearch, right: DiscussionSearch): boolean {
+  return left.page === right.page && left.limit === right.limit && left.cursor === right.cursor
+    && left.context?.kind === right.context?.kind && left.context?.id === right.context?.id;
 }
 
 function sameNotificationQuery(left: NotificationQuery, right: NotificationQuery): boolean {

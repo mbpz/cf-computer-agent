@@ -50,7 +50,7 @@ describe("dropdown keyboard contract", () => {
     expect(html).toContain('tabindex="-1"');
   });
 
-  it("promotes notifications while retaining keyboard-safe disabled server navigation", async () => {
+  it("promotes ready collaboration routes over stale disabled server navigation", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ tree: [{
       id: "menu-workspace", key: "workspace", labelKey: "SHELL_GROUP_WORKSPACE", path: null, icon: null, groupName: "workspace", availability: "ready", children: [{
         id: "menu-home", key: "home", labelKey: "NAV_HOME", path: "/", icon: "House", groupName: "workspace", availability: "ready", children: [],
@@ -66,37 +66,11 @@ describe("dropdown keyboard contract", () => {
     act(() => root.render(<AppShell session={{ member: { id: "m1", email: "member@example.test", role: "contributor" }, capabilities: ["knowledge:read"], permissionMask: "0x0", logoutUrl: "/logout" }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}><div /></AppShell>));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(host.querySelector('a[href="/notifications"]')?.textContent).toContain("通知");
-    const expandedMessage = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("消息"))!;
-    expect(expandedMessage.textContent).toContain("消息");
-    expect(expandedMessage.textContent).toContain("建设中");
-    expect(host.querySelector('a[href="/messages"]')).toBeNull();
-    expect(expandedMessage.getAttribute("title")).toBeNull();
+    expect(host.querySelector('a[href="/messages"]')?.textContent).toContain("消息");
+    expect(host.querySelector('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).toBeNull();
     const collapse = host.querySelector<HTMLButtonElement>("[data-shell-collapse-toggle]")!;
     await act(async () => collapse.click());
-    const message = Array.from(host.querySelectorAll<HTMLElement>('[data-nav-availability="coming_soon"] [aria-disabled="true"]')).find((node) => node.textContent?.includes("消息"))!;
-    await act(async () => {
-      message.focus();
-      message.dispatchEvent(new browser.FocusEvent("focusin", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    const tooltip = browser.document.body.querySelector<HTMLElement>('[role="tooltip"]');
-    expect(tooltip?.textContent).toContain("消息");
-    expect(tooltip?.textContent).toContain("建设中");
-    expect(message.getAttribute("aria-describedby")).toBe(tooltip?.id);
-    expect(host.querySelector('[role="tooltip"]')).toBeNull();
-
-    await act(async () => message.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    expect(browser.document.body.querySelector('[role="tooltip"]')).toBeNull();
-
-    await act(async () => message.dispatchEvent(new browser.PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" })));
-    const hoverTooltip = browser.document.body.querySelector<HTMLElement>('[role="tooltip"]');
-    expect(hoverTooltip).not.toBeNull();
-    await act(async () => {
-      message.dispatchEvent(new browser.PointerEvent("pointerleave", { bubbles: true, pointerType: "mouse" }));
-      hoverTooltip!.dispatchEvent(new browser.PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(browser.document.body.querySelector('[role="tooltip"]')).not.toBeNull();
+    expect(host.querySelector('a[href="/messages"]')).not.toBeNull();
     await act(async () => root.unmount());
     host.remove();
   });

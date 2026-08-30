@@ -67,9 +67,9 @@ describe("admin menus API", () => {
     });
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "notifications")?.disabledReason).toBeUndefined();
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "messages")).toMatchObject({
-      availability: "coming_soon",
-      disabledReason: "not_implemented",
+      availability: "ready",
     });
+    expect(contributorPayload.tree[0]?.children.find((node) => node.key === "messages")?.disabledReason).toBeUndefined();
   });
 
   it("keeps seeded coming-soon visibility under database control", async () => {

@@ -22,6 +22,8 @@ describe("private tasks page", () => {
     expect(html).toContain('aria-label="Delete: Beta (task-2)"');
     expect(html).toContain('aria-label="Complete: task-3"');
     expect(html).toContain('aria-label="Delete: task-3"');
+    expect(html).toContain('href="/messages?contextKind=task&amp;contextId=task-1"');
+    expect(html).toContain(frontendText(createLocaleRuntime(), "MESSAGES_DISCUSS"));
   });
 
   it("renders retryable initial and local failures", () => {

@@ -1310,7 +1310,7 @@ describe("Phase 1 control-plane migrations", () => {
   it("keeps historical collaboration menu seeds registered while current coming-soon paths stay seeded", async () => {
     const registeredPaths = new Set<string>(WORKSPACE_ROUTE_CAPABILITIES.map((route) => route.path));
     const comingSoonPaths = WORKSPACE_ROUTE_CAPABILITIES
-      .filter((route) => route.availability === "coming_soon")
+      .filter((route) => String(route.availability) === "coming_soon")
       .map((route) => route.path)
       .sort();
     const seedRows = [...comingSoonMenusMigration.matchAll(/SELECT\s+'([^']+)'[\s\S]*?'(\/[a-z-]+)'[\s\S]*?WHERE NOT EXISTS/gu)]

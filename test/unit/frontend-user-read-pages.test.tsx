@@ -75,10 +75,11 @@ describe("React read-only user pages", () => {
 
   it("passes reader Markdown through the supplied safe renderer as content", () => {
     const renderer = vi.fn(() => "<p>safe</p>");
-    const html = renderToStaticMarkup(<KnowledgeReaderPage revision={{ id: "r1", title: "Guide", markdown: "# Safe" }} renderMarkdown={renderer} />);
+    const html = renderToStaticMarkup(<KnowledgeReaderPage revision={{ id: "r1", knowledgeItemId: "knowledge-1", title: "Guide", markdown: "# Safe" }} renderMarkdown={renderer} />);
     expect(renderer).toHaveBeenCalledWith("# Safe");
     expect(html).toContain("&lt;p&gt;safe&lt;/p&gt;");
     expect(html).not.toContain("dangerouslySetInnerHTML");
+    expect(html).toContain('href="/messages?contextKind=knowledge&amp;contextId=knowledge-1"');
   });
 
   it("shows degraded search and citation links", () => {

@@ -44,7 +44,7 @@ export function notificationTargetHref(target: Pick<NotificationItem, "targetKin
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(target.targetId)) return null;
   if (target.targetKind === "knowledge_item") return `/knowledge/${encodeURIComponent(target.targetId)}`;
   if (target.targetKind === "task") return "/tasks";
-  if (target.targetKind === "discussion_thread") return "/messages";
+  if (target.targetKind === "discussion_thread") return `/messages/${encodeURIComponent(target.targetId)}`;
   return null;
 }
 

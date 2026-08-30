@@ -13,6 +13,7 @@ const PRIMARY_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/my-submissions": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
   "/tasks": [...NUMBERED_PAGE_QUERY_KEYS, "status", "priority", "due", "tag", "q"],
   "/notifications": [...NUMBERED_PAGE_QUERY_KEYS, "read", "type"],
+  "/messages": ["page", "limit", "cursor", "contextKind", "contextId"],
   "/admin/submissions": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/duplicates": NUMBERED_PAGE_QUERY_KEYS,
   "/admin/assets": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
@@ -27,7 +28,8 @@ export function readWorkspaceLocation(): WorkspaceLocation {
 
 export function canonicalWorkspaceLocationKey({ pathname, search }: WorkspaceLocation): string {
   const params = new URLSearchParams(search);
-  const primaryEntries = [...(PRIMARY_QUERY_KEYS[pathname] ?? [])]
+  const dynamicKeys = /^\/messages\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(pathname) ? ["page", "limit", "cursor"] : [];
+  const primaryEntries = [...(PRIMARY_QUERY_KEYS[pathname] ?? dynamicKeys)]
     .flatMap((key) => params.getAll(key).sort().map((value) => [key, value] as const))
     .sort(([leftKey, leftValue], [rightKey, rightValue]) => leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
   return JSON.stringify([pathname, primaryEntries]);

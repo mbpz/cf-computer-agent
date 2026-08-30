@@ -63,6 +63,10 @@ import { TasksRepository } from "./tasks/repository";
 import { TasksService } from "./tasks/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
+import { DiscussionTargetAuthorization } from "./discussions/authorization";
+import { DiscussionsRepository } from "./discussions/repository";
+import { DiscussionsService } from "./discussions/service";
+import { routeDiscussionsApi } from "./routes/discussions";
 import { routeNotificationsApi } from "./routes/notifications";
 import { routeTasksApi } from "./routes/tasks";
 import { ResearchRepository } from "./research/repository";
@@ -168,13 +172,14 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
 }
 
 const workspaceRoutes = new Set([
-  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/notifications", "/settings",
+  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/notifications", "/messages", "/settings",
   "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
 ]);
 
 function knownWorkspaceRoute(pathname: string): boolean {
   return workspaceRoutes.has(pathname)
     || /^\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
+    || /^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname);
 }
 
@@ -205,6 +210,8 @@ function createRequestServices(
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
   const review = new ReviewService(new ReviewRepository(env.DB));
   const taskRecords = new TasksRepository(env.DB);
+  const discussionRecords = new DiscussionsRepository(env.DB);
+  const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
   const notifications = new NotificationsService(notificationRecords, {
     dueSource: notificationRecords,
@@ -212,6 +219,9 @@ function createRequestServices(
       async canReadTarget(recipientMemberId, targetKind, targetId) {
         if (targetKind === "task") return (await taskRecords.findOwned(recipientMemberId, targetId)) !== null;
         if (targetKind === "knowledge_item") return taskRecords.isKnowledgeVisible(recipientMemberId, targetId);
+        if (targetKind === "discussion_thread") {
+          return (await discussionAuthorization.findAuthorizedThread(recipientMemberId, targetId)) !== null;
+        }
         return false;
       },
     },
@@ -292,6 +302,7 @@ function createRequestServices(
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
     notifications,
+    discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications }),
     tasks: new TasksService(taskRecords, { audit, notifications }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
@@ -331,6 +342,8 @@ async function dispatchApiRequest(
   if (tasks) return tasks;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
+  const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });
+  if (discussions) return discussions;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
   const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });

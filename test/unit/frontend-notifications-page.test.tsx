@@ -34,7 +34,7 @@ describe("notification inbox model", () => {
     expect(notificationEventKey("task.status_changed")).toBe("NOTIFICATIONS_EVENT_TASK_STATUS_CHANGED");
     expect(notificationTargetHref({ targetKind: "task", targetId: "task-1" })).toBe("/tasks");
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "knowledge-1" })).toBe("/knowledge/knowledge-1");
-    expect(notificationTargetHref({ targetKind: "discussion_thread", targetId: "thread-1" })).toBe("/messages");
+    expect(notificationTargetHref({ targetKind: "discussion_thread", targetId: "thread-1" })).toBe("/messages/thread-1");
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "javascript:alert(1)" })).toBeNull();
     expect(notificationTargetHref({ targetKind: null, targetId: null })).toBeNull();
   });

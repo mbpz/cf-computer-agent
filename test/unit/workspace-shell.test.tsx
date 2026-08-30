@@ -136,6 +136,15 @@ describe("shadcn workspace shell", () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
 
+  it("includes discussion cursor and context state in the canonical content scroll key", () => {
+    const base = canonicalWorkspaceLocationKey({ pathname: "/messages", search: "" });
+    expect(canonicalWorkspaceLocationKey({ pathname: "/messages", search: "?dialog=compose" })).toBe(base);
+    expect(canonicalWorkspaceLocationKey({ pathname: "/messages", search: "?page=2&limit=50&cursor=cursor_2" })).not.toBe(base);
+    expect(canonicalWorkspaceLocationKey({ pathname: "/messages", search: "?contextKind=task&contextId=task-1" })).not.toBe(base);
+    expect(canonicalWorkspaceLocationKey({ pathname: "/messages/thread-1", search: "?page=2&cursor=cursor_2" }))
+      .not.toBe(canonicalWorkspaceLocationKey({ pathname: "/messages/thread-1", search: "" }));
+  });
+
   it("keeps the mobile Sheet focus viewport padded inside its scroll boundary", async () => {
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
     const trigger = container.querySelector("[data-sheet-open] summary") as HTMLElement;

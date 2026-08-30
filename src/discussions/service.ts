@@ -52,6 +52,37 @@ export class DiscussionsService {
     return this.authorization.listThreads(actorMemberId, parsePageRequest(request.limit, request.cursor));
   }
 
+  async getContextThread(memberId: string, context: unknown): Promise<DiscussionThread> {
+    const actorMemberId = normalizeMemberId(memberId);
+    const normalizedContext = normalizeContext(context);
+    if (!await this.authorization.canReadContext(actorMemberId, normalizedContext)) throw notFound();
+    const thread = await this.repository.findThreadByContext(normalizedContext);
+    if (!thread || !await this.authorization.findAuthorizedThread(actorMemberId, thread.id)) throw notFound();
+    return thread;
+  }
+
+  async ensureContextThread(memberId: string, context: unknown): Promise<{ thread: DiscussionThread; created: boolean }> {
+    const actorMemberId = normalizeMemberId(memberId);
+    const normalizedContext = normalizeContext(context);
+    if (!await this.authorization.canReadContext(actorMemberId, normalizedContext)) throw notFound();
+    const existing = await this.repository.findThreadByContext(normalizedContext);
+    if (existing) {
+      const thread = await this.authorization.findAuthorizedThread(actorMemberId, existing.id);
+      if (!thread) throw notFound();
+      return { thread, created: false };
+    }
+    const generatedId = normalizeGeneratedId(this.id());
+    const thread = await this.repository.ensureThread({
+      id: generatedId,
+      context: normalizedContext,
+      creatorMemberId: actorMemberId,
+      createdAt: this.now().getTime(),
+    });
+    const authorized = await this.authorization.findAuthorizedThread(actorMemberId, thread.id);
+    if (!authorized || !await this.authorization.canReadContext(actorMemberId, normalizedContext)) throw notFound();
+    return { thread: authorized, created: authorized.id === generatedId };
+  }
+
   async getThread(memberId: string, threadId: string): Promise<DiscussionThread> {
     const actorMemberId = normalizeMemberId(memberId);
     const normalizedThreadId = normalizeLookupId(threadId);

@@ -1,13 +1,16 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { applyD1Migrations, env, reset } from "cloudflare:test";
+import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
 import {
   buildDiscussionThreadListQueries,
   DiscussionTargetAuthorization,
 } from "../../src/discussions/authorization";
 import { DiscussionsRepository } from "../../src/discussions/repository";
 import { DiscussionsService, type DiscussionNotificationSink } from "../../src/discussions/service";
+import { SessionService } from "../../src/identity/session";
+import { MembersRepository } from "../../src/members/repository";
 import type { NotificationEventInput } from "../../src/notifications/types";
 import { MIGRATIONS } from "../fixtures/d1";
 
@@ -336,6 +339,173 @@ describe("contextual discussions", () => {
   });
 });
 
+describe("discussion HTTP contract", () => {
+  let sessionA = "";
+  let sessionB = "";
+
+  beforeEach(async () => {
+    await reset();
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await seedMembers();
+    await seedKnowledge();
+    await seedTask("task-a", "member-a");
+    await seedTask("task-b", "member-b");
+    const members = new MembersRepository(env.DB);
+    const sessions = new SessionService(env.DB, members, {
+      waitUntil: () => undefined,
+      now: () => new Date("2026-08-30T00:00:00.000Z"),
+    });
+    sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
+    sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
+  });
+
+  it("creates or gets a context thread and exposes stable member-authorized cursor pages", async () => {
+    const created = await api("/api/discussions/context", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ kind: "task", id: "task-a" }),
+    });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as { thread: { id: string }; created: boolean };
+    expect(createdBody).toMatchObject({
+      created: true,
+      thread: { contextKind: "task", contextId: "task-a", lastSequence: 0 },
+    });
+
+    const replay = await api("/api/discussions/context", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ kind: "task", id: "task-a" }),
+    });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ ...createdBody, created: false });
+
+    const byContext = await api("/api/discussions/context?kind=task&id=task-a", sessionA);
+    expect(byContext.status).toBe(200);
+    await expect(byContext.json()).resolves.toEqual(createdBody.thread);
+
+    const list = await api("/api/discussions?limit=20", sessionA);
+    expect(list.status).toBe(200);
+    await expect(list.json()).resolves.toEqual({ items: [createdBody.thread] });
+
+    const detail = await api(`/api/discussions/${createdBody.thread.id}`, sessionA);
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toEqual(createdBody.thread);
+
+    const messages = await api(`/api/discussions/${createdBody.thread.id}/messages?limit=20`, sessionA);
+    expect(messages.status).toBe(200);
+    await expect(messages.json()).resolves.toEqual({ items: [] });
+  });
+
+  it("sends idempotently, validates replies and mentions, and keeps route ordering canonical", async () => {
+    const first = await api("/api/discussions/messages", sessionA, {
+      method: "POST",
+      body: JSON.stringify({
+        context: { kind: "knowledge", id: "knowledge-a" },
+        body: "Hello @member-b",
+        clientKey: "client-message-1",
+        mentionMemberIds: ["member-b"],
+      }),
+    });
+    expect(first.status).toBe(201);
+    const firstBody = await first.json() as { thread: { id: string }; message: { id: string }; created: boolean };
+    expect(firstBody).toMatchObject({
+      created: true,
+      thread: { contextKind: "knowledge", contextId: "knowledge-a" },
+      message: { body: "Hello @member-b", sequence: 1, mentionMemberIds: ["member-b"] },
+    });
+
+    const replay = await api("/api/discussions/messages", sessionA, {
+      method: "POST",
+      body: JSON.stringify({
+        context: { kind: "knowledge", id: "knowledge-a" },
+        body: "ignored replay body",
+        clientKey: "client-message-1",
+      }),
+    });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ ...firstBody, created: false });
+
+    const reply = await api("/api/discussions/messages", sessionB, {
+      method: "POST",
+      body: JSON.stringify({
+        context: { kind: "knowledge", id: "knowledge-a" },
+        body: "Reply",
+        clientKey: "client-message-2",
+        replyToMessageId: firstBody.message.id,
+      }),
+    });
+    expect(reply.status).toBe(201);
+    await expect(reply.json()).resolves.toMatchObject({
+      created: true,
+      message: { sequence: 2, replyToMessageId: firstBody.message.id },
+    });
+
+    const history = await api(`/api/discussions/${firstBody.thread.id}/messages?limit=1`, sessionA);
+    const historyBody = await history.json() as { items: Array<{ sequence: number }>; nextCursor: string };
+    expect(historyBody.items.map(({ sequence }) => sequence)).toEqual([2]);
+    expect(historyBody.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/u);
+    const older = await api(`/api/discussions/${firstBody.thread.id}/messages?limit=1&cursor=${historyBody.nextCursor}`, sessionA);
+    await expect(older.json()).resolves.toMatchObject({ items: [{ sequence: 1 }] });
+  });
+
+  it("fails closed on unknown, duplicated, malformed, oversized, and cross-member inputs", async () => {
+    const created = await api("/api/discussions/messages", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ context: { kind: "task", id: "task-a" }, body: "Private", clientKey: "private-1" }),
+    });
+    const { thread } = await created.json() as { thread: { id: string } };
+
+    for (const path of [
+      "/api/discussions?limit=51",
+      "/api/discussions?limit=20&limit=20",
+      "/api/discussions?unknown=x",
+      "/api/discussions?cursor=not-a-cursor",
+      "/api/discussions/context?kind=task&id=task-a&id=task-a",
+      `/api/discussions/${thread.id}/messages?limit=20&unknown=x`,
+    ]) {
+      const response = await api(path, sessionA);
+      expect(response.status, path).toBe(400);
+    }
+
+    for (const body of [
+      {},
+      { kind: "task", id: "task-a", extra: true },
+      { kind: "task", id: "task-a", context: {} },
+    ]) {
+      const response = await api("/api/discussions/context", sessionA, { method: "POST", body: JSON.stringify(body) });
+      expect(response.status, JSON.stringify(body)).toBe(400);
+    }
+    for (const body of [
+      { context: { kind: "task", id: "task-a", extra: true }, body: "x", clientKey: "x" },
+      { context: { kind: "task", id: "task-a" }, body: "x", clientKey: "x", extra: true },
+      { context: { kind: "task", id: "task-a" }, body: "x", clientKey: "x", mentionMemberIds: ["member-b"] },
+      { context: { kind: "task", id: "task-a" }, body: "x".repeat(5_001), clientKey: "long-body" },
+      { context: { kind: "task", id: "task-a" }, body: "x", clientKey: "x".repeat(129) },
+      { context: { kind: "task", id: "task-a" }, body: "x", clientKey: "many-mentions", mentionMemberIds: Array.from({ length: 21 }, (_, index) => `member-${index}`) },
+    ]) {
+      const response = await api("/api/discussions/messages", sessionA, { method: "POST", body: JSON.stringify(body) });
+      expect(response.status, JSON.stringify(body)).toBe(400);
+    }
+
+    expect((await api("/api/discussions?limit=20", "")).status).toBe(401);
+    expect((await api("/api/discussions/context?kind=task&id=task-a", sessionB)).status).toBe(404);
+    expect((await api(`/api/discussions/${thread.id}`, sessionB)).status).toBe(404);
+    expect((await api(`/api/discussions/${thread.id}/messages?limit=20`, sessionB)).status).toBe(404);
+    expect((await api("/api/discussions/messages", sessionB, {
+      method: "POST",
+      body: JSON.stringify({ context: { kind: "task", id: "task-a" }, body: "IDOR", clientKey: "idor" }),
+    })).status).toBe(404);
+
+    const forgedContext = createExecutionContext();
+    const forged = await createApp().fetch!(new Request("https://memory.crgmhrc.asia/api/discussions/context", {
+      method: "POST",
+      headers: { cookie: `__Host-memory-session=${sessionA}`, "content-type": "application/json", origin: "https://evil.example" },
+      body: JSON.stringify({ kind: "task", id: "task-a" }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, forgedContext);
+    await waitOnExecutionContext(forgedContext);
+    expect(forged.status).toBe(403);
+  });
+});
+
 function createService(notifications?: DiscussionNotificationSink): DiscussionsService {
   let id = 0;
   return new DiscussionsService(
@@ -401,4 +571,19 @@ async function expectAccessKeys(expected: string[][]): Promise<void> {
     principal_id,
     thread_id,
   ])).toEqual(expected);
+}
+
+async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("cookie", `__Host-memory-session=${token}`);
+  headers.set("origin", "https://memory.crgmhrc.asia");
+  headers.set("content-type", "application/json");
+  const context = createExecutionContext();
+  const response = await createApp().fetch!(
+    new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>,
+    env,
+    context,
+  );
+  await waitOnExecutionContext(context);
+  return response;
 }

@@ -36,7 +36,8 @@ describe("frontend navigation availability", () => {
     expect(children.find((node) => node.path === "/boards")).toBeUndefined();
     expect(children.find((node) => node.path === "/notifications")).toMatchObject({ availability: "ready" });
     expect(children.find((node) => node.path === "/notifications")?.disabledReason).toBeUndefined();
-    expect(children.find((node) => node.path === "/messages")).toMatchObject({ availability: "coming_soon", disabledReason: "not_implemented" });
+    expect(children.find((node) => node.path === "/messages")).toMatchObject({ availability: "ready" });
+    expect(children.find((node) => node.path === "/messages")?.disabledReason).toBeUndefined();
   });
 
   it("restores Tasks from a stale server tree when its canonical permission bit is present", async () => {
