@@ -1,9 +1,11 @@
 // @vitest-environment node
-import React, { act } from "react";
+import React, { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BoardsRoute } from "../../frontend/app";
+import { AppShell } from "../../frontend/components/shell/app-shell";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { readWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
 
 const vmContexts = new WeakSet<object>();
@@ -17,6 +19,7 @@ describe("task-backed boards route", () => {
   beforeEach(() => {
     browser = new Window({ url: "https://app.test/boards" });
     vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document);
+    vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div"); browser.document.body.append(container as unknown as Node); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
@@ -441,6 +444,43 @@ describe("task-backed boards route", () => {
     expect(column("todo").textContent).not.toContain("Stale");
   });
 
+  it("resets the selected column page when the current Boards menu re-enters its base URL", async () => {
+    browser.history.replaceState({}, "", "/boards?todoPage=2");
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/navigation") throw new Error("navigation unavailable");
+      requests.push(path);
+      return boardPage(path, { todoTotal: 21, todoTitle: path.includes("page=2") ? "Second page" : "First page" });
+    });
+    const session = {
+      member: { id: "member-1", email: "member@example.com", role: "contributor" as const },
+      capabilities: ["knowledge:read"], permissionMask: "0x100000", logoutUrl: "/auth/logout",
+    };
+    function Harness() {
+      const [location, setLocation] = useState(readWorkspaceLocation);
+      useEffect(() => {
+        const update = () => setLocation(readWorkspaceLocation());
+        window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
+        return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
+      }, []);
+      return <AppShell session={session} pathname={location.pathname} locale={createLocaleRuntime()} onNavigate={(path) => writeWorkspaceHistory("push", path)}>
+        <BoardsRoute locale={createLocaleRuntime()} search={location.search} />
+      </AppShell>;
+    }
+    await act(async () => root.render(<Harness />));
+    await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 2);
+
+    const boardsLink = container.querySelector("nav[data-shell-sidebar-scroll] a[href='/boards']") as HTMLAnchorElement;
+    await act(async () => boardsLink.click());
+    await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 1);
+
+    expect(browser.location.pathname).toBe("/boards");
+    expect(browser.location.search).toBe("");
+    expect(column("todo").textContent).toContain("First page");
+    expect(column("todo").querySelector('[aria-label="Page 1"][aria-current="page"]')).not.toBeNull();
+  });
+
   async function renderBoard() {
     await act(async () => root.render(<BoardsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
@@ -450,6 +490,14 @@ describe("task-backed boards route", () => {
     return container.querySelector(`[data-board-column="${status}"]`) as HTMLElement;
   }
 });
+
+async function waitForBoardRequest(requests: string[], predicate: (path: string) => boolean) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flush();
+    if (requests.some(predicate)) return;
+  }
+  throw new Error("board request not observed");
+}
 
 function boardPage(url: string, options: { todoTitle?: string; todoTotal?: number } = {}): Response {
   const parsed = new URL(url, "https://app.test");

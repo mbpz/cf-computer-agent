@@ -1,9 +1,11 @@
 // @vitest-environment node
-import React, { act } from "react";
+import React, { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationsRoute } from "../../frontend/app";
+import { AppShell } from "../../frontend/components/shell/app-shell";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { readWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -113,6 +115,43 @@ describe("notification inbox route", () => {
     expect(pageTitles).toContain("Early read page");
   });
 
+  it("resets page and filters when the current Notifications menu re-enters its base URL", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/navigation") throw new Error("navigation unavailable");
+      if (path.endsWith("/summary")) return Response.json({ unread: 3 });
+      requests.push(path);
+      return pageResponse(path, path.includes("page=2") ? "Filtered page" : "Default page");
+    });
+    const session = {
+      member: { id: "member-1", email: "member@example.com", role: "contributor" as const },
+      capabilities: ["knowledge:read"], permissionMask: "0x100000", logoutUrl: "/auth/logout",
+    };
+    function Harness() {
+      const [location, setLocation] = useState(readWorkspaceLocation);
+      useEffect(() => {
+        const update = () => setLocation(readWorkspaceLocation());
+        window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
+        return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
+      }, []);
+      return <AppShell session={session} pathname={location.pathname} locale={createLocaleRuntime()} onNavigate={(path) => writeWorkspaceHistory("push", path)}>
+        <NotificationsRoute locale={createLocaleRuntime()} search={location.search} />
+      </AppShell>;
+    }
+    await act(async () => root.render(<Harness />));
+    await waitForRequest(requests, (path) => path.includes("page=2") && path.includes("read=false") && path.includes("type=task.due"));
+
+    const notificationsLink = container.querySelector("nav[data-shell-sidebar-scroll] a[href='/notifications']") as HTMLAnchorElement;
+    await act(async () => notificationsLink.click());
+    await waitForRequest(requests, (path) => path.includes("page=1") && !path.includes("read=") && !path.includes("type="));
+
+    expect(browser.location.pathname).toBe("/notifications");
+    expect(browser.location.search).toBe("");
+    expect(container.textContent).toContain("Default page");
+    expect(container.querySelector('[aria-label="Page 1"][aria-current="page"]')).not.toBeNull();
+  });
+
   async function renderRoute() {
     await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
@@ -140,4 +179,11 @@ async function waitForText(text: string) {
     await flush();
     if (document.body.textContent?.includes(text)) return;
   }
+}
+async function waitForRequest(requests: string[], predicate: (path: string) => boolean) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flush();
+    if (requests.some(predicate)) return;
+  }
+  throw new Error("request not observed");
 }

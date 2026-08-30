@@ -39,3 +39,12 @@ export function writeWorkspaceHistory(mode: "push" | "replace", url: string): vo
   window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", url);
   window.dispatchEvent(new window.Event(WORKSPACE_LOCATION_CHANGE_EVENT));
 }
+
+export function subscribeWorkspaceLocation(listener: () => void): () => void {
+  window.addEventListener("popstate", listener);
+  window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
+  return () => {
+    window.removeEventListener("popstate", listener);
+    window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
+  };
+}

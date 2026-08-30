@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
+import { WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
 import { MIGRATIONS } from "../fixtures/d1";
 
 let sessionToken: string;
@@ -52,7 +53,8 @@ describe("React workspace assets", () => {
     }
   });
 
-  it.each(["/submit", "/knowledge", "/search", "/agent", "/admin/assets", "/admin/members"]) ("serves React for known deep link %s", async (path) => {
+  it.each(WORKSPACE_ROUTE_CAPABILITIES.filter(({ availability }) => availability === "ready").map(({ path }) => path))
+  ("serves React for every ready registry route %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('id="root"');
@@ -62,7 +64,7 @@ describe("React workspace assets", () => {
     expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 
-  it.each(["/knowledge/knowledge-1", "/admin/submissions/submission-1"]) ("serves React for bounded parameter route %s", async (path) => {
+  it.each(["/knowledge/knowledge-1", "/messages/thread-1", "/admin/submissions/submission-1"]) ("serves React for bounded parameter route %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('id="root"');

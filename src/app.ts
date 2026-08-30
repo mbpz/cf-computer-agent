@@ -86,6 +86,7 @@ import { DuplicateCandidatesRepository } from "./duplicates/repository";
 import { DuplicateCandidatesService } from "./duplicates/service";
 import { ReviewRepository } from "./review/repository";
 import { ReviewService } from "./review/service";
+import { WORKSPACE_ROUTE_CAPABILITIES } from "../shared/workspace-route-capabilities";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -171,10 +172,11 @@ function hasOAuthCredentialPair(clientId: unknown, clientSecret: unknown): boole
   return valid(clientId, 256) && valid(clientSecret, 1024);
 }
 
-const workspaceRoutes = new Set([
-  "/", "/submit", "/knowledge", "/search", "/agent", "/my-submissions", "/tasks", "/notifications", "/messages", "/settings",
-  "/admin", "/admin/submissions", "/admin/duplicates", "/admin/assets", "/admin/members", "/admin/roles", "/admin/menus", "/admin/spaces", "/admin/audit", "/admin/analytics",
-]);
+const workspaceRoutes = new Set<string>(
+  WORKSPACE_ROUTE_CAPABILITIES
+    .filter(({ availability }) => availability === "ready")
+    .map(({ path }) => path),
+);
 
 function knownWorkspaceRoute(pathname: string): boolean {
   return workspaceRoutes.has(pathname)
