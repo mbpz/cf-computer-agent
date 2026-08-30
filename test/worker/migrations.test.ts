@@ -1330,7 +1330,7 @@ describe("Phase 1 control-plane migrations", () => {
     ["key", "conflicting-boards-key", "boards", "/conflicting-boards-key"],
     ["path", "conflicting-boards-path", "conflicting-boards-path", "/boards"],
   ])("fails 0034 on an incompatible unique %s conflict", async (_kind, id, key, path) => {
-    const priorMigrations = MIGRATIONS.slice(0, -3);
+    const priorMigrations = MIGRATIONS.slice(0, -4);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1344,7 +1344,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("preserves canonical 0034 rows without overriding managed fields", async () => {
-    const priorMigrations = MIGRATIONS.slice(0, -3);
+    const priorMigrations = MIGRATIONS.slice(0, -4);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1642,6 +1642,104 @@ describe("Phase 1 control-plane migrations", () => {
     expect(lazyDuePlan).toContain("SEARCH n USING COVERING INDEX sqlite_autoindex_notifications_2 (recipient_member_id=? AND deduplication_key=?)");
     for (const plan of [listPlan, typePlan, unreadPlan, markReadPlan, markManyReadPlan, casPlan, pendingIntentPlan, markIntentDeliveredPlan, lazyDuePlan]) {
       expect(plan).not.toMatch(/SCAN (?:notifications|tasks|t|n|task_status_notification_intents)\b/iu);
+    }
+  });
+
+  it("creates bounded contextual discussion tables with one context thread and retry-safe message keys", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const tables = await env.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+       AND name IN ('discussion_threads', 'discussion_participants', 'discussion_messages') ORDER BY name`,
+    ).all<{ name: string }>();
+    expect(tables.results.map(({ name }) => name)).toEqual([
+      "discussion_messages",
+      "discussion_participants",
+      "discussion_threads",
+    ]);
+    await expectUniqueConstraints("discussion_threads", ["context_kind,context_id|partial=0"]);
+    await expectUniqueConstraints("discussion_messages", [
+      "author_member_id,client_key|partial=0",
+      "id,thread_id|partial=0",
+      "thread_id,sequence|partial=0",
+    ]);
+
+    const now = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('discussion-member', 'discussion-sub', 'discussion@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(now, now).run();
+    await env.DB.prepare(
+      `INSERT INTO discussion_threads
+       (id, context_kind, context_id, creator_member_id, last_sequence, created_at, updated_at)
+       VALUES ('thread-a', 'task', 'task-a', 'discussion-member', 0, 1, 1)`,
+    ).run();
+    await expect(env.DB.prepare(
+      `INSERT INTO discussion_threads
+       (id, context_kind, context_id, creator_member_id, last_sequence, created_at, updated_at)
+       VALUES ('thread-b', 'task', 'task-a', 'discussion-member', 0, 2, 2)`,
+    ).run()).rejects.toThrow();
+    await expect(env.DB.prepare(
+      `INSERT INTO discussion_messages
+       (id, thread_id, sequence, author_member_id, body, reply_to_message_id, mentions_json, client_key, created_at)
+       VALUES ('message-long', 'thread-a', 1, 'discussion-member', ?, NULL, '[]', 'client-a', 1)`,
+    ).bind("界".repeat(5_001)).run()).rejects.toThrow();
+    await expect(env.DB.prepare(
+      `INSERT INTO discussion_messages
+       (id, thread_id, sequence, author_member_id, body, reply_to_message_id, mentions_json, client_key, created_at)
+       VALUES ('message-key', 'thread-a', 1, 'discussion-member', 'body', NULL, '[]', ?, 1)`,
+    ).bind("x".repeat(129)).run()).rejects.toThrow();
+  });
+
+  it("uses bounded discussion indexes for context lookup, participant lookup, thread pages, history, and idempotency", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const contextPlan = await queryPlan(
+      "SELECT id FROM discussion_threads WHERE context_kind = ? AND context_id = ? LIMIT 1",
+      ["task", "task-a"],
+    );
+    const threadPagePlan = await queryPlan(
+      `SELECT id FROM discussion_threads
+       WHERE created_at < ? OR (created_at = ? AND id < ?)
+       ORDER BY created_at DESC, id DESC LIMIT ?`,
+      [1_777_777_000_000, 1_777_777_000_000, "thread-z", 21],
+    );
+    const participantPlan = await queryPlan(
+      "SELECT thread_id FROM discussion_participants WHERE member_id = ? ORDER BY thread_id LIMIT ?",
+      ["member-a", 20],
+    );
+    const historyPlan = await queryPlan(
+      `SELECT id FROM discussion_messages
+       WHERE thread_id = ? AND (sequence < ? OR (sequence = ? AND id < ?))
+       ORDER BY sequence DESC, id DESC LIMIT ?`,
+      ["thread-a", 20, 20, "message-z", 21],
+    );
+    const replayPlan = await queryPlan(
+      "SELECT id FROM discussion_messages WHERE author_member_id = ? AND client_key = ? LIMIT 1",
+      ["member-a", "client-key"],
+    );
+    const taskAuthorizationPlan = await queryPlan(
+      `SELECT 1 AS visible
+       FROM members m JOIN tasks t ON t.member_id = m.id
+       WHERE m.id = ? AND m.status = 'active' AND t.id = ? AND t.member_id = ? LIMIT 1`,
+      ["member-a", "task-a", "member-a"],
+    );
+    const eligibleMembersPlan = await queryPlan(
+      `SELECT COUNT(*) AS eligible
+       FROM json_each(?) requested
+       JOIN members m ON m.id = requested.value AND m.status = 'active'
+       JOIN tasks t ON t.member_id = m.id AND t.id = ?`,
+      ['["member-a"]', "task-a"],
+    );
+
+    expect(contextPlan).toContain("SEARCH discussion_threads USING INDEX sqlite_autoindex_discussion_threads_2 (context_kind=? AND context_id=?)");
+    expect(threadPagePlan).toContain("SCAN discussion_threads USING COVERING INDEX idx_discussion_threads_created");
+    expect(participantPlan).toContain("SEARCH discussion_participants USING COVERING INDEX idx_discussion_participants_member_thread (member_id=?)");
+    expect(historyPlan).toContain("SEARCH discussion_messages USING COVERING INDEX idx_discussion_messages_thread_sequence (thread_id=?)");
+    expect(replayPlan).toContain("SEARCH discussion_messages USING INDEX sqlite_autoindex_discussion_messages_4 (author_member_id=? AND client_key=?)");
+    expect(taskAuthorizationPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");
+    expect(taskAuthorizationPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
+    expect(eligibleMembersPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
+    expect(eligibleMembersPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");
+    for (const plan of [contextPlan, threadPagePlan, participantPlan, historyPlan, replayPlan, taskAuthorizationPlan, eligibleMembersPlan]) {
+      expect(plan).not.toMatch(/SCAN (?:discussion_threads|discussion_participants|discussion_messages)\b(?! USING)/iu);
     }
   });
 });
