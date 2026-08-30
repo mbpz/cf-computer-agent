@@ -28,7 +28,7 @@ Browser UI → GitHub OAuth → Worker API → D1 control plane
 
 The knowledge-base core supports text, Markdown, and code submissions; controlled review and publication; owner-scoped lists; FTS search; reader/citation retrieval; and grounded answers. The workbench provides the shell, navigation, settings, tasks, and admin areas for members, roles, menus, spaces, audit, and analytics.
 
-GitHub OAuth is the browser identity boundary: the callback must resolve to a primary, verified email, and D1 decides allowlist membership, role, status, and capability. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
+GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup. D1 then governs the member record, hashed session, role, active/disabled status, and capability. Automation requires both an HMAC signature and `APP_TOKEN`; it is limited to compatible legacy smoke routes and never acts as an administrator.
 
 `@cloudflare/computer` remains Preview, so it is kept behind storage boundaries rather than treated as a production-stability guarantee.
 
@@ -56,6 +56,7 @@ Remote automation smoke is an authorized post-deploy check, not browser acceptan
 
 - Session and member scope: `GET /api/session`, `GET /api/spaces`, `POST /api/submissions`, `GET /api/submissions/mine`
 - Knowledge: `GET /api/knowledge`, `GET /api/knowledge/search`, `GET /api/knowledge/:id`, `GET /api/knowledge/citations/:id`, `POST /api/knowledge/chat`
+- Tasks: `/api/tasks*` for active members with `tasks:use`; member isolation, idempotent writes, and numbered pagination.
 - Administration: `/api/admin/*` for active administrators only
 - Legacy automation compatibility: `GET /api/health`, `GET`/`POST /api/notes`, `GET /api/search`, `POST /api/chat`
 

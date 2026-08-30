@@ -401,8 +401,65 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 });
 
-test("README is a current workbench entrypoint rather than a milestone ledger", () => {
+test("README derives bounded workbench claims from the delivery ledger", () => {
   const readme = readFileSync(readmePath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  assertReadmeContract(readme, rows);
+
+  for (const { name, appended, expectedError } of [
+    {
+      name: "fully completed task UI",
+      appended: "\nUser-isolated tasks and the task UI are fully complete.\n",
+      expectedError: /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+    },
+    {
+      name: "implemented collaboration surfaces",
+      appended: "\nBoards, notifications, and messages are fully implemented and available now.\n",
+      expectedError: /boards must not claim readiness while BRD ledger implementation is pending/u,
+    },
+    {
+      name: "ready notifications",
+      appended: "\nNotifications are ready.\n",
+      expectedError: /notifications must not claim readiness while NTF ledger implementation is pending/u,
+    },
+    {
+      name: "completed messages",
+      appended: "\nMessages are fully completed.\n",
+      expectedError: /messages must not claim readiness while MSG ledger implementation is pending/u,
+    },
+    {
+      name: "completed current-main production acceptance",
+      appended: "\nCurrent-main production release and signed browser acceptance are complete.\n",
+      expectedError: /README must not claim current-main production release or browser acceptance complete/u,
+    },
+    {
+      name: "completed current-main release",
+      appended: "\nCurrent-main production release is complete.\n",
+      expectedError: /README must not claim current-main production release complete/u,
+    },
+    {
+      name: "completed current-main browser acceptance",
+      appended: "\nCurrent-main signed browser acceptance is complete.\n",
+      expectedError: /README must not claim current-main browser acceptance complete/u,
+    },
+    {
+      name: "current overall atom-count completion",
+      appended: "\nThe 23 product atoms are all complete as the current overall product status.\n",
+      expectedError: /README must not present an atom count as current overall completion/u,
+    },
+  ]) {
+    assert.throws(
+      () => assertReadmeContract(`${readme}${appended}`, rows),
+      expectedError,
+      `${name} must be rejected even when the canonical README paragraphs remain present`,
+    );
+  }
+});
+
+function assertReadmeContract(readme, rows) {
+  const maturity = readmeSection(readme, "Current maturity");
+  const product = readmeSection(readme, "Product and architecture");
+  const api = readmeSection(readme, "API boundary");
 
   for (const link of README_REQUIRED_LINKS) {
     assert.match(readme, new RegExp(`\\]\\(\\./${escapeRegExp(link)}\\)`, "u"), `README requires ./${link}`);
@@ -410,16 +467,77 @@ test("README is a current workbench entrypoint rather than a milestone ledger", 
   }
 
   assert.match(readme, /personal workbench.*AI knowledge base.*first major module/ui);
-  assert.match(readme, /user-isolated tasks.*implemented.*locally verified/ui);
-  assert.match(readme, /task UI remains.*partial/ui);
-  assert.match(readme, /unified numbered pagination.*independent scrolling.*compact shadcn Shell.*administrator governance.*implemented.*locally verified/ui);
-  assert.match(readme, /boards.*notifications.*messages.*Coming Soon/ui);
-  assert.match(readme, /current-main.*release.*acceptance.*only.*delivery status ledger/ui);
-  assert.match(readme, /R2.*Vectorize.*Queue.*Workers AI.*optional.*degrade.*do not block.*free text core/ui);
+  assert.match(maturity, /^- User-isolated tasks are implemented and locally verified; the task UI remains \*\*partial\*\* while detail, retention, and production role journeys are completed\.$/mu);
+  assert.match(maturity, /^- Unified numbered pagination, independent scrolling, the compact shadcn Shell, and administrator governance are implemented and locally verified\.$/mu);
+  assert.match(maturity, /^- Boards, notifications, and messages are \*\*Coming Soon\*\*\./mu);
+  assert.match(maturity, /^- \*\*Current-main release and acceptance are determined only by the \[delivery status ledger\]\(\.\/docs\/product\/delivery-status-ledger\.md\)\.\*\*/mu);
+  assert.match(product, /GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup\. D1 then governs the member record, hashed session, role, active\/disabled status, and capability\./u);
+  assert.match(api, /^- Tasks: `\/api\/tasks\*` for active members with `tasks:use`; member isolation, idempotent writes, and numbered pagination\.$/mu);
+  assert.match(readmeSection(readme, "Free-tier boundary and degradation"), /R2.*Vectorize.*Queue.*Workers AI.*optional.*degrade.*do not block.*free text core/ui);
 
   assert.doesNotMatch(readme, /\bM\d+\b/u, "README must not duplicate milestone prose or counts");
   assert.doesNotMatch(readme, /(?:M1 的 23|76 P0\/M1|M1 实现完成|远程验证待完成)/u);
-});
+  assert.doesNotMatch(readme, /D1\s+(?:decides|controls|governs)\s+allowlist membership/ui, "D1 must not be assigned the pre-login allowlist decision");
+  assert.doesNotMatch(readme, /\b\d+\s+(?:product\s+)?atoms?\s+(?:are\s+)?(?:all\s+)?(?:fully\s+)?(?:complete(?:d)?|done)\b/ui, "README must not present an atom count as current overall completion");
+
+  const taskUi = ledgerRow(rows, "TSK-002");
+  const taskRetention = ledgerRow(rows, "TSK-009");
+  const taskAcceptance = ledgerRow(rows, "TSK-010");
+  if (taskUi.实现 !== "done" || taskRetention.实现 !== "done" || taskAcceptance.验收 !== "done") {
+    assert.doesNotMatch(
+      readme,
+      /\b(?:user-isolated tasks(?: and the task UI)?|task UI) (?:are|is) (?:fully )?(?:complete(?:d)?|done)\b/ui,
+      "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
+    );
+  }
+
+  for (const [name, prefix] of [["boards", "BRD-"], ["notifications", "NTF-"], ["messages", "MSG-"]]) {
+    const domainRows = rows.filter((row) => row.ID.startsWith(prefix));
+    assert.ok(domainRows.length > 0, `${name} ledger domain is required`);
+    if (domainRows.some((row) => row.实现 !== "done")) {
+      assert.doesNotMatch(
+        readme,
+        new RegExp(`\\b${name}\\b[^.\\n]{0,96}\\b(?:are|is|remain)\\s+(?:fully\\s+)?(?:ready|implemented|available(?:\\s+now)?|complete(?:d)?|done)\\b`, "iu"),
+        `${name} must not claim readiness while ${prefix.slice(0, -1)} ledger implementation is pending`,
+      );
+    }
+  }
+
+  if (rows.some((row) => row.发布 !== "done") || rows.some((row) => row.验收 !== "done")) {
+    for (const { claim, message } of [
+      {
+        claim: /\bcurrent-main production release and signed browser acceptance (?:are|is) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        message: "README must not claim current-main production release or browser acceptance complete",
+      },
+      {
+        claim: /\bcurrent-main (?:production )?release (?:is|has|remains) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        message: "README must not claim current-main production release complete",
+      },
+      {
+        claim: /\bcurrent-main (?:signed )?browser acceptance (?:is|has|remains) (?:fully )?(?:complete(?:d)?|done|accepted)\b/ui,
+        message: "README must not claim current-main browser acceptance complete",
+      },
+    ]) {
+      assert.doesNotMatch(readme, claim, message);
+    }
+  }
+}
+
+function readmeSection(readme, heading) {
+  const match = new RegExp(`^## ${escapeRegExp(heading)}\\s*$`, "mu").exec(readme);
+  assert.ok(match, `README requires a ${heading} section`);
+  const start = match.index + match[0].length;
+  const next = /^## /gmu;
+  next.lastIndex = start;
+  const end = next.exec(readme)?.index ?? readme.length;
+  return readme.slice(start, end);
+}
+
+function ledgerRow(rows, id) {
+  const row = rows.find((candidate) => candidate.ID === id);
+  assert.ok(row, `delivery ledger requires ${id}`);
+  return row;
+}
 
 test("AI knowledge checklist separates local completion from delivery status", () => {
   const checklist = readFileSync(knowledgeChecklistPath, "utf8");
