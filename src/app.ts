@@ -61,6 +61,8 @@ import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
 import { TasksRepository } from "./tasks/repository";
 import { TasksService } from "./tasks/service";
+import { NotificationsRepository } from "./notifications/repository";
+import { NotificationsService } from "./notifications/service";
 import { routeTasksApi } from "./routes/tasks";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
@@ -201,6 +203,18 @@ function createRequestServices(
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
   const review = new ReviewService(new ReviewRepository(env.DB));
+  const taskRecords = new TasksRepository(env.DB);
+  const notificationRecords = new NotificationsRepository(env.DB);
+  const notifications = new NotificationsService(notificationRecords, {
+    dueSource: notificationRecords,
+    targetAuthorizer: {
+      async canReadTarget(recipientMemberId, targetKind, targetId) {
+        if (targetKind === "task") return (await taskRecords.findOwned(recipientMemberId, targetId)) !== null;
+        if (targetKind === "knowledge_item") return taskRecords.isKnowledgeVisible(recipientMemberId, targetId);
+        return false;
+      },
+    },
+  });
   const researchReports = new ResearchReportService(new ResearchRepository(env.DB), ai);
   const agentTools = new AgentToolRunner(memberRecords, [
     createSearchKnowledgeTool(library),
@@ -276,7 +290,8 @@ function createRequestServices(
     tags,
     sourceReparse: new SourceReparseService(new SourceReparseRepository(env.DB)),
     savedViews: new SavedViewsService(new SavedViewsRepository(env.DB)),
-    tasks: new TasksService(new TasksRepository(env.DB), { audit }),
+    notifications,
+    tasks: new TasksService(taskRecords, { audit, notifications }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),

@@ -1330,7 +1330,7 @@ describe("Phase 1 control-plane migrations", () => {
     ["key", "conflicting-boards-key", "boards", "/conflicting-boards-key"],
     ["path", "conflicting-boards-path", "conflicting-boards-path", "/boards"],
   ])("fails 0034 on an incompatible unique %s conflict", async (_kind, id, key, path) => {
-    const priorMigrations = MIGRATIONS.slice(0, -2);
+    const priorMigrations = MIGRATIONS.slice(0, -3);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1344,7 +1344,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("preserves canonical 0034 rows without overriding managed fields", async () => {
-    const priorMigrations = MIGRATIONS.slice(0, -2);
+    const priorMigrations = MIGRATIONS.slice(0, -3);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1362,7 +1362,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("adds 0035 as an idempotent position-only collaboration menu migration", async () => {
-    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -1));
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -2));
     await env.DB.prepare("UPDATE menus SET position = 42, visible = 0, status = 'disabled' WHERE id = 'menu-boards'").run();
     const migrationSql = workbenchCollaborationMenusMigration.replace(/^--.*$/gmu, "");
     await env.DB.prepare(migrationSql).run();
@@ -1436,5 +1436,91 @@ describe("Phase 1 control-plane migrations", () => {
         { id: "legacy-rejected", status: "rejected", content: "bytes:legacy-rejected", idempotency_key: null },
       ],
     });
+  });
+
+  it("creates bounded recipient-owned notifications with deterministic indexes", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    await expectTableSchema("notifications", [
+      "id:TEXT:0:NULL:1",
+      "recipient_member_id:TEXT:1:NULL:0",
+      "event_type:TEXT:1:NULL:0",
+      "actor_member_id:TEXT:0:NULL:0",
+      "target_kind:TEXT:1:NULL:0",
+      "target_id:TEXT:1:NULL:0",
+      "payload_json:TEXT:1:NULL:0",
+      "deduplication_key:TEXT:1:NULL:0",
+      "read_at:INTEGER:0:NULL:0",
+      "created_at:INTEGER:1:NULL:0",
+    ], [
+      "CHECK(length(id) BETWEEN 1 AND 128)",
+      "CHECK(length(event_type) BETWEEN 1 AND 64)",
+      "CHECK(length(target_id) BETWEEN 1 AND 128)",
+      "CHECK(length(CAST(payload_json AS BLOB)) BETWEEN 2 AND 4096)",
+      "CHECK(json_valid(payload_json) AND json_type(payload_json) = 'object')",
+      "CHECK(length(deduplication_key) BETWEEN 1 AND 256)",
+      "UNIQUE (recipient_member_id, deduplication_key)",
+    ]);
+    await expectForeignKeys("notifications", [
+      { from: "actor_member_id", table: "members", to: "id" },
+      { from: "recipient_member_id", table: "members", to: "id" },
+    ]);
+    await expectIndex("notifications", "idx_notifications_recipient_created", [
+      { name: "recipient_member_id", desc: 0 }, { name: "created_at", desc: 1 }, { name: "id", desc: 1 },
+    ]);
+    await expectIndex("notifications", "idx_notifications_recipient_type_created", [
+      { name: "recipient_member_id", desc: 0 }, { name: "event_type", desc: 0 },
+      { name: "created_at", desc: 1 }, { name: "id", desc: 1 },
+    ]);
+    await expectIndex("notifications", "idx_notifications_recipient_unread_created", [
+      { name: "recipient_member_id", desc: 0 }, { name: "created_at", desc: 1 }, { name: "id", desc: 1 },
+    ], { partial: 1, sqlFragment: "WHERE read_at IS NULL" });
+  });
+
+  it("enforces notification deduplication and byte-bounded persisted fields", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const timestamp = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare(
+      "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('notify-a', 'github:notify-a', 'notify-a@example.test', 'contributor', 'active', ?, ?), ('notify-b', 'github:notify-b', 'notify-b@example.test', 'contributor', 'active', ?, ?)",
+    ).bind(timestamp, timestamp, timestamp, timestamp).run();
+    const insert = (id: string, recipient: string, dedupe: string, payload: string) => env.DB.prepare(
+      `INSERT INTO notifications
+       (id, recipient_member_id, event_type, actor_member_id, target_kind, target_id, payload_json, deduplication_key, created_at)
+       VALUES (?, ?, 'task.status_changed', 'notify-a', 'task', 'task-a', ?, ?, 1777777000000)`,
+    ).bind(id, recipient, payload, dedupe).run();
+
+    await insert("notification-a", "notify-a", "task-a:status:doing", '{"status":"doing"}');
+    await expect(insert("notification-duplicate", "notify-a", "task-a:status:doing", '{}')).rejects.toThrow();
+    await expect(insert("notification-b", "notify-b", "task-a:status:doing", '{}')).resolves.toMatchObject({ success: true });
+    await expect(insert("x".repeat(129), "notify-a", "long-id", '{}')).rejects.toThrow();
+    await expect(insert("notification-payload", "notify-a", "long-payload", `{"body":"${"界".repeat(1400)}"}`)).rejects.toThrow();
+    await expect(insert("notification-dedupe", "notify-a", "x".repeat(257), '{}')).rejects.toThrow();
+  });
+
+  it("uses recipient indexes for notification list, type, and unread paths without scans", async () => {
+    await applyD1Migrations(env.DB, MIGRATIONS);
+    const listPlan = await queryPlan(
+      `SELECT id, recipient_member_id, event_type, actor_member_id, target_kind, target_id,
+        payload_json, deduplication_key, read_at, created_at
+       FROM notifications
+       WHERE recipient_member_id = ?
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["member-a", 20, 0],
+    );
+    const typePlan = await queryPlan(
+      `SELECT id FROM notifications WHERE recipient_member_id = ? AND event_type = ?
+       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+      ["member-a", "task.status_changed", 20, 0],
+    );
+    const unreadPlan = await queryPlan(
+      "SELECT COUNT(*) AS unread FROM notifications WHERE recipient_member_id = ? AND read_at IS NULL",
+      ["member-a"],
+    );
+
+    expect(listPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_created (recipient_member_id=?)");
+    expect(typePlan).toContain("SEARCH notifications USING COVERING INDEX idx_notifications_recipient_type_created (recipient_member_id=? AND event_type=?)");
+    expect(unreadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
+    for (const plan of [listPlan, typePlan, unreadPlan]) {
+      expect(plan).not.toMatch(/SCAN notifications|USE TEMP B-TREE/iu);
+    }
   });
 });

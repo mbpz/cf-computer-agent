@@ -223,6 +223,18 @@ describe("tasks HTTP contract", () => {
     await expect(replay.json()).resolves.toMatchObject({ status: "doing" });
     const audit = await env.DB.prepare("SELECT action FROM audit_events WHERE action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
     expect(audit.results.map((row) => row.action)).toEqual(["task.created", "task.status_changed"]);
+    const notifications = await env.DB.prepare(
+      "SELECT recipient_member_id, event_type, target_kind, target_id, payload_json FROM notifications WHERE recipient_member_id = ? ORDER BY created_at, id",
+    ).bind("member-a").all<{
+      recipient_member_id: string; event_type: string; target_kind: string; target_id: string; payload_json: string;
+    }>();
+    expect(notifications.results).toEqual([{
+      recipient_member_id: "member-a",
+      event_type: "task.status_changed",
+      target_kind: "task",
+      target_id: "task-1",
+      payload_json: '{"previousStatus":"todo","status":"doing"}',
+    }]);
   });
 
   it("rejects anonymous, automation, CSRF-forged, and invalid-transition requests", async () => {

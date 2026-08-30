@@ -4,6 +4,7 @@ import { TasksService } from "../../src/tasks/service";
 import type { TasksRepositoryPort } from "../../src/tasks/repository";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskSummary, TaskUpdate } from "../../src/tasks/types";
 import type { PageRequest } from "../../src/pagination";
+import type { NotificationEventInput } from "../../src/notifications/types";
 
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
@@ -69,6 +70,27 @@ describe("TasksService", () => {
     expect(reopened.completedAt).toBeNull();
     expect(reopened.progress).toBe(100); // 重开不回退进度
     void created;
+  });
+
+  it("emits one recipient-owned notification only after a real status transition", async () => {
+    const repository = new FakeTasksRepository();
+    const notifications = new FakeNotificationSink();
+    const service = createService(repository, undefined, notifications);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+
+    await service.setStatus("member-a", "task-1", "doing");
+    await service.setStatus("member-a", "task-1", "doing");
+
+    expect(notifications.events).toHaveLength(1);
+    expect(notifications.events[0]).toMatchObject({
+      recipientMemberId: "member-a",
+      eventType: "task.status_changed",
+      actorMemberId: "member-a",
+      targetKind: "task",
+      targetId: "task-1",
+      payload: { previousStatus: "todo", status: "doing" },
+    });
+    expect(notifications.events[0]?.deduplicationKey).toMatch(/^task:task-1:status:todo:doing:generated-\d+$/u);
   });
 
   it("validates progress bounds, non-terminal states, and idempotent updates", async () => {
@@ -147,13 +169,19 @@ describe("TasksService", () => {
   });
 });
 
-function createService(repository: FakeTasksRepository, audit?: FakeAudit): TasksService {
+function createService(repository: FakeTasksRepository, audit?: FakeAudit, notifications?: FakeNotificationSink): TasksService {
   let next = 0;
   return new TasksService(repository, {
     id: () => `generated-${++next}`,
     now: () => NOW,
     ...(audit ? { audit } : {}),
+    ...(notifications ? { notifications } : {}),
   });
+}
+
+class FakeNotificationSink {
+  readonly events: NotificationEventInput[] = [];
+  async emit(event: NotificationEventInput): Promise<void> { this.events.push(event); }
 }
 
 class FakeAudit {

@@ -42,6 +42,10 @@ export const APP_CONFIG = {
   maxTaskTitleChars: 200,
   maxTaskNotesChars: 5_000,
   maxTaskTagChars: 32,
+  maxNotificationPayloadBytes: 4 * 1024,
+  maxNotificationPayloadKeys: 32,
+  maxNotificationBulkRead: 100,
+  maxNotificationDueMaterialization: 10,
   // JSON may encode a one-byte control character as a six-byte `\\u00XX` escape.
   maxJsonRequestBytes: MAX_NOTE_BYTES * MAX_JSON_ESCAPE_BYTES_PER_INPUT_BYTE + MAX_NOTE_JSON_METADATA_BYTES,
   maxQuestionChars: 4_000,

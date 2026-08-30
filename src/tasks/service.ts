@@ -3,6 +3,7 @@ import { AppError } from "../http";
 import { normalizeNumberedPageRequest, type NumberedPageRequest } from "../pagination";
 import type { AuditRepository } from "../audit/repository";
 import type { AuditAction, CreateAuditEvent } from "../audit/types";
+import type { NotificationEventInput } from "../notifications/types";
 import type { TasksRepositoryPort } from "./repository";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskLink, type TaskListFilters, type TaskPage, type TaskStatus, type TaskSummary } from "./types";
 
@@ -15,6 +16,7 @@ export interface TasksServiceOptions {
   id?: () => string;
   now?: () => Date;
   audit?: Pick<AuditRepository, "writeAudit">;
+  notifications?: { emit(event: NotificationEventInput): Promise<unknown> };
 }
 
 /** 合法状态迁移表;done/canceled 为终态,仅可重开回 todo。 */
@@ -103,6 +105,18 @@ export class TasksService {
     const updated = await this.repository.updateStatus(memberId, id, next, next === "done" ? completedAt : null, progress, now);
     if (!updated) throw notFound();
     await this.emitAudit("task.status_changed", memberId, updated.id, { previousStatus, status: next });
+    if (this.options.notifications) {
+      const occurrenceId = this.id();
+      await this.options.notifications.emit({
+        recipientMemberId: memberId,
+        eventType: "task.status_changed",
+        actorMemberId: memberId,
+        targetKind: "task",
+        targetId: updated.id,
+        payload: { previousStatus, status: next },
+        deduplicationKey: `task:${updated.id}:status:${previousStatus}:${next}:${occurrenceId}`,
+      });
+    }
     return updated;
   }
 
