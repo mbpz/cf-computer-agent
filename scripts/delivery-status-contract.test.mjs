@@ -114,7 +114,28 @@ const FRONTEND_PENDING_DOMAIN_CONTRACTS = [
   { name: "board backend", ledgerPrefix: "BRD-", claim: "(?:看板(?:后端|服务端)|boards?\\s+backend)" },
   { name: "message backend", ledgerPrefix: "MSG-", claim: "(?:消息(?:后端|服务端)|messages?\\s+backend)" },
 ];
-const FRONTEND_COMPLETION_CLAIM = "(?:ready|implemented|completed|done|released|accepted|deployed|已实现(?:完成)?|实现完成|已完成|已发布|已验收|已部署|后端就绪|(?<!不)可用)";
+const FRONTEND_LEDGER_DIMENSION_CLAIMS = [
+  {
+    column: "实现",
+    name: "implementation",
+    claim: "(?:\\bimplemented\\b|\\bready\\b|\\bimplementation\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|ready)\\b|已实现(?:完成)?|实现(?:完成|就绪)|(?<!不)可用)",
+  },
+  {
+    column: "验证",
+    name: "verification",
+    claim: "(?:\\bverified\\b|\\btested\\b|\\bverification\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|\\btests?\\s+passed\\b|已验证|验证(?:完成|通过)|已测试|测试(?:完成|通过))",
+  },
+  {
+    column: "发布",
+    name: "release",
+    claim: "(?:\\breleased\\b|\\bdeployed\\b|\\bmigrated\\b|\\brelease\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|\\bdeployment\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|\\bmigration\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done)\\b|已发布|发布完成|已部署|部署完成|已迁移|迁移完成)",
+  },
+  {
+    column: "验收",
+    name: "acceptance",
+    claim: "(?:\\bbrowser[- ]accepted\\b|\\baccepted\\b|\\bacceptance\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|\\bbrowser acceptance\\s+(?:(?:is|was)\\s+)?(?:complete|completed|done|passed)\\b|已验收|验收完成|浏览器验收(?:完成|通过))",
+  },
+];
 const HISTORICAL_GATE_COLUMNS = ["历史 Gate", "当前结论", "新阶段", "历史证据（非权威）", "当前状态权威"];
 const HISTORICAL_GATE_AUTHORITY = "当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准";
 const HISTORICAL_GATE_CONTRACTS = [
@@ -438,6 +459,18 @@ test("frontend collaboration atoms stay unchecked and resolve backend ledger dep
     /FE-BRD-001 must have exactly one checkbox row/u,
   );
 
+  const indentedUppercaseDuplicate = `${checklist}\n  - [X] \`FE-MSG-001\` stale uppercase duplicate\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(indentedUppercaseDuplicate, rows),
+    /FE-MSG-001 must have exactly one checkbox row/u,
+  );
+
+  const indentedUncheckedDuplicate = `${checklist}\n    - [ ] \`FE-ACC-001\` stale indented duplicate\n`;
+  assert.throws(
+    () => assertFrontendCollaborationContract(indentedUncheckedDuplicate, rows),
+    /FE-ACC-001 must have exactly one checkbox row/u,
+  );
+
   const checkedCanonicalAtom = checklist.replace("- [ ] `FE-MSG-002`", "- [x] `FE-MSG-002`");
   assert.notEqual(checkedCanonicalAtom, checklist, "checked canonical atom fixture must mutate the checklist");
   assert.throws(
@@ -463,20 +496,47 @@ test("frontend checklist rejects stale pending backend and route completion pros
   const staleBackendCompletion = `${checklist}\nNTF-001、NTF-002 后端已实现完成。\n`;
   assert.throws(
     () => assertFrontendCollaborationContract(staleBackendCompletion, rows),
-    /NTF-001 must not claim completion while ledger implementation is pending/u,
+    /NTF-001 must not claim implementation while ledger 实现 is pending/u,
   );
 
   const staleRouteCompletion = `${checklist}\n\`\/notifications\` ready。\n`;
   assert.throws(
     () => assertFrontendCollaborationContract(staleRouteCompletion, rows),
-    /\/notifications must not claim readiness while its ledger route is pending/u,
+    /\/notifications must not claim implementation while ledger NTF-001 实现 is pending/u,
   );
 
   const staleDomainCompletion = `${checklist}\n通知后端已实现完成。\n`;
   assert.throws(
     () => assertFrontendCollaborationContract(staleDomainCompletion, rows),
-    /notification backend must not claim completion while its ledger domain is pending/u,
+    /notification backend must not claim implementation while ledger 实现 is not done/u,
   );
+
+  for (const claim of ["verified", "tested"]) {
+    const staleVerification = `${checklist}\nNTF-001 ${claim}。\n`;
+    assert.throws(
+      () => assertFrontendCollaborationContract(staleVerification, rows),
+      /NTF-001 must not claim verification while ledger 验证 is pending/u,
+    );
+  }
+
+  for (const claim of ["released", "deployed", "migrated"]) {
+    const staleRelease = `${checklist}\nTSK-001 ${claim}。\n`;
+    assert.throws(
+      () => assertFrontendCollaborationContract(staleRelease, rows),
+      /TSK-001 must not claim release while ledger 发布 is pending/u,
+    );
+  }
+
+  for (const claim of ["accepted", "browser-accepted"]) {
+    const staleAcceptance = `${checklist}\nADM-011 ${claim}。\n`;
+    assert.throws(
+      () => assertFrontendCollaborationContract(staleAcceptance, rows),
+      /ADM-011 must not claim acceptance while ledger 验收 is pending/u,
+    );
+  }
+
+  const explicitlyPendingProse = `${checklist}\nNTF-001 implementation pending; not implemented; not ready.\nNTF-001 verification pending; not verified; not tested.\nTSK-001 release pending; not released; not deployed; not migrated.\nADM-011 acceptance pending; not accepted; not browser-accepted.\n`;
+  assert.doesNotThrow(() => assertFrontendCollaborationContract(explicitlyPendingProse, rows));
 });
 
 test("AI knowledge section mappings resolve to canonical ledger IDs and Roadmap stages", () => {
@@ -715,8 +775,8 @@ function assertFrontendCollaborationContract(checklist, rows) {
   const rowsById = new Map(rows.map((row) => [row.ID, row]));
   const ledgerIds = new Set(rows.map((row) => row.ID));
   const checkboxRows = [...checklist.matchAll(
-    /^- \[([ x])\] `?(FE-(?:NTF|BRD|MSG|ACC)-\d{3})`?(?:\s|$)/gmu,
-  )].map((match) => ({ id: match[2], checked: match[1] === "x", index: match.index }));
+    /^[ \t]*- \[([ xX])\] `?(FE-(?:NTF|BRD|MSG|ACC)-\d{3})`?(?:\s|$)/gmu,
+  )].map((match) => ({ id: match[2], checked: match[1].toLowerCase() === "x", index: match.index }));
   for (const { id } of FRONTEND_PENDING_ATOM_CONTRACTS) {
     const matches = checkboxRows.filter((row) => row.id === id);
     assert.equal(matches.length, 1, `${id} must have exactly one checkbox row`);
@@ -743,7 +803,7 @@ function assertFrontendCollaborationContract(checklist, rows) {
 
   const section = checklist.slice(sectionStart, sectionEnd);
   const atoms = [...section.matchAll(
-    /^- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
+    /^[ \t]*- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
   )].map((match) => ({ id: match[1], dependencies: match[2].split("、") }));
 
   assert.deepEqual(
@@ -764,57 +824,76 @@ function assertFrontendCollaborationContract(checklist, rows) {
 }
 
 function assertNoPendingFrontendCompletionClaims(checklist, rowsById) {
-  const pendingDependencyIds = new Set(
-    FRONTEND_PENDING_ATOM_CONTRACTS
-      .flatMap(({ dependencies }) => dependencies)
-      .filter((id) => rowsById.get(id)?.实现 === "pending"),
+  const dependencyIds = new Set(
+    FRONTEND_PENDING_ATOM_CONTRACTS.flatMap(({ dependencies }) => dependencies),
   );
-  for (const id of pendingDependencyIds) {
-    const escapedId = escapeRegExp(id);
-    const forwardClaim = new RegExp(
-      `(?:\`?${escapedId}\`?)[^\\r\\n。；]{0,48}${FRONTEND_COMPLETION_CLAIM}`,
-      "iu",
-    );
-    const reverseClaim = new RegExp(
-      `${FRONTEND_COMPLETION_CLAIM}[^\\r\\n。；]{0,48}(?:\`?${escapedId}\`?)`,
-      "iu",
-    );
-    assert.ok(
-      !forwardClaim.test(checklist) && !reverseClaim.test(checklist),
-      `${id} must not claim completion while ledger implementation is pending`,
-    );
+  for (const id of dependencyIds) {
+    const row = rowsById.get(id);
+    assert.ok(row, `${id} completion guard requires a ledger row`);
+    const subject = `(?:\`?${escapeRegExp(id)}\`?)`;
+    for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+      if (row[dimension.column] === "done") continue;
+      assertNoPositiveDimensionClaim(
+        checklist,
+        subject,
+        dimension,
+        `${id} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+      );
+    }
   }
 
   for (const { path, ledgerId } of FRONTEND_PENDING_ROUTE_CONTRACTS) {
-    if (rowsById.get(ledgerId)?.实现 !== "pending") continue;
-    const escapedPath = escapeRegExp(path);
-    const routeClaim = new RegExp(
-      `\`?${escapedPath}\`?\\s*(?:(?:is|为|已经|已)\\s*)?${FRONTEND_COMPLETION_CLAIM}`,
-      "iu",
-    );
-    assert.ok(
-      !routeClaim.test(checklist),
-      `${path} must not claim readiness while its ledger route is pending`,
-    );
+    const row = rowsById.get(ledgerId);
+    assert.ok(row, `${path} completion guard requires ledger row ${ledgerId}`);
+    const subject = `(?:\`?${escapeRegExp(path)}\`?)`;
+    for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+      if (row[dimension.column] === "done") continue;
+      assertNoPositiveDimensionClaim(
+        checklist,
+        subject,
+        dimension,
+        `${path} must not claim ${dimension.name} while ledger ${ledgerId} ${dimension.column} is ${row[dimension.column]}`,
+        12,
+      );
+    }
   }
 
   for (const { name, ledgerPrefix, claim } of FRONTEND_PENDING_DOMAIN_CONTRACTS) {
     const domainRows = [...rowsById.values()].filter((row) => row.ID.startsWith(ledgerPrefix));
     assert.ok(domainRows.length > 0, `${name} requires ledger rows`);
-    if (!domainRows.some((row) => row.实现 === "pending")) continue;
-    const forwardClaim = new RegExp(
-      `${claim}[^\\r\\n。；]{0,32}${FRONTEND_COMPLETION_CLAIM}`,
-      "iu",
-    );
-    const reverseClaim = new RegExp(
-      `${FRONTEND_COMPLETION_CLAIM}[^\\r\\n。；]{0,32}${claim}`,
-      "iu",
-    );
-    assert.ok(
-      !forwardClaim.test(checklist) && !reverseClaim.test(checklist),
-      `${name} must not claim completion while its ledger domain is pending`,
-    );
+    for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+      if (domainRows.every((row) => row[dimension.column] === "done")) continue;
+      assertNoPositiveDimensionClaim(
+        checklist,
+        claim,
+        dimension,
+        `${name} must not claim ${dimension.name} while ledger ${dimension.column} is not done`,
+      );
+    }
   }
+}
+
+function assertNoPositiveDimensionClaim(markdown, subject, dimension, message, reverseDistance = 64) {
+  const forwardBetween = "[^\\r\\n。；;，,]{0,64}";
+  const reverseBetween = `[^\\r\\n。；;，,]{0,${reverseDistance}}`;
+  const patterns = [
+    new RegExp(`${subject}${forwardBetween}(?<claim>${dimension.claim})`, "giu"),
+    new RegExp(`(?<claim>${dimension.claim})${reverseBetween}${subject}`, "giu"),
+  ];
+  for (const pattern of patterns) {
+    for (const match of markdown.matchAll(pattern)) {
+      const claim = match.groups?.claim;
+      assert.ok(claim, `${dimension.name} claim parser must capture its claim`);
+      const claimIndex = match.index + match[0].indexOf(claim);
+      if (isClearlyNegatedOrPendingClaim(markdown.slice(Math.max(0, claimIndex - 40), claimIndex))) continue;
+      assert.fail(message);
+    }
+  }
+}
+
+function isClearlyNegatedOrPendingClaim(prefix) {
+  const clause = prefix.split(/[\r\n。；;]/u).at(-1)?.trimEnd() ?? "";
+  return /(?:\bnot(?:\s+yet)?|\bstill\s+not|\bnever|\bpending|尚未|还未|未|不是|并非|不可|不能|不|待)\s*$/iu.test(clause);
 }
 
 function escapeRegExp(value) {
