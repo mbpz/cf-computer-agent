@@ -19,6 +19,7 @@ import {
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const ledgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
+const knowledgeChecklistPath = resolve(repositoryRoot, "docs/product/ai-knowledge-base-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 
@@ -50,6 +51,17 @@ const STAGE_EXIT_CONCEPTS = new Map([
   ["R4", [/过滤.*来源定位/u, /相关知识.*反向链接/u, /混合检索.*量化评测/u]],
   ["R6", [/导出.*恢复/u, /R2\/D1.*容量保护/u, /完整生产验收.*1\.0/u]],
 ]);
+const KNOWLEDGE_CHECKLIST_SECTIONS = [
+  "SRC", "ING", "PAR", "CHK", "GOV", "IDX", "SRCH", "READ", "CHAT", "RES",
+  "ART", "AGT", "COL", "AUTH", "I18N", "EVAL", "WORKSPACE", "OPS",
+];
+const KNOWLEDGE_PENDING_ATOMS = [
+  "ING-003", "ING-007", "ING-008",
+  "IDX-007", "IDX-008", "IDX-009", "IDX-010", "IDX-011", "IDX-012", "IDX-013",
+  "SRCH-012", "SRCH-013", "SRCH-014",
+  "AUTH-019", "EVAL-018",
+  "OPS-008", "OPS-009", "OPS-010", "OPS-012", "OPS-013",
+];
 
 test("ledger table parsing preserves escaped and code-span pipes", () => {
   assert.deepEqual(
@@ -232,6 +244,36 @@ test("delivery status ledger reconciles documentation status claims", () => {
   for (const id of roadmapBacktickIds(readFileSync(roadmapPath, "utf8"))) {
     assert.ok(ledgerIds.has(id), `Roadmap ID ${id} requires a ledger row`);
   }
+});
+
+test("AI knowledge checklist separates local completion from delivery status", () => {
+  const checklist = readFileSync(knowledgeChecklistPath, "utf8");
+  assert.match(
+    checklist,
+    /复选框仅表示“实现 \+ 本地\/Workerd 验证”完成；发布和验收状态以交付状态总账为准。/u,
+  );
+  assert.match(checklist, /\[交付状态总账\]\(\.\/delivery-status-ledger\.md\)/u);
+
+  for (const section of KNOWLEDGE_CHECKLIST_SECTIONS) {
+    const sectionPattern = new RegExp(
+      `^## ${section}\\b[^\\n]*\\n\\n当前 R 阶段：[^\\n]+；总账映射：\\[[^\\]]+\\]\\(\\.\\/delivery-status-ledger\\.md\\)$`,
+      "mu",
+    );
+    assert.match(checklist, sectionPattern, `${section} requires an R-stage ledger mapping`);
+  }
+
+  const gateStart = checklist.indexOf("## 历史 Gate 映射");
+  assert.notEqual(gateStart, -1, "historical gate mapping is required");
+  const gateSummary = checklist.slice(gateStart);
+  assert.doesNotMatch(gateSummary, /^- \[[ x]\] `GATE-M\d+`/gmu);
+  assert.doesNotMatch(gateSummary, /状态：L\/W(?:\/R)?(?:\/D)?/u);
+  for (let milestone = 0; milestone <= 8; milestone += 1) {
+    assert.match(gateSummary, new RegExp(`^\\| GATE-M${milestone} \\|`, "mu"));
+  }
+
+  const uncheckedAtoms = [...checklist.matchAll(/^- \[ \] `([A-Z]+-\d{3})`/gmu)]
+    .map((match) => match[1]);
+  assert.deepEqual(uncheckedAtoms, KNOWLEDGE_PENDING_ATOMS);
 });
 
 test("Roadmap derives its exact R0-R6 stage contract from the delivery ledger", () => {

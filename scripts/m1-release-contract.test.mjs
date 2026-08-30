@@ -628,10 +628,10 @@ test("runbook contract rejects a probe moved before migration verification", asy
   });
 });
 
-test("derives exact M1 atom and gate truth and verifies report list cardinality", async () => {
+test("derives exact M1 atom truth from the historical gate mapping and verifies report list cardinality", async () => {
   const baseline = await runDocsVerifier(["--truth", checklistPath.pathname, reportPath.pathname]);
   assert.equal(baseline.code, 0, baseline.output);
-  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=76 unchecked=0 gates=1 unchecked_items=0$/mu);
+  assert.match(baseline.output, /^\[pass\] m1-truth atoms=76 checked=76 unchecked=0 historical_gates=1 gate_checkboxes=0 unchecked_items=0$/mu);
 
   const [checklist, report] = await Promise.all([
     readFile(checklistPath, "utf8"),
@@ -657,4 +657,16 @@ test("derives exact M1 atom and gate truth and verifies report list cardinality"
     assert.equal(result.code, 1, result.output);
     assert.match(result.output, /^\[fail\] m1-truth$/mu);
   });
+
+  for (const gateMutation of [
+    checklist.replace("| GATE-M1 |", "| REMOVED-M1 |"),
+    `${checklist}\n- [x] \`GATE-M1\` obsolete mixed completion signal\n`,
+  ]) {
+    assert.notEqual(gateMutation, checklist);
+    await withTextFile("m1-gate-truth-", gateMutation, async (path) => {
+      const result = await runDocsVerifier(["--truth", path, reportPath.pathname]);
+      assert.equal(result.code, 1, result.output);
+      assert.match(result.output, /^\[fail\] m1-truth$/mu);
+    });
+  }
 });

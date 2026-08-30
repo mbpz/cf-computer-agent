@@ -170,14 +170,14 @@ async function verifyTruth(checklist, report) {
   const atomIds = new Set(atoms.map(({ id }) => id));
   const checked = atoms.filter((atom) => atom.checked);
   const unchecked = atoms.filter((atom) => !atom.checked);
-  const gates = [...checklistText.matchAll(/^- \[([ x])\] `GATE-M1`(?:\s|$)/gmu)];
-  const uncheckedGates = gates.filter((gate) => gate[1] === " ");
+  const historicalGates = [...checklistText.matchAll(/^\| GATE-M1 \|[^\r\n]*\| R0\/R1 \|[^\r\n]*\|$/gmu)];
+  const gateCheckboxes = [...checklistText.matchAll(/^- \[[ x]\] `GATE-M1`(?:\s|$)/gmu)];
   if (atoms.length !== 76
     || atomIds.size !== atoms.length
     || checked.length !== 76
     || unchecked.length !== 0
-    || gates.length !== 1
-    || uncheckedGates.length !== 0) {
+    || historicalGates.length !== 1
+    || gateCheckboxes.length !== 0) {
     throw new Error("M1 checklist counts do not match the reviewed truth");
   }
 
@@ -198,7 +198,7 @@ async function verifyTruth(checklist, report) {
     || actualIds.some((id, index) => id !== expectedIds[index])) {
     throw new Error("M1 report unchecked atom list does not match the checklist");
   }
-  console.log(`[pass] m1-truth atoms=${atoms.length} checked=${checked.length} unchecked=${unchecked.length} gates=${gates.length} unchecked_items=${unchecked.length + uncheckedGates.length}`);
+  console.log(`[pass] m1-truth atoms=${atoms.length} checked=${checked.length} unchecked=${unchecked.length} historical_gates=${historicalGates.length} gate_checkboxes=${gateCheckboxes.length} unchecked_items=${unchecked.length + gateCheckboxes.length}`);
 }
 
 try {

@@ -1,16 +1,19 @@
 # Memory Garden AI 知识库原子 Checklist
 
-更新时间：2026-08-22
+更新时间：2026-08-30
 
 权威规格：[AI 知识操作系统设计](../superpowers/specs/2026-08-21-ai-knowledge-system-design.md)
 
 标杆证据：[国外 AI 知识库标杆矩阵](./ai-knowledge-base-benchmark.md)
 
+当前发布与验收权威状态：[交付状态总账](./delivery-status-ledger.md)
+
 ## 使用规则
 
-- `[x]` 只表示该原子项指定的当前证据已经满足；不能从父功能推断子项完成。
-- 每项必须记录状态：`planned / implemented / local_verified / workerd_verified / remote_verified / degraded_verified / deferred / rejected`。
-- P0 是对应 Milestone 发布阻断项；P1 是成熟产品核心；P2 是效率增强；P3 是实验。
+- 复选框仅表示“实现 + 本地/Workerd 验证”完成；发布和验收状态以交付状态总账为准。
+- `[x]` 不能从父功能推断子项完成；只有存在可复跑的实现与本地/Workerd 证据时才能勾选。
+- 条目中的 `P0/M1` 等旧 Milestone 标签和状态缩写是历史执行元数据；当前优先级、R 阶段、发布与验收结论均以本节映射和总账为准。
+- P0 是当前阶段阻断项；P1 是成熟产品核心；P2 是效率增强；P3 是实验。
 - 每项实现计划必须补齐：输入、输出、状态、权限、权威位置、Cloudflare 组件、错误码、依赖和测试 fixture。
 - 所有读路径默认重新校验 active member 和 visibility；所有写路径默认记录安全审计。
 - 所有 AI/Vectorize/Queue 项默认要求无 AI、FTS5-only 或 D1 重投降级。
@@ -19,6 +22,8 @@
 状态缩写：`P=planned`、`I=implemented`、`L=local_verified`、`W=workerd_verified`、`R=remote_verified`、`D=degraded_verified`。
 
 ## SRC — 来源采集
+
+当前 R 阶段：R1；总账映射：[KB-001–KB-003、ADM-004](./delivery-status-ledger.md)
 
 - [x] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；状态：L/W；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
 - [x] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；状态：L/W；验收：保留标题层级和代码块。
@@ -41,6 +46,8 @@
 
 ## ING — 摄取与原件
 
+当前 R 阶段：R1/R6；总账映射：[KB-003、ADM-003–ADM-004、OPS-009–OPS-010](./delivery-status-ledger.md)
+
 - [x] `ING-001` P0/M1 SHA-256 内容哈希；状态：L/W；验收：服务端重新验证，不信任客户端声明。
 - [x] `ING-002` P0/M1 完全重复检测；状态：L/W；验收：同 hash 返回既有候选，不静默发布。
 - [ ] `ING-003` P0/M2 R2 Standard 私有 Bucket；状态：deferred（免费层边界）；验收：启用付费 R2 档位时必须是 Standard/private、无公开对象 URL。当前生产明确不声明 `ORIGINALS`/`r2_buckets`，因此不宣称 R2 能力；历史对象接口仍 fail-closed，文本录入不受影响。证据：`wrangler.jsonc`、`src/env.d.ts`、`src/assets/service.ts`、`docs/operations/m2-asset-ingestion.md`。
@@ -61,6 +68,8 @@
 - [x] `ING-018` P1/M7 原件校验任务；状态：L；验收：定期抽检 hash 并报告损坏，不自动删除。证据：`src/ops/original-validation.ts`、`test/unit/original-validation.test.ts`；命令：`rtk npx vitest run test/unit/original-validation.test.ts && rtk npm run typecheck`。报告区分 missing/size_mismatch/hash_mismatch/unverified，删除计数固定为 0；无 R2 binding 时标记 `unbound`。
 
 ## PAR — 文档解析
+
+当前 R 阶段：R1；总账映射：[KB-003、ADM-004](./delivery-status-ledger.md)
 
 - [x] `PAR-001` P0/M1 确定性纯文本解析；状态：L/W；验收：canonical base64 字节先经 UTF-8 fatal decode，再确定性规范化为 LF；无效字节拒绝且不持久化。证据：`test/fixtures/m1-parser-cases.ts`、`test/unit/source-decoder.test.ts`、`test/unit/submissions-service.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run test:m1`。
 - [x] `PAR-002` P0/M1 Markdown 解析；状态：L；验收：标题、段落、列表、表格和 fenced code 结构化。
@@ -85,6 +94,8 @@
 
 ## CHK — Chunk 与来源定位
 
+当前 R 阶段：R1/R4；总账映射：[KB-003、KB-006、RET-001](./delivery-status-ledger.md)
+
 - [x] `CHK-001` P0/M1 Markdown heading-aware chunk；状态：L；验收：不跨无关一级章节。
 - [x] `CHK-002` P0/M1 代码行 chunk；状态：L；验收：短代码按完整行切分；单行自身超预算时按 Unicode code point 有界切分，所有片段保留同一源码行范围且顺序/ID 确定。
 - [x] `CHK-003` P0/M1 token/字符预算；状态：L；验收：每个 chunk 不超过精确 code-point 上限，超长段落/代码行无空片段或 surrogate 截断。
@@ -105,6 +116,8 @@
 - [x] `CHK-018` P0/M7 Chunk 重建；状态：L/W；验收：admin 通过 `GET /api/admin/knowledge/:knowledgeItemId/revisions/:revisionId/chunks/rebuild-report` 从 Revision 绑定的 SourceVersion 重新 chunk，返回 source hash、确定性 Chunk ID/parent 映射、现存状态与 `unchanged`；只读报告不改原件或 Revision。证据：`src/publication/repository.ts`、`src/publication/service.ts`、`src/routes/admin.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts test/unit/publication-service.test.ts`。实际重建写入与生产数据仍需单独授权。
 
 ## GOV — 审核、发布与版本
+
+当前 R 阶段：R1/R3；总账映射：[KB-004、KB-011–KB-012、ADM-002–ADM-003、GOV-001](./delivery-status-ledger.md)
 
 - [x] `GOV-001` P0/M1 review_pending 状态；状态：L/W；验收：提交完成后仅 owner/admin 可见。
 - [x] `GOV-002` P0/M1 管理员审核队列；状态：L/W；验收：有界 keyset pagination 和状态过滤。
@@ -131,6 +144,8 @@
 
 ## IDX — 索引
 
+当前 R 阶段：R1/R4/R6；总账映射：[KB-003、KB-007、RET-003、EVAL-001、OPS-009–OPS-010](./delivery-status-ledger.md)
+
 - [x] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
 - [x] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
 - [x] `IDX-003` P0/M1 FTS tokenizer 配置；状态：L/W；验收：中英文 fixture 和代码 token 有基线。
@@ -149,6 +164,8 @@
 - [x] `IDX-016` P1/M7 索引漂移检测；状态：L；验收：current Revision、FTS 和向量 ID 定期对账。证据：`src/ops/index-drift.ts`、`test/unit/index-drift.test.ts`；命令：`rtk npx vitest run test/unit/index-drift.test.ts && rtk npm run typecheck`。报告 missing/stale/mismatch；Vectorize 未绑定时固定 `skipped_unbound`，不虚报 clean。
 
 ## SRCH — 搜索
+
+当前 R 阶段：R1/R4；总账映射：[KB-005–KB-007、KB-010、RET-001–RET-003、EVAL-001](./delivery-status-ledger.md)
 
 - [x] `SRCH-001` P0/M1 关键词查询；状态：L/W；验收：空/超长/控制字符有稳定响应。
 - [x] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。证据：policy v2 固定 title=8/summary=4/tags=6/body=1/code=3，真实 D1 重分数 keyset 无漏项/重复测试见 `test/worker/m1-library.test.ts`。
@@ -173,6 +190,8 @@
 
 ## READ — 知识阅读器
 
+当前 R 阶段：R1/R3/R4；总账映射：[KB-005–KB-006、KB-010–KB-012、RET-001–RET-002](./delivery-status-ledger.md)
+
 - [x] `READ-001` P0/M1 Knowledge 列表；状态：L/W；验收：current published、权限、有界分页。
 - [x] `READ-002` P0/M1 Knowledge detail；状态：L/W；验收：D1 metadata 与规范 Markdown 一致。
 - [x] `READ-003` P0/M1 Markdown 安全渲染；验收：脚本、危险 URL、原始 HTML fixture 无执行。证据：本地固定 `markdown-it@15.0.0` + `dompurify@3.4.14` 双边界，`happy-dom` 覆盖 raw HTML、混淆协议、表格、代码围栏、嵌套列表和链接目标；应用仅插入 `DocumentFragment`。
@@ -193,6 +212,8 @@
 - [x] `READ-018` P0/M4 阅读权限回归；状态：L/W；验收：真实 Worker 回归覆盖 URL 猜测、hidden/missing Knowledge、历史 shared Revision、citation 和 download；admin_only current 对 contributor 统一 404，历史可见 Revision 仍按授权读取，cross-item/伪造路径不泄露正文、path/hash 或 metadata。证据：`src/library/repository.ts`、`src/library/service.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t "submits, reviews, publishes|permission|hidden|download"`。
 
 ## CHAT — 引用问答
+
+当前 R 阶段：R1/R4；总账映射：[KB-007–KB-008、EVAL-001](./delivery-status-ledger.md)
 
 - [x] `CHAT-001` P0/M1 问题边界；状态：L/W；验收：非空、字符/字节上限和稳定错误。
 - [x] `CHAT-002` P0/M1 显式来源集合；验收：全库/Space/Collection/选中来源可区分。
@@ -219,6 +240,8 @@
 
 ## RES — Deep Research
 
+当前 R 阶段：R5；总账映射：[KB-009、EVAL-001、OPS-009](./delivery-status-ledger.md)
+
 - [x] `RES-001` P1/M6 Research Workspace；状态：L/W；验收：ResearchRun 持久化 KnowledgeItem、Space/Collection/KnowledgeItem 来源范围、owner 和有限状态；所有读取/状态变更按 owner 条件过滤，跨成员统一 404。证据：`migrations/0013_m6_research_reports.sql`、`migrations/0014_m6_research_run_plan.sql`、`src/research/repository.ts`、`src/ai/research-report-service.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`（owner 研究流程与跨 owner 草稿 404）；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [x] `RES-002` P1/M6 研究目标；状态：L/W；验收：ResearchRun 创建必须同时提供有界 goal、Space/Collection/KnowledgeItem 范围和 1–8 条完成条件；D1 以 scope_json/completion_json 持久化，owner 重新读取时安全解析，非法/越界输入 400。证据：`migrations/0014_m6_research_run_plan.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [x] `RES-003` P1/M6 研究计划草稿；状态：L/W；验收：创建 ResearchRun 只产生 `draft` 计划，只有 owner 显式 `approve` 后才转为 `running` 并允许查询/报告执行；未确认计划不会调用 AI。证据：`src/ai/research-report-service.ts`（`start`/`approve`/`generate` 状态门禁）、`src/research/repository.ts`（D1 draft→running 条件更新）、`src/routes/library.ts`（approve 路由）、`test/worker/m1-api.test.ts`（创建、确认、查询、暂停/恢复研究流程）；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
@@ -238,6 +261,8 @@
 
 ## ART — 研究产物
 
+当前 R 阶段：R5；总账映射：[KB-009–KB-010](./delivery-status-ledger.md)
+
 - [x] `ART-001` P1/M5 私人 Note；状态：L/W；验收：D1 持久化、owner-only 默认、成员状态/知识可见性重新授权，保存必须携带可读 Revision/Chunk 引用，Note 不进入 Submission/Publication/FTS。证据：`migrations/0012_m5_private_notes.sql`、`src/private-notes/types.ts`、`src/private-notes/service.ts`、`src/private-notes/repository.ts`、`src/routes/library.ts`、`src/app.ts`、`frontend/lib/knowledge-note.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/private-notes-service.test.ts`、`test/unit/frontend-knowledge-note.test.ts`、`test/worker/private-notes.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/private-notes-service.test.ts test/unit/frontend-knowledge-note.test.ts test/worker/private-notes.test.ts`。
 - [x] `ART-002` P1/M5 来源摘要；状态：L/W；验收：只总结选中来源并附引用。证据：`src/ai/source-summary-service.ts`、`src/routes/library.ts`、`src/app.ts`、`test/unit/source-summary-service.test.ts`、`test/worker/m1-api.test.ts`；`POST /api/knowledge/:knowledgeItemId/summary` 逐条通过 `LibraryService.readCitation` 重新授权，仅接收同一 KnowledgeItem 的 1–8 个引用，AI 输出必须引用选中 citation，响应不含来源正文，失败返回可重试 `AI_UNAVAILABLE`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/source-summary-service.test.ts test/worker/m1-api.test.ts -t 'summary|selected citations'`。
 - [x] `ART-003` P1/M5 FAQ；状态：L/W；验收：每个回答有来源，无答案问题标缺口。证据：`src/ai/faq-service.ts`、`src/routes/library.ts`、`src/app.ts`、`test/unit/faq-service.test.ts`、`test/worker/m1-api.test.ts`；`POST /api/knowledge/:knowledgeItemId/faq` 逐条重新授权选中引用，有答案项必须带 citation，证据不足项返回 `gap=true`/`answer=null`，响应不含来源正文，AI 失败为可重试 `AI_UNAVAILABLE`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/faq-service.test.ts test/worker/m1-api.test.ts -t 'FAQ|summary'`。
@@ -254,6 +279,8 @@
 - [x] `ART-014` P3/M8 音频/视频/幻灯片实验；状态：L；验收：`decideExperimentalMedia` 默认关闭，使用独立 `experimental-media` 额度范围，质量分数非 1.0 时在消耗额度前阻断，并在额度耗尽时延期到下一 UTC 日。该策略仅为显式 rollout gate，当前不向生产 UI 暴露实验入口。证据：`src/ai/experimental-media-policy.ts`、`test/unit/experimental-media-policy.test.ts`；命令：`rtk npx vitest run test/unit/experimental-media-policy.test.ts && rtk npm run typecheck`。
 
 ## AGT — Agent 工具与会话
+
+当前 R 阶段：R5；总账映射：[IDN-005、KB-009、OPS-009](./delivery-status-ledger.md)
 
 - [x] `AGT-001` P1/M6 AgentSession DO 路由；状态：L/W；验收：Worker 通过独立 SQLite Durable Object namespace 创建随机 session ID，DO 持久化 member 绑定与时间戳；跨成员读取统一 404，路由仅允许已认证 member 的 `knowledge:read` 能力。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`src/app.ts`、`wrangler.jsonc`（AgentSession v2 SQLite binding）、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [x] `AGT-002` P1/M6 消息持久化；状态：L/W；验收：AgentSession SQLite 持久化仅允许 `user|assistant` 角色，正文单条有界，读取支持 1–50 条上限并返回截断标记；owner 外统一 404，Worker 写入只接受 user 正文，未开放工具角色或任意成员 ID。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
@@ -276,6 +303,8 @@
 
 ## COL — 协作与个人工作区
 
+当前 R 阶段：R1/R5；总账映射：[IDN-005、KB-002、KB-010](./delivery-status-ledger.md)
+
 - [x] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
 - [x] `COL-002` P1/M1 驳回理由；状态：L/W；验收：owner 的 `/api/submissions/mine` 仅返回审核决策、allowlist reasonCode、规范化 note 和时间，不返回 reviewer 身份或后台 metadata；React 提交列表展示中英文原因/备注且无 `undefined`。证据：`src/submissions/repository.ts`、`src/submissions/types.ts`、`frontend/lib/my-submissions-data.ts`、`frontend/pages/my-submissions-page.tsx`、`test/worker/m1-api.test.ts`、`test/unit/frontend-my-submissions-data.test.ts`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'owner-visible review reason' && rtk npx vitest run test/unit/frontend-my-submissions-data.test.ts test/unit/frontend-submit-pages.test.tsx && rtk npm run typecheck`。
 - [x] `COL-003` P1/M3 审核评论；状态：L/W；验收：admin 与 owner 只能读取所属提交评论，owner 响应不含 authorId；评论正文有界、控制字符拒绝；编辑通过新行 `supersedes_comment_id` 保留历史，原行不更新；管理员审核详情提供双语评论查看/添加面板。证据：`migrations/0022_m4_review_comments.sql`、`src/review-comments/types.ts`、`src/review-comments/repository.ts`、`src/review-comments/service.ts`、`src/routes/admin-review.ts`、`src/routes/member.ts`、`frontend/components/review/review-comments-data.ts`、`frontend/components/review/review-comments-panel.tsx`、`frontend/pages/admin/review-detail-page.tsx`、`test/worker/m1-api.test.ts`、`test/worker/migrations.test.ts`、`test/unit/review-comments-service.test.ts`、`test/unit/frontend-review-comments.test.ts`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'review comments' && rtk npx vitest run test/worker/migrations.test.ts test/unit/review-comments-service.test.ts test/unit/frontend-review-comments.test.ts && rtk npm run typecheck`。远程 0022 尚未应用，需单独生产迁移授权。
@@ -293,6 +322,8 @@
 - [x] `COL-014` P2/M8 系统分享入口；状态：L/W；验收：已登录知识库列表卡片仅生成同源 `/knowledge/{opaque-id}` 链接，拒绝路径穿越/控制字符/超长 ID；点击先要求用户确认，再调用设备 Web Share，绝不分享正文、Cookie、Session、Token 或 API/OAuth URL；取消、设备不支持和系统失败均有安全状态。证据：`frontend/lib/system-share.ts`、`frontend/components/knowledge/knowledge-card.tsx`、`frontend/lib/i18n.ts`、`test/unit/system-share.test.ts`；命令：`rtk npx vitest run test/unit/system-share.test.ts test/unit/frontend-user-read-pages.test.tsx && rtk npm run typecheck`。
 
 ## AUTH — 身份、角色和授权
+
+当前 R 阶段：R0；总账映射：[IDN-001–IDN-006](./delivery-status-ledger.md)
 
 - [x] `AUTH-001` P0/M0 GitHub OAuth start；状态：R；证据：2026-08-21，生产 `/auth/github` 302，version `3bd2985e-487c-4fc0-bcb8-31c1f00967ca`，request ID `a9d1e5602fd999e4c48a314167a77a5e`。
 - [x] `AUTH-002` P0/M0 state + PKCE S256 callback；状态：L/W/R；生产 callback request ID `a2f6d391fdf2ddbf`、302→首页 200、登录后 `/api/session` 200，版本 `ce88dab4-e452-4225-adf5-abfab7adb704`。
@@ -316,9 +347,13 @@
 
 ## I18N — 国际化
 
+当前 R 阶段：R0；总账映射：[WB-A11Y、ADM-011](./delivery-status-ledger.md)
+
 - [x] `I18N-001` P0/M1 中英文完整国际化；状态：L/W；验收：浏览器语言自动选择、页面内 `zh-CN`/`en` 切换、`localStorage` 持久化、全部用户可见文案与 ARIA 文本使用等价翻译键、未知键回退英文且 CI 阻止缺键/硬编码文案发布。证据：`zh-CN`/`en` 349 键及 45 个插值占位符完全对齐；切换只原位刷新已绑定文本、安全属性/ARIA 与标题，不重新渲染/抓取当前路由，不重启认证或重放 GET、mutation/AI，且保持已加载分页/游标、表单值/选择、抽屉/对话框状态、语言控件焦点和当前 mutation ownership；常规导航与前进/后退仍按原合同抓取，既有 route guard 继续拒绝陈旧路由完成。静态门禁使用固定 TypeScript AST API 与 DOM HTML 解析，mutation 测试覆盖缺键/占位符、动态键 map、直接/变量间接/setAttribute/createTextNode/DOM helper/HTML 文本和属性、转义中英文、base64、模板/拼接及可显示 Markdown 异常；命令：`rtk npm run test:i18n`、`rtk npm run verify:i18n`、`rtk npm run check`。
 
 ## EVAL — 质量评测
+
+当前 R 阶段：R0/R4/R6；总账映射：[EVAL-001、OPS-005、OPS-011](./delivery-status-ledger.md)
 
 M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从独立 fixture 导出的 34 条 parser 用例和中英文强/弱证据信心语料，并报告非零精确分母。评测计算 Recall@5、citation precision/recall/location、逐例答案/拒答/拒绝契约、错误引用和权限泄露。`test:m1` 契约直接包含 audit、index document、search policy、Markdown renderer 和 evidence confidence 等生产入口套件，删除任一必需套件会使发布契约失败。这不替代 M4/M5 的语义、同义词、表格、冲突和生产评测验收。
 
@@ -343,6 +378,8 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ## WORKSPACE — 工作台、权限与站点统计
 
+当前 R 阶段：R0；总账映射：[WB-001–WB-A11Y、ADM-005–ADM-010、WS-001、WS-008](./delivery-status-ledger.md)
+
 - [x] `WS-001` P1/M8 shadcn 工作台壳层；状态：L/W；验收：桌面 Sidebar、移动 Sheet、Topbar、面包屑、语言和退出菜单具备 loading/error/empty 状态，保持 GitHub OAuth/session 合同。证据：`frontend/components/shell/app-shell.tsx`、`test/unit/workspace-shell.test.tsx`、`test/unit/frontend-shell.test.tsx`、`test/unit/workspace-dashboard.test.tsx`。
 - [x] `WS-002` P1/M8 AI 知识库一级菜单；状态：L/W；验收：`/knowledge` 在 workspace 一级导航中稳定显示，contributor/admin 均按 `knowledge:read` 过滤，路径高亮和祖先展开稳定。证据：`frontend/contracts/routes.ts`、`frontend/components/shell/app-shell.tsx`、`test/unit/frontend-contract.test.ts`。
 - [x] `WS-003` P1/M8 权限位图兼容层；状态：L/W；验收：19 个权限固定 bit index，服务端 BigInt 运算，D1/JSON 使用十六进制字符串，`capabilities` 与 mask 投影一致。证据：`src/authorization/permission-bitmap.ts`、`src/authorization/policy.ts`、`test/unit/permission-bitmap.test.ts`、`test/unit/session-permission-projection.test.ts`。
@@ -353,6 +390,8 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `WS-008` P1/M8 工作台 i18n/WCAG；状态：L/W；验收：中英文 key 完整、无 `undefined/null` 可见文本、键盘导航和移动布局通过合同测试。证据：`frontend/lib/i18n.ts`、`frontend/components/shell/app-shell.tsx`、`test/unit/frontend-shell.test.tsx`。
 
 ## OPS — 运维、额度、备份和恢复
+
+当前 R 阶段：R0/R1/R6；总账映射：[ADM-004、OPS-001–OPS-011](./delivery-status-ledger.md)
 
 - [x] `OPS-001` P0/M0 本地完整门禁；状态：L/W；证据：types、TS、smoke、unit、workerd、dry build。
 - [x] `OPS-002` P0/M0 GitHub OAuth 生产部署手册；状态：I/L；证据：`docs/operations/production-environment-handbook.md`。
@@ -383,40 +422,18 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 - [x] `OPS-027` P0/M8 发布 checklist；状态：L；验收：backup→migration→upload→inspect→deploy→smoke→evidence。证据：`docs/operations/m7-release-checklist.md`；命令：文档内 7 阶段命令。远程执行仍需独立生产授权，未将本地门禁伪装成生产证据。
 - [x] `OPS-028` P0/M8 前向兼容回滚；状态：L；验收：不逆向 migration、不部署旧 Access build。证据：`docs/operations/rollback.md`；命令：文档内 `versions list→upload --strict→versions view→versions deploy`；回滚前检查 D1 schema/DO v1，禁止逆向 migration、删数据或部署旧 Access build。
 
-## Milestone Gate
+## 历史 Gate 映射
 
-### M0
+下表仅保留旧 M0–M8 ID、既有证据与新阶段关系，不参与当前完成度统计，也不替代总账中的实现、验证、发布和验收状态。
 
-- [x] `GATE-M0` 成功 OAuth callback、signed smoke、disabled contributor、workers.dev/preview Dashboard 关闭状态和 DO 正常生命周期读取证据均已归档；见 `docs/operations/evidence/m1-release-2026-08-23.md`。
-
-### M1
-
-- [x] `GATE-M1` 文本/Markdown/代码从录入、审核、Revision、阅读、FTS 到引用问答完整通过；GitHub OAuth 和 automation 无回归。生产 `0004`、version ID、signed automation、D1 成本和四项最终 M0 远程证据均已归档；见 `docs/operations/evidence/m1-release-2026-08-23.md`。
-
-### M2
-
-- [ ] `GATE-M2` 状态：degraded_verified（免费层）；`rtk npm run test:m2` 已覆盖支持矩阵所有格式的正常/损坏/空/超限 fixture、Numbers/R2 fail-closed 与任务恢复。完整接受仍要求启用 R2/Queue 后的生产对象、任务和 AI 降级证据，当前不宣称完成。证据：`package.json`、`docs/operations/m2-asset-ingestion.md`；命令：`rtk npm run test:m2`。
-
-### M3
-
-- [x] `GATE-M3` 状态：L/W；并发发布、重试、回收、恢复、回滚和审计路径均通过本地/Workerd 回归，无半成品或越权。证据：`test/unit/publication-service.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-publication.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/publication-service.test.ts test/unit/library-service.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'publish|rollback|purge|review|recover|history|visibility'`。生产恢复与跨激活证据仍由 M0/M1 远程记录承接。
-
-### M4
-
-- [x] `GATE-M4` 状态：L/W/D；固定 provider-free 评测达到 Recall@5/MRR/NDCG 基线，权限泄露为 0，FTS5-only 降级可用且 citation 可定位。证据：`src/evaluation/retrieval-metrics.ts`、`src/evaluation/permission-leaks.ts`、`src/evaluation/citation-metrics.ts`、`test/unit/retrieval-metrics.test.ts`、`test/unit/permission-leaks.test.ts`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/worker/m1-library.test.ts`；命令：`rtk npx vitest run test/unit/retrieval-metrics.test.ts test/unit/permission-leaks.test.ts test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/worker/m1-library.test.ts`。当前不宣称 Vectorize 语义召回或生产指标。
-
-### M5
-
-- [x] `GATE-M5` 状态：L/W；Sources panel、Add context、Notes 与 P1 研究产物均通过固定引用正确性/定位评测，错误引用率为 0。证据：`src/ai/answer-service.ts`、`src/research/repository.ts`、`src/private-notes`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/unit/research-report-service.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'citation|sources|context|notes|research|report'`。生产 AI 可用性与跨激活证据仍未宣称。
-
-### M6
-
-- [x] `GATE-M6` 状态：L/W；Research 可暂停恢复，Agent 无越权/直接发布/任意工具，额度耗尽可延期。证据：`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/agent/session-do.ts`、`src/agent/tool-runner.ts`、`src/agent/tools.ts`、`test/worker/m1-api.test.ts`、`test/worker/agent-session.test.ts`、`test/unit/m6-agent-trajectory.test.ts`、`test/unit/m6-ai-degraded.test.ts`；命令：`rtk npm run typecheck && rtk npm run test:unit && rtk npm run test:worker`。生产 AI/额度、DO 激活和远程 smoke 证据仍属于 OPS/GATE 远程边界，未宣称 R。
-
-### M7
-
-- [ ] `GATE-M7` 状态：L/W；导出包、身份映射、dry-run、FTS 重建和漂移检查已在本地通过，但“在新环境实际恢复权威数据并重建全部派生索引”仍未完成。当前免费层无 R2/Vectorize binding，真实恢复、对象读取和远程生产证据需付费资源/独立授权后执行；不得将本地 `writes:none` 结果标为 R。
-
-### M8
-
-- [ ] `GATE-M8` 完整端到端、移动/无障碍、托管 CI、故障演练和生产证据满足 1.0。
+| 历史 Gate | 当前结论 | 新阶段 | 权威状态 |
+| --- | --- | --- | --- |
+| GATE-M0 | 旧候选的 OAuth、automation、disabled contributor 与 DO 生命周期证据已归档；current main 的身份、版本和回滚点仍需复核 | R0 | 见总账 [GATE-M0、IDN-001–IDN-006、OPS-004–OPS-007](./delivery-status-ledger.md) |
+| GATE-M1 | 本地与既有生产证据已存在，当前 main 发布状态需 R0 复核 | R0/R1 | 见总账 [GATE-M1、KB-001–KB-008](./delivery-status-ledger.md) |
+| GATE-M2 | 文件摄取与 fail-closed 降级已有本地/Workerd 证据；R2、Queue、真实 provider 和生产对象旅程仍待资源与验收 | R1/R6 | 见总账 [KB-003、ADM-004、OPS-009–OPS-010](./delivery-status-ledger.md) |
+| GATE-M3 | 既有并发发布、恢复与审计回归属于历史本地证据；批量治理、Revision diff/rollback 和回收站仍是当前缺口 | R3 | 见总账 [KB-011–KB-012、ADM-008、GOV-001](./delivery-status-ledger.md) |
+| GATE-M4 | FTS5-only、引用定位与 provider-free 评测已有本地证据；成熟过滤、混合检索和量化评测仍按新原子交付 | R4 | 见总账 [RET-001–RET-003、EVAL-001](./delivery-status-ledger.md) |
+| GATE-M5 | Sources、Notes、引用与研究产物已有本地/Workerd 证据；真实 provider 和生产角色旅程未由旧 gate 证明 | R4/R5 | 见总账 [KB-009–KB-010、EVAL-001](./delivery-status-ledger.md) |
+| GATE-M6 | 有界 Agent、暂停恢复和额度降级已有本地/Workerd 证据；生产 AI、DO 激活和验收仍待执行 | R5 | 见总账 [KB-009、OPS-009](./delivery-status-ledger.md) |
+| GATE-M7 | 导出包、dry-run、恢复计划和索引重建已有本地证据；远程恢复、对象读取和新环境演练仍待执行 | R6 | 见总账 [OPS-008、OPS-010–OPS-011](./delivery-status-ledger.md) |
+| GATE-M8 | 旧 1.0 汇总条件不再作为完成信号；current-main gate、真实角色、可访问性、恢复、容量与质量证据均须由总账收口 | R0/R6 | 见总账 [OPS-002、OPS-005、OPS-010–OPS-011、ADM-011、EVAL-001](./delivery-status-ledger.md) |
