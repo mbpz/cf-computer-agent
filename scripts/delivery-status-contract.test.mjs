@@ -20,6 +20,7 @@ import {
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const ledgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const knowledgeChecklistPath = resolve(repositoryRoot, "docs/product/ai-knowledge-base-checklist.md");
+const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-frontend-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 
@@ -93,6 +94,15 @@ const KNOWLEDGE_PENDING_ATOMS = [
   "SRCH-012", "SRCH-013", "SRCH-014",
   "AUTH-019", "EVAL-018",
   "OPS-008", "OPS-009", "OPS-010", "OPS-012", "OPS-013",
+];
+const FRONTEND_PENDING_ATOM_CONTRACTS = [
+  { id: "FE-NTF-001", dependencies: ["NTF-001", "NTF-002", "NTF-003"] },
+  { id: "FE-NTF-002", dependencies: ["NTF-002", "NTF-003", "NTF-005"] },
+  { id: "FE-BRD-001", dependencies: ["TSK-001", "BRD-001", "BRD-003", "BRD-004"] },
+  { id: "FE-BRD-002", dependencies: ["BRD-002", "BRD-004", "BRD-006"] },
+  { id: "FE-MSG-001", dependencies: ["MSG-001", "MSG-002"] },
+  { id: "FE-MSG-002", dependencies: ["MSG-003", "MSG-005"] },
+  { id: "FE-ACC-001", dependencies: ["TSK-010", "NTF-006", "BRD-007", "MSG-006", "ADM-011"] },
 ];
 const HISTORICAL_GATE_COLUMNS = ["历史 Gate", "当前结论", "新阶段", "历史证据（非权威）", "当前状态权威"];
 const HISTORICAL_GATE_AUTHORITY = "当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准";
@@ -364,6 +374,50 @@ test("AI knowledge checklist separates local completion from delivery status", (
   const uncheckedAtoms = [...checklist.matchAll(/^- \[ \] `([A-Z]+-\d{3})`/gmu)]
     .map((match) => match[1]);
   assert.deepEqual(uncheckedAtoms, KNOWLEDGE_PENDING_ATOMS);
+});
+
+test("frontend checklist owns frontend surfaces without claiming backend delivery", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+
+  assert.match(
+    checklist,
+    /本清单只拥有：组件、路由、交互状态、响应式行为、可访问性与前端发布接线。/u,
+  );
+  assert.match(
+    checklist,
+    /不拥有后端实现、数据模型、migration、生产发布或 signed browser 验收状态。/u,
+  );
+  assert.match(
+    checklist,
+    /复选框仅表示“前端实现 \+ 本地\/UI 合同验证”完成；不表示对应后端已经 ready。/u,
+  );
+  assert.match(checklist, /\[交付状态总账\]\(\.\/delivery-status-ledger\.md\)/u);
+
+  for (const id of [
+    "WB-001", "WB-002", "WB-PAGE", "TSK-002", "NTF-001", "NTF-003", "BRD-001", "MSG-001", "ADM-010",
+  ]) {
+    assert.match(checklist, new RegExp(`\\b${id}\\b`, "u"), `frontend checklist requires ${id}`);
+  }
+});
+
+test("frontend collaboration atoms stay unchecked and resolve backend ledger dependencies", () => {
+  const checklist = readFileSync(frontendChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const ledgerIds = new Set(rows.map((row) => row.ID));
+  const atoms = [...checklist.matchAll(
+    /^- \[ \] `(FE-(?:NTF|BRD|MSG|ACC)-\d{3})` .+；后端总账依赖：\[([^\]]+)\]\(\.\/delivery-status-ledger\.md\)。$/gmu,
+  )].map((match) => ({ id: match[1], dependencies: match[2].split("、") }));
+
+  assert.deepEqual(atoms, FRONTEND_PENDING_ATOM_CONTRACTS);
+  for (const atom of atoms) {
+    for (const dependency of atom.dependencies) {
+      assert.ok(ledgerIds.has(dependency), `${atom.id} dependency ${dependency} requires a ledger row`);
+    }
+  }
+  assert.match(
+    checklist,
+    /即使这些 frontend atom 未来勾选完成，也不能把任何后端总账依赖提升为 ready、done、已发布或已验收。/u,
+  );
 });
 
 test("AI knowledge section mappings resolve to canonical ledger IDs and Roadmap stages", () => {
