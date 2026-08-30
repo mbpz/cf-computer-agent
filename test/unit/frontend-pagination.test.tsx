@@ -2,29 +2,27 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { DataPagination } from "../../frontend/components/data-pagination";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, visiblePageTokens } from "../../frontend/components/ui/pagination";
+import { DataPagination, type DataPaginationProps } from "../../frontend/components/data-pagination";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, type PaginationLabels, visiblePageTokens } from "../../frontend/components/ui/pagination";
 import { Select } from "../../frontend/components/ui/select";
-import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { createLocaleRuntime, frontendPaginationLabels } from "../../frontend/lib/i18n";
 
 const englishLocale = createLocaleRuntime({ navigatorLanguage: "en" });
 const chineseLocale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
 
-function localizedDataPaginationProps(props: Record<string, unknown>, locale = englishLocale) {
-  return { ...props, locale } as unknown as React.ComponentProps<typeof DataPagination>;
+type DataPaginationInput = Omit<DataPaginationProps, "locale" | "labels">;
+type LocalizedPaginationInput = Omit<React.ComponentProps<typeof Pagination>, "labels"> & { labels?: PaginationLabels };
+
+function localizedDataPaginationProps(props: DataPaginationInput, locale = englishLocale): DataPaginationProps {
+  return { ...props, locale };
 }
 
-function localizedPaginationProps(props: Record<string, unknown>) {
-  const { labels, ...rest } = props;
+function localizedPaginationProps(props: LocalizedPaginationInput): React.ComponentProps<typeof Pagination> {
+  const { labels = frontendPaginationLabels(englishLocale), ...rest } = props;
   return {
     ...rest,
-    labels: labels ?? {
-      navigationLabel: "Pagination navigation",
-      previousLabel: "Previous page",
-      nextLabel: "Next page",
-      pageLabel: (page: number) => `Page ${page}`,
-    },
-  } as unknown as React.ComponentProps<typeof Pagination>;
+    labels,
+  };
 }
 
 describe("frontend pagination", () => {
@@ -165,10 +163,13 @@ describe("frontend pagination", () => {
     expect(html).toContain('aria-label="上一页"');
     expect(html).toContain('aria-label="下一页"');
     expect(html).toContain('aria-label="分页导航"');
+    expect(html).toContain('aria-label="第 1 页"');
+    expect(html).toContain("1 / 1");
     expect(html).not.toContain("Total");
     expect(html).not.toContain("Visible");
     expect(html).not.toContain("Rows per page");
     expect(emptyHtml).toContain("总计 <span class=\"font-medium text-foreground\">0</span><span aria-hidden=\"true\"> · </span>当前显示 <span class=\"font-medium text-foreground\">0–0</span>");
+    expect(emptyHtml).toContain("0 / 0");
     expect(emptyHtml).not.toContain("Total");
     expect(emptyHtml).not.toContain("Visible");
     expect(emptyHtml).not.toContain("Rows per page");

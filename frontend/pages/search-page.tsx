@@ -15,7 +15,7 @@ export type SearchState =
 
 export function SearchPage({ state, locale, query = "", pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError }: {
   state: SearchState;
-  locale?: LocaleRuntime;
+  locale: LocaleRuntime;
   query?: string;
   onQueryChange?: (query: string) => void;
   onSubmit?: () => void;

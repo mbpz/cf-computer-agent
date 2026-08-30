@@ -1,5 +1,5 @@
 import * as React from "react";
-import { frontendPaginationLabels, type FrontendPaginationLabels, type LocaleRuntime } from "../lib/i18n";
+import { frontendPaginationLabels, type DataPaginationLocalization } from "../lib/i18n";
 import { cn } from "../lib/utils";
 import type { SupportedPageSize } from "../lib/numbered-page";
 import { Pagination } from "./ui/pagination";
@@ -16,7 +16,7 @@ interface DataPaginationBaseProps extends React.HTMLAttributes<HTMLDivElement> {
   pending?: boolean;
 }
 
-export type DataPaginationProps = DataPaginationBaseProps & ({ locale: Pick<LocaleRuntime, "t"> | undefined; labels?: never } | { labels: FrontendPaginationLabels; locale?: never });
+export type DataPaginationProps = DataPaginationBaseProps & DataPaginationLocalization;
 
 const pageSizes: readonly SupportedPageSize[] = [20, 50, 100];
 

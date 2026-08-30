@@ -7,7 +7,7 @@ import type { AdminAnalyticsOverview } from "../../lib/admin-analytics-data";
 import { DataPagination } from "../../components/data-pagination";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 
-export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, localError = false, onDaysChange, onPageChange, onPageSizeChange, onRefresh }: { state: { kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }; locale?: LocaleRuntime; days?: number; pending?: boolean; localError?: boolean; onDaysChange?: (days: number) => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onRefresh?: () => void }) {
+export function AdminAnalyticsPage({ state, locale, days = 7, pending = false, localError = false, onDaysChange, onPageChange, onPageSizeChange, onRefresh }: { state: { kind: "loading" } | { kind: "ready"; data: AdminAnalyticsOverview } | { kind: "error" }; locale: LocaleRuntime; days?: number; pending?: boolean; localError?: boolean; onDaysChange?: (days: number) => void; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: SupportedPageSize) => void; onRefresh?: () => void }) {
   if (state.kind === "loading") return <div aria-busy="true" className="space-y-4"><Skeleton className="h-20" /><Skeleton className="h-56" /></div>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "ADMIN_ANALYTICS_UNAVAILABLE")} />;
   const { data } = state;
@@ -24,7 +24,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   return <Card><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold tabular-nums">{value}</p></CardContent></Card>;
 }
 
-function DailyChart({ rows, locale }: { rows: AdminAnalyticsOverview["daily"]; locale?: LocaleRuntime }) {
+function DailyChart({ rows, locale }: { rows: AdminAnalyticsOverview["daily"]; locale: LocaleRuntime }) {
   if (rows.length === 0) return <p className="py-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_EMPTY")}</p>;
   const max = Math.max(...rows.map((row) => row.pageViews), 1);
   return <div className="grid grid-cols-[repeat(auto-fit,minmax(2.5rem,1fr))] items-end gap-2" role="img" aria-label={frontendText(locale, "ADMIN_ANALYTICS_TRENDS")}>
@@ -37,7 +37,7 @@ function BreakdownCard({ title, rows, empty }: { title: string; rows: Array<{ ke
   return <Card><CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader><CardContent>{rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : <div className="space-y-3">{rows.map((row) => <div key={row.key} className="space-y-1"><div className="flex items-center justify-between gap-2 text-sm"><span className="truncate" title={row.key}>{row.key}</span><span className="tabular-nums text-muted-foreground">{row.pageViews}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.max((row.pageViews / max) * 100, 4)}%` }} /></div></div>)}</div>}</CardContent></Card>;
 }
 
-function VisitorsTable({ rows, locale }: { rows: AdminAnalyticsOverview["recentVisitors"]["items"]; locale?: LocaleRuntime }) {
+function VisitorsTable({ rows, locale }: { rows: AdminAnalyticsOverview["recentVisitors"]["items"]; locale: LocaleRuntime }) {
   if (rows.length === 0) return <p className="py-4 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ANALYTICS_EMPTY")}</p>;
   return <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b text-xs text-muted-foreground"><tr><th className="px-2 py-2 font-medium">{frontendText(locale, "ADMIN_ANALYTICS_TIME")}</th><th className="px-2 py-2 font-medium">{frontendText(locale, "ADMIN_ANALYTICS_PAGE")}</th><th className="px-2 py-2 font-medium">{frontendText(locale, "ADMIN_ANALYTICS_MEMBER")}</th><th className="px-2 py-2 font-medium">IP</th><th className="px-2 py-2 font-medium">{frontendText(locale, "ADMIN_ANALYTICS_LOCATION")}</th><th className="px-2 py-2 font-medium">{frontendText(locale, "ADMIN_ANALYTICS_NETWORK")}</th></tr></thead><tbody className="divide-y">{rows.map((row, index) => <tr key={`${row.occurredAt}-${row.path}-${index}`}><td className="whitespace-nowrap px-2 py-2 text-muted-foreground"><time dateTime={row.occurredAt}>{formatTime(row.occurredAt, locale)}</time></td><td className="max-w-40 truncate px-2 py-2" title={row.path}>{row.path}</td><td className="max-w-48 truncate px-2 py-2" title={row.member?.email || undefined}>{row.member?.email || frontendText(locale, "ADMIN_ANALYTICS_ANONYMOUS")}</td><td className="whitespace-nowrap px-2 py-2 font-mono text-xs">{row.ip || "unknown"}</td><td className="max-w-48 truncate px-2 py-2">{formatLocation(row)}</td><td className="px-2 py-2">{row.colo || "—"}</td></tr>)}</tbody></table></div>;
 }
@@ -46,7 +46,7 @@ function formatLocation(row: AdminAnalyticsOverview["recentVisitors"]["items"][n
   return [row.city, row.region, row.country].filter((value): value is string => Boolean(value)).join(", ") || "—";
 }
 
-function formatTime(value: string, locale?: LocaleRuntime): string {
+function formatTime(value: string, locale: LocaleRuntime): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "—";
   try { return new Intl.DateTimeFormat(locale?.locale === "zh-CN" ? "zh-CN" : "en", { dateStyle: "short", timeStyle: "short" }).format(date); } catch { return value; }

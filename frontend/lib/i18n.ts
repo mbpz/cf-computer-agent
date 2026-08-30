@@ -1074,7 +1074,9 @@ export interface FrontendPaginationLabels {
   mobileSummary(page: number, totalPages: number): string;
 }
 
-export function frontendPaginationLabels(locale: Pick<LocaleRuntime, "t"> | undefined): FrontendPaginationLabels {
+export type DataPaginationLocalization = { locale: Pick<LocaleRuntime, "t">; labels?: never } | { labels: FrontendPaginationLabels; locale?: never };
+
+export function frontendPaginationLabels(locale: Pick<LocaleRuntime, "t">): FrontendPaginationLabels {
   return {
     navigationLabel: frontendText(locale, "PAGINATION_NAVIGATION"),
     totalLabel: frontendText(locale, "PAGINATION_TOTAL"),
@@ -1087,7 +1089,7 @@ export function frontendPaginationLabels(locale: Pick<LocaleRuntime, "t"> | unde
   };
 }
 
-function formatFrontendText(locale: Pick<LocaleRuntime, "t"> | undefined, key: string, values: Record<string, number>): string {
+function formatFrontendText(locale: Pick<LocaleRuntime, "t">, key: string, values: Record<string, number>): string {
   return frontendText(locale, key).replace(/\{(\w+)\}/gu, (_, name: string) => String(values[name] ?? ""));
 }
 

@@ -18,7 +18,7 @@ export type TasksPageState =
 export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onPageChange, onPageSizeChange, onStatusChange, onDelete }: {
   state: TasksPageState;
   filters: TaskFilterState;
-  locale?: LocaleRuntime;
+  locale: LocaleRuntime;
   pending?: boolean;
   localLoadError?: string;
   actionError?: string;

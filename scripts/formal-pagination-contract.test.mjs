@@ -55,12 +55,14 @@ test("every shared pagination caller passes its page locale without English defa
   try {
     const component = sourceFile(snapshot, "frontend/components/data-pagination.tsx");
     assert.match(component.text, /frontendPaginationLabels/u);
+    assert.match(component.text, /DataPaginationLocalization/u);
     assert.doesNotMatch(component.text, /(?:totalLabel|rangeLabel|pageSizeLabel|previousLabel|nextLabel)\s*=\s*"/u);
-    for (const pagePath of pagePaths) {
+    for (const [, , pagePath, pageFunction] of formalLists) {
       const page = sourceFile(snapshot, pagePath);
       const calls = collectNodes(page, (node) => isJsxSelfClosingElement(node) && node.tagName.getText(page) === "DataPagination");
       assert.equal(calls.length, 1, `${pagePath} DataPagination caller`);
       assert.match(calls[0].getText(page), /\blocale=\{locale\}/u, `${pagePath} locale forwarding`);
+      assert.doesNotMatch(namedFunction(page, pageFunction).getText(page), /\blocale\?: LocaleRuntime\b/u, `${pagePath} required locale contract`);
     }
   } finally {
     snapshot.dispose();
