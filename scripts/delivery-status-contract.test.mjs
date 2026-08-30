@@ -51,9 +51,41 @@ const STAGE_EXIT_CONCEPTS = new Map([
   ["R4", [/过滤.*来源定位/u, /相关知识.*反向链接/u, /混合检索.*量化评测/u]],
   ["R6", [/导出.*恢复/u, /R2\/D1.*容量保护/u, /完整生产验收.*1\.0/u]],
 ]);
-const KNOWLEDGE_CHECKLIST_SECTIONS = [
-  "SRC", "ING", "PAR", "CHK", "GOV", "IDX", "SRCH", "READ", "CHAT", "RES",
-  "ART", "AGT", "COL", "AUTH", "I18N", "EVAL", "WORKSPACE", "OPS",
+const KNOWLEDGE_SECTION_CONTRACTS = [
+  { section: "SRC", ids: ["KB-001", "KB-002", "KB-003", "ADM-004"] },
+  { section: "ING", ids: ["KB-003", "ADM-003", "ADM-004", "OPS-009", "OPS-010"] },
+  { section: "PAR", ids: ["KB-003", "ADM-004"] },
+  { section: "CHK", ids: ["KB-003", "KB-006", "RET-001"] },
+  { section: "GOV", ids: ["KB-004", "KB-011", "KB-012", "ADM-002", "ADM-003", "GOV-001"] },
+  { section: "IDX", ids: ["KB-003", "KB-007", "RET-003", "EVAL-001", "OPS-009", "OPS-010"] },
+  { section: "SRCH", ids: ["KB-005", "KB-006", "KB-007", "KB-010", "RET-001", "RET-002", "RET-003", "EVAL-001"] },
+  { section: "READ", ids: ["KB-005", "KB-006", "KB-010", "KB-011", "KB-012", "RET-001", "RET-002"] },
+  { section: "CHAT", ids: ["KB-007", "KB-008", "EVAL-001"] },
+  { section: "RES", ids: ["KB-009", "EVAL-001", "OPS-009"] },
+  { section: "ART", ids: ["KB-009", "KB-010"] },
+  { section: "AGT", ids: ["IDN-005", "KB-009", "OPS-009"] },
+  {
+    section: "COL",
+    ids: ["IDN-005", "KB-002", "KB-009", "KB-010", "WB-001", "WB-A11Y", "ADM-002", "ADM-009", "ADM-010"],
+  },
+  { section: "AUTH", ids: ["IDN-001", "IDN-002", "IDN-003", "IDN-004", "IDN-005", "IDN-006"] },
+  { section: "I18N", ids: ["WB-A11Y", "ADM-011"] },
+  { section: "EVAL", ids: ["EVAL-001", "OPS-005", "OPS-011"] },
+  {
+    section: "WORKSPACE",
+    ids: [
+      "WB-001", "WB-002", "WB-PAGE", "WB-SCROLL", "WB-SETTINGS", "WB-A11Y",
+      "ADM-005", "ADM-006", "ADM-007", "ADM-008", "ADM-009", "ADM-010",
+      "WS-001", "WS-008",
+    ],
+  },
+  {
+    section: "OPS",
+    ids: [
+      "ADM-004", "OPS-001", "OPS-002", "OPS-003", "OPS-004", "OPS-005", "OPS-006",
+      "OPS-007", "OPS-008", "OPS-009", "OPS-010", "OPS-011",
+    ],
+  },
 ];
 const KNOWLEDGE_PENDING_ATOMS = [
   "ING-003", "ING-007", "ING-008",
@@ -61,6 +93,64 @@ const KNOWLEDGE_PENDING_ATOMS = [
   "SRCH-012", "SRCH-013", "SRCH-014",
   "AUTH-019", "EVAL-018",
   "OPS-008", "OPS-009", "OPS-010", "OPS-012", "OPS-013",
+];
+const HISTORICAL_GATE_COLUMNS = ["历史 Gate", "当前结论", "新阶段", "历史证据（非权威）", "当前状态权威"];
+const HISTORICAL_GATE_AUTHORITY = "当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准";
+const HISTORICAL_GATE_CONTRACTS = [
+  {
+    id: "GATE-M0",
+    conclusion: "旧候选的 OAuth、automation、disabled contributor 与 DO 生命周期证据已归档；current main 的身份、版本和回滚点仍需复核",
+    stage: "R0",
+    evidence: "`docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M0 证据）",
+  },
+  {
+    id: "GATE-M1",
+    conclusion: "本地与既有生产证据已存在，当前 main 发布状态需 R0 复核",
+    stage: "R0/R1",
+    evidence: "`docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M1 证据）",
+  },
+  {
+    id: "GATE-M2",
+    conclusion: "文件摄取与 fail-closed 降级已有本地/Workerd 证据；R2、Queue、真实 provider 和生产对象旅程仍待资源与验收",
+    stage: "R1/R6",
+    evidence: "`package.json`、`docs/operations/m2-asset-ingestion.md`；命令：`rtk npm run test:m2`",
+  },
+  {
+    id: "GATE-M3",
+    conclusion: "既有并发发布、恢复与审计回归属于历史本地证据；批量治理、Revision diff/rollback 和回收站仍是当前缺口",
+    stage: "R3",
+    evidence: "`test/unit/publication-service.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-publication.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/publication-service.test.ts test/unit/library-service.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'publish|rollback|purge|review|recover|history|visibility'`",
+  },
+  {
+    id: "GATE-M4",
+    conclusion: "FTS5-only、引用定位与 provider-free 评测已有本地证据；成熟过滤、混合检索和量化评测仍按新原子交付",
+    stage: "R4",
+    evidence: "`src/evaluation/retrieval-metrics.ts`、`src/evaluation/permission-leaks.ts`、`src/evaluation/citation-metrics.ts`、`test/unit/retrieval-metrics.test.ts`、`test/unit/permission-leaks.test.ts`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/worker/m1-library.test.ts`；命令：`rtk npx vitest run test/unit/retrieval-metrics.test.ts test/unit/permission-leaks.test.ts test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/worker/m1-library.test.ts`",
+  },
+  {
+    id: "GATE-M5",
+    conclusion: "Sources、Notes、引用与研究产物已有本地/Workerd 证据；真实 provider 和生产角色旅程未由旧 gate 证明",
+    stage: "R4/R5",
+    evidence: "`src/ai/answer-service.ts`、`src/research/repository.ts`、`src/private-notes`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/unit/research-report-service.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'citation|sources|context|notes|research|report'`",
+  },
+  {
+    id: "GATE-M6",
+    conclusion: "有界 Agent、暂停恢复和额度降级已有本地/Workerd 证据；生产 AI、DO 激活和验收仍待执行",
+    stage: "R5",
+    evidence: "`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/agent/session-do.ts`、`src/agent/tool-runner.ts`、`src/agent/tools.ts`、`test/worker/m1-api.test.ts`、`test/worker/agent-session.test.ts`、`test/unit/m6-agent-trajectory.test.ts`、`test/unit/m6-ai-degraded.test.ts`；命令：`rtk npm run typecheck && rtk npm run test:unit && rtk npm run test:worker`",
+  },
+  {
+    id: "GATE-M7",
+    conclusion: "导出包、dry-run、恢复计划和索引重建已有本地证据；远程恢复、对象读取和新环境演练仍待执行",
+    stage: "R6",
+    evidence: "`src/ops/export-package.ts`、`src/ops/import-dry-run.ts`、`src/ops/restore-plan.ts`、`src/ops/index-rebuild-plan.ts`、`src/ops/restore-drill.ts`；命令：`rtk npx vitest run test/unit/export-package.test.ts test/unit/import-dry-run.test.ts test/unit/restore-plan.test.ts test/unit/index-rebuild-plan.test.ts test/unit/restore-drill.test.ts`",
+  },
+  {
+    id: "GATE-M8",
+    conclusion: "旧 1.0 汇总条件不再作为完成信号；current-main gate、真实角色、可访问性、恢复、容量与质量证据均须由总账收口",
+    stage: "R0/R6",
+    evidence: "无；旧 1.0 条件未满足",
+  },
 ];
 
 test("ledger table parsing preserves escaped and code-span pipes", () => {
@@ -254,7 +344,7 @@ test("AI knowledge checklist separates local completion from delivery status", (
   );
   assert.match(checklist, /\[交付状态总账\]\(\.\/delivery-status-ledger\.md\)/u);
 
-  for (const section of KNOWLEDGE_CHECKLIST_SECTIONS) {
+  for (const { section } of KNOWLEDGE_SECTION_CONTRACTS) {
     const sectionPattern = new RegExp(
       `^## ${section}\\b[^\\n]*\\n\\n当前 R 阶段：[^\\n]+；总账映射：\\[[^\\]]+\\]\\(\\.\\/delivery-status-ledger\\.md\\)$`,
       "mu",
@@ -274,6 +364,41 @@ test("AI knowledge checklist separates local completion from delivery status", (
   const uncheckedAtoms = [...checklist.matchAll(/^- \[ \] `([A-Z]+-\d{3})`/gmu)]
     .map((match) => match[1]);
   assert.deepEqual(uncheckedAtoms, KNOWLEDGE_PENDING_ATOMS);
+});
+
+test("AI knowledge section mappings resolve to canonical ledger IDs and Roadmap stages", () => {
+  const checklist = readFileSync(knowledgeChecklistPath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const roadmap = readFileSync(roadmapPath, "utf8");
+  assertKnowledgeSectionMappings(checklist, rows, roadmap);
+
+  for (const mutation of [
+    replaceKnowledgeSectionMapping(checklist, "COL", { ids: [
+      "IDN-005", "KB-002", "KB-009", "KB-010", "WB-001", "WB-A11Y", "ADM-002", "ADM-009", "ADM-999",
+    ] }),
+    replaceKnowledgeSectionMapping(checklist, "COL", { ids: [
+      "IDN-005", "KB-002", "KB-009", "KB-010", "WB-001", "WB-A11Y", "ADM-002", "ADM-009", "OPS-002",
+    ] }),
+    replaceKnowledgeSectionMapping(checklist, "COL", { stages: ["R1", "R4", "R5"] }),
+  ]) {
+    assert.throws(() => assertKnowledgeSectionMappings(mutation, rows, roadmap));
+  }
+});
+
+test("historical gate mapping preserves canonical evidence without claiming current authority", () => {
+  const checklist = readFileSync(knowledgeChecklistPath, "utf8");
+  assertHistoricalGateContract(checklist);
+
+  const m4 = HISTORICAL_GATE_CONTRACTS.find(({ id }) => id === "GATE-M4");
+  assert.ok(m4);
+  for (const mutation of [
+    replaceHistoricalGateRow(checklist, m4, { evidence: "证据已删除" }),
+    replaceHistoricalGateRow(checklist, m4, { authority: "当前状态已完成" }),
+    replaceHistoricalGateRow(checklist, m4, { id: "GATE-M9" }),
+    replaceHistoricalGateRow(checklist, m4, { stage: "R5" }),
+  ]) {
+    assert.throws(() => assertHistoricalGateContract(mutation));
+  }
 });
 
 test("Roadmap derives its exact R0-R6 stage contract from the delivery ledger", () => {
@@ -345,6 +470,104 @@ test("Roadmap contract rejects stage-order, section, maturity, and dependency mu
     /R3 exit 2 must be unchecked/u,
   );
 });
+
+function historicalGateRow(contract, overrides = {}) {
+  const row = { ...contract, ...overrides };
+  return `| ${row.id} | ${row.conclusion} | ${row.stage} | ${row.evidence} | ${row.authority ?? HISTORICAL_GATE_AUTHORITY} |`;
+}
+
+function replaceHistoricalGateRow(markdown, contract, overrides) {
+  const original = historicalGateRow(contract);
+  assert.ok(markdown.includes(original), `${contract.id} canonical row is required for mutation`);
+  return markdown.replace(original, historicalGateRow(contract, overrides));
+}
+
+function assertHistoricalGateContract(markdown) {
+  const lines = markdown.split(/\r?\n/u);
+  const headerIndex = lines.findIndex((line) => splitTableRow(line).join("|") === HISTORICAL_GATE_COLUMNS.join("|"));
+  assert.notEqual(headerIndex, -1, "historical gate table header is required");
+  assert.match(lines[headerIndex + 1] ?? "", /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/u, "historical gate divider is required");
+  const rows = [];
+  for (const line of lines.slice(headerIndex + 2)) {
+    if (!line.trimStart().startsWith("|")) break;
+    const cells = splitTableRow(line);
+    assert.equal(cells.length, HISTORICAL_GATE_COLUMNS.length, "historical gate row has the required columns");
+    rows.push(Object.fromEntries(HISTORICAL_GATE_COLUMNS.map((header, index) => [header, cells[index]])));
+  }
+  assert.equal(rows.length, HISTORICAL_GATE_CONTRACTS.length, "historical gate rows must be exactly M0 through M8");
+  for (const [index, expected] of HISTORICAL_GATE_CONTRACTS.entries()) {
+    const row = rows[index];
+    assert.deepEqual(row, {
+      "历史 Gate": expected.id,
+      当前结论: expected.conclusion,
+      新阶段: expected.stage,
+      "历史证据（非权威）": expected.evidence,
+      当前状态权威: HISTORICAL_GATE_AUTHORITY,
+    });
+  }
+}
+
+function parseKnowledgeSectionMappings(markdown) {
+  const mappings = new Map();
+  for (const { section } of KNOWLEDGE_SECTION_CONTRACTS) {
+    const pattern = new RegExp(
+      `^## ${section}\\b[^\\r\\n]*\\r?\\n\\r?\\n(当前 R 阶段：(R\\d(?:\\/R\\d)*)；总账映射：\\[([^\\]]+)\\]\\(\\.\\/delivery-status-ledger\\.md\\))$`,
+      "gmu",
+    );
+    const matches = [...markdown.matchAll(pattern)];
+    assert.equal(matches.length, 1, `${section} requires exactly one structured R-stage ledger mapping`);
+    const stages = matches[0][2].split("/");
+    const ids = matches[0][3].split("、");
+    assert.equal(new Set(stages).size, stages.length, `${section} mapping stages must be unique`);
+    assert.equal(new Set(ids).size, ids.length, `${section} mapping IDs must be unique`);
+    for (const stage of stages) assert.ok(ROADMAP_STAGE_IDS.includes(stage), `${section} has invalid stage ${stage}`);
+    for (const id of ids) assert.match(id, /^[A-Z][A-Z0-9]*-[A-Z0-9]+$/u, `${section} has invalid ledger ID ${id}`);
+    mappings.set(section, { stages, ids, line: matches[0][1] });
+  }
+  return mappings;
+}
+
+function replaceKnowledgeSectionMapping(markdown, section, overrides) {
+  const mapping = parseKnowledgeSectionMappings(markdown).get(section);
+  assert.ok(mapping, `${section} mapping is required for mutation`);
+  const stages = overrides.stages ?? mapping.stages;
+  const ids = overrides.ids ?? mapping.ids;
+  const replacement = `当前 R 阶段：${stages.join("/")}；总账映射：[${ids.join("、")}](./delivery-status-ledger.md)`;
+  return markdown.replace(mapping.line, replacement);
+}
+
+function assertKnowledgeSectionMappings(checklist, rows, roadmap) {
+  const mappings = parseKnowledgeSectionMappings(checklist);
+  const ledgerIds = new Set(rows.map((row) => row.ID));
+  const rowsById = new Map(rows.map((row) => [row.ID, row]));
+  const roadmapStages = assertRoadmapStageSections(parseRoadmapStages(roadmap));
+  const owners = assertRoadmapOwnership(roadmapStages, rows, roadmap);
+  const stageIndex = new Map(ROADMAP_STAGE_IDS.map((stage, index) => [stage, index]));
+
+  assert.equal(mappings.size, KNOWLEDGE_SECTION_CONTRACTS.length, "knowledge checklist mappings must cover every section");
+  for (const expected of KNOWLEDGE_SECTION_CONTRACTS) {
+    const actual = mappings.get(expected.section);
+    assert.ok(actual, `${expected.section} mapping is required`);
+    assert.deepEqual(actual.ids, expected.ids, `${expected.section} ledger mapping must match its canonical surfaces`);
+    const ownerStages = new Set();
+    for (const id of actual.ids) {
+      assert.ok(ledgerIds.has(id), `${expected.section} mapping ID ${id} requires a ledger row`);
+      if (owners.has(id)) {
+        ownerStages.add(owners.get(id));
+        continue;
+      }
+      if (EXPLICITLY_DEFERRED_ROADMAP_IDS.has(id)) continue;
+      assert.ok(LEGACY_ROADMAP_IDS.has(id), `${expected.section} mapping ID ${id} requires Roadmap ownership`);
+      for (const dependency of ledgerDependencies(rowsById.get(id))) {
+        const dependencyOwner = owners.get(dependency);
+        assert.ok(dependencyOwner, `${expected.section} legacy mapping ${id} dependency ${dependency} requires Roadmap ownership`);
+        ownerStages.add(dependencyOwner);
+      }
+    }
+    const expectedStages = [...ownerStages].sort((left, right) => stageIndex.get(left) - stageIndex.get(right));
+    assert.deepEqual(actual.stages, expectedStages, `${expected.section} stages must match mapped Roadmap ownership/consumption`);
+  }
+}
 
 function parseMarkdownTable(markdown) {
   const lines = markdown.split(/\r?\n/u);

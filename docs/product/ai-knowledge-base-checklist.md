@@ -23,7 +23,7 @@
 
 ## SRC — 来源采集
 
-当前 R 阶段：R1；总账映射：[KB-001–KB-003、ADM-004](./delivery-status-ledger.md)
+当前 R 阶段：R1；总账映射：[KB-001、KB-002、KB-003、ADM-004](./delivery-status-ledger.md)
 
 - [x] `SRC-001` P0/M1 `[NotebookLM]` 创建纯文本来源；状态：L/W；验收：非空 UTF-8 输入生成 SourceVersion 和 Submission。
 - [x] `SRC-002` P0/M1 `[NotebookLM]` 创建 Markdown 来源；状态：L/W；验收：保留标题层级和代码块。
@@ -46,7 +46,7 @@
 
 ## ING — 摄取与原件
 
-当前 R 阶段：R1/R6；总账映射：[KB-003、ADM-003–ADM-004、OPS-009–OPS-010](./delivery-status-ledger.md)
+当前 R 阶段：R0/R1/R6；总账映射：[KB-003、ADM-003、ADM-004、OPS-009、OPS-010](./delivery-status-ledger.md)
 
 - [x] `ING-001` P0/M1 SHA-256 内容哈希；状态：L/W；验收：服务端重新验证，不信任客户端声明。
 - [x] `ING-002` P0/M1 完全重复检测；状态：L/W；验收：同 hash 返回既有候选，不静默发布。
@@ -117,7 +117,7 @@
 
 ## GOV — 审核、发布与版本
 
-当前 R 阶段：R1/R3；总账映射：[KB-004、KB-011–KB-012、ADM-002–ADM-003、GOV-001](./delivery-status-ledger.md)
+当前 R 阶段：R1/R3；总账映射：[KB-004、KB-011、KB-012、ADM-002、ADM-003、GOV-001](./delivery-status-ledger.md)
 
 - [x] `GOV-001` P0/M1 review_pending 状态；状态：L/W；验收：提交完成后仅 owner/admin 可见。
 - [x] `GOV-002` P0/M1 管理员审核队列；状态：L/W；验收：有界 keyset pagination 和状态过滤。
@@ -144,7 +144,7 @@
 
 ## IDX — 索引
 
-当前 R 阶段：R1/R4/R6；总账映射：[KB-003、KB-007、RET-003、EVAL-001、OPS-009–OPS-010](./delivery-status-ledger.md)
+当前 R 阶段：R0/R1/R4/R6；总账映射：[KB-003、KB-007、RET-003、EVAL-001、OPS-009、OPS-010](./delivery-status-ledger.md)
 
 - [x] `IDX-001` P0/M1 D1 FTS5 schema；验收：title/summary/tags/body/code 可检索。
 - [x] `IDX-002` P0/M1 FTS 同步策略；验收：Revision 切换、回收和恢复一致更新。
@@ -165,7 +165,7 @@
 
 ## SRCH — 搜索
 
-当前 R 阶段：R1/R4；总账映射：[KB-005–KB-007、KB-010、RET-001–RET-003、EVAL-001](./delivery-status-ledger.md)
+当前 R 阶段：R1/R4；总账映射：[KB-005、KB-006、KB-007、KB-010、RET-001、RET-002、RET-003、EVAL-001](./delivery-status-ledger.md)
 
 - [x] `SRCH-001` P0/M1 关键词查询；状态：L/W；验收：空/超长/控制字符有稳定响应。
 - [x] `SRCH-002` P0/M1 FTS BM25 排名；验收：固定 query set 稳定。证据：policy v2 固定 title=8/summary=4/tags=6/body=1/code=3，真实 D1 重分数 keyset 无漏项/重复测试见 `test/worker/m1-library.test.ts`。
@@ -190,7 +190,7 @@
 
 ## READ — 知识阅读器
 
-当前 R 阶段：R1/R3/R4；总账映射：[KB-005–KB-006、KB-010–KB-012、RET-001–RET-002](./delivery-status-ledger.md)
+当前 R 阶段：R1/R3/R4；总账映射：[KB-005、KB-006、KB-010、KB-011、KB-012、RET-001、RET-002](./delivery-status-ledger.md)
 
 - [x] `READ-001` P0/M1 Knowledge 列表；状态：L/W；验收：current published、权限、有界分页。
 - [x] `READ-002` P0/M1 Knowledge detail；状态：L/W；验收：D1 metadata 与规范 Markdown 一致。
@@ -213,7 +213,7 @@
 
 ## CHAT — 引用问答
 
-当前 R 阶段：R1/R4；总账映射：[KB-007–KB-008、EVAL-001](./delivery-status-ledger.md)
+当前 R 阶段：R1/R4；总账映射：[KB-007、KB-008、EVAL-001](./delivery-status-ledger.md)
 
 - [x] `CHAT-001` P0/M1 问题边界；状态：L/W；验收：非空、字符/字节上限和稳定错误。
 - [x] `CHAT-002` P0/M1 显式来源集合；验收：全库/Space/Collection/选中来源可区分。
@@ -240,7 +240,7 @@
 
 ## RES — Deep Research
 
-当前 R 阶段：R5；总账映射：[KB-009、EVAL-001、OPS-009](./delivery-status-ledger.md)
+当前 R 阶段：R0/R4/R5；总账映射：[KB-009、EVAL-001、OPS-009](./delivery-status-ledger.md)
 
 - [x] `RES-001` P1/M6 Research Workspace；状态：L/W；验收：ResearchRun 持久化 KnowledgeItem、Space/Collection/KnowledgeItem 来源范围、owner 和有限状态；所有读取/状态变更按 owner 条件过滤，跨成员统一 404。证据：`migrations/0013_m6_research_reports.sql`、`migrations/0014_m6_research_run_plan.sql`、`src/research/repository.ts`、`src/ai/research-report-service.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`（owner 研究流程与跨 owner 草稿 404）；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
 - [x] `RES-002` P1/M6 研究目标；状态：L/W；验收：ResearchRun 创建必须同时提供有界 goal、Space/Collection/KnowledgeItem 范围和 1–8 条完成条件；D1 以 scope_json/completion_json 持久化，owner 重新读取时安全解析，非法/越界输入 400。证据：`migrations/0014_m6_research_run_plan.sql`、`src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/routes/library.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/worker/m1-api.test.ts -t 'research|Research'`。
@@ -261,7 +261,7 @@
 
 ## ART — 研究产物
 
-当前 R 阶段：R5；总账映射：[KB-009–KB-010](./delivery-status-ledger.md)
+当前 R 阶段：R4/R5；总账映射：[KB-009、KB-010](./delivery-status-ledger.md)
 
 - [x] `ART-001` P1/M5 私人 Note；状态：L/W；验收：D1 持久化、owner-only 默认、成员状态/知识可见性重新授权，保存必须携带可读 Revision/Chunk 引用，Note 不进入 Submission/Publication/FTS。证据：`migrations/0012_m5_private_notes.sql`、`src/private-notes/types.ts`、`src/private-notes/service.ts`、`src/private-notes/repository.ts`、`src/routes/library.ts`、`src/app.ts`、`frontend/lib/knowledge-note.ts`、`frontend/pages/knowledge-reader-page.tsx`、`test/unit/private-notes-service.test.ts`、`test/unit/frontend-knowledge-note.test.ts`、`test/worker/private-notes.test.ts`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/private-notes-service.test.ts test/unit/frontend-knowledge-note.test.ts test/worker/private-notes.test.ts`。
 - [x] `ART-002` P1/M5 来源摘要；状态：L/W；验收：只总结选中来源并附引用。证据：`src/ai/source-summary-service.ts`、`src/routes/library.ts`、`src/app.ts`、`test/unit/source-summary-service.test.ts`、`test/worker/m1-api.test.ts`；`POST /api/knowledge/:knowledgeItemId/summary` 逐条通过 `LibraryService.readCitation` 重新授权，仅接收同一 KnowledgeItem 的 1–8 个引用，AI 输出必须引用选中 citation，响应不含来源正文，失败返回可重试 `AI_UNAVAILABLE`；命令：`rtk npm run typecheck && rtk npx vitest run test/unit/source-summary-service.test.ts test/worker/m1-api.test.ts -t 'summary|selected citations'`。
@@ -280,7 +280,7 @@
 
 ## AGT — Agent 工具与会话
 
-当前 R 阶段：R5；总账映射：[IDN-005、KB-009、OPS-009](./delivery-status-ledger.md)
+当前 R 阶段：R0/R5；总账映射：[IDN-005、KB-009、OPS-009](./delivery-status-ledger.md)
 
 - [x] `AGT-001` P1/M6 AgentSession DO 路由；状态：L/W；验收：Worker 通过独立 SQLite Durable Object namespace 创建随机 session ID，DO 持久化 member 绑定与时间戳；跨成员读取统一 404，路由仅允许已认证 member 的 `knowledge:read` 能力。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`src/app.ts`、`wrangler.jsonc`（AgentSession v2 SQLite binding）、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
 - [x] `AGT-002` P1/M6 消息持久化；状态：L/W；验收：AgentSession SQLite 持久化仅允许 `user|assistant` 角色，正文单条有界，读取支持 1–50 条上限并返回截断标记；owner 外统一 404，Worker 写入只接受 user 正文，未开放工具角色或任意成员 ID。证据：`src/agent/session-do.ts`、`src/routes/agent.ts`、`test/worker/agent-session.test.ts`；命令：`rtk npx vitest run test/worker/agent-session.test.ts && rtk npm run typecheck`。
@@ -303,7 +303,7 @@
 
 ## COL — 协作与个人工作区
 
-当前 R 阶段：R1/R5；总账映射：[IDN-005、KB-002、KB-010](./delivery-status-ledger.md)
+当前 R 阶段：R0/R1/R4/R5；总账映射：[IDN-005、KB-002、KB-009、KB-010、WB-001、WB-A11Y、ADM-002、ADM-009、ADM-010](./delivery-status-ledger.md)
 
 - [x] `COL-001` P0/M1 我的 Submission；状态：L/W；验收：只看本人、有界分页和状态过滤。证据：真实 D1 按 owner + 精确 status 在分页前过滤，重复排序键下无缺失/重复，游标绑定 owner/status/sort，跨 owner/status/admin 游标重放关闭失败，`EXPLAIN QUERY PLAN` 使用 `submissions_owner_status_page`；命令：`rtk npm run check`。
 - [x] `COL-002` P1/M1 驳回理由；状态：L/W；验收：owner 的 `/api/submissions/mine` 仅返回审核决策、allowlist reasonCode、规范化 note 和时间，不返回 reviewer 身份或后台 metadata；React 提交列表展示中英文原因/备注且无 `undefined`。证据：`src/submissions/repository.ts`、`src/submissions/types.ts`、`frontend/lib/my-submissions-data.ts`、`frontend/pages/my-submissions-page.tsx`、`test/worker/m1-api.test.ts`、`test/unit/frontend-my-submissions-data.test.ts`、`test/unit/frontend-submit-pages.test.tsx`；命令：`rtk npx vitest run test/worker/m1-api.test.ts -t 'owner-visible review reason' && rtk npx vitest run test/unit/frontend-my-submissions-data.test.ts test/unit/frontend-submit-pages.test.tsx && rtk npm run typecheck`。
@@ -323,7 +323,7 @@
 
 ## AUTH — 身份、角色和授权
 
-当前 R 阶段：R0；总账映射：[IDN-001–IDN-006](./delivery-status-ledger.md)
+当前 R 阶段：R0；总账映射：[IDN-001、IDN-002、IDN-003、IDN-004、IDN-005、IDN-006](./delivery-status-ledger.md)
 
 - [x] `AUTH-001` P0/M0 GitHub OAuth start；状态：R；证据：2026-08-21，生产 `/auth/github` 302，version `3bd2985e-487c-4fc0-bcb8-31c1f00967ca`，request ID `a9d1e5602fd999e4c48a314167a77a5e`。
 - [x] `AUTH-002` P0/M0 state + PKCE S256 callback；状态：L/W/R；生产 callback request ID `a2f6d391fdf2ddbf`、302→首页 200、登录后 `/api/session` 200，版本 `ce88dab4-e452-4225-adf5-abfab7adb704`。
@@ -378,7 +378,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ## WORKSPACE — 工作台、权限与站点统计
 
-当前 R 阶段：R0；总账映射：[WB-001–WB-A11Y、ADM-005–ADM-010、WS-001、WS-008](./delivery-status-ledger.md)
+当前 R 阶段：R0/R3；总账映射：[WB-001、WB-002、WB-PAGE、WB-SCROLL、WB-SETTINGS、WB-A11Y、ADM-005、ADM-006、ADM-007、ADM-008、ADM-009、ADM-010、WS-001、WS-008](./delivery-status-ledger.md)
 
 - [x] `WS-001` P1/M8 shadcn 工作台壳层；状态：L/W；验收：桌面 Sidebar、移动 Sheet、Topbar、面包屑、语言和退出菜单具备 loading/error/empty 状态，保持 GitHub OAuth/session 合同。证据：`frontend/components/shell/app-shell.tsx`、`test/unit/workspace-shell.test.tsx`、`test/unit/frontend-shell.test.tsx`、`test/unit/workspace-dashboard.test.tsx`。
 - [x] `WS-002` P1/M8 AI 知识库一级菜单；状态：L/W；验收：`/knowledge` 在 workspace 一级导航中稳定显示，contributor/admin 均按 `knowledge:read` 过滤，路径高亮和祖先展开稳定。证据：`frontend/contracts/routes.ts`、`frontend/components/shell/app-shell.tsx`、`test/unit/frontend-contract.test.ts`。
@@ -391,7 +391,7 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 ## OPS — 运维、额度、备份和恢复
 
-当前 R 阶段：R0/R1/R6；总账映射：[ADM-004、OPS-001–OPS-011](./delivery-status-ledger.md)
+当前 R 阶段：R0/R1/R6；总账映射：[ADM-004、OPS-001、OPS-002、OPS-003、OPS-004、OPS-005、OPS-006、OPS-007、OPS-008、OPS-009、OPS-010、OPS-011](./delivery-status-ledger.md)
 
 - [x] `OPS-001` P0/M0 本地完整门禁；状态：L/W；证据：types、TS、smoke、unit、workerd、dry build。
 - [x] `OPS-002` P0/M0 GitHub OAuth 生产部署手册；状态：I/L；证据：`docs/operations/production-environment-handbook.md`。
@@ -426,14 +426,14 @@ M1 Task 9 的 provider-free 门禁包含 24 条固定检索/问答查询、从�
 
 下表仅保留旧 M0–M8 ID、既有证据与新阶段关系，不参与当前完成度统计，也不替代总账中的实现、验证、发布和验收状态。
 
-| 历史 Gate | 当前结论 | 新阶段 | 权威状态 |
-| --- | --- | --- | --- |
-| GATE-M0 | 旧候选的 OAuth、automation、disabled contributor 与 DO 生命周期证据已归档；current main 的身份、版本和回滚点仍需复核 | R0 | 见总账 [GATE-M0、IDN-001–IDN-006、OPS-004–OPS-007](./delivery-status-ledger.md) |
-| GATE-M1 | 本地与既有生产证据已存在，当前 main 发布状态需 R0 复核 | R0/R1 | 见总账 [GATE-M1、KB-001–KB-008](./delivery-status-ledger.md) |
-| GATE-M2 | 文件摄取与 fail-closed 降级已有本地/Workerd 证据；R2、Queue、真实 provider 和生产对象旅程仍待资源与验收 | R1/R6 | 见总账 [KB-003、ADM-004、OPS-009–OPS-010](./delivery-status-ledger.md) |
-| GATE-M3 | 既有并发发布、恢复与审计回归属于历史本地证据；批量治理、Revision diff/rollback 和回收站仍是当前缺口 | R3 | 见总账 [KB-011–KB-012、ADM-008、GOV-001](./delivery-status-ledger.md) |
-| GATE-M4 | FTS5-only、引用定位与 provider-free 评测已有本地证据；成熟过滤、混合检索和量化评测仍按新原子交付 | R4 | 见总账 [RET-001–RET-003、EVAL-001](./delivery-status-ledger.md) |
-| GATE-M5 | Sources、Notes、引用与研究产物已有本地/Workerd 证据；真实 provider 和生产角色旅程未由旧 gate 证明 | R4/R5 | 见总账 [KB-009–KB-010、EVAL-001](./delivery-status-ledger.md) |
-| GATE-M6 | 有界 Agent、暂停恢复和额度降级已有本地/Workerd 证据；生产 AI、DO 激活和验收仍待执行 | R5 | 见总账 [KB-009、OPS-009](./delivery-status-ledger.md) |
-| GATE-M7 | 导出包、dry-run、恢复计划和索引重建已有本地证据；远程恢复、对象读取和新环境演练仍待执行 | R6 | 见总账 [OPS-008、OPS-010–OPS-011](./delivery-status-ledger.md) |
-| GATE-M8 | 旧 1.0 汇总条件不再作为完成信号；current-main gate、真实角色、可访问性、恢复、容量与质量证据均须由总账收口 | R0/R6 | 见总账 [OPS-002、OPS-005、OPS-010–OPS-011、ADM-011、EVAL-001](./delivery-status-ledger.md) |
+| 历史 Gate | 当前结论 | 新阶段 | 历史证据（非权威） | 当前状态权威 |
+| --- | --- | --- | --- | --- |
+| GATE-M0 | 旧候选的 OAuth、automation、disabled contributor 与 DO 生命周期证据已归档；current main 的身份、版本和回滚点仍需复核 | R0 | `docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M0 证据） | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M1 | 本地与既有生产证据已存在，当前 main 发布状态需 R0 复核 | R0/R1 | `docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M1 证据） | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M2 | 文件摄取与 fail-closed 降级已有本地/Workerd 证据；R2、Queue、真实 provider 和生产对象旅程仍待资源与验收 | R1/R6 | `package.json`、`docs/operations/m2-asset-ingestion.md`；命令：`rtk npm run test:m2` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M3 | 既有并发发布、恢复与审计回归属于历史本地证据；批量治理、Revision diff/rollback 和回收站仍是当前缺口 | R3 | `test/unit/publication-service.test.ts`、`test/unit/library-service.test.ts`、`test/worker/m1-publication.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/publication-service.test.ts test/unit/library-service.test.ts test/worker/m1-publication.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'publish|rollback|purge|review|recover|history|visibility'` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M4 | FTS5-only、引用定位与 provider-free 评测已有本地证据；成熟过滤、混合检索和量化评测仍按新原子交付 | R4 | `src/evaluation/retrieval-metrics.ts`、`src/evaluation/permission-leaks.ts`、`src/evaluation/citation-metrics.ts`、`test/unit/retrieval-metrics.test.ts`、`test/unit/permission-leaks.test.ts`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/worker/m1-library.test.ts`；命令：`rtk npx vitest run test/unit/retrieval-metrics.test.ts test/unit/permission-leaks.test.ts test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/worker/m1-library.test.ts` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M5 | Sources、Notes、引用与研究产物已有本地/Workerd 证据；真实 provider 和生产角色旅程未由旧 gate 证明 | R4/R5 | `src/ai/answer-service.ts`、`src/research/repository.ts`、`src/private-notes`、`test/unit/citation-metrics.test.ts`、`test/unit/m1-evaluation.test.ts`、`test/unit/research-report-service.test.ts`、`test/worker/m1-library.test.ts`、`test/worker/m1-api.test.ts`；命令：`rtk npx vitest run test/unit/citation-metrics.test.ts test/unit/m1-evaluation.test.ts test/unit/research-report-service.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts -t 'citation|sources|context|notes|research|report'` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M6 | 有界 Agent、暂停恢复和额度降级已有本地/Workerd 证据；生产 AI、DO 激活和验收仍待执行 | R5 | `src/ai/research-report-service.ts`、`src/research/repository.ts`、`src/agent/session-do.ts`、`src/agent/tool-runner.ts`、`src/agent/tools.ts`、`test/worker/m1-api.test.ts`、`test/worker/agent-session.test.ts`、`test/unit/m6-agent-trajectory.test.ts`、`test/unit/m6-ai-degraded.test.ts`；命令：`rtk npm run typecheck && rtk npm run test:unit && rtk npm run test:worker` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M7 | 导出包、dry-run、恢复计划和索引重建已有本地证据；远程恢复、对象读取和新环境演练仍待执行 | R6 | `src/ops/export-package.ts`、`src/ops/import-dry-run.ts`、`src/ops/restore-plan.ts`、`src/ops/index-rebuild-plan.ts`、`src/ops/restore-drill.ts`；命令：`rtk npx vitest run test/unit/export-package.test.ts test/unit/import-dry-run.test.ts test/unit/restore-plan.test.ts test/unit/index-rebuild-plan.test.ts test/unit/restore-drill.test.ts` | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |
+| GATE-M8 | 旧 1.0 汇总条件不再作为完成信号；current-main gate、真实角色、可访问性、恢复、容量与质量证据均须由总账收口 | R0/R6 | 无；旧 1.0 条件未满足 | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |

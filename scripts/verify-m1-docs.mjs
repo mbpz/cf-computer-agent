@@ -4,6 +4,8 @@ const repositoryRoot = new URL("../", import.meta.url);
 const runbookPath = new URL("docs/operations/m1-release.md", repositoryRoot);
 const checklistPath = new URL("docs/product/ai-knowledge-base-checklist.md", repositoryRoot);
 const reportPath = new URL(".superpowers/sdd/2026-08-22-m1-gate-completion/task-9-report.md", repositoryRoot);
+const historicalGateHeader = "| 历史 Gate | 当前结论 | 新阶段 | 历史证据（非权威） | 当前状态权威 |";
+const historicalGateM1Row = "| GATE-M1 | 本地与既有生产证据已存在，当前 main 发布状态需 R0 复核 | R0/R1 | `docs/operations/evidence/m1-release-2026-08-23.md`（候选级 M1 证据） | 当前状态仅以[交付状态总账](./delivery-status-ledger.md)为准 |";
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
   ["pre-ledger-capture", 'rtk npx wrangler d1 execute memory-garden-control-plane --remote --command "SELECT id, name, applied_at FROM d1_migrations ORDER BY id" --json > "$M1_LEDGER_FILE"'],
@@ -170,12 +172,14 @@ async function verifyTruth(checklist, report) {
   const atomIds = new Set(atoms.map(({ id }) => id));
   const checked = atoms.filter((atom) => atom.checked);
   const unchecked = atoms.filter((atom) => !atom.checked);
-  const historicalGates = [...checklistText.matchAll(/^\| GATE-M1 \|[^\r\n]*\| R0\/R1 \|[^\r\n]*\|$/gmu)];
+  const historicalGateHeaders = checklistText.split(/\r?\n/u).filter((line) => line === historicalGateHeader);
+  const historicalGates = checklistText.split(/\r?\n/u).filter((line) => line === historicalGateM1Row);
   const gateCheckboxes = [...checklistText.matchAll(/^- \[[ x]\] `GATE-M1`(?:\s|$)/gmu)];
   if (atoms.length !== 76
     || atomIds.size !== atoms.length
     || checked.length !== 76
     || unchecked.length !== 0
+    || historicalGateHeaders.length !== 1
     || historicalGates.length !== 1
     || gateCheckboxes.length !== 0) {
     throw new Error("M1 checklist counts do not match the reviewed truth");
