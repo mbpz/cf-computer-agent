@@ -37,7 +37,11 @@ const README_CLAIM_MODIFIERS = "(?:(?:now|already|fully|all)\\s+)*";
 const README_POSITIVE_CLAIM = "(?:ready|implemented|available|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_FINAL_CLAIM = "(?:ready|complete(?:d)?|done|accepted|production-ready|ready-for-production)";
 const README_CLAIM_BETWEEN = "(?:(?!\\b(?:but|however|yet|while)\\b)[^.\\n;]){0,96}?";
-const README_TASK_SUBJECT = "(?:user-isolated tasks(?: and (?:the )?task UI)?|tasks|task UI)";
+const README_MARKDOWN_CLAUSE_PREFIX = "^\\s*(?:(?:>{1,3}|#{1,6}|[-+*]|\\d+[.)])\\s+)*";
+const README_TASKS_HEAD_ARTICLE = "(?:(?:the|these|those|all|our)\\s+)?";
+const README_TASKS_HEAD_ADJECTIVES = "(?:(?:current|local|personal|user-isolated|member-scoped|workspace)\\s+)*";
+const README_TASKS_CLAUSE_SUBJECT = `${README_TASKS_HEAD_ARTICLE}${README_TASKS_HEAD_ADJECTIVES}tasks(?: and (?:the )?task UI)?`;
+const README_TASK_UI_SUBJECT = "(?:the )?task UI";
 const README_CURRENT_MAIN_RELEASE_ACCEPTANCE_SUBJECT = "current-main (?:production )?release and (?:(?:signed )?browser )?acceptance";
 const README_CURRENT_MAIN_RELEASE_SUBJECT = "current-main (?:production )?release";
 const README_CURRENT_MAIN_ACCEPTANCE_SUBJECT = "current-main (?:(?:signed )?browser )?acceptance";
@@ -573,11 +577,19 @@ test("README rejects bare plural task completion", () => {
   const readme = readFileSync(readmePath, "utf8");
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
 
-  assert.throws(
-    () => assertReadmeContract(`${readme}\nTasks are complete.\n`, rows),
-    /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
-    "bare plural Tasks must remain bounded by the task ledger rows",
-  );
+  for (const mutation of [
+    "Tasks are complete.",
+    "- Tasks are complete.",
+    "## Tasks are complete.",
+    "> Tasks are complete.",
+    "> - The current tasks have been completed.",
+  ]) {
+    assert.throws(
+      () => assertReadmeContract(`${readme}\n${mutation}\n`, rows),
+      /tasks must not claim overall completion while TSK-002 is partial or task gaps remain/u,
+      `bare plural Tasks clause subject must remain bounded by the task ledger rows: ${mutation}`,
+    );
+  }
   for (const contrast of [
     "Tasks are not complete.",
     "Tasks remain pending.",
@@ -585,6 +597,21 @@ test("README rejects bare plural task completion", () => {
     assert.doesNotThrow(
       () => assertReadmeContract(`${readme}\n${contrast}\n`, rows),
       `negative or pending bare plural task status must remain allowed: ${contrast}`,
+    );
+  }
+});
+
+test("README does not treat prepositional tasks as a clause subject", () => {
+  const readme = readFileSync(readmePath, "utf8");
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+
+  for (const control of [
+    "Documentation for tasks is complete.",
+    "The migration for tasks has been completed.",
+  ]) {
+    assert.doesNotThrow(
+      () => assertReadmeContract(`${readme}\n${control}\n`, rows),
+      `object or prepositional tasks must not be treated as the claim subject: ${control}`,
     );
   }
 });
@@ -624,9 +651,16 @@ function assertReadmeContract(readme, rows) {
   if (taskUi.实现 !== "done" || taskRetention.实现 !== "done" || taskAcceptance.验收 !== "done") {
     assertNoPositiveReadmeClaim(
       readme,
-      README_TASK_SUBJECT,
+      README_TASK_UI_SUBJECT,
       README_FINAL_CLAIM,
       "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
+    );
+    assertNoPositiveReadmeClaim(
+      readme,
+      README_TASKS_CLAUSE_SUBJECT,
+      README_FINAL_CLAIM,
+      "tasks must not claim overall completion while TSK-002 is partial or task gaps remain",
+      { clauseSubject: true },
     );
   }
 
@@ -667,13 +701,16 @@ function assertReadmeContract(readme, rows) {
   }
 }
 
-function assertNoPositiveReadmeClaim(readme, subject, claim, message) {
-  assert.ok(!hasPositiveReadmeClaim(readme, subject, claim), message);
+function assertNoPositiveReadmeClaim(readme, subject, claim, message, options) {
+  assert.ok(!hasPositiveReadmeClaim(readme, subject, claim, options), message);
 }
 
-function hasPositiveReadmeClaim(readme, subject, claim = README_POSITIVE_CLAIM) {
+function hasPositiveReadmeClaim(readme, subject, claim = README_POSITIVE_CLAIM, { clauseSubject = false } = {}) {
+  const subjectPattern = clauseSubject
+    ? `${README_MARKDOWN_CLAUSE_PREFIX}(?:${subject})\\b`
+    : `\\b(?:${subject})\\b`;
   const positivePredicate = new RegExp(
-    `\\b(?:${subject})\\b${README_CLAIM_BETWEEN}\\b(?:`
+    `${subjectPattern}${README_CLAIM_BETWEEN}\\b(?:`
       + `(?:is|are|remain)\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
       + `|(?:has|have)\\s+${README_CLAIM_MODIFIERS}been\\s+${README_CLAIM_MODIFIERS}${claim}(?:\\s+(?:now|already|fully))?`
       + `)\\b`,
