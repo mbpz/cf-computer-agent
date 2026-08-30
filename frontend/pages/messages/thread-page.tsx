@@ -7,7 +7,7 @@ import { PageState } from "../../components/ui/page-state";
 import { Select, SelectOption } from "../../components/ui/select";
 import type { DiscussionMessage, DiscussionSendInput, DiscussionThread } from "../../lib/discussions-data";
 import { frontendPaginationLabels, frontendText, type LocaleRuntime } from "../../lib/i18n";
-import { createDiscussionSubmitController, discussionContextHref, mentionIdsFromBody } from "./discussion-model";
+import { createDiscussionSubmitController, discussionContextHref, discussionSendFingerprint, mentionIdsFromBody } from "./discussion-model";
 
 export type ThreadPageState =
   | { kind: "loading" }
@@ -36,7 +36,7 @@ export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRef
       {state.messages.length === 0 ? <PageState kind="empty" title={frontendText(locale, "MESSAGES_THREAD_EMPTY")} /> : state.messages.map((message) => <Card key={message.id} data-message-id={message.id}><CardContent className="space-y-2 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{message.authorMemberId}</p><time className="text-xs text-muted-foreground" dateTime={message.createdAt}>{message.createdAt}</time></div>{message.replyToMessageId && <p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_REPLYING_TO")} {message.replyToMessageId}</p>}<p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>{message.mentionMemberIds.length > 0 && <div className="flex flex-wrap gap-1">{message.mentionMemberIds.map((memberId) => <Badge key={memberId} variant="secondary">@{memberId}</Badge>)}</div>}<Button size="sm" variant="ghost" onClick={() => setReplyTo(message)}>{frontendText(locale, "MESSAGES_REPLY")}</Button></CardContent></Card>)}
     </div>
     <DiscussionCursorPagination locale={locale} page={page} limit={limit} pending={pending} hasNext={Boolean(state.nextCursor)} onPrevious={onPrevious} onNext={() => state.nextCursor && onNext(state.nextCursor)} onLimitChange={onLimitChange} />
-    <DiscussionComposer locale={locale} thread={state.thread} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSend={onSend} />
+    <DiscussionComposer key={state.thread.id} locale={locale} thread={state.thread} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSend={onSend} />
   </section>;
 }
 
@@ -45,19 +45,22 @@ function DiscussionComposer({ locale, thread, replyTo, onCancelReply, onSend }: 
   const [status, setStatus] = useState<"idle" | "pending" | "error">("idle");
   const submitControllerRef = useRef<ReturnType<typeof createDiscussionSubmitController> | null>(null);
   if (!submitControllerRef.current) submitControllerRef.current = createDiscussionSubmitController();
+  const currentInput = discussionComposerInput(thread, body, replyTo);
+  const currentFingerprintRef = useRef<string | null>(null);
+  currentFingerprintRef.current = currentInput ? discussionSendFingerprint(currentInput) : null;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const normalized = body.trim();
-    if (!normalized) return;
+    const input = discussionComposerInput(thread, body, replyTo);
+    if (!input) return;
+    const submittedFingerprint = discussionSendFingerprint(input);
     setStatus("pending");
     try {
-      const accepted = await submitControllerRef.current!.submit({
-        context: { kind: thread.contextKind, id: thread.contextId },
-        body: normalized,
-        ...(replyTo ? { replyToMessageId: replyTo.id } : {}),
-        mentionMemberIds: mentionIdsFromBody(normalized),
-      }, onSend);
+      const accepted = await submitControllerRef.current!.submit(input, onSend);
       if (!accepted) return;
+      if (currentFingerprintRef.current !== submittedFingerprint) {
+        setStatus("idle");
+        return;
+      }
       setBody("");
       onCancelReply();
       setStatus("idle");
@@ -72,6 +75,21 @@ function DiscussionComposer({ locale, thread, replyTo, onCancelReply, onSend }: 
     <textarea id="discussion-composer" value={body} onChange={(event) => setBody(event.currentTarget.value)} maxLength={5_000} disabled={status === "pending"} className="min-h-24 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={frontendText(locale, "MESSAGES_COMPOSER_PLACEHOLDER")} />
     <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">{frontendText(locale, "MESSAGES_MENTION_HINT")}</p><Button type="submit" disabled={status === "pending" || !body.trim()}>{status === "pending" ? frontendText(locale, "MESSAGES_SENDING") : frontendText(locale, "MESSAGES_SEND")}</Button></div>
   </form>;
+}
+
+function discussionComposerInput(
+  thread: DiscussionThread,
+  body: string,
+  replyTo: DiscussionMessage | null,
+): Omit<DiscussionSendInput, "clientKey"> | null {
+  const normalized = body.trim();
+  if (!normalized) return null;
+  return {
+    context: { kind: thread.contextKind, id: thread.contextId },
+    body: normalized,
+    ...(replyTo ? { replyToMessageId: replyTo.id } : {}),
+    mentionMemberIds: mentionIdsFromBody(normalized),
+  };
 }
 
 export function DiscussionCursorPagination({ locale, page, limit, pending, hasNext, onPrevious, onNext, onLimitChange }: { locale: LocaleRuntime; page: number; limit: 20 | 50; pending: boolean; hasNext: boolean; onPrevious: () => void; onNext: () => void; onLimitChange: (limit: 20 | 50) => void }) {

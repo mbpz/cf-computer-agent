@@ -70,23 +70,36 @@ export function mentionIdsFromBody(body: string): string[] {
 
 export function createDiscussionSubmitController(keyFactory: () => string = () => crypto.randomUUID()) {
   let pending = false;
-  let clientKey = keyFactory();
+  let attempt: { fingerprint: string; clientKey: string } | null = null;
   return {
     async submit(
       input: Omit<DiscussionSendInput, "clientKey">,
       sender: (input: DiscussionSendInput) => Promise<unknown>,
     ): Promise<boolean> {
       if (pending) return false;
+      const fingerprint = discussionSendFingerprint(input);
+      if (attempt?.fingerprint !== fingerprint) attempt = { fingerprint, clientKey: keyFactory() };
+      const currentAttempt = attempt;
       pending = true;
       try {
-        await sender({ ...input, clientKey });
-        clientKey = keyFactory();
+        await sender({ ...input, clientKey: currentAttempt.clientKey });
+        if (attempt === currentAttempt) attempt = null;
         return true;
       } finally {
         pending = false;
       }
     },
   };
+}
+
+export function discussionSendFingerprint(input: Omit<DiscussionSendInput, "clientKey">): string {
+  return JSON.stringify([
+    input.context.kind,
+    input.context.id,
+    input.body.trim(),
+    input.replyToMessageId ?? null,
+    [...(input.mentionMemberIds ?? [])],
+  ]);
 }
 
 function positiveSingle(params: URLSearchParams, key: string): number | null {

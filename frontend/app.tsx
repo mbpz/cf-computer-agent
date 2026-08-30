@@ -927,9 +927,19 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
   }, [query, retryVersion]);
 
   useEffect(() => {
-    const onPopState = () => { const next = parseDiscussionSearch(window.location.search); queryRef.current = next; setQuery(next); };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    const onLocationChange = () => {
+      if (window.location.pathname !== "/messages") return;
+      const next = parseDiscussionSearch(window.location.search);
+      if (sameDiscussionSearch(queryRef.current, next)) return;
+      queryRef.current = next;
+      setQuery(next);
+    };
+    window.addEventListener("popstate", onLocationChange);
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, onLocationChange);
+    return () => {
+      window.removeEventListener("popstate", onLocationChange);
+      window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, onLocationChange);
+    };
   }, []);
   useEffect(() => () => { controllerRef.current?.dispose(); controllerRef.current = null; }, []);
 
@@ -953,6 +963,8 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   const queryRef = useRef(query);
   queryRef.current = query;
   const activeRef = useRef(true);
+  const currentThreadIdRef = useRef(threadId);
+  currentThreadIdRef.current = threadId;
   const controllerRef = useRef<ReturnType<typeof createDiscussionRequestController<DiscussionSearch, { thread: Awaited<ReturnType<typeof loadDiscussionThread>>; messages: Awaited<ReturnType<typeof loadDiscussionMessages>> }>> | null>(null);
 
   useEffect(() => {
@@ -995,12 +1007,14 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
     queryRef.current = next; setQuery(next);
   };
   const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
+    const sendingThreadId = threadId;
     await sendDiscussionMessage(input);
-    if (!activeRef.current) return;
+    if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId) return;
     if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
     else setRetryVersion((value) => value + 1);
   };
-  return <ThreadPage locale={locale} state={state} page={query.page} limit={query.limit} pending={pending}
+  const visibleState: ThreadPageState = state.kind === "ready" && state.thread.id !== threadId ? { kind: "loading" } : state;
+  return <ThreadPage key={threadId} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRefresh={() => setRetryVersion((value) => value + 1)}
     onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
