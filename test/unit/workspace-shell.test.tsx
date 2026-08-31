@@ -102,6 +102,20 @@ describe("shadcn workspace shell", () => {
     expect(sidebarNavigation).not.toContain('href="/messages"');
   });
 
+  it.each([320, 375])("keeps collaboration actions reachable and navigable in the %spx DOM fallback", async (width) => {
+    const onNavigate = vi.fn();
+    Object.defineProperty(browser, "innerWidth", { configurable: true, value: width });
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })} onNavigate={onNavigate}><p>Home</p></AppShell>));
+    const navigation = container.querySelector('[data-shell-collaboration-navigation]') as HTMLElement;
+    const links = Array.from(navigation.querySelectorAll<HTMLAnchorElement>("a"));
+
+    expect(navigation.className).toContain("overflow-x-auto");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/tasks", "/boards", "/notifications", "/messages"]);
+    expect(links.every((link) => link.className.includes("shrink-0") && link.className.includes("min-h-10"))).toBe(true);
+    await act(async () => links.at(-1)!.click());
+    expect(onNavigate).toHaveBeenCalledWith("/messages");
+  });
+
   it("omits collaboration links whose route access is denied", () => {
     const html = renderToStaticMarkup(
       <AppShell session={{ ...admin, permissionMask: "0x0" }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
@@ -300,6 +314,46 @@ describe("shadcn workspace shell", () => {
     await act(async () => retryableLogout.click());
     expect(onLogout).toHaveBeenCalledTimes(1);
     expect(container.querySelector("[data-account-menu]")).not.toBeNull();
+  });
+
+  it("names every account trigger with its localized visible member identity", async () => {
+    const expectedLabel = "Account menu: admin@example.com";
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Home</p></AppShell>));
+    const expanded = container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLButtonElement;
+    expect(expanded.getAttribute("aria-label")).toBe(expectedLabel);
+
+    await act(async () => (container.querySelector("[data-shell-collapse-toggle]") as HTMLButtonElement).click());
+    const collapsed = container.querySelector('[data-account-trigger-variant="collapsed"]') as HTMLButtonElement;
+    expect(collapsed.getAttribute("aria-label")).toBe(expectedLabel);
+
+    await act(async () => (container.querySelector("[data-sheet-open] summary") as HTMLElement).click());
+    const mobile = container.querySelector('[data-account-trigger-variant="mobile"]') as HTMLButtonElement;
+    expect(mobile.getAttribute("aria-label")).toBe(expectedLabel);
+
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}><p>首页</p></AppShell>));
+    expect((container.querySelector('[data-account-trigger-variant="collapsed"]') as HTMLButtonElement).getAttribute("aria-label"))
+      .toBe("账户菜单：admin@example.com");
+  });
+
+  it("exposes theme choices as a selected radio group with a visible current marker", async () => {
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Home</p></AppShell>));
+    await act(async () => (container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLButtonElement).click());
+    const options = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-theme-option]"));
+    const [light, dark, system] = options;
+
+    expect(options).toHaveLength(3);
+    expect(options.every((option) => option.getAttribute("role") === "menuitemradio")).toBe(true);
+    expect([light.getAttribute("aria-checked"), dark.getAttribute("aria-checked"), system.getAttribute("aria-checked")])
+      .toEqual(["false", "false", "true"]);
+    expect(system.className).toContain("bg-accent");
+    expect(system.querySelector("[data-theme-selected-indicator]")).not.toBeNull();
+    expect(light.querySelector("[data-theme-selected-indicator]")).toBeNull();
+
+    await act(async () => {
+      light.focus();
+      light.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(container.querySelector('[data-account-logout]'));
   });
 
   it("keeps failed logout retryable after its pending state resolves", async () => {

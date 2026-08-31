@@ -120,6 +120,30 @@ describe("dropdown keyboard contract", () => {
     host.remove();
   });
 
+  it("closes and restores focus when pointer activation leaves Escape on the trigger", () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu>
+      <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+      <DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent>
+    </DropdownMenu>));
+    const trigger = host.querySelector<HTMLButtonElement>("button")!;
+
+    act(() => {
+      trigger.focus();
+      trigger.click();
+    });
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+
+    act(() => trigger.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+    act(() => root.unmount());
+    host.remove();
+  });
+
   it("dismisses when focus completes outside the menu", async () => {
     const host = browser.document.createElement("div") as unknown as HTMLDivElement;
     browser.document.body.append(host as unknown as Node);
@@ -132,6 +156,35 @@ describe("dropdown keyboard contract", () => {
     expect(host.querySelector('[role="menu"]')).toBeNull();
     await act(async () => root.unmount());
     host.remove();
+  });
+
+  it("cancels queued focus dismissal after unmount without requiring global Node", async () => {
+    const onOpenChange = vi.fn();
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    const outside = browser.document.createElement("button");
+    browser.document.body.append(host as unknown as Node, outside);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu defaultOpen onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+      <DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent>
+    </DropdownMenu>));
+    const item = host.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    act(() => item.focus());
+    const originalNode = globalThis.Node;
+
+    vi.stubGlobal("Node", undefined);
+    try {
+      act(() => {
+        outside.focus();
+        root.unmount();
+      });
+      await act(async () => { await Promise.resolve(); });
+      expect(onOpenChange).not.toHaveBeenCalled();
+    } finally {
+      vi.stubGlobal("Node", originalNode);
+      host.remove();
+      outside.remove();
+    }
   });
 
   it("focuses the first enabled item when a trigger opens from the keyboard", () => {
