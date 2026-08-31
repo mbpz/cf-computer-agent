@@ -6,7 +6,7 @@ DONE
 
 ## Commit
 
-Pending at report creation; the implementation and this report are committed together as the Task 1 change.
+`f08c3d5 feat: standardize dismissible shell menus`
 
 ## Files
 
