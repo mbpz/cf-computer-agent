@@ -183,7 +183,7 @@ describe("shadcn workspace shell", () => {
     expect(container.querySelector("[data-shell-account-footer]")).toBeNull();
     const accountTrigger = container.querySelector("[data-shell-collapsed-account-trigger]") as HTMLElement;
     expect(accountTrigger).not.toBeNull();
-    expect(accountTrigger.tagName).toBe("SUMMARY");
+    expect(accountTrigger.tagName).toBe("BUTTON");
     expect(accountTrigger.tabIndex).not.toBe(-1);
     expect(accountTrigger.getAttribute("class")).not.toContain("sr-only");
     await act(async () => { accountTrigger.focus(); accountTrigger.click(); });

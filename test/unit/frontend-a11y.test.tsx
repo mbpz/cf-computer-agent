@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createFocusRestorer } from "../../frontend/lib/focus";
 import { AppShell } from "../../frontend/components/shell/app-shell";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../../frontend/components/ui/dropdown-menu";
 import { SubmitPage } from "../../frontend/pages/submit-page";
 import { KnowledgeReaderPage } from "../../frontend/pages/knowledge-reader-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
@@ -39,6 +40,17 @@ describe("frontend accessibility gates", () => {
     expect(focus.release()).toBe(true);
     expect(owner.focused).toBe(true);
     expect(focus.release()).toBe(false);
+  });
+
+  it("keeps menu visibility and WAI-ARIA semantics in sync", () => {
+    const closedMenu = renderToStaticMarkup(<DropdownMenu><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent></DropdownMenu>);
+    const openMenu = renderToStaticMarkup(<DropdownMenu defaultOpen><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent></DropdownMenu>);
+    expect(closedMenu).toContain('aria-haspopup="menu"');
+    expect(closedMenu).toContain('aria-expanded="false"');
+    expect(closedMenu).not.toContain('role="menu"');
+    expect(openMenu).toContain('aria-expanded="true"');
+    expect(openMenu).toContain('role="menu"');
+    expect(openMenu).toContain('role="menuitem"');
   });
 
   it("renders bounded source metadata and an explicit unselected source control", () => {

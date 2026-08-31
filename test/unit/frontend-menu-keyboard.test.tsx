@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -44,10 +44,128 @@ describe("dropdown keyboard contract", () => {
   });
 
   it("emits menu semantics and keyboard-safe items", () => {
-    const html = renderToStaticMarkup(<DropdownMenu><DropdownMenuTrigger aria-label="Open">Open</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>One</DropdownMenuItem></DropdownMenuContent></DropdownMenu>);
+    const closedHtml = renderToStaticMarkup(<DropdownMenu><DropdownMenuTrigger aria-label="Open">Open</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>One</DropdownMenuItem></DropdownMenuContent></DropdownMenu>);
+    const html = renderToStaticMarkup(<DropdownMenu defaultOpen><DropdownMenuTrigger aria-label="Open">Open</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>One</DropdownMenuItem></DropdownMenuContent></DropdownMenu>);
+    expect(closedHtml).toContain('aria-expanded="false"');
+    expect(closedHtml).not.toContain('role="menu"');
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('role="menu"');
     expect(html).toContain('role="menuitem"');
     expect(html).toContain('tabindex="-1"');
+  });
+
+  it("opens a controlled menu and dismisses only for outside pointers", () => {
+    const onOpenChange = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      const handleOpenChange = (next: boolean) => {
+        onOpenChange(next);
+        setOpen(next);
+      };
+      return <><DropdownMenu open={open} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+        <DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent>
+      </DropdownMenu><button data-outside type="button">Outside</button></>;
+    }
+
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<Harness />));
+    const trigger = host.querySelector<HTMLButtonElement>("button:not([data-outside])")!;
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    act(() => trigger.click());
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    const menu = host.querySelector<HTMLDivElement>('[role="menu"]')!;
+    expect(menu).not.toBeNull();
+
+    act(() => menu.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+
+    act(() => host.querySelector<HTMLButtonElement>("[data-outside]")!.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("returns focus on Escape and moves among enabled menu items", () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu defaultOpen>
+      <DropdownMenuTrigger>Language</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem>English</DropdownMenuItem>
+        <DropdownMenuItem disabled>Disabled</DropdownMenuItem>
+        <DropdownMenuItem>Chinese</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>));
+    const trigger = host.querySelector<HTMLButtonElement>("button")!;
+    const [english, , chinese] = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+
+    act(() => english.focus());
+    act(() => english.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(browser.document.activeElement).toBe(chinese);
+    act(() => chinese.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    expect(browser.document.activeElement).toBe(english);
+    act(() => english.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "End", bubbles: true })));
+    expect(browser.document.activeElement).toBe(chinese);
+    act(() => chinese.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(browser.document.activeElement).toBe(trigger);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("dismisses when focus completes outside the menu", async () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<><DropdownMenu defaultOpen><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent></DropdownMenu><button type="button" data-outside>Outside</button></>));
+    const item = host.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    const outside = host.querySelector<HTMLButtonElement>("[data-outside]")!;
+    act(() => item.focus());
+    await act(async () => outside.focus());
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  it("focuses the first enabled item when a trigger opens from the keyboard", () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem disabled>Disabled</DropdownMenuItem><DropdownMenuItem>English</DropdownMenuItem></DropdownMenuContent></DropdownMenu>));
+    const trigger = host.querySelector<HTMLButtonElement>("button")!;
+    act(() => trigger.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    const english = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find((item) => item.textContent === "English");
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(browser.document.activeElement).toBe(english);
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("closes after enabled selection but keeps disabled items open and inert", () => {
+    const onSelect = vi.fn();
+    const onDisabledSelect = vi.fn();
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu defaultOpen><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onClick={onSelect}>English</DropdownMenuItem></DropdownMenuContent></DropdownMenu>));
+    act(() => host.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click());
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+
+    act(() => root.render(<DropdownMenu key="disabled-menu" defaultOpen><DropdownMenuTrigger>Language</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem disabled onClick={onDisabledSelect}>Disabled</DropdownMenuItem></DropdownMenuContent></DropdownMenu>));
+    const disabledItem = host.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    act(() => disabledItem.click());
+    expect(onDisabledSelect).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    act(() => root.unmount());
+    host.remove();
   });
 
   it("promotes ready collaboration routes over stale disabled server navigation", async () => {
