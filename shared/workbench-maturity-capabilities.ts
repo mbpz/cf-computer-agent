@@ -18,6 +18,19 @@ export interface WorkbenchMaturityCapability {
   readonly gaps: readonly string[];
 }
 
+export type WorkbenchPaginationAudit = "numbered" | "cursor" | "not_applicable";
+export type WorkbenchMutationSafety = "idempotency_key" | "conditional_write" | "convergent_delete" | "mixed" | "not_applicable";
+
+export interface WorkbenchMaturityDomainEvidence {
+  readonly id: string;
+  readonly apiPaths: readonly string[];
+  readonly persistencePaths: readonly string[];
+  readonly ownerPredicate: string | null;
+  readonly pagination: WorkbenchPaginationAudit;
+  readonly mutations: readonly string[];
+  readonly mutationSafety: WorkbenchMutationSafety;
+}
+
 const INITIAL_DIMENSIONS = {
   entry: "proven",
   journey: "gap",
@@ -39,7 +52,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-submit", routeId: "submit", pathname: "/submit", requiredRole: "contributor",
     journey: "Submit knowledge for parsing and later review.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/member.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Persistence, idempotency, release evidence, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/member.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Source-level persistence and submitter-scoped idempotency exist, but complete browser, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-knowledge", routeId: "knowledge", pathname: "/knowledge", requiredRole: "contributor",
@@ -144,7 +157,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-message-thread", routeId: "message-thread", pathname: "/messages/:id", parentRouteId: "messages", routePattern: "/^\\/messages\\/[A-Za-z0-9_-]{1,128}$/u", requiredRole: "contributor",
     journey: "Open an authorized contextual discussion thread and read its messages.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/messages/thread-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/discussions.ts", "src/discussions/service.ts"], testEvidence: ["test/unit/frontend-discussion-route.test.tsx", "test/worker/discussions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["MSG-002", "MSG-004"], gaps: ["The current messages owner entry plus direct loading, empty, retryable error, and response-owned private-message marker are runtime-probed without a duplicate global entry. Context 403 removes message ID/body, target ID/link, thread scroll, and composer, but renders a generic retryable error; explicit revoked presentation, list discovery, backend/signed authority, release, and signed-browser acceptance remain gaps."],
+    frontendEvidence: ["frontend/pages/messages/thread-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/discussions.ts", "src/discussions/service.ts"], testEvidence: ["test/unit/frontend-discussion-route.test.tsx", "test/worker/discussions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["MSG-002", "MSG-004"], gaps: ["The current messages owner entry plus direct loading, empty, retryable error, and response-owned private-message marker are runtime-probed without a duplicate global entry. Runtime target re-authorization is source-audited; context 403 removes private thread content but renders a generic retryable error. Explicit revoked presentation, list discovery, release, and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-admin-submission-detail", routeId: "admin-submission-detail", pathname: "/admin/submissions/:id", parentRouteId: "admin-submissions", routePattern: "/^\\/admin\\/submissions\\/[A-Za-z0-9_-]+$/u", requiredRole: "admin",
@@ -152,3 +165,225 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
     frontendEvidence: ["frontend/pages/admin/review-detail-route.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/admin-review.ts", "src/review/service.ts"], testEvidence: ["test/unit/frontend-admin-review-data.test.ts", "test/worker/m1-publication.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-002"], gaps: ["The current review-queue owner entry plus direct loading, initial error, and response-owned detail title are runtime-probed without a duplicate global entry. Missing preview is an error rather than empty and initial error has no retry; queue-to-detail discovery, decision idempotency, release, and signed-browser acceptance remain gaps."],
   },
 ] as const satisfies readonly WorkbenchMaturityCapability[]);
+
+// Kept as a separately frozen, one-to-one ledger so Task 1's fail-closed AST
+// contract remains stable. scripts/workbench-domain-audit.mjs rejects missing,
+// duplicate, or unknown capability IDs before joining these records.
+export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
+  {
+    id: "workbench-home",
+    apiPaths: ["/api/knowledge/recent"],
+    persistencePaths: ["src/recent-visits/repository.ts", "migrations/0024_m4_knowledge_visits.sql"],
+    ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.",
+    pagination: "not_applicable",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-submit",
+    apiPaths: ["/api/submissions"],
+    persistencePaths: ["src/submissions/repository.ts", "migrations/0003_m1_knowledge_loop.sql"],
+    ownerPredicate: "routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.",
+    pagination: "not_applicable",
+    mutations: ["POST /api/submissions — proven: submitter-scoped Idempotency-Key replay"],
+    mutationSafety: "idempotency_key",
+  },
+  {
+    id: "workbench-knowledge",
+    apiPaths: ["/api/knowledge", "/api/knowledge/recent", "/api/knowledge/favorites", "/api/knowledge/research-runs", "/api/knowledge/notes", "/api/knowledge/review"],
+    persistencePaths: ["src/library/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; LibraryRepository authorization binds scope.memberId before applying revision visibility predicates.",
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-search",
+    apiPaths: ["/api/knowledge/search"],
+    persistencePaths: ["src/library/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; LibraryRepository search binds scope.memberId through the authorized member CTE before visibility filtering.",
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-agent",
+    apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel"],
+    persistencePaths: ["src/chat/repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql"],
+    ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.",
+    pagination: "not_applicable",
+    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — proven: owner-scoped conditional update", "POST /api/knowledge/chat/conversations/:id/cancel — proven: owner-scoped conditional cancel state"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-my-submissions",
+    apiPaths: ["/api/submissions/mine"],
+    persistencePaths: ["src/submissions/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: "routeMemberApi passes authenticated member.memberId to SubmissionsService.listOwn; SubmissionsRepository predicates submissions.submitter_id = ? for both items and total.",
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-tasks",
+    apiPaths: ["/api/tasks", "/api/tasks/:id", "/api/tasks/:id/status", "/api/tasks/:id/progress", "/api/tasks/:id/tags", "/api/tasks/:id/links", "/api/tasks/:id/links/:linkId"],
+    persistencePaths: ["src/tasks/repository.ts", "migrations/0032_workspace_tasks.sql", "migrations/0033_numbered_pagination_indexes.sql", "migrations/0036_workbench_notifications.sql"],
+    ownerPredicate: "routeTasksApi passes authenticated member.memberId to TasksService; TasksRepository predicates tasks.member_id = ? and task child tables by member_id.",
+    pagination: "numbered",
+    mutations: ["POST /api/tasks — proven: stable client task id with INSERT OR IGNORE replay", "POST /api/tasks/:id/status — proven: expected-status conditional write", "DELETE /api/tasks/:id — gap: repeated deletion returns not-found rather than converging", "PATCH/POST/PUT task detail mutations — gap: no expected version is supplied"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-boards",
+    apiPaths: ["/api/tasks", "/api/tasks/:id/status"],
+    persistencePaths: ["src/tasks/repository.ts", "migrations/0032_workspace_tasks.sql", "migrations/0033_numbered_pagination_indexes.sql", "migrations/0036_workbench_notifications.sql"],
+    ownerPredicate: "routeTasksApi passes authenticated member.memberId to TasksService; board lists and status updates remain predicates on tasks.member_id = ?.",
+    pagination: "numbered",
+    mutations: ["POST /api/tasks/:id/status — proven: repository compares the previously read status before update"],
+    mutationSafety: "conditional_write",
+  },
+  {
+    id: "workbench-settings",
+    apiPaths: ["/api/session"],
+    persistencePaths: ["src/identity/session.ts", "migrations/0002_github_auth.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-admin",
+    apiPaths: ["/api/navigation"],
+    persistencePaths: ["src/authorization/menus-repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-admin-submissions",
+    apiPaths: ["/api/admin/submissions"],
+    persistencePaths: ["src/submissions/repository.ts", "src/publication/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-admin-duplicates",
+    apiPaths: ["/api/admin/duplicates", "/api/admin/duplicates/:submissionId/decision"],
+    persistencePaths: ["src/duplicates/repository.ts", "migrations/0027_duplicate_candidates.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: ["POST /api/admin/duplicates/:submissionId/decision — proven: decision = pending compare-and-set with same-reviewer replay"],
+    mutationSafety: "conditional_write",
+  },
+  {
+    id: "workbench-admin-assets",
+    apiPaths: ["/api/admin/assets", "/api/admin/assets/:id/preview", "/api/admin/assets/:id/retry"],
+    persistencePaths: ["src/assets/repository.ts", "migrations/0005_m2_asset_ingestion.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: ["POST /api/admin/assets/:id/retry — proven: parse job status must be retryable or terminal before reset"],
+    mutationSafety: "conditional_write",
+  },
+  {
+    id: "workbench-admin-members",
+    apiPaths: ["/api/admin/members", "/api/admin/members/:id/status"],
+    persistencePaths: ["src/members/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: ["PATCH /api/admin/members/:id/status — proven: repository compares the previously read contributor status"],
+    mutationSafety: "conditional_write",
+  },
+  {
+    id: "workbench-admin-roles",
+    apiPaths: ["/api/admin/roles", "/api/admin/roles/:id", "/api/admin/roles/:id/members"],
+    persistencePaths: ["src/authorization/roles-repository.ts", "migrations/0029_workspace_rbac.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: ["POST /api/admin/roles — gap: server-generated create has no client idempotency key", "POST /api/admin/roles/:id/members — proven: unique membership converges duplicate assignment", "DELETE /api/admin/roles/:id/members — proven: membership removal converges"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-admin-menus",
+    apiPaths: ["/api/admin/menus", "/api/admin/menus/:id"],
+    persistencePaths: ["src/authorization/menus-repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: ["PATCH /api/admin/menus/:id — gap: no expected version protects concurrent menu edits", "DELETE /api/admin/menus/:id — gap: repeated deletion returns not-found rather than converging"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-admin-spaces",
+    apiPaths: ["/api/admin/spaces", "/api/admin/spaces/:id/collections"],
+    persistencePaths: ["src/spaces/repository.ts", "migrations/0001_phase1_control_plane.sql"],
+    ownerPredicate: null,
+    pagination: "cursor",
+    mutations: ["POST /api/admin/spaces — gap: the visible server-generated create has no client idempotency key"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-admin-audit",
+    apiPaths: ["/api/admin/audit-events"],
+    persistencePaths: ["src/audit/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-admin-analytics",
+    apiPaths: ["/api/admin/analytics/overview"],
+    persistencePaths: ["src/analytics/repository.ts", "migrations/0026_site_analytics.sql", "migrations/0030_site_analytics_dimensions.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: null,
+    pagination: "numbered",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-notifications",
+    apiPaths: ["/api/notifications", "/api/notifications/summary", "/api/notifications/:id/read", "/api/notifications/read"],
+    persistencePaths: ["src/notifications/repository.ts", "migrations/0036_workbench_notifications.sql", "migrations/0033_numbered_pagination_indexes.sql"],
+    ownerPredicate: "routeNotificationsApi passes authenticated member.memberId as recipientMemberId; NotificationsRepository predicates recipient_member_id = ? for items, total, and writes.",
+    pagination: "numbered",
+    mutations: ["POST /api/notifications/:id/read — proven: recipient-scoped read_at IS NULL conditional write", "POST /api/notifications/read — proven: bounded recipient-scoped unread selection"],
+    mutationSafety: "conditional_write",
+  },
+  {
+    id: "workbench-messages",
+    apiPaths: ["/api/discussions"],
+    persistencePaths: ["src/discussions/authorization.ts", "src/discussions/repository.ts", "migrations/0037_workbench_discussions.sql"],
+    ownerPredicate: "routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks task ownership or current knowledge visibility before listing or writing.",
+    pagination: "cursor",
+    mutations: [],
+    mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-knowledge-reader",
+    apiPaths: ["/api/knowledge/:id", "/api/knowledge/:id/favorite", "/api/knowledge/:id/note", "/api/knowledge/:id/related", "/api/knowledge/:id/backlinks"],
+    persistencePaths: ["src/library/repository.ts", "src/favorites/repository.ts", "src/private-notes/repository.ts", "src/recent-visits/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0012_m5_private_notes.sql", "migrations/0023_m4_knowledge_favorites.sql", "migrations/0024_m4_knowledge_visits.sql"],
+    ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.",
+    pagination: "not_applicable",
+    mutations: ["PUT/DELETE /api/knowledge/:id/favorite — proven: member-scoped insert-ignore and convergent delete", "PUT /api/knowledge/:id/note — gap: no expected version protects concurrent note edits", "reader visit recording — gap: repeated GET increments visit_count and is intentionally not retry-idempotent"],
+    mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-message-thread",
+    apiPaths: ["/api/discussions/:id", "/api/discussions/:id/messages", "/api/discussions/messages"],
+    persistencePaths: ["src/discussions/authorization.ts", "src/discussions/repository.ts", "migrations/0037_workbench_discussions.sql"],
+    ownerPredicate: "routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks the thread context before message reads and sends.",
+    pagination: "cursor",
+    mutations: ["POST /api/discussions/messages — proven: author_member_id plus client_key uniquely replays a send"],
+    mutationSafety: "idempotency_key",
+  },
+  {
+    id: "workbench-admin-submission-detail",
+    apiPaths: ["/api/admin/submissions/:id", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject", "/api/admin/submissions/:id/comments"],
+    persistencePaths: ["src/publication/repository.ts", "src/submissions/repository.ts", "src/review-comments/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0022_m4_review_comments.sql"],
+    ownerPredicate: null,
+    pagination: "not_applicable",
+    mutations: ["POST /api/admin/submissions/:id/publish — proven: stable submission publication intent resumes the same outcome", "POST request-revision/reject — proven: review-pending conditional transition", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
+    mutationSafety: "mixed",
+  },
+] as const satisfies readonly WorkbenchMaturityDomainEvidence[]);

@@ -32,6 +32,7 @@
     "verify:m1:docs": "node scripts/verify-m1-docs.mjs --all",
     "verify:delivery-status": "node --test scripts/delivery-status-contract.test.mjs",
     "verify:workbench-maturity": "node --test scripts/workbench-maturity-contract.test.mjs",
+    "audit:workbench-domain": "node scripts/workbench-domain-audit.mjs --check",
     "vendor:browser": "node scripts/vendor-browser-deps.mjs",
     "vendor:check": "node scripts/vendor-browser-deps.mjs --check",
     "build:ui": "vite build --config vite.config.ts",
