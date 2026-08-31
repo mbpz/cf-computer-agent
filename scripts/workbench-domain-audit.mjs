@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { API } from "typescript/unstable/sync";
 import {
   isArrayLiteralExpression,
   isAsExpression,
   isCallExpression,
+  isClassDeclaration,
+  isFunctionDeclaration,
   isIdentifier,
+  isIfStatement,
+  isImportDeclaration,
+  isMethodDeclaration,
   isObjectLiteralExpression,
   isParenthesizedExpression,
   isPropertyAssignment,
@@ -18,149 +23,283 @@ import {
 
 const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md";
 const DOMAIN_KEYS = new Set(["id", "apiPaths", "persistencePaths", "ownerPredicate", "pagination", "mutations", "mutationSafety"]);
+const FRONTEND_INDEX_CACHE = new Map();
+const ROUTE_EVIDENCE_CACHE = new Map();
 
-const binding = (path, ...tokens) => ({ path, tokens });
-const apiEvidence = (path, pagination, routePath, routeToken, mechanism, paginationPath = routePath, paginationToken = routeToken) => ({
-  path,
-  pagination,
-  route: binding(routePath, routeToken),
-  paginationEvidence: { mechanism, ...binding(paginationPath, paginationToken) },
-});
-
-const API_EVIDENCE = Object.freeze(Object.fromEntries([
-  apiEvidence("/api/knowledge/recent", "cursor", "src/routes/library.ts", 'url.pathname === "/api/knowledge/recent"', "parsePageRequest", "src/routes/library.ts", "services.recentVisits.list(scope, parsePageRequest"),
-  apiEvidence("/api/submissions", "not_applicable", "src/routes/member.ts", 'url.pathname === "/api/submissions"', "none"),
-  apiEvidence("/api/knowledge", "numbered", "src/routes/library.ts", 'url.pathname === "/api/knowledge"', "parseNumberedPageRequest", "src/routes/library.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/knowledge/favorites", "cursor", "src/routes/library.ts", 'url.pathname === "/api/knowledge/favorites"', "parsePageRequest", "src/routes/library.ts", "services.favorites.list(scope, parsePageRequest"),
-  apiEvidence("/api/knowledge/research-runs", "cursor", "src/routes/library.ts", 'url.pathname === "/api/knowledge/research-runs"', "parsePageRequest", "src/routes/library.ts", "services.researchReports.list(scope, parsePageRequest"),
-  apiEvidence("/api/knowledge/notes", "cursor", "src/routes/library.ts", 'url.pathname === "/api/knowledge/notes"', "parsePageRequest", "src/routes/library.ts", "services.privateNotes.list(scope, parsePageRequest"),
-  apiEvidence("/api/knowledge/review", "not_applicable", "src/routes/library.ts", 'url.pathname === "/api/knowledge/review"', "none"),
-  apiEvidence("/api/knowledge/search", "numbered", "src/routes/library.ts", 'url.pathname === "/api/knowledge/search"', "parseNumberedPageRequest", "src/routes/library.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/knowledge/chat", "not_applicable", "src/routes/library.ts", 'url.pathname === "/api/knowledge/chat"', "none"),
-  apiEvidence("/api/knowledge/chat/conversations/:id/scope", "not_applicable", "src/routes/library.ts", "const conversationScope = /^\\/api\\/knowledge\\/chat\\/conversations\\/", "none"),
-  apiEvidence("/api/knowledge/chat/conversations/:id/cancel", "not_applicable", "src/routes/library.ts", "const conversationCancel = /^\\/api\\/knowledge\\/chat\\/conversations\\/", "none"),
-  apiEvidence("/api/submissions/mine", "numbered", "src/routes/member.ts", 'url.pathname === "/api/submissions/mine"', "parseNumberedPageRequest", "src/routes/member.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/tasks", "numbered", "src/routes/tasks.ts", 'url.pathname === "/api/tasks"', "parseNumberedPageRequest", "src/routes/tasks.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/tasks/:id", "not_applicable", "src/routes/tasks.ts", "const task = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/tasks/:id/status", "not_applicable", "src/routes/tasks.ts", "const status = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/tasks/:id/progress", "not_applicable", "src/routes/tasks.ts", "const progress = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/tasks/:id/tags", "not_applicable", "src/routes/tasks.ts", "const tags = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/tasks/:id/links", "not_applicable", "src/routes/tasks.ts", "const links = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/tasks/:id/links/:linkId", "not_applicable", "src/routes/tasks.ts", "const link = /^\\/api\\/tasks\\/", "none"),
-  apiEvidence("/api/session", "not_applicable", "src/routes/session.ts", 'url.pathname !== "/api/session"', "none"),
-  apiEvidence("/api/navigation", "not_applicable", "src/routes/navigation.ts", 'url.pathname !== "/api/navigation"', "none"),
-  apiEvidence("/api/admin/submissions", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/submissions"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/admin/duplicates", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/duplicates"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/admin/duplicates/:submissionId/decision", "not_applicable", "src/routes/admin.ts", "const duplicateDecision = /^\\/api\\/admin\\/duplicates\\/", "none"),
-  apiEvidence("/api/admin/assets", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/assets"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/admin/assets/:id/preview", "not_applicable", "src/routes/admin.ts", "const assetMetadataPreview = /^\\/api\\/admin\\/assets\\/", "none"),
-  apiEvidence("/api/admin/assets/:id/retry", "not_applicable", "src/routes/admin.ts", "const assetRetry = /^\\/api\\/admin\\/assets\\/", "none"),
-  apiEvidence("/api/admin/members", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/members"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/admin/members/:id/status", "not_applicable", "src/routes/admin.ts", "const memberStatus = /^\\/api\\/admin\\/members\\/", "none"),
-  apiEvidence("/api/admin/roles", "not_applicable", "src/routes/admin-roles.ts", 'url.pathname === "/api/admin/roles"', "bounded", "src/authorization/roles-repository.ts", "LIMIT 50"),
-  apiEvidence("/api/admin/roles/:id", "not_applicable", "src/routes/admin-roles.ts", "const match = /^\\/api\\/admin\\/roles\\/", "none"),
-  apiEvidence("/api/admin/roles/:id/members", "not_applicable", "src/routes/admin-roles.ts", "const assignment = /^\\/api\\/admin\\/roles\\/", "none"),
-  apiEvidence("/api/admin/menus", "not_applicable", "src/routes/admin-menus.ts", 'url.pathname === "/api/admin/menus"', "bounded", "src/authorization/menus-repository.ts", "LIMIT 200"),
-  apiEvidence("/api/admin/menus/:id", "not_applicable", "src/routes/admin-menus.ts", "const match = /^\\/api\\/admin\\/menus\\/", "none"),
-  apiEvidence("/api/admin/spaces", "cursor", "src/routes/admin.ts", 'url.pathname === "/api/admin/spaces"', "pageRequest", "src/routes/admin.ts", "services.spaces.listSpaces(pageRequest(url))"),
-  apiEvidence("/api/admin/spaces/:id/collections", "cursor", "src/routes/admin.ts", "const spaceCollections = /^\\/api\\/admin\\/spaces\\/", "pageRequest", "src/routes/admin.ts", "services.spaces.listCollections(decodePathId(spaceCollections[1]!), pageRequest(url))"),
-  apiEvidence("/api/admin/audit-events", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/audit-events"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/admin/analytics/overview", "numbered", "src/routes/admin.ts", 'url.pathname === "/api/admin/analytics/overview"', "parseNumberedPageRequest", "src/routes/admin.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/notifications", "numbered", "src/routes/notifications.ts", 'url.pathname === "/api/notifications"', "parseNumberedPageRequest", "src/routes/notifications.ts", "parseNumberedPageRequest(url"),
-  apiEvidence("/api/notifications/summary", "not_applicable", "src/routes/notifications.ts", 'url.pathname === "/api/notifications/summary"', "none"),
-  apiEvidence("/api/notifications/:id/read", "not_applicable", "src/routes/notifications.ts", "const read = /^\\/api\\/notifications\\/", "none"),
-  apiEvidence("/api/notifications/read", "not_applicable", "src/routes/notifications.ts", 'url.pathname === "/api/notifications/read"', "none"),
-  apiEvidence("/api/discussions", "cursor", "src/routes/discussions.ts", 'url.pathname === "/api/discussions"', "cursorPage", "src/routes/discussions.ts", "cursorPage(url)"),
-  apiEvidence("/api/knowledge/:id", "not_applicable", "src/routes/library.ts", "const detail = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/favorite", "not_applicable", "src/routes/library.ts", "const favorite = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/note", "not_applicable", "src/routes/library.ts", "const note = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/note/shares", "not_applicable", "src/routes/library.ts", "const noteShares = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/note/shares/:recipientId", "not_applicable", "src/routes/library.ts", "const noteShares = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/related", "not_applicable", "src/routes/library.ts", "const related = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/knowledge/:id/backlinks", "not_applicable", "src/routes/library.ts", "const backlinks = /^\\/api\\/knowledge\\/", "none"),
-  apiEvidence("/api/discussions/:id", "not_applicable", "src/routes/discussions.ts", "const thread = /^\\/api\\/discussions\\/", "none"),
-  apiEvidence("/api/discussions/:id/messages", "cursor", "src/routes/discussions.ts", "const messages = /^\\/api\\/discussions\\/", "cursorPage", "src/routes/discussions.ts", "cursorPage(url)"),
-  apiEvidence("/api/discussions/messages", "not_applicable", "src/routes/discussions.ts", 'url.pathname === "/api/discussions/messages"', "none"),
-  apiEvidence("/api/admin/submissions/:id", "not_applicable", "src/routes/admin-review.ts", "const detail = /^\\/api\\/admin\\/submissions\\/", "none"),
-  apiEvidence("/api/admin/submissions/:id/publish", "not_applicable", "src/routes/admin-review.ts", "const publish = /^\\/api\\/admin\\/submissions\\/", "none"),
-  apiEvidence("/api/admin/submissions/:id/request-revision", "not_applicable", "src/routes/admin-review.ts", "const requestRevision = /^\\/api\\/admin\\/submissions\\/", "none"),
-  apiEvidence("/api/admin/submissions/:id/reject", "not_applicable", "src/routes/admin-review.ts", "const reject = /^\\/api\\/admin\\/submissions\\/", "none"),
-  apiEvidence("/api/admin/submissions/:id/comments", "not_applicable", "src/routes/admin-review.ts", "const adminComments = /^\\/api\\/admin\\/submissions\\/", "none"),
-].map((fact) => [fact.path, fact])));
-
+const symbolBinding = (path, symbol, ...tokens) => ({ path, symbol, tokens });
 const ownerEvidence = (predicate, ...bindings) => ({ predicate, bindings });
 const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
-  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.", binding("src/routes/library.ts", "scope.memberId"), binding("src/recent-visits/repository.ts", "knowledge_visits", "member_id = ?")),
-  ownerEvidence("routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.", binding("src/routes/member.ts", "member.memberId"), binding("src/submissions/repository.ts", "submitter_id")),
-  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository authorization binds scope.memberId before applying revision visibility predicates.", binding("src/routes/library.ts", "scope.memberId"), binding("src/library/repository.ts", "memberId")),
-  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository search binds scope.memberId through the authorized member CTE before visibility filtering.", binding("src/routes/library.ts", "scope.memberId"), binding("src/library/repository.ts", "authorized")),
-  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.", binding("src/routes/library.ts", "scope.memberId"), binding("src/chat/repository.ts", "owner_member_id")),
-  ownerEvidence("routeMemberApi passes authenticated member.memberId to SubmissionsService.listOwn; SubmissionsRepository predicates submissions.submitter_id = ? for both items and total.", binding("src/routes/member.ts", "member.memberId", "listOwn"), binding("src/submissions/repository.ts", "submitter_id = ?")),
-  ownerEvidence("routeTasksApi passes authenticated member.memberId to TasksService; TasksRepository predicates tasks.member_id = ? and task child tables by member_id.", binding("src/routes/tasks.ts", "member.memberId"), binding("src/tasks/repository.ts", "member_id = ?")),
-  ownerEvidence("routeTasksApi passes authenticated member.memberId to TasksService; board lists and status updates remain predicates on tasks.member_id = ?.", binding("src/routes/tasks.ts", "member.memberId"), binding("src/tasks/repository.ts", "member_id = ?")),
-  ownerEvidence("routeNotificationsApi passes authenticated member.memberId as recipientMemberId; NotificationsRepository predicates recipient_member_id = ? for items, total, and writes.", binding("src/routes/notifications.ts", "member.memberId"), binding("src/notifications/repository.ts", "recipient_member_id = ?")),
-  ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks task ownership or current knowledge visibility before listing or writing.", binding("src/routes/discussions.ts", "member.memberId"), binding("src/discussions/service.ts", "actorMemberId")),
-  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.", binding("src/routes/library.ts", "scope.memberId"), binding("src/library/repository.ts", "memberId")),
-  ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks the thread context before message reads and sends.", binding("src/routes/discussions.ts", "member.memberId"), binding("src/discussions/service.ts", "actorMemberId")),
+  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/recent-visits/repository.ts", "RecentVisitsRepository.list", "v.member_id = ?", "scope.memberId")),
+  ownerEvidence("routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.", symbolBinding("src/routes/member.ts", "routeMemberApi", "member.memberId"), symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.findByIdempotencyKey", "submitterId", "idempotencyKey")),
+  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository authorization binds scope.memberId before applying revision visibility predicates.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.authorizeScope", "scope.memberId")),
+  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository search binds scope.memberId through the authorized member CTE before visibility filtering.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.search", "scope.memberId")),
+  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/chat/repository.ts", "ChatRepository.find", "owner_member_id", "ownerMemberId")),
+  ownerEvidence("routeMemberApi passes authenticated member.memberId to SubmissionsService.listOwn; SubmissionsRepository predicates submissions.submitter_id = ? for both items and total.", symbolBinding("src/routes/member.ts", "routeMemberApi", "member.memberId", "listOwn"), symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.listOwned", "submitter_id = ?")),
+  ownerEvidence("routeTasksApi passes authenticated member.memberId to TasksService; TasksRepository predicates tasks.member_id = ? and task child tables by member_id.", symbolBinding("src/routes/tasks.ts", "routeTasksApi", "member.memberId"), symbolBinding("src/tasks/repository.ts", "TasksRepository.list", "member_id = ?")),
+  ownerEvidence("routeTasksApi passes authenticated member.memberId to TasksService; board lists and status updates remain predicates on tasks.member_id = ?.", symbolBinding("src/routes/tasks.ts", "routeTasksApi", "member.memberId"), symbolBinding("src/tasks/repository.ts", "TasksRepository.compareAndSetStatus", "member_id = ?", "expectedStatus")),
+  ownerEvidence("routeNotificationsApi passes authenticated member.memberId as recipientMemberId; NotificationsRepository predicates recipient_member_id = ? for items, total, and writes.", symbolBinding("src/routes/notifications.ts", "routeNotificationsApi", "member.memberId"), symbolBinding("src/notifications/repository.ts", "NotificationsRepository.list", "recipient_member_id = ?")),
+  ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks task ownership or current knowledge visibility before listing or writing.", symbolBinding("src/routes/discussions.ts", "routeDiscussionsApi", "member.memberId"), symbolBinding("src/discussions/service.ts", "DiscussionsService.listThreads", "memberId")),
+  ownerEvidence("routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.findCurrent", "scope")),
+  ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks the thread context before message reads and sends.", symbolBinding("src/routes/discussions.ts", "routeDiscussionsApi", "member.memberId"), symbolBinding("src/discussions/service.ts", "DiscussionsService.sendMessage", "memberId")),
 ].map((fact) => [fact.predicate, fact])));
-
-const mutationEvidence = (id, apiPath, description, strategy, sourcePath, ...sourceTokens) => ({
-  id, apiPath, description, strategy, source: binding(sourcePath, ...sourceTokens),
-});
-const MUTATION_EVIDENCE = Object.freeze(Object.fromEntries([
-  mutationEvidence("submission.create", "/api/submissions", "POST create submission", "idempotency_key", "src/submissions/repository.ts", "idempotency", "submitter_id"),
-  mutationEvidence("agent.ask", "/api/knowledge/chat", "POST ask agent", "gap", "src/routes/library.ts", 'url.pathname === "/api/knowledge/chat"', 'request.method === "POST"'),
-  mutationEvidence("agent.scope", "/api/knowledge/chat/conversations/:id/scope", "PATCH conversation scope", "gap", "src/routes/library.ts", "conversationScope", 'methodNotAllowed("PATCH"'),
-  mutationEvidence("agent.cancel", "/api/knowledge/chat/conversations/:id/cancel", "POST cancel conversation", "gap", "src/routes/library.ts", "conversationCancel", 'methodNotAllowed("POST"'),
-  mutationEvidence("tasks.create", "/api/tasks", "POST create task", "idempotency_key", "src/tasks/repository.ts", "INSERT OR IGNORE INTO tasks"),
-  mutationEvidence("tasks.update", "/api/tasks/:id", "PATCH task", "gap", "src/routes/tasks.ts", 'request.method === "PATCH"'),
-  mutationEvidence("tasks.delete", "/api/tasks/:id", "DELETE task", "gap", "src/routes/tasks.ts", 'request.method === "DELETE"'),
-  mutationEvidence("tasks.status", "/api/tasks/:id/status", "POST task status", "conditional_write", "src/tasks/repository.ts", "compareAndSetStatus", "expectedStatus"),
-  mutationEvidence("tasks.progress", "/api/tasks/:id/progress", "POST task progress", "gap", "src/routes/tasks.ts", "progress", 'methodNotAllowed("POST"'),
-  mutationEvidence("tasks.tags", "/api/tasks/:id/tags", "PUT task tags", "gap", "src/routes/tasks.ts", "tags", 'methodNotAllowed("PUT"'),
-  mutationEvidence("tasks.link", "/api/tasks/:id/links", "POST task link", "gap", "src/routes/tasks.ts", "links", 'methodNotAllowed("POST"'),
-  mutationEvidence("tasks.unlink", "/api/tasks/:id/links/:linkId", "DELETE task link", "gap", "src/routes/tasks.ts", "link", 'methodNotAllowed("DELETE"'),
-  mutationEvidence("duplicates.decide", "/api/admin/duplicates/:submissionId/decision", "POST duplicate decision", "conditional_write", "src/duplicates/repository.ts", "pending"),
-  mutationEvidence("assets.retry", "/api/admin/assets/:id/retry", "POST asset retry", "gap", "src/assets/service.ts", "async retry", "current.job.status"),
-  mutationEvidence("members.status", "/api/admin/members/:id/status", "PATCH member status", "gap", "src/routes/admin.ts", "memberStatus", 'methodNotAllowed("PATCH"'),
-  mutationEvidence("roles.create", "/api/admin/roles", "POST create role", "gap", "src/routes/admin-roles.ts", 'request.method === "POST"'),
-  mutationEvidence("roles.update", "/api/admin/roles/:id", "PATCH role", "gap", "src/routes/admin-roles.ts", "const match =", 'methodNotAllowed("PATCH, DELETE"'),
-  mutationEvidence("roles.assign", "/api/admin/roles/:id/members", "POST assign role member; duplicate returns 409", "gap", "src/authorization/roles-repository.ts", "ROLE_MEMBER_EXISTS"),
-  mutationEvidence("roles.unassign", "/api/admin/roles/:id/members", "DELETE role member; repeat returns 404", "gap", "src/authorization/roles-repository.ts", "ROLE_MEMBER_NOT_FOUND"),
-  mutationEvidence("menus.update", "/api/admin/menus/:id", "PATCH menu", "gap", "src/routes/admin-menus.ts", "const match =", 'methodNotAllowed("PATCH, DELETE"'),
-  mutationEvidence("menus.delete", "/api/admin/menus/:id", "DELETE menu", "gap", "src/routes/admin-menus.ts", "const match =", 'request.method === "DELETE"'),
-  mutationEvidence("spaces.create", "/api/admin/spaces", "POST create space", "gap", "src/routes/admin.ts", 'url.pathname === "/api/admin/spaces"', 'methodNotAllowed("POST"'),
-  mutationEvidence("notifications.read", "/api/notifications/:id/read", "POST mark notification read", "conditional_write", "src/notifications/repository.ts", "read_at IS NULL"),
-  mutationEvidence("notifications.bulk-read", "/api/notifications/read", "POST bulk mark notifications read", "conditional_write", "src/notifications/repository.ts", "read_at IS NULL"),
-  mutationEvidence("favorites.add", "/api/knowledge/:id/favorite", "PUT favorite", "idempotency_key", "src/favorites/repository.ts", "ON CONFLICT(member_id, knowledge_item_id) DO NOTHING", "knowledge_favorites"),
-  mutationEvidence("favorites.remove", "/api/knowledge/:id/favorite", "DELETE favorite", "gap", "src/routes/library.ts", 'request.method === "DELETE"'),
-  mutationEvidence("notes.save", "/api/knowledge/:id/note", "PUT private note", "gap", "src/routes/library.ts", 'request.method === "PUT"'),
-  mutationEvidence("notes.share", "/api/knowledge/:id/note/shares", "POST note share", "gap", "src/routes/library.ts", "noteShares", 'request.method === "POST"'),
-  mutationEvidence("notes.revoke-share", "/api/knowledge/:id/note/shares/:recipientId", "DELETE note share", "gap", "src/routes/library.ts", "noteShares", 'request.method === "DELETE"'),
-  mutationEvidence("discussions.send", "/api/discussions/messages", "POST discussion message", "idempotency_key", "src/discussions/repository.ts", "findMessageByAuthorClientKey", "clientKey"),
-  mutationEvidence("review.publish", "/api/admin/submissions/:id/publish", "POST publish review", "gap", "src/routes/admin-review.ts", "const publish =", 'methodNotAllowed("POST"'),
-  mutationEvidence("review.request-revision", "/api/admin/submissions/:id/request-revision", "POST request revision", "gap", "src/routes/admin-review.ts", "const requestRevision =", 'methodNotAllowed("POST"'),
-  mutationEvidence("review.reject", "/api/admin/submissions/:id/reject", "POST reject submission", "gap", "src/routes/admin-review.ts", "const reject =", 'methodNotAllowed("POST"'),
-  mutationEvidence("review.comment", "/api/admin/submissions/:id/comments", "POST review comment", "gap", "src/routes/admin-review.ts", "adminComments", 'request.method === "POST"'),
-].map((fact) => [fact.id, fact])));
-
-const CAPABILITY_MUTATION_FACT_IDS = Object.freeze({
-  "workbench-home": [], "workbench-submit": ["submission.create"], "workbench-knowledge": [], "workbench-search": [],
-  "workbench-agent": ["agent.ask", "agent.scope", "agent.cancel"], "workbench-my-submissions": [],
-  "workbench-tasks": ["tasks.create", "tasks.update", "tasks.delete", "tasks.status", "tasks.progress", "tasks.tags", "tasks.link", "tasks.unlink"],
-  "workbench-boards": ["tasks.status"], "workbench-settings": [], "workbench-admin": [], "workbench-admin-submissions": [],
-  "workbench-admin-duplicates": ["duplicates.decide"], "workbench-admin-assets": ["assets.retry"], "workbench-admin-members": ["members.status"],
-  "workbench-admin-roles": ["roles.create", "roles.update", "roles.assign", "roles.unassign"],
-  "workbench-admin-menus": ["menus.update", "menus.delete"], "workbench-admin-spaces": ["spaces.create"],
-  "workbench-admin-audit": [], "workbench-admin-analytics": [],
-  "workbench-notifications": ["notifications.read", "notifications.bulk-read"], "workbench-messages": [],
-  "workbench-knowledge-reader": ["favorites.add", "favorites.remove", "notes.save", "notes.share", "notes.revoke-share"],
-  "workbench-message-thread": ["discussions.send"],
-  "workbench-admin-submission-detail": ["review.publish", "review.request-revision", "review.reject", "review.comment"],
+const PROVEN_MUTATION_SAFETY = Object.freeze({
+  "POST /api/submissions": { strategy: "idempotency_key", safety: symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.findByIdempotencyKey", "submitterId", "idempotencyKey") },
+  "POST /api/tasks": { strategy: "idempotency_key", safety: symbolBinding("src/tasks/repository.ts", "TasksRepository.insert", "INSERT OR IGNORE INTO tasks") },
+  "POST /api/tasks/:id/status": { strategy: "conditional_write", safety: symbolBinding("src/tasks/repository.ts", "TasksRepository.compareAndSetStatus", "expectedStatus", "AND status = ?") },
+  "PUT /api/knowledge/:id/favorite": { strategy: "idempotency_key", safety: symbolBinding("src/favorites/repository.ts", "FavoritesRepository.add", "ON CONFLICT(member_id, knowledge_item_id) DO NOTHING") },
+  "POST /api/discussions/messages": { strategy: "idempotency_key", safety: symbolBinding("src/discussions/service.ts", "DiscussionsService.sendMessage", "findMessageByAuthorClientKey", "clientKey") },
 });
 
-export function runtimeEvidenceSnapshot() {
-  return structuredClone({ apis: API_EVIDENCE, owners: OWNER_EVIDENCE, mutations: MUTATION_EVIDENCE });
+const MUTATION_LABELS = Object.freeze({
+  "POST /api/admin/roles/:id/members": "POST assign role member; duplicate returns 409",
+  "DELETE /api/admin/roles/:id/members": "DELETE role member; repeat returns 404",
+});
+
+export function runtimeEvidenceSnapshot({ repositoryRoot = resolve(import.meta.dirname, "..") } = {}) {
+  const records = readDomainManifest(repositoryRoot);
+  return structuredClone(canonicalRuntimeEvidence(records, repositoryRoot));
+}
+
+function readDomainManifest(repositoryRoot) {
+  const manifestPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: [manifestPath] });
+  try {
+    const source = sourceFile(snapshot, manifestPath);
+    const capabilities = maturityRecords(source);
+    const domainsById = new Map(domainRecords(source).map((record) => [record.id, record]));
+    return capabilities.map((capability) => ({ ...capability, ...domainsById.get(capability.id) }));
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
+}
+
+function canonicalRuntimeEvidence(records, repositoryRoot) {
+  const apiPaths = [...new Set(records.flatMap((record) => record.apiPaths))];
+  const apis = deriveRouteEvidence(apiPaths, repositoryRoot);
+  const mutations = {};
+  for (const record of records) {
+    for (const operation of deriveVisibleMutations(record, repositoryRoot)) {
+      const route = apis[operation.slice(operation.indexOf(" ") + 1)];
+      assert.ok(route?.methods.includes(operation.slice(0, operation.indexOf(" "))), `${record.id}: frontend mutation lacks matching route handler ${operation}`);
+      const proven = PROVEN_MUTATION_SAFETY[operation];
+      mutations[operation] = {
+        id: operation,
+        apiPath: operation.slice(operation.indexOf(" ") + 1),
+        description: MUTATION_LABELS[operation] ?? operation,
+        strategy: proven?.strategy ?? "gap",
+        ...(proven ? { safety: proven.safety } : {}),
+      };
+    }
+  }
+  return { apis, owners: OWNER_EVIDENCE, mutations };
+}
+
+function deriveRouteEvidence(apiPaths, repositoryRoot) {
+  const cacheKey = `${repositoryRoot}\0${[...apiPaths].sort().join("\0")}`;
+  const cached = ROUTE_EVIDENCE_CACHE.get(cacheKey);
+  if (cached) return cached;
+  const routeRoot = resolve(repositoryRoot, "src/routes");
+  const paths = sourcePaths(routeRoot);
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: paths });
+  try {
+    const definitions = [];
+    for (const absolutePath of paths) {
+      const source = sourceFile(snapshot, absolutePath);
+      const ifStatements = [];
+      const regexRoutes = [];
+      const functionBodies = new Map();
+      const visit = (node) => {
+        if (isIfStatement(node)) ifStatements.push(node);
+        if (isFunctionDeclaration(node) && node.name && node.body) functionBodies.set(node.name.getText(source), node.body.getText(source));
+        if (isVariableDeclaration(node) && isIdentifier(node.name) && node.initializer) {
+          const text = node.initializer.getText(source);
+          const match = text.match(/^(\/\^.*\/[a-z]*)\.exec\(url\.pathname\)$/u);
+          if (match) regexRoutes.push({ name: node.name.text, literal: match[1], node });
+        }
+        node.forEachChild(visit);
+      };
+      visit(source);
+      for (const statement of ifStatements) {
+        const expression = statement.expression.getText(source);
+        const staticMatch = expression.match(/url\.pathname\s*(!==|===)\s*["'](\/api\/[^"']+)["']/u);
+        if (staticMatch) {
+          const functionNode = enclosingFunction(statement);
+          const body = staticMatch[1] === "!==" ? functionNode?.body : statement.thenStatement;
+          if (body && functionNode) definitions.push(routeDefinition(staticMatch[2], null, expandLocalCalls(body.getText(source), functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
+        }
+      }
+      for (const route of regexRoutes) {
+        const statement = ifStatements.find((candidate) => [route.name, `!${route.name}`].includes(candidate.expression.getText(source)));
+        const functionNode = statement ? enclosingFunction(statement) : null;
+        if (statement && functionNode) {
+          const body = statement.expression.getText(source) === `!${route.name}` ? functionNode.body : statement.thenStatement;
+          definitions.push(routeDefinition(null, route.literal, expandLocalCalls(body.getText(source), functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
+        }
+      }
+    }
+    const evidence = Object.fromEntries(apiPaths.map((path) => {
+      const sample = path.replace(/:[A-Za-z][A-Za-z0-9_]*/gu, "probe-id");
+      const staticMatches = definitions.filter((definition) => definition.path === path);
+      const rawMatches = staticMatches.length > 0 ? staticMatches : definitions.filter((definition) => definition.regex && definition.regex.test(sample));
+      const matches = [...new Map(rawMatches.map((definition) => [`${definition.sourcePath}#${definition.symbol}#${definition.path ?? definition.regex.source}`, definition])).values()];
+      assert.equal(matches.length, 1, `unknown API evidence ${path}: expected exactly one source-owned route definition, found ${matches.length}`);
+      return [path, { ...matches[0], path }];
+    }));
+    ROUTE_EVIDENCE_CACHE.set(cacheKey, evidence);
+    return evidence;
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
+}
+
+function expandLocalCalls(body, functionBodies) {
+  let expanded = body;
+  for (const [name, functionBody] of functionBodies) if (new RegExp(`\\b${name}\\s*\\(`, "u").test(body)) expanded += `\n${functionBody}`;
+  return expanded;
+}
+
+function routeDefinition(path, literal, body, sourcePath, symbol) {
+  const methods = [...new Set([...body.matchAll(/request\.method\s*(?:===|!==)\s*["'](GET|POST|PUT|PATCH|DELETE)["']/gu)].map((match) => match[1]))].sort();
+  const pagination = body.includes("parseNumberedPageRequest")
+    ? "numbered"
+    : /\b(?:parsePageRequest|cursorPage|pageRequest)\s*\(/u.test(body)
+      ? "cursor"
+      : "not_applicable";
+  return { path, regex: literal ? regularExpression(literal) : null, sourcePath, symbol, methods, pagination };
+}
+
+function regularExpression(literal) {
+  const lastSlash = literal.lastIndexOf("/");
+  return new RegExp(literal.slice(1, lastSlash), literal.slice(lastSlash + 1));
+}
+
+function enclosingFunction(node) {
+  for (let current = node.parent; current; current = current.parent) if (isFunctionDeclaration(current)) return current;
+  return null;
+}
+
+function deriveVisibleMutations(record, repositoryRoot) {
+  const index = frontendSourceIndex(repositoryRoot);
+  const queue = record.frontendEvidence
+    .filter((path) => path.startsWith("frontend/"))
+    .map((path) => ({ path, symbol: /frontend\/(?:app|app-routes)\.tsx?$/u.test(path) ? routeSymbol(record.id) : null }));
+  const visited = new Set();
+  const operations = new Set();
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item) continue;
+    const visitKey = `${item.path}#${item.symbol ?? "module"}`;
+    if (visited.has(visitKey)) continue;
+    visited.add(visitKey);
+    const entry = index.get(item.path);
+    if (!entry) continue;
+    const scope = item.symbol === null ? entry.module : entry.functions.get(item.symbol);
+    if (!scope) continue;
+    for (const invoked of scope.invokedImports) {
+      const imported = entry.imports.get(invoked);
+      if (imported) queue.push(imported);
+    }
+    for (const call of scope.calls) {
+      const declaredPath = record.apiPaths.find((pathValue) => pathShape(pathValue) === pathShape(call.path));
+      if (declaredPath && call.method !== "GET") operations.add(`${call.method} ${declaredPath}`);
+    }
+  }
+  return [...operations].sort();
+}
+
+function routeSymbol(capabilityId) {
+  return capabilityId.replace(/^workbench-/u, "").split("-").map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("") + "Route";
+}
+
+function frontendSourceIndex(repositoryRoot) {
+  const cached = FRONTEND_INDEX_CACHE.get(repositoryRoot);
+  if (cached) return cached;
+  const frontendRoot = resolve(repositoryRoot, "frontend");
+  const paths = sourcePaths(frontendRoot);
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: paths });
+  try {
+    const index = new Map();
+    for (const absolutePath of paths) {
+      const source = sourceFile(snapshot, absolutePath);
+      const imports = new Map();
+      const functions = new Map();
+      const visit = (node) => {
+        if (isImportDeclaration(node) && isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text.startsWith(".")) {
+          const imported = resolveSourceImport(absolutePath, node.moduleSpecifier.text);
+          const named = node.getText(source).match(/import\s*\{([^}]+)\}/u)?.[1];
+          if (imported && named) {
+            for (const part of named.split(",")) {
+              const cleaned = part.trim().replace(/^type\s+/u, "");
+              const [importedName, localName = importedName] = cleaned.split(/\s+as\s+/u);
+              if (importedName) imports.set(localName, { path: relative(repositoryRoot, imported), symbol: importedName });
+            }
+          }
+        }
+        if (isFunctionDeclaration(node) && node.name && node.body) functions.set(node.name.getText(source), frontendScope(node.body, source));
+        node.forEachChild(visit);
+      };
+      visit(source);
+      index.set(relative(repositoryRoot, absolutePath), { imports, functions, module: frontendScope(source, source) });
+    }
+    FRONTEND_INDEX_CACHE.set(repositoryRoot, index);
+    return index;
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
+}
+
+function frontendScope(node, source) {
+  const calls = [];
+  const invokedImports = new Set();
+  const scopeText = node.getText(source);
+  const visit = (child) => {
+    if (isCallExpression(child)) {
+      const expression = child.expression.getText(source);
+      if (expression === "apiFetch") {
+        const method = child.arguments[1]?.getText(source).match(/\bmethod\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/u)?.[1] ?? "GET";
+        for (const path of frontendCallPaths(child.arguments[0]?.getText(source), scopeText)) calls.push({ path, method });
+      } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(expression)) {
+        invokedImports.add(expression);
+      }
+    }
+    child.forEachChild(visit);
+  };
+  visit(node);
+  return { calls, invokedImports };
+}
+
+function frontendCallPaths(text, scopeText) {
+  if (!text || (!text.startsWith("\"") && !text.startsWith("'") && !text.startsWith("`"))) return [];
+  let candidates = [text.slice(1, -1)];
+  for (const match of [...candidates[0].matchAll(/\$\{([A-Za-z_$][A-Za-z0-9_$]*)\}/gu)]) {
+    const values = scopeText.match(new RegExp(`(?:const|let)\\s+${match[1]}\\s*=.*?[?].*?["']([^"']+)["']\\s*:\\s*["']([^"']+)["']`, "u"))?.slice(1);
+    if (values) candidates = candidates.flatMap((candidate) => values.map((value) => candidate.replace(match[0], value)));
+  }
+  return candidates
+    .map((candidate) => candidate.replace(/\$\{[^}]+\}/gu, ":id").split("?")[0])
+    .filter((path) => path.startsWith("/api/"));
+}
+
+function pathShape(path) {
+  return path.replace(/:[A-Za-z][A-Za-z0-9_]*/gu, ":*");
+}
+
+function sourcePaths(root) {
+  return readdirSync(root, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && [".ts", ".tsx"].includes(extname(entry.name)))
+    .map((entry) => resolve(entry.parentPath, entry.name));
+}
+
+function resolveSourceImport(importer, specifier) {
+  const base = resolve(dirname(importer), specifier);
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, resolve(base, "index.ts"), resolve(base, "index.tsx")]) if (existsSync(candidate)) return candidate;
+  return null;
 }
 
 export async function loadWorkbenchDomainAudit({ repositoryRoot = resolve(import.meta.dirname, "..") } = {}) {
@@ -181,9 +320,9 @@ export async function loadWorkbenchDomainAudit({ repositoryRoot = resolve(import
     const joined = capabilities.map((capability, routeOrder) => ({
       ...capability,
       ...domainsById.get(capability.id),
-      mutationFactIds: CAPABILITY_MUTATION_FACT_IDS[capability.id],
       routeOrder,
     }));
+    for (const record of joined) record.mutationFactIds = deriveVisibleMutations(record, repositoryRoot);
     validateWorkbenchDomainAudit(joined, { repositoryRoot });
     return joined;
   } finally {
@@ -193,7 +332,11 @@ export async function loadWorkbenchDomainAudit({ repositoryRoot = resolve(import
 }
 
 export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve(import.meta.dirname, ".."), runtimeEvidence = runtimeEvidenceSnapshot() } = {}) {
+  const canonical = canonicalRuntimeEvidence(records, repositoryRoot);
+  const semanticBindings = [];
   for (const record of records) {
+    record.apiEvidence = canonical.apis;
+    record.mutationEvidence = canonical.mutations;
     assert.ok(typeof record.id === "string" && record.id.length > 0, "domain capability id is required");
     assert.ok(Array.isArray(record.apiPaths), `${record.id}: apiPaths must be an array`);
     assert.ok(record.apiPaths.every((path) => /^\/api\/[A-Za-z0-9_/:.-]+$/u.test(path)), `${record.id}: API paths must be normalized /api paths`);
@@ -202,38 +345,28 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
     assert.ok(Array.isArray(record.mutationFactIds), `${record.id}: mutation fact inventory is required`);
 
     for (const apiPath of record.apiPaths) {
-      const fact = runtimeEvidence.apis[apiPath];
+      const fact = canonical.apis[apiPath];
       assert.ok(fact, `${record.id}: unknown API evidence ${apiPath}`);
-      verifyBinding(fact.route, repositoryRoot, `${record.id}: API route ${apiPath}`);
-      verifyBinding(fact.paginationEvidence, repositoryRoot, `${record.id}: pagination ${apiPath}`);
-      assert.equal(fact.path, apiPath, `${record.id}: API evidence contradiction for ${apiPath}`);
-      const allowedMechanisms = fact.pagination === "numbered"
-        ? new Set(["parseNumberedPageRequest"])
-        : fact.pagination === "cursor"
-          ? new Set(["parsePageRequest", "cursorPage", "pageRequest"])
-          : new Set(["none", "bounded"]);
-      assert.ok(allowedMechanisms.has(fact.paginationEvidence.mechanism), `${record.id}: pagination evidence contradiction for ${apiPath}`);
+      if (runtimeEvidence) assert.deepEqual(runtimeEvidence.apis?.[apiPath], fact, `${record.id}: runtime evidence contradiction for ${apiPath}`);
     }
 
     if (record.ownerPredicate !== null) {
       assert.ok(typeof record.ownerPredicate === "string" && record.ownerPredicate.length > 0, `${record.id}: ownerPredicate must be null or text`);
-      const fact = runtimeEvidence.owners[record.ownerPredicate];
+      const fact = canonical.owners[record.ownerPredicate];
       assert.ok(fact && fact.predicate === record.ownerPredicate, `${record.id}: owner evidence contradiction`);
-      for (const ownerBinding of fact.bindings) verifyBinding(ownerBinding, repositoryRoot, `${record.id}: owner evidence`);
+      if (runtimeEvidence) assert.deepEqual(runtimeEvidence.owners?.[record.ownerPredicate], fact, `${record.id}: runtime evidence contradiction for owner`);
+      semanticBindings.push(...fact.bindings.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: owner evidence` })));
     }
 
-    for (const mutationFactId of record.mutationFactIds) {
-      const fact = runtimeEvidence.mutations[mutationFactId];
+    const expectedMutations = deriveVisibleMutations(record, repositoryRoot);
+    assert.deepEqual(record.mutationFactIds, expectedMutations, `${record.id}: visible mutation inventory contradiction`);
+    for (const mutationFactId of expectedMutations) {
+      const fact = canonical.mutations[mutationFactId];
       assert.ok(fact, `${record.id}: unknown mutation evidence ${mutationFactId}`);
       assert.ok(record.apiPaths.includes(fact.apiPath), `${record.id}: mutation ${mutationFactId} has undeclared API ${fact.apiPath}`);
-      verifyBinding(fact.source, repositoryRoot, `${record.id}: mutation ${mutationFactId}`);
       assert.ok(["gap", "idempotency_key", "conditional_write"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
-      if (fact.strategy === "idempotency_key") {
-        assert.ok(fact.source.tokens.some((token) => /idempoten|INSERT OR IGNORE|ON CONFLICT|clientKey|intent/iu.test(token)), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
-      }
-      if (fact.strategy === "conditional_write") {
-        assert.ok(fact.source.tokens.some((token) => /expected|compare|pending|status|IS NULL|requestRevision|reject/iu.test(token)), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
-      }
+      if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
+      if (fact.strategy !== "gap") semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
     }
 
     const evidencePaths = [
@@ -261,7 +394,41 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
       assert.ok(record.apiPaths.length > 0 || record.mutationFactIds.length > 0, `${record.id}: proven query or idempotency dimension lacks evidence`);
     }
   }
+  verifySymbolBindings(semanticBindings, repositoryRoot);
   return records;
+}
+
+function verifySymbolBindings(entries, repositoryRoot) {
+  const paths = [...new Set(entries.map(({ binding: bindingValue }) => resolve(repositoryRoot, bindingValue.path)))];
+  if (paths.length === 0) return;
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: paths });
+  try {
+    const symbols = new Map();
+    for (const absolutePath of paths) {
+      const source = sourceFile(snapshot, absolutePath);
+      const visit = (node) => {
+        if (isFunctionDeclaration(node) && node.name && node.body) {
+          symbols.set(`${relative(repositoryRoot, absolutePath)}#${node.name.getText(source)}`, node.body.getText(source));
+        }
+        if (isMethodDeclaration(node) && node.name && node.body && isClassDeclaration(node.parent) && node.parent.name) {
+          symbols.set(`${relative(repositoryRoot, absolutePath)}#${node.parent.name.getText(source)}.${node.name.getText(source)}`, node.body.getText(source));
+        }
+        node.forEachChild(visit);
+      };
+      visit(source);
+    }
+    for (const { binding: bindingValue, context } of entries) {
+      assert.ok(bindingValue && typeof bindingValue.path === "string" && typeof bindingValue.symbol === "string" && Array.isArray(bindingValue.tokens), `${context}: invalid semantic binding`);
+      const body = symbols.get(`${bindingValue.path}#${bindingValue.symbol}`);
+      assert.ok(body, `${context}: missing bound symbol ${bindingValue.path}#${bindingValue.symbol}`);
+      assert.ok(bindingValue.tokens.length > 0, `${context}: semantic binding requires tokens`);
+      for (const token of bindingValue.tokens) assert.ok(body.includes(token), `${context}: token ${JSON.stringify(token)} is outside bound symbol ${bindingValue.symbol}`);
+    }
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
 }
 
 export function renderWorkbenchDomainAudit(records) {
@@ -269,7 +436,7 @@ export function renderWorkbenchDomainAudit(records) {
   const rows = sorted.map((record) => [
     record.id,
     record.pathname,
-    listCell(record.apiPaths.map((path) => `${path} (${API_EVIDENCE[path].pagination})`)),
+    listCell(record.apiPaths.map((path) => `${path} (${record.apiEvidence[path].pagination})`)),
     listCell(record.persistencePaths),
     record.ownerPredicate ?? "—",
     mutationCell(record),
@@ -292,18 +459,9 @@ export function renderWorkbenchDomainAudit(records) {
 function mutationCell(record) {
   if (record.mutationFactIds.length === 0) return "not_applicable";
   return record.mutationFactIds.map((id) => {
-    const fact = MUTATION_EVIDENCE[id];
+    const fact = record.mutationEvidence[id];
     return `${fact.description} — ${fact.strategy === "gap" ? "gap" : `proven ${fact.strategy}`}`;
   }).join("; ");
-}
-
-function verifyBinding(evidenceBinding, repositoryRoot, context) {
-  assert.ok(evidenceBinding && typeof evidenceBinding.path === "string" && Array.isArray(evidenceBinding.tokens), `${context}: invalid evidence binding`);
-  const absolutePath = resolve(repositoryRoot, evidenceBinding.path);
-  assert.equal(existsSync(absolutePath), true, `${context}: missing evidence path ${evidenceBinding.path}`);
-  const source = readFileSync(absolutePath, "utf8");
-  assert.ok(evidenceBinding.tokens.length > 0, `${context}: evidence binding requires tokens`);
-  for (const token of evidenceBinding.tokens) assert.ok(source.includes(token), `${context}: missing source token ${JSON.stringify(token)}`);
 }
 
 function listCell(values) {
