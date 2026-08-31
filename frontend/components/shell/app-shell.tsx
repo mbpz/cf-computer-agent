@@ -15,6 +15,7 @@ import { loadNavigation, mergeRequiredWorkspaceNavigation, type NavigationDataNo
 import { Badge } from "../ui/badge";
 import { menuAvailability, type MenuAvailability } from "../../../shared/workspace-route-capabilities";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { collaborationQuickLinks, isCollaborationPath } from "./navigation-policy";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -72,6 +73,8 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     ? mergedNavigation.filter((node) => node.groupName === "admin").flatMap(toNavigationNodes)
     : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
+  const collaborationLinks = collaborationQuickLinks(session);
+  const sidebarWorkspaceRoutes = withoutCollaborationRoutes(workspaceRoutes);
   const navigate = (path: string) => onNavigate?.(path);
   const changeTheme = (mode: ThemeMode) => {
     setTheme(mode);
@@ -91,7 +94,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             </Button>
           </div>
           <TooltipProvider><nav data-shell-sidebar-scroll aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1">
-            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={workspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
+            <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={sidebarWorkspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav></TooltipProvider>
           {collapsed
@@ -100,9 +103,12 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
         </div>
       </aside>
       <div className={cn("transition-[padding] duration-200 lg:flex lg:h-dvh lg:min-h-0 lg:flex-col", collapsed ? "lg:pl-16" : "lg:pl-64")}>
-        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+        <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <div className="flex min-w-0 items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><Breadcrumb pathname={pathname} locale={locale} /></div>
-          <div data-shell-topbar-actions className="flex items-center gap-2">
+          <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-2">
+            <nav data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
+              {collaborationLinks.map((link) => <a key={link.path} href={link.path} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} className={cn("flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-sm", isCollaborationActive(pathname, link.activePrefix) && "bg-accent font-medium text-accent-foreground")}><NavIcon path={link.icon} /><span className="max-w-16 truncate sm:max-w-28 lg:max-w-none">{locale.t(link.labelKey)}</span></a>)}
+            </nav>
             <DropdownMenu menuId="language" open={activeMenu === "language"} onOpenChange={(open) => setActiveMenu(open ? "language" : null)}>
               <DropdownMenuTrigger aria-label={locale.t("SHELL_LANGUAGE_LABEL")}><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></DropdownMenuTrigger>
               <DropdownMenuContent>
@@ -112,7 +118,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             </DropdownMenu>
           </div>
         </header>
-        <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...workspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
+        <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...sidebarWorkspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
         <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
       </div>
     </div>
@@ -141,6 +147,14 @@ function NavNode({ node, pathname, locale, onNavigate, collapsed, expanded, onTo
 }
 
 function isNodeActive(node: NavigationNode, pathname: string): boolean { const path = node.path ?? node.route?.path; return Boolean(path && (pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))) || Boolean(node.children?.some((child) => isNodeActive(child, pathname))); }
+
+function withoutCollaborationRoutes(nodes: NavigationNode[]): NavigationNode[] {
+  return nodes.filter((node) => !isCollaborationPath(node.path ?? node.route?.path)).map((node) => ({ ...node, children: node.children ? withoutCollaborationRoutes(node.children) : undefined }));
+}
+
+function isCollaborationActive(pathname: string, activePrefix: string): boolean {
+  return pathname === activePrefix || pathname.startsWith(`${activePrefix}/`);
+}
 
 function toNavigationNode(node: NavigationDataNode): NavigationNode {
   const route = node.path ? ROUTES.find((item) => item.path === node.path) : undefined;

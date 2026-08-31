@@ -19,6 +19,7 @@ const admin = {
     "knowledge:read", "submission:create", "submission:read-own", "submission:read-all",
     "knowledge:review", "member:manage", "space:manage", "audit:read", "analytics:read",
   ],
+  permissionMask: "0x100000",
   logoutUrl: "/auth/logout",
 };
 
@@ -79,6 +80,69 @@ describe("shadcn workspace shell", () => {
     );
     expect(html).not.toContain("Site analytics");
     expect(html).not.toContain("Governance");
+  });
+
+  it("projects authorized collaboration links into the global top bar without duplicating the sidebar", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={admin} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Workspace</h1>
+      </AppShell>,
+    );
+    const collaborationNavigation = html.match(/<nav[^>]*data-shell-collaboration-navigation[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? "";
+    const sidebarNavigation = html.match(/<nav[^>]*data-shell-sidebar-scroll[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? "";
+
+    expect(Array.from(collaborationNavigation.matchAll(/<a[^>]*href="([^"]+)"/gu), (match) => match[1]))
+      .toEqual(["/tasks", "/boards", "/notifications", "/messages"]);
+    expect(collaborationNavigation).toContain('aria-label="Collaboration navigation"');
+    expect(collaborationNavigation.match(/<svg/g)?.length).toBe(4);
+    expect(collaborationNavigation.match(/min-h-10/g)?.length).toBe(4);
+    expect(sidebarNavigation).not.toContain('href="/tasks"');
+    expect(sidebarNavigation).not.toContain('href="/boards"');
+    expect(sidebarNavigation).not.toContain('href="/notifications"');
+    expect(sidebarNavigation).not.toContain('href="/messages"');
+  });
+
+  it("omits collaboration links whose route access is denied", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={{ ...admin, permissionMask: "0x0" }} pathname="/" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Workspace</h1>
+      </AppShell>,
+    );
+    const collaborationNavigation = html.match(/<nav[^>]*data-shell-collaboration-navigation[^>]*>[\s\S]*?<\/nav>/u)?.[0] ?? "";
+
+    expect(Array.from(collaborationNavigation.matchAll(/<a[^>]*href="([^"]+)"/gu), (match) => match[1]))
+      .toEqual(["/notifications", "/messages"]);
+  });
+
+  it("selects the collaboration parent for boards and message threads while keeping links outside the mobile sheet", () => {
+    const boardsHtml = renderToStaticMarkup(
+      <AppShell session={admin} pathname="/boards" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Boards</h1>
+      </AppShell>,
+    );
+    const messagesHtml = renderToStaticMarkup(
+      <AppShell session={admin} pathname="/messages/thread-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Messages</h1>
+      </AppShell>,
+    );
+
+    expect(boardsHtml).toMatch(/<a(?=[^>]*href="\/boards")(?=[^>]*aria-current="page")/u);
+    expect(messagesHtml).toMatch(/<a(?=[^>]*href="\/messages")(?=[^>]*aria-current="page")/u);
+    expect(messagesHtml).toMatch(/<header[^>]*data-shell-topbar[\s\S]*data-shell-collaboration-navigation/u);
+    expect(messagesHtml).toMatch(/<a(?=[^>]*href="\/messages")(?=[^>]*aria-label="Messages")/u);
+  });
+
+  it("navigates collaboration quick links to canonical paths without stale queries", async () => {
+    const onNavigate = vi.fn();
+    window.history.replaceState({}, "", "/notifications?page=2&read=unread");
+    await act(async () => root.render(<AppShell session={admin} pathname="/notifications" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Notifications</p></AppShell>));
+    await act(async () => (container.querySelector('[data-shell-collaboration-navigation] a[href="/notifications"]') as HTMLAnchorElement).click());
+    expect(onNavigate).toHaveBeenLastCalledWith("/notifications");
+
+    window.history.replaceState({}, "", "/messages?page=2&cursor=cursor_2");
+    await act(async () => root.render(<AppShell session={admin} pathname="/messages" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Messages</p></AppShell>));
+    await act(async () => (container.querySelector('[data-shell-collaboration-navigation] a[href="/messages"]') as HTMLAnchorElement).click());
+    expect(onNavigate).toHaveBeenLastCalledWith("/messages");
   });
 
   it("resets exactly once through the real navigation link and App onNavigate pattern", async () => {
