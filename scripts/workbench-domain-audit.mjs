@@ -17,6 +17,8 @@ import {
   isParenthesizedExpression,
   isPropertyAssignment,
   isSatisfiesExpression,
+  isShorthandPropertyAssignment,
+  isSpreadAssignment,
   isStringLiteral,
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
@@ -281,8 +283,13 @@ function frontendScope(node, source) {
     if (isCallExpression(child)) {
       const expression = child.expression.getText(source);
       if (expression === "apiFetch") {
-        const method = child.arguments[1]?.getText(source).match(/\bmethod\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/u)?.[1] ?? "GET";
+        const options = child.arguments[1];
+        const method = frontendCallMethod(options);
         const argument = child.arguments[0]?.getText(source);
+        if (method === null) {
+          unsupportedMutations.push(options?.getText(source) ?? "<missing options>");
+          return;
+        }
         const paths = frontendCallPaths(argument, scopeText);
         for (const path of paths) calls.push({ path, method });
         if (method !== "GET" && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
@@ -294,6 +301,26 @@ function frontendScope(node, source) {
   };
   visit(node);
   return { calls, invokedImports, unsupportedMutations };
+}
+
+function frontendCallMethod(options) {
+  if (!options) return "GET";
+  const expression = unwrapExpression(options);
+  if (!isObjectLiteralExpression(expression)) return null;
+  let method = "GET";
+  for (const property of expression.properties) {
+    if (isSpreadAssignment(property)) return null;
+    if (isShorthandPropertyAssignment(property)) {
+      if (property.name.text === "method") return null;
+      continue;
+    }
+    if (!isPropertyAssignment(property) || (!isIdentifier(property.name) && !isStringLiteral(property.name))) return null;
+    if (property.name.text !== "method") continue;
+    const value = unwrapExpression(property.initializer);
+    if (!isStringLiteral(value) || !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(value.text)) return null;
+    method = value.text;
+  }
+  return method;
 }
 
 function frontendCallPaths(text, scopeText) {

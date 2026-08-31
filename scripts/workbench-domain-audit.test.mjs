@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
@@ -12,6 +13,24 @@ import {
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md");
+
+function withRepositoryProbe(relativePath, transform, assertion) {
+  const probeRoot = mkdtempSync(resolve(tmpdir(), "workbench-domain-audit-"));
+  try {
+    cpSync(resolve(repositoryRoot, "frontend"), resolve(probeRoot, "frontend"), { recursive: true });
+    cpSync(resolve(repositoryRoot, "shared"), resolve(probeRoot, "shared"), { recursive: true });
+    mkdirSync(resolve(probeRoot, "src"), { recursive: true });
+    cpSync(resolve(repositoryRoot, "src/routes"), resolve(probeRoot, "src/routes"), { recursive: true });
+    const probePath = resolve(probeRoot, relativePath);
+    const original = readFileSync(probePath, "utf8");
+    const transformed = transform(original);
+    assert.notEqual(transformed, original, `${relativePath}: adversarial transform must change the fixture`);
+    writeFileSync(probePath, transformed);
+    return assertion(probeRoot);
+  } finally {
+    rmSync(probeRoot, { recursive: true, force: true });
+  }
+}
 test("every maturity capability has one conservative domain audit record", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   assert.equal(audit.length, 24);
@@ -143,6 +162,29 @@ test("removing role detail API ownership and its mutation cannot bypass source d
     }], { repositoryRoot }),
     /source-visible API ownership contradiction|visible mutation inventory contradiction/u,
   );
+});
+
+test("frontend scanner fails closed when request options method is not statically resolved", () => {
+  withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
+    /(  const data = await apiFetch<[^\n]+>\("\/api\/knowledge\/chat", )(\{[\s\S]*?^  \}\);)/mu,
+    (_, callPrefix, inlineOptions) => `  const requestOptions = ${inlineOptions.slice(0, -2)};\n${callPrefix}requestOptions);`,
+  ), (probeRoot) => {
+    assert.throws(
+      () => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
+      /unsupported frontend mutation invocation.*requestOptions/u,
+    );
+  });
+});
+
+test("frontend scanner preserves no-options GET and inline mutation methods", () => {
+  withRepositoryProbe("frontend/lib/agent-data.ts", (source) => source.replace(
+    "  const data = await apiFetch<{ answer?: unknown;",
+    "  void apiFetch(\"/api/knowledge/recent\");\n  const data = await apiFetch<{ answer?: unknown;",
+  ), (probeRoot) => {
+    const evidence = runtimeEvidenceSnapshot({ repositoryRoot: probeRoot });
+    assert.ok(evidence.mutations["POST /api/knowledge/chat"]);
+    assert.equal(evidence.mutations["GET /api/knowledge/recent"], undefined);
+  });
 });
 
 test("validation rejects unsupported pagination", async () => {
