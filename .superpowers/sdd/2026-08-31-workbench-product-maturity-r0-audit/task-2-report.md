@@ -157,7 +157,7 @@ Per the fix-round instruction, no full repository suite was run. The single boun
 rtk npx vitest run test/unit/frontend-workbench-maturity-routes.test.tsx
 ```
 
-Result: 1 file passed, 101 tests passed in 10.10 seconds. Vitest emitted the existing Cloudflare AI-binding warning; these fixtures made no remote AI request.
+Covering result: the controller ran this exact focused file outside the sandbox and reported 1 file passed, 101/101 tests passed in 10.96 seconds. The earlier execution problem was sandbox access to Wrangler logging/local binding, not test logic. This covering result was accepted and Vitest was not rerun during finalization. The fixtures made no remote AI request.
 
 Fresh contract/type checks after the report and manifest corrections:
 
@@ -168,6 +168,8 @@ rtk git diff --check
 ```
 
 Results: maturity contract 3/3 passed; TypeScript exited 0; whitespace validation exited 0.
+
+Final fix-round closeout repeated only the sandbox-safe maturity verifier and typecheck after commit `23804ed`: maturity contract 3/3 passed and TypeScript exited 0. No Vitest or full-suite command was rerun.
 
 ## Concerns carried forward
 
