@@ -116,7 +116,7 @@ export function DropdownMenuContent({ className, onKeyDown, ...props }: React.HT
   return <div ref={contentRef} {...props} role="menu" className={cn("absolute right-0 z-20 mt-2 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md", className)} onKeyDown={handleKeyDown} />;
 }
 
-export function DropdownMenuItem({ className, disabled = false, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function DropdownMenuItem({ className, closeOnSelect = true, disabled = false, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { closeOnSelect?: boolean }) {
   const { setOpen } = useDropdownMenuContext();
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled) {
@@ -124,7 +124,7 @@ export function DropdownMenuItem({ className, disabled = false, onClick, ...prop
       return;
     }
     onClick?.(event);
-    if (!event.defaultPrevented) setOpen(false, "selection");
+    if (!event.defaultPrevented && closeOnSelect) setOpen(false, "selection");
   };
   return <button {...props} type="button" role="menuitem" tabIndex={-1} aria-disabled={disabled ? "true" : undefined} disabled={disabled} className={cn("flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent", className)} onClick={handleClick} />;
 }

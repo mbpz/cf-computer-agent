@@ -168,6 +168,22 @@ describe("dropdown keyboard contract", () => {
     host.remove();
   });
 
+  it("keeps a closeOnSelect=false menuitem open while preserving keyboard traversal", () => {
+    const onSelect = vi.fn();
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    act(() => root.render(<DropdownMenu defaultOpen><DropdownMenuTrigger>Account</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem>Settings</DropdownMenuItem><DropdownMenuItem closeOnSelect={false} onClick={onSelect}>Log out</DropdownMenuItem></DropdownMenuContent></DropdownMenu>));
+    const [settings, logout] = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+    act(() => { settings.focus(); settings.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "End", bubbles: true })); });
+    expect(browser.document.activeElement).toBe(logout);
+    act(() => logout.click());
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    act(() => root.unmount());
+    host.remove();
+  });
+
   it("coordinates shell menus and dismisses either menu with an outside pointer", async () => {
     const host = browser.document.createElement("div") as unknown as HTMLDivElement;
     browser.document.body.append(host as unknown as Node);
@@ -177,17 +193,17 @@ describe("dropdown keyboard contract", () => {
     const languageTrigger = host.querySelector<HTMLButtonElement>('[aria-label="Language"]')!;
 
     await act(async () => accountTrigger.click());
-    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).not.toBeNull();
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).not.toBeNull();
     await act(async () => languageTrigger.click());
-    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).toBeNull();
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).toBeNull();
     expect(host.querySelector('[data-menu-id="language"] [role="menu"]')).not.toBeNull();
     await act(async () => host.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
     expect(host.querySelector('[data-menu-id="language"] [role="menu"]')).toBeNull();
 
     await act(async () => accountTrigger.click());
-    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).not.toBeNull();
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).not.toBeNull();
     await act(async () => host.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
-    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).toBeNull();
+    expect(host.querySelector('[data-menu-id="account-desktop"] [role="menu"]')).toBeNull();
     await act(async () => root.unmount());
     host.remove();
   });

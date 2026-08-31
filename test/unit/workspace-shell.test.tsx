@@ -147,7 +147,8 @@ describe("shadcn workspace shell", () => {
   });
 
   it("keeps the mobile Sheet focus viewport padded inside its scroll boundary", async () => {
-    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
+    const onNavigate = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
     const trigger = container.querySelector("[data-sheet-open] summary") as HTMLElement;
     await act(async () => trigger.click());
 
@@ -165,6 +166,16 @@ describe("shadcn workspace shell", () => {
     expect(dialog?.querySelector("[data-account-settings]")).toBeNull();
     expect(dialog?.querySelector("[data-theme-option]")).toBeNull();
     expect(dialog?.querySelector("[data-account-logout]")).toBeNull();
+
+    const accountTrigger = dialog?.querySelector('[data-account-trigger-variant="mobile"]') as HTMLButtonElement;
+    await act(async () => accountTrigger.click());
+    const menu = dialog?.querySelector("[data-account-menu]") as HTMLElement;
+    const settings = menu.querySelector('[data-account-settings]') as HTMLButtonElement;
+    expect(container.querySelectorAll("[data-account-menu]")).toHaveLength(1);
+    await act(async () => menu.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
+    expect(dialog?.querySelector("[data-account-menu]")).not.toBeNull();
+    await act(async () => settings.click());
+    expect(onNavigate).toHaveBeenCalledWith("/settings");
   });
 
   it("does not restore Tasks through the navigation-load failure fallback without its permission", async () => {
@@ -200,35 +211,65 @@ describe("shadcn workspace shell", () => {
     expect(menu.textContent).toContain("Settings");
     expect(menu.querySelector('[data-account-settings]')).not.toBeNull();
     expect(menu.querySelectorAll('[data-theme-option]')).toHaveLength(3);
-    expect(menu.querySelector('[data-account-logout]')).not.toBeNull();
+    const logout = menu.querySelector('[data-account-logout]') as HTMLButtonElement;
+    expect(logout).not.toBeNull();
+    expect(logout.getAttribute("role")).toBe("menuitem");
+    const light = menu.querySelector('[data-theme-option="light"]') as HTMLButtonElement;
+    await act(async () => { light.focus(); light.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "End", bubbles: true })); });
+    expect(document.activeElement).toBe(logout);
     const settings = menu.querySelector('[data-account-settings]') as HTMLButtonElement;
     await act(async () => settings.click());
     expect(onNavigate).toHaveBeenCalledWith("/settings");
     expect(container.querySelector("[data-account-menu]")).toBeNull();
 
     await act(async () => accountTrigger.click());
-    const dark = container.querySelector('[data-theme-option="dark"]') as HTMLButtonElement;
-    await act(async () => dark.click());
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
-    expect(window.localStorage.getItem("memory-garden-theme")).toBe("dark");
-    expect(container.querySelector("[data-account-menu]")).toBeNull();
+    for (const mode of ["light", "dark", "system"] as const) {
+      const themeOption = container.querySelector(`[data-theme-option="${mode}"]`) as HTMLButtonElement;
+      await act(async () => themeOption.click());
+      expect(window.localStorage.getItem("memory-garden-theme")).toBe(mode);
+      expect(container.querySelector("[data-account-menu]")).toBeNull();
+      if (mode !== "system") await act(async () => accountTrigger.click());
+    }
 
     await act(async () => accountTrigger.click());
-    const logout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
-    await act(async () => logout.click());
+    const retryableLogout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    await act(async () => retryableLogout.click());
     expect(onLogout).toHaveBeenCalledTimes(1);
     expect(container.querySelector("[data-account-menu]")).not.toBeNull();
   });
 
-  it("preserves logout pending and error states in collapsed desktop account actions", async () => {
-    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} logoutPending logoutError="Logout failed"><p>Home</p></AppShell>));
+  it("keeps failed logout retryable after its pending state resolves", async () => {
+    const onLogout = vi.fn();
+    const renderShell = (logoutPending: boolean, logoutError: string | null) => <AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError}><p>Home</p></AppShell>;
+    await act(async () => root.render(renderShell(false, null)));
     await act(async () => (container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLElement).click());
 
+    const initialLogout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    await act(async () => initialLogout.click());
+    expect(onLogout).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-account-menu]")).not.toBeNull();
+
+    await act(async () => root.render(renderShell(true, null)));
+    const pendingLogout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    expect(pendingLogout.disabled).toBe(true);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    await act(async () => root.render(renderShell(false, "Logout failed")));
+    const failedLogout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Logout failed");
+    expect(failedLogout.disabled).toBe(false);
+    await act(async () => failedLogout.click());
+    expect(onLogout).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[data-account-menu]")).not.toBeNull();
+  });
+
+  it("keeps expanded account content within the viewport boundary", async () => {
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
+    await act(async () => (container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLButtonElement).click());
     const menu = container.querySelector("[data-account-menu]") as HTMLElement;
-    expect(menu.querySelector('[role="alert"]')?.textContent).toBe("Logout failed");
-    const logout = menu.querySelector('[data-account-logout]');
-    expect(logout).toBeDefined();
-    expect((logout as HTMLButtonElement | null)?.disabled).toBe(true);
+    expect(menu.className).toContain("left-0");
+    expect(menu.className).toContain("max-w-[calc(100vw-2rem)]");
+    expect(menu.className).toContain("w-[min(18rem,calc(100vw-2rem))]");
   });
 
   it("coordinates Account and Language menus and closes either on pathname changes", async () => {
@@ -245,5 +286,10 @@ describe("shadcn workspace shell", () => {
 
     await act(async () => root.render(renderShell("/knowledge")));
     expect(container.querySelector('[data-menu-id="language"] [role="menu"]')).toBeNull();
+
+    await act(async () => accountTrigger.click());
+    expect(container.querySelector('[data-account-menu]')).not.toBeNull();
+    await act(async () => root.render(renderShell("/tasks")));
+    expect(container.querySelector('[data-account-menu]')).toBeNull();
   });
 });
