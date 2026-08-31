@@ -53,6 +53,15 @@ describe("frontend accessibility gates", () => {
     expect(openMenu).toContain('role="menuitem"');
   });
 
+  it("keeps account actions out of all closed shell account triggers", () => {
+    const shell = renderToStaticMarkup(<AppShell session={session} pathname="/" locale={createLocaleRuntime()}><div /></AppShell>);
+    expect(shell).toContain('data-account-trigger="true"');
+    expect(shell).not.toContain('data-account-menu="true"');
+    expect(shell).not.toContain('data-account-settings="true"');
+    expect(shell).not.toContain('data-theme-option="true"');
+    expect(shell).not.toContain('data-account-logout="true"');
+  });
+
   it("renders bounded source metadata and an explicit unselected source control", () => {
     const html = renderToStaticMarkup(<KnowledgeReaderPage
       locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })}

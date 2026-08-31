@@ -62,9 +62,10 @@ describe("shadcn workspace shell", () => {
     expect(html).toContain("AI assistant");
     expect(html).toContain("Governance");
     expect(html).toContain("Site analytics");
-    expect(html).toContain("Settings");
-    expect(html).toContain("Light");
-    expect(html).toContain("Dark");
+    expect(html).toContain("admin@example.com");
+    expect(html).not.toContain("data-account-settings");
+    expect(html).not.toContain("data-theme-option");
+    expect(html).not.toContain("data-account-logout");
     expect(html).toContain("data-shell-topbar");
     expect(html).not.toContain("undefined");
     expect(html).toContain("data-breadcrumb");
@@ -159,8 +160,11 @@ describe("shadcn workspace shell", () => {
     expect(dialog?.querySelector("[data-shell-mobile-account-footer]")).not.toBeNull();
     expect(dialog?.textContent).toContain("admin@example.com");
     expect(dialog?.textContent).toContain("Administrator");
-    expect(dialog?.textContent).toContain("Settings");
-    expect(dialog?.textContent).toContain("Log out");
+    expect(dialog?.querySelector("[data-account-trigger]")).not.toBeNull();
+    expect(dialog?.querySelector("[data-account-menu]")).toBeNull();
+    expect(dialog?.querySelector("[data-account-settings]")).toBeNull();
+    expect(dialog?.querySelector("[data-theme-option]")).toBeNull();
+    expect(dialog?.querySelector("[data-account-logout]")).toBeNull();
   });
 
   it("does not restore Tasks through the navigation-load failure fallback without its permission", async () => {
@@ -172,7 +176,7 @@ describe("shadcn workspace shell", () => {
     expect(container.querySelector('a[href="/tasks"]')).toBeNull();
   });
 
-  it("keeps collapsed desktop account actions visible and keyboard reachable", async () => {
+  it("keeps the shared collapsed account trigger keyboard reachable and reveals actions only after opening", async () => {
     const onNavigate = vi.fn();
     const onLogout = vi.fn();
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate} onLogout={onLogout}><p>Home</p></AppShell>));
@@ -181,39 +185,65 @@ describe("shadcn workspace shell", () => {
     await act(async () => collapse.click());
 
     expect(container.querySelector("[data-shell-account-footer]")).toBeNull();
-    const accountTrigger = container.querySelector("[data-shell-collapsed-account-trigger]") as HTMLElement;
+    const accountTrigger = container.querySelector('[data-account-trigger-variant="collapsed"]') as HTMLElement;
     expect(accountTrigger).not.toBeNull();
     expect(accountTrigger.tagName).toBe("BUTTON");
     expect(accountTrigger.tabIndex).not.toBe(-1);
     expect(accountTrigger.getAttribute("class")).not.toContain("sr-only");
+    expect(container.querySelector("[data-account-menu]")).toBeNull();
     await act(async () => { accountTrigger.focus(); accountTrigger.click(); });
     expect(document.activeElement).toBe(accountTrigger);
 
-    const menu = container.querySelector("[data-shell-collapsed-account-menu]") as HTMLElement;
+    const menu = container.querySelector("[data-account-menu]") as HTMLElement;
     expect(menu).not.toBeNull();
     expect(menu.textContent).toContain("admin@example.com");
     expect(menu.textContent).toContain("Settings");
-    const settings = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Settings"))!;
+    expect(menu.querySelector('[data-account-settings]')).not.toBeNull();
+    expect(menu.querySelectorAll('[data-theme-option]')).toHaveLength(3);
+    expect(menu.querySelector('[data-account-logout]')).not.toBeNull();
+    const settings = menu.querySelector('[data-account-settings]') as HTMLButtonElement;
     await act(async () => settings.click());
     expect(onNavigate).toHaveBeenCalledWith("/settings");
+    expect(container.querySelector("[data-account-menu]")).toBeNull();
 
-    const dark = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Dark"))!;
+    await act(async () => accountTrigger.click());
+    const dark = container.querySelector('[data-theme-option="dark"]') as HTMLButtonElement;
     await act(async () => dark.click());
     expect(document.documentElement.classList.contains("dark")).toBe(true);
-    const logout = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Log out"))!;
+    expect(window.localStorage.getItem("memory-garden-theme")).toBe("dark");
+    expect(container.querySelector("[data-account-menu]")).toBeNull();
+
+    await act(async () => accountTrigger.click());
+    const logout = container.querySelector('[data-account-logout]') as HTMLButtonElement;
     await act(async () => logout.click());
     expect(onLogout).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[data-account-menu]")).not.toBeNull();
   });
 
   it("preserves logout pending and error states in collapsed desktop account actions", async () => {
     await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} logoutPending logoutError="Logout failed"><p>Home</p></AppShell>));
-    await act(async () => (container.querySelector("[data-shell-collapse-toggle]") as HTMLButtonElement).click());
-    await act(async () => (container.querySelector("[data-shell-collapsed-account-trigger]") as HTMLElement).click());
+    await act(async () => (container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLElement).click());
 
-    const menu = container.querySelector("[data-shell-collapsed-account-menu]") as HTMLElement;
+    const menu = container.querySelector("[data-account-menu]") as HTMLElement;
     expect(menu.querySelector('[role="alert"]')?.textContent).toBe("Logout failed");
-    const logout = Array.from(menu.querySelectorAll("button")).find((button) => button.textContent?.includes("Signing out"));
+    const logout = menu.querySelector('[data-account-logout]');
     expect(logout).toBeDefined();
-    expect(logout?.disabled).toBe(true);
+    expect((logout as HTMLButtonElement | null)?.disabled).toBe(true);
+  });
+
+  it("coordinates Account and Language menus and closes either on pathname changes", async () => {
+    const renderShell = (pathname: string) => <AppShell session={admin} pathname={pathname} locale={createLocaleRuntime()}><p>{pathname}</p></AppShell>;
+    await act(async () => root.render(renderShell("/")));
+    const accountTrigger = container.querySelector('[data-account-trigger-variant="expanded"]') as HTMLButtonElement;
+    const languageTrigger = container.querySelector('[aria-label="Language"]') as HTMLButtonElement;
+
+    await act(async () => accountTrigger.click());
+    expect(container.querySelector('[data-account-menu]')).not.toBeNull();
+    await act(async () => languageTrigger.click());
+    expect(container.querySelector('[data-account-menu]')).toBeNull();
+    expect(container.querySelector('[data-menu-id="language"] [role="menu"]')).not.toBeNull();
+
+    await act(async () => root.render(renderShell("/knowledge")));
+    expect(container.querySelector('[data-menu-id="language"] [role="menu"]')).toBeNull();
   });
 });

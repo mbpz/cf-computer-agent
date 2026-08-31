@@ -11,7 +11,7 @@ const contributor = {
 };
 
 describe("frontend application shell", () => {
-  it("keeps only language controls in the top-right and puts account actions in the desktop footer", () => {
+  it("keeps only language controls in the top-right and a closed account trigger in the desktop footer", () => {
     const html = renderToStaticMarkup(
       <AppShell session={contributor} pathname="/knowledge" locale={createLocaleRuntime({ navigatorLanguage: "en" })} logoutPending logoutError="Session ended">
         <h1>Knowledge</h1>
@@ -28,12 +28,11 @@ describe("frontend application shell", () => {
     expect(html).toContain("data-shell-account-footer");
     expect(html).toContain("reader@example.com");
     expect(html).toContain("Member");
-    expect(html).toContain("Settings");
-    expect(html).toContain("Light");
-    expect(html).toContain("Dark");
-    expect(html).toContain("System");
-    expect(html).toContain("Signing out");
-    expect(html).toContain("Session ended");
+    expect(html).toContain('data-account-trigger="true"');
+    expect(html).not.toContain('data-account-menu="true"');
+    expect(html).not.toContain('data-account-settings="true"');
+    expect(html).not.toContain('data-theme-option="true"');
+    expect(html).not.toContain('data-account-logout="true"');
     expect(primaryNavigation).not.toContain("Settings");
     expect(html).not.toContain("Cloudflare free tier");
     expect(html).toContain("Knowledge");

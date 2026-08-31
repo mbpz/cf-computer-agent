@@ -168,6 +168,30 @@ describe("dropdown keyboard contract", () => {
     host.remove();
   });
 
+  it("coordinates shell menus and dismisses either menu with an outside pointer", async () => {
+    const host = browser.document.createElement("div") as unknown as HTMLDivElement;
+    browser.document.body.append(host as unknown as Node);
+    const root = createRoot(host);
+    await act(async () => root.render(<AppShell session={{ member: { id: "m1", email: "member@example.com", role: "contributor" }, capabilities: ["knowledge:read"], logoutUrl: "/logout" }} pathname="/" locale={createLocaleRuntime()}><div /></AppShell>));
+    const accountTrigger = host.querySelector<HTMLButtonElement>('[data-account-trigger-variant="expanded"]')!;
+    const languageTrigger = host.querySelector<HTMLButtonElement>('[aria-label="Language"]')!;
+
+    await act(async () => accountTrigger.click());
+    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).not.toBeNull();
+    await act(async () => languageTrigger.click());
+    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).toBeNull();
+    expect(host.querySelector('[data-menu-id="language"] [role="menu"]')).not.toBeNull();
+    await act(async () => host.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
+    expect(host.querySelector('[data-menu-id="language"] [role="menu"]')).toBeNull();
+
+    await act(async () => accountTrigger.click());
+    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).not.toBeNull();
+    await act(async () => host.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true })));
+    expect(host.querySelector('[data-menu-id="account"] [role="menu"]')).toBeNull();
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
   it("promotes ready collaboration routes over stale disabled server navigation", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ tree: [{
       id: "menu-workspace", key: "workspace", labelKey: "SHELL_GROUP_WORKSPACE", path: null, icon: null, groupName: "workspace", availability: "ready", children: [{
