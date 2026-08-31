@@ -1,6 +1,6 @@
 # 产品交付状态总账
 
-更新时间：2026-08-31
+更新时间：2026-09-01
 
 > 本文是当前完成情况的唯一权威来源。历史计划中的复选框不参与完成度统计。
 
@@ -98,6 +98,9 @@
 ## 判定边界
 
 - `ready` 只表示共享路由已有可执行页面；它不自动把发布或验收标为 `done`。
+- 2026-09-01 R0 审计把 21 个可见菜单路由与 3 个参数化深链接全部分类为 `partial`。该分类描述九维产品成熟度，不覆盖总账中更窄原子的本地实现/验证状态；例如已验证的 owner predicate、分页 helper 或页面入口仍可在对应窄原子中保持 `done`，但不能据此宣称完整用户旅程完成。
+- R0 对账没有提升或下调任何总账状态列：Tasks 1–3 的接受证据没有推翻现有 atom-scoped 本地 `done`，同时也没有产生 current-main 部署或 signed-browser acceptance。发现的 dashboard 占位数据、AdminAuditRoute ready/empty 不可达、筛选/排序/URL 恢复未穷举、mutation safety 缺口、二级对象授权缺口继续由 maturity manifest 和 domain audit 记录，不被总账 `done` 隐藏。
+- R0 机器证据为 `shared/workbench-maturity-capabilities.ts`、`test/unit/frontend-workbench-maturity-routes.test.tsx`、`docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md`、`scripts/workbench-domain-audit.test.mjs`。它们证明本地审计范围，不是 release evidence 或 acceptance evidence。
 - `/tasks`、`/boards`、`/notifications`、`/messages` 的 `ready` 路由与本地合同只证明当前分支具备可执行页面及本地验证证据；main 集成、push/PR、部署、远程迁移、生产 smoke 与 signed browser acceptance 仍须独立证据。
 - 2026-08-23 与 2026-08-27/28 的生产证据都早于 current main；因此相关发布/验收最多为 `partial`。
 - `docs/operations/evidence/2026-08-28-unified-pagination-shell-menu.md` 明确限定为本地 gate，且明确未部署、未应用远程 migration、未做 signed browser 验收。

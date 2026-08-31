@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -28,6 +28,8 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
+const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
+const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
 const dimensions = new Set(["entry", "journey", "api", "persistence", "isolation", "query_or_idempotency", "states", "accessibility", "evidence"]);
 const dimensionStates = new Set(["proven", "gap", "not_applicable"]);
@@ -116,6 +118,45 @@ test("AST extraction fails closed on syntax diagnostics and mutable indirection"
   });
 });
 
+test("R0 checklist atoms carry four-dimensional evidence without promoting release or acceptance", () => {
+  const { maturity } = loadContracts();
+  const checklist = readFileSync(maturityChecklistPath, "utf8");
+  const ledgerIds = deliveryLedgerIds(readFileSync(deliveryLedgerPath, "utf8"));
+  const atoms = r0ChecklistAtoms(checklist);
+
+  assert.deepEqual(
+    atoms.map((atom) => atom.id),
+    Array.from({ length: 12 }, (_, index) => `R0-${String(index + 1).padStart(3, "0")}`),
+    "R0 checklist must contain exactly the twelve canonical atoms in order",
+  );
+  assert.ok(atoms.some((atom) => atom.marker === "-"), "accepted local R0 evidence must remain delivery-partial");
+  assert.ok(atoms.some((atom) => atom.marker === " "), "unsupported R0 audit claims must remain unchecked");
+
+  for (const atom of atoms) {
+    assertR0AtomEvidence(atom, ledgerIds, maturity);
+  }
+});
+
+test("R0 checklist marker semantics fail closed on unsupported promotion", () => {
+  const checklist = readFileSync(maturityChecklistPath, "utf8");
+  const ledgerIds = deliveryLedgerIds(readFileSync(deliveryLedgerPath, "utf8"));
+  const { maturity } = loadContracts();
+  const atoms = r0ChecklistAtoms(checklist);
+  const unsupported = atoms.find((atom) => atom.marker === " ");
+  const locallyProven = atoms.find((atom) => atom.marker === "-");
+  assert.ok(unsupported, "fixture requires an unsupported atom");
+  assert.ok(locallyProven, "fixture requires a locally proven atom");
+
+  assert.throws(
+    () => assertR0AtomEvidence({ ...unsupported, marker: "x" }, ledgerIds, maturity),
+    /cannot be checked without done implementation and verification/u,
+  );
+  assert.throws(
+    () => assertR0AtomEvidence({ ...locallyProven, marker: "x" }, ledgerIds, maturity),
+    /cannot be checked while release or acceptance is incomplete/u,
+  );
+});
+
 function loadContracts() {
   const api = new API({ cwd: repositoryRoot });
   const snapshot = api.updateSnapshot({ openFiles: [routeCapabilitiesPath, maturityCapabilitiesPath] });
@@ -129,6 +170,93 @@ function loadContracts() {
     snapshot.dispose();
     api.close();
   }
+}
+
+function r0ChecklistAtoms(markdown) {
+  const section = /^## R0\b[\s\S]*?(?=^## R1\b)/mu.exec(markdown)?.[0];
+  assert.ok(section, "R0 checklist section is required");
+  const lines = section.split(/\r?\n/u);
+  const atoms = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^- \[([ x-])\] `(R0-\d{3})` (.+)$/u.exec(lines[index]);
+    if (!match) continue;
+    const dimensions = {};
+    for (const name of ["implementation", "verification", "release", "acceptance", "ledger"]) {
+      const line = lines[++index] ?? "";
+      const evidence = /^  - `(implementation|verification|release|acceptance|ledger)`: `([^`]+)` — (.+)$/u.exec(line);
+      assert.ok(evidence, `${match[2]} requires structured ${name} evidence`);
+      assert.equal(evidence[1], name, `${match[2]} evidence dimensions must remain ordered`);
+      dimensions[name] = { status: evidence[2], detail: evidence[3] };
+    }
+    atoms.push({ marker: match[1], id: match[2], description: match[3], dimensions });
+  }
+  return atoms;
+}
+
+function assertR0AtomEvidence(atom, ledgerIds, maturity) {
+  const statuses = Object.fromEntries(
+    ["implementation", "verification", "release", "acceptance"]
+      .map((name) => [name, atom.dimensions[name].status]),
+  );
+  for (const [name, status] of Object.entries(statuses)) {
+    assert.ok(["done", "partial", "pending"].includes(status), `${atom.id} has invalid ${name} status`);
+  }
+
+  for (const name of ["implementation", "verification"]) {
+    if (statuses[name] === "pending") continue;
+    const paths = evidencePaths(atom.dimensions[name].detail);
+    assert.ok(paths.length > 0, `${atom.id} ${name} requires repository evidence paths`);
+    for (const path of paths) {
+      assert.ok(existsSync(resolve(repositoryRoot, path)), `${atom.id} ${name} evidence is missing: ${path}`);
+    }
+  }
+
+  assert.equal(statuses.release, "pending", `${atom.id} R0 must not promote production release`);
+  assert.equal(statuses.acceptance, "pending", `${atom.id} R0 must not promote signed-browser acceptance`);
+  for (const name of ["release", "acceptance"]) {
+    assert.match(
+      atom.dimensions[name].detail,
+      /`docs\/product\/delivery-status-ledger\.md`/u,
+      `${atom.id} ${name} requires delivery-ledger authority`,
+    );
+  }
+
+  const localDone = statuses.implementation === "done" && statuses.verification === "done";
+  if (atom.marker === "x") {
+    assert.ok(localDone, `${atom.id} cannot be checked without done implementation and verification`);
+    assert.ok(
+      statuses.release === "done" && statuses.acceptance === "done",
+      `${atom.id} cannot be checked while release or acceptance is incomplete`,
+    );
+  } else if (atom.marker === "-") {
+    assert.ok(localDone, `${atom.id} partial marker requires done local implementation and verification`);
+    assert.ok(
+      statuses.release !== "done" || statuses.acceptance !== "done",
+      `${atom.id} partial marker requires an incomplete delivery dimension`,
+    );
+  } else {
+    assert.ok(!localDone, `${atom.id} unchecked marker requires a local implementation or verification gap`);
+  }
+
+  assert.equal(atom.dimensions.ledger.status, "manifest", `${atom.id} must use the auditable manifest ledger mapping`);
+  assert.match(
+    atom.dimensions.ledger.detail,
+    /`shared\/workbench-maturity-capabilities\.ts`/u,
+    `${atom.id} ledger mapping must reference the maturity manifest`,
+  );
+  const manifestLedgerIds = new Set(maturity.flatMap((record) => record.ledgerIds));
+  assert.ok(manifestLedgerIds.size > 0, "maturity manifest requires ledger mappings");
+  for (const id of manifestLedgerIds) assert.ok(ledgerIds.has(id), `manifest ledger ID ${id} requires a delivery row`);
+}
+
+function evidencePaths(detail) {
+  return [...detail.matchAll(/`([^`]+(?:\.[a-z0-9]+|\/[^`]+))`/giu)]
+    .map((match) => match[1])
+    .filter((path) => !path.includes(" "));
+}
+
+function deliveryLedgerIds(markdown) {
+  return new Set([...markdown.matchAll(/^\| ([A-Z][A-Z0-9]*-[A-Z0-9]+) \|/gmu)].map((match) => match[1]));
 }
 
 function sourceFile(snapshot, path) {

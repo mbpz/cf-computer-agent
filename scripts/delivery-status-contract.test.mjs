@@ -22,6 +22,7 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const ledgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const knowledgeChecklistPath = resolve(repositoryRoot, "docs/product/ai-knowledge-base-checklist.md");
 const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-frontend-checklist.md");
+const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const readmePath = resolve(repositoryRoot, "README.md");
@@ -458,6 +459,32 @@ test("delivery status ledger reconciles documentation status claims", () => {
   }
 });
 
+test("README, Roadmap, frontend, and maturity checklists keep ledger dimensions separate", () => {
+  const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
+  const documents = [
+    ["README", readFileSync(readmePath, "utf8")],
+    ["Roadmap", readFileSync(roadmapPath, "utf8")],
+    ["frontend checklist", readFileSync(frontendChecklistPath, "utf8")],
+    ["maturity checklist", readFileSync(maturityChecklistPath, "utf8")],
+  ];
+
+  for (const [name, markdown] of documents) {
+    assertLedgerLanguageBoundaries(markdown, rows, name);
+    for (const claim of [
+      "TSK-009 implementation is complete.",
+      "WB-001 release is complete.",
+      "IDN-001 acceptance is complete.",
+      "TSK-001 is complete.",
+    ]) {
+      assert.throws(
+        () => assertLedgerLanguageBoundaries(`${markdown}\n${claim}\n`, rows, name),
+        new RegExp(`${name} .*must not claim`, "u"),
+        `${name} must reject a ledger-conflicting claim: ${claim}`,
+      );
+    }
+  }
+});
+
 test("collaboration delivery is locally ready while release and acceptance remain pending", () => {
   const { rows } = parseMarkdownTable(readFileSync(ledgerPath, "utf8"));
   const rowsById = new Map(rows.map((row) => [row.ID, row]));
@@ -784,6 +811,37 @@ function assertReadmeContract(readme, rows) {
     ]) {
       assertNoPositiveReadmeClaim(readme, subject, README_FINAL_CLAIM, message);
     }
+  }
+}
+
+function assertLedgerLanguageBoundaries(markdown, rows, documentName) {
+  const currentClaims = markdown.replace(/^- \[ \].*$/gmu, "");
+  for (const row of rows) {
+    const subject = `(?:\`?${escapeRegExp(row.ID)}\`?)`;
+    for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
+      if (row[dimension.column] === "done") continue;
+      assertNoPositiveDimensionClaim(
+        currentClaims,
+        subject,
+        dimension,
+        `${documentName} ${row.ID} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+      );
+    }
+    if (isOverallCompletionEligible(row)) continue;
+    assertNoPositiveDimensionClaim(
+      currentClaims,
+      subject,
+      FRONTEND_OVERALL_COMPLETION_CLAIM,
+      `${documentName} ${row.ID} must not claim overall completion while delivery dimensions remain incomplete`,
+      64,
+      ({ claimIndex, claim }) => handleDimensionQualifiedCompletion(
+        currentClaims,
+        claimIndex,
+        claim.length,
+        [row],
+        (dimension) => `${documentName} ${row.ID} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+      ),
+    );
   }
 }
 

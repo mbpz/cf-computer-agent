@@ -1,6 +1,6 @@
 # Workbench Product Maturity Checklist
 
-更新时间：2026-08-31
+更新时间：2026-09-01
 
 本清单是工作台成熟化计划的原子任务索引。当前勾选状态只在 R0 审计后更新；已有页面、测试或 `ready` 路由不能自动把 atom 标记为完成。
 
@@ -11,22 +11,84 @@
 - `[x]`：本地实现和验证完整。
 - 每个 atom 另行记录 `release` 与 `acceptance`，不得由 `[x]` 推断生产完成。
 
+R0 对账采用更严格的交付标记：本地实现与验证均为 `done`、但发布或 signed-browser 验收仍为 `pending` 时使用 `[-]`；只有四个维度均完成才允许 `[x]`。`ledger: manifest` 表示该 atom 映射到 `shared/workbench-maturity-capabilities.ts` 中 24 个 capability record 的 `ledgerIds` 并由合同逐项解析到交付总账。
+
 完成判定必须覆盖入口、核心流程、真实 API、成员隔离、分页/幂等、完整异步状态、键盘/触控/响应式、本地验证和独立交付证据。
 
 ## R0 — 现状审计与权威总账
 
-- [ ] `R0-001` 固化所有共享路由、参数化路由、菜单入口和权限映射。
+- [-] `R0-001` 固化所有共享路由、参数化路由、菜单入口和权限映射。
+  - `implementation`: `done` — `shared/workspace-route-capabilities.ts`、`frontend/app-routes.ts`、`shared/workbench-maturity-capabilities.ts`。
+  - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs`、`test/unit/frontend-workbench-maturity-routes.test.tsx`。
+  - `release`: `pending` — R0 未执行部署；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — R0 未执行 signed-browser 验收；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-002` 固化所有页面主操作、次操作、表单、列表、详情和深链接清单。
-- [ ] `R0-003` 逐路由验证 admin、contributor、匿名和撤权后的可见性。
-- [ ] `R0-004` 逐页面验证 loading、empty、error、retry、ready、pending。
+  - `implementation`: `partial` — `shared/workbench-maturity-capabilities.ts`、`docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md` 已覆盖路由、详情和 source-visible mutation；非 mutation 次操作仍未穷举。
+  - `verification`: `partial` — `test/unit/frontend-workbench-maturity-routes.test.tsx`、`scripts/workbench-domain-audit.test.mjs` 未证明每个非 mutation 控件。
+  - `release`: `pending` — R0 未执行部署；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — R0 未执行 signed-browser 验收；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
+- [-] `R0-003` 逐路由验证 admin、contributor、匿名和撤权后的可见性。
+  - `implementation`: `done` — `test/helpers/workbench-maturity-route-fixtures.ts`、`test/helpers/authenticated-app-harness.tsx` 固化角色与撤权投影。
+  - `verification`: `done` — `test/unit/frontend-workbench-maturity-routes.test.tsx` 覆盖入口、直达、权限收缩与参数化路由。
+  - `release`: `pending` — 本地 fixture 不构成发布；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — backend-generated signed session 与真实浏览器角色旅程未执行；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
+- [-] `R0-004` 逐页面验证 loading、empty、error、retry、ready、pending。
+  - `implementation`: `done` — `test/helpers/workbench-maturity-route-fixtures.ts` 为 24 个 capability 固化四态输入或命名的 unsupported gap。
+  - `verification`: `done` — `test/unit/frontend-workbench-maturity-routes.test.tsx` 的 24×4 运行时矩阵验证现状而不补写业务行为。
+  - `release`: `pending` — 状态矩阵仅为本地证据；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — 真实浏览器错误、焦点和恢复旅程未执行；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-005` 逐列表验证真实 API、服务端分页、筛选、排序、URL 恢复和 stale guard。
+  - `implementation`: `partial` — `docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md` 已按 API 记录 numbered/cursor/not-applicable，但不把 API shape 当作完整 UI continuation。
+  - `verification`: `partial` — `scripts/workbench-domain-audit.test.mjs` 验证真实 API 与分页来源；筛选、排序、URL 恢复和 stale guard 尚未逐列表穷举。
+  - `release`: `pending` — R0 未执行部署或远程 migration；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — 真实浏览器翻页与历史恢复未执行；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-006` 逐 mutation 验证幂等键、重复提交、并发冲突、精确回滚和审计。
+  - `implementation`: `partial` — `shared/workbench-maturity-capabilities.ts`、`docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md` 已来源绑定 visible mutation 与 safety strategy，但保留未保护端点。
+  - `verification`: `partial` — `scripts/workbench-domain-audit.test.mjs` 能失败关闭遗漏或动态 request options；精确回滚与审计结果未逐 mutation 完整验证。
+  - `release`: `pending` — R0 未执行部署；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — 重放、并发与 uncertain outcome 浏览器旅程未执行；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-007` 逐私有实体验证 member scope、二级对象授权和撤权收缩。
+  - `implementation`: `partial` — `docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md` 只认可运行时 authenticated principal predicate；管理域全局对象保持 `ownerPredicate: null`。
+  - `verification`: `partial` — `scripts/workbench-domain-audit.test.mjs`、`test/unit/frontend-workbench-maturity-routes.test.tsx` 覆盖 owner binding 与消息撤权探针，但未逐二级对象完成 signed authority 验证。
+  - `release`: `pending` — R0 未执行远程隔离 smoke；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — 跨成员与撤权后的真实角色旅程未执行；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-008` 对照 D1 migration、本地 schema、Repository、Service、Route 和 DTO。
-- [ ] `R0-009` 对照单元测试、Worker 测试、浏览器证据、发布版本和验收范围。
-- [ ] `R0-010` 将每项分类为 usable、partial、unusable、pseudo-entry 或 unreachable。
-- [ ] `R0-011` 下调没有完整证据的 `ready`、`done` 和 README/ROADMAP 完成声明。
+  - `implementation`: `partial` — `docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md` 已绑定 API、persistence 与 owner source path，尚未为每项独立列出 DTO/Service 链。
+  - `verification`: `partial` — `scripts/workbench-domain-audit.test.mjs` 验证路径、AST route branch 与 symbol/token 绑定，但不能替代逐 DTO 语义审查。
+  - `release`: `pending` — 本地 migration/source 审计不证明远程 schema；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — 远程 schema 与真实角色读写未验收；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
+- [-] `R0-009` 对照单元测试、Worker 测试、浏览器证据、发布版本和验收范围。
+  - `implementation`: `done` — `shared/workbench-maturity-capabilities.ts` 分列 frontend/backend/test evidence，`docs/product/delivery-status-ledger.md` 分列实现、验证、发布、验收。
+  - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs`、`scripts/delivery-status-contract.test.mjs` 验证 evidence path、dated scope 与语言边界。
+  - `release`: `pending` — 仅保留总账中的日期化历史候选范围，不推断 current-main；权威为 `docs/product/delivery-status-ledger.md`。
+  - `acceptance`: `pending` — 历史匿名/signed automation 证据不替代 current-main signed browser；权威为 `docs/product/delivery-status-ledger.md`。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
+- [-] `R0-010` 将每项分类为 usable、partial、unusable、pseudo-entry 或 unreachable。
+  - `implementation`: `done` — `shared/workbench-maturity-capabilities.ts` 为 24 个当前可见/参数化 capability 明确记录 classification；当前均为 `partial`。
+  - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs`、`scripts/workbench-domain-audit.test.mjs` 验证记录完整性、来源绑定与保守 gap。
+  - `release`: `pending` — classification 只描述本地审计；发布状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `acceptance`: `pending` — classification 不代表 signed-browser acceptance；验收状态仅以 `docs/product/delivery-status-ledger.md` 为准。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
+- [-] `R0-011` 下调没有完整证据的 `ready`、`done` 和 README/ROADMAP 完成声明。
+  - `implementation`: `done` — `docs/product/workbench-product-maturity-checklist.md`、`docs/product/delivery-status-ledger.md` 明确本地、发布与验收边界。
+  - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs`、`scripts/delivery-status-contract.test.mjs` 对 checklist marker 与四份权威文档的维度语言失败关闭。
+  - `release`: `pending` — Task 4 不部署且不提升总账生产列；权威为 `docs/product/delivery-status-ledger.md`。
+  - `acceptance`: `pending` — Task 4 不执行 signed-browser acceptance；权威为 `docs/product/delivery-status-ledger.md`。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集逐项解析到总账。
 - [ ] `R0-012` 生成 R1–R8 的缺口矩阵、依赖图、优先级和验收顺序。
+  - `implementation`: `pending` — Task 5 尚未生成经审查的缺口矩阵与依赖排序。
+  - `verification`: `pending` — Task 5 尚未提供独立合同或评审证据。
+  - `release`: `pending` — 尚无可发布产物；权威为 `docs/product/delivery-status-ledger.md`。
+  - `acceptance`: `pending` — 尚无可验收产物；权威为 `docs/product/delivery-status-ledger.md`。
+  - `ledger`: `manifest` — `shared/workbench-maturity-capabilities.ts` 的 `ledgerIds` 并集为后续缺口矩阵输入。
 
 ## R1 — 设计系统与全局 Shell
 
@@ -149,4 +211,3 @@
 - [ ] `R8-008` Worker 候选版本、静态资产、secrets 和流量目标独立记录。
 - [ ] `R8-009` 匿名 smoke、signed automation 和 signed browser 分开验收。
 - [ ] `R8-010` 交付总账、README、ROADMAP 和 checklist 与证据同步。
-
