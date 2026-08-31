@@ -95,6 +95,56 @@ test("validation rejects removing source-visible roles.update from the capabilit
   );
 });
 
+test("role detail route methods and pagination are isolated to the exact regex branch", () => {
+  const evidence = runtimeEvidenceSnapshot({ repositoryRoot });
+  assert.deepEqual(evidence.apis["/api/admin/roles/:id"].methods, ["DELETE", "PATCH"]);
+  assert.equal(evidence.apis["/api/admin/roles/:id"].pagination, "not_applicable");
+  assert.deepEqual(evidence.apis["/api/admin/roles/:id/members"].methods, ["DELETE", "POST"]);
+});
+
+test("validation rejects collection methods borrowed by the role detail branch", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  const roles = audit.find((item) => item.id === "workbench-admin-roles");
+  assert.ok(roles);
+  const contaminated = runtimeEvidenceSnapshot({ repositoryRoot });
+  contaminated.apis["/api/admin/roles/:id"] = {
+    ...contaminated.apis["/api/admin/roles/:id"],
+    methods: ["DELETE", "GET", "PATCH", "POST"],
+  };
+  assert.throws(
+    () => validateWorkbenchDomainAudit([roles], { repositoryRoot, runtimeEvidence: contaminated }),
+    /runtime evidence contradiction/u,
+  );
+});
+
+test("current frontend ownership discovers the required visible mutation minimum", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  const expected = {
+    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel"],
+    "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/links/:linkId", "PATCH /api/tasks/:id", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
+    "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],
+    "workbench-admin-members": ["PATCH /api/admin/members/:id/status"],
+    "workbench-admin-roles": ["DELETE /api/admin/roles/:id/members", "PATCH /api/admin/roles/:id", "POST /api/admin/roles", "POST /api/admin/roles/:id/members"],
+  };
+  for (const [id, operations] of Object.entries(expected)) {
+    assert.deepEqual(audit.find((record) => record.id === id)?.mutationFactIds, operations, `${id}: visible mutation inventory incomplete`);
+  }
+});
+
+test("removing role detail API ownership and its mutation cannot bypass source discovery", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  const roles = audit.find((item) => item.id === "workbench-admin-roles");
+  assert.ok(roles);
+  assert.throws(
+    () => validateWorkbenchDomainAudit([{
+      ...roles,
+      apiPaths: roles.apiPaths.filter((path) => path !== "/api/admin/roles/:id"),
+      mutationFactIds: roles.mutationFactIds.filter((id) => id !== "PATCH /api/admin/roles/:id"),
+    }], { repositoryRoot }),
+    /source-visible API ownership contradiction|visible mutation inventory contradiction/u,
+  );
+});
+
 test("validation rejects unsupported pagination", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const home = audit.find((item) => item.id === "workbench-home");

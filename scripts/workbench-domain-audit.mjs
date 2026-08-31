@@ -76,11 +76,15 @@ function readDomainManifest(repositoryRoot) {
 }
 
 function canonicalRuntimeEvidence(records, repositoryRoot) {
-  const apiPaths = [...new Set(records.flatMap((record) => record.apiPaths))];
+  const visibleMutations = new Map(records.map((record) => [record.id, deriveVisibleMutations(record, repositoryRoot)]));
+  const apiPaths = [...new Set([
+    ...records.flatMap((record) => record.apiPaths),
+    ...[...visibleMutations.values()].flatMap((operations) => operations.map((operation) => operation.slice(operation.indexOf(" ") + 1))),
+  ])];
   const apis = deriveRouteEvidence(apiPaths, repositoryRoot);
   const mutations = {};
   for (const record of records) {
-    for (const operation of deriveVisibleMutations(record, repositoryRoot)) {
+    for (const operation of visibleMutations.get(record.id) ?? []) {
       const route = apis[operation.slice(operation.indexOf(" ") + 1)];
       assert.ok(route?.methods.includes(operation.slice(0, operation.indexOf(" "))), `${record.id}: frontend mutation lacks matching route handler ${operation}`);
       const proven = PROVEN_MUTATION_SAFETY[operation];
@@ -127,16 +131,16 @@ function deriveRouteEvidence(apiPaths, repositoryRoot) {
         const staticMatch = expression.match(/url\.pathname\s*(!==|===)\s*["'](\/api\/[^"']+)["']/u);
         if (staticMatch) {
           const functionNode = enclosingFunction(statement);
-          const body = staticMatch[1] === "!==" ? functionNode?.body : statement.thenStatement;
-          if (body && functionNode) definitions.push(routeDefinition(staticMatch[2], null, expandLocalCalls(body.getText(source), functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
+          const body = staticMatch[1] === "!==" ? continuationAfterGuard(statement, source) : statement.thenStatement.getText(source);
+          if (body && functionNode) definitions.push(routeDefinition(staticMatch[2], null, expandLocalCalls(body, functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
         }
       }
       for (const route of regexRoutes) {
         const statement = ifStatements.find((candidate) => [route.name, `!${route.name}`].includes(candidate.expression.getText(source)));
         const functionNode = statement ? enclosingFunction(statement) : null;
         if (statement && functionNode) {
-          const body = statement.expression.getText(source) === `!${route.name}` ? functionNode.body : statement.thenStatement;
-          definitions.push(routeDefinition(null, route.literal, expandLocalCalls(body.getText(source), functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
+          const body = statement.expression.getText(source) === `!${route.name}` ? continuationAfterGuard(statement, source) : statement.thenStatement.getText(source);
+          definitions.push(routeDefinition(null, route.literal, expandLocalCalls(body, functionBodies), relative(repositoryRoot, absolutePath), functionNode.name?.getText(source) ?? "anonymous"));
         }
       }
     }
@@ -162,6 +166,16 @@ function expandLocalCalls(body, functionBodies) {
   return expanded;
 }
 
+function continuationAfterGuard(statement, source) {
+  const statements = statement.parent?.statements;
+  assert.ok(statements, `route guard must be a direct block statement: ${statement.getText(source)}`);
+  const index = statements.indexOf(statement);
+  assert.ok(index >= 0, "route guard must belong to its parent block");
+  const continuation = statements.slice(index + 1).map((node) => node.getText(source)).join("\n");
+  assert.ok(continuation.length > 0, `route guard has no owned continuation: ${statement.getText(source)}`);
+  return continuation;
+}
+
 function routeDefinition(path, literal, body, sourcePath, symbol) {
   const methods = [...new Set([...body.matchAll(/request\.method\s*(?:===|!==)\s*["'](GET|POST|PUT|PATCH|DELETE)["']/gu)].map((match) => match[1]))].sort();
   const pagination = body.includes("parseNumberedPageRequest")
@@ -185,8 +199,10 @@ function enclosingFunction(node) {
 function deriveVisibleMutations(record, repositoryRoot) {
   const index = frontendSourceIndex(repositoryRoot);
   const queue = record.frontendEvidence
-    .filter((path) => path.startsWith("frontend/"))
+    .filter((path) => path.startsWith("frontend/") && !path.startsWith("frontend/lib/"))
     .map((path) => ({ path, symbol: /frontend\/(?:app|app-routes)\.tsx?$/u.test(path) ? routeSymbol(record.id) : null }));
+  const operationModule = `frontend/lib/${record.id.replace(/^workbench-/u, "")}-data.ts`;
+  if (index.has(operationModule)) queue.push({ path: operationModule, symbol: null });
   const visited = new Set();
   const operations = new Set();
   while (queue.length > 0) {
@@ -199,13 +215,14 @@ function deriveVisibleMutations(record, repositoryRoot) {
     if (!entry) continue;
     const scope = item.symbol === null ? entry.module : entry.functions.get(item.symbol);
     if (!scope) continue;
+    assert.equal(scope.unsupportedMutations.length, 0, `${record.id}: unsupported frontend mutation invocation: ${scope.unsupportedMutations.join(", ")}`);
     for (const invoked of scope.invokedImports) {
       const imported = entry.imports.get(invoked);
       if (imported) queue.push(imported);
     }
     for (const call of scope.calls) {
       const declaredPath = record.apiPaths.find((pathValue) => pathShape(pathValue) === pathShape(call.path));
-      if (declaredPath && call.method !== "GET") operations.add(`${call.method} ${declaredPath}`);
+      if (call.method !== "GET") operations.add(`${call.method} ${declaredPath ?? call.path}`);
     }
   }
   return [...operations].sort();
@@ -256,14 +273,19 @@ function frontendSourceIndex(repositoryRoot) {
 
 function frontendScope(node, source) {
   const calls = [];
+  const unsupportedMutations = [];
   const invokedImports = new Set();
   const scopeText = node.getText(source);
+  for (const match of scopeText.matchAll(/<([A-Z][A-Za-z0-9_$]*)\b/gu)) invokedImports.add(match[1]);
   const visit = (child) => {
     if (isCallExpression(child)) {
       const expression = child.expression.getText(source);
       if (expression === "apiFetch") {
         const method = child.arguments[1]?.getText(source).match(/\bmethod\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/u)?.[1] ?? "GET";
-        for (const path of frontendCallPaths(child.arguments[0]?.getText(source), scopeText)) calls.push({ path, method });
+        const argument = child.arguments[0]?.getText(source);
+        const paths = frontendCallPaths(argument, scopeText);
+        for (const path of paths) calls.push({ path, method });
+        if (method !== "GET" && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
       } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(expression)) {
         invokedImports.add(expression);
       }
@@ -271,7 +293,7 @@ function frontendScope(node, source) {
     child.forEachChild(visit);
   };
   visit(node);
-  return { calls, invokedImports };
+  return { calls, invokedImports, unsupportedMutations };
 }
 
 function frontendCallPaths(text, scopeText) {
@@ -363,7 +385,7 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
     for (const mutationFactId of expectedMutations) {
       const fact = canonical.mutations[mutationFactId];
       assert.ok(fact, `${record.id}: unknown mutation evidence ${mutationFactId}`);
-      assert.ok(record.apiPaths.includes(fact.apiPath), `${record.id}: mutation ${mutationFactId} has undeclared API ${fact.apiPath}`);
+      assert.ok(record.apiPaths.some((apiPath) => pathShape(apiPath) === pathShape(fact.apiPath)), `${record.id}: source-visible API ownership contradiction for ${mutationFactId}`);
       assert.ok(["gap", "idempotency_key", "conditional_write"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
       if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
       if (fact.strategy !== "gap") semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });

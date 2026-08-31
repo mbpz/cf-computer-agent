@@ -199,12 +199,12 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-search",
-    apiPaths: ["/api/knowledge/search"],
+    apiPaths: ["/api/knowledge/search", "/api/saved-views", "/api/saved-views/:id"],
     persistencePaths: ["src/library/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; LibraryRepository search binds scope.memberId through the authorized member CTE before visibility filtering.",
     pagination: "numbered",
-    mutations: [],
-    mutationSafety: "not_applicable",
+    mutations: ["POST /api/saved-views — gap: server-generated create has no client idempotency key", "DELETE /api/saved-views/:id — gap: repeated deletion does not converge"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-agent",
@@ -352,12 +352,12 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-messages",
-    apiPaths: ["/api/discussions"],
+    apiPaths: ["/api/discussions", "/api/discussions/context"],
     persistencePaths: ["src/discussions/authorization.ts", "src/discussions/repository.ts", "migrations/0037_workbench_discussions.sql"],
     ownerPredicate: "routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks task ownership or current knowledge visibility before listing or writing.",
     pagination: "cursor",
-    mutations: [],
-    mutationSafety: "not_applicable",
+    mutations: ["POST /api/discussions/context — gap: server-generated thread create has no client idempotency key"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-knowledge-reader",
