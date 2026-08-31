@@ -905,6 +905,16 @@ describe("Worker application", () => {
     expectProtectedResponse(stylesheet);
   });
 
+  it("serves the SPA for direct Notifications and Messages refreshes", async () => {
+    for (const path of ["/notifications", "/messages", "/messages/thread-1"]) {
+      const page = await SELF.fetch(`https://example.test${path}`);
+      expect(page.status, path).toBe(200);
+      expectProtectedResponse(page);
+      expect(page.headers.get("cache-control"), path).toBe("no-store");
+      await expect(page.text(), path).resolves.toContain("Memory Garden");
+    }
+  });
+
   it("does not encode unexpected journal corruption as a domain error", async () => {
     const sensitiveMarker = "journal-sensitive-marker-do-not-log";
     const knowledge = isolatedKnowledgeNamespace(`journal-corruption-${crypto.randomUUID()}`);

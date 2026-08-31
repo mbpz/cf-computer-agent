@@ -1,11 +1,9 @@
 // @vitest-environment node
-import React, { act, useEffect, useState } from "react";
+import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DiscussionThreadRoute, MessagesRoute } from "../../frontend/app";
-import { AppShell } from "../../frontend/components/shell/app-shell";
+import { App, DiscussionThreadRoute, MessagesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
-import { readWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createDiscussionSubmitController } from "../../frontend/pages/messages/discussion-model";
 
 const vmContexts = new WeakSet<object>();
@@ -315,14 +313,20 @@ describe("discussion routes", () => {
     expect(sent[1]!.clientKey).not.toBe(sent[0]!.clientKey);
   });
 
-  it("synchronizes internal cursor state when the sidebar re-enters the canonical messages route", async () => {
+  it("synchronizes internal cursor state when the global Messages link re-enters canonically without accepting the stale response", async () => {
     const discussionCalls: string[] = [];
+    let resolveStale!: (response: Response) => void;
+    const stale = new Promise<Response>((resolve) => { resolveStale = resolve; });
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
       const path = String(input);
+      if (path === "/api/session") return Promise.resolve(Response.json(session));
+      if (path === "/api/telemetry/pageview") return Promise.resolve(new Response(null, { status: 204 }));
       if (path === "/api/navigation") return Promise.reject(new Error("navigation unavailable"));
       if (path.startsWith("/api/discussions?")) {
         discussionCalls.push(path);
-        return Promise.resolve(Response.json({ items: [] }));
+        return path.includes("cursor=cursor_2")
+          ? stale
+          : Promise.resolve(Response.json({ items: [thread({ id: "thread-default", contextId: "task-default" })] }));
       }
       return Promise.reject(new Error(`unexpected request: ${path}`));
     });
@@ -333,27 +337,22 @@ describe("discussion routes", () => {
       permissionMask: "0x100000",
       logoutUrl: "/auth/logout",
     };
-    function Harness() {
-      const [location, setLocation] = useState(readWorkspaceLocation);
-      useEffect(() => {
-        const update = () => setLocation(readWorkspaceLocation());
-        window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
-        return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, update);
-      }, []);
-      return <AppShell session={session} pathname={location.pathname} locale={createLocaleRuntime()} onNavigate={(path) => writeWorkspaceHistory("push", path)}>
-        <MessagesRoute locale={createLocaleRuntime()} search={location.search} />
-      </AppShell>;
-    }
-    await act(async () => root.render(<Harness />));
+    await act(async () => root.render(<App />));
     await waitFor(() => discussionCalls.includes("/api/discussions?limit=20&cursor=cursor_2"));
 
-    const messagesLink = container.querySelector("nav[data-shell-sidebar-scroll] a[href='/messages']") as HTMLAnchorElement;
+    const messagesLink = container.querySelector("nav[data-shell-collaboration-navigation] a[href='/messages']") as HTMLAnchorElement;
+    expect(messagesLink).not.toBeNull();
     await act(async () => messagesLink.click());
     await waitFor(() => discussionCalls.includes("/api/discussions?limit=20"));
 
     expect(browser.location.pathname).toBe("/messages");
     expect(browser.location.search).toBe("");
     expect(container.textContent).toContain("Page 1");
+    expect(container.textContent).toContain("task-default");
+
+    await act(async () => resolveStale(Response.json({ items: [thread({ id: "thread-stale", contextId: "task-stale" })] })));
+    await waitFor(() => container.textContent?.includes("task-default") ?? false);
+    expect(container.textContent).not.toContain("task-stale");
   });
 });
 

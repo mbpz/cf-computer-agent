@@ -471,7 +471,8 @@ describe("task-backed boards route", () => {
     await act(async () => root.render(<Harness />));
     await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 2);
 
-    const boardsLink = container.querySelector("nav[data-shell-sidebar-scroll] a[href='/boards']") as HTMLAnchorElement;
+    const boardsLink = container.querySelector("nav[data-shell-collaboration-navigation] a[href='/boards']") as HTMLAnchorElement;
+    expect(boardsLink).not.toBeNull();
     await act(async () => boardsLink.click());
     await waitForBoardRequest(requests, (path) => statusFromUrl(path) === "todo" && pageFromUrl(path) === 1);
 
