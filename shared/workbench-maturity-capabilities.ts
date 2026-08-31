@@ -47,7 +47,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-home", routeId: "home", pathname: "/", requiredRole: "contributor",
     journey: "Open the workbench and review the current capability summary.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/home-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/member.ts"], testEvidence: ["test/unit/workspace-dashboard.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["WB-001", "WB-002"], gaps: ["The current server-navigation entry and a response-owned recent-item ready marker are fixture-proven. Home renders ready while recent data is pending, collapses recent failure to empty, hard-codes zero metrics, and has no retryable route error. Release and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/home-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/member.ts"], testEvidence: ["test/unit/workspace-dashboard.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["WB-001", "WB-002"], gaps: ["The current server-navigation entry and a response-owned recent-item ready marker are fixture-proven. Home renders ready while recent data is pending, collapses recent failure to empty, hard-codes zero metrics, and has no retryable route error. The recent API is cursor-paged, but Home exposes no continuation control. Release and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-submit", routeId: "submit", pathname: "/submit", requiredRole: "contributor",
@@ -175,7 +175,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     apiPaths: ["/api/knowledge/recent"],
     persistencePaths: ["src/recent-visits/repository.ts", "migrations/0024_m4_knowledge_visits.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.",
-    pagination: "not_applicable",
+    pagination: "cursor",
     mutations: [],
     mutationSafety: "not_applicable",
   },
@@ -212,7 +212,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/chat/repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.",
     pagination: "not_applicable",
-    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — proven: owner-scoped conditional update", "POST /api/knowledge/chat/conversations/:id/cancel — proven: owner-scoped conditional cancel state"],
+    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — gap: no expected version is supplied", "POST /api/knowledge/chat/conversations/:id/cancel — gap: no replay key is supplied"],
     mutationSafety: "mixed",
   },
   {
@@ -284,8 +284,8 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/assets/repository.ts", "migrations/0005_m2_asset_ingestion.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: ["POST /api/admin/assets/:id/retry — proven: parse job status must be retryable or terminal before reset"],
-    mutationSafety: "conditional_write",
+    mutations: ["POST /api/admin/assets/:id/retry — gap: read-before-reset is not an atomic conditional write"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-admin-members",
@@ -293,8 +293,8 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/members/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: ["PATCH /api/admin/members/:id/status — proven: repository compares the previously read contributor status"],
-    mutationSafety: "conditional_write",
+    mutations: ["PATCH /api/admin/members/:id/status — gap: no expected status or version is supplied"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-admin-roles",
@@ -302,7 +302,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/authorization/roles-repository.ts", "migrations/0029_workspace_rbac.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["POST /api/admin/roles — gap: server-generated create has no client idempotency key", "POST /api/admin/roles/:id/members — proven: unique membership converges duplicate assignment", "DELETE /api/admin/roles/:id/members — proven: membership removal converges"],
+    mutations: ["POST /api/admin/roles — gap: server-generated create has no client idempotency key", "PATCH /api/admin/roles/:id — gap: update has no expected version or conditional predicate", "POST /api/admin/roles/:id/members — gap: duplicate assignment returns 409 rather than replay success", "DELETE /api/admin/roles/:id/members — gap: repeated removal returns 404 rather than converging"],
     mutationSafety: "mixed",
   },
   {
@@ -361,11 +361,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-knowledge-reader",
-    apiPaths: ["/api/knowledge/:id", "/api/knowledge/:id/favorite", "/api/knowledge/:id/note", "/api/knowledge/:id/related", "/api/knowledge/:id/backlinks"],
+    apiPaths: ["/api/knowledge/:id", "/api/knowledge/:id/favorite", "/api/knowledge/:id/note", "/api/knowledge/:id/note/shares", "/api/knowledge/:id/note/shares/:recipientId", "/api/knowledge/:id/related", "/api/knowledge/:id/backlinks"],
     persistencePaths: ["src/library/repository.ts", "src/favorites/repository.ts", "src/private-notes/repository.ts", "src/recent-visits/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0012_m5_private_notes.sql", "migrations/0023_m4_knowledge_favorites.sql", "migrations/0024_m4_knowledge_visits.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.",
     pagination: "not_applicable",
-    mutations: ["PUT/DELETE /api/knowledge/:id/favorite — proven: member-scoped insert-ignore and convergent delete", "PUT /api/knowledge/:id/note — gap: no expected version protects concurrent note edits", "reader visit recording — gap: repeated GET increments visit_count and is intentionally not retry-idempotent"],
+    mutations: ["PUT /api/knowledge/:id/favorite — proven: member-scoped conflict-ignore converges", "DELETE /api/knowledge/:id/favorite — gap: repeated delete behavior is not proven", "PUT /api/knowledge/:id/note — gap: no expected version protects concurrent note edits", "POST/DELETE note shares — gap: no replay key or expected version is supplied", "reader visit recording — gap: repeated GET increments visit_count and is intentionally not retry-idempotent"],
     mutationSafety: "mixed",
   },
   {
@@ -383,7 +383,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/publication/repository.ts", "src/submissions/repository.ts", "src/review-comments/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0022_m4_review_comments.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["POST /api/admin/submissions/:id/publish — proven: stable submission publication intent resumes the same outcome", "POST request-revision/reject — proven: review-pending conditional transition", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
+    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST request-revision/reject — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
     mutationSafety: "mixed",
   },
 ] as const satisfies readonly WorkbenchMaturityDomainEvidence[]);
