@@ -5,6 +5,8 @@ export interface WorkbenchMaturityCapability {
   readonly id: string;
   readonly routeId: string;
   readonly pathname: string;
+  readonly parentRouteId?: string;
+  readonly routePattern?: string;
   readonly requiredRole: "anonymous" | "contributor" | "admin";
   readonly journey: string;
   readonly classification: MaturityClassification;
@@ -137,5 +139,20 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
     id: "workbench-messages", routeId: "messages", pathname: "/messages", requiredRole: "contributor",
     journey: "Find a contextual discussion and reply to its current authorized thread.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
     frontendEvidence: ["frontend/pages/messages/messages-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/discussions.ts", "src/discussions/service.ts"], testEvidence: ["test/unit/frontend-discussion-route.test.tsx", "test/worker/discussions.test.ts"], ledgerIds: ["MSG-001", "MSG-002", "MSG-004"], gaps: INITIAL_GAPS,
+  },
+  {
+    id: "workbench-knowledge-reader", routeId: "knowledge-reader", pathname: "/knowledge/:id", parentRouteId: "knowledge", routePattern: "/^\\/knowledge\\/[A-Za-z0-9_-]+$/u", requiredRole: "contributor",
+    journey: "Open an authorized knowledge item and inspect its reader content.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/pages/knowledge-reader-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/library.ts", "src/library/service.ts"], testEvidence: ["test/unit/frontend-knowledge-reader-data.test.ts", "test/worker/m1-library.test.ts"], ledgerIds: ["KB-006"], gaps: INITIAL_GAPS,
+  },
+  {
+    id: "workbench-message-thread", routeId: "message-thread", pathname: "/messages/:id", parentRouteId: "messages", routePattern: "/^\\/messages\\/[A-Za-z0-9_-]{1,128}$/u", requiredRole: "contributor",
+    journey: "Open an authorized contextual discussion thread and read its messages.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/pages/messages/thread-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/discussions.ts", "src/discussions/service.ts"], testEvidence: ["test/unit/frontend-discussion-route.test.tsx", "test/worker/discussions.test.ts"], ledgerIds: ["MSG-002", "MSG-004"], gaps: INITIAL_GAPS,
+  },
+  {
+    id: "workbench-admin-submission-detail", routeId: "admin-submission-detail", pathname: "/admin/submissions/:id", parentRouteId: "admin-submissions", routePattern: "/^\\/admin\\/submissions\\/[A-Za-z0-9_-]+$/u", requiredRole: "admin",
+    journey: "Open a reviewable submission and make an authorized publication decision.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/pages/admin/review-detail-route.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/admin-review.ts", "src/review/service.ts"], testEvidence: ["test/unit/frontend-admin-review-data.test.ts", "test/worker/m1-publication.test.ts"], ledgerIds: ["ADM-002"], gaps: INITIAL_GAPS,
   },
 ] as const satisfies readonly WorkbenchMaturityCapability[]);
