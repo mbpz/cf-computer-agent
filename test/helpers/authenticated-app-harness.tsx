@@ -70,31 +70,57 @@ export async function mountApp(options: {
   fetch: typeof globalThis.fetch;
 }): Promise<MountedApp> {
   const browser = new Window({ url: options.url });
-  vi.stubGlobal("window", browser);
-  vi.stubGlobal("document", browser.document);
-  vi.stubGlobal("navigator", browser.navigator);
-  vi.stubGlobal("history", browser.history);
-  vi.stubGlobal("location", browser.location);
-  vi.stubGlobal("HTMLElement", browser.HTMLElement);
-  vi.stubGlobal("fetch", options.fetch);
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const container = browser.document.createElement("div") as unknown as HTMLElement;
-  browser.document.body.append(container as unknown as Node);
-  const root = createRoot(container);
-  await act(async () => root.render(<App />));
-  await waitFor(() => container.querySelector("[data-shell-root]") !== null || container.querySelector("main") !== null);
-  return {
-    browser,
-    container,
-    root,
-    async unmount() {
-      await act(async () => root.unmount());
-      container.remove();
-      browser.close();
-      vi.unstubAllGlobals();
-      vi.restoreAllMocks();
-    },
+  let container: HTMLElement | undefined;
+  let root: Root | undefined;
+  let cleanupStarted = false;
+
+  const cleanup = async (): Promise<void> => {
+    if (cleanupStarted) return;
+    cleanupStarted = true;
+    const errors: unknown[] = [];
+    const attempt = async (operation: () => void | Promise<void>) => {
+      try {
+        await operation();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+
+    await attempt(async () => {
+      if (root !== undefined) await act(async () => root?.unmount());
+    });
+    await attempt(() => container?.remove());
+    await attempt(() => browser.close());
+    await attempt(() => vi.unstubAllGlobals());
+    await attempt(() => vi.restoreAllMocks());
+
+    if (errors.length > 0) throw new AggregateError(errors, "Authenticated App cleanup failed");
   };
+
+  try {
+    vi.stubGlobal("window", browser);
+    vi.stubGlobal("document", browser.document);
+    vi.stubGlobal("navigator", browser.navigator);
+    vi.stubGlobal("history", browser.history);
+    vi.stubGlobal("location", browser.location);
+    vi.stubGlobal("HTMLElement", browser.HTMLElement);
+    vi.stubGlobal("fetch", options.fetch);
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = browser.document.createElement("div") as unknown as HTMLElement;
+    browser.document.body.append(container as unknown as Node);
+    root = createRoot(container);
+    await act(async () => root?.render(<App />));
+    await waitFor(() => container?.querySelector("[data-shell-root]") !== null || container?.querySelector("main") !== null);
+    return { browser, container, root, unmount: cleanup };
+  } catch (mountError) {
+    try {
+      await cleanup();
+    } catch (cleanupError) {
+      const cleanupErrors = cleanupError instanceof AggregateError ? cleanupError.errors : [cleanupError];
+      throw new AggregateError([mountError, ...cleanupErrors], "App mount failed and cleanup failed");
+    }
+    throw mountError;
+  }
 }
 
 export async function waitForApp(predicate: () => boolean): Promise<void> {
