@@ -17,6 +17,8 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 
 ## R0 — 现状审计与权威总账
 
+Task 6 本地闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-completion.md`。精确候选树 `d536c606d74b8c2c0aa9ee732b4ca20b7e0b00ac` 的 focused gates 与完整 `npm run check` 已通过；状态仍按 atom 证据同步为 7 个 `[x]`、5 个 `[-]`。24 个 capability 继续为 `partial`，53 项缺口继续由 R1–R8 负责，98 个 R1–R8 implementation atoms 均保持 `[ ]`；本地 gate 不提升 release 或 acceptance。
+
 - [x] `R0-001` 固化所有共享路由、参数化路由、菜单入口和权限映射。
   - `implementation`: `done` — `shared/workspace-route-capabilities.ts`、`frontend/app-routes.ts`、`shared/workbench-maturity-capabilities.ts`。
   - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs`、`test/unit/frontend-workbench-maturity-routes.test.tsx`。
