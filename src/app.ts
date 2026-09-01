@@ -97,6 +97,7 @@ export interface AppDependencies {
   assetStorage?: R2Bucket | null;
   oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
   analyticsNow?: () => Date;
+  reviewNow?: () => Date;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -210,7 +211,7 @@ function createRequestServices(
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
-  const review = new ReviewService(new ReviewRepository(env.DB));
+  const review = new ReviewService(new ReviewRepository(env.DB), dependencies.reviewNow);
   const taskRecords = new TasksRepository(env.DB);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
