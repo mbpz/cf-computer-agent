@@ -97,6 +97,63 @@ const R0_EVIDENCE_CLASS_PATHS = new Map([
     "scripts/workbench-maturity-contract.test.mjs", "scripts/delivery-status-contract.test.mjs",
   ])],
 ]);
+const MANIFEST_GAP_POLICIES = new Map(Object.entries({
+  "workbench-home": { source: "manifest:0@edfe01e1ad3d", dimension: "api", slug: "authoritative-summary-and-recent-recovery", symptom: "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", owner: "R7-010" },
+  "workbench-submit": { source: "manifest:0@edeb39c3614b", dimension: "evidence", slug: "signed-submission-acceptance", symptom: "本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。", owner: "R8-009" },
+  "workbench-knowledge": { source: "manifest:0@edac5a3b202d", dimension: "states", slug: "auxiliary-data-recovery", symptom: "知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。", owner: "R2-010" },
+  "workbench-search": { source: "manifest:0@425b859782bc", dimension: "journey", slug: "filter-restore-and-result-open", symptom: "搜索降级、筛选恢复和打开结果的端到端旅程仍不完整。", owner: "R3-014" },
+  "workbench-agent": { source: "manifest:0@4d692899e183", dimension: "states", slug: "cited-completion-and-cancel-recovery", symptom: "Agent 没有明确空答案状态，引用完成、取消恢复与配额降级未形成完整旅程。", owner: "R3-016" },
+  "workbench-my-submissions": { source: "manifest:0@7f29b6446786", dimension: "journey", slug: "resubmission-and-status-recovery", symptom: "我的提交缺少退回后的重提和完整状态恢复旅程。", owner: "R3-001" },
+  "workbench-tasks": { source: "manifest:0@f69e69f87dec", dimension: "isolation", slug: "revocation-and-mutation-convergence", symptom: "撤权路径虽有探针，但 mutation、删除恢复及并发收敛尚未形成完整私有任务旅程。", owner: "R4-012" },
+  "workbench-boards": { source: "manifest:0@0f01e0145a2e", dimension: "query_or_idempotency", slug: "move-concurrency-and-rollback", symptom: "看板移动缺少键盘操作、并发冲突与精确乐观回滚的完整旅程。", owner: "R4-012" },
+  "workbench-settings": { source: "manifest:0@5e57e601f4cd", dimension: "states", slug: "persisted-settings-boundary", symptom: "设置页没有路由级异步状态、持久化或保存 pending 边界。", owner: "R1-012" },
+  "workbench-admin": { source: "manifest:0@59434198411a", dimension: "api", slug: "real-dashboard-summary", symptom: "管理 Dashboard 使用硬编码零指标且无路由级加载、空态与错误恢复。", owner: "R6-001" },
+  "workbench-admin-submissions": { source: "manifest:0@e56a2c5a0b50", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列初始错误无重试，列表到详情发现、决策完成和幂等尚未闭环。", owner: "R6-003" },
+  "workbench-admin-duplicates": { source: "manifest:0@52988e32a0b8", dimension: "journey", slug: "duplicate-decision-recovery", symptom: "重复候选页初始错误无重试且决策收敛旅程未证明。", owner: "R6-010" },
+  "workbench-admin-assets": { source: "manifest:0@96b40fbd4a65", dimension: "states", slug: "parse-progress-and-recovery", symptom: "资产页初始加载不可重试，解析进度与完整恢复旅程不完整。", owner: "R6-004" },
+  "workbench-admin-members": { source: "manifest:0@73518e6bede9", dimension: "journey", slug: "member-status-and-audit-navigation", symptom: "成员页初始错误无重试，禁用后的缓存失效与审计定位未闭环。", owner: "R6-005" },
+  "workbench-admin-roles": { source: "manifest:0@5d2693dc1b9e", dimension: "isolation", slug: "role-projection-and-session-hardening", symptom: "角色页缺少畸形提权 session、后端角色投影与 signed-browser 的完整拒绝证据。", owner: "R6-006" },
+  "workbench-admin-menus": { source: "manifest:0@a0343c75e574", dimension: "journey", slug: "projection-invalidation", symptom: "菜单页初始错误无重试，跨 session 投影失效尚未形成产品旅程。", owner: "R6-007" },
+  "workbench-admin-spaces": { source: "manifest:0@529d9702bce9", dimension: "journey", slug: "archive-content-impact", symptom: "Space 页初始错误无重试，归档与内容影响确认未闭环。", owner: "R6-008" },
+  "workbench-admin-audit": { source: "manifest:0@bfef1ebcb5d4", dimension: "states", slug: "raw-page-shape-and-retry", symptom: "审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。", owner: "R6-009" },
+  "workbench-admin-analytics": { source: "manifest:0@5002e212125a", dimension: "journey", slug: "date-range-and-pagination", symptom: "统计页初始错误无重试，完整日期范围与数字分页旅程未证明。", owner: "R6-002" },
+  "workbench-notifications": { source: "manifest:0@a0f9955f2fa0", dimension: "isolation", slug: "revoked-target-navigation", symptom: "通知目标撤权后的跳转与顶部未读收敛尚未闭环。", owner: "R5-005" },
+  "workbench-messages": { source: "manifest:0@6f83a4364e6d", dimension: "isolation", slug: "context-revocation-presentation", symptom: "上下文 thread 发现与 stale/revoked target 的明确呈现尚未闭环。", owner: "R5-011" },
+  "workbench-knowledge-reader": { source: "manifest:0@823eea297a96", dimension: "isolation", slug: "secondary-object-reauthorization", symptom: "阅读器私有笔记、分享、收藏和访问记录的完整二级对象撤权旅程未证明。", owner: "R3-012" },
+  "workbench-message-thread": { source: "manifest:0@fb654b86d344", dimension: "isolation", slug: "thread-context-revocation", symptom: "thread context 返回 403 时仍是通用错误，缺少明确撤权状态及深链发现证据。", owner: "R5-011" },
+  "workbench-admin-submission-detail": { source: "manifest:0@b139ccd7bb29", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情缺少空态、初始重试、队列发现和决策幂等闭环。", owner: "R6-003" },
+}));
+const DOMAIN_GAP_POLICIES = new Map(Object.entries({
+  "DELETE /api/tasks/:id": { slug: "delete-task", symptom: "删除任务缺少已证明的重放与 uncertain-outcome 收敛策略。", owner: "R4-010" },
+  "DELETE /api/tasks/:id/links/:linkId": { slug: "delete-knowledge-link", symptom: "删除任务知识关联缺少已证明的幂等与目标授权策略。", owner: "R4-005" },
+  "PATCH /api/tasks/:id": { slug: "update-task", symptom: "任务详情更新缺少条件写入或幂等重放证明。", owner: "R4-003" },
+  "POST /api/tasks/:id/links": { slug: "create-knowledge-link", symptom: "创建任务知识关联缺少重放收敛与二级目标授权证明。", owner: "R4-005" },
+  "POST /api/tasks/:id/progress": { slug: "append-progress", symptom: "追加进度缺少稳定客户端键与重复事件收敛证明。", owner: "R4-004" },
+  "PUT /api/tasks/:id/tags": { slug: "replace-tags", symptom: "替换任务标签缺少并发条件与重放后权威集合证明。", owner: "R4-005" },
+  "PATCH /api/admin/members/:id/status": { slug: "change-member-status", symptom: "成员状态修改缺少重放、session 收缩与缓存失效证明。", owner: "R6-005" },
+  "DELETE role member; repeat returns 404": { slug: "remove-role-member", symptom: "重复移除角色成员返回 404，尚未定义安全收敛和审计语义。", owner: "R6-006" },
+  "PATCH /api/admin/roles/:id": { slug: "update-role", symptom: "角色权限更新缺少并发条件和重复请求策略。", owner: "R6-006" },
+  "POST /api/admin/roles": { slug: "create-role", symptom: "创建角色缺少稳定幂等键与 uncertain-outcome 重放策略。", owner: "R6-006" },
+  "POST assign role member; duplicate returns 409": { slug: "assign-role-member", symptom: "重复分配角色成员返回 409，尚未定义授权写入收敛语义。", owner: "R6-006" },
+  "DELETE /api/admin/menus/:id": { slug: "delete-menu", symptom: "菜单删除缺少重放、层级影响与跨 session 投影收敛证明。", owner: "R6-007" },
+  "PATCH /api/admin/menus/:id": { slug: "update-menu", symptom: "菜单编辑缺少原子排序、并发冲突与投影失效证明。", owner: "R6-007" },
+  "POST /api/discussions/context": { slug: "create-context-thread", symptom: "创建上下文 thread 缺少重放收敛和当前目标再授权证明。", owner: "R5-006" },
+  "DELETE /api/knowledge/:id/note/shares/:recipientId": { slug: "remove-note-share", symptom: "移除私有笔记分享缺少重放收敛与接收者访问即时收缩证明。", owner: "R3-011" },
+  "POST /api/knowledge/:id/note/shares": { slug: "create-note-share", symptom: "创建私有笔记分享缺少幂等与知识目标再授权证明。", owner: "R3-011" },
+  "PUT /api/knowledge/:id/note": { slug: "update-private-note", symptom: "更新私有笔记缺少并发条件与 uncertain-outcome 收敛证明。", owner: "R3-011" },
+  "DELETE /api/saved-views/:id": { slug: "delete-saved-view", symptom: "删除 Saved View 缺少重放与 uncertain-outcome 收敛策略。", owner: "R3-014" },
+  "POST /api/saved-views": { slug: "create-saved-view", symptom: "创建 Saved View 缺少稳定幂等键与重复请求证明。", owner: "R3-014" },
+  "PATCH /api/knowledge/chat/conversations/:id/scope": { slug: "update-conversation-scope", symptom: "Agent 会话范围更新缺少条件写入与撤权后收敛策略。", owner: "R3-016" },
+  "POST /api/knowledge/chat": { slug: "submit-chat-turn", symptom: "Agent 提问缺少端到端稳定请求键和重复副作用证明。", owner: "R3-016" },
+  "POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
+  "POST /api/admin/assets/:id/retry": { slug: "retry-asset", symptom: "资产解析重试缺少稳定幂等键与重复任务抑制证明。", owner: "R6-004" },
+  "POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
+  "DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
+  "POST /api/admin/submissions/:id/comments": { slug: "add-review-comment", symptom: "审核评论缺少稳定客户端键与重复写入抑制证明。", owner: "R6-003" },
+  "POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
+  "POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
+  "POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "退回修改决策缺少幂等、通知去重与并发策略。", owner: "R6-003" },
+}));
 const menuRecordKeys = new Set([
   "id", "routeId", "pathname", "requiredRole", "journey", "classification", "dimensions",
   "frontendEvidence", "backendEvidence", "testEvidence", "ledgerIds", "gaps",
@@ -294,8 +351,29 @@ test("every manifest and domain gap has one stable future owner", () => {
     [...expectedSources.keys()].sort(),
     "every manifest/domain source gap must appear exactly once",
   );
+  assertGapPolicyCoverage(expectedSources);
 
   for (const row of rows) assertGapRow(row, checklistAtoms, expectedSources);
+});
+
+test("canonical source policy rejects gap ID, symptom, and owner self-certification", () => {
+  const { maturity } = loadContracts();
+  const expectedSources = expectedGapSources(maturity, readFileSync(domainAuditPath, "utf8"));
+  const checklistAtoms = futureChecklistAtomIds(readFileSync(maturityChecklistPath, "utf8"));
+  const source = gapMatrixRows(readFileSync(maturityGapMatrixPath, "utf8"))[0];
+
+  assert.throws(
+    () => assertGapRow({ ...source, gapId: source.gapId.replace(/:[^:]+$/u, ":renamed") }, checklistAtoms, expectedSources),
+    /canonical gap ID/u,
+  );
+  assert.throws(
+    () => assertGapRow({ ...source, symptom: "This unrelated placeholder is deliberately long enough." }, checklistAtoms, expectedSources),
+    /canonical symptom/u,
+  );
+  assert.throws(
+    () => assertGapRow({ ...source, owner: "R4-009" }, checklistAtoms, expectedSources),
+    /canonical owner/u,
+  );
 });
 
 test("gap execution order is priority-first and never depends on a later phase", () => {
@@ -313,6 +391,25 @@ test("gap execution order is priority-first and never depends on a later phase",
       assert.notEqual(prerequisite, row.owner, `${row.gapId} cannot depend on its owner atom`);
     }
   }
+  assertAcyclicGapGraph(rows);
+});
+
+test("dependency graph rejects direct and long same-phase cycles", () => {
+  assert.throws(
+    () => assertAcyclicGapGraph([
+      { gapId: "two-a", owner: "R6-001", prerequisites: ["R6-002"] },
+      { gapId: "two-b", owner: "R6-002", prerequisites: ["R6-001"] },
+    ]),
+    /dependency cycle.*R6-001.*R6-002.*R6-001/u,
+  );
+  assert.throws(
+    () => assertAcyclicGapGraph([
+      { gapId: "long-a", owner: "R4-001", prerequisites: ["R4-002"] },
+      { gapId: "long-b", owner: "R4-002", prerequisites: ["R4-003"] },
+      { gapId: "long-c", owner: "R4-003", prerequisites: ["R4-001"] },
+    ]),
+    /dependency cycle.*R4-001.*R4-002.*R4-003.*R4-001/u,
+  );
 });
 
 test("R1-R8 checklist and roadmap mappings reconcile to the owned gaps", () => {
@@ -339,6 +436,7 @@ test("R1-R8 checklist and roadmap mappings reconcile to the owned gaps", () => {
 });
 
 test("R0-012 closes only with executable gap-accounting evidence", () => {
+  assertTask5ClosureEvidence();
   const atoms = r0ChecklistAtoms(readFileSync(maturityChecklistPath, "utf8"));
   const atom = atoms.find((candidate) => candidate.id === "R0-012");
   assert.ok(atom, "R0-012 is required");
@@ -410,6 +508,7 @@ function gapMatrixRows(markdown) {
 function assertGapRow(row, checklistAtoms, expectedSources) {
   const source = expectedSources.get(`${row.capability}|${row.source}`);
   assert.ok(source, `${row.gapId} has unknown source ${row.capability}|${row.source}`);
+  const canonical = canonicalGapPolicy(row.capability, row.source, source);
   assert.match(
     row.gapId,
     /^workbench-[a-z0-9-]+:(?:entry|journey|api|persistence|isolation|query_or_idempotency|states|accessibility|evidence):[a-z0-9]+(?:-[a-z0-9]+)*$/u,
@@ -419,7 +518,10 @@ function assertGapRow(row, checklistAtoms, expectedSources) {
   assert.equal(row.gapId.slice(0, separator), row.capability, `${row.gapId} capability prefix drifted`);
   assert.equal(row.gapId.split(":")[1], row.dimension, `${row.gapId} dimension prefix drifted`);
   assert.ok(dimensions.has(row.dimension), `${row.gapId} has unsupported dimension ${row.dimension}`);
-  assert.ok(row.symptom.length >= 12, `${row.gapId} requires an observed symptom`);
+  assert.equal(row.gapId, canonical.gapId, `${row.gapId} must match its canonical gap ID`);
+  assert.equal(row.dimension, canonical.dimension, `${row.gapId} must match its canonical dimension`);
+  assert.equal(row.symptom, canonical.symptom, `${row.gapId} must match its canonical symptom`);
+  assert.equal(row.owner, canonical.owner, `${row.gapId} must match its canonical owner`);
   assert.ok(checklistAtoms.has(row.owner), `${row.gapId} has unknown owner ${row.owner}`);
   assert.equal(new Set(row.prerequisites).size, row.prerequisites.length, `${row.gapId} repeats a prerequisite`);
   assert.ok(row.affectedFiles.length > 0 && row.affectedFiles.every((path) => existsSync(resolve(repositoryRoot, path))), `${row.gapId} affected files must exist`);
@@ -428,6 +530,95 @@ function assertGapRow(row, checklistAtoms, expectedSources) {
   assert.match(row.priority, /^P[0-2]$/u, `${row.gapId} priority must be P0, P1, or P2`);
   assert.equal(row.priority, expectedPriority(row.capability, row.source), `${row.gapId} priority contradicts the independent risk policy`);
   if (source.kind === "domain") assert.equal(row.dimension, "query_or_idempotency", `${row.gapId} domain mutation gap has wrong dimension`);
+}
+
+function canonicalGapPolicy(capability, sourceKey, source) {
+  if (source.kind === "manifest") {
+    const policy = MANIFEST_GAP_POLICIES.get(capability);
+    assert.ok(policy, `${capability}: manifest gap policy is required`);
+    assert.equal(sourceKey, policy.source, `${capability}: manifest policy must bind the exact source fingerprint`);
+    return {
+      ...policy,
+      gapId: `${capability}:${policy.dimension}:${policy.slug}`,
+    };
+  }
+  const operation = sourceKey.slice("domain:".length);
+  const policy = DOMAIN_GAP_POLICIES.get(operation);
+  assert.ok(policy, `${capability}: domain gap policy is required for ${operation}`);
+  return {
+    dimension: "query_or_idempotency",
+    gapId: `${capability}:query_or_idempotency:${policy.slug}`,
+    symptom: policy.symptom,
+    owner: policy.owner,
+  };
+}
+
+function assertGapPolicyCoverage(expectedSources) {
+  const manifestCapabilities = [];
+  const domainOperations = [];
+  for (const [key, source] of expectedSources) {
+    const separator = key.indexOf("|");
+    if (source.kind === "manifest") manifestCapabilities.push(key.slice(0, separator));
+    else domainOperations.push(key.slice(separator + "|domain:".length));
+  }
+  assert.deepEqual(
+    [...MANIFEST_GAP_POLICIES.keys()].sort(),
+    manifestCapabilities.sort(),
+    "manifest policies must exactly cover validated manifest sources",
+  );
+  assert.deepEqual(
+    [...DOMAIN_GAP_POLICIES.keys()].sort(),
+    domainOperations.sort(),
+    "domain policies must exactly cover validated domain source operations",
+  );
+}
+
+function assertAcyclicGapGraph(rows) {
+  const graph = new Map();
+  for (const row of rows) {
+    if (!graph.has(row.owner)) graph.set(row.owner, new Set());
+    for (const prerequisite of row.prerequisites) {
+      graph.get(row.owner).add(prerequisite);
+      if (!graph.has(prerequisite)) graph.set(prerequisite, new Set());
+    }
+  }
+  const visited = new Set();
+  const active = new Set();
+  const path = [];
+  const visit = (atom) => {
+    if (active.has(atom)) {
+      const start = path.indexOf(atom);
+      assert.fail(`dependency cycle: ${[...path.slice(start), atom].join(" -> ")}`);
+    }
+    if (visited.has(atom)) return;
+    active.add(atom);
+    path.push(atom);
+    for (const prerequisite of graph.get(atom) ?? []) visit(prerequisite);
+    path.pop();
+    active.delete(atom);
+    visited.add(atom);
+  };
+  for (const atom of graph.keys()) visit(atom);
+}
+
+function assertTask5ClosureEvidence() {
+  const { maturity } = loadContracts();
+  const matrix = gapMatrixRows(readFileSync(maturityGapMatrixPath, "utf8"));
+  const sources = expectedGapSources(maturity, readFileSync(domainAuditPath, "utf8"));
+  const checklist = readFileSync(maturityChecklistPath, "utf8");
+  const checklistAtoms = futureChecklistAtomIds(checklist);
+  assert.deepEqual(matrix.map((row) => `${row.capability}|${row.source}`).sort(), [...sources.keys()].sort());
+  assertGapPolicyCoverage(sources);
+  for (const row of matrix) assertGapRow(row, checklistAtoms, sources);
+  const priorities = matrix.map((row) => Number(row.priority.slice(1)));
+  assert.deepEqual(priorities, [...priorities].sort((left, right) => left - right));
+  assertAcyclicGapGraph(matrix);
+  const checklistStages = stageMappingRows(checklist, "task5-stage-map");
+  const roadmapStages = stageMappingRows(readFileSync(roadmapPath, "utf8"), "maturity-stage-map");
+  assert.deepEqual(checklistStages, roadmapStages);
+  for (const stage of checklistStages) {
+    assert.equal(stage.ownedGaps, matrix.filter((row) => row.owner.startsWith(`${stage.phase}-`)).length);
+  }
 }
 
 function expectedPriority(capability, source) {

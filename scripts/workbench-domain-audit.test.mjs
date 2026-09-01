@@ -103,6 +103,55 @@ test("validation rejects roles.update conditional safety borrowed from unrelated
   );
 });
 
+test("source-bound replay strategies prove duplicate decisions and notification reads", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  const expected = {
+    "POST /api/admin/duplicates/:submissionId/decision": {
+      capability: "workbench-admin-duplicates",
+      strategy: "conditional_write",
+      source: { path: "src/duplicates/repository.ts", symbol: "DuplicateCandidatesRepository.decide" },
+      testPath: "test/worker/submissions.test.ts",
+    },
+    "POST /api/notifications/:id/read": {
+      capability: "workbench-notifications",
+      strategy: "conditional_write",
+      source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markRead" },
+      testPath: "test/worker/notifications.test.ts",
+    },
+    "POST /api/notifications/read": {
+      capability: "workbench-notifications",
+      strategy: "conditional_write",
+      source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markManyRead" },
+      testPath: "test/worker/notifications.test.ts",
+    },
+  };
+
+  for (const [operation, policy] of Object.entries(expected)) {
+    const record = audit.find((item) => item.id === policy.capability);
+    const fact = record?.mutationEvidence[operation];
+    assert.ok(fact, `${operation}: mutation fact is required`);
+    assert.equal(fact.strategy, policy.strategy, `${operation}: proven strategy must not fall back to gap`);
+    assert.deepEqual(
+      { path: fact.safety.path, symbol: fact.safety.symbol },
+      policy.source,
+      `${operation}: strategy must bind the exact source symbol`,
+    );
+    assert.ok(fact.tests.some((binding) => binding.path === policy.testPath), `${operation}: exact regression test binding is required`);
+  }
+});
+
+test("a proven declaration cannot silently lose its structured strategy binding", () => {
+  withRepositoryProbe("shared/workbench-maturity-capabilities.ts", (source) => source.replace(
+    'operation: "POST /api/admin/duplicates/:submissionId/decision"',
+    'operation: "POST /api/admin/duplicates/:submissionId/unrelated"',
+  ), (probeRoot) => {
+    assert.throws(
+      () => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
+      /proven mutation declaration requires structured strategy binding.*duplicates.*decision/u,
+    );
+  });
+});
+
 test("validation rejects removing source-visible roles.update from the capability", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const roles = audit.find((item) => item.id === "workbench-admin-roles");

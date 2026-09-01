@@ -44,14 +44,6 @@ const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.findCurrent", "scope")),
   ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks the thread context before message reads and sends.", symbolBinding("src/routes/discussions.ts", "routeDiscussionsApi", "member.memberId"), symbolBinding("src/discussions/service.ts", "DiscussionsService.sendMessage", "memberId")),
 ].map((fact) => [fact.predicate, fact])));
-const PROVEN_MUTATION_SAFETY = Object.freeze({
-  "POST /api/submissions": { strategy: "idempotency_key", safety: symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.findByIdempotencyKey", "submitterId", "idempotencyKey") },
-  "POST /api/tasks": { strategy: "idempotency_key", safety: symbolBinding("src/tasks/repository.ts", "TasksRepository.insert", "INSERT OR IGNORE INTO tasks") },
-  "POST /api/tasks/:id/status": { strategy: "conditional_write", safety: symbolBinding("src/tasks/repository.ts", "TasksRepository.compareAndSetStatus", "expectedStatus", "AND status = ?") },
-  "PUT /api/knowledge/:id/favorite": { strategy: "idempotency_key", safety: symbolBinding("src/favorites/repository.ts", "FavoritesRepository.add", "ON CONFLICT(member_id, knowledge_item_id) DO NOTHING") },
-  "POST /api/discussions/messages": { strategy: "idempotency_key", safety: symbolBinding("src/discussions/service.ts", "DiscussionsService.sendMessage", "findMessageByAuthorClientKey", "clientKey") },
-});
-
 const MUTATION_LABELS = Object.freeze({
   "POST /api/admin/roles/:id/members": "POST assign role member; duplicate returns 409",
   "DELETE /api/admin/roles/:id/members": "DELETE role member; repeat returns 404",
@@ -78,6 +70,11 @@ function readDomainManifest(repositoryRoot) {
 }
 
 function canonicalRuntimeEvidence(records, repositoryRoot) {
+  const strategyBindings = new Map();
+  for (const binding of readMutationStrategyBindings(repositoryRoot)) {
+    assert.ok(!strategyBindings.has(binding.operation), `duplicate mutation strategy binding ${binding.operation}`);
+    strategyBindings.set(binding.operation, binding);
+  }
   const visibleMutations = new Map(records.map((record) => [record.id, deriveVisibleMutations(record, repositoryRoot)]));
   const apiPaths = [...new Set([
     ...records.flatMap((record) => record.apiPaths),
@@ -89,13 +86,17 @@ function canonicalRuntimeEvidence(records, repositoryRoot) {
     for (const operation of visibleMutations.get(record.id) ?? []) {
       const route = apis[operation.slice(operation.indexOf(" ") + 1)];
       assert.ok(route?.methods.includes(operation.slice(0, operation.indexOf(" "))), `${record.id}: frontend mutation lacks matching route handler ${operation}`);
-      const proven = PROVEN_MUTATION_SAFETY[operation];
+      const declaration = record.mutations.find((value) => value.startsWith(`${operation} — `));
+      const declaresProven = declaration?.includes(" — proven:") ?? false;
+      const proven = strategyBindings.get(operation);
+      if (declaresProven) assert.ok(proven, `${record.id}: proven mutation declaration requires structured strategy binding ${operation}`);
+      if (proven) assert.ok(declaresProven, `${record.id}: structured strategy binding requires a proven mutation declaration ${operation}`);
       mutations[operation] = {
         id: operation,
         apiPath: operation.slice(operation.indexOf(" ") + 1),
         description: MUTATION_LABELS[operation] ?? operation,
         strategy: proven?.strategy ?? "gap",
-        ...(proven ? { safety: proven.safety } : {}),
+        ...(proven ? { safety: proven.source, tests: proven.tests } : {}),
       };
     }
   }
@@ -383,6 +384,7 @@ export async function loadWorkbenchDomainAudit({ repositoryRoot = resolve(import
 export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve(import.meta.dirname, ".."), runtimeEvidence = runtimeEvidenceSnapshot() } = {}) {
   const canonical = canonicalRuntimeEvidence(records, repositoryRoot);
   const semanticBindings = [];
+  const testBindings = [];
   for (const record of records) {
     record.apiEvidence = canonical.apis;
     record.mutationEvidence = canonical.mutations;
@@ -415,7 +417,10 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
       assert.ok(record.apiPaths.some((apiPath) => pathShape(apiPath) === pathShape(fact.apiPath)), `${record.id}: source-visible API ownership contradiction for ${mutationFactId}`);
       assert.ok(["gap", "idempotency_key", "conditional_write"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
       if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
-      if (fact.strategy !== "gap") semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
+      if (fact.strategy !== "gap") {
+        semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
+        testBindings.push(...fact.tests.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: mutation regression evidence ${mutationFactId}` })));
+      }
     }
 
     const evidencePaths = [
@@ -444,7 +449,20 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
     }
   }
   verifySymbolBindings(semanticBindings, repositoryRoot);
+  verifyTestBindings(testBindings, repositoryRoot);
   return records;
+}
+
+function readMutationStrategyBindings(repositoryRoot) {
+  const manifestPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: [manifestPath] });
+  try {
+    return mutationStrategyRecords(sourceFile(snapshot, manifestPath));
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
 }
 
 function verifySymbolBindings(entries, repositoryRoot) {
@@ -477,6 +495,17 @@ function verifySymbolBindings(entries, repositoryRoot) {
   } finally {
     snapshot.dispose();
     api.close();
+  }
+}
+
+function verifyTestBindings(entries, repositoryRoot) {
+  for (const { binding: bindingValue, context } of entries) {
+    assert.ok(bindingValue && typeof bindingValue.path === "string" && Array.isArray(bindingValue.tokens), `${context}: invalid test binding`);
+    const path = resolve(repositoryRoot, bindingValue.path);
+    assert.equal(existsSync(path), true, `${context}: missing test evidence ${bindingValue.path}`);
+    const source = readFileSync(path, "utf8");
+    assert.ok(bindingValue.tokens.length > 0, `${context}: test binding requires tokens`);
+    for (const token of bindingValue.tokens) assert.ok(source.includes(token), `${context}: token ${JSON.stringify(token)} is outside test ${bindingValue.path}`);
   }
 }
 
@@ -562,6 +591,41 @@ function domainRecords(source) {
       mutationSafety: requiredString(properties, "mutationSafety", context),
     };
   });
+}
+
+function mutationStrategyRecords(source) {
+  return arrayRecords(source, "WORKBENCH_MUTATION_STRATEGY_BINDINGS").map((entry, index) => {
+    const context = `mutation strategy binding ${index}`;
+    const properties = objectProperties(entry, context);
+    assert.deepEqual(new Set(properties.keys()), new Set(["operation", "strategy", "source", "tests"]), `${context} must use the exact strategy fields`);
+    const tests = unwrapExpression(properties.get("tests"));
+    assert.ok(isArrayLiteralExpression(tests), `${context} tests must be an array literal`);
+    return {
+      operation: requiredString(properties, "operation", context),
+      strategy: requiredString(properties, "strategy", context),
+      source: semanticBindingRecord(source, properties.get("source"), `${context} source`),
+      tests: tests.elements.map((entryValue, testIndex) => testBindingRecord(source, entryValue, `${context} test ${testIndex}`)),
+    };
+  });
+}
+
+function semanticBindingRecord(source, node, context) {
+  const properties = objectProperties(unwrapExpression(node), context);
+  assert.deepEqual(new Set(properties.keys()), new Set(["path", "symbol", "tokens"]), `${context} must use path, symbol, and tokens`);
+  return {
+    path: requiredString(properties, "path", context),
+    symbol: requiredString(properties, "symbol", context),
+    tokens: stringArray(source, properties.get("tokens"), `${context} tokens`),
+  };
+}
+
+function testBindingRecord(source, node, context) {
+  const properties = objectProperties(unwrapExpression(node), context);
+  assert.deepEqual(new Set(properties.keys()), new Set(["path", "tokens"]), `${context} must use path and tokens`);
+  return {
+    path: requiredString(properties, "path", context),
+    tokens: stringArray(source, properties.get("tokens"), `${context} tokens`),
+  };
 }
 
 function arrayRecords(source, declarationName) {

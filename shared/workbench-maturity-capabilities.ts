@@ -31,6 +31,71 @@ export interface WorkbenchMaturityDomainEvidence {
   readonly mutationSafety: WorkbenchMutationSafety;
 }
 
+export interface WorkbenchMutationStrategyBinding {
+  readonly operation: string;
+  readonly strategy: Exclude<WorkbenchMutationSafety, "mixed" | "not_applicable">;
+  readonly source: {
+    readonly path: string;
+    readonly symbol: string;
+    readonly tokens: readonly string[];
+  };
+  readonly tests: readonly {
+    readonly path: string;
+    readonly tokens: readonly string[];
+  }[];
+}
+
+export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
+  {
+    operation: "POST /api/submissions",
+    strategy: "idempotency_key",
+    source: { path: "src/submissions/repository.ts", symbol: "SubmissionsRepository.findByIdempotencyKey", tokens: ["s.submitter_id = ?", "s.idempotency_key = ?"] },
+    tests: [{ path: "test/worker/submissions.test.ts", tokens: ["returns an exact replay and rejects changed content or target for the same member key", "submissions: 1"] }],
+  },
+  {
+    operation: "POST /api/tasks",
+    strategy: "idempotency_key",
+    source: { path: "src/tasks/repository.ts", symbol: "TasksRepository.insert", tokens: ["INSERT OR IGNORE INTO tasks"] },
+    tests: [{ path: "test/worker/tasks.test.ts", tokens: ["creates idempotently, lists, updates, transitions, and deletes", "created: false"] }],
+  },
+  {
+    operation: "POST /api/tasks/:id/status",
+    strategy: "conditional_write",
+    source: { path: "src/tasks/repository.ts", symbol: "TasksRepository.compareAndSetStatus", tokens: ["expectedStatus", "AND status = ?"] },
+    tests: [{ path: "test/unit/tasks-service.test.ts", tokens: ["compareAndSetStatus", "previousStatus: expectedStatus"] }],
+  },
+  {
+    operation: "POST /api/admin/duplicates/:submissionId/decision",
+    strategy: "conditional_write",
+    source: { path: "src/duplicates/repository.ts", symbol: "DuplicateCandidatesRepository.decide", tokens: ["current.decision === decision", "current.decidedBy === reviewerId", "AND decision = 'pending'"] },
+    tests: [{ path: "test/worker/submissions.test.ts", tokens: ["keeps exact duplicate decisions admin-scoped, idempotent, and audited", "DUPLICATE_DECISION_CONFLICT"] }],
+  },
+  {
+    operation: "POST /api/notifications/:id/read",
+    strategy: "conditional_write",
+    source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markRead", tokens: ["recipient_member_id = ?", "read_at IS NULL", "result.meta.changes === 1"] },
+    tests: [{ path: "test/worker/notifications.test.ts", tokens: ["marks one notification replay-safely and returns 404 across recipients", "toEqual(firstBody)"] }],
+  },
+  {
+    operation: "POST /api/notifications/read",
+    strategy: "conditional_write",
+    source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markManyRead", tokens: ["recipient_member_id = ?", "read_at IS NULL", "selection.limit"] },
+    tests: [{ path: "test/worker/notifications.test.ts", tokens: ["marks only a bounded visible ID set and converges on bulk replay", "marked: 0"] }],
+  },
+  {
+    operation: "PUT /api/knowledge/:id/favorite",
+    strategy: "idempotency_key",
+    source: { path: "src/favorites/repository.ts", symbol: "FavoritesRepository.add", tokens: ["ON CONFLICT(member_id, knowledge_item_id) DO NOTHING"] },
+    tests: [{ path: "test/worker/favorites.test.ts", tokens: ["keeps favorites private, visible only for readable knowledge, and removable", "favorite: true"] }],
+  },
+  {
+    operation: "POST /api/discussions/messages",
+    strategy: "idempotency_key",
+    source: { path: "src/discussions/service.ts", symbol: "DiscussionsService.sendMessage", tokens: ["findMessageByAuthorClientKey", "normalized.clientKey"] },
+    tests: [{ path: "test/worker/discussions.test.ts", tokens: ["sends idempotently, validates replies and mentions, and keeps route ordering canonical", "created: false"] }],
+  },
+] as const satisfies readonly WorkbenchMutationStrategyBinding[]);
+
 const INITIAL_DIMENSIONS = {
   entry: "proven",
   journey: "gap",
