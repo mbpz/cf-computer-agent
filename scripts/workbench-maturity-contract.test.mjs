@@ -34,6 +34,64 @@ const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry"
 const dimensions = new Set(["entry", "journey", "api", "persistence", "isolation", "query_or_idempotency", "states", "accessibility", "evidence"]);
 const dimensionStates = new Set(["proven", "gap", "not_applicable"]);
 const roles = new Set(["anonymous", "contributor", "admin"]);
+const ALL_CAPABILITY_IDS = [
+  "workbench-home", "workbench-submit", "workbench-knowledge", "workbench-search", "workbench-agent",
+  "workbench-my-submissions", "workbench-tasks", "workbench-boards", "workbench-settings", "workbench-admin",
+  "workbench-admin-submissions", "workbench-admin-duplicates", "workbench-admin-assets", "workbench-admin-members",
+  "workbench-admin-roles", "workbench-admin-menus", "workbench-admin-spaces", "workbench-admin-audit",
+  "workbench-admin-analytics", "workbench-notifications", "workbench-messages", "workbench-knowledge-reader",
+  "workbench-message-thread", "workbench-admin-submission-detail",
+];
+const LIST_CAPABILITY_IDS = [
+  "workbench-home", "workbench-knowledge", "workbench-search", "workbench-my-submissions", "workbench-tasks",
+  "workbench-boards", "workbench-admin-submissions", "workbench-admin-duplicates", "workbench-admin-assets",
+  "workbench-admin-members", "workbench-admin-roles", "workbench-admin-menus", "workbench-admin-spaces",
+  "workbench-admin-audit", "workbench-admin-analytics", "workbench-notifications", "workbench-messages",
+  "workbench-message-thread",
+];
+const MUTATION_CAPABILITY_IDS = [
+  "workbench-submit", "workbench-search", "workbench-agent", "workbench-tasks", "workbench-boards",
+  "workbench-admin-submissions", "workbench-admin-duplicates", "workbench-admin-assets", "workbench-admin-members",
+  "workbench-admin-roles", "workbench-admin-menus", "workbench-admin-spaces", "workbench-notifications",
+  "workbench-messages", "workbench-knowledge-reader", "workbench-message-thread", "workbench-admin-submission-detail",
+];
+const PRIVATE_CAPABILITY_IDS = [
+  "workbench-home", "workbench-submit", "workbench-knowledge", "workbench-search", "workbench-agent",
+  "workbench-my-submissions", "workbench-tasks", "workbench-boards", "workbench-notifications",
+  "workbench-messages", "workbench-knowledge-reader", "workbench-message-thread",
+];
+const R0_ATOM_POLICIES = new Map([
+  ["R0-001", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { entry: "proven" }, evidenceClasses: ["manifest", "route"] }],
+  ["R0-002", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { journey: "gap" }, evidenceClasses: ["manifest", "route", "domain"] }],
+  ["R0-003", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { entry: "proven", isolation: "gap" }, evidenceClasses: ["manifest", "route"] }],
+  ["R0-004", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { states: "gap" }, evidenceClasses: ["manifest", "route"] }],
+  ["R0-005", { capabilityIds: LIST_CAPABILITY_IDS, requiredDimensions: { api: "gap", query_or_idempotency: "gap" }, evidenceClasses: ["manifest", "domain"] }],
+  ["R0-006", { capabilityIds: MUTATION_CAPABILITY_IDS, requiredDimensions: { query_or_idempotency: "gap" }, evidenceClasses: ["manifest", "domain"] }],
+  ["R0-007", { capabilityIds: PRIVATE_CAPABILITY_IDS, requiredDimensions: { isolation: "gap" }, evidenceClasses: ["manifest", "route", "domain"] }],
+  ["R0-008", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { api: "gap", persistence: "gap", isolation: "gap" }, evidenceClasses: ["manifest", "domain"] }],
+  ["R0-009", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "route", "domain", "delivery"] }],
+  ["R0-010", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "domain"] }],
+  ["R0-011", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "delivery"] }],
+  ["R0-012", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "delivery"] }],
+]);
+const R0_EVIDENCE_CLASS_PATHS = new Map([
+  ["manifest", new Set([
+    "shared/workbench-maturity-capabilities.ts", "shared/workspace-route-capabilities.ts", "frontend/app-routes.ts",
+    "scripts/workbench-maturity-contract.test.mjs",
+  ])],
+  ["route", new Set([
+    "shared/workspace-route-capabilities.ts", "frontend/app-routes.ts", "test/helpers/workbench-maturity-route-fixtures.ts",
+    "test/helpers/authenticated-app-harness.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx",
+  ])],
+  ["domain", new Set([
+    "shared/workbench-maturity-capabilities.ts", "scripts/workbench-domain-audit.mjs",
+    "scripts/workbench-domain-audit.test.mjs", "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md",
+  ])],
+  ["delivery", new Set([
+    "docs/product/workbench-product-maturity-checklist.md", "docs/product/delivery-status-ledger.md",
+    "scripts/workbench-maturity-contract.test.mjs", "scripts/delivery-status-contract.test.mjs",
+  ])],
+]);
 const menuRecordKeys = new Set([
   "id", "routeId", "pathname", "requiredRole", "journey", "classification", "dimensions",
   "frontendEvidence", "backendEvidence", "testEvidence", "ledgerIds", "gaps",
@@ -129,31 +187,78 @@ test("R0 checklist atoms carry four-dimensional evidence without promoting relea
     Array.from({ length: 12 }, (_, index) => `R0-${String(index + 1).padStart(3, "0")}`),
     "R0 checklist must contain exactly the twelve canonical atoms in order",
   );
-  assert.ok(atoms.some((atom) => atom.marker === "-"), "accepted local R0 evidence must remain delivery-partial");
-  assert.ok(atoms.some((atom) => atom.marker === " "), "unsupported R0 audit claims must remain unchecked");
+  assert.deepEqual(
+    Object.fromEntries(["x", "-", " "].map((marker) => [marker, atoms.filter((atom) => atom.marker === marker).length])),
+    { x: 6, "-": 5, " ": 1 },
+    "R0 markers must represent local completion independently from release and acceptance",
+  );
 
   for (const atom of atoms) {
     assertR0AtomEvidence(atom, ledgerIds, maturity);
   }
 });
 
-test("R0 checklist marker semantics fail closed on unsupported promotion", () => {
+test("R0 checklist markers derive only from local implementation and verification", () => {
   const checklist = readFileSync(maturityChecklistPath, "utf8");
   const ledgerIds = deliveryLedgerIds(readFileSync(deliveryLedgerPath, "utf8"));
   const { maturity } = loadContracts();
   const atoms = r0ChecklistAtoms(checklist);
-  const unsupported = atoms.find((atom) => atom.marker === " ");
-  const locallyProven = atoms.find((atom) => atom.marker === "-");
-  assert.ok(unsupported, "fixture requires an unsupported atom");
-  assert.ok(locallyProven, "fixture requires a locally proven atom");
+  const locallyDone = atoms.filter((atom) =>
+    atom.dimensions.implementation.status === "done" && atom.dimensions.verification.status === "done"
+  );
+  const locallyPartial = atoms.filter((atom) =>
+    [atom.dimensions.implementation.status, atom.dimensions.verification.status].includes("partial")
+  );
+  const locallyPending = atoms.filter((atom) =>
+    [atom.dimensions.implementation.status, atom.dimensions.verification.status].includes("pending")
+  );
+
+  assert.ok(locallyDone.length > 0, "fixture requires locally done atoms");
+  assert.ok(locallyPartial.length > 0, "fixture requires locally partial atoms");
+  assert.ok(locallyPending.length > 0, "fixture requires locally pending atoms");
+  for (const atom of locallyDone) assert.equal(atom.marker, "x", `${atom.id} local done must use [x]`);
+  for (const atom of locallyPartial) assert.equal(atom.marker, "-", `${atom.id} local partial must use [-]`);
+  for (const atom of locallyPending) assert.equal(atom.marker, " ", `${atom.id} local pending must use [ ]`);
 
   assert.throws(
-    () => assertR0AtomEvidence({ ...unsupported, marker: "x" }, ledgerIds, maturity),
+    () => assertR0AtomEvidence({ ...locallyPartial[0], marker: "x" }, ledgerIds, maturity),
     /cannot be checked without done implementation and verification/u,
   );
+});
+
+test("R0 atoms bind exact capabilities, ledger rows, dimensions, and evidence classes", () => {
+  const checklist = readFileSync(maturityChecklistPath, "utf8");
+  const atoms = r0ChecklistAtoms(checklist);
+  const { maturity } = loadContracts();
+  const ledgerIds = deliveryLedgerIds(readFileSync(deliveryLedgerPath, "utf8"));
+
+  assert.equal(R0_ATOM_POLICIES.size, atoms.length, "every R0 atom requires an independent evidence policy");
+  for (const atom of atoms) assertR0AtomEvidence(atom, ledgerIds, maturity);
+});
+
+test("R0 evidence binding rejects unrelated paths and global manifest substitution", () => {
+  const atoms = r0ChecklistAtoms(readFileSync(maturityChecklistPath, "utf8"));
+  const { maturity } = loadContracts();
+  const ledgerIds = deliveryLedgerIds(readFileSync(deliveryLedgerPath, "utf8"));
+  const source = atoms.find((atom) => atom.id === "R0-001");
+  assert.ok(source, "R0-001 fixture is required");
+
   assert.throws(
-    () => assertR0AtomEvidence({ ...locallyProven, marker: "x" }, ledgerIds, maturity),
-    /cannot be checked while release or acceptance is incomplete/u,
+    () => assertR0AtomEvidence({
+      ...source,
+      dimensions: {
+        ...source.dimensions,
+        implementation: { ...source.dimensions.implementation, detail: "`README.md`" },
+      },
+    }, ledgerIds, maturity),
+    /unsupported implementation evidence/u,
+  );
+  assert.throws(
+    () => assertR0AtomEvidence({
+      ...source,
+      dimensions: { ...source.dimensions, ledger: { status: "manifest", detail: "bare global union" } },
+    }, ledgerIds, maturity),
+    /ledger mapping must match its capabilities/u,
   );
 });
 
@@ -181,9 +286,9 @@ function r0ChecklistAtoms(markdown) {
     const match = /^- \[([ x-])\] `(R0-\d{3})` (.+)$/u.exec(lines[index]);
     if (!match) continue;
     const dimensions = {};
-    for (const name of ["implementation", "verification", "release", "acceptance", "ledger"]) {
+    for (const name of ["implementation", "verification", "release", "acceptance", "capabilities", "ledger", "required", "evidence"]) {
       const line = lines[++index] ?? "";
-      const evidence = /^  - `(implementation|verification|release|acceptance|ledger)`: `([^`]+)` — (.+)$/u.exec(line);
+      const evidence = /^  - `(implementation|verification|release|acceptance|capabilities|ledger|required|evidence)`: `([^`]+)` — (.+)$/u.exec(line);
       assert.ok(evidence, `${match[2]} requires structured ${name} evidence`);
       assert.equal(evidence[1], name, `${match[2]} evidence dimensions must remain ordered`);
       dimensions[name] = { status: evidence[2], detail: evidence[3] };
@@ -194,6 +299,8 @@ function r0ChecklistAtoms(markdown) {
 }
 
 function assertR0AtomEvidence(atom, ledgerIds, maturity) {
+  const policy = R0_ATOM_POLICIES.get(atom.id);
+  assert.ok(policy, `${atom.id} requires an atom-specific evidence policy`);
   const statuses = Object.fromEntries(
     ["implementation", "verification", "release", "acceptance"]
       .map((name) => [name, atom.dimensions[name].status]),
@@ -224,29 +331,62 @@ function assertR0AtomEvidence(atom, ledgerIds, maturity) {
   const localDone = statuses.implementation === "done" && statuses.verification === "done";
   if (atom.marker === "x") {
     assert.ok(localDone, `${atom.id} cannot be checked without done implementation and verification`);
-    assert.ok(
-      statuses.release === "done" && statuses.acceptance === "done",
-      `${atom.id} cannot be checked while release or acceptance is incomplete`,
-    );
   } else if (atom.marker === "-") {
-    assert.ok(localDone, `${atom.id} partial marker requires done local implementation and verification`);
     assert.ok(
-      statuses.release !== "done" || statuses.acceptance !== "done",
-      `${atom.id} partial marker requires an incomplete delivery dimension`,
+      [statuses.implementation, statuses.verification].includes("partial"),
+      `${atom.id} partial marker requires partial local implementation or verification`,
     );
   } else {
-    assert.ok(!localDone, `${atom.id} unchecked marker requires a local implementation or verification gap`);
+    assert.ok(
+      [statuses.implementation, statuses.verification].includes("pending"),
+      `${atom.id} unchecked marker requires pending local implementation or verification`,
+    );
   }
 
-  assert.equal(atom.dimensions.ledger.status, "manifest", `${atom.id} must use the auditable manifest ledger mapping`);
-  assert.match(
-    atom.dimensions.ledger.detail,
-    /`shared\/workbench-maturity-capabilities\.ts`/u,
-    `${atom.id} ledger mapping must reference the maturity manifest`,
+  const capabilityIds = commaList(atom.dimensions.capabilities.status);
+  assert.deepEqual(capabilityIds, policy.capabilityIds, `${atom.id} capability mapping must match its audit scope`);
+  const recordsById = new Map(maturity.map((record) => [record.id, record]));
+  const mappedRecords = capabilityIds.map((id) => {
+    const record = recordsById.get(id);
+    assert.ok(record, `${atom.id} maps unknown capability ${id}`);
+    return record;
+  });
+  const expectedLedgerIds = [...new Set(mappedRecords.flatMap((record) => record.ledgerIds))].sort();
+  const declaredLedgerIds = commaList(atom.dimensions.ledger.status).sort();
+  assert.deepEqual(
+    declaredLedgerIds,
+    expectedLedgerIds,
+    `${atom.id} ledger mapping must match its capabilities`,
   );
-  const manifestLedgerIds = new Set(maturity.flatMap((record) => record.ledgerIds));
-  assert.ok(manifestLedgerIds.size > 0, "maturity manifest requires ledger mappings");
-  for (const id of manifestLedgerIds) assert.ok(ledgerIds.has(id), `manifest ledger ID ${id} requires a delivery row`);
+  for (const id of declaredLedgerIds) assert.ok(ledgerIds.has(id), `${atom.id} ledger ID ${id} requires a delivery row`);
+
+  const requiredDimensions = assignmentRecord(atom.dimensions.required.status);
+  assert.deepEqual(requiredDimensions, policy.requiredDimensions, `${atom.id} required dimensions must match its audit policy`);
+  for (const record of mappedRecords) {
+    for (const [dimension, expected] of Object.entries(requiredDimensions)) {
+      assert.equal(record.dimensions.get(dimension), expected, `${atom.id} ${record.id} ${dimension} must be ${expected}`);
+    }
+  }
+
+  const evidenceClasses = commaList(atom.dimensions.evidence.status);
+  assert.deepEqual(evidenceClasses, policy.evidenceClasses, `${atom.id} evidence classes must match its audit policy`);
+  const localPaths = ["implementation", "verification"].flatMap((name) => evidencePaths(atom.dimensions[name].detail));
+  const allowedPaths = new Set(evidenceClasses.flatMap((name) => {
+    const paths = R0_EVIDENCE_CLASS_PATHS.get(name);
+    assert.ok(paths, `${atom.id} has unknown evidence class ${name}`);
+    return [...paths];
+  }));
+  for (const path of localPaths) {
+    assert.ok(allowedPaths.has(path), `${atom.id} unsupported implementation evidence: ${path}`);
+  }
+  if (![statuses.implementation, statuses.verification].includes("pending")) {
+    for (const name of evidenceClasses) {
+      assert.ok(
+        localPaths.some((path) => R0_EVIDENCE_CLASS_PATHS.get(name).has(path)),
+        `${atom.id} requires ${name} evidence`,
+      );
+    }
+  }
 }
 
 function evidencePaths(detail) {
@@ -257,6 +397,18 @@ function evidencePaths(detail) {
 
 function deliveryLedgerIds(markdown) {
   return new Set([...markdown.matchAll(/^\| ([A-Z][A-Z0-9]*-[A-Z0-9]+) \|/gmu)].map((match) => match[1]));
+}
+
+function commaList(value) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function assignmentRecord(value) {
+  return Object.fromEntries(commaList(value).map((item) => {
+    const match = /^([a-z_]+)=(proven|gap|not_applicable)$/u.exec(item);
+    assert.ok(match, `invalid required dimension assignment: ${item}`);
+    return [match[1], match[2]];
+  }));
 }
 
 function sourceFile(snapshot, path) {

@@ -472,6 +472,7 @@ test("README, Roadmap, frontend, and maturity checklists keep ledger dimensions 
     assertLedgerLanguageBoundaries(markdown, rows, name);
     for (const claim of [
       "TSK-009 implementation is complete.",
+      "OPS-007 verification is complete.",
       "WB-001 release is complete.",
       "IDN-001 acceptance is complete.",
       "TSK-001 is complete.",
@@ -480,6 +481,44 @@ test("README, Roadmap, frontend, and maturity checklists keep ledger dimensions 
         () => assertLedgerLanguageBoundaries(`${markdown}\n${claim}\n`, rows, name),
         new RegExp(`${name} .*must not claim`, "u"),
         `${name} must reject a ledger-conflicting claim: ${claim}`,
+      );
+    }
+    for (const claim of [
+      "- [ ] TSK-009 implementation is complete.",
+      "- [ ] OPS-007 verification is complete.",
+      "- [ ] WB-001 release is complete.",
+      "- [ ] IDN-001 acceptance is complete.",
+    ]) {
+      assert.throws(
+        () => assertLedgerLanguageBoundaries(`${markdown}\n${claim}\n`, rows, name),
+        new RegExp(`${name} .*must not claim`, "u"),
+        `${name} must reject checkbox-wrapped current completion: ${claim}`,
+      );
+    }
+    assert.doesNotThrow(
+      () => assertLedgerLanguageBoundaries(
+        `${markdown}\n- [ ] When TSK-009 implementation is complete, run the retention verification.\n`,
+        rows,
+        name,
+      ),
+      `${name} must allow an explicitly prospective unchecked criterion`,
+    );
+
+    const boundedHistory = "Historical candidate 843f43a (2026-08-23): IDN-001 acceptance is complete for that candidate only, not current main.";
+    assert.doesNotThrow(
+      () => assertLedgerLanguageBoundaries(`${markdown}\n${boundedHistory}\n`, rows, name),
+      `${name} must allow strictly bounded historical candidate evidence`,
+    );
+    for (const claim of [
+      "Historical candidate 843f43a: IDN-001 acceptance is complete for that candidate only, not current main.",
+      "Historical candidate (2026-08-23): IDN-001 acceptance is complete for that candidate only, not current main.",
+      "Historical candidate 843f43a (2026-08-23): IDN-001 acceptance is complete for that candidate only.",
+      "Current-main candidate 843f43a (2026-08-23): IDN-001 acceptance is complete.",
+    ]) {
+      assert.throws(
+        () => assertLedgerLanguageBoundaries(`${markdown}\n${claim}\n`, rows, name),
+        new RegExp(`${name} .*must not claim`, "u"),
+        `${name} must reject ambiguous or current historical wording: ${claim}`,
       );
     }
   }
@@ -815,7 +854,7 @@ function assertReadmeContract(readme, rows) {
 }
 
 function assertLedgerLanguageBoundaries(markdown, rows, documentName) {
-  const currentClaims = markdown.replace(/^- \[ \].*$/gmu, "");
+  const currentClaims = currentStatusClaims(markdown);
   for (const row of rows) {
     const subject = `(?:\`?${escapeRegExp(row.ID)}\`?)`;
     for (const dimension of FRONTEND_LEDGER_DIMENSION_CLAIMS) {
@@ -825,6 +864,8 @@ function assertLedgerLanguageBoundaries(markdown, rows, documentName) {
         subject,
         dimension,
         `${documentName} ${row.ID} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+        64,
+        ({ claimIndex }) => isStrictBoundedHistoricalClaim(currentClaims, claimIndex),
       );
     }
     if (isOverallCompletionEligible(row)) continue;
@@ -834,15 +875,48 @@ function assertLedgerLanguageBoundaries(markdown, rows, documentName) {
       FRONTEND_OVERALL_COMPLETION_CLAIM,
       `${documentName} ${row.ID} must not claim overall completion while delivery dimensions remain incomplete`,
       64,
-      ({ claimIndex, claim }) => handleDimensionQualifiedCompletion(
-        currentClaims,
-        claimIndex,
-        claim.length,
-        [row],
-        (dimension) => `${documentName} ${row.ID} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
-      ),
+      ({ claimIndex, claim }) =>
+        isStrictBoundedHistoricalClaim(currentClaims, claimIndex) ||
+        handleDimensionQualifiedCompletion(
+          currentClaims,
+          claimIndex,
+          claim.length,
+          [row],
+          (dimension) => `${documentName} ${row.ID} must not claim ${dimension.name} while ledger ${dimension.column} is ${row[dimension.column]}`,
+        ),
     );
   }
+}
+
+function currentStatusClaims(markdown) {
+  let prospectiveSection = false;
+  return markdown.split(/\r?\n/u).map((line) => {
+    const trimmed = line.trim();
+    if (/^(?:退出标准|Acceptance criteria)：?$/iu.test(trimmed)) {
+      prospectiveSection = true;
+      return line;
+    }
+    if (/^#{1,6}\s/u.test(trimmed)) prospectiveSection = false;
+    const unchecked = /^\s*- \[ \] (.+)$/u.exec(line);
+    if (!unchecked) return line;
+    const structuredRoadmapExit = prospectiveSection && /（owned: .+; consumed: .+）$/u.test(unchecked[1]);
+    if (structuredRoadmapExit || isExplicitlyProspectiveCriterion(unchecked[1])) return "";
+    return line;
+  }).join("\n");
+}
+
+function isExplicitlyProspectiveCriterion(value) {
+  return /^(?:when|once|before|after|until|if)\b/iu.test(value.trim()) ||
+    /^(?:当|待|若|如果|在.+(?:前|后))/u.test(value.trim());
+}
+
+function isStrictBoundedHistoricalClaim(markdown, claimIndex) {
+  const lineStart = markdown.lastIndexOf("\n", claimIndex - 1) + 1;
+  const nextLine = markdown.indexOf("\n", claimIndex);
+  const lineEnd = nextLine === -1 ? markdown.length : nextLine;
+  const line = markdown.slice(lineStart, lineEnd).trim();
+  return /^(?:[-*]\s+)?Historical (?:candidate|commit) `?[a-f0-9]{7,40}`? \(20\d{2}-\d{2}-\d{2}\): .+ for that (?:candidate|commit) only, not current[- ]main\.$/iu.test(line) ||
+    /^(?:[-*]\s+)?历史(?:候选|提交) `?[a-f0-9]{7,40}`?（20\d{2}-\d{2}-\d{2}）：.+仅(?:该|此)(?:候选|提交)，不代表 current[- ]main。$/u.test(line);
 }
 
 function assertNoPositiveReadmeClaim(readme, subject, claim, message, options) {
