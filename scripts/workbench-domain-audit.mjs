@@ -44,11 +44,6 @@ const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.findCurrent", "scope")),
   ownerEvidence("routeDiscussionsApi passes authenticated member.memberId as actorMemberId; DiscussionTargetAuthorization rechecks the thread context before message reads and sends.", symbolBinding("src/routes/discussions.ts", "routeDiscussionsApi", "member.memberId"), symbolBinding("src/discussions/service.ts", "DiscussionsService.sendMessage", "memberId")),
 ].map((fact) => [fact.predicate, fact])));
-const MUTATION_LABELS = Object.freeze({
-  "POST /api/admin/roles/:id/members": "POST assign role member; duplicate returns 409",
-  "DELETE /api/admin/roles/:id/members": "DELETE role member; repeat returns 404",
-});
-
 export function runtimeEvidenceSnapshot({ repositoryRoot = resolve(import.meta.dirname, "..") } = {}) {
   const records = readDomainManifest(repositoryRoot);
   return structuredClone(canonicalRuntimeEvidence(records, repositoryRoot));
@@ -62,7 +57,20 @@ function readDomainManifest(repositoryRoot) {
     const source = sourceFile(snapshot, manifestPath);
     const capabilities = maturityRecords(source);
     const domainsById = new Map(domainRecords(source).map((record) => [record.id, record]));
-    return capabilities.map((capability) => ({ ...capability, ...domainsById.get(capability.id) }));
+    const roots = operationRootRecords(source);
+    const sideEffects = sourceSideEffectRecords(source);
+    assert.equal(new Set(roots.map((root) => operationOwnerKey(root.capabilityId, `${root.path}#${root.symbol}`))).size, roots.length, "frontend operation roots must be unique");
+    assert.deepEqual(
+      [...new Set(roots.map((root) => root.capabilityId))].sort(),
+      capabilities.map((capability) => capability.id).sort(),
+      "every maturity capability must declare a frontend operation root",
+    );
+    return capabilities.map((capability) => ({
+      ...capability,
+      ...domainsById.get(capability.id),
+      operationRoots: roots.filter((root) => root.capabilityId === capability.id),
+      sourceSideEffects: sideEffects.filter((binding) => binding.capabilityId === capability.id),
+    }));
   } finally {
     snapshot.dispose();
     api.close();
@@ -70,35 +78,75 @@ function readDomainManifest(repositoryRoot) {
 }
 
 function canonicalRuntimeEvidence(records, repositoryRoot) {
+  const recordIds = new Set(records.map((record) => record.id));
   const strategyBindings = new Map();
   for (const binding of readMutationStrategyBindings(repositoryRoot)) {
-    assert.ok(!strategyBindings.has(binding.operation), `duplicate mutation strategy binding ${binding.operation}`);
-    strategyBindings.set(binding.operation, binding);
+    if (!recordIds.has(binding.capabilityId)) continue;
+    const key = operationOwnerKey(binding.capabilityId, binding.operation);
+    assert.ok(!strategyBindings.has(key), `duplicate mutation strategy binding ${binding.capabilityId} ${binding.operation}`);
+    strategyBindings.set(key, binding);
+  }
+  const sourceSideEffects = new Map();
+  for (const binding of readSourceSideEffectBindings(repositoryRoot)) {
+    if (!recordIds.has(binding.capabilityId)) continue;
+    const key = operationOwnerKey(binding.capabilityId, binding.operation);
+    assert.ok(!sourceSideEffects.has(key), `duplicate source side-effect binding ${binding.capabilityId} ${binding.operation}`);
+    sourceSideEffects.set(key, binding);
   }
   const visibleMutations = new Map(records.map((record) => [record.id, deriveVisibleMutations(record, repositoryRoot)]));
   const apiPaths = [...new Set([
     ...records.flatMap((record) => record.apiPaths),
-    ...[...visibleMutations.values()].flatMap((operations) => operations.map((operation) => operation.slice(operation.indexOf(" ") + 1))),
+    ...[...visibleMutations.values()].flatMap((operations) => operations.map((operation) => operationParts(operation).apiPath)),
   ])];
   const apis = deriveRouteEvidence(apiPaths, repositoryRoot);
   const mutations = {};
+  const consumedStrategyBindings = new Set();
+  const consumedSideEffects = new Set();
   for (const record of records) {
-    for (const operation of visibleMutations.get(record.id) ?? []) {
-      const route = apis[operation.slice(operation.indexOf(" ") + 1)];
-      assert.ok(route?.methods.includes(operation.slice(0, operation.indexOf(" "))), `${record.id}: frontend mutation lacks matching route handler ${operation}`);
-      const declaration = record.mutations.find((value) => value.startsWith(`${operation} — `));
-      const declaresProven = declaration?.includes(" — proven:") ?? false;
-      const proven = strategyBindings.get(operation);
-      if (declaresProven) assert.ok(proven, `${record.id}: proven mutation declaration requires structured strategy binding ${operation}`);
-      if (proven) assert.ok(declaresProven, `${record.id}: structured strategy binding requires a proven mutation declaration ${operation}`);
-      mutations[operation] = {
+    const declarations = mutationDeclarations(record);
+    const operations = visibleMutations.get(record.id) ?? [];
+    assert.deepEqual(
+      [...declarations.keys()].sort(),
+      operations,
+      `${record.id}: mutation declarations must map one-to-one to generated facts`,
+    );
+    mutations[record.id] = {};
+    for (const operation of operations) {
+      const parts = operationParts(operation);
+      const route = apis[parts.apiPath];
+      assert.ok(route?.methods.includes(parts.method), `${record.id}: generated operation lacks matching route handler ${operation}`);
+      const declaration = declarations.get(operation);
+      assert.ok(declaration, `${record.id}: generated operation lacks manifest declaration ${operation}`);
+      const ownerKey = operationOwnerKey(record.id, operation);
+      const proven = strategyBindings.get(ownerKey);
+      const sideEffect = sourceSideEffects.get(ownerKey);
+      if (sideEffect) {
+        assert.equal(sideEffect.apiPath, parts.apiPath, `${record.id}: source side-effect API path contradicts operation ${operation}`);
+        assert.equal(declaration.status, "gap", `${record.id}: source side-effect declaration must remain a gap ${operation}`);
+      }
+      if (declaration.status === "proven") {
+        assert.ok(proven, `${record.id}: proven mutation declaration requires structured strategy binding ${operation}`);
+        assert.equal(sideEffect, undefined, `${record.id}: proven frontend mutation must not use a side-effect binding ${operation}`);
+      } else {
+        assert.equal(proven, undefined, `${record.id}: structured strategy binding requires a proven mutation declaration ${operation}`);
+      }
+      if (proven) consumedStrategyBindings.add(ownerKey);
+      if (sideEffect) consumedSideEffects.add(ownerKey);
+      mutations[record.id][operation] = {
         id: operation,
-        apiPath: operation.slice(operation.indexOf(" ") + 1),
-        description: MUTATION_LABELS[operation] ?? operation,
+        apiPath: parts.apiPath,
+        description: operation,
         strategy: proven?.strategy ?? "gap",
         ...(proven ? { safety: proven.source, tests: proven.tests } : {}),
+        ...(sideEffect ? { source: sideEffect.source, tests: sideEffect.tests } : {}),
       };
     }
+  }
+  for (const [key, binding] of strategyBindings) {
+    assert.ok(consumedStrategyBindings.has(key), `structured strategy binding has no generated fact ${binding.capabilityId} ${binding.operation}`);
+  }
+  for (const [key, binding] of sourceSideEffects) {
+    assert.ok(consumedSideEffects.has(key), `structured source side-effect binding has no generated fact ${binding.capabilityId} ${binding.operation}`);
   }
   return { apis, owners: OWNER_EVIDENCE, mutations };
 }
@@ -201,11 +249,8 @@ function enclosingFunction(node) {
 
 function deriveVisibleMutations(record, repositoryRoot) {
   const index = frontendSourceIndex(repositoryRoot);
-  const queue = record.frontendEvidence
-    .filter((path) => path.startsWith("frontend/") && !path.startsWith("frontend/lib/"))
-    .map((path) => ({ path, symbol: /frontend\/(?:app|app-routes)\.tsx?$/u.test(path) ? routeSymbol(record.id) : null }));
-  const operationModule = `frontend/lib/${record.id.replace(/^workbench-/u, "")}-data.ts`;
-  if (index.has(operationModule)) queue.push({ path: operationModule, symbol: null });
+  assert.ok(Array.isArray(record.operationRoots) && record.operationRoots.length > 0, `${record.id}: frontend operation root is required`);
+  const queue = record.operationRoots.map((root) => ({ ...root, required: true }));
   const visited = new Set();
   const operations = new Set();
   while (queue.length > 0) {
@@ -215,24 +260,33 @@ function deriveVisibleMutations(record, repositoryRoot) {
     if (visited.has(visitKey)) continue;
     visited.add(visitKey);
     const entry = index.get(item.path);
-    if (!entry) continue;
-    const scope = item.symbol === null ? entry.module : entry.functions.get(item.symbol);
-    if (!scope) continue;
+    if (!entry) {
+      assert.equal(item.required, false, `${record.id}: missing frontend operation root module ${item.path}`);
+      continue;
+    }
+    const scope = item.symbol === "*" ? entry.module : entry.functions.get(item.symbol);
+    if (!scope) {
+      assert.equal(item.required, false, `${record.id}: missing frontend operation root ${item.path}#${item.symbol}`);
+      continue;
+    }
     assert.equal(scope.unsupportedMutations.length, 0, `${record.id}: unsupported frontend mutation invocation: ${scope.unsupportedMutations.join(", ")}`);
     for (const invoked of scope.invokedImports) {
+      if (entry.functions.has(invoked)) {
+        queue.push({ path: item.path, symbol: invoked, required: false });
+        continue;
+      }
       const imported = entry.imports.get(invoked);
-      if (imported) queue.push(imported);
+      if (imported) queue.push({ ...imported, required: false });
     }
     for (const call of scope.calls) {
       const declaredPath = record.apiPaths.find((pathValue) => pathShape(pathValue) === pathShape(call.path));
       if (call.method !== "GET") operations.add(`${call.method} ${declaredPath ?? call.path}`);
     }
   }
+  for (const binding of record.sourceSideEffects ?? []) {
+    if (binding.capabilityId === record.id) operations.add(binding.operation);
+  }
   return [...operations].sort();
-}
-
-function routeSymbol(capabilityId) {
-  return capabilityId.replace(/^workbench-/u, "").split("-").map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("") + "Route";
 }
 
 function frontendSourceIndex(repositoryRoot) {
@@ -360,16 +414,26 @@ export async function loadWorkbenchDomainAudit({ repositoryRoot = resolve(import
     const source = sourceFile(snapshot, manifestPath);
     const capabilities = maturityRecords(source);
     const domains = domainRecords(source);
+    const roots = operationRootRecords(source);
+    const sideEffects = sourceSideEffectRecords(source);
+    assert.equal(new Set(roots.map((root) => operationOwnerKey(root.capabilityId, `${root.path}#${root.symbol}`))).size, roots.length, "frontend operation roots must be unique");
     assert.equal(new Set(domains.map((record) => record.id)).size, domains.length, "domain capability ids must be unique");
     assert.deepEqual(
       domains.map((record) => record.id).sort(),
       capabilities.map((record) => record.id).sort(),
       "domain evidence must map one-to-one to maturity capabilities",
     );
+    assert.deepEqual(
+      [...new Set(roots.map((root) => root.capabilityId))].sort(),
+      capabilities.map((record) => record.id).sort(),
+      "every maturity capability must declare a frontend operation root",
+    );
     const domainsById = new Map(domains.map((record) => [record.id, record]));
     const joined = capabilities.map((capability, routeOrder) => ({
       ...capability,
       ...domainsById.get(capability.id),
+      operationRoots: roots.filter((root) => root.capabilityId === capability.id),
+      sourceSideEffects: sideEffects.filter((binding) => binding.capabilityId === capability.id),
       routeOrder,
     }));
     for (const record of joined) record.mutationFactIds = deriveVisibleMutations(record, repositoryRoot);
@@ -387,7 +451,7 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
   const testBindings = [];
   for (const record of records) {
     record.apiEvidence = canonical.apis;
-    record.mutationEvidence = canonical.mutations;
+    record.mutationEvidence = canonical.mutations[record.id];
     assert.ok(typeof record.id === "string" && record.id.length > 0, "domain capability id is required");
     assert.ok(Array.isArray(record.apiPaths), `${record.id}: apiPaths must be an array`);
     assert.ok(record.apiPaths.every((path) => /^\/api\/[A-Za-z0-9_/:.-]+$/u.test(path)), `${record.id}: API paths must be normalized /api paths`);
@@ -412,14 +476,17 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
     const expectedMutations = deriveVisibleMutations(record, repositoryRoot);
     assert.deepEqual(record.mutationFactIds, expectedMutations, `${record.id}: visible mutation inventory contradiction`);
     for (const mutationFactId of expectedMutations) {
-      const fact = canonical.mutations[mutationFactId];
+      const fact = canonical.mutations[record.id]?.[mutationFactId];
       assert.ok(fact, `${record.id}: unknown mutation evidence ${mutationFactId}`);
       assert.ok(record.apiPaths.some((apiPath) => pathShape(apiPath) === pathShape(fact.apiPath)), `${record.id}: source-visible API ownership contradiction for ${mutationFactId}`);
       assert.ok(["gap", "idempotency_key", "conditional_write"].includes(fact.strategy), `${record.id}: mutation strategy evidence contradiction for ${mutationFactId}`);
-      if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
+      if (runtimeEvidence) assert.deepEqual(runtimeEvidence.mutations?.[record.id]?.[mutationFactId], fact, `${record.id}: runtime evidence contradiction for mutation ${mutationFactId}`);
       if (fact.strategy !== "gap") {
         semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
         testBindings.push(...fact.tests.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: mutation regression evidence ${mutationFactId}` })));
+      } else if (fact.source) {
+        semanticBindings.push({ binding: fact.source, context: `${record.id}: source side-effect evidence ${mutationFactId}` });
+        testBindings.push(...fact.tests.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: source side-effect regression ${mutationFactId}` })));
       }
     }
 
@@ -463,6 +530,40 @@ function readMutationStrategyBindings(repositoryRoot) {
     snapshot.dispose();
     api.close();
   }
+}
+
+function readSourceSideEffectBindings(repositoryRoot) {
+  const manifestPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
+  const api = new API({ cwd: repositoryRoot });
+  const snapshot = api.updateSnapshot({ openFiles: [manifestPath] });
+  try {
+    return sourceSideEffectRecords(sourceFile(snapshot, manifestPath));
+  } finally {
+    snapshot.dispose();
+    api.close();
+  }
+}
+
+function operationOwnerKey(capabilityId, operation) {
+  return `${capabilityId}\0${operation}`;
+}
+
+function operationParts(operation) {
+  const match = /^(GET|POST|PUT|PATCH|DELETE) (\/api\/[A-Za-z0-9_/:.-]+)(?:#[a-z0-9-]+)?$/u.exec(operation);
+  assert.ok(match, `invalid operation identity ${operation}`);
+  return { method: match[1], apiPath: match[2] };
+}
+
+function mutationDeclarations(record) {
+  const declarations = new Map();
+  for (const declaration of record.mutations) {
+    const match = /^(GET|POST|PUT|PATCH|DELETE) (\/api\/[A-Za-z0-9_/:.-]+(?:#[a-z0-9-]+)?) — (proven|gap): (.+)$/u.exec(declaration);
+    assert.ok(match, `${record.id}: mutation declaration must carry one exact operation identity: ${declaration}`);
+    const operation = `${match[1]} ${match[2]}`;
+    assert.ok(!declarations.has(operation), `${record.id}: duplicate mutation declaration ${operation}`);
+    declarations.set(operation, { operation, status: match[3], detail: match[4] });
+  }
+  return declarations;
 }
 
 function verifySymbolBindings(entries, repositoryRoot) {
@@ -525,7 +626,7 @@ export function renderWorkbenchDomainAudit(records) {
   return [
     "# Workbench R0 Domain Audit",
     "",
-    "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every API carries its independently bound runtime pagination shape. Mutation status is derived from verified source facts and remains conservative.",
+    "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",
     "| Capability | Route | API and pagination | Persistence | Owner predicate | Mutation safety | Test evidence | Classification | Gaps |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
@@ -597,12 +698,43 @@ function mutationStrategyRecords(source) {
   return arrayRecords(source, "WORKBENCH_MUTATION_STRATEGY_BINDINGS").map((entry, index) => {
     const context = `mutation strategy binding ${index}`;
     const properties = objectProperties(entry, context);
-    assert.deepEqual(new Set(properties.keys()), new Set(["operation", "strategy", "source", "tests"]), `${context} must use the exact strategy fields`);
+    assert.deepEqual(new Set(properties.keys()), new Set(["capabilityId", "operation", "strategy", "source", "tests"]), `${context} must use the exact strategy fields`);
     const tests = unwrapExpression(properties.get("tests"));
     assert.ok(isArrayLiteralExpression(tests), `${context} tests must be an array literal`);
     return {
+      capabilityId: requiredString(properties, "capabilityId", context),
       operation: requiredString(properties, "operation", context),
       strategy: requiredString(properties, "strategy", context),
+      source: semanticBindingRecord(source, properties.get("source"), `${context} source`),
+      tests: tests.elements.map((entryValue, testIndex) => testBindingRecord(source, entryValue, `${context} test ${testIndex}`)),
+    };
+  });
+}
+
+function operationRootRecords(source) {
+  return arrayRecords(source, "WORKBENCH_OPERATION_ROOTS").map((entry, index) => {
+    const context = `frontend operation root ${index}`;
+    const properties = objectProperties(entry, context);
+    assert.deepEqual(new Set(properties.keys()), new Set(["capabilityId", "path", "symbol"]), `${context} must use the exact root fields`);
+    return {
+      capabilityId: requiredString(properties, "capabilityId", context),
+      path: requiredString(properties, "path", context),
+      symbol: requiredString(properties, "symbol", context),
+    };
+  });
+}
+
+function sourceSideEffectRecords(source) {
+  return arrayRecords(source, "WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS").map((entry, index) => {
+    const context = `source side-effect binding ${index}`;
+    const properties = objectProperties(entry, context);
+    assert.deepEqual(new Set(properties.keys()), new Set(["capabilityId", "operation", "apiPath", "source", "tests"]), `${context} must use the exact side-effect fields`);
+    const tests = unwrapExpression(properties.get("tests"));
+    assert.ok(isArrayLiteralExpression(tests), `${context} tests must be an array literal`);
+    return {
+      capabilityId: requiredString(properties, "capabilityId", context),
+      operation: requiredString(properties, "operation", context),
+      apiPath: requiredString(properties, "apiPath", context),
       source: semanticBindingRecord(source, properties.get("source"), `${context} source`),
       tests: tests.elements.map((entryValue, testIndex) => testBindingRecord(source, entryValue, `${context} test ${testIndex}`)),
     };

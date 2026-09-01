@@ -76,7 +76,7 @@ const R0_ATOM_POLICIES = new Map([
   ["R0-009", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "route", "domain", "delivery"] }],
   ["R0-010", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "domain"] }],
   ["R0-011", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "delivery"] }],
-  ["R0-012", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "delivery"] }],
+  ["R0-012", { capabilityIds: ALL_CAPABILITY_IDS, requiredDimensions: { evidence: "gap" }, evidenceClasses: ["manifest", "domain", "delivery"] }],
 ]);
 const R0_EVIDENCE_CLASS_PATHS = new Map([
   ["manifest", new Set([
@@ -124,35 +124,39 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-submission-detail": { source: "manifest:0@b139ccd7bb29", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情缺少空态、初始重试、队列发现和决策幂等闭环。", owner: "R6-003" },
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
-  "DELETE /api/tasks/:id": { slug: "delete-task", symptom: "删除任务缺少已证明的重放与 uncertain-outcome 收敛策略。", owner: "R4-010" },
-  "DELETE /api/tasks/:id/links/:linkId": { slug: "delete-knowledge-link", symptom: "删除任务知识关联缺少已证明的幂等与目标授权策略。", owner: "R4-005" },
-  "PATCH /api/tasks/:id": { slug: "update-task", symptom: "任务详情更新缺少条件写入或幂等重放证明。", owner: "R4-003" },
-  "POST /api/tasks/:id/links": { slug: "create-knowledge-link", symptom: "创建任务知识关联缺少重放收敛与二级目标授权证明。", owner: "R4-005" },
-  "POST /api/tasks/:id/progress": { slug: "append-progress", symptom: "追加进度缺少稳定客户端键与重复事件收敛证明。", owner: "R4-004" },
-  "PUT /api/tasks/:id/tags": { slug: "replace-tags", symptom: "替换任务标签缺少并发条件与重放后权威集合证明。", owner: "R4-005" },
-  "PATCH /api/admin/members/:id/status": { slug: "change-member-status", symptom: "成员状态修改缺少重放、session 收缩与缓存失效证明。", owner: "R6-005" },
-  "DELETE role member; repeat returns 404": { slug: "remove-role-member", symptom: "重复移除角色成员返回 404，尚未定义安全收敛和审计语义。", owner: "R6-006" },
-  "PATCH /api/admin/roles/:id": { slug: "update-role", symptom: "角色权限更新缺少并发条件和重复请求策略。", owner: "R6-006" },
-  "POST /api/admin/roles": { slug: "create-role", symptom: "创建角色缺少稳定幂等键与 uncertain-outcome 重放策略。", owner: "R6-006" },
-  "POST assign role member; duplicate returns 409": { slug: "assign-role-member", symptom: "重复分配角色成员返回 409，尚未定义授权写入收敛语义。", owner: "R6-006" },
-  "DELETE /api/admin/menus/:id": { slug: "delete-menu", symptom: "菜单删除缺少重放、层级影响与跨 session 投影收敛证明。", owner: "R6-007" },
-  "PATCH /api/admin/menus/:id": { slug: "update-menu", symptom: "菜单编辑缺少原子排序、并发冲突与投影失效证明。", owner: "R6-007" },
-  "POST /api/discussions/context": { slug: "create-context-thread", symptom: "创建上下文 thread 缺少重放收敛和当前目标再授权证明。", owner: "R5-006" },
-  "DELETE /api/knowledge/:id/note/shares/:recipientId": { slug: "remove-note-share", symptom: "移除私有笔记分享缺少重放收敛与接收者访问即时收缩证明。", owner: "R3-011" },
-  "POST /api/knowledge/:id/note/shares": { slug: "create-note-share", symptom: "创建私有笔记分享缺少幂等与知识目标再授权证明。", owner: "R3-011" },
-  "PUT /api/knowledge/:id/note": { slug: "update-private-note", symptom: "更新私有笔记缺少并发条件与 uncertain-outcome 收敛证明。", owner: "R3-011" },
-  "DELETE /api/saved-views/:id": { slug: "delete-saved-view", symptom: "删除 Saved View 缺少重放与 uncertain-outcome 收敛策略。", owner: "R3-014" },
-  "POST /api/saved-views": { slug: "create-saved-view", symptom: "创建 Saved View 缺少稳定幂等键与重复请求证明。", owner: "R3-014" },
-  "PATCH /api/knowledge/chat/conversations/:id/scope": { slug: "update-conversation-scope", symptom: "Agent 会话范围更新缺少条件写入与撤权后收敛策略。", owner: "R3-016" },
-  "POST /api/knowledge/chat": { slug: "submit-chat-turn", symptom: "Agent 提问缺少端到端稳定请求键和重复副作用证明。", owner: "R3-016" },
-  "POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
-  "POST /api/admin/assets/:id/retry": { slug: "retry-asset", symptom: "资产解析重试缺少稳定幂等键与重复任务抑制证明。", owner: "R6-004" },
-  "POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
-  "DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
-  "POST /api/admin/submissions/:id/comments": { slug: "add-review-comment", symptom: "审核评论缺少稳定客户端键与重复写入抑制证明。", owner: "R6-003" },
-  "POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
-  "POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
-  "POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "退回修改决策缺少幂等、通知去重与并发策略。", owner: "R6-003" },
+  "workbench-tasks|DELETE /api/tasks/:id": { slug: "delete-task", symptom: "删除任务缺少已证明的重放与 uncertain-outcome 收敛策略。", owner: "R4-010" },
+  "workbench-tasks|DELETE /api/tasks/:id/links/:linkId": { slug: "delete-knowledge-link", symptom: "删除任务知识关联缺少已证明的幂等与目标授权策略。", owner: "R4-005" },
+  "workbench-tasks|PATCH /api/tasks/:id": { slug: "update-task", symptom: "任务详情更新缺少条件写入或幂等重放证明。", owner: "R4-003" },
+  "workbench-tasks|POST /api/tasks/:id/links": { slug: "create-knowledge-link", symptom: "创建任务知识关联缺少重放收敛与二级目标授权证明。", owner: "R4-005" },
+  "workbench-tasks|POST /api/tasks/:id/progress": { slug: "append-progress", symptom: "追加进度缺少稳定客户端键与重复事件收敛证明。", owner: "R4-004" },
+  "workbench-tasks|PUT /api/tasks/:id/tags": { slug: "replace-tags", symptom: "替换任务标签缺少并发条件与重放后权威集合证明。", owner: "R4-005" },
+  "workbench-admin-members|PATCH /api/admin/members/:id/status": { slug: "change-member-status", symptom: "成员状态修改缺少重放、session 收缩与缓存失效证明。", owner: "R6-005" },
+  "workbench-admin-roles|DELETE /api/admin/roles/:id/members": { slug: "remove-role-member", symptom: "重复移除角色成员返回 404，尚未定义安全收敛和审计语义。", owner: "R6-006" },
+  "workbench-admin-roles|PATCH /api/admin/roles/:id": { slug: "update-role", symptom: "角色权限更新缺少并发条件和重复请求策略。", owner: "R6-006" },
+  "workbench-admin-roles|POST /api/admin/roles": { slug: "create-role", symptom: "创建角色缺少稳定幂等键与 uncertain-outcome 重放策略。", owner: "R6-006" },
+  "workbench-admin-roles|POST /api/admin/roles/:id/members": { slug: "assign-role-member", symptom: "重复分配角色成员返回 409，尚未定义授权写入收敛语义。", owner: "R6-006" },
+  "workbench-admin-menus|DELETE /api/admin/menus/:id": { slug: "delete-menu", symptom: "菜单删除缺少重放、层级影响与跨 session 投影收敛证明。", owner: "R6-007" },
+  "workbench-admin-menus|PATCH /api/admin/menus/:id": { slug: "update-menu", symptom: "菜单编辑缺少原子排序、并发冲突与投影失效证明。", owner: "R6-007" },
+  "workbench-messages|POST /api/discussions/context": { slug: "create-context-thread", symptom: "创建上下文 thread 缺少重放收敛和当前目标再授权证明。", owner: "R5-006" },
+  "workbench-knowledge-reader|DELETE /api/knowledge/:id/note/shares/:recipientId": { slug: "remove-note-share", symptom: "移除私有笔记分享缺少重放收敛与接收者访问即时收缩证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|GET /api/knowledge/:id#record-visit": { slug: "record-reader-visit", symptom: "阅读器成功 GET 会增加 visit_count，但缺少重试去重或明确的一次访问语义。", owner: "R3-011" },
+  "workbench-knowledge-reader|POST /api/knowledge/:id/note/shares": { slug: "create-note-share", symptom: "创建私有笔记分享缺少幂等与知识目标再授权证明。", owner: "R3-011" },
+  "workbench-knowledge-reader|PUT /api/knowledge/:id/note": { slug: "update-private-note", symptom: "更新私有笔记缺少并发条件与 uncertain-outcome 收敛证明。", owner: "R3-011" },
+  "workbench-search|DELETE /api/saved-views/:id": { slug: "delete-saved-view", symptom: "删除 Saved View 缺少重放与 uncertain-outcome 收敛策略。", owner: "R3-014" },
+  "workbench-search|POST /api/saved-views": { slug: "create-saved-view", symptom: "创建 Saved View 缺少稳定幂等键与重复请求证明。", owner: "R3-014" },
+  "workbench-agent|PATCH /api/knowledge/chat/conversations/:id/scope": { slug: "update-conversation-scope", symptom: "Agent 会话范围更新缺少条件写入与撤权后收敛策略。", owner: "R3-016" },
+  "workbench-agent|POST /api/knowledge/chat": { slug: "submit-chat-turn", symptom: "Agent 提问缺少端到端稳定请求键和重复副作用证明。", owner: "R3-016" },
+  "workbench-agent|POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
+  "workbench-admin-assets|POST /api/admin/assets/:id/retry": { slug: "retry-asset", symptom: "资产解析重试缺少稳定幂等键与重复任务抑制证明。", owner: "R6-004" },
+  "workbench-admin-spaces|POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
+  "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
+  "workbench-admin-submission-detail|POST /api/admin/submissions/:id/comments": { slug: "add-review-comment", symptom: "审核评论缺少稳定客户端键与重复写入抑制证明。", owner: "R6-003" },
+  "workbench-admin-submission-detail|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
+  "workbench-admin-submission-detail|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
+  "workbench-admin-submission-detail|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "退回修改决策缺少幂等、通知去重与并发策略。", owner: "R6-003" },
+  "workbench-admin-submissions|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "审核队列发布操作缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
+  "workbench-admin-submissions|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "审核队列拒绝操作缺少幂等重放与并发冲突策略。", owner: "R6-003" },
+  "workbench-admin-submissions|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "审核队列退回操作缺少幂等、通知去重与并发策略。", owner: "R6-003" },
 }));
 const menuRecordKeys = new Set([
   "id", "routeId", "pathname", "requiredRole", "journey", "classification", "dimensions",
@@ -543,7 +547,7 @@ function canonicalGapPolicy(capability, sourceKey, source) {
     };
   }
   const operation = sourceKey.slice("domain:".length);
-  const policy = DOMAIN_GAP_POLICIES.get(operation);
+  const policy = DOMAIN_GAP_POLICIES.get(`${capability}|${operation}`);
   assert.ok(policy, `${capability}: domain gap policy is required for ${operation}`);
   return {
     dimension: "query_or_idempotency",
@@ -559,7 +563,7 @@ function assertGapPolicyCoverage(expectedSources) {
   for (const [key, source] of expectedSources) {
     const separator = key.indexOf("|");
     if (source.kind === "manifest") manifestCapabilities.push(key.slice(0, separator));
-    else domainOperations.push(key.slice(separator + "|domain:".length));
+    else domainOperations.push(`${key.slice(0, separator)}|${key.slice(separator + "|domain:".length)}`);
   }
   assert.deepEqual(
     [...MANIFEST_GAP_POLICIES.keys()].sort(),

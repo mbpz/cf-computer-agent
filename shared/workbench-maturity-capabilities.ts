@@ -32,6 +32,7 @@ export interface WorkbenchMaturityDomainEvidence {
 }
 
 export interface WorkbenchMutationStrategyBinding {
+  readonly capabilityId: string;
   readonly operation: string;
   readonly strategy: Exclude<WorkbenchMutationSafety, "mixed" | "not_applicable">;
   readonly source: {
@@ -45,56 +46,133 @@ export interface WorkbenchMutationStrategyBinding {
   }[];
 }
 
+export interface WorkbenchOperationRoot {
+  readonly capabilityId: string;
+  readonly path: string;
+  readonly symbol: string;
+}
+
+export interface WorkbenchSourceSideEffectBinding {
+  readonly capabilityId: string;
+  readonly operation: string;
+  readonly apiPath: string;
+  readonly source: WorkbenchMutationStrategyBinding["source"];
+  readonly tests: WorkbenchMutationStrategyBinding["tests"];
+}
+
 export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-submit",
     operation: "POST /api/submissions",
     strategy: "idempotency_key",
     source: { path: "src/submissions/repository.ts", symbol: "SubmissionsRepository.findByIdempotencyKey", tokens: ["s.submitter_id = ?", "s.idempotency_key = ?"] },
     tests: [{ path: "test/worker/submissions.test.ts", tokens: ["returns an exact replay and rejects changed content or target for the same member key", "submissions: 1"] }],
   },
   {
+    capabilityId: "workbench-tasks",
     operation: "POST /api/tasks",
     strategy: "idempotency_key",
     source: { path: "src/tasks/repository.ts", symbol: "TasksRepository.insert", tokens: ["INSERT OR IGNORE INTO tasks"] },
     tests: [{ path: "test/worker/tasks.test.ts", tokens: ["creates idempotently, lists, updates, transitions, and deletes", "created: false"] }],
   },
   {
+    capabilityId: "workbench-tasks",
     operation: "POST /api/tasks/:id/status",
     strategy: "conditional_write",
     source: { path: "src/tasks/repository.ts", symbol: "TasksRepository.compareAndSetStatus", tokens: ["expectedStatus", "AND status = ?"] },
     tests: [{ path: "test/unit/tasks-service.test.ts", tokens: ["compareAndSetStatus", "previousStatus: expectedStatus"] }],
   },
   {
+    capabilityId: "workbench-boards",
+    operation: "POST /api/tasks/:id/status",
+    strategy: "conditional_write",
+    source: { path: "src/tasks/repository.ts", symbol: "TasksRepository.compareAndSetStatus", tokens: ["expectedStatus", "AND status = ?"] },
+    tests: [{ path: "test/unit/tasks-service.test.ts", tokens: ["compareAndSetStatus", "previousStatus: expectedStatus"] }],
+  },
+  {
+    capabilityId: "workbench-admin-duplicates",
     operation: "POST /api/admin/duplicates/:submissionId/decision",
     strategy: "conditional_write",
     source: { path: "src/duplicates/repository.ts", symbol: "DuplicateCandidatesRepository.decide", tokens: ["current.decision === decision", "current.decidedBy === reviewerId", "AND decision = 'pending'"] },
     tests: [{ path: "test/worker/submissions.test.ts", tokens: ["keeps exact duplicate decisions admin-scoped, idempotent, and audited", "DUPLICATE_DECISION_CONFLICT"] }],
   },
   {
+    capabilityId: "workbench-notifications",
     operation: "POST /api/notifications/:id/read",
     strategy: "conditional_write",
     source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markRead", tokens: ["recipient_member_id = ?", "read_at IS NULL", "result.meta.changes === 1"] },
     tests: [{ path: "test/worker/notifications.test.ts", tokens: ["marks one notification replay-safely and returns 404 across recipients", "toEqual(firstBody)"] }],
   },
   {
+    capabilityId: "workbench-notifications",
     operation: "POST /api/notifications/read",
     strategy: "conditional_write",
     source: { path: "src/notifications/repository.ts", symbol: "NotificationsRepository.markManyRead", tokens: ["recipient_member_id = ?", "read_at IS NULL", "selection.limit"] },
     tests: [{ path: "test/worker/notifications.test.ts", tokens: ["marks only a bounded visible ID set and converges on bulk replay", "marked: 0"] }],
   },
   {
+    capabilityId: "workbench-knowledge-reader",
     operation: "PUT /api/knowledge/:id/favorite",
     strategy: "idempotency_key",
     source: { path: "src/favorites/repository.ts", symbol: "FavoritesRepository.add", tokens: ["ON CONFLICT(member_id, knowledge_item_id) DO NOTHING"] },
     tests: [{ path: "test/worker/favorites.test.ts", tokens: ["keeps favorites private, visible only for readable knowledge, and removable", "favorite: true"] }],
   },
   {
+    capabilityId: "workbench-message-thread",
     operation: "POST /api/discussions/messages",
     strategy: "idempotency_key",
     source: { path: "src/discussions/service.ts", symbol: "DiscussionsService.sendMessage", tokens: ["findMessageByAuthorClientKey", "normalized.clientKey"] },
     tests: [{ path: "test/worker/discussions.test.ts", tokens: ["sends idempotently, validates replies and mentions, and keeps route ordering canonical", "created: false"] }],
   },
 ] as const satisfies readonly WorkbenchMutationStrategyBinding[]);
+
+export const WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS = Object.freeze([
+  {
+    capabilityId: "workbench-knowledge-reader",
+    operation: "GET /api/knowledge/:id#record-visit",
+    apiPath: "/api/knowledge/:id",
+    source: { path: "src/routes/library.ts", symbol: "routeLibraryApi", tokens: ["services.library.detail(scope, knowledgeItemId)", "services.recentVisits.record(scope, knowledgeItemId)"] },
+    tests: [{ path: "test/worker/recent-visits.test.ts", tokens: ["records successful detail reads, deduplicates counts, and paginates privately", "visitCount: 2"] }],
+  },
+] as const satisfies readonly WorkbenchSourceSideEffectBinding[]);
+
+export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
+  { capabilityId: "workbench-home", path: "frontend/app.tsx", symbol: "HomeRoute" },
+  { capabilityId: "workbench-submit", path: "frontend/app.tsx", symbol: "SubmitRoute" },
+  { capabilityId: "workbench-knowledge", path: "frontend/app.tsx", symbol: "KnowledgeRoute" },
+  { capabilityId: "workbench-search", path: "frontend/app.tsx", symbol: "SearchRoute" },
+  { capabilityId: "workbench-search", path: "frontend/lib/search-data.ts", symbol: "*" },
+  { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentRoute" },
+  { capabilityId: "workbench-agent", path: "frontend/lib/agent-data.ts", symbol: "*" },
+  { capabilityId: "workbench-my-submissions", path: "frontend/app.tsx", symbol: "MySubmissionsRoute" },
+  { capabilityId: "workbench-tasks", path: "frontend/app.tsx", symbol: "TasksRoute" },
+  { capabilityId: "workbench-tasks", path: "frontend/lib/tasks-data.ts", symbol: "*" },
+  { capabilityId: "workbench-boards", path: "frontend/app.tsx", symbol: "BoardsRoute" },
+  { capabilityId: "workbench-settings", path: "frontend/pages/settings-page.tsx", symbol: "SettingsPage" },
+  { capabilityId: "workbench-admin", path: "frontend/pages/admin/admin-dashboard-page.tsx", symbol: "AdminDashboardPage" },
+  { capabilityId: "workbench-admin-submissions", path: "frontend/app.tsx", symbol: "ReviewQueueRoute" },
+  { capabilityId: "workbench-admin-duplicates", path: "frontend/app.tsx", symbol: "AdminDuplicateRoute" },
+  { capabilityId: "workbench-admin-duplicates", path: "frontend/lib/admin-duplicates-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-assets", path: "frontend/app.tsx", symbol: "AdminAssetsRoute" },
+  { capabilityId: "workbench-admin-assets", path: "frontend/lib/admin-assets-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-members", path: "frontend/app.tsx", symbol: "AdminMembersRoute" },
+  { capabilityId: "workbench-admin-members", path: "frontend/lib/admin-members-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-roles", path: "frontend/app.tsx", symbol: "AdminRolesRoute" },
+  { capabilityId: "workbench-admin-roles", path: "frontend/lib/admin-roles-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-menus", path: "frontend/app.tsx", symbol: "AdminMenusRoute" },
+  { capabilityId: "workbench-admin-menus", path: "frontend/lib/admin-menus-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-spaces", path: "frontend/app.tsx", symbol: "AdminSpacesRoute" },
+  { capabilityId: "workbench-admin-spaces", path: "frontend/lib/admin-spaces-data.ts", symbol: "*" },
+  { capabilityId: "workbench-admin-audit", path: "frontend/app.tsx", symbol: "AdminAuditRoute" },
+  { capabilityId: "workbench-admin-analytics", path: "frontend/app.tsx", symbol: "AdminAnalyticsRoute" },
+  { capabilityId: "workbench-notifications", path: "frontend/app.tsx", symbol: "NotificationsRoute" },
+  { capabilityId: "workbench-notifications", path: "frontend/lib/notifications-data.ts", symbol: "*" },
+  { capabilityId: "workbench-messages", path: "frontend/app.tsx", symbol: "MessagesRoute" },
+  { capabilityId: "workbench-knowledge-reader", path: "frontend/app.tsx", symbol: "KnowledgeReaderRoute" },
+  { capabilityId: "workbench-knowledge-reader", path: "frontend/lib/knowledge-reader-data.ts", symbol: "*" },
+  { capabilityId: "workbench-message-thread", path: "frontend/app.tsx", symbol: "DiscussionThreadRoute" },
+  { capabilityId: "workbench-admin-submission-detail", path: "frontend/pages/admin/review-detail-route.tsx", symbol: "ReviewDetailRoute" },
+] as const satisfies readonly WorkbenchOperationRoot[]);
 
 const INITIAL_DIMENSIONS = {
   entry: "proven",
@@ -295,7 +373,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/tasks/repository.ts", "migrations/0032_workspace_tasks.sql", "migrations/0033_numbered_pagination_indexes.sql", "migrations/0036_workbench_notifications.sql"],
     ownerPredicate: "routeTasksApi passes authenticated member.memberId to TasksService; TasksRepository predicates tasks.member_id = ? and task child tables by member_id.",
     pagination: "numbered",
-    mutations: ["POST /api/tasks — proven: stable client task id with INSERT OR IGNORE replay", "POST /api/tasks/:id/status — proven: expected-status conditional write", "DELETE /api/tasks/:id — gap: repeated deletion returns not-found rather than converging", "PATCH/POST/PUT task detail mutations — gap: no expected version is supplied"],
+    mutations: ["POST /api/tasks — proven: stable client task id with INSERT OR IGNORE replay", "POST /api/tasks/:id/status — proven: expected-status conditional write", "DELETE /api/tasks/:id — gap: repeated deletion returns not-found rather than converging", "DELETE /api/tasks/:id/links/:linkId — gap: repeated deletion behavior is not proven", "PATCH /api/tasks/:id — gap: no expected version is supplied", "POST /api/tasks/:id/links — gap: no replay key is supplied", "POST /api/tasks/:id/progress — gap: no stable event key is supplied", "PUT /api/tasks/:id/tags — gap: no expected version is supplied"],
     mutationSafety: "mixed",
   },
   {
@@ -327,12 +405,12 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-submissions",
-    apiPaths: ["/api/admin/submissions"],
+    apiPaths: ["/api/admin/submissions", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject"],
     persistencePaths: ["src/submissions/repository.ts", "src/publication/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: null,
     pagination: "numbered",
-    mutations: [],
-    mutationSafety: "not_applicable",
+    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-admin-duplicates",
@@ -430,7 +508,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/library/repository.ts", "src/favorites/repository.ts", "src/private-notes/repository.ts", "src/recent-visits/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0012_m5_private_notes.sql", "migrations/0023_m4_knowledge_favorites.sql", "migrations/0024_m4_knowledge_visits.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.",
     pagination: "not_applicable",
-    mutations: ["PUT /api/knowledge/:id/favorite — proven: member-scoped conflict-ignore converges", "DELETE /api/knowledge/:id/favorite — gap: repeated delete behavior is not proven", "PUT /api/knowledge/:id/note — gap: no expected version protects concurrent note edits", "POST/DELETE note shares — gap: no replay key or expected version is supplied", "reader visit recording — gap: repeated GET increments visit_count and is intentionally not retry-idempotent"],
+    mutations: ["PUT /api/knowledge/:id/favorite — proven: member-scoped conflict-ignore converges", "DELETE /api/knowledge/:id/favorite — gap: repeated delete behavior is not proven", "PUT /api/knowledge/:id/note — gap: no expected version protects concurrent note edits", "POST /api/knowledge/:id/note/shares — gap: no replay key is supplied", "DELETE /api/knowledge/:id/note/shares/:recipientId — gap: repeated revoke behavior is not proven", "GET /api/knowledge/:id#record-visit — gap: successful detail reads increment visit_count and are intentionally not retry-idempotent"],
     mutationSafety: "mixed",
   },
   {
@@ -448,7 +526,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/publication/repository.ts", "src/submissions/repository.ts", "src/review-comments/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0022_m4_review_comments.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST request-revision/reject — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
+    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
     mutationSafety: "mixed",
   },
 ] as const satisfies readonly WorkbenchMaturityDomainEvidence[]);

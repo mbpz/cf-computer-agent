@@ -17,7 +17,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 
 ## R0 — 现状审计与权威总账
 
-Task 6 本地闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-completion.md`。精确候选树 `d536c606d74b8c2c0aa9ee732b4ca20b7e0b00ac` 的 focused gates 与完整 `npm run check` 已通过；状态仍按 atom 证据同步为 7 个 `[x]`、5 个 `[-]`。24 个 capability 继续为 `partial`，53 项缺口继续由 R1–R8 负责，98 个 R1–R8 implementation atoms 均保持 `[ ]`；本地 gate 不提升 release 或 acceptance。
+Task 6 与最终修正闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-completion.md`。结构化 operation roots、capability-owned strategy bindings 与 GET side-effect binding 已使全部声明双向失败关闭；状态按 atom 证据恢复为 7 个 `[x]`、5 个 `[-]`。24 个 capability 继续为 `partial`，57 项缺口由 R1–R8 负责，98 个 R1–R8 implementation atoms 均保持 `[ ]`；本地 gate 不提升 release 或 acceptance。
 
 - [x] `R0-001` 固化所有共享路由、参数化路由、菜单入口和权限映射。
   - `implementation`: `done` — `shared/workspace-route-capabilities.ts`、`frontend/app-routes.ts`、`shared/workbench-maturity-capabilities.ts`。
@@ -119,14 +119,14 @@ Task 6 本地闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-c
   - `required`: `evidence=gap` — 文档守卫不得把本地证据提升为产品完成。
   - `evidence`: `manifest,delivery` — 只接受 manifest 和交付合同证据。
 - [x] `R0-012` 生成 R1–R8 的缺口矩阵、依赖图、优先级和验收顺序。
-  - `implementation`: `done` — `docs/product/workbench-product-maturity-gap-matrix.md` 与 `ROADMAP.md` 精确归集 53 项未实现缺口，并建立唯一 owner、前置依赖、优先级和阶段出入口。
-  - `verification`: `done` — `scripts/workbench-maturity-contract.test.mjs` 验证修正后的 source accounting、canonical identity/owner、独立 priority policy、完整有向无环图及 R1–R8 映射。
+  - `implementation`: `done` — `docs/product/workbench-product-maturity-gap-matrix.md` 与 `ROADMAP.md` 精确归集 57 项未实现缺口，并建立唯一 owner、前置依赖、优先级和阶段出入口。
+  - `verification`: `done` — `scripts/workbench-domain-audit.test.mjs` 与 `scripts/workbench-maturity-contract.test.mjs` 验证 all-record operation accounting、canonical identity/owner、独立 priority policy、完整有向无环图及 R1–R8 映射。
   - `release`: `pending` — 尚无可发布产物；权威为 `docs/product/delivery-status-ledger.md`。
   - `acceptance`: `pending` — 尚无可验收产物；权威为 `docs/product/delivery-status-ledger.md`。
   - `capabilities`: `workbench-home,workbench-submit,workbench-knowledge,workbench-search,workbench-agent,workbench-my-submissions,workbench-tasks,workbench-boards,workbench-settings,workbench-admin,workbench-admin-submissions,workbench-admin-duplicates,workbench-admin-assets,workbench-admin-members,workbench-admin-roles,workbench-admin-menus,workbench-admin-spaces,workbench-admin-audit,workbench-admin-analytics,workbench-notifications,workbench-messages,workbench-knowledge-reader,workbench-message-thread,workbench-admin-submission-detail` — Task 5 精确消费全部 24 项 manifest 记录及对应 domain gaps。
   - `ledger`: `ADM-001,ADM-002,ADM-003,ADM-004,ADM-005,ADM-006,ADM-007,ADM-008,ADM-009,ADM-010,BRD-001,BRD-002,KB-001,KB-002,KB-005,KB-006,KB-007,KB-009,MSG-001,MSG-002,MSG-004,NTF-001,NTF-003,NTF-004,TSK-001,TSK-002,WB-001,WB-002,WB-SETTINGS` — gap matrix 的精确 ledger 输入；各交付维度状态不变。
   - `required`: `evidence=gap` — 矩阵产物不抹去 24 项 capability 的 release/signed-browser 证据缺口。
-  - `evidence`: `manifest,delivery` — manifest、gap matrix、Roadmap 与交付合同共同构成规划证据，不构成 R1–R8 实现证据。
+  - `evidence`: `manifest,domain,delivery` — manifest、source-derived domain audit、gap matrix、Roadmap 与交付合同共同构成规划证据，不构成 R1–R8 实现证据。
 
 ### Task 5：R1–R8 阶段映射
 
@@ -137,10 +137,10 @@ Task 6 本地闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-c
 | --- | ---: | --- | --- | --- |
 | R1 | 1 | R1 入口门槛：R0 缺口账、身份边界、当前 Shell 基线。 | R1 退出门槛：设置、全局 Shell、键盘、overlay、主题、窄屏验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r1-design-system.md |
 | R2 | 1 | R2 入口门槛：R1 overlay、焦点、token、响应式 Shell 合同。 | R2 退出门槛：共享 DataTable、分页、AsyncBoundary、表单、URL 恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r2-shared-patterns.md |
-| R3 | 13 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
+| R3 | 14 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
 | R4 | 8 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务与看板 CRUD、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
 | R5 | 4 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
-| R6 | 24 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
+| R6 | 27 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
 | R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
 | R8 | 1 | R8 入口门槛：R1–R7 本地实现、完整 gate、精确候选树。 | R8 退出门槛：发布、迁移、免费层、smoke、signed acceptance、账本证据。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r8-delivery-acceptance.md |
 <!-- task5-stage-map:end -->

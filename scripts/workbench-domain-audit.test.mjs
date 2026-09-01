@@ -92,8 +92,8 @@ test("validation rejects roles.update conditional safety borrowed from unrelated
   assert.ok(roles);
 
   const safetyRuntime = runtimeEvidenceSnapshot();
-  safetyRuntime.mutations["PATCH /api/admin/roles/:id"] = {
-    ...safetyRuntime.mutations["PATCH /api/admin/roles/:id"],
+  safetyRuntime.mutations["workbench-admin-roles"]["PATCH /api/admin/roles/:id"] = {
+    ...safetyRuntime.mutations["workbench-admin-roles"]["PATCH /api/admin/roles/:id"],
     strategy: "conditional_write",
     safety: { path: "src/tasks/repository.ts", symbol: "TasksRepository.compareAndSetStatus", tokens: ["expectedStatus"] },
   };
@@ -199,6 +199,74 @@ test("current frontend ownership discovers the required visible mutation minimum
   }
 });
 
+test("every declared operation has one generated fact for its owning capability", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  for (const record of audit) {
+    const declarations = record.mutations.map((declaration) => {
+      const match = /^(GET|POST|PUT|PATCH|DELETE) (\/api\/[A-Za-z0-9_/:.-]+(?:#[a-z0-9-]+)?) — (?:proven|gap): /u.exec(declaration);
+      assert.ok(match, `${record.id}: mutation declaration must carry one exact operation identity: ${declaration}`);
+      return match[1] + " " + match[2];
+    });
+    assert.deepEqual(
+      record.mutationFactIds,
+      [...declarations].sort(),
+      `${record.id}: every declaration must resolve to one generated fact and vice versa`,
+    );
+  }
+});
+
+test("message-thread send and knowledge-reader visit are independently accounted", async () => {
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  const thread = audit.find((record) => record.id === "workbench-message-thread");
+  const reader = audit.find((record) => record.id === "workbench-knowledge-reader");
+  assert.ok(thread);
+  assert.ok(reader);
+
+  assert.deepEqual(thread.mutationFactIds, ["POST /api/discussions/messages"]);
+  assert.equal(thread.mutationEvidence["POST /api/discussions/messages"].strategy, "idempotency_key");
+
+  const visit = reader.mutationEvidence["GET /api/knowledge/:id#record-visit"];
+  assert.ok(visit, "reader visit recording requires a generated operation fact distinct from ordinary GET");
+  assert.equal(visit.apiPath, "/api/knowledge/:id");
+  assert.equal(visit.strategy, "gap");
+  assert.deepEqual(
+    { path: visit.source.path, symbol: visit.source.symbol },
+    { path: "src/routes/library.ts", symbol: "routeLibraryApi" },
+  );
+  assert.ok(visit.tests.some((binding) => binding.path === "test/worker/recent-visits.test.ts"));
+});
+
+test("a missing declared frontend controller root fails closed", () => {
+  withRepositoryProbe("frontend/app.tsx", (source) => source.replace(
+    "export function DiscussionThreadRoute(",
+    "export function RenamedDiscussionThreadRoute(",
+  ), (probeRoot) => {
+    assert.throws(
+      () => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
+      /workbench-message-thread: missing frontend operation root.*DiscussionThreadRoute/u,
+    );
+  });
+});
+
+test("an orphan structured strategy binding fails closed", () => {
+  withRepositoryProbe("shared/workbench-maturity-capabilities.ts", (source) => source.replace(
+    "] as const satisfies readonly WorkbenchMutationStrategyBinding[]);",
+    `  {
+    capabilityId: "workbench-message-thread",
+    operation: "POST /api/discussions/orphan-message",
+    strategy: "idempotency_key",
+    source: { path: "src/discussions/service.ts", symbol: "DiscussionsService.sendMessage", tokens: ["findMessageByAuthorClientKey"] },
+    tests: [{ path: "test/worker/discussions.test.ts", tokens: ["sends idempotently"] }],
+  },
+] as const satisfies readonly WorkbenchMutationStrategyBinding[]);`,
+  ), (probeRoot) => {
+    assert.throws(
+      () => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
+      /structured strategy binding has no generated fact.*orphan-message/u,
+    );
+  });
+});
+
 test("removing role detail API ownership and its mutation cannot bypass source discovery", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const roles = audit.find((item) => item.id === "workbench-admin-roles");
@@ -231,8 +299,8 @@ test("frontend scanner preserves no-options GET and inline mutation methods", ()
     "  void apiFetch(\"/api/knowledge/recent\");\n  const data = await apiFetch<{ answer?: unknown;",
   ), (probeRoot) => {
     const evidence = runtimeEvidenceSnapshot({ repositoryRoot: probeRoot });
-    assert.ok(evidence.mutations["POST /api/knowledge/chat"]);
-    assert.equal(evidence.mutations["GET /api/knowledge/recent"], undefined);
+    assert.ok(evidence.mutations["workbench-agent"]["POST /api/knowledge/chat"]);
+    assert.equal(evidence.mutations["workbench-agent"]["GET /api/knowledge/recent"], undefined);
   });
 });
 
