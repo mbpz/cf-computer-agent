@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -29,7 +30,10 @@ const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-ca
 const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
+const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
+const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
 const dimensions = new Set(["entry", "journey", "api", "persistence", "isolation", "query_or_idempotency", "states", "accessibility", "evidence"]);
 const dimensionStates = new Set(["proven", "gap", "not_applicable"]);
@@ -89,6 +93,7 @@ const R0_EVIDENCE_CLASS_PATHS = new Map([
   ])],
   ["delivery", new Set([
     "docs/product/workbench-product-maturity-checklist.md", "docs/product/delivery-status-ledger.md",
+    "docs/product/workbench-product-maturity-gap-matrix.md", "ROADMAP.md",
     "scripts/workbench-maturity-contract.test.mjs", "scripts/delivery-status-contract.test.mjs",
   ])],
 ]);
@@ -189,7 +194,7 @@ test("R0 checklist atoms carry four-dimensional evidence without promoting relea
   );
   assert.deepEqual(
     Object.fromEntries(["x", "-", " "].map((marker) => [marker, atoms.filter((atom) => atom.marker === marker).length])),
-    { x: 6, "-": 5, " ": 1 },
+    { x: 7, "-": 5, " ": 0 },
     "R0 markers must represent local completion independently from release and acceptance",
   );
 
@@ -215,13 +220,25 @@ test("R0 checklist markers derive only from local implementation and verificatio
 
   assert.ok(locallyDone.length > 0, "fixture requires locally done atoms");
   assert.ok(locallyPartial.length > 0, "fixture requires locally partial atoms");
-  assert.ok(locallyPending.length > 0, "fixture requires locally pending atoms");
   for (const atom of locallyDone) assert.equal(atom.marker, "x", `${atom.id} local done must use [x]`);
   for (const atom of locallyPartial) assert.equal(atom.marker, "-", `${atom.id} local partial must use [-]`);
   for (const atom of locallyPending) assert.equal(atom.marker, " ", `${atom.id} local pending must use [ ]`);
 
   assert.throws(
     () => assertR0AtomEvidence({ ...locallyPartial[0], marker: "x" }, ledgerIds, maturity),
+    /cannot be checked without done implementation and verification/u,
+  );
+  const pending = {
+    ...locallyDone[0],
+    marker: " ",
+    dimensions: {
+      ...locallyDone[0].dimensions,
+      implementation: { status: "pending", detail: "Synthetic pending implementation." },
+    },
+  };
+  assert.doesNotThrow(() => assertR0AtomEvidence(pending, ledgerIds, maturity));
+  assert.throws(
+    () => assertR0AtomEvidence({ ...pending, marker: "x" }, ledgerIds, maturity),
     /cannot be checked without done implementation and verification/u,
   );
 });
@@ -261,6 +278,207 @@ test("R0 evidence binding rejects unrelated paths and global manifest substituti
     /ledger mapping must match its capabilities/u,
   );
 });
+
+test("every manifest and domain gap has one stable future owner", () => {
+  const { maturity } = loadContracts();
+  const rows = gapMatrixRows(readFileSync(maturityGapMatrixPath, "utf8"));
+  const expectedSources = expectedGapSources(
+    maturity,
+    readFileSync(domainAuditPath, "utf8"),
+  );
+  const checklistAtoms = futureChecklistAtomIds(readFileSync(maturityChecklistPath, "utf8"));
+
+  assert.equal(new Set(rows.map((row) => row.gapId)).size, rows.length, "gap IDs must be unique");
+  assert.deepEqual(
+    rows.map((row) => `${row.capability}|${row.source}`).sort(),
+    [...expectedSources.keys()].sort(),
+    "every manifest/domain source gap must appear exactly once",
+  );
+
+  for (const row of rows) assertGapRow(row, checklistAtoms, expectedSources);
+});
+
+test("gap execution order is priority-first and never depends on a later phase", () => {
+  const rows = gapMatrixRows(readFileSync(maturityGapMatrixPath, "utf8"));
+  const checklistAtoms = futureChecklistAtomIds(readFileSync(maturityChecklistPath, "utf8"));
+  const priorities = rows.map((row) => Number(row.priority.slice(1)));
+
+  assert.ok(rows.some((row) => row.priority === "P0"), "matrix requires user-blocking or authorization P0 work");
+  assert.deepEqual(priorities, [...priorities].sort((left, right) => left - right), "P0 must precede polish priorities");
+  for (const row of rows) {
+    const ownerPhase = atomPhase(row.owner);
+    for (const prerequisite of row.prerequisites) {
+      assert.ok(checklistAtoms.has(prerequisite), `${row.gapId} has unknown prerequisite ${prerequisite}`);
+      assert.ok(atomPhase(prerequisite) <= ownerPhase, `${row.gapId} depends on later phase ${prerequisite}`);
+      assert.notEqual(prerequisite, row.owner, `${row.gapId} cannot depend on its owner atom`);
+    }
+  }
+});
+
+test("R1-R8 checklist and roadmap mappings reconcile to the owned gaps", () => {
+  const rows = gapMatrixRows(readFileSync(maturityGapMatrixPath, "utf8"));
+  const checklistStages = stageMappingRows(readFileSync(maturityChecklistPath, "utf8"), "task5-stage-map");
+  const roadmapStages = stageMappingRows(readFileSync(roadmapPath, "utf8"), "maturity-stage-map");
+  const expectedCounts = Object.fromEntries(
+    Array.from({ length: 8 }, (_, index) => {
+      const phase = `R${index + 1}`;
+      return [phase, rows.filter((row) => row.owner.startsWith(`${phase}-`)).length];
+    }),
+  );
+
+  assert.deepEqual(checklistStages.map((stage) => stage.phase), Object.keys(expectedCounts));
+  assert.deepEqual(roadmapStages.map((stage) => stage.phase), Object.keys(expectedCounts));
+  for (const stage of checklistStages) {
+    assert.equal(stage.ownedGaps, expectedCounts[stage.phase], `${stage.phase} checklist gap count drifted`);
+    assert.ok(stage.entry.length > 0, `${stage.phase} checklist entry criteria are required`);
+    assert.ok(stage.exit.length > 0, `${stage.phase} checklist exit criteria are required`);
+    assert.match(stage.nextPlan, /^docs\/superpowers\/plans\/\d{4}-\d{2}-\d{2}-workbench-maturity-r[1-8]-[a-z0-9-]+\.md$/u);
+    const roadmap = roadmapStages.find((candidate) => candidate.phase === stage.phase);
+    assert.deepEqual(roadmap, stage, `${stage.phase} roadmap mapping must match the checklist`);
+  }
+});
+
+test("R0-012 closes only with executable gap-accounting evidence", () => {
+  const atoms = r0ChecklistAtoms(readFileSync(maturityChecklistPath, "utf8"));
+  const atom = atoms.find((candidate) => candidate.id === "R0-012");
+  assert.ok(atom, "R0-012 is required");
+  assert.equal(atom.marker, "x");
+  assert.equal(atom.dimensions.implementation.status, "done");
+  assert.equal(atom.dimensions.verification.status, "done");
+  assert.match(atom.dimensions.implementation.detail, /`docs\/product\/workbench-product-maturity-gap-matrix\.md`/u);
+  assert.match(atom.dimensions.implementation.detail, /`ROADMAP\.md`/u);
+  assert.match(atom.dimensions.verification.detail, /`scripts\/workbench-maturity-contract\.test\.mjs`/u);
+});
+
+function expectedGapSources(maturity, domainAudit) {
+  const sources = new Map();
+  for (const record of maturity) {
+    record.gaps.forEach((symptom, index) => {
+      const fingerprint = createHash("sha256").update(symptom).digest("hex").slice(0, 12);
+      const key = `${record.id}|manifest:${index}@${fingerprint}`;
+      assert.ok(!sources.has(key), `duplicate manifest gap source ${key}`);
+      sources.set(key, { capability: record.id, symptom, kind: "manifest" });
+    });
+  }
+  for (const line of domainAudit.split(/\r?\n/u)) {
+    if (!line.startsWith("| workbench-")) continue;
+    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
+    assert.equal(cells.length, 9, "domain audit rows must retain nine columns");
+    for (const fact of cells[5].split(/;\s+(?=(?:GET|POST|PUT|PATCH|DELETE)\s)/u)) {
+      if (!fact.endsWith("— gap")) continue;
+      const operation = fact.slice(0, -" — gap".length);
+      const key = `${cells[0]}|domain:${operation}`;
+      assert.ok(!sources.has(key), `duplicate domain gap source ${key}`);
+      sources.set(key, {
+        capability: cells[0],
+        symptom: `${operation} lacks a proven mutation-safety strategy.`,
+        kind: "domain",
+      });
+    }
+  }
+  return sources;
+}
+
+function gapMatrixRows(markdown) {
+  const section = markerSection(markdown, "gap-matrix");
+  const lines = section.split(/\r?\n/u).filter((line) => line.startsWith("| "));
+  assert.ok(lines.length >= 3, "gap matrix table is required");
+  const headers = markdownCells(lines[0]);
+  assert.deepEqual(headers, [
+    "Gap ID", "Source", "Capability", "Symptom", "Dimension", "Owner atom", "Prerequisites",
+    "Affected files", "Focused test", "Acceptance journey", "Priority",
+  ]);
+  return lines.slice(2).map((line) => {
+    const cells = markdownCells(line);
+    assert.equal(cells.length, headers.length, `gap row must contain ${headers.length} fields`);
+    return {
+      gapId: cells[0],
+      source: cells[1],
+      capability: cells[2],
+      symptom: cells[3],
+      dimension: cells[4],
+      owner: cells[5],
+      prerequisites: cells[6] === "-" ? [] : cells[6].split("<br>").map((value) => value.trim()),
+      affectedFiles: cells[7].split("<br>").map((value) => value.trim()),
+      focusedTest: cells[8],
+      acceptanceJourney: cells[9],
+      priority: cells[10],
+    };
+  });
+}
+
+function assertGapRow(row, checklistAtoms, expectedSources) {
+  const source = expectedSources.get(`${row.capability}|${row.source}`);
+  assert.ok(source, `${row.gapId} has unknown source ${row.capability}|${row.source}`);
+  assert.match(
+    row.gapId,
+    /^workbench-[a-z0-9-]+:(?:entry|journey|api|persistence|isolation|query_or_idempotency|states|accessibility|evidence):[a-z0-9]+(?:-[a-z0-9]+)*$/u,
+    `${row.gapId} must use the stable capability:dimension:slug format`,
+  );
+  const separator = row.gapId.indexOf(":");
+  assert.equal(row.gapId.slice(0, separator), row.capability, `${row.gapId} capability prefix drifted`);
+  assert.equal(row.gapId.split(":")[1], row.dimension, `${row.gapId} dimension prefix drifted`);
+  assert.ok(dimensions.has(row.dimension), `${row.gapId} has unsupported dimension ${row.dimension}`);
+  assert.ok(row.symptom.length >= 12, `${row.gapId} requires an observed symptom`);
+  assert.ok(checklistAtoms.has(row.owner), `${row.gapId} has unknown owner ${row.owner}`);
+  assert.equal(new Set(row.prerequisites).size, row.prerequisites.length, `${row.gapId} repeats a prerequisite`);
+  assert.ok(row.affectedFiles.length > 0 && row.affectedFiles.every((path) => existsSync(resolve(repositoryRoot, path))), `${row.gapId} affected files must exist`);
+  assert.ok(existsSync(resolve(repositoryRoot, row.focusedTest)), `${row.gapId} focused test must exist`);
+  assert.ok(row.acceptanceJourney.length >= 12, `${row.gapId} requires an acceptance journey`);
+  assert.match(row.priority, /^P[0-2]$/u, `${row.gapId} priority must be P0, P1, or P2`);
+  assert.equal(row.priority, expectedPriority(row.capability, row.source), `${row.gapId} priority contradicts the independent risk policy`);
+  if (source.kind === "domain") assert.equal(row.dimension, "query_or_idempotency", `${row.gapId} domain mutation gap has wrong dimension`);
+}
+
+function expectedPriority(capability, source) {
+  if (source.startsWith("manifest:")) {
+    if (capability === "workbench-submit") return "P2";
+    if (new Set([
+      "workbench-tasks", "workbench-boards", "workbench-admin-roles", "workbench-notifications",
+      "workbench-messages", "workbench-knowledge-reader", "workbench-message-thread",
+    ]).has(capability)) return "P0";
+    return "P1";
+  }
+  if (new Set([
+    "workbench-tasks", "workbench-admin-members", "workbench-admin-roles", "workbench-admin-menus", "workbench-messages",
+  ]).has(capability)) return "P0";
+  if (capability === "workbench-knowledge-reader" && !source.includes("favorite")) return "P0";
+  return "P1";
+}
+
+function futureChecklistAtomIds(markdown) {
+  return new Set([...markdown.matchAll(/^- \[[ x-]\] `(R[1-8]-\d{3})` /gmu)].map((match) => match[1]));
+}
+
+function atomPhase(atomId) {
+  const match = /^R([1-8])-\d{3}$/u.exec(atomId);
+  assert.ok(match, `invalid future atom ${atomId}`);
+  return Number(match[1]);
+}
+
+function stageMappingRows(markdown, marker) {
+  const section = markerSection(markdown, marker);
+  const lines = section.split(/\r?\n/u).filter((line) => line.startsWith("| "));
+  assert.ok(lines.length === 10, `${marker} must contain one header, divider, and R1-R8 rows`);
+  assert.deepEqual(markdownCells(lines[0]), ["Phase", "Owned gaps", "Entry criteria", "Exit criteria", "Next detailed plan"]);
+  return lines.slice(2).map((line) => {
+    const cells = markdownCells(line);
+    assert.equal(cells.length, 5, `${marker} stage rows require five fields`);
+    return { phase: cells[0], ownedGaps: Number(cells[1]), entry: cells[2], exit: cells[3], nextPlan: cells[4] };
+  });
+}
+
+function markerSection(markdown, marker) {
+  const start = `<!-- ${marker}:start -->`;
+  const end = `<!-- ${marker}:end -->`;
+  assert.equal(markdown.split(start).length, 2, `${marker} start marker is required exactly once`);
+  assert.equal(markdown.split(end).length, 2, `${marker} end marker is required exactly once`);
+  return markdown.slice(markdown.indexOf(start) + start.length, markdown.indexOf(end));
+}
+
+function markdownCells(line) {
+  return line.split("|").slice(1, -1).map((cell) => cell.trim().replaceAll("`", ""));
+}
 
 function loadContracts() {
   const api = new API({ cwd: repositoryRoot });

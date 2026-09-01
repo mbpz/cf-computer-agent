@@ -16,6 +16,25 @@
 
 **证据规则。** 本地 fixture 仅证明确定性逻辑，workerd 仅证明本地 Cloudflare runtime 合同；发布必须记录日期、版本和 migration 范围，验收必须记录真实角色旅程与脱敏证据。页面、README、历史勾选框、匿名 smoke 和口头确认均不能替代这些证据。所有审计仅保留 allowlist metadata，不记录正文、凭据或敏感输入。
 
+### Workbench 产品成熟度 R1–R8 执行映射
+
+此映射消费 [Workbench 产品成熟度缺口矩阵](./docs/product/workbench-product-maturity-gap-matrix.md)，是 2026-08-31 R0 审计之后的新执行顺序。下方原有 R0–R6 Roadmap 继续作为历史范围、交付证据与 ledger ownership 档案保留，不因新映射而删除、改写或被解释为 current-main 完成。
+
+<!-- maturity-stage-map:start -->
+| Phase | Owned gaps | Entry criteria | Exit criteria | Next detailed plan |
+| --- | ---: | --- | --- | --- |
+| R1 | 1 | R1 入口门槛：R0 缺口账、身份边界、当前 Shell 基线。 | R1 退出门槛：设置、全局 Shell、键盘、overlay、主题、窄屏验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r1-design-system.md |
+| R2 | 1 | R2 入口门槛：R1 overlay、焦点、token、响应式 Shell 合同。 | R2 退出门槛：共享 DataTable、分页、AsyncBoundary、表单、URL 恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r2-shared-patterns.md |
+| R3 | 13 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
+| R4 | 8 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务与看板 CRUD、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
+| R5 | 6 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
+| R6 | 25 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
+| R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
+| R8 | 1 | R8 入口门槛：R1–R7 本地实现、完整 gate、精确候选树。 | R8 退出门槛：发布、迁移、免费层、smoke、signed acceptance、账本证据。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r8-delivery-acceptance.md |
+<!-- maturity-stage-map:end -->
+
+执行约束：每个 source gap 只有一个主责 atom；跨阶段工作只通过前置依赖消费，不重复 ownership。P0 授权、隐私、用户阻断和写入收敛先于 P1 产品闭环及 P2 交付证据。进入某阶段前创建表中指定详细计划，并重新核对当时的 Cloudflare 免费层、当前分支和总账状态。
+
 ## R0 — 状态收口、身份与工作台基础
 
 状态：active
