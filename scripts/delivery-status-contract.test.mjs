@@ -503,6 +503,61 @@ test("README, Roadmap, frontend, and maturity checklists keep ledger dimensions 
       ),
       `${name} must allow an explicitly prospective unchecked criterion`,
     );
+    assert.doesNotThrow(
+      () => assertLedgerLanguageBoundaries(
+        `${markdown}\n- [ ] 当 TSK-009 实现完成后，运行保留验证。\n`,
+        rows,
+        name,
+      ),
+      `${name} must allow a Chinese explicitly prospective unchecked criterion`,
+    );
+
+    const mixedProspectiveClaims = [
+      "When the next audit runs, TSK-009 implementation is complete.",
+      "When the next audit runs, OPS-007 verification is complete.",
+      "When the next audit runs, WB-001 release is complete.",
+      "When the next audit runs, IDN-001 acceptance is complete.",
+      "When the next audit runs, TSK-001 is complete.",
+      "当下一次审计运行后，TSK-009 实现已完成。",
+      "当下一次审计运行后，OPS-007 验证已完成。",
+      "当下一次审计运行后，WB-001 发布已完成。",
+      "当下一次审计运行后，IDN-001 验收已完成。",
+      "当下一次审计运行后，TSK-001 已完成。",
+    ];
+    for (const claim of mixedProspectiveClaims) {
+      assert.throws(
+        () => assertLedgerLanguageBoundaries(`${markdown}\n- [ ] ${claim}\n`, rows, name),
+        new RegExp(`${name} .*must not claim`, "u"),
+        `${name} must reject a current claim after a prospective clause: ${claim}`,
+      );
+    }
+
+    if (name === "Roadmap") {
+      for (const claim of [
+        "When TSK-009 implementation is complete, run the retention verification.",
+        "当 TSK-009 实现完成后，运行保留验证。",
+      ]) {
+        assert.doesNotThrow(
+          () => assertLedgerLanguageBoundaries(
+            `${markdown}\n退出标准：\n\n- [ ] ${claim}（owned: \`TSK-009\`; consumed: -）\n`,
+            rows,
+            name,
+          ),
+          `Roadmap must allow a genuinely prospective structured exit: ${claim}`,
+        );
+      }
+      for (const claim of mixedProspectiveClaims) {
+        assert.throws(
+          () => assertLedgerLanguageBoundaries(
+            `${markdown}\n退出标准：\n\n- [ ] ${claim}（owned: \`TSK-009\`; consumed: -）\n`,
+            rows,
+            name,
+          ),
+          /Roadmap .*must not claim/u,
+          `Roadmap must reject a current claim in a structured prospective exit: ${claim}`,
+        );
+      }
+    }
 
     const boundedHistory = "Historical candidate 843f43a (2026-08-23): IDN-001 acceptance is complete for that candidate only, not current main.";
     assert.doesNotThrow(
@@ -900,7 +955,9 @@ function currentStatusClaims(markdown) {
     const unchecked = /^\s*- \[ \] (.+)$/u.exec(line);
     if (!unchecked) return line;
     const structuredRoadmapExit = prospectiveSection && /（owned: .+; consumed: .+）$/u.test(unchecked[1]);
-    if (structuredRoadmapExit || isExplicitlyProspectiveCriterion(unchecked[1])) return "";
+    if (structuredRoadmapExit || isExplicitlyProspectiveCriterion(unchecked[1])) {
+      return currentClausesAfterProspectivePredicate(unchecked[1], structuredRoadmapExit);
+    }
     return line;
   }).join("\n");
 }
@@ -908,6 +965,15 @@ function currentStatusClaims(markdown) {
 function isExplicitlyProspectiveCriterion(value) {
   return /^(?:when|once|before|after|until|if)\b/iu.test(value.trim()) ||
     /^(?:当|待|若|如果|在.+(?:前|后))/u.test(value.trim());
+}
+
+function currentClausesAfterProspectivePredicate(value, structuredRoadmapExit) {
+  const criterion = structuredRoadmapExit
+    ? value.replace(/（owned: .+; consumed: .+）$/u, "").trim()
+    : value.trim();
+  const boundary = /[,，;；.!?。！？]|\b(?:then|but|however|yet)\b|(?:则|但是|但|然而)/iu.exec(criterion);
+  if (!boundary) return "";
+  return criterion.slice(boundary.index + boundary[0].length).trim();
 }
 
 function isStrictBoundedHistoricalClaim(markdown, claimIndex) {
