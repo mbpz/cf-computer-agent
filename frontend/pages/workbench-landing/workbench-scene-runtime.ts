@@ -203,9 +203,12 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
         }
       } catch { fail("render-error"); }
     }
-    function snap() {
+    function snap(resetCycle = false) {
       cancelFrame(); transition = undefined;
-      settlePoses();
+      if (resetCycle) {
+        motions.clear();
+        for (const [node, origin] of origins) applyPose(node, origin);
+      } else settlePoses();
       const target = fit(); center.copy(target.target); halfHeight = target.height;
       draw();
     }
@@ -261,18 +264,18 @@ export async function createWorkbenchScene(options: SceneOptions): Promise<Workb
     return {
       update(next: SceneSnapshot) {
         if (disposed) return;
-        if ((Object.keys(snapshot) as (keyof SceneSnapshot)[]).every(key => snapshot[key] === next[key])) return;
+        const changedCycle = (next.cycleId ?? 0) !== (snapshot.cycleId ?? 0);
+        if (!changedCycle && (Object.keys(snapshot) as (keyof SceneSnapshot)[]).every(key => key === "cycleId" || snapshot[key] === next[key])) return;
         const changedFeature = next.feature !== snapshot.feature;
         const changedCapture = next.captured !== snapshot.captured;
         const changedTask = next.taskDone !== snapshot.taskDone;
         const changedCitation = (next.citationId !== null) !== (snapshot.citationId !== null);
         snapshot = { ...next };
         applyTheme();
-        const replay = snapshot.feature === null && !snapshot.captured && !snapshot.taskDone && snapshot.citationId === null;
-        if (replay) { assistantTurned = false; snap(); return; }
+        if (changedCycle) { assistantTurned = false; snap(true); return; }
         // One short acknowledgement per demo/replay cycle, never an idle loop.
-        const changedAssistant = !assistantTurned;
-        assistantTurned = true;
+        const changedAssistant = !assistantTurned && (snapshot.feature !== null || snapshot.captured || snapshot.taskDone || snapshot.citationId !== null);
+        if (changedAssistant) assistantTurned = true;
         for (const [role, changed] of [["capture", changedCapture], ["task", changedTask], ["citation", changedCitation], ["assistant", changedAssistant]] as const) {
           const node = actors[role];
           if (changed) motions.set(node, { from: copyPose(node), to: targetPose(role), started: performance.now() });

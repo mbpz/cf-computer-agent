@@ -4,6 +4,7 @@ Memory Garden is a private personal workbench for a small invited team on Cloudf
 
 ## Current maturity
 
+- Anonymous `/` now has a locally implemented bilingual 3D knowledge-studio demo, with original Blender assets, cited fictional samples and a complete static fallback. It does not read member data or call AI/business APIs. Local evidence and remaining browser/device gates are recorded in the [landing acceptance report](./design/workbench-landing/local-acceptance.md); this is not a production-release claim.
 - The member-isolated Tasks core, task-backed Boards, recipient-owned Notifications, and task/knowledge-context Messages are implemented and locally verified on this branch. Retention/cleanup policy and production role journeys remain open; general direct messages are out of scope.
 - Shared numbered pagination is fully localized in English and Simplified Chinese. The compact shadcn Shell keeps navigation and content independently scrollable, places account/settings/theme/logout controls in the desktop/mobile sidebar account area, and leaves only language selection in the top-right area.
 - These collaboration routes are locally `ready`; that means an executable API/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser.

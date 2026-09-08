@@ -25,6 +25,18 @@ function demoNetworkBoundary() {
   return { fetch, calls, unexpected };
 }
 
+function installAlternateTransportGuards(browser: Parameters<NonNullable<Parameters<typeof mountApp>[0]["configureBrowser"]>>[0], boundary: ReturnType<typeof demoNetworkBoundary>) {
+  browser.fetch = boundary.fetch as typeof browser.fetch;
+  browser.navigator.sendBeacon = (url) => {
+    boundary.unexpected.push(`BEACON ${String(url)}`);
+    return false;
+  };
+  browser.XMLHttpRequest.prototype.open = function (_method, url) {
+    boundary.unexpected.push(`XHR ${String(url)}`);
+    throw new Error("UNEXPECTED_XHR");
+  };
+}
+
 describe("demo request allowlist", () => {
   it.each([
     ["https://untrusted.example/api/telemetry/pageview", "POST"],
@@ -42,6 +54,29 @@ describe("demo request allowlist", () => {
     expect((await boundary.fetch(new Request("https://app.test/api/session", { method: "DELETE" }), { method: "GET" })).status).toBe(401);
     expect((await boundary.fetch("/api/telemetry/pageview", { method: "post" })).status).toBe(204);
     expect(boundary.unexpected).toEqual([]);
+  });
+  it("guards alternate transports before the first session effect, even when failures are swallowed", async () => {
+    const boundary = demoNetworkBoundary();
+    let attempts = 0;
+    const app = await mountApp({
+      url: "https://app.test/",
+      configureBrowser: browser => installAlternateTransportGuards(browser, boundary),
+      fetch: async (input, init) => {
+        if (String(input) === "/api/session" && attempts++ === 0) {
+          await window.fetch("https://untrusted.example/api/knowledge").catch(() => {});
+          navigator.sendBeacon("https://untrusted.example/beacon");
+          try { new window.XMLHttpRequest().open("POST", "https://untrusted.example/xhr"); } catch {}
+        }
+        return boundary.fetch(input, init);
+      },
+    });
+    try { await waitForApp(() => Boolean(app.container.querySelector("[data-workbench-landing]"))); }
+    finally { await app.unmount(); }
+    expect(boundary.unexpected).toEqual([
+      "GET https://untrusted.example/api/knowledge",
+      "BEACON https://untrusted.example/beacon",
+      "XHR https://untrusted.example/xhr",
+    ]);
   });
 });
 
@@ -76,18 +111,9 @@ describe("public knowledge studio authentication boundary", () => {
   });
 
   it("runs the full fictional journey and every hotspot without business requests", async () => {
-    const { fetch, calls, unexpected } = demoNetworkBoundary();
-    const app = await mountApp({ url: "https://app.test/", fetch });
-    // Keep alternate Happy DOM egress paths inside this test's boundary too.
-    app.browser.fetch = fetch as typeof app.browser.fetch;
-    app.browser.navigator.sendBeacon = (url) => {
-      unexpected.push(`BEACON ${String(url)}`);
-      return false;
-    };
-    app.browser.XMLHttpRequest.prototype.open = function (_method, url) {
-      unexpected.push(`XHR ${String(url)}`);
-      throw new Error("UNEXPECTED_XHR");
-    };
+    const boundary = demoNetworkBoundary();
+    const { fetch, calls, unexpected } = boundary;
+    const app = await mountApp({ url: "https://app.test/", fetch, configureBrowser: browser => installAlternateTransportGuards(browser, boundary) });
     const click = async (selector: string) => {
       const button = app.container.querySelector<HTMLButtonElement>(selector);
       expect(button, selector).not.toBeNull();
@@ -122,10 +148,10 @@ describe("public knowledge studio authentication boundary", () => {
       }
       await click('[data-demo-action="replay"]');
       expect(step()).toBe("capture");
-      expect(unexpected).toEqual([]);
-      expect(calls).toContain("GET https://app.test/api/session");
-      expect(calls.filter(call => call.includes("/api/")).every(call => ["GET https://app.test/api/session", "POST https://app.test/api/telemetry/pageview"].includes(call))).toBe(true);
     } finally { await app.unmount(); }
+    expect(unexpected).toEqual([]);
+    expect(calls).toContain("GET https://app.test/api/session");
+    expect(calls.filter(call => call.includes("/api/")).every(call => ["GET https://app.test/api/session", "POST https://app.test/api/telemetry/pageview"].includes(call))).toBe(true);
   });
 
   it.each([[500, "SERVER_ERROR"], [401, "MEMBER_NOT_ALLOWED"]])("does not disguise session error %s/%s as a demo", async (status, code) => {

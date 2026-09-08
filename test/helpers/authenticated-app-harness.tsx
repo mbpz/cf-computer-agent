@@ -68,6 +68,7 @@ export async function mountAuthenticatedApp(options: {
 export async function mountApp(options: {
   url: string;
   fetch: typeof globalThis.fetch;
+  configureBrowser?: (browser: InstanceType<typeof Window>) => void;
 }): Promise<MountedApp> {
   const browser = new Window({ url: options.url });
   let container: HTMLElement | undefined;
@@ -108,6 +109,7 @@ export async function mountApp(options: {
     vi.stubGlobal("IntersectionObserver", browser.IntersectionObserver);
     vi.stubGlobal("fetch", options.fetch);
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    options.configureBrowser?.(browser);
     container = browser.document.createElement("div") as unknown as HTMLElement;
     browser.document.body.append(container as unknown as Node);
     root = createRoot(container);

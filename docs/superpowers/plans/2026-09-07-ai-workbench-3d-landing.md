@@ -12,6 +12,12 @@
 
 ## Global Constraints
 
+### 2026-09-08（UTC）执行同步
+
+本地证据见 `design/workbench-landing/local-acceptance.md`。用户要求“先提交下然后继续”，因此原 Task 1–8 的逐任务提交改为共享工作树的一次检查点 `523d555` 与后续复核修复提交；下面勾选的提交步骤表示对应代码已纳入这些提交，不表示执行过每条示例 commit 命令。9.2 表示完整门禁已运行并记录失败，不是全绿；9.4–9.6 保留部分待验收。未获合并或部署授权。
+
+实现裁定：Task 7 动画写入 runtime 文件；`SceneSnapshot` 增加兼容的可选 `cycleId`（默认 0），page 单一 reducer 仅在 start/replay 递增。Task 5 测试夹具的错误必须包含 `retryable:false`；认证 harness 仅增加可选 pre-render `configureBrowser` 回调，网络拦截只在本测试安装。Task 8 另增加 build-only `scripts/workbench-landing-provenance.mjs` 和最小 Vite 插件注册，用真实模块来源、产物摘要与实测源资产校验分包，不靠 chunk 名称证明隔离。
+
 - 仅匿名根路径 `/` 改用新展示页；匿名其他路径、会话错误、已登录路径维持现有行为。
 - 模型不烘焙必须阅读的文字；界面支持 `en` 和 `zh-CN`，保持现有 shadcn 风格。
 - 所有资料、回答、引用、任务及消息是人工编写虚构样例；显示“示例演示 · 不读取你的个人数据”。
@@ -143,7 +149,7 @@ HTML 热点按钮驱动 `feature` 和镜头，画布本身标记为装饰、`poi
 
 **Interfaces:** Consumes Node `child_process.spawn` 及当前配置的 `/opt/homebrew/bin/uvx --offline blender-mcp`。Produces `callBlenderTool({name, arguments, timeoutMs, signal}, {spawn}?) → Promise<CallToolResult>`；结果至少含 `isError?: boolean`, `content?: {type:string,text?:string}[]`。CLI 仅支持 `scene`、`screenshot --output <absolute-path>`、`execute --file <repo-script> --timeout-ms <integer>`；不能将任意第三方命令当作子进程执行。
 
-- [ ] **1.1 写协议红测。** 使用 Node EventEmitter/PassThrough fake child，发送分块 JSON 行，检查以下核心行为；补齐 init error、缺失工具、服务早退、超时、工具返回 `isError:true` 和取消后不再回调的独立用例。
+- [x] **1.1 写协议红测。** 使用 Node EventEmitter/PassThrough fake child，发送分块 JSON 行，检查以下核心行为；补齐 init error、缺失工具、服务早退、超时、工具返回 `isError:true` 和取消后不再回调的独立用例。
 
 ```js
 const fake = fakeMcpProcess({ tools: ["get_scene_info"], result: { isError: false, content: [] } });
@@ -155,8 +161,8 @@ assert.equal(fake.closed, true);
 
 `fakeMcpProcess` 是此测试文件定义的本地工厂，返回 `{spawn, methods, spawnOptions, closed}`，按传入结果生成真实 JSON-RPC 响应；不能让它调用生产解析函数，以免自证。
 
-- [ ] **1.2 运行红测。** `rtk proxy node --test scripts/blender-mcp-client.test.mjs`；预期因模块不存在失败，记录与语法或环境失败的区别。
-- [ ] **1.3 实现桥及 CLI。** 使用请求 ID 映射，不假定日志等于响应；初始化后发现目标工具，再按其 schema 调用；将进程 stderr 保留为有界诊断，不打印环境值。JSON 行缓冲最大 8 MiB，超过时明确失败。结束时关闭 stdin、SIGTERM，并设置两秒兜底 SIGKILL（仅限自身启动的子进程）。清理必须幂等，删除 AbortSignal 监听及所有计时器。
+- [x] **1.2 运行红测。** `rtk proxy node --test scripts/blender-mcp-client.test.mjs`；预期因模块不存在失败，记录与语法或环境失败的区别。
+- [x] **1.3 实现桥及 CLI。** 使用请求 ID 映射，不假定日志等于响应；初始化后发现目标工具，再按其 schema 调用；将进程 stderr 保留为有界诊断，不打印环境值。JSON 行缓冲最大 8 MiB，超过时明确失败。结束时关闭 stdin、SIGTERM，并设置两秒兜底 SIGKILL（仅限自身启动的子进程）。清理必须幂等，删除 AbortSignal 监听及所有计时器。
 
 ```js
 const command = "/opt/homebrew/bin/uvx";
@@ -168,8 +174,8 @@ const request = { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name, a
 
 截图读取 `get_viewport_screenshot` 实际 schema 和 image content；客户端把解码图片写入指定输出目录，不将 base64 倾倒进日志。执行入口使用 `execute_blender_code`；发现错误正文也判失败，不只检查 transport 成功。
 
-- [ ] **1.4 运行绿测并调用真实只读工具。** 重跑 1.2；再 `rtk proxy node scripts/blender-mcp-client.mjs scene`，记录场景、对象名、MCP 版本，不修改场景。遇沙箱 socket/cache 阻碍按权限流程重试，不偷偷改端口或启动第二个 Blender。
-- [ ] **1.5 提交。** `rtk git add scripts/blender-mcp-client.mjs scripts/blender-mcp-client.test.mjs`；`rtk git commit -m "feat: add bounded Blender MCP asset client"`。
+- [x] **1.4 运行绿测并调用真实只读工具。** 重跑 1.2；再 `rtk proxy node scripts/blender-mcp-client.mjs scene`，记录场景、对象名、MCP 版本，不修改场景。遇沙箱 socket/cache 阻碍按权限流程重试，不偷偷改端口或启动第二个 Blender。
+- [x] **1.5 提交。** `rtk git add scripts/blender-mcp-client.mjs scripts/blender-mcp-client.test.mjs`；`rtk git commit -m "feat: add bounded Blender MCP asset client"`。
 
 ## Task 2: 原创工作室模型、导出与可复现验收
 
@@ -177,7 +183,7 @@ const request = { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name, a
 
 **Interfaces:** Consumes Task 1 CLI。Produces七个稳定根节点及两个 poster；`inspectLandingGlb(buffer) → {triangles,nodeNames,maxTextureDimension}` 与 `verifyLandingAssets(root) → AssetReport`，后者从真实文件读取尺寸、字节数，失败抛出具体约束名。`AssetReport` 的公开字段为 `{modelBytes:number, triangles:number, nodeNames:string[], maxTextureDimension:number, posters:{path:string,bytes:number,width:number,height:number}[]}`；Blender额外导出场景保留证据，与检查器结果分别记录，不能混用自报计数。
 
-- [ ] **2.1 写资产检查红测并运行。** 用测试文件内 `makeGlb({nodes,primitiveCount,indicesCount,mode})` 工厂按 glTF 2.0 header/chunk 对齐生成最小 JSON/BIN 缓冲；工厂不调用检查器。
+- [x] **2.1 写资产检查红测并运行。** 用测试文件内 `makeGlb({nodes,primitiveCount,indicesCount,mode})` 工厂按 glTF 2.0 header/chunk 对齐生成最小 JSON/BIN 缓冲；工厂不调用检查器。
 
 ```js
 assert.throws(() => inspectLandingGlb(Buffer.from("bad")), /GLB_HEADER/);
@@ -187,9 +193,9 @@ assert.throws(() => inspectLandingGlb(makeGlb({ nodes: requiredNodes, primitiveC
 
 运行 `rtk proxy node --test scripts/workbench-landing-assets.test.mjs`，预期模块缺失；另测损坏 chunk、越界 accessor、外链纹理、缺失 BIN、非法 primitive mode、材质未知私人 extras、WebP 超预算。
 
-- [ ] **2.2 实现资产检查器。** GLB 仅接受 mode 4（三角形），按场景中 mesh 实例数量累计 index accessor count/3（无索引用 POSITION count/3）；拒绝外部资源 URI，仅允许导出报告中声明的本任务元数据。节点要求 `MG_Desk/MG_Inbox/MG_Library/MG_Query/MG_Board/MG_Updates/MG_Assistant`。从图片头读取尺寸，不信任报告的自报数值。实现后重跑 2.1。
-- [ ] **2.3 真实建模前保存截图及场景清单。** 使用 Task 1 scene/screenshot，在 `design/workbench-landing/` 保存参考截图；读取全部场景及任务命名是否冲突。未知同名资产导致停止，不删除。记录默认场景对象名称、变换和材质引用用于建模后比对。
-- [ ] **2.4 建立安全场景脚本。** 首次创建任务 scene/collection 并设置所有权标签，重复执行只更新带标签对象；不使用全局全选删除。用脚本自身所在仓库根解析固定输出，不接受从模型属性读出的路径。
+- [x] **2.2 实现资产检查器。** GLB 仅接受 mode 4（三角形），按场景中 mesh 实例数量累计 index accessor count/3（无索引用 POSITION count/3）；拒绝外部资源 URI，仅允许导出报告中声明的本任务元数据。节点要求 `MG_Desk/MG_Inbox/MG_Library/MG_Query/MG_Board/MG_Updates/MG_Assistant`。从图片头读取尺寸，不信任报告的自报数值。实现后重跑 2.1。
+- [x] **2.3 真实建模前保存截图及场景清单。** 使用 Task 1 scene/screenshot，在 `design/workbench-landing/` 保存参考截图；读取全部场景及任务命名是否冲突。未知同名资产导致停止，不删除。记录默认场景对象名称、变换和材质引用用于建模后比对。
+- [x] **2.4 建立安全场景脚本。** 首次创建任务 scene/collection 并设置所有权标签，重复执行只更新带标签对象；不使用全局全选删除。用脚本自身所在仓库根解析固定输出，不接受从模型属性读出的路径。
 
 ```python
 import bpy
@@ -203,12 +209,12 @@ if scene is None:
     scene["mg_owner"] = OWNER
 ```
 
-- [ ] **2.5 制作工作台。** 统一 Blender Z-up 坐标、米制，桌面 8×5×0.3，桌面顶为 z=0；深石墨底座、暖白背板、柔光 area light。几何使用 bevel box/cylinder，细分不超过2级，倒角段数3。创建正交 overview 相机看向台面中心，投影尺度约10，先检查完整台面可见。
-- [ ] **2.6 制作三个核心站点。** `MG_Inbox` 中心(-2.5,-1.0,0.2)，包含托盘及三张独立卡片；`MG_Library` 中心(-1.5,1.3,0)，包含书架和六册书及展开板；`MG_Query` 中心(1.2,0.9,0)，包含显示器和三张引用卡。指定 `MG_CaptureCard` 为资料动画节点，`MG_CitationCard` 为引用强调节点；在根清单之外单独验证它们存在。
-- [ ] **2.7 制作辅助区域。** `MG_Board` 中心(2.5,1.4,0)，四列靠材质区分，独立 `MG_TaskCard`；`MG_Updates` 中心(2.7,-0.9,0.2)；`MG_Assistant` 中心(0.1,-1.5,0.4)，用球/圆柱/盒体组合，不需要骨骼。知识/问答在画面上占主体，截图检查遮挡后仅在任务场景微调位置。
-- [ ] **2.8 保存与导出。** 用 `bpy.data.libraries.write(str(blend_path), {scene}, fake_user=True, compress=True)` 仅保存本任务scene及其依赖到独立 `.blend`，不用保存全部场景的操作，也不更改原文件保存路径。若输出已存在，必须从本任务报告确认归属后才覆盖。GLB导出上下文限定任务 scene 和集合，`use_selection` 仅选择其中的可见几何，不导出原场景。保留 glTF 坐标转换，浏览器用节点世界坐标定位热点，不照抄 Blender Z-up 数值。关闭 extras 导出、摄像机和灯光导出；浏览器自建轻量光照。
-- [ ] **2.9 生成 poster。** 正交 overview 渲染桌面1600×1000、移动端900×1100；渲染完成导出 WebP，调整质量直到每张不超过250 KiB。用 Blender 的场景渲染与图像保存 API 生成，不引入付费图片服务。Task1 execute CLI 的超时可显式提高到180秒，通过 exec session 每次最多等待30秒并继续向用户报告进度。
-- [ ] **2.10 验证与提交。** 通过 MCP 检查/截图建模结果，重跑脚本确认对象数不增长；导出后比对原场景快照未变；运行 `rtk proxy node scripts/workbench-landing-assets.mjs --check`。报告所有真实指标和源文件大小（源 `.blend` 不受网页预算限制，但不得误放进前端）。只暂存本 Task Files 中的产物并提交 `feat: create AI knowledge studio assets`。
+- [x] **2.5 制作工作台。** 统一 Blender Z-up 坐标、米制，桌面 8×5×0.3，桌面顶为 z=0；深石墨底座、暖白背板、柔光 area light。几何使用 bevel box/cylinder，细分不超过2级，倒角段数3。创建正交 overview 相机看向台面中心，投影尺度约10，先检查完整台面可见。
+- [x] **2.6 制作三个核心站点。** `MG_Inbox` 中心(-2.5,-1.0,0.2)，包含托盘及三张独立卡片；`MG_Library` 中心(-1.5,1.3,0)，包含书架和六册书及展开板；`MG_Query` 中心(1.2,0.9,0)，包含显示器和三张引用卡。指定 `MG_CaptureCard` 为资料动画节点，`MG_CitationCard` 为引用强调节点；在根清单之外单独验证它们存在。
+- [x] **2.7 制作辅助区域。** `MG_Board` 中心(2.5,1.4,0)，四列靠材质区分，独立 `MG_TaskCard`；`MG_Updates` 中心(2.7,-0.9,0.2)；`MG_Assistant` 中心(0.1,-1.5,0.4)，用球/圆柱/盒体组合，不需要骨骼。知识/问答在画面上占主体，截图检查遮挡后仅在任务场景微调位置。
+- [x] **2.8 保存与导出。** 用 `bpy.data.libraries.write(str(blend_path), {scene}, fake_user=True, compress=True)` 仅保存本任务scene及其依赖到独立 `.blend`，不用保存全部场景的操作，也不更改原文件保存路径。若输出已存在，必须从本任务报告确认归属后才覆盖。GLB导出上下文限定任务 scene 和集合，`use_selection` 仅选择其中的可见几何，不导出原场景。保留 glTF 坐标转换，浏览器用节点世界坐标定位热点，不照抄 Blender Z-up 数值。关闭 extras 导出、摄像机和灯光导出；浏览器自建轻量光照。
+- [x] **2.9 生成 poster。** 正交 overview 渲染桌面1600×1000、移动端900×1100；渲染完成导出 WebP，调整质量直到每张不超过250 KiB。用 Blender 的场景渲染与图像保存 API 生成，不引入付费图片服务。Task1 execute CLI 的超时可显式提高到180秒，通过 exec session 每次最多等待30秒并继续向用户报告进度。
+- [x] **2.10 验证与提交。** 通过 MCP 检查/截图建模结果，重跑脚本确认对象数不增长；导出后比对原场景快照未变；运行 `rtk proxy node scripts/workbench-landing-assets.mjs --check`。报告所有真实指标和源文件大小（源 `.blend` 不受网页预算限制，但不得误放进前端）。只暂存本 Task Files 中的产物并提交 `feat: create AI knowledge studio assets`。
 
 ## Task 3: 双语样例与纯演示状态机
 
@@ -216,7 +222,7 @@ if scene is None:
 
 **Interfaces:** Produces §2 类型，`demoContent(locale: FrontendLocale): DemoContent`、`initialDemoState(): DemoState`、`demoReducer(state,event): DemoState`；文案模块提供 `landingText(locale: LocaleRuntime,key: LandingCopyKey): string`，不扩展现有 LocaleRuntime 接口。
 
-- [ ] **3.1 写红测。** 每个测试文件使用 node 环境注释，导入实际公开函数；校验两个语言版本的 source/paragraph/citation ID 完全一致，引用实际指向正文段落。
+- [x] **3.1 写红测。** 每个测试文件使用 node 环境注释，导入实际公开函数；校验两个语言版本的 source/paragraph/citation ID 完全一致，引用实际指向正文段落。
 
 ```ts
 it("requires capture and task action before guided progression", () => {
@@ -236,11 +242,11 @@ it("keeps source citations resolvable in both languages", () => {
 });
 ```
 
-- [ ] **3.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-data.test.ts test/unit/frontend-workbench-landing-state.test.ts`；预期缺失模块失败。
-- [ ] **3.3 实现固定样例。** 两份文档分别为“项目资料整理约定/Project filing guide”和“每周回顾方法/Weekly review method”，每篇三段；稳定ID `filing-guide/p1..p3`、`weekly-review/p1..p3`。固定问题“如何把零散的项目资料变成下一步行动？”，回答明确先保留来源、再阅读归纳、最后人工创建待办；引用 `cite-filing` 指向 `filing-guide/p2`，`cite-review` 指向 `weekly-review/p2`。任务为“整理本周项目资料”；通知和讨论均围绕这张示例任务，无真人姓名或私人数据。
-- [ ] **3.4 实现 reducer。** `start/replay` 均重置到 capture、打开 capture 热点；capture仅置本地captured；next遵循 overview→capture→library→answer→action→complete，capture和action各自需captured/taskDone；complete的next不变。next将activeFeature设为新步骤同名热点（complete则为null）并清空citationId。open只改activeFeature且清空citationId，close只关闭面板且保留步骤；citation只有有效ID可进入；complete-task仅在action步骤或action热点时置true；pause只改paused。无fetch、Date、随机数或storage调用。
-- [ ] **3.5 完成绿测及边界测试。** 覆盖invalid citation、重复事件、close后step不变、replay重置、直接热点探索不推进引导、暂停和语言切换不重置。重跑3.2以及 `rtk npm run verify:i18n`；本地双语目录由新增data测试穷举key，避免现有扫描未覆盖形成漏检。
-- [ ] **3.6 提交。** 仅暂存本 Task 五个源/测试文件，`rtk git commit -m "feat: add deterministic bilingual knowledge demo"`。
+- [x] **3.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-data.test.ts test/unit/frontend-workbench-landing-state.test.ts`；预期缺失模块失败。
+- [x] **3.3 实现固定样例。** 两份文档分别为“项目资料整理约定/Project filing guide”和“每周回顾方法/Weekly review method”，每篇三段；稳定ID `filing-guide/p1..p3`、`weekly-review/p1..p3`。固定问题“如何把零散的项目资料变成下一步行动？”，回答明确先保留来源、再阅读归纳、最后人工创建待办；引用 `cite-filing` 指向 `filing-guide/p2`，`cite-review` 指向 `weekly-review/p2`。任务为“整理本周项目资料”；通知和讨论均围绕这张示例任务，无真人姓名或私人数据。
+- [x] **3.4 实现 reducer。** `start/replay` 均重置到 capture、打开 capture 热点；capture仅置本地captured；next遵循 overview→capture→library→answer→action→complete，capture和action各自需captured/taskDone；complete的next不变。next将activeFeature设为新步骤同名热点（complete则为null）并清空citationId。open只改activeFeature且清空citationId，close只关闭面板且保留步骤；citation只有有效ID可进入；complete-task仅在action步骤或action热点时置true；pause只改paused。无fetch、Date、随机数或storage调用。
+- [x] **3.5 完成绿测及边界测试。** 覆盖invalid citation、重复事件、close后step不变、replay重置、直接热点探索不推进引导、暂停和语言切换不重置。重跑3.2以及 `rtk npm run verify:i18n`；本地双语目录由新增data测试穷举key，避免现有扫描未覆盖形成漏检。
+- [x] **3.6 提交。** 仅暂存本 Task 五个源/测试文件，`rtk git commit -m "feat: add deterministic bilingual knowledge demo"`。
 
 ## Task 4: 可访问 HTML 首页和单一功能面板
 
@@ -248,7 +254,7 @@ it("keeps source citations resolvable in both languages", () => {
 
 **Interfaces:** Consumes Task3 reducer/content；Produces `PublicWorkbenchPage({locale, githubEnabled=true}: {locale:LocaleRuntime;githubEnabled?:boolean})` 和 `WorkbenchFeaturePanel({locale,state,dispatch}: {locale:LocaleRuntime;state:DemoState;dispatch:React.Dispatch<DemoEvent>})`。此任务不导入Three.js；场景区先显示 Task2 poster（模型任务未完成时测试使用fixture URL，不能把fixture当最终资产）。
 
-- [ ] **4.1 写渲染与交互红测。** 复用已有Happy DOM初始化方式；本组件测试自行 createRoot，清理所有globals与root，不修改认证harness来迁就组件。
+- [x] **4.1 写渲染与交互红测。** 复用已有Happy DOM初始化方式；本组件测试自行 createRoot，清理所有globals与root，不修改认证harness来迁就组件。
 
 ```tsx
 const html = renderToStaticMarkup(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "zh-CN" })} />);
@@ -260,9 +266,9 @@ expect(html).not.toContain("<canvas");
 
 交互测试点击实际 `button[data-feature="answer"]`，再点击真实引用按钮，断言对应原文段落可见；不要仅断言函数被调用。为关闭按钮、Escape、遮罩、内部点击、Tab循环、焦点返回、body overflow恢复各写独立用例。
 
-- [ ] **4.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-page.test.tsx test/unit/frontend-workbench-landing-panel.test.tsx`。
-- [ ] **4.3 实现 HTML 页面。** 用现有 Button/Card 排版、常驻登录 `<a href="/auth/github">`、邀请说明、五个DOM热点、start/next/replay按钮和常显演示标签；next依据状态禁用并给出明确提示。GitHub不可用时显示真实不可用文字，不渲染有效登录链接。引用正文只作为React文本渲染，不用 `dangerouslySetInnerHTML`。
-- [ ] **4.4 实现单面板。** 复用 `useFocusScope`，onEscape使用useCallback保持稳定，避免每次状态变化重设焦点。遮罩关闭用 `event.target === event.currentTarget`；内部面板包含标题/说明关联id与显式close按钮。打开时保存body overflow，清理时恢复原值；引用在面板内部切换视图并聚焦标题，返回时恢复引用触发按钮。桌面右侧面板、移动端底部sheet，最大高度 `calc(100dvh - 1rem)`，内部纵向滚动。
+- [x] **4.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-page.test.tsx test/unit/frontend-workbench-landing-panel.test.tsx`。
+- [x] **4.3 实现 HTML 页面。** 用现有 Button/Card 排版、常驻登录 `<a href="/auth/github">`、邀请说明、五个DOM热点、start/next/replay按钮和常显演示标签；next依据状态禁用并给出明确提示。GitHub不可用时显示真实不可用文字，不渲染有效登录链接。引用正文只作为React文本渲染，不用 `dangerouslySetInnerHTML`。
+- [x] **4.4 实现单面板。** 复用 `useFocusScope`，onEscape使用useCallback保持稳定，避免每次状态变化重设焦点。遮罩关闭用 `event.target === event.currentTarget`；内部面板包含标题/说明关联id与显式close按钮。打开时保存body overflow，清理时恢复原值；引用在面板内部切换视图并聚焦标题，返回时恢复引用触发按钮。桌面右侧面板、移动端底部sheet，最大高度 `calc(100dvh - 1rem)`，内部纵向滚动。
 
 ```tsx
 <div data-landing-overlay onClick={e => { if (e.target === e.currentTarget) dispatch({ type: "close" }); }}>
@@ -273,8 +279,8 @@ expect(html).not.toContain("<canvas");
 </div>
 ```
 
-- [ ] **4.5 实现语言和布局。** 使用已有LocaleRuntime切换，组件订阅语言更新不重置reducer；语言选择使用原生select配合shadcn视觉以避免再造弹窗。Theme沿用现有document dark class，本期不新增主题菜单。对320px宽屏和200%缩放保留原生滚动，不固定正文高度，不将文案放进canvas。
-- [ ] **4.6 绿测与提交。** 重跑4.2和现有 `test/unit/frontend-login.test.tsx`；确保测试卸载后没有滚动锁残留。仅暂存本 Task 文件，提交 `feat: add accessible public knowledge studio experience`。
+- [x] **4.5 实现语言和布局。** 使用已有LocaleRuntime切换，组件订阅语言更新不重置reducer；语言选择使用原生select配合shadcn视觉以避免再造弹窗。Theme沿用现有document dark class，本期不新增主题菜单。对320px宽屏和200%缩放保留原生滚动，不固定正文高度，不将文案放进canvas。
+- [x] **4.6 绿测与提交。** 重跑4.2和现有 `test/unit/frontend-login.test.tsx`；确保测试卸载后没有滚动锁残留。仅暂存本 Task 文件，提交 `feat: add accessible public knowledge studio experience`。
 
 ## Task 5: 匿名根路径接入及网络边界回归
 
@@ -282,13 +288,13 @@ expect(html).not.toContain("<canvas");
 
 **Interfaces:** Consumes Task4 PublicWorkbenchPage；Produces匿名`/`新分支及对其他分支的显式回归证据。
 
-- [ ] **5.1 写路由红测。** 将session mock返回 `Response.json({error:{code:"AUTH_REQUIRED",message:"Authentication required"}}, {status:401})`，该错误码来自已核对的 `frontend/lib/session-state.ts`；等待最终元素，不在初始loading main出现时提前断言。
+- [x] **5.1 写路由红测。** 将session mock返回 `Response.json({error:{code:"AUTH_REQUIRED",message:"Authentication required",retryable:false}}, {status:401})`，该错误码来自已核对的 `frontend/lib/session-state.ts`；等待最终元素，不在初始loading main出现时提前断言。
 
 ```tsx
 const calls: string[] = [];
 const app = await mountApp({ url: "https://app.test/", fetch: async (input) => {
   const path = String(input); calls.push(path);
-  if (path === "/api/session") return Response.json({ error: { code: "AUTH_REQUIRED", message: "Authentication required" } }, { status: 401 });
+  if (path === "/api/session") return Response.json({ error: { code: "AUTH_REQUIRED", message: "Authentication required", retryable: false } }, { status: 401 });
   if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
   throw new Error(`UNEXPECTED_REQUEST:${path}`);
 }});
@@ -297,9 +303,11 @@ finally { await app.unmount(); }
 expect(calls.every(p => ["/api/session", "/api/telemetry/pageview"].includes(p))).toBe(true);
 ```
 
+上述代码仅是初始路由红测骨架，不代表最终网络隔离测试。最终实现归一化 string/URL/Request、精确匹配同源和 method，并通过 pre-render `configureBrowser` 拦截 window.fetch/beacon/XHR；被拒绝的请求在抛错前记录，最终断言位于 awaited unmount 之后。
+
 另测匿名`/knowledge/example`仍是data-login-page、session500仍带alert且无展示页、登录后`/`渲染原shell。遍历全部演示按钮和引用时加入fetch拒绝业务写入断言；静态资源请求与session/pageview单独分类，不能对任意`/api/`一概放行。
-- [ ] **5.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-routing.test.tsx`，预期匿名根路径缺少新标记。
-- [ ] **5.3 修改最小分支。** 在原sessionError分支之后、原匿名fallback之前接入公开页：
+- [x] **5.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-routing.test.tsx`，预期匿名根路径缺少新标记。
+- [x] **5.3 修改最小分支。** 在原sessionError分支之后、原匿名fallback之前接入公开页：
 
 ```tsx
 if (anonymous && pathname === "/") return <PublicWorkbenchPage locale={locale} />;
@@ -307,8 +315,8 @@ if (anonymous) return <LoginPage locale={locale} />;
 ```
 
 此处可静态导入HTML页面，但不得从页面顶层导入3D runtime。保留sessionError与已有加载状态及pageview effect。更新源码契约测试，分别验证根路径和其他匿名路径，不简单删除旧LoginPage断言。
-- [ ] **5.4 绿测并回归。** 重跑5.2；`rtk proxy node --test scripts/frontend-app-contract.test.mjs`；`rtk npx vitest run test/unit/frontend-login.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx`。另外断言401且code为其他值仍进入异常状态，不能让展示页修改认证错误分类。
-- [ ] **5.5 提交。** 仅暂存本 Task 三个文件，提交 `feat: route anonymous home to public knowledge studio`。
+- [x] **5.4 绿测并回归。** 重跑5.2；`rtk proxy node --test scripts/frontend-app-contract.test.mjs`；`rtk npx vitest run test/unit/frontend-login.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx`。另外断言401且code为其他值仍进入异常状态，不能让展示页修改认证错误分类。
+- [x] **5.5 提交。** 仅暂存本 Task 三个文件，提交 `feat: route anonymous home to public knowledge studio`。
 
 ## Task 6: 可取消的 Three.js 运行时与加载策略
 
@@ -316,7 +324,7 @@ if (anonymous) return <LoginPage locale={locale} />;
 
 **Interfaces:** Produces §2 `createWorkbenchScene`/handle/types，`shouldAutoLoadScene({reduceMotion,saveData,staticMode}): boolean`；Consumes Task2真实GLB节点。config只使用类型导入，不引用Three.js，导出 `LANDING_MODEL_URL` 与两个poster URL、`REQUIRED_ROOTS` 和预算常量。
 
-- [ ] **6.1 写策略与生命周期红测。** 策略表覆盖三个静态条件各自成立及全部false；runtime测试mock WebGLRenderer、GLTFLoader和帧调度，不mock待验证的dispose/abort逻辑。
+- [x] **6.1 写策略与生命周期红测。** 策略表覆盖三个静态条件各自成立及全部false；runtime测试mock WebGLRenderer、GLTFLoader和帧调度，不mock待验证的dispose/abort逻辑。
 
 ```ts
 expect(shouldAutoLoadScene({ reduceMotion: true, saveData: false, staticMode: false })).toBe(false);
@@ -328,8 +336,8 @@ expect(host.querySelectorAll("canvas")).toHaveLength(0);
 ```
 
 `host/controller/onFailure/renderer`由此测试的beforeEach创建。补齐load失败、abort在fetch前/parse中/resolve后、缺失节点、contextlost、隐藏后取消帧、恢复后重新渲染；每个mock断言都绑定可观察生命周期，不以假渲染器证明视觉质量。
-- [ ] **6.2 运行红测并安装锁定依赖。** `rtk npx vitest run test/unit/frontend-workbench-landing-policy.test.ts test/unit/frontend-workbench-landing-runtime.test.ts`；确认缺失模块后执行 `rtk npm install --save-exact three@0.180.0` 和 `rtk npm install --save-dev --save-exact @types/three@0.180.0`。校验lockfile版本/integrity，并记录安装产生的安全告警；不执行自动audit fix。
-- [ ] **6.3 配置局部类型检查。** `tsconfig.landing.json`内容采用：
+- [x] **6.2 运行红测并安装锁定依赖。** `rtk npx vitest run test/unit/frontend-workbench-landing-policy.test.ts test/unit/frontend-workbench-landing-runtime.test.ts`；确认缺失模块后执行 `rtk npm install --save-exact three@0.180.0` 和 `rtk npm install --save-dev --save-exact @types/three@0.180.0`。校验lockfile版本/integrity，并记录安装产生的安全告警；不执行自动audit fix。
+- [x] **6.3 配置局部类型检查。** `tsconfig.landing.json`内容采用：
 
 ```json
 {
@@ -340,7 +348,7 @@ expect(host.querySelectorAll("canvas")).toHaveLength(0);
 ```
 
 package新增 `typecheck:landing = tsc --project tsconfig.landing.json`，接入现有check的类型检查之后；测试运行时文件仍用node环境，不能靠Vite转译代替类型检查。
-- [ ] **6.4 实现受控资源加载。** 在runtime内导入 `three` 和 `three/addons/loaders/GLTFLoader.js`；fetch model带signal，检查response.ok再parseAsync arrayBuffer。parse不支持取消时，完成后检查signal，若已取消立刻释放模型，不能把它挂到已卸载host。任一初始化阶段失败均释放此前创建的资源。
+- [x] **6.4 实现受控资源加载。** 在runtime内导入 `three` 和 `three/addons/loaders/GLTFLoader.js`；fetch model带signal，检查response.ok再parseAsync arrayBuffer。parse不支持取消时，完成后检查signal，若已取消立刻释放模型，不能把它挂到已卸载host。任一初始化阶段失败均释放此前创建的资源。
 
 ```ts
 const response = await fetch(options.modelUrl, { signal: options.signal });
@@ -351,9 +359,9 @@ if (options.signal.aborted) { disposeObject(gltf.scene); throw new DOMException(
 ```
 
 `disposeObject(root)`在本runtime定义，遍历geometry、material与texture，用Set去重后释放。所有子资源必须由Task2检查器保证内嵌；不允许GLB暗中请求外域纹理。
-- [ ] **6.5 建立镜头和帧循环。** 使用OrthographicCamera、简单半球/方向光、无动态阴影和后处理；以`Box3.setFromObject()`算整体中心和适配宽高，避免硬编码Blender坐标。ResizeObserver更新投影和像素比；相机过渡300–450ms，每次update覆盖上一目标，静止无循环；visible=false或paused=true取消RAF。保留最后snapshot，恢复时按其绘制一次。
-- [ ] **6.6 完善失败与清理。** canvas监听webglcontextlost时preventDefault并调用onFailure，再交由外层静态降级；dispose幂等释放observer/listener/RAF/renderer及canvas。dark更新背景与材质色调，不重载模型。只统计实际`renderer.info.render.calls/triangles`作为后续浏览器证据。
-- [ ] **6.7 绿测与提交。** 重跑6.1测试、`rtk npm run typecheck:landing`、`rtk npm run build:ui`。仅暂存本Task文件，提交 `feat: add bounded on-demand workbench scene runtime`。
+- [x] **6.5 建立镜头和帧循环。** 使用OrthographicCamera、简单半球/方向光、无动态阴影和后处理；以`Box3.setFromObject()`算整体中心和适配宽高，避免硬编码Blender坐标。ResizeObserver更新投影和像素比；相机过渡300–450ms，每次update覆盖上一目标，静止无循环；visible=false或paused=true取消RAF。保留最后snapshot，恢复时按其绘制一次。
+- [x] **6.6 完善失败与清理。** canvas监听webglcontextlost时preventDefault并调用onFailure，再交由外层静态降级；dispose幂等释放observer/listener/RAF/renderer及canvas。dark更新背景与材质色调，不重载模型。只统计实际`renderer.info.render.calls/triangles`作为后续浏览器证据。
+- [x] **6.7 绿测与提交。** 重跑6.1测试、`rtk npm run typecheck:landing`、`rtk npm run build:ui`。仅暂存本Task文件，提交 `feat: add bounded on-demand workbench scene runtime`。
 
 ## Task 7: 3D 接入、动画联动与全路径静态降级
 
@@ -361,7 +369,7 @@ if (options.signal.aborted) { disposeObject(gltf.scene); throw new DOMException(
 
 **Interfaces:** Produces `WorkbenchScene({snapshot}: {snapshot:SceneSnapshot})`；ConsumesTask6 handle和policy，Task3 state通过page映射snapshot。DOM热点仍由page维护，scene只负责视觉，不产生第二份业务状态。
 
-- [ ] **7.1 写红测。** 注入/mock动态模块和matchMedia/IntersectionObserver/fetch；使用fake timers验证8秒超时，仅以真实加载状态推进UI。
+- [x] **7.1 写红测。** 注入/mock动态模块和matchMedia/IntersectionObserver/fetch；使用fake timers验证8秒超时，仅以真实加载状态推进UI。
 
 ```tsx
 vi.useFakeTimers();
@@ -375,11 +383,11 @@ vi.useRealTimers();
 ```
 
 `mountSceneWithPendingRuntime`由该测试定义，创建真实组件/root并返回container、传入runtime的abortSignal及清理函数。补齐静态模式不导入runtime、手动启用、重试只产生一次新请求、过时promise完成不会插canvas、StrictMode重挂载、离开页面清理、语言切换不重建renderer。
-- [ ] **7.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-scene.test.tsx`。
-- [ ] **7.3 实现scene wrapper。** 初始picture和文字可见；符合策略且进入视口时才 `import("./workbench-scene-runtime")`，设置独立AbortController和8秒总加载计时器（包含import等待）。状态为poster/loading/ready/error/timeout/static；错误和静态路径共用HTML体验，只有主动重试才新建attempt。visibilitychange及IntersectionObserver共同决定可见性，不能互相覆盖导致后台继续渲染。
-- [ ] **7.4 接入动画。** state.captured驱动MG_CaptureCard从托盘外移动到托盘内，taskDone驱动MG_TaskCard移至第四列；保存原始局部变换，replay按其复位，不连续叠加偏移。feature聚焦使用节点世界包围盒中心；引用面板已打开时强调MG_CitationCard，机器人只做一次短转向。pause/reduceMotion立即呈现终态，不运行循环待机动画。
-- [ ] **7.5 实现用户控制与主题响应。** “静态模式/加载3D/暂停动画”使用可访问DOM按钮；静态选择保存在当前挂载状态，不写storage。减少动态或数据节省默认静态，主动加载后仍保留减少动态限制。监听document主题class变化调用handle.update，不重建renderer。布局保持320px到桌面不溢出、触摸可原生滚动。
-- [ ] **7.6 绿测与提交。** 重跑7.1及Task3–5测试，`rtk npm run typecheck:landing`。只暂存本Task文件，提交 `feat: connect interactive studio with reliable static fallback`。
+- [x] **7.2 运行红测。** `rtk npx vitest run test/unit/frontend-workbench-landing-scene.test.tsx`。
+- [x] **7.3 实现scene wrapper。** 初始picture和文字可见；符合策略且进入视口时才 `import("./workbench-scene-runtime")`，设置独立AbortController和8秒总加载计时器（包含import等待）。状态为poster/loading/ready/error/timeout/static；错误和静态路径共用HTML体验，只有主动重试才新建attempt。visibilitychange及IntersectionObserver共同决定可见性，不能互相覆盖导致后台继续渲染。
+- [x] **7.4 接入动画。** state.captured驱动MG_CaptureCard从托盘外移动到托盘内，taskDone驱动MG_TaskCard移至第四列；保存原始局部变换，replay按其复位，不连续叠加偏移。feature聚焦使用节点世界包围盒中心；引用面板已打开时强调MG_CitationCard，机器人只做一次短转向。pause/reduceMotion立即呈现终态，不运行循环待机动画。
+- [x] **7.5 实现用户控制与主题响应。** “静态模式/加载3D/暂停动画”使用可访问DOM按钮；静态选择保存在当前挂载状态，不写storage。减少动态或数据节省默认静态，主动加载后仍保留减少动态限制。监听document主题class变化调用handle.update，不重建renderer。布局保持320px到桌面不溢出、触摸可原生滚动。
+- [x] **7.6 绿测与提交。** 重跑7.1及Task3–5测试，`rtk npm run typecheck:landing`。只暂存本Task文件，提交 `feat: connect interactive studio with reliable static fallback`。
 
 ## Task 8: 实际构建资产、安全边界与自动预算门禁
 
@@ -387,7 +395,7 @@ vi.useRealTimers();
 
 **Interfaces:** Consumes真实Vite manifest及输出GLB/WebP。Produces `verify:landing = node --test scripts/blender-mcp-client.test.mjs scripts/workbench-landing-assets.test.mjs scripts/workbench-landing-build.test.mjs`；检查器保证本地检查不需要运行Blender。build相关检查接在build:ui之后，不让测试读取陈旧dist。
 
-- [ ] **8.1 写构建契约红测。** 从`frontend/dist/manifest.json`解析JS静态import图和dynamicImports，断言启动静态闭包内无Three.js runtime chunk，并计算动态场景闭包中新增JS（排除初始共享模块）的gzip总和。不得只测单个入口文件以漏掉其子chunk。
+- [x] **8.1 写构建契约红测。** 从`frontend/dist/manifest.json`解析JS静态import图和dynamicImports，断言启动静态闭包内无Three.js runtime chunk，并计算动态场景闭包中新增JS（排除初始共享模块）的gzip总和。不得只测单个入口文件以漏掉其子chunk。
 
 ```js
 const graph = await loadBuildGraph("frontend/dist/manifest.json");
@@ -397,10 +405,10 @@ assert.ok(graph.modelBytes <= 2 * 1024 * 1024, "GLB_BUDGET");
 ```
 
 `loadBuildGraph(manifestPath)`在该脚本定义，读取实际磁盘内容，解析manifest的imports/dynamicImports，循环引用用visited去重；找不到对应源入口或模型时明确失败。覆盖所有新动态分包，不能因为键名改变跳过检查。若Vite合并chunk导致不能证明隔离，应调整局部打包边界并重新验证，不删除断言。
-- [ ] **8.2 运行失败基线。** `rtk npm run build:ui` 后 `rtk proxy node --test scripts/workbench-landing-build.test.mjs`，实际预算未达成则记录具体字节，不将预算失败当环境问题。
-- [ ] **8.3 扩展Worker资源测试。** 使用构建manifest取得真实hash路径，通过SELF.fetch读取；GLB检查200、二进制响应类型和glTF magic，poster检查WebP文件头；未知资产404，不应回退成HTML。GLB允许有效二进制MIME `model/gltf-binary` 或 `application/octet-stream`，不接受text/html；loader按二进制解析。API匿名401、贡献者管理API403沿用原断言，检查公开模型不改变它们。
-- [ ] **8.4 接入命令。** 将asset checker和MCP客户端单测加入verify:landing，build图测试需在build:ui之后运行。在现有build命令中build:ui后追加verify:landing，其后保留secrets/legacy/dry-run步骤；node单测全部用合成fixture，不会意外启动Blender或联网。
-- [ ] **8.5 绿测并提交。** `rtk npm run build:ui`、`rtk npm run verify:landing`、`rtk npx vitest run test/worker/assets.test.ts`。若资源大小不达标返回Task2简化模型后重验。只暂存本Task文件，提交 `test: enforce landing assets and runtime budgets`。
+- [x] **8.2 运行失败基线。** `rtk npm run build:ui` 后 `rtk proxy node --test scripts/workbench-landing-build.test.mjs`，实际预算未达成则记录具体字节，不将预算失败当环境问题。
+- [x] **8.3 扩展Worker资源测试。** 使用构建manifest取得真实hash路径，通过SELF.fetch读取；GLB检查200、二进制响应类型和glTF magic，poster检查WebP文件头；未知资产404，不应回退成HTML。GLB允许有效二进制MIME `model/gltf-binary` 或 `application/octet-stream`，不接受text/html；loader按二进制解析。API匿名401、贡献者管理API403沿用原断言，检查公开模型不改变它们。
+- [x] **8.4 接入命令。** 将asset checker和MCP客户端单测加入verify:landing，build图测试需在build:ui之后运行。在现有build命令中build:ui后追加verify:landing，其后保留secrets/legacy/dry-run步骤；node单测全部用合成fixture，不会意外启动Blender或联网。
+- [x] **8.5 绿测并提交。** `rtk npm run build:ui`、`rtk npm run verify:landing`、`rtk npx vitest run test/worker/assets.test.ts`。若资源大小不达标返回Task2简化模型后重验。只暂存本Task文件，提交 `test: enforce landing assets and runtime budgets`。
 
 ## Task 9: 浏览器验收、证据同步和交付
 
@@ -408,14 +416,14 @@ assert.ok(graph.modelBytes <= 2 * 1024 * 1024, "GLB_BUDGET");
 
 **Interfaces:** Consumes前8任务真实产物与命令输出；Produces逐条规格映射的本地实现/验证状态。无实现或验证证据的条目保留未勾选，S6所有发布项继续未完成。
 
-- [ ] **9.1 新增缺漏回归并运行。** 复查未被自动测试覆盖的超时、无WebGL、lang切换、GitHub不可用、关闭面板焦点位置；将发现的问题先变为对应Task测试的失败用例，修复后运行该文件，不以截图替代回归测试。
-- [ ] **9.2 运行完整本地门禁。** `rtk npm run check`，额外执行 `rtk npm run verify:workbench-maturity` 与 `rtk npm run audit:workbench-domain`。记录准确提交/工作树差异与完整exit status。loopback/Workerd沙箱错误按批准流程在沙箱外重跑原命令；不要执行deploy或远程migration。既有审计问题必须标明为既有/新引入，不能顺手改成通过。
-- [ ] **9.3 启动本地演示与只读浏览器检查。** 使用可用浏览器技能并完整读取其SKILL.md，启动`rtk npm run dev:ui -- --host 127.0.0.1`。浏览器仅为本地演示mock匿名session与现有pageview，禁止修改生产鉴权；随后用本地Wrangler实际资源路径复核。记录mock覆盖边界，不能把Vite开发预览当Worker验收。
+- [x] **9.1 新增缺漏回归并运行。** 复查未被自动测试覆盖的超时、无WebGL、lang切换、GitHub不可用、关闭面板焦点位置；将发现的问题先变为对应Task测试的失败用例，修复后运行该文件，不以截图替代回归测试。
+- [x] **9.2 运行完整本地门禁。** `rtk npm run check`，额外执行 `rtk npm run verify:workbench-maturity` 与 `rtk npm run audit:workbench-domain`。记录准确提交/工作树差异与完整exit status。loopback/Workerd沙箱错误按批准流程在沙箱外重跑原命令；不要执行deploy或远程migration。既有审计问题必须标明为既有/新引入，不能顺手改成通过。
+- [x] **9.3 启动本地演示与只读浏览器检查。** 使用可用浏览器技能并完整读取其SKILL.md，启动`rtk npm run dev:ui -- --host 127.0.0.1`。浏览器仅为本地演示mock匿名session与现有pageview，禁止修改生产鉴权；随后用本地Wrangler实际资源路径复核。记录mock覆盖边界，不能把Vite开发预览当Worker验收。
 - [ ] **9.4 检查桌面/窄屏和双语。** 桌面1440×900、窄屏390×844与最窄320px；分别完成六步演示、五个热点、引用查看、重播、语言切换；键盘Tab/Shift+Tab/Esc、外部点击/内部点击、200%缩放。检查中英文标题不截断、画布不拦滚动、登录始终可达。只验证登录链接目标，不触发线上OAuth。
 - [ ] **9.5 检查失败与资源清理。** 浏览器阻断GLB、延迟超过8秒、关闭WebGL、模拟减少动态和saveData，验证poster与HTML仍可用；切换页面反复挂载十次，确认canvas、监听及GPU资源不持续增长；后台/离屏不持续提交帧。开发StrictMode的观察与生产build预览分别记录。
 - [ ] **9.6 记录性能与视觉证据。** 通过实际renderer信息记录draw calls/triangles，记录动画中帧率、分辨率、设备型号、浏览器、像素比、冷启动资源字节。桌面60fps/手机30fps是目标，无法接入真手机则S5-06保留部分待验收，不能使用桌面mobile emulation冒充真机通过。保存overview、问答引用、移动端面板、静态降级截图。
-- [ ] **9.7 文档更新与提交。** 在证据文件分别列实现、自动测试、浏览器观察、性能、发布五个状态；逐项勾选规格，缺证据不勾选。执行`rtk git diff --check`，提交仅本次相关文件 `docs: record local 3D landing acceptance evidence`；实际commit hash写入后续交付说明，避免文档自引用自身hash。
-- [ ] **9.8 交付。** 列出.blend/.glb/poster、可运行首页、测试结果及未验收项；明确未部署。审阅发现重要问题先修复并回归，不自动合并或开始S6。
+- [x] **9.7 文档更新与提交。** 在证据文件分别列实现、自动测试、浏览器观察、性能、发布五个状态；逐项勾选规格，缺证据不勾选。执行`rtk git diff --check`，提交仅本次相关文件 `docs: record local 3D landing acceptance evidence`；实际commit hash写入后续交付说明，避免文档自引用自身hash。
+- [x] **9.8 交付。** 列出.blend/.glb/poster、可运行首页、测试结果及未验收项；明确未部署。审阅发现重要问题先修复并回归，不自动合并或开始S6。
 
 ## 3. 规格覆盖映射与完成边界
 

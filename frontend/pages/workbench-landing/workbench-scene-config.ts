@@ -20,6 +20,8 @@ export const SCENE_BUDGET = {
 } as const;
 
 export interface SceneSnapshot {
+  /** Page-owned start/replay epoch. Omitted means cycle 0; feature changes never reset a cycle. */
+  cycleId?: number;
   feature: FeatureId | null; captured: boolean; taskDone: boolean;
   citationId: string | null; paused: boolean; reduceMotion: boolean; dark: boolean;
 }

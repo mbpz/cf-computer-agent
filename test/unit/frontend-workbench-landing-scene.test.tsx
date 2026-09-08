@@ -166,6 +166,116 @@ async function start() {
 }
 
 describe("bounded workbench scene wrapper", () => {
+  it("moves focus from an activated Load button to Static when Load disappears", async () => {
+    await mount({ ...initial, reduceMotion: true });
+    await intersect(true);
+    const trigger = container.querySelector<HTMLButtonElement>('button[data-scene-action="load"]')!;
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    await click("load");
+
+    expect(status()).toBe("loading");
+    expect(trigger.isConnected).toBe(false);
+    expect(document.activeElement).toBe(container.querySelector('button[data-scene-action="static"]'));
+  });
+
+  it.each(["error", "timeout"])("moves focused Retry to Static after %s", async failure => {
+    await start();
+    if (failure === "error") {
+      await act(async () => requests[0].result.reject(new Error("load failed")));
+    } else {
+      await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    }
+    await flush();
+    expect(status()).toBe(failure);
+    const trigger = container.querySelector<HTMLButtonElement>('button[data-scene-action="retry"]')!;
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    await click("retry");
+
+    expect(status()).toBe("loading");
+    expect(trigger.isConnected).toBe(false);
+    expect(document.activeElement).toBe(container.querySelector('button[data-scene-action="static"]'));
+  });
+
+  it.each(["loading", "ready"])("moves focused Static to Load from %s", async phase => {
+    await start();
+    if (phase === "ready") await ready();
+    const trigger = container.querySelector<HTMLButtonElement>('button[data-scene-action="static"]')!;
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    await click("static");
+
+    expect(status()).toBe("static");
+    expect(trigger.isConnected).toBe(false);
+    expect(requests[0].options.signal.aborted).toBe(true);
+    expect(document.activeElement).toBe(container.querySelector('button[data-scene-action="load"]'));
+  });
+
+  it("does not move focus during automatic loading or async readiness", async () => {
+    await mount();
+    const trigger = document.createElement("button");
+    container.append(trigger);
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    await intersect(true);
+    expect(status()).toBe("loading");
+    expect(document.activeElement).toBe(trigger);
+    await ready();
+    expect(status()).toBe("ready");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("does not reclaim focus moved away after a manual load when readiness arrives", async () => {
+    await mount({ ...initial, reduceMotion: true });
+    await intersect(true);
+    const trigger = container.querySelector<HTMLButtonElement>('button[data-scene-action="load"]')!;
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    await click("load");
+    const elsewhere = document.createElement("button");
+    container.append(elsewhere);
+    elsewhere.focus();
+    expect(document.activeElement).toBe(elsewhere);
+
+    await ready();
+
+    expect(status()).toBe("ready");
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it("does not focus a replacement for an unfocused programmatic activation", async () => {
+    await mount({ ...initial, reduceMotion: true });
+    await intersect(true);
+    expect(document.activeElement).toBe(document.body);
+
+    await click("load");
+
+    expect(status()).toBe("loading");
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("does not retain a focus request while a manual load waits offscreen", async () => {
+    await mount({ ...initial, reduceMotion: true });
+    const trigger = container.querySelector<HTMLButtonElement>('button[data-scene-action="load"]')!;
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+    await click("load");
+    expect(imports).toBe(0);
+    expect(trigger.isConnected).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+
+    await intersect(true);
+
+    expect(status()).toBe("loading");
+    expect(trigger.isConnected).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it("renders an accessible responsive poster before effects and never imports offscreen", async () => {
     const html = renderToStaticMarkup(<WorkbenchScene snapshot={initial} />);
     expect(html).toContain("<picture"); expect(html).not.toContain("<canvas");

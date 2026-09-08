@@ -4,6 +4,8 @@ Date: 2026-09-08. Branch: `codex/ai-workbench-3d-landing`.
 
 This is a local implementation checkpoint, not a release or a declaration that every acceptance criterion has passed.
 
+Checkpoint was committed as `523d555`. Subsequent fixes and final local verification are tracked separately in [local-acceptance.md](./local-acceptance.md), recorded September 8, 2026 (UTC). The open-at-checkpoint list below is retained as historical evidence, not current status.
+
 ## Included
 
 - Original Blender-generated studio, source generator, isolated source scene, GLB and responsive static posters; existing Blender scene preservation and repeat-generation evidence.

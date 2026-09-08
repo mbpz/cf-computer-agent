@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { readTheme, type ThemeMode } from "../../lib/theme";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
-import { demoReducer, initialDemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
+import { demoReducer, initialDemoState, type DemoEvent, type DemoState, type DemoStep, type FeatureId } from "./workbench-demo-state";
 import { WorkbenchFeaturePanel } from "./workbench-feature-panel";
 import { WorkbenchScene } from "./workbench-scene";
 import "./workbench-landing.css";
@@ -21,11 +21,18 @@ const stepLabels: Record<DemoStep, LandingCopyKey> = {
   overview: "STEP_OVERVIEW", capture: "STEP_CAPTURE", library: "STEP_LIBRARY", answer: "STEP_ANSWER", action: "STEP_ACTION", complete: "STEP_COMPLETE",
 };
 
+function landingReducer(previous: { demo: DemoState; cycleId: number }, event: DemoEvent) {
+  return {
+    demo: demoReducer(previous.demo, event),
+    cycleId: previous.cycleId + Number(event.type === "start" || event.type === "replay"),
+  };
+}
+
 export function PublicWorkbenchPage({ locale, githubEnabled = true }: { locale: LocaleRuntime; githubEnabled?: boolean }) {
   const language = useSyncExternalStore(locale.subscribe, () => locale.locale, () => locale.locale);
-  const [state, dispatch] = useReducer(demoReducer, undefined, initialDemoState);
+  const [{ demo: state, cycleId }, dispatch] = useReducer(landingReducer, undefined, () => ({ demo: initialDemoState(), cycleId: 0 }));
   const snapshot = useMemo(() => ({ feature: state.activeFeature, captured: state.captured,
-    taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, reduceMotion: false, dark: false }), [state]);
+    taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, reduceMotion: false, dark: false, cycleId }), [state, cycleId]);
   const firstFeature = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     let mode: ThemeMode = "system";

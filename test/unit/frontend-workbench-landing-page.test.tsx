@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { PublicWorkbenchPage } from "../../frontend/pages/workbench-landing/public-workbench-page";
+import * as scene from "../../frontend/pages/workbench-landing/workbench-scene";
 
 // The existing Workers test pool does not expose node:vm constructors.
 const vmContexts = new WeakSet<object>();
@@ -29,6 +30,7 @@ afterEach(async () => {
   act(() => root.unmount());
   host.remove();
   await browser.happyDOM.close();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 function click(selector: string) {
@@ -39,6 +41,26 @@ function click(selector: string) {
 const action = (name: string) => `button[data-demo-action="${name}"]`;
 
 describe("public knowledge studio", () => {
+  it("sends a new scene cycle only for start and replay, not feature navigation or pause", () => {
+    let snapshot: { cycleId?: number; feature: unknown; captured: boolean } | undefined;
+    vi.spyOn(scene, "WorkbenchScene").mockImplementation(props => { snapshot = props.snapshot; return null; });
+    act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));
+    expect(snapshot?.cycleId).toBe(0);
+    click('button[data-feature="library"]');
+    click(action("close"));
+    expect(snapshot?.cycleId).toBe(0);
+    click(action("start"));
+    expect(snapshot).toMatchObject({ cycleId: 1, feature: "capture", captured: false });
+    click(action("capture"));
+    click(action("close"));
+    click(action("pause"));
+    expect(snapshot).toMatchObject({ cycleId: 1, captured: true });
+    click(action("replay"));
+    expect(snapshot).toMatchObject({ cycleId: 2, feature: "capture", captured: false });
+    click(action("close"));
+    click(action("start"));
+    expect(snapshot?.cycleId).toBe(3);
+  });
   it("applies the existing saved theme without adding demo storage", () => {
     browser.localStorage.setItem("memory-garden-theme", "dark");
     act(() => root.render(<PublicWorkbenchPage locale={createLocaleRuntime({ navigatorLanguage: "en" })} />));

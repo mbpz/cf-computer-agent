@@ -5,7 +5,7 @@ import {
   Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, OrthographicCamera, Scene, Texture, Vector3,
 } from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
-import type { FeatureId } from "../../frontend/pages/workbench-landing/workbench-demo-state";
+import { demoReducer, initialDemoState, type DemoEvent, type FeatureId } from "../../frontend/pages/workbench-landing/workbench-demo-state";
 
 // Root tsc is a Worker project. Keep the DOM production graph in typecheck:landing;
 // this computed import still executes the actual runtime in Vitest, without adding
@@ -130,6 +130,81 @@ function rendered() {
 }
 
 describe("workbench scene lifecycle", () => {
+  // Catches the old all-clear/null-feature sentinel resetting a normal panel close.
+  it("preserves the assistant turn across reducer feature close/open in default cycle zero", async () => {
+    const handle = await create();
+    const assistant = gltf.scene.getObjectByName("MG_Assistant")!;
+    let state = demoReducer(initialDemoState(), { type: "open", feature: "capture" });
+    handle.update({ ...snapshot, feature: state.activeFeature }); tick();
+    const turn = assistant.quaternion.toArray();
+    expect(assistant.rotation.y).toBeCloseTo(0.24);
+    state = demoReducer(state, { type: "close" });
+    handle.update({ ...snapshot, feature: state.activeFeature, cycleId: 0 });
+    expect(assistant.quaternion.toArray()).toEqual(turn);
+    tick();
+    state = demoReducer(state, { type: "open", feature: "library" });
+    handle.update({ ...snapshot, feature: state.activeFeature }); tick();
+    expect(assistant.quaternion.toArray()).toEqual(turn);
+    const count = rendered().renderer.render.mock.calls.length;
+    handle.update({ ...snapshot, feature: state.activeFeature, cycleId: 0 });
+    expect(rendered().renderer.render).toHaveBeenCalledTimes(count);
+    expect(frames.size).toBe(0);
+  });
+
+  // Catches missing an added epoch key in snapshot equality, or resetting only when flags change.
+  it("resets on epoch-only updates and cancels an unfinished turn without guessing from flags", async () => {
+    const handle = await create();
+    const assistant = gltf.scene.getObjectByName("MG_Assistant")!;
+    const capture = gltf.scene.getObjectByName("MG_CaptureCard")!;
+    const active = { ...snapshot, feature: "capture" as const, captured: true };
+    handle.update(active); tick(90);
+    expect(assistant.rotation.y).toBeGreaterThan(0);
+    handle.update({ ...active, cycleId: 1 });
+    expect(assistant.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+    expect(capture.position.toArray()).toEqual([0.02, 0.25, 0.06]);
+    expect(frames.size).toBe(0);
+    handle.update({ ...active, cycleId: 2 }); tick();
+    expect(assistant.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+    expect(frames.size).toBe(0);
+  });
+
+  // Catches confusing the reducer's capture-feature replay with an ordinary feature update.
+  it.each([400, 90])("restores and rearms actors on reducer replay after %i ms of motion", async elapsed => {
+    const actors = ["MG_CaptureCard", "MG_TaskCard", "MG_CitationCard", "MG_Assistant"].map(name => gltf.scene.getObjectByName(name)!);
+    actors.forEach((actor, i) => { actor.rotation.set(0.1, i * 0.17, -0.2); actor.scale.set(0.8, 1.3, 1.1); });
+    const original = actors.map(actor => ({ p: actor.position.toArray(), q: actor.quaternion.toArray(), s: actor.scale.toArray() }));
+    const handle = await create();
+    let state = initialDemoState(), cycleId = 0;
+    function dispatch(event: DemoEvent) {
+      state = demoReducer(state, event);
+      if (event.type === "start" || event.type === "replay") cycleId++;
+      const next = { ...snapshot, feature: state.activeFeature, captured: state.captured, taskDone: state.taskDone, citationId: state.citationId, paused: state.paused, cycleId };
+      handle.update(next); return next;
+    }
+    dispatch({ type: "start" });
+    dispatch({ type: "capture" }); tick(elapsed);
+    for (const event of [{ type: "next" }, { type: "next" }, { type: "next" }, { type: "complete-task" }, { type: "next" }] as const) {
+      dispatch(event); if (elapsed === 400) tick();
+    }
+    expect(actors[3].quaternion.toArray()).not.toEqual(original[3].q);
+    const replay = dispatch({ type: "replay" });
+    expect(replay).toMatchObject({ feature: "capture", captured: false, taskDone: false, citationId: null, cycleId: 2 });
+    actors.forEach((actor, i) => {
+      expect(actor.position.toArray()).toEqual(original[i].p);
+      expect(actor.quaternion.toArray()).toEqual(original[i].q);
+      expect(actor.scale.toArray()).toEqual(original[i].s);
+    });
+    expect(frames.size).toBe(0);
+    tick(); expect(actors[3].quaternion.toArray()).toEqual(original[3].q);
+    dispatch({ type: "capture" }); tick(190);
+    expect(actors[3].quaternion.toArray()).not.toEqual(original[3].q);
+    tick(200);
+    const nextTurn = actors[3].quaternion.toArray();
+    dispatch({ type: "next" }); tick();
+    expect(actors[3].quaternion.toArray()).toEqual(nextTurn);
+    expect(frames.size).toBe(0);
+  });
+
   // Guards the shared snap path: motion preferences must settle every actor, not only the camera.
   it.each(["paused", "reduceMotion"] as const)("applies all end poses immediately when %s interrupts motion", async preference => {
     const handle = await create();
@@ -218,10 +293,11 @@ describe("workbench scene lifecycle", () => {
     expect(gltf.scene.getObjectByName("MG_TaskCard")!.position.x).toBeCloseTo(0.585);
     expect(gltf.scene.getObjectByName("MG_CitationCard")!.scale.x).toBeCloseTo(1.12);
     expect(frames.size).toBe(0); tick(); expect(renderer.render).toHaveBeenCalledTimes(count);
-    handle.update(snapshot);
+    handle.update({ ...snapshot, feature: "capture", cycleId: 1 });
     expect(gltf.scene.getObjectByName("MG_CaptureCard")!.position.y).toBe(0.25);
     expect(gltf.scene.getObjectByName("MG_TaskCard")!.position.x).toBe(-0.61);
     expect(gltf.scene.getObjectByName("MG_CitationCard")!.scale.x).toBe(1);
+    expect(gltf.scene.getObjectByName("MG_Assistant")!.quaternion.toArray()).toEqual([0, 0, 0, 1]);
     if (hidden === "viewport") handle.setVisible(true);
     if (hidden === "document") {
       Object.defineProperty(browser.document, "hidden", { configurable: true, value: false });
@@ -252,9 +328,9 @@ describe("workbench scene lifecycle", () => {
     expect(assistant.quaternion.toArray()).toEqual(finalTurn);
     const renders = rendered().renderer.render.mock.calls.length;
     tick(2000); expect(frames.size).toBe(0); expect(rendered().renderer.render).toHaveBeenCalledTimes(renders);
-    handle.update(snapshot);
+    handle.update({ ...snapshot, feature: "capture", cycleId: 1 });
     expect(assistant.quaternion.toArray()).toEqual(origin.toArray());
-    handle.update({ ...snapshot, feature: "library" }); tick();
+    handle.update({ ...snapshot, feature: "library", cycleId: 1 }); tick();
     expect(assistant.quaternion.toArray()).toEqual(finalTurn);
   });
 
@@ -265,9 +341,9 @@ describe("workbench scene lifecycle", () => {
     const original = cards.map(card => ({ p: card.position.toArray(), q: card.quaternion.toArray(), s: card.scale.toArray() }));
     const handle = await create();
     for (let cycle = 0; cycle < 3; cycle++) {
-      handle.update({ ...snapshot, feature: "action", captured: true, taskDone: true, citationId: "citation-a" });
+      handle.update({ ...snapshot, feature: "action", captured: true, taskDone: true, citationId: "citation-a", cycleId: cycle });
       tick(cycle === 1 ? 90 : 400);
-      handle.update(snapshot);
+      handle.update({ ...snapshot, feature: "capture", cycleId: cycle + 1 });
       cards.forEach((card, i) => {
         expect(card.position.toArray()).toEqual(original[i].p);
         expect(card.quaternion.toArray()).toEqual(original[i].q);

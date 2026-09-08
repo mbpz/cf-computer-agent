@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createLocaleRuntime } from "../../lib/i18n";
 import { landingText, type LandingCopyKey } from "./workbench-copy";
 import {
@@ -29,8 +29,22 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
   const host = useRef<HTMLDivElement>(null);
   const controller = useRef<SceneController | null>(null);
   const [view, setView] = useState<SceneView>({ status: "poster", message: "SCENE_IDLE", language: "en" });
+  const [focusRequest, setFocusRequest] = useState<HTMLButtonElement | null>(null);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: view.language }), [view.language]);
   const text = (key: LandingCopyKey) => landingText(locale, key);
+
+  useLayoutEffect(() => {
+    if (!focusRequest) return;
+    // Consume this activation even if loading waits for visibility. Async updates must not move focus.
+    setFocusRequest(null);
+    if (focusRequest.isConnected || document.activeElement !== document.body) return;
+    root.current?.querySelector<HTMLButtonElement>("button[data-scene-action]")?.focus();
+  }, [focusRequest]);
+
+  const activate = (trigger: HTMLButtonElement, action: "load" | "useStatic") => {
+    setFocusRequest(document.activeElement === trigger ? trigger : null);
+    controller.current?.[action]();
+  };
 
   useEffect(() => {
     const element = root.current!;
@@ -229,11 +243,11 @@ export function WorkbenchScene({ snapshot }: { snapshot: SceneSnapshot }) {
       <div className="workbench-scene-controls">
         {view.status !== "loading" && view.status !== "ready" && (
           <button type="button" className="workbench-scene-button" data-scene-action={failed ? "retry" : "load"}
-            onClick={() => controller.current?.load()}>{text(failed ? "SCENE_RETRY" : "SCENE_LOAD")}</button>
+            onClick={event => activate(event.currentTarget, "load")}>{text(failed ? "SCENE_RETRY" : "SCENE_LOAD")}</button>
         )}
         {view.status !== "static" && (
           <button type="button" className="workbench-scene-button" data-scene-action="static"
-            onClick={() => controller.current?.useStatic()}>{text("SCENE_STATIC_MODE")}</button>
+            onClick={event => activate(event.currentTarget, "useStatic")}>{text("SCENE_STATIC_MODE")}</button>
         )}
       </div>
     </div>
