@@ -18,7 +18,7 @@ P4 项目、日程、会议与协作
   ↓
 P5 数据与治理
   ↓
-P6 3D 工作台演示
+P6 3D Landing Page
   ↓
 P7 2.0 稳定发布
 ```
@@ -59,11 +59,11 @@ P7 2.0 稳定发布
 
 退出条件：管理员统计专属；所有治理接口有服务端鉴权；统计数据不会泄露未授权内容；访问、登录和 AI 指标可以按时间范围查看。
 
-## P6：3D 工作台演示
+## P6：3D Landing Page 产品演示
 
-交付：Today Hub、Inbox Dock、Knowledge Garden、Goals Mountain、Project District、Task Orbit、AI Observatory、Collaboration Room 和 Admin Control Tower。
+交付：公开匿名 Landing Page、等距微缩工作室、自动演示时间线、功能热点、登录 CTA、静态降级海报、暂停/跳过/重播、浅色/深色主题和减少动态效果模式。场景用 Inbox、Knowledge、AI、Tasks、Collaboration 和 Admin 等空间解释整个个人工作台 SaaS，而不是只展示知识库。
 
-退出条件：3D 懒加载；节点数量受控；双击节点进入真实 2D 页面；低性能设备、移动端和减少动态效果模式自动使用 2D。
+退出条件：Landing Page 不读取真实业务数据；自动演示可暂停、跳过和重播；所有 CTA 指向真实登录流程；WebGL 不可用时使用静态海报和 2D 说明；不新增运行时付费服务；登录后的核心工作仍完全在 2D 工作台完成。
 
 ## P7：2.0 稳定发布
 
@@ -78,4 +78,4 @@ P7 2.0 稳定发布
 - 浏览器扩展、Webhook、API Token。
 - 自动化规则和 Agent 工作流。
 - 多工作空间和更高级的团队协作。
-- 可选付费对象存储和大文件原件归档。
+- 可选付费对象存储和大文件原件归档；不属于 2.0 免费层承诺。

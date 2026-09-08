@@ -87,19 +87,20 @@
 - [ ] `MG2-P5-007` 统计与治理接口的服务端权限回归。
 - [ ] `MG2-P5-008` 个人数据与管理员数据的显示隔离。
 
-## P6 3D 工作台
+## P6 3D Landing Page
 
-- [ ] `MG2-P6-001` 独立 3D 路由和懒加载。
-- [ ] `MG2-P6-002` Today Hub。
-- [ ] `MG2-P6-003` Inbox Dock。
-- [ ] `MG2-P6-004` Knowledge Garden。
-- [ ] `MG2-P6-005` Goals Mountain 和 Project District。
-- [ ] `MG2-P6-006` Task Orbit。
-- [ ] `MG2-P6-007` AI Observatory。
-- [ ] `MG2-P6-008` Collaboration Room 和 Admin Control Tower。
-- [ ] `MG2-P6-009` 节点上下文卡片和跳转真实 2D 页面。
-- [ ] `MG2-P6-010` WebGL、移动端、低性能和减少动态效果降级。
-- [ ] `MG2-P6-011` 3D 首屏和节点数量性能验收。
+- [ ] `MG2-P6-001` 匿名根路径 Landing Page，不改变登录后工作台路由。
+- [ ] `MG2-P6-002` 等距微缩工作室场景，表达个人工作台 SaaS 而非单一知识库。
+- [ ] `MG2-P6-003` Inbox、Knowledge、AI、Tasks、Projects、Collaboration、Admin 等功能热点。
+- [ ] `MG2-P6-004` 自动演示时间线：收集 → 整理 → 理解 → 执行 → 协作 → 复盘。
+- [ ] `MG2-P6-005` 播放、暂停、跳过、重播和进度提示。
+- [ ] `MG2-P6-006` GitHub 登录 CTA、邀请制和隐私边界说明。
+- [ ] `MG2-P6-007` 热点卡片和功能说明全部由 DOM/i18n 提供。
+- [ ] `MG2-P6-008` 不读取真实用户数据、不创建访客业务数据。
+- [ ] `MG2-P6-009` WebGL 不可用时使用静态海报和 2D 流程说明。
+- [ ] `MG2-P6-010` 移动端、低性能和减少动态效果降级。
+- [ ] `MG2-P6-011` 首屏资源、构建体积和运行时内存验收。
+- [ ] `MG2-P6-012` 仅使用 Cloudflare 免费能力和构建期静态资源，不引入额外付费服务。
 
 ## P7 稳定发布
 
