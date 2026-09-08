@@ -104,6 +104,8 @@ export async function mountApp(options: {
     vi.stubGlobal("history", browser.history);
     vi.stubGlobal("location", browser.location);
     vi.stubGlobal("HTMLElement", browser.HTMLElement);
+    vi.stubGlobal("MutationObserver", browser.MutationObserver);
+    vi.stubGlobal("IntersectionObserver", browser.IntersectionObserver);
     vi.stubGlobal("fetch", options.fetch);
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div") as unknown as HTMLElement;

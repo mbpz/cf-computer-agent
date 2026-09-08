@@ -14,10 +14,10 @@ test("anonymous bootstrap imports the LoginPage component it renders", async () 
   assert.match(source, /import \{ LoginPage \} from ["']\.\/pages\/login-page["'];/u);
 });
 
-test("anonymous and session-error branches stay wired to LoginPage", async () => {
+test("only anonymous root uses the public studio; deep links and session errors keep LoginPage", async () => {
   const source = await appSource();
-  assert.match(source, /return <LoginPage locale=\{locale\}[^>]*\/>;/u);
-  assert.match(source, /return <LoginPage locale=\{locale\} error=[^>]*\/>;/u);
+  assert.match(source, /import \{ PublicWorkbenchPage \} from ["']\.\/pages\/workbench-landing\/public-workbench-page["'];/u);
+  assert.match(source, /if \(sessionError\) return <LoginPage locale=\{locale\} error=[^>]*\/>;\s+if \(anonymous && pathname === "\/"\) return <PublicWorkbenchPage locale=\{locale\} \/>;\s+if \(anonymous\) return <LoginPage locale=\{locale\} \/>;/u);
 });
 
 test("the application shell keeps account actions out of the topbar and removes free-tier copy", async () => {

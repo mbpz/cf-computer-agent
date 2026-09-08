@@ -1,0 +1,48 @@
+{
+  "owner": "memory-garden-landing-v1",
+  "provenance": {
+    "kind": "original-procedural-geometry",
+    "generator": "scripts/blender/workbench-landing.py",
+    "externalAssets": []
+  },
+  "generationEvidence": "design/workbench-landing/generation-report.json",
+  "originalSceneEvidence": "design/workbench-landing/original-scene-snapshot.json",
+  "status": "local-assets-verified",
+  "verifiedDate": "2026-09-08",
+  "modelBytes": 650596,
+  "triangles": 33716,
+  "meshes": 54,
+  "materialPrimitives": 54,
+  "maxTextureDimension": 0,
+  "nodeNames": [
+    "MG_Assistant_Gold", "MG_Assistant_Graphite", "MG_Assistant_Ink", "MG_Assistant_Mint", "MG_Assistant_Paper", "MG_Assistant_Porcelain", "MG_Assistant_Teal", "MG_Assistant",
+    "MG_Board_Clay", "MG_Board_Gold", "MG_Board_Graphite", "MG_Board_Mist", "MG_Board_Paper", "MG_Board_Porcelain", "MG_Board_Teal",
+    "MG_TaskCard_Mist", "MG_TaskCard_Paper", "MG_TaskCard_Teal", "MG_TaskCard", "MG_Board",
+    "MG_Desk_Graphite", "MG_Desk_Ink", "MG_Desk_Mist", "MG_Desk_Porcelain", "MG_Desk_Teal", "MG_Desk",
+    "MG_CaptureCard_Mist", "MG_CaptureCard_Paper", "MG_CaptureCard_Teal", "MG_CaptureCard",
+    "MG_Inbox_Gold", "MG_Inbox_Paper", "MG_Inbox_Porcelain", "MG_Inbox_Teal", "MG_Inbox",
+    "MG_Library_Clay", "MG_Library_Gold", "MG_Library_Graphite", "MG_Library_Mist", "MG_Library_Paper", "MG_Library_Porcelain", "MG_Library_Teal", "MG_Library",
+    "MG_CitationCard_Mist", "MG_CitationCard_Paper", "MG_CitationCard_Teal", "MG_CitationCard",
+    "MG_Query_Gold", "MG_Query_Graphite", "MG_Query_Ink", "MG_Query_Mint", "MG_Query_Mist", "MG_Query_Paper", "MG_Query_Porcelain", "MG_Query_Teal", "MG_Query",
+    "MG_Updates_Graphite", "MG_Updates_Ink", "MG_Updates_Mint", "MG_Updates_Mist", "MG_Updates_Paper", "MG_Updates_Porcelain", "MG_Updates_Teal", "MG_Updates"
+  ],
+  "rootNodes": ["MG_Desk", "MG_Inbox", "MG_Library", "MG_Query", "MG_Board", "MG_Updates", "MG_Assistant"],
+  "animationNodes": ["MG_CaptureCard", "MG_CitationCard", "MG_TaskCard"],
+  "posters": [
+    {"path": "frontend/assets/workbench-landing/poster-desktop.webp", "bytes": 49500, "width": 1600, "height": 1000},
+    {"path": "frontend/assets/workbench-landing/poster-mobile.webp", "bytes": 29460, "width": 900, "height": 1100}
+  ],
+  "verification": {
+    "checker": "node scripts/workbench-landing-assets.mjs --check",
+    "checkerPassed": true,
+    "checkerTestsPassed": 28,
+    "sameSourceSuccessfulRuns": [2, 3],
+    "sameObjectNames": true,
+    "originalSceneSnapshotExact": true,
+    "originalSceneSha256": "8f83ba214e4b1eb3427d4c6f9c9670300654a2e39c94a468cdf28a6012e6b027",
+    "posterPixelsVisuallyReviewed": true,
+    "sourceBlendScopedLibraryReviewed": true,
+    "runtimeFrameRateMeasured": false,
+    "notes": "54 material primitives is a static model draw estimate, not measured total renderer calls. Runs 2 and 3 have identical object names/counts and poster bytes; GLB and blend hashes differ, so binary reproducibility is not claimed."
+  }
+}

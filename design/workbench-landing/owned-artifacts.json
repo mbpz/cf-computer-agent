@@ -1,0 +1,9 @@
+{
+  "owner": "memory-garden-landing-v1",
+  "outputs": [
+    "design/workbench-landing/workbench.blend",
+    "frontend/assets/workbench-landing/workbench.glb",
+    "frontend/assets/workbench-landing/poster-desktop.webp",
+    "frontend/assets/workbench-landing/poster-mobile.webp"
+  ]
+}

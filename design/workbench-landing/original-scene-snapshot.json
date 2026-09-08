@@ -1,0 +1,2272 @@
+{
+  "owner": "memory-garden-landing-v1",
+  "sha256": "8f83ba214e4b1eb3427d4c6f9c9670300654a2e39c94a468cdf28a6012e6b027",
+  "snapshot": {
+    "collections": {
+      "Collection": {
+        "children": [],
+        "objects": [
+          "Camera",
+          "Cube",
+          "Light"
+        ],
+        "properties": {}
+      }
+    },
+    "filepath": "",
+    "materials": {
+      "Dots Stroke": {
+        "links": [
+          [
+            "Diffuse BSDF",
+            "BSDF",
+            "Material Output.001",
+            "Surface"
+          ],
+          [
+            "Principled BSDF",
+            "BSDF",
+            "Material Output",
+            "Surface"
+          ]
+        ],
+        "nodes": [
+          {
+            "inputs": {},
+            "name": "Frame",
+            "rna": {
+              "bl_description": "Collect related nodes together in a common area. Useful for organization when the re-usability of a node group is not required",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "NodeFrame",
+              "bl_label": "Frame",
+              "bl_static_type": "FRAME",
+              "bl_width_default": 160.0,
+              "bl_width_max": 3.4028234663852886e+38,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "NONE",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "label": "Versioning: Use Nodes was removed",
+              "label_size": 20,
+              "location": [
+                0.0,
+                0.0
+              ],
+              "location_absolute": [
+                0.0,
+                0.0
+              ],
+              "mute": false,
+              "name": "Frame",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "shrink": true,
+              "type": "FRAME",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 150.0
+            },
+            "type": "NodeFrame"
+          },
+          {
+            "inputs": {
+              "Displacement": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Thickness": 0.0
+            },
+            "name": "Material Output",
+            "rna": {
+              "bl_description": "Output surface material information for use in rendering",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeOutputMaterial",
+              "bl_label": "Material Output",
+              "bl_static_type": "OUTPUT_MATERIAL",
+              "bl_width_default": 140.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "OUTPUT",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "is_active_output": true,
+              "label": "",
+              "location": [
+                200.0,
+                100.0
+              ],
+              "location_absolute": [
+                200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Material Output",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "target": "EEVEE",
+              "type": "OUTPUT_MATERIAL",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 140.0
+            },
+            "type": "ShaderNodeOutputMaterial"
+          },
+          {
+            "inputs": {
+              "Alpha": 1.0,
+              "Anisotropic": 0.0,
+              "Anisotropic Rotation": 0.0,
+              "Base Color": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929,
+                1.0
+              ],
+              "Coat IOR": 1.5,
+              "Coat Normal": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Coat Roughness": 0.029999999329447746,
+              "Coat Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Coat Weight": 0.0,
+              "Diffuse Roughness": 0.0,
+              "Emission Color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Emission Strength": 0.0,
+              "IOR": 1.5,
+              "Metallic": 0.0,
+              "Normal": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Roughness": 0.5,
+              "Sheen Roughness": 0.5,
+              "Sheen Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Sheen Weight": 0.0,
+              "Specular IOR Level": 0.5,
+              "Specular Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Subsurface Anisotropy": 0.0,
+              "Subsurface IOR": 1.399999976158142,
+              "Subsurface Radius": [
+                1.0,
+                0.20000000298023224,
+                0.10000000149011612
+              ],
+              "Subsurface Scale": 0.004999999888241291,
+              "Subsurface Weight": 0.0,
+              "Tangent": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Thin Film IOR": 1.3300000429153442,
+              "Thin Film Thickness": 0.0,
+              "Thin Wall": false,
+              "Transmission Weight": 0.0,
+              "Weight": 0.0
+            },
+            "name": "Principled BSDF",
+            "rna": {
+              "bl_description": "Physically-based, easy-to-use shader for rendering surface materials, based on the OpenPBR model",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeBsdfPrincipled",
+              "bl_label": "Principled BSDF",
+              "bl_static_type": "BSDF_PRINCIPLED",
+              "bl_width_default": 240.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "SHADER",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "distribution": "MULTI_GGX",
+              "height": 100.0,
+              "hide": false,
+              "label": "",
+              "location": [
+                -200.0,
+                100.0
+              ],
+              "location_absolute": [
+                -200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Principled BSDF",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "subsurface_method": "RANDOM_WALK",
+              "type": "BSDF_PRINCIPLED",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 240.0
+            },
+            "type": "ShaderNodeBsdfPrincipled"
+          },
+          {
+            "inputs": {
+              "Displacement": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Thickness": 0.0
+            },
+            "name": "Material Output.001",
+            "rna": {
+              "bl_description": "Output surface material information for use in rendering",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeOutputMaterial",
+              "bl_label": "Material Output",
+              "bl_static_type": "OUTPUT_MATERIAL",
+              "bl_width_default": 140.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "OUTPUT",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "is_active_output": false,
+              "label": "",
+              "location": [
+                200.0,
+                100.0
+              ],
+              "location_absolute": [
+                200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Material Output.001",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "target": "CYCLES",
+              "type": "OUTPUT_MATERIAL",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 140.0
+            },
+            "type": "ShaderNodeOutputMaterial"
+          },
+          {
+            "inputs": {
+              "Color": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929,
+                1.0
+              ],
+              "Normal": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Roughness": 0.0,
+              "Weight": 0.0
+            },
+            "name": "Diffuse BSDF",
+            "rna": {
+              "bl_description": "Lambertian and Oren-Nayar diffuse reflection",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeBsdfDiffuse",
+              "bl_label": "Diffuse BSDF",
+              "bl_static_type": "BSDF_DIFFUSE",
+              "bl_width_default": 160.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "SHADER",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "label": "",
+              "location": [
+                0.0,
+                0.0
+              ],
+              "location_absolute": [
+                0.0,
+                0.0
+              ],
+              "mute": false,
+              "name": "Diffuse BSDF",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "type": "BSDF_DIFFUSE",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 150.0
+            },
+            "type": "ShaderNodeBsdfDiffuse"
+          }
+        ],
+        "properties": {},
+        "rna": {
+          "alpha_threshold": 0.5,
+          "blend_method": "HASHED",
+          "diffuse_color": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929,
+            1.0
+          ],
+          "displacement_method": "BUMP",
+          "id_type": "MATERIAL",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_grease_pencil": true,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "line_color": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "line_priority": 0,
+          "max_vertex_displacement": 0.0,
+          "metallic": 0.0,
+          "name": "Dots Stroke",
+          "name_full": "Dots Stroke",
+          "paint_active_slot": 0,
+          "paint_clone_slot": 0,
+          "pass_index": 0,
+          "preview_render_type": "SPHERE",
+          "refraction_depth": 0.0,
+          "roughness": 0.5,
+          "session_uid": 125,
+          "show_transparent_back": true,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_intensity": 0.5,
+          "surface_render_method": "DITHERED",
+          "tag": false,
+          "thickness_mode": "SPHERE",
+          "use_backface_culling": false,
+          "use_backface_culling_lightprobe_volume": false,
+          "use_backface_culling_shadow": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_nodes": true,
+          "use_preview_world": false,
+          "use_raytrace_refraction": false,
+          "use_screen_refraction": false,
+          "use_sss_translucency": false,
+          "use_thickness_from_shadow": false,
+          "use_transparency_overlap": true,
+          "use_transparent_shadow": true,
+          "users": 0,
+          "volume_intersection_method": "FAST"
+        }
+      },
+      "Material": {
+        "links": [
+          [
+            "Principled BSDF",
+            "BSDF",
+            "Material Output",
+            "Surface"
+          ]
+        ],
+        "nodes": [
+          {
+            "inputs": {
+              "Displacement": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Thickness": 0.0
+            },
+            "name": "Material Output",
+            "rna": {
+              "bl_description": "Output surface material information for use in rendering",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeOutputMaterial",
+              "bl_label": "Material Output",
+              "bl_static_type": "OUTPUT_MATERIAL",
+              "bl_width_default": 140.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "OUTPUT",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "is_active_output": true,
+              "label": "",
+              "location": [
+                200.0,
+                100.0
+              ],
+              "location_absolute": [
+                200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Material Output",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "target": "ALL",
+              "type": "OUTPUT_MATERIAL",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 140.0
+            },
+            "type": "ShaderNodeOutputMaterial"
+          },
+          {
+            "inputs": {
+              "Alpha": 1.0,
+              "Anisotropic": 0.0,
+              "Anisotropic Rotation": 0.0,
+              "Base Color": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929,
+                1.0
+              ],
+              "Coat IOR": 1.5,
+              "Coat Normal": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Coat Roughness": 0.029999999329447746,
+              "Coat Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Coat Weight": 0.0,
+              "Diffuse Roughness": 0.0,
+              "Emission Color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Emission Strength": 0.0,
+              "IOR": 1.5,
+              "Metallic": 0.0,
+              "Normal": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Roughness": 0.5,
+              "Sheen Roughness": 0.5,
+              "Sheen Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Sheen Weight": 0.0,
+              "Specular IOR Level": 0.5,
+              "Specular Tint": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              "Subsurface Anisotropy": 0.0,
+              "Subsurface IOR": 1.399999976158142,
+              "Subsurface Radius": [
+                1.0,
+                0.20000000298023224,
+                0.10000000149011612
+              ],
+              "Subsurface Scale": 0.004999999888241291,
+              "Subsurface Weight": 0.0,
+              "Tangent": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "Thin Film IOR": 1.3300000429153442,
+              "Thin Film Thickness": 0.0,
+              "Thin Wall": false,
+              "Transmission Weight": 0.0,
+              "Weight": 0.0
+            },
+            "name": "Principled BSDF",
+            "rna": {
+              "bl_description": "Physically-based, easy-to-use shader for rendering surface materials, based on the OpenPBR model",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeBsdfPrincipled",
+              "bl_label": "Principled BSDF",
+              "bl_static_type": "BSDF_PRINCIPLED",
+              "bl_width_default": 240.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "SHADER",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "distribution": "MULTI_GGX",
+              "height": 100.0,
+              "hide": false,
+              "label": "",
+              "location": [
+                -200.0,
+                100.0
+              ],
+              "location_absolute": [
+                -200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Principled BSDF",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "subsurface_method": "RANDOM_WALK",
+              "type": "BSDF_PRINCIPLED",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 240.0
+            },
+            "type": "ShaderNodeBsdfPrincipled"
+          }
+        ],
+        "properties": {},
+        "rna": {
+          "alpha_threshold": 0.0,
+          "blend_method": "HASHED",
+          "diffuse_color": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929,
+            1.0
+          ],
+          "displacement_method": "BUMP",
+          "id_type": "MATERIAL",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_grease_pencil": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "line_color": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "line_priority": 0,
+          "max_vertex_displacement": 0.0,
+          "metallic": 0.0,
+          "name": "Material",
+          "name_full": "Material",
+          "paint_active_slot": 0,
+          "paint_clone_slot": 0,
+          "pass_index": 0,
+          "preview_render_type": "SPHERE",
+          "refraction_depth": 0.0,
+          "roughness": 0.5,
+          "session_uid": 127,
+          "show_transparent_back": true,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_intensity": 0.5,
+          "surface_render_method": "DITHERED",
+          "tag": false,
+          "thickness_mode": "SPHERE",
+          "use_backface_culling": false,
+          "use_backface_culling_lightprobe_volume": false,
+          "use_backface_culling_shadow": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_nodes": true,
+          "use_preview_world": false,
+          "use_raytrace_refraction": false,
+          "use_screen_refraction": false,
+          "use_sss_translucency": false,
+          "use_thickness_from_shadow": false,
+          "use_transparency_overlap": true,
+          "use_transparent_shadow": true,
+          "users": 1,
+          "volume_intersection_method": "FAST"
+        }
+      }
+    },
+    "objects": {
+      "Camera": {
+        "collections": [
+          "Collection"
+        ],
+        "constraints": [],
+        "data": "Camera",
+        "dataRNA": {
+          "angle": 0.691111147403717,
+          "angle_x": 0.691111147403717,
+          "angle_y": 0.4710899591445923,
+          "central_cylindrical_radius": 1.0,
+          "central_cylindrical_range_u_max": 3.1415927410125732,
+          "central_cylindrical_range_u_min": -3.1415927410125732,
+          "central_cylindrical_range_v_max": 1.0,
+          "central_cylindrical_range_v_min": -1.0,
+          "clip_end": 100.0,
+          "clip_start": 0.10000000149011612,
+          "composition_guide_color": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "custom_bytecode": "",
+          "custom_bytecode_hash": "",
+          "custom_filepath": "",
+          "custom_mode": "INTERNAL",
+          "display_size": 1.0,
+          "fisheye_fov": 3.1415927410125732,
+          "fisheye_lens": 10.5,
+          "fisheye_polynomial_k0": -1.1735143743862864e-05,
+          "fisheye_polynomial_k1": -0.019988736137747765,
+          "fisheye_polynomial_k2": -3.3525323033245513e-06,
+          "fisheye_polynomial_k3": 3.0992753181635635e-06,
+          "fisheye_polynomial_k4": -2.60646473293491e-08,
+          "id_type": "CAMERA",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "latitude_max": 1.5707963705062866,
+          "latitude_min": -1.5707963705062866,
+          "lens": 50.0,
+          "lens_unit": "MILLIMETERS",
+          "longitude_max": 3.1415927410125732,
+          "longitude_min": -3.1415927410125732,
+          "name": "Camera",
+          "name_full": "Camera",
+          "ortho_scale": 7.314285755157471,
+          "panorama_type": "FISHEYE_EQUISOLID",
+          "passepartout_alpha": 0.5,
+          "sensor_fit": "AUTO",
+          "sensor_height": 24.0,
+          "sensor_width": 36.0,
+          "session_uid": 118,
+          "shift_x": 0.0,
+          "shift_y": 0.0,
+          "show_background_images": false,
+          "show_composition_center": false,
+          "show_composition_center_diagonal": false,
+          "show_composition_golden": false,
+          "show_composition_golden_tria_a": false,
+          "show_composition_golden_tria_b": false,
+          "show_composition_harmony_tri_a": false,
+          "show_composition_harmony_tri_b": false,
+          "show_composition_thirds": false,
+          "show_limits": false,
+          "show_mist": false,
+          "show_name": false,
+          "show_passepartout": true,
+          "show_safe_areas": false,
+          "show_safe_center": false,
+          "show_sensor": false,
+          "tag": false,
+          "type": "PERSP",
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "users": 1
+        },
+        "materials": [],
+        "matrix_local": [
+          [
+            0.6859206557273865,
+            -0.32401347160339355,
+            0.6515582203865051,
+            7.358891487121582
+          ],
+          [
+            0.7276763319969177,
+            0.305420845746994,
+            -0.6141703724861145,
+            -6.925790786743164
+          ],
+          [
+            0.0,
+            0.8953956365585327,
+            0.44527140259742737,
+            4.958309173583984
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "matrix_world": [
+          [
+            0.6859206557273865,
+            -0.32401347160339355,
+            0.6515582203865051,
+            7.358891487121582
+          ],
+          [
+            0.7276763319969177,
+            0.305420845746994,
+            -0.6141703724861145,
+            -6.925790786743164
+          ],
+          [
+            0.0,
+            0.8953956365585327,
+            0.44527140259742737,
+            4.958309173583984
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "modifiers": [],
+        "parent": null,
+        "properties": {},
+        "rna": {
+          "active_material_index": 0,
+          "active_selection_set": 0,
+          "active_shape_key_index": 0,
+          "add_rest_position_attribute": false,
+          "bound_box": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ],
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_location": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_euler": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dimensions": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "display_bounds_type": "BOX",
+          "display_type": "WIRE",
+          "empty_display_size": 1.0,
+          "empty_display_type": "ARROWS",
+          "empty_image_depth": "DEFAULT",
+          "empty_image_offset": [
+            0.0,
+            0.0
+          ],
+          "empty_image_side": "DOUBLE_SIDED",
+          "hide_probe_plane": false,
+          "hide_probe_sphere": false,
+          "hide_probe_volume": false,
+          "hide_render": false,
+          "hide_select": false,
+          "hide_surface_pick": false,
+          "hide_viewport": false,
+          "id_type": "OBJECT",
+          "instance_faces_scale": 1.0,
+          "instance_type": "NONE",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_from_instancer": false,
+          "is_from_set": false,
+          "is_holdout": false,
+          "is_instancer": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "is_shadow_catcher": false,
+          "lightgroup": "",
+          "location": [
+            7.358891487121582,
+            -6.925790786743164,
+            4.958309173583984
+          ],
+          "lock_location": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation_w": false,
+          "lock_rotations_4d": false,
+          "lock_scale": [
+            false,
+            false,
+            false
+          ],
+          "matrix_basis": [
+            [
+              0.6859206557273865,
+              -0.32401347160339355,
+              0.6515582203865051,
+              7.358891487121582
+            ],
+            [
+              0.7276763319969177,
+              0.305420845746994,
+              -0.6141703724861145,
+              -6.925790786743164
+            ],
+            [
+              0.0,
+              0.8953956365585327,
+              0.44527140259742737,
+              4.958309173583984
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_local": [
+            [
+              0.6859206557273865,
+              -0.32401347160339355,
+              0.6515582203865051,
+              7.358891487121582
+            ],
+            [
+              0.7276763319969177,
+              0.305420845746994,
+              -0.6141703724861145,
+              -6.925790786743164
+            ],
+            [
+              0.0,
+              0.8953956365585327,
+              0.44527140259742737,
+              4.958309173583984
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_parent_inverse": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_world": [
+            [
+              0.6859206557273865,
+              -0.32401347160339355,
+              0.6515582203865051,
+              7.358891487121582
+            ],
+            [
+              0.7276763319969177,
+              0.305420845746994,
+              -0.6141703724861145,
+              -6.925790786743164
+            ],
+            [
+              0.0,
+              0.8953956365585327,
+              0.44527140259742737,
+              4.958309173583984
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "mode": "OBJECT",
+          "name": "Camera",
+          "name_full": "Camera",
+          "parent_bone": "",
+          "parent_bone_head_tail_factor": 1.0,
+          "parent_type": "OBJECT",
+          "parent_vertices": [
+            0,
+            0,
+            0
+          ],
+          "pass_index": 0,
+          "rotation_axis_angle": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "rotation_euler": [
+            1.1093189716339111,
+            0.0,
+            0.8149281740188599
+          ],
+          "rotation_mode": "XYZ",
+          "rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "session_uid": 115,
+          "shadow_terminator_geometry_offset": 0.10000000149011612,
+          "shadow_terminator_normal_offset": 0.0,
+          "shadow_terminator_shading_offset": 0.0,
+          "show_all_edges": false,
+          "show_axis": false,
+          "show_bounds": false,
+          "show_empty_image_only_axis_aligned": false,
+          "show_empty_image_orthographic": true,
+          "show_empty_image_perspective": true,
+          "show_in_front": false,
+          "show_instancer_for_render": true,
+          "show_instancer_for_viewport": true,
+          "show_name": false,
+          "show_only_shape_key": false,
+          "show_texture_space": false,
+          "show_transparent": false,
+          "show_wire": false,
+          "tag": false,
+          "track_axis": "NEG_Z",
+          "type": "CAMERA",
+          "up_axis": "Y",
+          "use_camera_lock_parent": false,
+          "use_dynamic_topology_sculpting": false,
+          "use_empty_image_alpha": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_grease_pencil_lights": false,
+          "use_instance_faces_scale": false,
+          "use_instance_vertices_rotation": false,
+          "use_mesh_mirror_x": false,
+          "use_mesh_mirror_y": false,
+          "use_mesh_mirror_z": false,
+          "use_parent_final_indices": false,
+          "use_shape_key_edit_mode": false,
+          "use_simulation_cache": true,
+          "users": 1,
+          "visible_camera": true,
+          "visible_diffuse": true,
+          "visible_glossy": true,
+          "visible_raycast": true,
+          "visible_shadow": true,
+          "visible_transmission": true,
+          "visible_volume_scatter": true
+        },
+        "type": "CAMERA"
+      },
+      "Cube": {
+        "collections": [
+          "Collection"
+        ],
+        "constraints": [],
+        "data": "Cube",
+        "geometrySha256": "43ddf437892e781bfbf112ea371a8019aec1dd4bab99aa554b28b99a92b39483",
+        "materials": [
+          "Material"
+        ],
+        "matrix_local": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "matrix_world": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "modifiers": [],
+        "parent": null,
+        "properties": {},
+        "rna": {
+          "active_material_index": 0,
+          "active_selection_set": 0,
+          "active_shape_key_index": 0,
+          "add_rest_position_attribute": false,
+          "bound_box": [
+            [
+              -1.0,
+              -1.0,
+              -1.0
+            ],
+            [
+              -1.0,
+              -1.0,
+              1.0
+            ],
+            [
+              -1.0,
+              1.0,
+              1.0
+            ],
+            [
+              -1.0,
+              1.0,
+              -1.0
+            ],
+            [
+              1.0,
+              -1.0,
+              -1.0
+            ],
+            [
+              1.0,
+              -1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              1.0,
+              1.0,
+              -1.0
+            ]
+          ],
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "delta_location": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_euler": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dimensions": [
+            2.0,
+            2.0,
+            2.0
+          ],
+          "display_bounds_type": "BOX",
+          "display_type": "TEXTURED",
+          "empty_display_size": 1.0,
+          "empty_display_type": "ARROWS",
+          "empty_image_depth": "DEFAULT",
+          "empty_image_offset": [
+            0.0,
+            0.0
+          ],
+          "empty_image_side": "DOUBLE_SIDED",
+          "hide_probe_plane": false,
+          "hide_probe_sphere": false,
+          "hide_probe_volume": false,
+          "hide_render": false,
+          "hide_select": false,
+          "hide_surface_pick": false,
+          "hide_viewport": false,
+          "id_type": "OBJECT",
+          "instance_faces_scale": 1.0,
+          "instance_type": "NONE",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_from_instancer": false,
+          "is_from_set": false,
+          "is_holdout": false,
+          "is_instancer": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "is_shadow_catcher": false,
+          "lightgroup": "",
+          "location": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "lock_location": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation_w": false,
+          "lock_rotations_4d": false,
+          "lock_scale": [
+            false,
+            false,
+            false
+          ],
+          "matrix_basis": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_local": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_parent_inverse": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_world": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "mode": "OBJECT",
+          "name": "Cube",
+          "name_full": "Cube",
+          "parent_bone": "",
+          "parent_bone_head_tail_factor": 1.0,
+          "parent_type": "OBJECT",
+          "parent_vertices": [
+            0,
+            0,
+            0
+          ],
+          "pass_index": 0,
+          "rotation_axis_angle": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "rotation_euler": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_mode": "XYZ",
+          "rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "session_uid": 116,
+          "shadow_terminator_geometry_offset": 0.10000000149011612,
+          "shadow_terminator_normal_offset": 0.0,
+          "shadow_terminator_shading_offset": 0.0,
+          "show_all_edges": false,
+          "show_axis": false,
+          "show_bounds": false,
+          "show_empty_image_only_axis_aligned": false,
+          "show_empty_image_orthographic": true,
+          "show_empty_image_perspective": true,
+          "show_in_front": false,
+          "show_instancer_for_render": true,
+          "show_instancer_for_viewport": true,
+          "show_name": false,
+          "show_only_shape_key": false,
+          "show_texture_space": false,
+          "show_transparent": false,
+          "show_wire": false,
+          "tag": false,
+          "track_axis": "POS_Y",
+          "type": "MESH",
+          "up_axis": "Z",
+          "use_camera_lock_parent": false,
+          "use_dynamic_topology_sculpting": false,
+          "use_empty_image_alpha": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_grease_pencil_lights": false,
+          "use_instance_faces_scale": false,
+          "use_instance_vertices_rotation": false,
+          "use_mesh_mirror_x": false,
+          "use_mesh_mirror_y": false,
+          "use_mesh_mirror_z": false,
+          "use_parent_final_indices": false,
+          "use_shape_key_edit_mode": false,
+          "use_simulation_cache": true,
+          "users": 1,
+          "visible_camera": true,
+          "visible_diffuse": true,
+          "visible_glossy": true,
+          "visible_raycast": true,
+          "visible_shadow": true,
+          "visible_transmission": true,
+          "visible_volume_scatter": true
+        },
+        "type": "MESH"
+      },
+      "Light": {
+        "collections": [
+          "Collection"
+        ],
+        "constraints": [],
+        "data": "Light",
+        "dataRNA": {
+          "color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "cutoff_distance": 40.0,
+          "diffuse_factor": 1.0,
+          "energy": 1000.0,
+          "exposure": 0.0,
+          "id_type": "LIGHT",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "name": "Light",
+          "name_full": "Light",
+          "normalize": true,
+          "session_uid": 119,
+          "shadow_buffer_clip_start": 0.05000000074505806,
+          "shadow_filter_radius": 1.0,
+          "shadow_jitter_overblur": 10.0,
+          "shadow_maximum_resolution": 0.0010000000474974513,
+          "shadow_soft_size": 0.10000000149011612,
+          "specular_factor": 1.0,
+          "tag": false,
+          "temperature": 6500.0,
+          "temperature_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "transmission_factor": 1.0,
+          "type": "POINT",
+          "use_absolute_resolution": false,
+          "use_custom_distance": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_nodes": true,
+          "use_shadow": true,
+          "use_shadow_jitter": false,
+          "use_soft_falloff": true,
+          "use_temperature": false,
+          "users": 1,
+          "volume_factor": 1.0
+        },
+        "materials": [],
+        "matrix_local": [
+          [
+            -0.29086464643478394,
+            -0.7711008191108704,
+            0.5663931965827942,
+            4.076245307922363
+          ],
+          [
+            0.9551711678504944,
+            -0.1998833566904068,
+            0.21839119493961334,
+            1.0054539442062378
+          ],
+          [
+            -0.05518905818462372,
+            0.6045247316360474,
+            0.7946722507476807,
+            5.903861999511719
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "matrix_world": [
+          [
+            -0.29086464643478394,
+            -0.7711008191108704,
+            0.5663931965827942,
+            4.076245307922363
+          ],
+          [
+            0.9551711678504944,
+            -0.1998833566904068,
+            0.21839119493961334,
+            1.0054539442062378
+          ],
+          [
+            -0.05518905818462372,
+            0.6045247316360474,
+            0.7946722507476807,
+            5.903861999511719
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "modifiers": [],
+        "parent": null,
+        "properties": {},
+        "rna": {
+          "active_material_index": 0,
+          "active_selection_set": 0,
+          "active_shape_key_index": 0,
+          "add_rest_position_attribute": false,
+          "bound_box": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ],
+          "color": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_location": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_euler": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "delta_scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "dimensions": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "display_bounds_type": "BOX",
+          "display_type": "TEXTURED",
+          "empty_display_size": 1.0,
+          "empty_display_type": "ARROWS",
+          "empty_image_depth": "DEFAULT",
+          "empty_image_offset": [
+            0.0,
+            0.0
+          ],
+          "empty_image_side": "DOUBLE_SIDED",
+          "hide_probe_plane": false,
+          "hide_probe_sphere": false,
+          "hide_probe_volume": false,
+          "hide_render": false,
+          "hide_select": false,
+          "hide_surface_pick": false,
+          "hide_viewport": false,
+          "id_type": "OBJECT",
+          "instance_faces_scale": 1.0,
+          "instance_type": "NONE",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_from_instancer": false,
+          "is_from_set": false,
+          "is_holdout": false,
+          "is_instancer": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "is_shadow_catcher": true,
+          "lightgroup": "",
+          "location": [
+            4.076245307922363,
+            1.0054539442062378,
+            5.903861999511719
+          ],
+          "lock_location": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation": [
+            false,
+            false,
+            false
+          ],
+          "lock_rotation_w": false,
+          "lock_rotations_4d": false,
+          "lock_scale": [
+            false,
+            false,
+            false
+          ],
+          "matrix_basis": [
+            [
+              -0.29086464643478394,
+              -0.7711008191108704,
+              0.5663931965827942,
+              4.076245307922363
+            ],
+            [
+              0.9551711678504944,
+              -0.1998833566904068,
+              0.21839119493961334,
+              1.0054539442062378
+            ],
+            [
+              -0.05518905818462372,
+              0.6045247316360474,
+              0.7946722507476807,
+              5.903861999511719
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_local": [
+            [
+              -0.29086464643478394,
+              -0.7711008191108704,
+              0.5663931965827942,
+              4.076245307922363
+            ],
+            [
+              0.9551711678504944,
+              -0.1998833566904068,
+              0.21839119493961334,
+              1.0054539442062378
+            ],
+            [
+              -0.05518905818462372,
+              0.6045247316360474,
+              0.7946722507476807,
+              5.903861999511719
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_parent_inverse": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "matrix_world": [
+            [
+              -0.29086464643478394,
+              -0.7711008191108704,
+              0.5663931965827942,
+              4.076245307922363
+            ],
+            [
+              0.9551711678504944,
+              -0.1998833566904068,
+              0.21839119493961334,
+              1.0054539442062378
+            ],
+            [
+              -0.05518905818462372,
+              0.6045247316360474,
+              0.7946722507476807,
+              5.903861999511719
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "mode": "OBJECT",
+          "name": "Light",
+          "name_full": "Light",
+          "parent_bone": "",
+          "parent_bone_head_tail_factor": 1.0,
+          "parent_type": "OBJECT",
+          "parent_vertices": [
+            0,
+            0,
+            0
+          ],
+          "pass_index": 0,
+          "rotation_axis_angle": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "rotation_euler": [
+            0.6503279805183411,
+            0.055217113345861435,
+            1.8663908243179321
+          ],
+          "rotation_mode": "XYZ",
+          "rotation_quaternion": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "session_uid": 117,
+          "shadow_terminator_geometry_offset": 0.10000000149011612,
+          "shadow_terminator_normal_offset": 0.0,
+          "shadow_terminator_shading_offset": 0.0,
+          "show_all_edges": false,
+          "show_axis": false,
+          "show_bounds": false,
+          "show_empty_image_only_axis_aligned": false,
+          "show_empty_image_orthographic": true,
+          "show_empty_image_perspective": true,
+          "show_in_front": false,
+          "show_instancer_for_render": true,
+          "show_instancer_for_viewport": true,
+          "show_name": false,
+          "show_only_shape_key": false,
+          "show_texture_space": false,
+          "show_transparent": false,
+          "show_wire": false,
+          "tag": false,
+          "track_axis": "NEG_Z",
+          "type": "LIGHT",
+          "up_axis": "Y",
+          "use_camera_lock_parent": false,
+          "use_dynamic_topology_sculpting": false,
+          "use_empty_image_alpha": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_grease_pencil_lights": false,
+          "use_instance_faces_scale": false,
+          "use_instance_vertices_rotation": false,
+          "use_mesh_mirror_x": false,
+          "use_mesh_mirror_y": false,
+          "use_mesh_mirror_z": false,
+          "use_parent_final_indices": false,
+          "use_shape_key_edit_mode": false,
+          "use_simulation_cache": true,
+          "users": 1,
+          "visible_camera": false,
+          "visible_diffuse": true,
+          "visible_glossy": true,
+          "visible_raycast": true,
+          "visible_shadow": true,
+          "visible_transmission": true,
+          "visible_volume_scatter": true
+        },
+        "type": "LIGHT"
+      }
+    },
+    "scenes": {
+      "Scene": {
+        "camera": "Camera",
+        "collections": [
+          "Collection"
+        ],
+        "frame": 0,
+        "objects": [
+          "Camera",
+          "Cube",
+          "Light"
+        ],
+        "properties": {},
+        "render": {
+          "anisotropic_filter": "FILTER_2",
+          "border_max_x": 1.0,
+          "border_max_y": 1.0,
+          "border_min_x": 0.0,
+          "border_min_y": 0.0,
+          "compositor_denoise_device": "AUTO",
+          "compositor_denoise_final_quality": "HIGH",
+          "compositor_denoise_preview_quality": "BALANCED",
+          "compositor_device": "GPU",
+          "compositor_precision": "AUTO",
+          "dither_intensity": 1.0,
+          "engine": "BLENDER_EEVEE",
+          "file_extension": ".png",
+          "filepath": "/tmp/",
+          "film_transparent": false,
+          "filter_size": 1.5,
+          "fps": 24,
+          "fps_base": 1.0,
+          "frame_map_new": 100,
+          "frame_map_old": 100,
+          "hair_subdiv": 0,
+          "hair_type": "STRAND",
+          "has_multiple_engines": true,
+          "is_movie_format": false,
+          "line_thickness": 1.0,
+          "line_thickness_mode": "ABSOLUTE",
+          "metadata_input": "SCENE",
+          "motion_blur_position": "CENTER",
+          "motion_blur_shutter": 0.5,
+          "pixel_aspect_x": 1.0,
+          "pixel_aspect_y": 1.0,
+          "ppm_base": 0.02539999969303608,
+          "ppm_factor": 72.0,
+          "preview_pixel_size": "AUTO",
+          "resolution_percentage": 100,
+          "resolution_x": 1920,
+          "resolution_y": 1080,
+          "save_output": true,
+          "sequencer_gl_preview": "SOLID",
+          "simplify_child_particles": 1.0,
+          "simplify_child_particles_render": 1.0,
+          "simplify_gpencil": false,
+          "simplify_gpencil_antialiasing": true,
+          "simplify_gpencil_modifier": true,
+          "simplify_gpencil_onplay": false,
+          "simplify_gpencil_shader_fx": true,
+          "simplify_gpencil_tint": true,
+          "simplify_gpencil_view_fill": true,
+          "simplify_subdivision": 6,
+          "simplify_subdivision_render": 6,
+          "simplify_volumes": 1.0,
+          "stamp_background": [
+            0.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "stamp_font_size": 12,
+          "stamp_foreground": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929,
+            1.0
+          ],
+          "stamp_note_text": "",
+          "threads": 10,
+          "threads_mode": "AUTO",
+          "use_auto_generate_texture_cache": false,
+          "use_border": false,
+          "use_compositing": true,
+          "use_crop_to_border": false,
+          "use_file_extension": true,
+          "use_freestyle": false,
+          "use_high_quality_normals": false,
+          "use_lock_interface": false,
+          "use_motion_blur": false,
+          "use_multiview": false,
+          "use_overwrite": true,
+          "use_persistent_data": false,
+          "use_placeholder": false,
+          "use_render_cache": false,
+          "use_sequencer": true,
+          "use_sequencer_override_scene_strip": false,
+          "use_simplify": false,
+          "use_simplify_normals": false,
+          "use_single_layer": false,
+          "use_spherical_stereo": false,
+          "use_stamp": false,
+          "use_stamp_camera": true,
+          "use_stamp_date": true,
+          "use_stamp_filename": true,
+          "use_stamp_frame": true,
+          "use_stamp_frame_range": false,
+          "use_stamp_hostname": false,
+          "use_stamp_labels": true,
+          "use_stamp_lens": false,
+          "use_stamp_marker": false,
+          "use_stamp_memory": false,
+          "use_stamp_note": false,
+          "use_stamp_render_time": true,
+          "use_stamp_scene": true,
+          "use_stamp_sequencer_strip": false,
+          "use_stamp_time": true,
+          "use_texture_cache": true,
+          "views_format": "STEREO_3D"
+        },
+        "world": "World"
+      }
+    },
+    "worlds": {
+      "World": {
+        "links": [
+          [
+            "Background",
+            "Background",
+            "World Output",
+            "Surface"
+          ]
+        ],
+        "nodes": [
+          {
+            "inputs": {},
+            "name": "World Output",
+            "rna": {
+              "bl_description": "Output light color information to the scene's World",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeOutputWorld",
+              "bl_label": "World Output",
+              "bl_static_type": "OUTPUT_WORLD",
+              "bl_width_default": 140.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "OUTPUT",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "is_active_output": true,
+              "label": "",
+              "location": [
+                200.0,
+                100.0
+              ],
+              "location_absolute": [
+                200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "World Output",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "target": "ALL",
+              "type": "OUTPUT_WORLD",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 140.0
+            },
+            "type": "ShaderNodeOutputWorld"
+          },
+          {
+            "inputs": {
+              "Color": [
+                0.05087608844041824,
+                0.05087608844041824,
+                0.05087608844041824,
+                1.0
+              ],
+              "Strength": 1.0,
+              "Weight": 0.0
+            },
+            "name": "Background",
+            "rna": {
+              "bl_description": "Add background light emission.\nNote: This node should only be used for the world surface output",
+              "bl_height_default": 100.0,
+              "bl_height_max": 3.4028234663852886e+38,
+              "bl_height_min": 30.0,
+              "bl_icon": "NONE",
+              "bl_idname": "ShaderNodeBackground",
+              "bl_label": "Background",
+              "bl_static_type": "BACKGROUND",
+              "bl_width_default": 140.0,
+              "bl_width_max": 700.0,
+              "bl_width_min": 100.0,
+              "color": [
+                0.6079999804496765,
+                0.6079999804496765,
+                0.6079999804496765
+              ],
+              "color_tag": "SHADER",
+              "dimensions": [
+                0.0,
+                0.0
+              ],
+              "height": 100.0,
+              "hide": false,
+              "label": "",
+              "location": [
+                -200.0,
+                100.0
+              ],
+              "location_absolute": [
+                -200.0,
+                100.0
+              ],
+              "mute": false,
+              "name": "Background",
+              "select": true,
+              "show_options": true,
+              "show_preview": false,
+              "show_texture": false,
+              "type": "BACKGROUND",
+              "use_custom_color": false,
+              "warning_propagation": "ALL",
+              "width": 140.0
+            },
+            "type": "ShaderNodeBackground"
+          }
+        ],
+        "properties": {},
+        "rna": {
+          "color": [
+            0.05087608844041824,
+            0.05087608844041824,
+            0.05087608844041824
+          ],
+          "id_type": "WORLD",
+          "is_editable": true,
+          "is_embedded_data": false,
+          "is_evaluated": false,
+          "is_library_indirect": false,
+          "is_linked_packed": false,
+          "is_missing": false,
+          "is_runtime_data": false,
+          "lightgroup": "",
+          "name": "World",
+          "name_full": "World",
+          "probe_resolution": "1024",
+          "session_uid": 122,
+          "sun_angle": 0.009180432185530663,
+          "sun_shadow_filter_radius": 1.0,
+          "sun_shadow_jitter_overblur": 0.0,
+          "sun_shadow_maximum_resolution": 0.0010000000474974513,
+          "sun_threshold": 10.0,
+          "tag": false,
+          "use_eevee_finite_volume": false,
+          "use_extra_user": false,
+          "use_fake_user": false,
+          "use_nodes": true,
+          "use_sun_shadow": true,
+          "use_sun_shadow_jitter": false,
+          "users": 1
+        }
+      }
+    }
+  }
+}

@@ -24,6 +24,7 @@ import { NotificationsPage, type NotificationsPageState } from "./pages/notifica
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
 import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
+import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-page";
 import { SettingsPage } from "./pages/settings-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
@@ -114,6 +115,7 @@ export function App() {
   }, []);
 
   if (sessionError) return <LoginPage locale={locale} error={frontendText(locale, "APP_SIGN_IN_DESCRIPTION")} />;
+  if (anonymous && pathname === "/") return <PublicWorkbenchPage locale={locale} />;
   if (anonymous) return <LoginPage locale={locale} />;
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 

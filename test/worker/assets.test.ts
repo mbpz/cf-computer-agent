@@ -53,6 +53,34 @@ describe("React workspace assets", () => {
     }
   });
 
+  it("serves the real hashed public studio binaries without making APIs public", async () => {
+    const manifestResponse = await SELF.fetch("https://example.test/manifest.json");
+    const manifest = await manifestResponse.json() as Record<string, { file: string }>;
+    for (const source of ["workbench.glb", "poster-desktop.webp", "poster-mobile.webp"]) {
+      const key = Object.keys(manifest).find(value => value.endsWith(`/workbench-landing/${source}`));
+      expect(key, `missing built asset ${source}`).toBeTruthy();
+      const file = manifest[key!].file;
+      const response = await SELF.fetch(`https://example.test/${file}`);
+      expect(response.status, file).toBe(200);
+      expect(response.headers.get("content-type"), file).not.toContain("text/html");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const header = new TextDecoder().decode(bytes.slice(0, 12));
+      if (source.endsWith(".glb")) {
+        expect(response.headers.get("content-type")).toMatch(/^(model\/gltf-binary|application\/octet-stream)(;|$)/);
+        expect(header.slice(0, 4)).toBe("glTF");
+      } else {
+        expect(response.headers.get("content-type")).toMatch(/^image\/webp(;|$)/);
+        expect(header.slice(0, 4)).toBe("RIFF");
+        expect(header.slice(8, 12)).toBe("WEBP");
+      }
+    }
+    for (const path of ["/assets/missing-studio-model.glb", "/assets/missing-studio-poster.webp"]) {
+      expect((await SELF.fetch(`https://example.test${path}`)).status).toBe(404);
+    }
+    const api = await SELF.fetch("https://example.test/api/knowledge");
+    expect(api.status).toBe(401);
+  });
+
   it.each(WORKSPACE_ROUTE_CAPABILITIES.filter(({ availability }) => availability === "ready").map(({ path }) => path))
   ("serves React for every ready registry route %s", async (path) => {
     const response = await SELF.fetch(`https://example.test${path}`);
