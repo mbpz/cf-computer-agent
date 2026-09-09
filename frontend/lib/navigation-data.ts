@@ -2,6 +2,7 @@ import { apiFetch } from "./api";
 import type { SessionSnapshot } from "../contracts/api";
 import { WORKSPACE_ROUTE_CAPABILITIES, menuAvailability, type MenuAvailability, type WorkspaceRouteCapability } from "../../shared/workspace-route-capabilities";
 import { routeAccessAllowed } from "./route-access";
+import { moduleForPath, type WorkbenchModuleKey } from "../../shared/workbench-modules";
 
 export interface NavigationDataNode {
   id: string;
@@ -11,6 +12,7 @@ export interface NavigationDataNode {
   icon: string | null;
   groupName: "workspace" | "admin";
   availability: MenuAvailability;
+  moduleKey?: WorkbenchModuleKey | null;
   disabledReason?: "not_implemented";
   children: NavigationDataNode[];
 }
@@ -58,6 +60,7 @@ function requiredNavigationNode(route: WorkspaceRouteCapability, existing?: Navi
     path: route.path,
     icon: existing?.icon ?? null,
     groupName: "workspace",
+    moduleKey: moduleForPath(route.path)?.key ?? null,
     ...menuAvailability(route.path)!,
     children: existing?.children ?? [],
   };
@@ -71,6 +74,7 @@ function emptyWorkspaceNode(): NavigationDataNode {
     path: null,
     icon: null,
     groupName: "workspace",
+    moduleKey: "workbench",
     availability: "ready",
     children: [],
   };
@@ -96,6 +100,7 @@ function parseNode(value: unknown, depth: number): NavigationDataNode {
     icon: record.icon as string | null,
     groupName: record.groupName,
     availability: record.availability,
+    moduleKey: moduleForPath(record.path ?? "")?.key ?? null,
     ...(record.disabledReason === "not_implemented" ? { disabledReason: record.disabledReason } : {}),
     children: (record.children as unknown[]).map((child) => parseNode(child, depth + 1)),
   };

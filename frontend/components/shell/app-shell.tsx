@@ -17,6 +17,8 @@ import { menuAvailability, routeCapability, type MenuAvailability } from "../../
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { collaborationQuickLinks, isCollaborationPath } from "./navigation-policy";
 import { CommandPalette } from "./command-palette";
+import { ContextRail } from "./context-rail";
+import { WORKBENCH_MODULES, moduleForPath } from "../../../shared/workbench-modules";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -46,6 +48,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ "knowledge-base": true, admin: true, governance: true });
   const [activeMenu, setActiveMenu] = useState<ShellMenuId>(null);
+  const [contextRailCollapsed, setContextRailCollapsed] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>("system");
   const [serverNavigation, setServerNavigation] = useState<NavigationDataNode[] | null>(null);
   const contentScrollRef = useRef<HTMLElement>(null);
@@ -96,6 +99,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
             </Button>
           </div>
           <TooltipProvider><nav data-shell-sidebar-scroll data-navigation-source={serverNavigation ? "server" : "fallback"} aria-label={locale.t("SHELL_PRIMARY_NAVIGATION")} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-p-1 p-1">
+            <ModuleNavigation pathname={pathname} locale={locale} session={session} collapsed={collapsed} onNavigate={navigate} />
             <NavGroup title={locale.t("SHELL_GROUP_WORKSPACE")} nodes={sidebarWorkspaceRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />
             {adminRoutes.length > 0 && <NavGroup title={locale.t("SHELL_GROUP_ADMIN")} nodes={adminRoutes} pathname={pathname} locale={locale} onNavigate={navigate} collapsed={collapsed} expanded={expanded} onToggle={(id) => setExpanded((value) => ({ ...value, [id]: !value[id] }))} />}
           </nav></TooltipProvider>
@@ -122,13 +126,26 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
           </div>
         </header>
         <div data-shell-mobile-scroll data-shell-mobile-focus-viewport className="max-h-dvh shrink-0 overflow-y-auto overscroll-contain lg:hidden"><MobileNavigation nodes={[...sidebarWorkspaceRoutes, ...adminRoutes]} pathname={pathname} locale={locale} onNavigate={navigate} memberLabel={memberLabel} session={session} theme={theme} activeMenu={activeMenu} onActiveMenuChange={setActiveMenu} onThemeChange={changeTheme} onLogout={onLogout} logoutPending={logoutPending} logoutError={logoutError} /></div>
-        <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section data-page-state="forbidden" role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
+        <div className="flex min-h-0 flex-1">
+          <main ref={contentScrollRef} data-shell-content-scroll id="main-content" className="min-h-[calc(100vh-4rem)] scroll-p-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain min-w-0 flex-1"><div className="mx-auto w-full max-w-[1440px] p-4 lg:px-6 lg:py-5">{access.kind === "forbidden" ? <section data-page-state="forbidden" role="alert" className="mx-auto max-w-xl rounded-lg border border-destructive/40 bg-destructive/5 p-6"><h1 className="text-xl font-semibold">{locale.t("PAGE_FORBIDDEN_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{locale.t("PAGE_FORBIDDEN_DESCRIPTION")}</p></section> : children}</div></main>
+          <ContextRail pathname={pathname} locale={locale} session={session} collapsed={contextRailCollapsed} onClose={() => setContextRailCollapsed((value) => !value)} onNavigate={navigate} />
+        </div>
       </div>
     </div>
   );
 }
 
 interface NavigationNode { id: string; route?: typeof ROUTES[number]; path?: string; labelKey: string; icon?: string | null; availability: MenuAvailability; disabledReason?: "not_implemented"; children?: NavigationNode[]; }
+
+function ModuleNavigation({ pathname, locale, session, collapsed, onNavigate }: { pathname: string; locale: LocaleRuntime; session: SessionSnapshot; collapsed: boolean; onNavigate: (path: string) => void }) {
+  const current = moduleForPath(pathname) ?? WORKBENCH_MODULES.find((module) => module.entryPath !== "/" && pathname.startsWith(`${module.entryPath}/`));
+  const modules = WORKBENCH_MODULES.filter((module) => {
+    if (module.adminOnly && session.member.role !== "admin") return false;
+    const route = ROUTES.find((item) => item.path === module.entryPath);
+    return !route || routeAccessAllowed(session, route);
+  });
+  return <div data-shell-module-navigation className="space-y-1">{!collapsed && <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{locale.t("SHELL_MODULE_NAVIGATION")}</p>}{modules.map((module) => <a key={module.key} href={module.entryPath} onClick={(event) => { event.preventDefault(); onNavigate(module.entryPath); }} aria-current={current?.key === module.key ? "page" : undefined} title={collapsed ? locale.t(module.labelKey) : undefined} className={cn("flex items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground", current?.key === module.key && "bg-accent font-medium text-accent-foreground", collapsed && "justify-center px-0")}><span className="size-1.5 rounded-full bg-current" aria-hidden="true" />{!collapsed && locale.t(module.labelKey)}</a>)}</div>;
+}
 
 function NavGroup({ title, nodes, pathname, locale, onNavigate, collapsed, expanded, onToggle }: { title: string; nodes: NavigationNode[]; pathname: string; locale: LocaleRuntime; onNavigate: (path: string) => void; collapsed: boolean; expanded: Record<string, boolean>; onToggle: (id: string) => void }) {
   return <div data-nav-group><p className={cn("mb-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground", collapsed && "sr-only")}>{title}</p><div className="space-y-1">{nodes.map((node) => <NavNode key={node.id} node={node} pathname={pathname} locale={locale} onNavigate={onNavigate} collapsed={collapsed} expanded={expanded} onToggle={onToggle} depth={1} />)}</div></div>;
