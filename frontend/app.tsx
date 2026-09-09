@@ -38,7 +38,7 @@ import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submiss
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
-import { buildWorkbenchSummary } from "./lib/workbench-data";
+import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
@@ -189,7 +189,7 @@ function assertNever(value: never): never {
 }
 
 function HomeRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; total: number; pending: number; published: number; recent: Array<{ id: string; title: string }> } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; summary: WorkbenchSummary } | { kind: "error"; message: string }>({ kind: "loading" });
   useEffect(() => {
     let active = true;
     void Promise.allSettled([loadTaskSummary(), loadRecentKnowledge(), loadWorkspaceActivity()]).then(([taskResult, knowledgeResult, activityResult]) => {
@@ -202,7 +202,7 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
         return;
       }
       const summary = buildWorkbenchSummary({ taskSummary, knowledge, activity });
-      setState({ kind: "ready", total: summary.taskCount, pending: summary.overdueTaskCount, published: summary.recentKnowledge.length, recent: summary.recentKnowledge.map((item) => ({ id: item.id, title: item.title })) });
+      setState({ kind: "ready", summary });
     });
     return () => { active = false; };
   }, [locale]);
