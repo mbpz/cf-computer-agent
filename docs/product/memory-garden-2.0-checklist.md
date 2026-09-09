@@ -42,12 +42,12 @@
 
 ## P2 收件箱与个人工作
 
-- [ ] `MG2-P2-001` InboxItem 数据模型和列表。
-- [ ] `MG2-P2-002` 快速文本输入。
+- [I] `MG2-P2-001` InboxItem 数据模型和列表。
+- [I] `MG2-P2-002` 快速文本输入。
 - [ ] `MG2-P2-003` 链接和文件输入。
 - [ ] `MG2-P2-004` AI 结果转 InboxItem。
 - [ ] `MG2-P2-005` InboxItem 转知识。
-- [ ] `MG2-P2-006` InboxItem 转任务。
+- [I] `MG2-P2-006` InboxItem 转任务。
 - [ ] `MG2-P2-007` InboxItem 转项目。
 - [ ] `MG2-P2-008` InboxItem 转日程。
 - [ ] `MG2-P2-009` Goal 创建、编辑、归档和进度。
@@ -58,6 +58,14 @@
 - [ ] `MG2-P2-014` 内部日程和时间块。
 - [ ] `MG2-P2-015` 今日视图和专注模式。
 - [ ] `MG2-P2-016` 每日/每周复盘。
+
+### P2-A Inbox 本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 后端提交：`73ce141`，包含 `0038_workbench_inbox.sql`、owner-scoped D1 repository/service/route、幂等 client key、opaque cursor、归档/恢复和显式转任务。
+- 前端同一工作树已接入 `/inbox`、中英文文案、快速文本/链接收集、归档/恢复、转任务和加载更多；Inbox 知识 promotion、文件原件持久化仍未完成，不能标记为已实现。
+- 验证：Inbox 单元/worker/route 测试 10 项通过；Inbox 前端静态渲染测试 2 项通过；`rtk npm run typecheck`、`rtk npm run verify:i18n`、路由契约测试通过；此前完整 `rtk npm run build` dry-run 已通过。
+- 边界：`[I]` 仅代表当前隔离工作树的本地证据，待本地完整回归、main 集成、Cloudflare 部署、生产 smoke 和 signed browser 验收后再提升发布状态。
 
 ## P3 知识与 AI
 

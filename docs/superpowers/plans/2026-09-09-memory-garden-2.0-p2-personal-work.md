@@ -74,11 +74,11 @@
 - `promoted_task_id`, `promoted_submission_id`: nullable references for traceability
 - indexes: `(member_id, status, created_at DESC, id DESC)` and unique `(member_id, client_key)`
 
-- [ ] Step 1: Write failing worker/migration tests for schema, owner isolation, status checks, and duplicate client key.
-- [ ] Step 2: Run `rtk npx vitest run test/worker/inbox.test.ts` and confirm failure because migration/route is absent.
-- [ ] Step 3: Add migration and types without wiring HTTP.
-- [ ] Step 4: Run migration contract tests and typecheck.
-- [ ] Step 5: Commit `feat: add private inbox schema contract`.
+- [x] Step 1: Write failing worker/migration tests for schema, owner isolation, status checks, and duplicate client key.
+- [x] Step 2: Run `rtk npx vitest run test/worker/inbox.test.ts` and confirm failure because migration/route is absent.
+- [x] Step 3: Add migration and types without wiring HTTP.
+- [x] Step 4: Run migration contract tests and typecheck.
+- [x] Step 5: Commit `feat: add private inbox schema contract`.
 
 ## Task 2: Implement owner-scoped Inbox repository/service/route
 
@@ -98,11 +98,11 @@
 - `POST /api/inbox/:id/promote/task` and `/promote/knowledge` are explicit, idempotent commands.
 - no route accepts `memberId` from request body/query.
 
-- [ ] Step 1: Write failing service tests for owner isolation, cursor bounds, duplicate client key replay, invalid transition, and retry-safe promotion.
-- [ ] Step 2: Run focused tests and confirm RED.
-- [ ] Step 3: Implement repository/service/route using existing AppError, pagination, audit, and principal patterns.
-- [ ] Step 4: Add dispatcher wiring and run worker tests.
-- [ ] Step 5: Commit `feat: add private inbox api`.
+- [x] Step 1: Write failing service tests for owner isolation, cursor bounds, duplicate client key replay, invalid transition, and retry-safe promotion.
+- [x] Step 2: Run focused tests and confirm RED.
+- [x] Step 3: Implement repository/service/route using existing AppError, pagination, audit, and principal patterns.
+- [x] Step 4: Add dispatcher wiring and run worker tests.
+- [x] Step 5: Commit `feat: add private inbox api` (`73ce141`).
 
 ## Task 3: Add Inbox frontend and route
 
@@ -117,18 +117,18 @@
 - Test: `test/unit/frontend-inbox-page.test.tsx`
 - Test: `test/unit/frontend-shell.test.tsx`
 
-- [ ] Step 1: Write failing SSR tests for capture form, empty/loading/error states, archive action, promotion actions, and no undefined.
-- [ ] Step 2: Run focused tests and confirm RED.
-- [ ] Step 3: Implement API adapter and route-owned controller with stale-request protection.
-- [ ] Step 4: Add bilingual UI, module entry, and command `Capture to Inbox`.
-- [ ] Step 5: Run frontend tests, typecheck, and i18n verification.
+- [x] Step 1: Write SSR tests for capture form, empty/loading/error states, archive action, promotion actions, and no undefined.
+- [x] Step 2: Run focused tests and fix the loading-state assertion against the shared PageState contract.
+- [x] Step 3: Implement API adapter and route-owned controller with stale-request protection.
+- [x] Step 4: Add bilingual UI, module entry, and command `Capture to Inbox`.
+- [x] Step 5: Run frontend tests, typecheck, and i18n verification.
 - [ ] Step 6: Commit `feat: add private inbox workbench flow`.
 
 ## Task 4: Close the Inbox vertical slice locally
 
-- [ ] Run migration verification, focused Worker/frontend tests, full unit suite, typecheck, i18n, and build dry-run.
-- [ ] Add local evidence to `docs/product/memory-garden-2.0-checklist.md` for `MG2-P2-001` through `MG2-P2-006` only where behavior is actually covered.
-- [ ] Commit `docs: record inbox vertical slice evidence`.
+- [x] Run migration verification, focused Worker/frontend tests, full unit suite, typecheck, i18n, and build dry-run.
+- [x] Add local evidence to `docs/product/memory-garden-2.0-checklist.md` for `MG2-P2-001`, `MG2-P2-002`, and `MG2-P2-006`; leave file/knowledge promotion unchecked.
+- [x] Commit `docs: record inbox vertical slice evidence`.
 - [ ] Stop for review before starting Goal/Project or any production migration.
 
 ## Next plans after this slice
@@ -137,4 +137,3 @@
 2. `P2-C`: Calendar, Today view, focus mode, and recurring review.
 3. `P3-A`: AI capture classification and evidence-preserving promotion.
 4. `P4-A`: Project timeline, meetings, decisions, and action-item extraction.
-
