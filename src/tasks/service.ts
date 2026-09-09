@@ -5,6 +5,7 @@ import type { AuditRepository } from "../audit/repository";
 import type { AuditAction, CreateAuditEvent } from "../audit/types";
 import type { NotificationEventInput } from "../notifications/types";
 import type { TasksRepositoryPort } from "./repository";
+import { normalizeSubtaskCreate, normalizeSubtaskUpdate, validStructureId, type TaskDependency, type TaskSubtask, type TaskSubtaskCreateInput, type TaskSubtaskUpdateInput } from "./structure";
 import { TASK_PRIORITIES, TASK_STATUSES, type Task, type TaskLink, type TaskListFilters, type TaskPage, type TaskStatus, type TaskSummary } from "./types";
 
 export interface TaskCreateInput { id?: unknown; title?: unknown; notes?: unknown; priority?: unknown; dueAt?: unknown; knowledgeItemId?: unknown; }
@@ -73,6 +74,59 @@ export class TasksService {
 
   async summary(memberId: string): Promise<TaskSummary> {
     return this.repository.summary(memberId, this.now());
+  }
+
+  async listSubtasks(memberId: string, taskId: string): Promise<TaskSubtask[]> {
+    await this.requireOwned(memberId, taskId);
+    return this.repository.listSubtasks(memberId, taskId);
+  }
+
+  async createSubtask(memberId: string, taskId: string, input: TaskSubtaskCreateInput): Promise<{ subtask: TaskSubtask; created: boolean }> {
+    await this.requireOwned(memberId, taskId);
+    const normalized = normalizeSubtaskCreate(input, this.id());
+    const existing = await this.repository.findSubtask(memberId, taskId, normalized.id);
+    if (existing) return { subtask: existing, created: false };
+    const now = this.now().getTime();
+    const created = await this.repository.insertSubtask({ ...normalized, memberId, taskId, createdAt: now, updatedAt: now });
+    const subtask = await this.repository.findSubtask(memberId, taskId, normalized.id);
+    if (!subtask) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404, true);
+    return { subtask, created };
+  }
+
+  async updateSubtask(memberId: string, taskId: string, subtaskId: string, input: TaskSubtaskUpdateInput): Promise<TaskSubtask> {
+    await this.requireOwned(memberId, taskId);
+    if (!validStructureId(subtaskId)) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    const normalized = normalizeSubtaskUpdate(input);
+    const updated = await this.repository.updateSubtask(memberId, taskId, subtaskId, { ...normalized, updatedAt: this.now().getTime() });
+    if (!updated) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+    return updated;
+  }
+
+  async deleteSubtask(memberId: string, taskId: string, subtaskId: string): Promise<void> {
+    await this.requireOwned(memberId, taskId);
+    if (!await this.repository.deleteSubtask(memberId, taskId, subtaskId)) throw new AppError("TASK_NOT_FOUND", "Task subtask not found", 404);
+  }
+
+  async listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]> {
+    await this.requireOwned(memberId, taskId);
+    return this.repository.listDependencies(memberId, taskId);
+  }
+
+  async addDependency(memberId: string, taskId: string, dependsOnTaskId: unknown): Promise<{ dependency: TaskDependency; created: boolean }> {
+    await this.requireOwned(memberId, taskId);
+    if (typeof dependsOnTaskId !== "string" || !validStructureId(dependsOnTaskId) || dependsOnTaskId === taskId) {
+      throw new AppError("TASK_DEPENDENCY_INVALID", "Task dependency is invalid", 400);
+    }
+    await this.requireOwned(memberId, dependsOnTaskId);
+    const created = await this.repository.insertDependency({ memberId, taskId, dependsOnTaskId, createdAt: this.now().getTime() });
+    const dependency = (await this.repository.listDependencies(memberId, taskId)).find((item) => item.dependsOnTaskId === dependsOnTaskId);
+    if (!dependency) throw new AppError("TASK_NOT_FOUND", "Task dependency not found", 404, true);
+    return { dependency, created };
+  }
+
+  async removeDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<void> {
+    await this.requireOwned(memberId, taskId);
+    if (!await this.repository.deleteDependency(memberId, taskId, dependsOnTaskId)) throw new AppError("TASK_DEPENDENCY_NOT_FOUND", "Task dependency not found", 404);
   }
 
   async update(memberId: string, id: string, input: TaskUpdateInput): Promise<Task> {

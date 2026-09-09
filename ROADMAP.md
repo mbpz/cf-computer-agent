@@ -6,7 +6,7 @@
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
 
-总账成熟度：`atoms=87`; `implementation=done:67,partial:5,pending:15,n/a:0`; `verification=done:71,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:59,n/a:0`; `acceptance=done:0,partial:8,pending:79,n/a:0`
+总账成熟度：`atoms=88`; `implementation=done:68,partial:5,pending:15,n/a:0`; `verification=done:72,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:60,n/a:0`; `acceptance=done:0,partial:8,pending:80,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
@@ -77,13 +77,13 @@
 
 当前证据：Tasks、四列 task-backed Boards、recipient-owned Notifications、任务/知识 contextual Messages 以及对应分页、隔离、重放和前端状态已在当前分支实现并通过本地自动化验证。R2 尚未退出：任务/通知/消息保留与清理策略、main 集成、远程 0035–0037 migration、生产发布、production smoke 和 admin/contributor signed browser acceptance 均未完成。
 
-范围：`INB-001`、`GL-001`、`PRJ-001`、`TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`。
+范围：`INB-001`、`GL-001`、`PRJ-001`、`TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`TSK-011`、`NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`。
 
 前置依赖：消费 `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`、`KB-006` 的隔离、分页、可访问性、审计与知识上下文。
 
 退出标准：
 
-- [ ] 任务覆盖创建、关联、筛选、分页、幂等、空/错态、审计、保留/恢复和跨成员拒绝（owned: `TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`; consumed: `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
+- [ ] 任务覆盖创建、关联、筛选、分页、幂等、空/错态、审计、子项/依赖、保留/恢复和跨成员拒绝（owned: `TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`TSK-011`; consumed: `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
 - [ ] 通知在重复事件、未读重试、目标失效和保留清理下保持隔离与可审计（owned: `NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`; consumed: `IDN-004`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
 - [ ] 看板和上下文消息覆盖键盘排序、并发回滚、撤权、分页、重放和 signed browser 验收（owned: `TSK-001`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`; consumed: `KB-006`、`WB-PAGE`、`WB-A11Y`、`ADM-009`）
 

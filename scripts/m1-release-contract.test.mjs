@@ -63,6 +63,7 @@ const expectedMigrations = [
   ["0038_workbench_inbox.sql", "1751aea21736ce4938d70b86e73962365cd56002066bada95edf49993aafe57e"],
   ["0039_workbench_goals.sql", "23affa827d5e201c74a77c29e5b65c42806c06e0979ec2da8251a81aeade696a"],
   ["0040_workbench_projects.sql", "c4e22e1b1e004fc846bfe81044073607a62eb499d463a0a428d9c9fef0a6379e"],
+  ["0041_workbench_task_structure.sql", "f0d306113c1eb704d33b6feb09685eeb105a5c439e8826bd8b5c2245e6630296"],
 ];
 const requiredEvidenceBlocks = [
   ["migration-hash-verification", "rtk npm run verify:m1:migrations -- --files"],
@@ -216,7 +217,7 @@ test("pins the reviewed bytes of all forward migrations", async () => {
   }
   const result = await runVerifier(["--files"]);
   assert.equal(result.code, 0, result.output);
-  assert.match(result.output, /^\[pass\] migration-files count=40$/mu);
+  assert.match(result.output, /^\[pass\] migration-files count=41$/mu);
 });
 
 test("keeps asset pairing migration compatible with remote D1 statement execution", async () => {
@@ -259,8 +260,8 @@ test("accepts only the exact reviewed Wrangler ledger prefixes", async () => {
     assert.equal(result.code, 0, result.output);
     assert.match(result.output, /0008_m2_parent_chunks.sql/mu);
     assert.match(result.output, /0009_m2_chunk_status.sql/mu);
-    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql,0034_workspace_coming_soon_menus\.sql,0035_workbench_collaboration_menus\.sql,0036_workbench_notifications\.sql,0037_workbench_discussions\.sql,0038_workbench_inbox\.sql,0039_workbench_goals\.sql,0040_workbench_projects\.sql$/mu);
-    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql,0034_workspace_coming_soon_menus\.sql,0035_workbench_collaboration_menus\.sql,0036_workbench_notifications\.sql,0037_workbench_discussions\.sql,0038_workbench_inbox\.sql,0039_workbench_goals\.sql,0040_workbench_projects\.sql$/mu);
+    assert.match(result.output, /0010_m2_chunk_metadata\.sql,0011_m4_saved_views\.sql,0012_m5_private_notes\.sql,0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql,0034_workspace_coming_soon_menus\.sql,0035_workbench_collaboration_menus\.sql,0036_workbench_notifications\.sql,0037_workbench_discussions\.sql,0038_workbench_inbox\.sql,0039_workbench_goals\.sql,0040_workbench_projects\.sql,0041_workbench_task_structure\.sql$/mu);
+    assert.match(result.output, /0013_m6_research_reports\.sql,0014_m6_research_run_plan\.sql,0015_m6_research_plan_steps\.sql,0016_m6_research_subquestions\.sql,0017_m6_research_queries\.sql,0018_m6_research_quota\.sql,0019_m5_chat_conversations\.sql,0020_m5_chat_cancel\.sql,0021_m5_chat_feedback\.sql,0022_m4_review_comments\.sql,0023_m4_knowledge_favorites\.sql,0024_m4_knowledge_visits\.sql,0025_m5_private_note_shares\.sql,0026_site_analytics\.sql,0027_duplicate_candidates\.sql,0028_asset_submission_pairing\.sql,0029_workspace_rbac\.sql,0030_site_analytics_dimensions\.sql,0031_workspace_menu_hierarchy\.sql,0032_workspace_tasks\.sql,0033_numbered_pagination_indexes\.sql,0034_workspace_coming_soon_menus\.sql,0035_workbench_collaboration_menus\.sql,0036_workbench_notifications\.sql,0037_workbench_discussions\.sql,0038_workbench_inbox\.sql,0039_workbench_goals\.sql,0040_workbench_projects\.sql,0041_workbench_task_structure\.sql$/mu);
   });
   await withLedger(ledger(names.slice(0, 6)), async (path) => {
     const result = await runVerifier(["--ledger-after", path]);

@@ -75,6 +75,52 @@ export async function routeTasksApi(
     return jsonResponse({ link: await services.tasks.addLink(member.memberId, decodePathId(links[1]!), input.knowledgeItemId) }, 201, context.requestId);
   }
 
+  const subtasks = /^\/api\/tasks\/([^/]+)\/subtasks$/u.exec(url.pathname);
+  if (subtasks) {
+    const taskId = decodePathId(subtasks[1]!);
+    requireNoQuery(url);
+    if (request.method === "GET") return jsonResponse(await services.tasks.listSubtasks(member.memberId, taskId), 200, context.requestId);
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["id", "title", "status", "position"], "TASK_INVALID");
+    const result = await services.tasks.createSubtask(member.memberId, taskId, input);
+    return jsonResponse(result, result.created ? 201 : 200, context.requestId);
+  }
+
+  const subtask = /^\/api\/tasks\/([^/]+)\/subtasks\/([^/]+)$/u.exec(url.pathname);
+  if (subtask) {
+    const taskId = decodePathId(subtask[1]!);
+    const subtaskId = decodePathId(subtask[2]!);
+    requireNoQuery(url);
+    if (request.method === "PATCH") {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "status", "position"], "TASK_INVALID");
+      return jsonResponse(await services.tasks.updateSubtask(member.memberId, taskId, subtaskId, input), 200, context.requestId);
+    }
+    if (request.method === "DELETE") {
+      await services.tasks.deleteSubtask(member.memberId, taskId, subtaskId);
+      return noContent(context.requestId);
+    }
+    return methodNotAllowed("DELETE, PATCH", context);
+  }
+
+  const dependencies = /^\/api\/tasks\/([^/]+)\/dependencies$/u.exec(url.pathname);
+  if (dependencies) {
+    const taskId = decodePathId(dependencies[1]!);
+    requireNoQuery(url);
+    if (request.method === "GET") return jsonResponse(await services.tasks.listDependencies(member.memberId, taskId), 200, context.requestId);
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["dependsOnTaskId"], "TASK_INVALID");
+    const result = await services.tasks.addDependency(member.memberId, taskId, input.dependsOnTaskId);
+    return jsonResponse(result, result.created ? 201 : 200, context.requestId);
+  }
+
+  const dependency = /^\/api\/tasks\/([^/]+)\/dependencies\/([^/]+)$/u.exec(url.pathname);
+  if (dependency) {
+    requireNoQuery(url);
+    if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
+    await services.tasks.removeDependency(member.memberId, decodePathId(dependency[1]!), decodePathId(dependency[2]!));
+    return noContent(context.requestId);
+  }
+
   const link = /^\/api\/tasks\/([^/]+)\/links\/([^/]+)$/u.exec(url.pathname);
   if (link) {
     if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);

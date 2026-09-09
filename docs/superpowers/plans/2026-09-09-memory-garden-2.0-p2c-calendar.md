@@ -19,11 +19,11 @@
 
 ### C1. Task sub-items and dependency contract
 
-- [ ] 定义 `task_subtasks`：`id`, `member_id`, `task_id`, `title`, `status`, `position`, timestamps。
-- [ ] 定义 `task_dependencies`：`member_id`, `task_id`, `depends_on_task_id`, dependency kind；唯一键防重放。
-- [ ] 所有 relation 查询同时约束 owner 和 parent task owner。
-- [ ] 禁止自依赖和跨成员依赖；删除父任务时由数据库级 cascade 或安全归档策略收敛。
-- [ ] 增加 repository/service/route 契约和成员隔离测试。
+- [x] 定义 `task_subtasks`：`id`, `member_id`, `task_id`, `title`, `status`, `position`, timestamps。
+- [x] 定义 `task_dependencies`：`member_id`, `task_id`, `depends_on_task_id`；唯一键防重放。
+- [x] 所有 relation 查询同时约束 owner 和 parent task owner。
+- [x] 禁止自依赖和跨成员依赖；删除父任务时由数据库级 cascade 收敛。
+- [x] 增加 repository/service/route 契约和成员隔离测试。
 
 ### C2. Internal schedule and time blocks
 
@@ -71,8 +71,8 @@
 
 ## First implementation slice
 
-本阶段第一批只实现 C1 的任务子项与依赖，不同时修改日程和 Today 聚合，确保每个关系都有独立的 owner、幂等和回归证据。
+本阶段第一批已完成 C1 的任务子项与依赖；下一批进入 C2 内部日程和时间块，不同时修改 Today 聚合，确保每个关系都有独立的 owner、幂等和回归证据。
 
 ## Stop gate
 
-C1 本地证据完成后暂停，等待审阅再进入 C2。若测试暴露当前任务表的 owner 或级联约束不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。
+C1 本地证据已完成，下一阶段进入 C2。若后续测试暴露当前任务表的 owner 或级联约束不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。

@@ -6,6 +6,7 @@ import {
   authorizedKnowledgeMemberCteSql,
   readableKnowledgeRevisionSql,
 } from "../library/read-authorization";
+import type { TaskDependency, TaskSubtask, TaskSubtaskStatus } from "./structure";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatus, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "./types";
 
 export interface TasksRepositoryPort {
@@ -28,6 +29,14 @@ export interface TasksRepositoryPort {
   deleteLink(memberId: string, taskId: string, linkId: string): Promise<boolean>;
   countLinks(memberId: string, taskId: string): Promise<number>;
   isKnowledgeVisible(memberId: string, knowledgeItemId: string): Promise<boolean>;
+  insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }): Promise<boolean>;
+  findSubtask(memberId: string, taskId: string, id: string): Promise<TaskSubtask | null>;
+  listSubtasks(memberId: string, taskId: string): Promise<TaskSubtask[]>;
+  updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }): Promise<TaskSubtask | null>;
+  deleteSubtask(memberId: string, taskId: string, id: string): Promise<boolean>;
+  insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }): Promise<boolean>;
+  listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]>;
+  deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<boolean>;
 }
 
 type TaskRow = {
@@ -41,6 +50,8 @@ type TaskStatusNotificationIntentRow = {
   id: string; recipient_member_id: string; task_id: string; previous_status: TaskStatus;
   status: TaskStatus; deduplication_key: string; created_at: number;
 };
+type SubtaskRow = { id: string; member_id: string; task_id: string; title: string; status: TaskSubtaskStatus; position: number; created_at: number; updated_at: number };
+type DependencyRow = { member_id: string; task_id: string; depends_on_task_id: string; created_at: number };
 
 const taskColumns = "id, member_id, title, notes, status, progress, priority, due_at, completed_at, created_at, updated_at";
 const OPEN_STATUSES = "('todo', 'doing', 'blocked')";
@@ -237,6 +248,71 @@ export class TasksRepository implements TasksRepositoryPort {
     ).bind(memberId, knowledgeItemId).first<{ visible: number }>();
     return row !== null;
   }
+
+  async insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }): Promise<boolean> {
+    const result = await this.db.prepare(
+      `INSERT OR IGNORE INTO task_subtasks (id, member_id, task_id, title, status, position, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(input.id, input.memberId, input.taskId, input.title, input.status, input.position, input.createdAt, input.updatedAt).run();
+    return result.meta.changes === 1;
+  }
+
+  async findSubtask(memberId: string, taskId: string, id: string): Promise<TaskSubtask | null> {
+    const row = await this.db.prepare(
+      `SELECT id, member_id, task_id, title, status, position, created_at, updated_at
+       FROM task_subtasks WHERE member_id = ? AND task_id = ? AND id = ? LIMIT 1`,
+    ).bind(memberId, taskId, id).first<SubtaskRow>();
+    return row ? mapSubtaskRow(row) : null;
+  }
+
+  async listSubtasks(memberId: string, taskId: string): Promise<TaskSubtask[]> {
+    const rows = await this.db.prepare(
+      `SELECT id, member_id, task_id, title, status, position, created_at, updated_at
+       FROM task_subtasks WHERE member_id = ? AND task_id = ?
+       ORDER BY position ASC, id ASC`,
+    ).bind(memberId, taskId).all<SubtaskRow>();
+    return rows.results.map(mapSubtaskRow);
+  }
+
+  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }): Promise<TaskSubtask | null> {
+    const result = await this.db.prepare(
+      `UPDATE task_subtasks SET title = ?, status = ?, position = ?, updated_at = ?
+       WHERE member_id = ? AND task_id = ? AND id = ?`,
+    ).bind(input.title, input.status, input.position, input.updatedAt, memberId, taskId, id).run();
+    if (result.meta.changes !== 1) return null;
+    return this.findSubtask(memberId, taskId, id);
+  }
+
+  async deleteSubtask(memberId: string, taskId: string, id: string): Promise<boolean> {
+    const result = await this.db.prepare(
+      "DELETE FROM task_subtasks WHERE member_id = ? AND task_id = ? AND id = ?",
+    ).bind(memberId, taskId, id).run();
+    return result.meta.changes === 1;
+  }
+
+  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }): Promise<boolean> {
+    const result = await this.db.prepare(
+      `INSERT OR IGNORE INTO task_dependencies (member_id, task_id, depends_on_task_id, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).bind(input.memberId, input.taskId, input.dependsOnTaskId, input.createdAt).run();
+    return result.meta.changes === 1;
+  }
+
+  async listDependencies(memberId: string, taskId: string): Promise<TaskDependency[]> {
+    const rows = await this.db.prepare(
+      `SELECT member_id, task_id, depends_on_task_id, created_at
+       FROM task_dependencies WHERE member_id = ? AND task_id = ?
+       ORDER BY created_at DESC, depends_on_task_id ASC`,
+    ).bind(memberId, taskId).all<DependencyRow>();
+    return rows.results.map(mapDependencyRow);
+  }
+
+  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string): Promise<boolean> {
+    const result = await this.db.prepare(
+      "DELETE FROM task_dependencies WHERE member_id = ? AND task_id = ? AND depends_on_task_id = ?",
+    ).bind(memberId, taskId, dependsOnTaskId).run();
+    return result.meta.changes === 1;
+  }
 }
 
 function mapTask(row: TaskRow | null): Task | null {
@@ -265,6 +341,28 @@ function mapLinkRow(row: LinkRow): TaskLink {
     taskId: row.task_id,
     knowledgeItemId: row.knowledge_item_id,
     knowledgeTitle: row.title,
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+function mapSubtaskRow(row: SubtaskRow): TaskSubtask {
+  return {
+    id: row.id,
+    memberId: row.member_id,
+    taskId: row.task_id,
+    title: row.title,
+    status: row.status,
+    position: row.position,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function mapDependencyRow(row: DependencyRow): TaskDependency {
+  return {
+    memberId: row.member_id,
+    taskId: row.task_id,
+    dependsOnTaskId: row.depends_on_task_id,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }

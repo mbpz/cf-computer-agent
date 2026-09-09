@@ -53,7 +53,7 @@
 - [I] `MG2-P2-009` Goal 创建、编辑、归档和进度。
 - [I] `MG2-P2-010` Project 创建、编辑、状态和成员。
 - [ ] `R MG2-P2-011` 保留当前任务 CRUD、状态、优先级、标签和知识关联。
-- [ ] `MG2-P2-012` 任务子项和依赖。
+- [I] `MG2-P2-012` 任务子项和依赖。
 - [ ] `MG2-P2-013` 任务列表、看板、时间线和日历视图。
 - [ ] `MG2-P2-014` 内部日程和时间块。
 - [ ] `MG2-P2-015` 今日视图和专注模式。
@@ -80,6 +80,13 @@
 - 实现提交：`dd8ce4b`（`0040_workbench_projects.sql`、项目表、目标/任务关系表和 migration contract）、`95467f4`（Project repository/service、成员隔离、幂等关系和有界摘要）、`393664b`（`/api/projects` 路由与 Worker wiring）、`124008c`（`/projects` 页面、导航和双语文案）。
 - 已验证：Project migration 4 项、service 3 项、route 3 项、frontend SSR 2 项；`rtk npm run typecheck`、`rtk npm run verify:i18n` 通过。
 - 范围：Project 创建、编辑、状态、归档/恢复、进度摘要、Goal/Task owner 校验、关系幂等和有界页面已完成本地集成；成员管理、时间线、会议、生产 migration、部署与 signed browser 仍 pending。
+
+### P2-C C1 任务结构本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现：`0041_workbench_task_structure.sql`、`src/tasks/structure.ts`、`src/tasks/repository.ts`、`src/tasks/service.ts`、`src/routes/tasks.ts`。
+- 已验证：子任务成员隔离、位置唯一性、依赖自环拒绝、跨成员依赖拒绝、关系幂等；任务 service 16 项、C1 worker migration 2 项、typecheck 通过。
+- 范围：当前为后端/数据契约本地集成；任务页面交互、Calendar、Today、Focus、Review、生产 migration、部署与 signed browser 仍 pending。
 
 ## P3 知识与 AI
 

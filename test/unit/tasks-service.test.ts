@@ -3,12 +3,40 @@ import type { CreateAuditEvent } from "../../src/audit/types";
 import { TasksService } from "../../src/tasks/service";
 import type { TasksRepositoryPort } from "../../src/tasks/repository";
 import type { Task, TaskCreate, TaskLink, TaskLinkInsert, TaskListRequest, TaskPage, TaskStatusNotificationIntent, TaskSummary, TaskUpdate } from "../../src/tasks/types";
+import type { TaskDependency, TaskSubtask, TaskSubtaskStatus } from "../../src/tasks/structure";
 import type { PageRequest } from "../../src/pagination";
 import type { NotificationEventInput } from "../../src/notifications/types";
 
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 describe("TasksService", () => {
+  it("creates member-owned subtasks idempotently", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-a", title: "Parent" });
+    const first = await service.createSubtask("member-a", "task-a", { id: "sub-a", title: "First", position: 0 });
+    const replay = await service.createSubtask("member-a", "task-a", { id: "sub-a", title: "Changed", position: 1 });
+    expect(first.created).toBe(true);
+    expect(replay.created).toBe(false);
+    expect(replay.subtask.title).toBe("First");
+    await expect(service.listSubtasks("member-b", "task-a")).rejects.toMatchObject({ code: "TASK_NOT_FOUND" });
+  });
+
+  it("rejects self and cross-member task dependencies", async () => {
+    const repository = new FakeTasksRepository();
+    const service = createService(repository);
+    await service.create("member-a", { id: "task-a", title: "A" });
+    await service.create("member-a", { id: "task-b", title: "B" });
+    await service.create("member-b", { id: "task-c", title: "C" });
+    await expect(service.addDependency("member-a", "task-a", "task-a")).rejects.toMatchObject({ code: "TASK_DEPENDENCY_INVALID" });
+    await expect(service.addDependency("member-a", "task-a", "task-c")).rejects.toMatchObject({ code: "TASK_NOT_FOUND" });
+    const dependency = await service.addDependency("member-a", "task-a", "task-b");
+    const replay = await service.addDependency("member-a", "task-a", "task-b");
+    expect(dependency.created).toBe(true);
+    expect(replay.created).toBe(false);
+    expect((await service.listDependencies("member-a", "task-a"))).toHaveLength(1);
+  });
+
   it("returns member-scoped numbered totals for task filters", async () => {
     const repository = new FakeTasksRepository();
     const service = createService(repository);
@@ -227,6 +255,8 @@ class FakeTasksRepository implements TasksRepositoryPort {
   visibleKnowledge = new Set<string>(["knowledge-a"]);
   count = 0;
   linkCount = 0;
+  subtasks = new Map<string, TaskSubtask>();
+  dependencies = new Map<string, TaskDependency>();
 
   async insert(input: TaskCreate): Promise<boolean> {
     if (this.tasks.has(input.id)) return false;
@@ -307,4 +337,29 @@ class FakeTasksRepository implements TasksRepositoryPort {
   async deleteLink(memberId: string, taskId: string, linkId: string) { return this.links.delete(linkId); }
   async countLinks(memberId: string, taskId: string) { return this.linkCount || [...this.links.values()].filter((link) => link.taskId === taskId).length; }
   async isKnowledgeVisible(memberId: string, knowledgeItemId: string) { return this.visibleKnowledge.has(knowledgeItemId); }
+  async insertSubtask(input: { id: string; memberId: string; taskId: string; title: string; status: TaskSubtaskStatus; position: number; createdAt: number; updatedAt: number }) {
+    if (this.subtasks.has(input.id)) return false;
+    this.subtasks.set(input.id, { id: input.id, memberId: input.memberId, taskId: input.taskId, title: input.title, status: input.status, position: input.position, createdAt: new Date(input.createdAt).toISOString(), updatedAt: new Date(input.updatedAt).toISOString() });
+    return true;
+  }
+  async findSubtask(memberId: string, taskId: string, id: string) {
+    const item = this.subtasks.get(id);
+    return item && item.memberId === memberId && item.taskId === taskId ? item : null;
+  }
+  async listSubtasks(memberId: string, taskId: string) { return [...this.subtasks.values()].filter((item) => item.memberId === memberId && item.taskId === taskId); }
+  async updateSubtask(memberId: string, taskId: string, id: string, input: { title: string; status: TaskSubtaskStatus; position: number; updatedAt: number }) {
+    const item = await this.findSubtask(memberId, taskId, id);
+    if (!item) return null;
+    Object.assign(item, { title: input.title, status: input.status, position: input.position, updatedAt: new Date(input.updatedAt).toISOString() });
+    return item;
+  }
+  async deleteSubtask(memberId: string, taskId: string, id: string) { return (await this.findSubtask(memberId, taskId, id)) !== null && this.subtasks.delete(id); }
+  async insertDependency(input: { memberId: string; taskId: string; dependsOnTaskId: string; createdAt: number }) {
+    const key = `${input.taskId}:${input.dependsOnTaskId}`;
+    if (this.dependencies.has(key)) return false;
+    this.dependencies.set(key, { memberId: input.memberId, taskId: input.taskId, dependsOnTaskId: input.dependsOnTaskId, createdAt: new Date(input.createdAt).toISOString() });
+    return true;
+  }
+  async listDependencies(memberId: string, taskId: string) { return [...this.dependencies.values()].filter((item) => item.memberId === memberId && item.taskId === taskId); }
+  async deleteDependency(memberId: string, taskId: string, dependsOnTaskId: string) { return this.dependencies.delete(`${taskId}:${dependsOnTaskId}`); }
 }
