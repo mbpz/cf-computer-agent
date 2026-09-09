@@ -5,7 +5,7 @@ export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions"
-  | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
+  | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
 
@@ -41,6 +41,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "calendar", path: "/calendar", pageKind: "calendar", availability: "ready", labelKey: "NAV_CALENDAR", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "today", path: "/today", pageKind: "today", availability: "ready", labelKey: "NAV_TODAY", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "focus", path: "/focus", pageKind: "focus", availability: "ready", labelKey: "NAV_FOCUS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
+  { id: "review", path: "/review", pageKind: "review", availability: "ready", labelKey: "NAV_REVIEW", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "inbox", path: "/inbox", pageKind: "inbox", availability: "ready", labelKey: "NAV_INBOX", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "boards", path: "/boards", pageKind: "boards", availability: "ready", labelKey: "NAV_BOARDS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "settings", path: "/settings", pageKind: "settings", availability: "ready", labelKey: "SHELL_SETTINGS", group: "workspace", moduleKey: "workbench", capability: null },

@@ -71,6 +71,8 @@ import { CalendarRepository } from "./calendar/repository";
 import { CalendarService } from "./calendar/service";
 import { FocusRepository } from "./focus/repository";
 import { FocusService } from "./focus/service";
+import { WorkbenchReviewRepository } from "./workbench-review/repository";
+import { WorkbenchReviewService } from "./workbench-review/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -84,6 +86,7 @@ import { routeGoalsApi } from "./routes/goals";
 import { routeProjectsApi } from "./routes/projects";
 import { routeCalendarApi } from "./routes/calendar";
 import { routeFocusApi } from "./routes/focus";
+import { routeWorkbenchReviewApi } from "./routes/workbench-review";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -236,6 +239,12 @@ function createRequestServices(
   const calendarRecords = new CalendarRepository(env.DB);
   const calendar = new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords });
   const focus = new FocusService(new FocusRepository(env.DB), { tasks: taskRecords, calendar });
+  const workbenchReview = new WorkbenchReviewService(new WorkbenchReviewRepository(env.DB), {
+    tasks: new TasksService(taskRecords, { audit }),
+    inbox: new InboxService(inboxRecords),
+    projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
+    focus,
+  });
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -345,6 +354,7 @@ function createRequestServices(
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     calendar,
     focus,
+    workbenchReview,
     today: new TodayService({
       tasks: new TasksService(taskRecords, { audit, notifications }),
       inbox: new InboxService(inboxRecords),
@@ -397,6 +407,8 @@ async function dispatchApiRequest(
   if (calendar) return calendar;
   const focus = await routeFocusApi(request, url, context, principal, { focus: services.focus });
   if (focus) return focus;
+  const workbenchReview = await routeWorkbenchReviewApi(request, url, context, principal, { review: services.workbenchReview });
+  if (workbenchReview) return workbenchReview;
   const today = await routeTodayApi(request, url, context, principal, { today: services.today });
   if (today) return today;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });

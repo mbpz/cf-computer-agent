@@ -56,10 +56,10 @@
 
 ### C6. Daily and weekly review
 
-- [ ] Daily Review：完成项、延期项、阻塞项、时间投入和未处理 Inbox 摘要。
-- [ ] Weekly Review：按项目/目标聚合完成情况、逾期趋势和下一周候选项。
-- [ ] 复盘结果以成员私有快照保存，重复生成使用确定性 key 收敛。
-- [ ] 不在本阶段引入自动 AI 写回；AI 仅可作为后续建议入口。
+- [x] Daily Review：完成项、延期项、阻塞项、时间投入和未处理 Inbox 摘要。
+- [x] Weekly Review：按项目聚合完成情况、逾期趋势和下一周候选项。
+- [x] 复盘结果以成员私有快照保存，重复生成使用确定性 key 收敛。
+- [x] 不在本阶段引入自动 AI 写回；AI 仅可作为后续建议入口。
 
 ### C7. Evidence and release boundary
 
@@ -71,8 +71,8 @@
 
 ## First implementation slice
 
-本阶段已完成 C1 任务结构、C2 内部日程、C3 Calendar 视图、C4 Today 聚合和 C5 Focus 模式；下一批进入 C6 Daily/Weekly Review，继续保持每个关系独立的 owner、幂等和回归证据。
+本阶段已完成 C1 任务结构、C2 内部日程、C3 Calendar 视图、C4 Today 聚合、C5 Focus 模式和 C6 Daily/Weekly Review；下一批进入 P3-A AI capture 分类与 promotion，继续保持每个关系独立的 owner、幂等和回归证据。
 
 ## Stop gate
 
-C1–C5 本地证据已完成，下一阶段进入 C6。若后续测试暴露当前任务、日程、聚合或专注状态的 owner、时间范围、状态机或数量边界不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。
+C1–C6 本地证据已完成，下一阶段进入 P3-A。若后续测试暴露任务、日程、聚合、专注或复盘快照的 owner、时间范围、状态机、确定性 key 或数量边界不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。

@@ -192,7 +192,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };
-    return [item("/"), item("/today"), item("/focus"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
+    return [item("/"), item("/today"), item("/focus"), item("/review"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
   }
   const admin = allowed("/admin");
   if (!admin) return [];
@@ -223,6 +223,7 @@ function NavIcon({ path }: { path: string }) {
   if (path === "/calendar") return <CalendarBlank {...props} />;
   if (path === "/today") return <CalendarBlank {...props} />;
   if (path === "/focus") return <Timer {...props} />;
+  if (path === "/review") return <Check {...props} />;
   if (path === "/admin") return <ShieldCheck {...props} />;
   if (path === "/admin/submissions") return <NotePencil {...props} />;
   if (path === "/admin/assets") return <Stack {...props} />;

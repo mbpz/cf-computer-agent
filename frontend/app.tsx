@@ -25,6 +25,7 @@ import { ProjectsPage, type ProjectsPageState } from "./pages/projects-page";
 import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
 import { TodayPage, type TodayPageState } from "./pages/today-page";
 import { FocusPage, type FocusPageState } from "./pages/focus-page";
+import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -50,6 +51,7 @@ import { createProject, loadProjectSummary, loadProjects, setProjectStatus, type
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
+import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
@@ -180,6 +182,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
+    case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -1006,6 +1009,14 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
   useEffect(() => { void refresh(); }, [refresh, retryVersion]);
   const mutate = async (operation: () => Promise<unknown>) => { if (pending) return; setPending(true); setActionError(undefined); try { await operation(); await refresh(); } catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "FOCUS_ACTION_FAILED")); } finally { setPending(false); } };
   return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} onRetry={() => setRetryVersion((value) => value + 1)} onStart={(input) => void mutate(() => startFocus(input))} onTransition={(action) => { if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action)); }} />;
+}
+
+export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
+  const [period, setPeriod] = useState<"daily" | "weekly">("daily");
+  const [state, setState] = useState<WorkbenchReviewPageState>({ kind: "loading" });
+  const [retryVersion, setRetryVersion] = useState(0);
+  useEffect(() => { let active = true; setState((current) => current.kind === "ready" ? current : { kind: "loading" }); void loadWorkbenchReview(period).then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale, period, retryVersion]);
+  return <WorkbenchReviewPage locale={locale} period={period} state={state} onPeriodChange={setPeriod} onRetry={() => setRetryVersion((value) => value + 1)} />;
 }
 
 export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
