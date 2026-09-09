@@ -32,11 +32,11 @@
 
 ### Task 2: Project repository/service
 
-- [ ] Add `src/projects/types.ts`, `repository.ts`, `service.ts`.
-- [ ] Implement create/get/list/update/status with owner predicates and cursor scope.
-- [ ] Implement `linkGoal`, `unlinkGoal`, `linkTask`, `unlinkTask` with idempotent relation behavior.
-- [ ] Implement `summary(memberId, projectId)` returning bounded counts only for owned visible relations.
-- [ ] Add service tests for replay, cross-member refusal, relation idempotency and status behavior.
+- [x] Add `src/projects/types.ts`, `repository.ts`, `service.ts`.
+- [x] Implement create/get/list/update/status with owner predicates and cursor scope.
+- [x] Implement `linkGoal`, `unlinkGoal`, `linkTask`, `unlinkTask` with idempotent relation behavior.
+- [x] Implement `summary(memberId, projectId)` returning bounded counts only for owned visible relations.
+- [x] Add service tests for replay, cross-member refusal, relation idempotency and status behavior.
 
 ### Task 3: Project API and task/goal relation checks
 
