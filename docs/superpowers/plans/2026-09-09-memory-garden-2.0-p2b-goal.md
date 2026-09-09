@@ -100,7 +100,7 @@
 - [x] Add normalized API adapter and bounded page UI; never render raw API labels.
 - [x] Add bilingual route/menu labels and command palette entry.
 - [x] Run frontend tests, i18n verification, and build.
-- [ ] Commit `feat: add goals workbench page`.
+- [x] Commit `feat: add goals workbench page`.
 
 ## Task 5: Evidence and release ledger update
 
@@ -116,7 +116,7 @@
 - [x] Add migration hash/count and route/menu contract evidence.
 - [x] Record local-only acceptance and the known unrelated full worker-suite failures separately.
 - [x] Run typecheck, i18n verification, focused tests, build, and smoke.
-- [ ] Commit `docs: record goals vertical slice evidence`.
+- [x] Commit `docs: record goals vertical slice evidence`.
 
 ## Stop Gate
 
