@@ -50,7 +50,7 @@
 - [I] `MG2-P2-006` InboxItem 转任务。
 - [ ] `MG2-P2-007` InboxItem 转项目。
 - [ ] `MG2-P2-008` InboxItem 转日程。
-- [ ] `MG2-P2-009` Goal 创建、编辑、归档和进度。
+- [I] `MG2-P2-009` Goal 创建、编辑、归档和进度。
 - [ ] `MG2-P2-010` Project 创建、编辑、状态和成员。
 - [ ] `R MG2-P2-011` 保留当前任务 CRUD、状态、优先级、标签和知识关联。
 - [ ] `MG2-P2-012` 任务子项和依赖。
@@ -66,6 +66,13 @@
 - 前端同一工作树已接入 `/inbox`、中英文文案、快速文本/链接收集、归档/恢复、转任务和加载更多；Inbox 知识 promotion、文件原件持久化仍未完成，不能标记为已实现。
 - 验证：Inbox 单元/worker/route 测试 10 项通过；Inbox 前端静态渲染测试 2 项通过；`rtk npm run typecheck`、`rtk npm run verify:i18n`、路由契约测试通过；此前完整 `rtk npm run build` dry-run 已通过。
 - 边界：`[I]` 仅代表当前隔离工作树的本地证据，待本地完整回归、main 集成、Cloudflare 部署、生产 smoke 和 signed browser 验收后再提升发布状态。
+
+### P2-B Goal 本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现提交：`53f0b11`（`0039_workbench_goals.sql` 与迁移契约）、`5094fdb`（owner-scoped Goal repository/service）、`dbc4950`（`/api/goals` Worker 路由与 app wiring）；当前工作树继续包含 Goals 页面、双语菜单和本地验证改动。
+- 已验证：Goal migration worker 4 项、service 3 项、route 3 项、frontend SSR 2 项；`rtk npm run typecheck`、`rtk npm run verify:i18n`、`rtk npm run verify:m1:migrations -- --files` 通过。
+- 范围：Goal 创建、编辑、状态（active/paused/completed/archived）、进度、归档/恢复、成员隔离、幂等 client key、opaque cursor 和 `/goals` 页面已完成本地集成；Goal 与 Project/Task 的关联、生产 migration、部署、signed browser 仍 pending。
 
 ## P3 知识与 AI
 
