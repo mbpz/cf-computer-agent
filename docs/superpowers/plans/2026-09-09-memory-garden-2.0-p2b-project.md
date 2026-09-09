@@ -40,10 +40,10 @@
 
 ### Task 3: Project API and task/goal relation checks
 
-- [ ] Add `src/routes/projects.ts` and wire it into `src/app.ts`.
-- [ ] Expose `/api/projects`, `/api/projects/:id`, `/status`, `/goals`, `/tasks`, and `/summary`.
-- [ ] Reject client-supplied `memberId`, unknown query/body keys and cross-member goal/task IDs.
-- [ ] Add route tests and worker route tests.
+- [x] Add `src/routes/projects.ts` and wire it into `src/app.ts`.
+- [x] Expose `/api/projects`, `/api/projects/:id`, `/status`, `/goals`, `/tasks`, and `/summary`.
+- [x] Reject client-supplied `memberId`, unknown query/body keys and cross-member goal/task IDs.
+- [x] Add route tests and worker route tests.
 
 ### Task 4: Project workbench page
 

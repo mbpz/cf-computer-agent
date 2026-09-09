@@ -65,6 +65,8 @@ import { InboxRepository } from "./inbox/repository";
 import { InboxService } from "./inbox/service";
 import { GoalsRepository } from "./goals/repository";
 import { GoalsService } from "./goals/service";
+import { ProjectsRepository } from "./projects/repository";
+import { ProjectsService } from "./projects/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -75,6 +77,7 @@ import { routeNotificationsApi } from "./routes/notifications";
 import { routeTasksApi } from "./routes/tasks";
 import { routeInboxApi } from "./routes/inbox";
 import { routeGoalsApi } from "./routes/goals";
+import { routeProjectsApi } from "./routes/projects";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
@@ -221,6 +224,7 @@ function createRequestServices(
   const taskRecords = new TasksRepository(env.DB);
   const inboxRecords = new InboxRepository(env.DB);
   const goalRecords = new GoalsRepository(env.DB);
+  const projectRecords = new ProjectsRepository(env.DB);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -327,6 +331,7 @@ function createRequestServices(
       },
     }),
     goals: new GoalsService(goalRecords),
+    projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -367,6 +372,8 @@ async function dispatchApiRequest(
   if (inbox) return inbox;
   const goals = await routeGoalsApi(request, url, context, principal, { goals: services.goals });
   if (goals) return goals;
+  const projects = await routeProjectsApi(request, url, context, principal, { projects: services.projects });
+  if (projects) return projects;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });
