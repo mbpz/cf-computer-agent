@@ -14,6 +14,7 @@ export interface CommandPaletteItem {
 const COMMANDS: readonly CommandPaletteItem[] = [
   { id: "capture-knowledge", labelKey: "WORKBENCH_QUICK_SUBMIT", keywords: ["capture", "submit", "note", "knowledge", "收集", "知识"], href: "/submit", action: "create-note", capability: "submission:create" },
   { id: "open-tasks", labelKey: "WORKBENCH_QUICK_TASKS", keywords: ["task", "todo", "work", "任务", "待办"], href: "/tasks", action: "create-task", capability: "workspace.tasks" },
+  { id: "open-inbox", labelKey: "NAV_INBOX", keywords: ["inbox", "capture", "收集", "收集箱"], href: "/inbox", capability: "workspace.tasks" },
   { id: "ask-ai", labelKey: "WORKBENCH_QUICK_AI", keywords: ["ai", "agent", "copilot", "assistant", "智能", "问答"], href: "/agent", action: "ask-ai", capability: "knowledge:read" },
   { id: "search-knowledge", labelKey: "WORKBENCH_QUICK_SEARCH", keywords: ["search", "find", "knowledge", "搜索", "查找"], href: "/search", capability: "knowledge:read" },
   { id: "open-knowledge", labelKey: "HOME_OPEN_KNOWLEDGE", keywords: ["library", "knowledge", "kb", "知识库", "库"], href: "/knowledge", capability: "knowledge:read" },

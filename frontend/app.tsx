@@ -19,6 +19,7 @@ import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
 import { TasksPage } from "./pages/tasks/tasks-page";
+import { InboxPage, type InboxPageState } from "./pages/inbox-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -38,6 +39,7 @@ import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submiss
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
+import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
@@ -162,6 +164,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "submit": return <SubmitRoute locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
+    case "inbox": return <InboxRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -792,6 +795,49 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
   return <TasksPage locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+}
+
+export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<InboxPageState>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | undefined>();
+  const [retryVersion, setRetryVersion] = useState(0);
+  const activeRef = useRef(true);
+  const stateRef = useRef<InboxPageState>({ kind: "loading" });
+  stateRef.current = state;
+
+  const refresh = useCallback(async (append = false) => {
+    const currentState = stateRef.current;
+    const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
+    setPending(true); setActionError(undefined);
+    try {
+      const page = await loadInbox({ limit: 20, ...(cursor ? { cursor } : {}) });
+      if (!activeRef.current) return;
+      setState((current) => append && current.kind === "ready"
+        ? { kind: "ready", items: [...current.items, ...page.items], nextCursor: page.nextCursor }
+        : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+    } catch (error: unknown) {
+      if (!activeRef.current || isAbort(error)) return;
+      setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setActionError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+    } finally { if (activeRef.current) setPending(false); }
+  }, [locale]);
+
+  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
+
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pending) return;
+    setPending(true); setActionError(undefined);
+    try { await operation(); await refresh(); }
+    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "INBOX_ACTION_FAILED")); setPending(false); }
+  };
+
+  return <InboxPage locale={locale} state={state} pending={pending} actionError={actionError}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onCreate={(input) => void mutate(async () => { await createInbox(input); })}
+    onStatusChange={(item) => void mutate(() => updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived"))}
+    onPromoteTask={(item) => void mutate(() => promoteInboxTask(item.id))}
+    onLoadMore={() => void refresh(true)} />;
 }
 
 export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
