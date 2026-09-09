@@ -51,7 +51,7 @@
 - [ ] `MG2-P2-007` InboxItem 转项目。
 - [ ] `MG2-P2-008` InboxItem 转日程。
 - [I] `MG2-P2-009` Goal 创建、编辑、归档和进度。
-- [ ] `MG2-P2-010` Project 创建、编辑、状态和成员。
+- [I] `MG2-P2-010` Project 创建、编辑、状态和成员。
 - [ ] `R MG2-P2-011` 保留当前任务 CRUD、状态、优先级、标签和知识关联。
 - [ ] `MG2-P2-012` 任务子项和依赖。
 - [ ] `MG2-P2-013` 任务列表、看板、时间线和日历视图。
@@ -73,6 +73,13 @@
 - 实现提交：`53f0b11`（`0039_workbench_goals.sql` 与迁移契约）、`5094fdb`（owner-scoped Goal repository/service）、`dbc4950`（`/api/goals` Worker 路由与 app wiring）；当前工作树继续包含 Goals 页面、双语菜单和本地验证改动。
 - 已验证：Goal migration worker 4 项、service 3 项、route 3 项、frontend SSR 2 项；`rtk npm run typecheck`、`rtk npm run verify:i18n`、`rtk npm run verify:m1:migrations -- --files` 通过。
 - 范围：Goal 创建、编辑、状态（active/paused/completed/archived）、进度、归档/恢复、成员隔离、幂等 client key、opaque cursor 和 `/goals` 页面已完成本地集成；Goal 与 Project/Task 的关联、生产 migration、部署、signed browser 仍 pending。
+
+### P2-B Project 本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现提交：`dd8ce4b`（`0040_workbench_projects.sql`、项目表、目标/任务关系表和 migration contract）、`95467f4`（Project repository/service、成员隔离、幂等关系和有界摘要）、`393664b`（`/api/projects` 路由与 Worker wiring）、`124008c`（`/projects` 页面、导航和双语文案）。
+- 已验证：Project migration 4 项、service 3 项、route 3 项、frontend SSR 2 项；`rtk npm run typecheck`、`rtk npm run verify:i18n` 通过。
+- 范围：Project 创建、编辑、状态、归档/恢复、进度摘要、Goal/Task owner 校验、关系幂等和有界页面已完成本地集成；成员管理、时间线、会议、生产 migration、部署与 signed browser 仍 pending。
 
 ## P3 知识与 AI
 

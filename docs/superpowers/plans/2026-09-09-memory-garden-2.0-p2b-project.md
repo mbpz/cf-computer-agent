@@ -54,10 +54,10 @@
 
 ### Task 5: Evidence and checklist
 
-- [ ] Record `PRJ-001` in `docs/product/delivery-status-ledger.md`.
-- [ ] Mark `MG2-P2-010` as local integration only in the 2.0 checklist.
-- [ ] Add migration manifest/hash, local acceptance evidence and roadmap maturity updates.
-- [ ] Run typecheck, unit, focused worker, i18n, build and smoke contracts.
+- [x] Record `PRJ-001` in `docs/product/delivery-status-ledger.md`.
+- [x] Mark `MG2-P2-010` as local integration only in the 2.0 checklist.
+- [x] Add migration manifest/hash, local acceptance evidence and roadmap maturity updates.
+- [x] Run typecheck, unit, focused worker, i18n, build and smoke contracts.
 
 ## Stop gate
 

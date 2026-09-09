@@ -317,6 +317,7 @@ test("actual workspace route registry extraction includes every ready and coming
       { path: "/my-submissions", availability: "ready" },
       { path: "/tasks", availability: "ready" },
       { path: "/goals", availability: "ready" },
+      { path: "/projects", availability: "ready" },
       { path: "/inbox", availability: "ready" },
       { path: "/boards", availability: "ready" },
       { path: "/settings", availability: "ready" },
@@ -1683,7 +1684,7 @@ function reviewedMigrationManifest() {
 }
 
 function assertCollaborationMigrationEvidence(evidence, manifest) {
-  assert.ok(manifest.length === 38 || manifest.length === 39, "reviewed migration manifest must contain the historical 38 or current 39 migrations");
+  assert.ok(manifest.length === 38 || manifest.length === 39 || manifest.length === 40, "reviewed migration manifest must contain the historical 38, 39, or current 40 migrations");
   const numbered = manifest.map((entry) => {
     assert.deepEqual(Object.keys(entry).sort(), ["name", "sha256"], "manifest entries must be name/hash records");
     assert.match(entry.name, /^\d{4}_[a-z0-9_]+\.sql$/u, "migration names must be numbered SQL files");
