@@ -22,6 +22,7 @@ import { TasksPage } from "./pages/tasks/tasks-page";
 import { InboxPage, type InboxPageState } from "./pages/inbox-page";
 import { GoalsPage, type GoalsPageState } from "./pages/goals-page";
 import { ProjectsPage, type ProjectsPageState } from "./pages/projects-page";
+import { ProjectTimelinePage, type ProjectTimelinePageState } from "./pages/project-timeline-page";
 import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
 import { TodayPage, type TodayPageState } from "./pages/today-page";
 import { FocusPage, type FocusPageState } from "./pages/focus-page";
@@ -47,7 +48,7 @@ import { createMySubmissionsRequestController, type MySubmissionItem } from "./l
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
-import { createProject, loadProjectSummary, loadProjects, setProjectStatus, type Project, type ProjectSummary } from "./lib/projects-data";
+import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadProjectTimeline, loadProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
@@ -179,6 +180,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute locale={locale} />;
     case "projects": return <ProjectsRoute locale={locale} />;
+    case "project-timeline": return <ProjectTimelineRoute locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
@@ -942,6 +944,46 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={(input) => void mutate(() => createProject(input))}
     onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
+    onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
+    onLoadMore={() => void refresh(true)} />;
+}
+
+export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRuntime; projectId: string }) {
+  const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | undefined>();
+  const [retryVersion, setRetryVersion] = useState(0);
+  const activeRef = useRef(true);
+  const stateRef = useRef<ProjectTimelinePageState>({ kind: "loading" });
+  stateRef.current = state;
+
+  const refresh = useCallback(async (append = false) => {
+    const current = stateRef.current;
+    const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
+    setPending(true); setActionError(undefined);
+    try {
+      const [project, page] = await Promise.all([loadProject(projectId), loadProjectTimeline(projectId, { limit: 20, ...(cursor ? { cursor } : {}) })]);
+      if (!activeRef.current) return;
+      setState((previous) => append && previous.kind === "ready" ? { kind: "ready", project, items: [...previous.items, ...page.items], nextCursor: page.nextCursor } : { kind: "ready", project, items: page.items, nextCursor: page.nextCursor });
+    } catch (error: unknown) {
+      if (!activeRef.current || isAbort(error)) return;
+      setState((currentState) => currentState.kind === "ready" ? currentState : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED"));
+    } finally { if (activeRef.current) setPending(false); }
+  }, [locale, projectId]);
+
+  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pending) return;
+    setPending(true); setActionError(undefined);
+    try { await operation(); await refresh(); }
+    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); setPending(false); }
+  };
+  return <ProjectTimelinePage locale={locale} state={state} pending={pending} actionError={actionError}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onBack={() => writeWorkspaceHistory("push", "/projects")}
+    onCreate={(input) => void mutate(() => createProjectTimeline(projectId, input))}
+    onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(() => setProjectTimelineStatus(projectId, item.id, status))}
     onLoadMore={() => void refresh(true)} />;
 }
 

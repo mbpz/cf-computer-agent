@@ -75,6 +75,8 @@ import { WorkbenchReviewRepository } from "./workbench-review/repository";
 import { WorkbenchReviewService } from "./workbench-review/service";
 import { CaptureRepository } from "./capture/repository";
 import { CaptureClassificationService } from "./capture/service";
+import { ProjectTimelineRepository } from "./project-timeline/repository";
+import { ProjectTimelineService } from "./project-timeline/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -90,6 +92,7 @@ import { routeCalendarApi } from "./routes/calendar";
 import { routeFocusApi } from "./routes/focus";
 import { routeWorkbenchReviewApi } from "./routes/workbench-review";
 import { routeCaptureApi } from "./routes/capture";
+import { routeProjectTimelineApi } from "./routes/project-timeline";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -206,6 +209,7 @@ function knownWorkspaceRoute(pathname: string): boolean {
   return workspaceRoutes.has(pathname)
     || /^\/knowledge\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
     || /^\/messages\/[A-Za-z0-9_-]{1,128}$/u.test(pathname)
+    || /^\/projects\/[A-Za-z0-9_-]{1,128}\/timeline$/u.test(pathname)
     || /^\/admin\/submissions\/[A-Za-z0-9_-]{1,128}$/u.test(pathname);
 }
 
@@ -249,6 +253,7 @@ function createRequestServices(
     focus,
   });
   const capture = new CaptureClassificationService(new CaptureRepository(env.DB), new InboxService(inboxRecords));
+  const projectTimeline = new ProjectTimelineService(new ProjectTimelineRepository(env.DB), projectRecords);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -360,6 +365,7 @@ function createRequestServices(
     focus,
     workbenchReview,
     capture,
+    projectTimeline,
     today: new TodayService({
       tasks: new TasksService(taskRecords, { audit, notifications }),
       inbox: new InboxService(inboxRecords),
@@ -406,6 +412,8 @@ async function dispatchApiRequest(
   if (inbox) return inbox;
   const goals = await routeGoalsApi(request, url, context, principal, { goals: services.goals });
   if (goals) return goals;
+  const projectTimeline = await routeProjectTimelineApi(request, url, context, principal, { projectTimeline: services.projectTimeline });
+  if (projectTimeline) return projectTimeline;
   const projects = await routeProjectsApi(request, url, context, principal, { projects: services.projects });
   if (projects) return projects;
   const calendar = await routeCalendarApi(request, url, context, principal, { calendar: services.calendar });
