@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { BookOpen, CaretDown, ChartLine, Check, DotsThree, Files, FolderSimple, GearSix, House, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, UploadSimple, UsersThree } from "@phosphor-icons/react";
+import { BookOpen, CalendarBlank, CaretDown, ChartLine, Check, DotsThree, Files, FolderSimple, GearSix, House, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
 import type { FrontendLocale } from "../../lib/i18n";
@@ -192,7 +192,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };
-    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
+    return [item("/"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
   }
   const admin = allowed("/admin");
   if (!admin) return [];
@@ -220,6 +220,7 @@ function NavIcon({ path }: { path: string }) {
   if (path === "/my-submissions") return <Files {...props} />;
   if (path === "/goals") return <Target {...props} />;
   if (path === "/projects") return <FolderSimple {...props} />;
+  if (path === "/calendar") return <CalendarBlank {...props} />;
   if (path === "/admin") return <ShieldCheck {...props} />;
   if (path === "/admin/submissions") return <NotePencil {...props} />;
   if (path === "/admin/assets") return <Stack {...props} />;

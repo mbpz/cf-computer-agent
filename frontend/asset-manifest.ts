@@ -10,6 +10,7 @@ export const FRONTEND_ASSET_MANIFEST = Object.freeze({
     "/my-submissions",
     "/goals",
     "/projects",
+    "/calendar",
     "/settings",
     "/admin",
     "/admin/submissions",

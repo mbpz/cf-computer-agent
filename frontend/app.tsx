@@ -22,6 +22,7 @@ import { TasksPage } from "./pages/tasks/tasks-page";
 import { InboxPage, type InboxPageState } from "./pages/inbox-page";
 import { GoalsPage, type GoalsPageState } from "./pages/goals-page";
 import { ProjectsPage, type ProjectsPageState } from "./pages/projects-page";
+import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -44,6 +45,7 @@ import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatu
 import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, loadProjectSummary, loadProjects, setProjectStatus, type Project, type ProjectSummary } from "./lib/projects-data";
+import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
@@ -171,6 +173,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute locale={locale} />;
     case "projects": return <ProjectsRoute locale={locale} />;
+    case "calendar": return <CalendarRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -930,6 +933,46 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={(input) => void mutate(() => createProject(input))}
     onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
+    onLoadMore={() => void refresh(true)} />;
+}
+
+export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<CalendarPageState>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string | undefined>();
+  const [retryVersion, setRetryVersion] = useState(0);
+  const activeRef = useRef(true);
+  const stateRef = useRef<CalendarPageState>({ kind: "loading" });
+  stateRef.current = state;
+  const range = useMemo(() => {
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    const to = new Date(from); to.setDate(to.getDate() + 14);
+    return { from, to };
+  }, [retryVersion]);
+  const refresh = useCallback(async (append = false) => {
+    const current = stateRef.current;
+    const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
+    setPending(true); setActionError(undefined);
+    try {
+      const page = await loadCalendar({ ...range, limit: 50, ...(cursor ? { cursor } : {}) });
+      if (!activeRef.current) return;
+      setState((previous) => append && previous.kind === "ready" ? { kind: "ready", items: [...previous.items, ...page.items], nextCursor: page.nextCursor } : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+    } catch (error: unknown) {
+      if (!activeRef.current || isAbort(error)) return;
+      setState((currentState) => currentState.kind === "ready" ? currentState : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED"));
+    } finally { if (activeRef.current) setPending(false); }
+  }, [locale, range]);
+  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh]);
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pending) return;
+    setPending(true); setActionError(undefined);
+    try { await operation(); await refresh(); } catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED")); setPending(false); }
+  };
+  return <CalendarPage locale={locale} state={state} pending={pending} actionError={actionError}
+    onRetry={() => setRetryVersion((value) => value + 1)}
+    onCreate={(input) => void mutate(() => createCalendarEvent(input))}
+    onCancel={(event: CalendarEvent) => void mutate(() => cancelCalendarEvent(event.id))}
     onLoadMore={() => void refresh(true)} />;
 }
 

@@ -318,6 +318,7 @@ test("actual workspace route registry extraction includes every ready and coming
       { path: "/tasks", availability: "ready" },
       { path: "/goals", availability: "ready" },
       { path: "/projects", availability: "ready" },
+      { path: "/calendar", availability: "ready" },
       { path: "/inbox", availability: "ready" },
       { path: "/boards", availability: "ready" },
       { path: "/settings", availability: "ready" },
