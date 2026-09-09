@@ -25,10 +25,10 @@
 
 ### Task 1: Project schema contract
 
-- [ ] Add `migrations/0040_workbench_projects.sql` with `projects`, `project_goals`, `project_tasks` and `/projects` menu.
-- [ ] Enforce project status (`planned | active | paused | completed | archived`), title bounds, member-scoped client key, and unique relation keys.
-- [ ] Add D1 worker tests for schema, invalid states, replay, member isolation and relation uniqueness.
-- [ ] Update migration hashes only after SQL is locally verified.
+- [x] Add `migrations/0040_workbench_projects.sql` with `projects`, `project_goals`, `project_tasks` and `/projects` menu.
+- [x] Enforce project status (`planned | active | paused | completed | archived`), title bounds, member-scoped client key, and unique relation keys.
+- [x] Add D1 worker tests for schema, invalid states, replay, member isolation and relation uniqueness.
+- [x] Update migration hashes only after SQL is locally verified.
 
 ### Task 2: Project repository/service
 
