@@ -67,6 +67,8 @@ import { GoalsRepository } from "./goals/repository";
 import { GoalsService } from "./goals/service";
 import { ProjectsRepository } from "./projects/repository";
 import { ProjectsService } from "./projects/service";
+import { CalendarRepository } from "./calendar/repository";
+import { CalendarService } from "./calendar/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -78,6 +80,7 @@ import { routeTasksApi } from "./routes/tasks";
 import { routeInboxApi } from "./routes/inbox";
 import { routeGoalsApi } from "./routes/goals";
 import { routeProjectsApi } from "./routes/projects";
+import { routeCalendarApi } from "./routes/calendar";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
@@ -225,6 +228,7 @@ function createRequestServices(
   const inboxRecords = new InboxRepository(env.DB);
   const goalRecords = new GoalsRepository(env.DB);
   const projectRecords = new ProjectsRepository(env.DB);
+  const calendarRecords = new CalendarRepository(env.DB);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -332,6 +336,7 @@ function createRequestServices(
     }),
     goals: new GoalsService(goalRecords),
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
+    calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -374,6 +379,8 @@ async function dispatchApiRequest(
   if (goals) return goals;
   const projects = await routeProjectsApi(request, url, context, principal, { projects: services.projects });
   if (projects) return projects;
+  const calendar = await routeCalendarApi(request, url, context, principal, { calendar: services.calendar });
+  if (calendar) return calendar;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });

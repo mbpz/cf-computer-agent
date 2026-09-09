@@ -27,11 +27,11 @@
 
 ### C2. Internal schedule and time blocks
 
-- [ ] 定义 `calendar_events`：标题、描述、开始/结束、时区、全天标识、状态、关联 task/project、client key。
-- [ ] 定义 `focus_blocks` 或统一 `calendar_events.kind`，避免第二套时间模型；优先选择单表加枚举。
-- [ ] 校验结束时间晚于开始时间、时长上限、跨成员关联和重复 client key。
-- [ ] 提供 owner-scoped 列表、创建、编辑、取消/归档和单日范围查询。
-- [ ] 对日期范围设置最大跨度，避免无界扫描。
+- [x] 定义 `calendar_events`：标题、描述、开始/结束、时区、全天标识、状态、关联 task/project、client key。
+- [x] 用 `calendar_events.kind` 区分普通事件和 focus block，避免第二套时间模型。
+- [x] 校验结束时间晚于开始时间、时长上限、跨成员关联和重复 client key。
+- [x] 提供 owner-scoped 列表、创建、编辑、取消和日期范围查询。
+- [x] 对日期范围设置最大 31 天跨度，避免无界扫描。
 
 ### C3. Task calendar views
 
@@ -71,8 +71,8 @@
 
 ## First implementation slice
 
-本阶段第一批已完成 C1 的任务子项与依赖；下一批进入 C2 内部日程和时间块，不同时修改 Today 聚合，确保每个关系都有独立的 owner、幂等和回归证据。
+本阶段第一批已完成 C1 的任务子项与依赖，第二批已完成 C2 内部日程和时间块；下一批进入 C3 Calendar 视图，不同时修改 Today 聚合，确保每个关系都有独立的 owner、幂等和回归证据。
 
 ## Stop gate
 
-C1 本地证据已完成，下一阶段进入 C2。若后续测试暴露当前任务表的 owner 或级联约束不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。
+C1、C2 本地证据已完成，下一阶段进入 C3。若后续测试暴露当前任务或日程表的 owner、时间范围或级联约束不足，先修复数据边界，不通过增加前端隐藏逻辑绕过。

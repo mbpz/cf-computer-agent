@@ -1684,7 +1684,7 @@ function reviewedMigrationManifest() {
 }
 
 function assertCollaborationMigrationEvidence(evidence, manifest) {
-  assert.ok(manifest.length === 38 || manifest.length === 39 || manifest.length === 40 || manifest.length === 41, "reviewed migration manifest must contain the historical 38, 39, 40, or current 41 migrations");
+  assert.ok(manifest.length === 38 || manifest.length === 39 || manifest.length === 40 || manifest.length === 41 || manifest.length === 42, "reviewed migration manifest must contain the historical 38, 39, 40, 41, or current 42 migrations");
   const numbered = manifest.map((entry) => {
     assert.deepEqual(Object.keys(entry).sort(), ["name", "sha256"], "manifest entries must be name/hash records");
     assert.match(entry.name, /^\d{4}_[a-z0-9_]+\.sql$/u, "migration names must be numbered SQL files");

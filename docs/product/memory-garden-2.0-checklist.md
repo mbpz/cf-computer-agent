@@ -55,7 +55,7 @@
 - [ ] `R MG2-P2-011` 保留当前任务 CRUD、状态、优先级、标签和知识关联。
 - [I] `MG2-P2-012` 任务子项和依赖。
 - [ ] `MG2-P2-013` 任务列表、看板、时间线和日历视图。
-- [ ] `MG2-P2-014` 内部日程和时间块。
+- [I] `MG2-P2-014` 内部日程和时间块。
 - [ ] `MG2-P2-015` 今日视图和专注模式。
 - [ ] `MG2-P2-016` 每日/每周复盘。
 
@@ -87,6 +87,13 @@
 - 实现：`0041_workbench_task_structure.sql`、`src/tasks/structure.ts`、`src/tasks/repository.ts`、`src/tasks/service.ts`、`src/routes/tasks.ts`。
 - 已验证：子任务成员隔离、位置唯一性、依赖自环拒绝、跨成员依赖拒绝、关系幂等；任务 service 16 项、C1 worker migration 2 项、typecheck 通过。
 - 范围：当前为后端/数据契约本地集成；任务页面交互、Calendar、Today、Focus、Review、生产 migration、部署与 signed browser 仍 pending。
+
+### P2-C C2 内部日程本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现：`0042_workbench_calendar.sql`、`src/calendar`、`src/routes/calendar.ts`、`src/app.ts`。
+- 已验证：事件/专注块类型、时间范围、成员任务/项目关联、client key 幂等、跨成员关联拒绝和 31 天范围上限；Calendar service 2 项、worker migration 2 项、typecheck 通过。
+- 范围：当前为后端/数据契约本地集成；Calendar 页面、Today、Focus、Review、生产 migration、部署与 signed browser 仍 pending。
 
 ## P3 知识与 AI
 
