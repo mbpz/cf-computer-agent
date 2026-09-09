@@ -109,6 +109,13 @@
 - 已验证：Today 后端按成员一次性有界聚合今日任务、任务摘要、Inbox、活动项目和当日日程；worker 测试证明跨成员数据不泄露、查询参数被拒绝；service、页面、typecheck、i18n 通过。
 - 范围：当前为本地纵向切片；卡片跨模块跳转、生产 migration、部署、signed browser 和 release/acceptance 仍 pending。
 
+### P2-C C5 Focus 专注模式本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现：`0043_workbench_focus.sql`、`src/focus`、`src/routes/focus.ts`、`frontend/lib/focus-data.ts`、`frontend/pages/focus-page.tsx`、`/focus` route capability。
+- 已验证：active/paused/completed/abandoned 状态流、同一成员单一 open session、client key 幂等、Calendar focus block 同步、刷新读取 current、跨成员 task 拒绝；migration count=43、service/page/worker/typecheck 通过。
+- 范围：当前为本地纵向切片；生产 migration、部署、signed browser 和 release/acceptance 仍 pending。
+
 ## P3 知识与 AI
 
 - [ ] `R MG2-P3-001` 保留当前文本、Markdown、代码、PDF、Office、表格和网页解析。

@@ -24,6 +24,7 @@ import { GoalsPage, type GoalsPageState } from "./pages/goals-page";
 import { ProjectsPage, type ProjectsPageState } from "./pages/projects-page";
 import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
 import { TodayPage, type TodayPageState } from "./pages/today-page";
+import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -48,6 +49,7 @@ import { createGoal, loadGoals, setGoalProgress, setGoalStatus, type Goal } from
 import { createProject, loadProjectSummary, loadProjects, setProjectStatus, type Project, type ProjectSummary } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
+import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
@@ -177,6 +179,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "projects": return <ProjectsRoute locale={locale} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
+    case "focus": return <FocusRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -989,6 +992,20 @@ export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
     return () => { active = false; };
   }, [locale, retryVersion]);
   return <TodayPage locale={locale} state={state} onRetry={() => setRetryVersion((value) => value + 1)} />;
+}
+
+export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<FocusPageState>({ kind: "loading" });
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+  const refresh = useCallback(() => {
+    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
+    return loadCurrentFocus().then((session) => setState({ kind: "ready", session })).catch((error: unknown) => { if (!isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
+  }, [locale]);
+  useEffect(() => { void refresh(); }, [refresh, retryVersion]);
+  const mutate = async (operation: () => Promise<unknown>) => { if (pending) return; setPending(true); setActionError(undefined); try { await operation(); await refresh(); } catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "FOCUS_ACTION_FAILED")); } finally { setPending(false); } };
+  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} onRetry={() => setRetryVersion((value) => value + 1)} onStart={(input) => void mutate(() => startFocus(input))} onTransition={(action) => { if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action)); }} />;
 }
 
 export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

@@ -69,6 +69,8 @@ import { ProjectsRepository } from "./projects/repository";
 import { ProjectsService } from "./projects/service";
 import { CalendarRepository } from "./calendar/repository";
 import { CalendarService } from "./calendar/service";
+import { FocusRepository } from "./focus/repository";
+import { FocusService } from "./focus/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -81,6 +83,7 @@ import { routeInboxApi } from "./routes/inbox";
 import { routeGoalsApi } from "./routes/goals";
 import { routeProjectsApi } from "./routes/projects";
 import { routeCalendarApi } from "./routes/calendar";
+import { routeFocusApi } from "./routes/focus";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -231,6 +234,8 @@ function createRequestServices(
   const goalRecords = new GoalsRepository(env.DB);
   const projectRecords = new ProjectsRepository(env.DB);
   const calendarRecords = new CalendarRepository(env.DB);
+  const calendar = new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords });
+  const focus = new FocusService(new FocusRepository(env.DB), { tasks: taskRecords, calendar });
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -338,7 +343,8 @@ function createRequestServices(
     }),
     goals: new GoalsService(goalRecords),
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
-    calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
+    calendar,
+    focus,
     today: new TodayService({
       tasks: new TasksService(taskRecords, { audit, notifications }),
       inbox: new InboxService(inboxRecords),
@@ -389,6 +395,8 @@ async function dispatchApiRequest(
   if (projects) return projects;
   const calendar = await routeCalendarApi(request, url, context, principal, { calendar: services.calendar });
   if (calendar) return calendar;
+  const focus = await routeFocusApi(request, url, context, principal, { focus: services.focus });
+  if (focus) return focus;
   const today = await routeTodayApi(request, url, context, principal, { today: services.today });
   if (today) return today;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
