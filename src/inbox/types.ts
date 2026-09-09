@@ -1,4 +1,4 @@
-import type { NumberedPage, NumberedPageRequest } from "../pagination";
+import type { Page, PageRequest } from "../pagination";
 
 export type InboxKind = "text" | "link" | "file_ref";
 export type InboxStatus = "inbox" | "archived" | "promoted";
@@ -40,8 +40,6 @@ export interface InboxListFilters {
   status?: InboxStatus;
 }
 
-export interface InboxListRequest extends NumberedPageRequest {
-  filters: InboxListFilters;
-}
+export interface InboxListRequest extends PageRequest { filters: InboxListFilters; }
 
-export type InboxPage = NumberedPage<InboxItem>;
+export type InboxPage = Page<InboxItem>;

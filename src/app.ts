@@ -61,6 +61,8 @@ import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
 import { TasksRepository } from "./tasks/repository";
 import { TasksService } from "./tasks/service";
+import { InboxRepository } from "./inbox/repository";
+import { InboxService } from "./inbox/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -69,6 +71,7 @@ import { DiscussionsService } from "./discussions/service";
 import { routeDiscussionsApi } from "./routes/discussions";
 import { routeNotificationsApi } from "./routes/notifications";
 import { routeTasksApi } from "./routes/tasks";
+import { routeInboxApi } from "./routes/inbox";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
@@ -213,6 +216,7 @@ function createRequestServices(
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
   const review = new ReviewService(new ReviewRepository(env.DB), dependencies.reviewNow);
   const taskRecords = new TasksRepository(env.DB);
+  const inboxRecords = new InboxRepository(env.DB);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -307,6 +311,17 @@ function createRequestServices(
     notifications,
     discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications }),
     tasks: new TasksService(taskRecords, { audit, notifications }),
+    inbox: new InboxService(inboxRecords, {
+      promoteTask: async (memberId, item) => {
+        const result = await new TasksService(taskRecords, { audit, notifications }).create(memberId, {
+          id: `inbox-${item.id}`,
+          title: item.kind === "link" ? item.sourceUrl || item.content : item.content.slice(0, 200),
+          notes: item.content,
+          priority: "medium",
+        });
+        return { taskId: result.task.id };
+      },
+    }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -343,6 +358,8 @@ async function dispatchApiRequest(
   if (member) return member;
   const tasks = await routeTasksApi(request, url, context, principal, { tasks: services.tasks });
   if (tasks) return tasks;
+  const inbox = await routeInboxApi(request, url, context, principal, { inbox: services.inbox });
+  if (inbox) return inbox;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });

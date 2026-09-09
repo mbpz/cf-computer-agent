@@ -3,6 +3,8 @@
 import { applyD1Migrations, env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MIGRATIONS } from "../fixtures/d1";
+import { InboxRepository } from "../../src/inbox/repository";
+import { encodeOpaqueCursor } from "../../src/pagination";
 
 describe("private Inbox migration contract", () => {
   beforeEach(async () => {
@@ -44,5 +46,16 @@ describe("private Inbox migration contract", () => {
   it("rejects invalid Inbox status and kind values at the database boundary", async () => {
     await expect(env.DB.prepare("INSERT INTO inbox_items (id, member_id, client_key, kind, content, source_url, status, promoted_task_id, promoted_submission_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("inbox-invalid", "member-a", "capture-invalid", "binary", "bad", null, "inbox", null, null, 1, 1).run()).rejects.toThrow();
     await expect(env.DB.prepare("INSERT INTO inbox_items (id, member_id, client_key, kind, content, source_url, status, promoted_task_id, promoted_submission_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("inbox-invalid-status", "member-a", "capture-invalid-status", "text", "bad", null, "deleted", null, null, 1, 1).run()).rejects.toThrow();
+  });
+
+  it("keeps list results owner-scoped and rejects a cursor from another member", async () => {
+    const repository = new InboxRepository(env.DB);
+    for (const [id, memberId, createdAt] of [["inbox-a-1", "member-a", 10], ["inbox-a-2", "member-a", 20], ["inbox-b-1", "member-b", 30]] as const) {
+      await repository.insert({ id, memberId, clientKey: id, kind: "text", content: id, sourceUrl: null, createdAt, updatedAt: createdAt });
+    }
+    const page = await repository.listOwned("member-a", { limit: 20 });
+    expect(page.items.map((item) => item.memberId)).toEqual(["member-a", "member-a"]);
+    const foreignCursor = encodeOpaqueCursor({ v: 1, memberId: "member-b", status: null, sort: 30, id: "inbox-b-1" });
+    await expect(repository.listOwned("member-a", { limit: 20, cursor: foreignCursor })).rejects.toMatchObject({ code: "INBOX_PAGE_INVALID", status: 400 });
   });
 });
