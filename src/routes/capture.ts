@@ -1,0 +1,6 @@
+import { requireCapability } from "../authorization/policy";
+import { AppError, jsonResponse, methodNotAllowed, requireNoQuery, type RequestContext } from "../http";
+import type { Principal } from "../identity/principal";
+import type { CaptureClassificationService } from "../capture/service";
+import { decodePathId } from "../http";
+export async function routeCaptureApi(request: Request, url: URL, context: RequestContext, principal: Principal, services: { capture: CaptureClassificationService }): Promise<Response | undefined> { if (!url.pathname.startsWith("/api/capture/")) return undefined; requireCapability(principal, "tasks:use"); if (principal.kind !== "member") throw new AppError("FORBIDDEN", "Member access required", 403); const classify = /^\/api\/capture\/([^/]+)\/(classify|dismiss)$/u.exec(url.pathname); if (!classify) throw new AppError("NOT_FOUND", "Not found", 404); if (request.method !== "POST") return methodNotAllowed("POST", context); requireNoQuery(url); const inboxId = decodePathId(classify[1]!); const value = classify[2] === "classify" ? await services.capture.classify(principal.memberId, inboxId) : await services.capture.dismiss(principal.memberId, inboxId); return jsonResponse(value, 200, context.requestId); }

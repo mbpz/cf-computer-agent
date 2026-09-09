@@ -73,6 +73,8 @@ import { FocusRepository } from "./focus/repository";
 import { FocusService } from "./focus/service";
 import { WorkbenchReviewRepository } from "./workbench-review/repository";
 import { WorkbenchReviewService } from "./workbench-review/service";
+import { CaptureRepository } from "./capture/repository";
+import { CaptureClassificationService } from "./capture/service";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -87,6 +89,7 @@ import { routeProjectsApi } from "./routes/projects";
 import { routeCalendarApi } from "./routes/calendar";
 import { routeFocusApi } from "./routes/focus";
 import { routeWorkbenchReviewApi } from "./routes/workbench-review";
+import { routeCaptureApi } from "./routes/capture";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -245,6 +248,7 @@ function createRequestServices(
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     focus,
   });
+  const capture = new CaptureClassificationService(new CaptureRepository(env.DB), new InboxService(inboxRecords));
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -355,6 +359,7 @@ function createRequestServices(
     calendar,
     focus,
     workbenchReview,
+    capture,
     today: new TodayService({
       tasks: new TasksService(taskRecords, { audit, notifications }),
       inbox: new InboxService(inboxRecords),
@@ -409,6 +414,8 @@ async function dispatchApiRequest(
   if (focus) return focus;
   const workbenchReview = await routeWorkbenchReviewApi(request, url, context, principal, { review: services.workbenchReview });
   if (workbenchReview) return workbenchReview;
+  const capture = await routeCaptureApi(request, url, context, principal, { capture: services.capture });
+  if (capture) return capture;
   const today = await routeTodayApi(request, url, context, principal, { today: services.today });
   if (today) return today;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });

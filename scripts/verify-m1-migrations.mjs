@@ -46,6 +46,7 @@ const migrations = [
   ["0042_workbench_calendar.sql", "6c361a57ee77b4c72269f2e68c6d2f184b946bacbf8521ff59b7cf7b5471f324"],
   ["0043_workbench_focus.sql", "5281f1e9d6beddb9a7273336cbc004e8c0a43fde69766d28dd3126b4ca24d781"],
   ["0044_workbench_review.sql", "54af339fc4b5897bf313f46a4dace558f65770377d380345a8acb856a785bece"],
+  ["0045_workbench_capture_classifications.sql", "4ea0d9fc91da3bbba82c045ce79b83f17656fe2fb8333c29df4262d53fd39f2f"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
