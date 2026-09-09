@@ -41,11 +41,11 @@
 - indexes: `(member_id, status, updated_at DESC, id DESC)` and unique `(member_id, client_key)`
 - migration adds a system menu row `/goals` with `workspace.tasks` permission semantics
 
-- [ ] Write failing worker contract tests for migration shape, owner isolation, client-key replay, and bounded pagination.
-- [ ] Run the focused worker test and observe failure before implementation.
-- [ ] Add the migration and TypeScript input/output types.
-- [ ] Run the focused worker test and typecheck.
-- [ ] Commit `feat: add private goals schema contract`.
+- [x] Write failing worker contract tests for migration shape, owner isolation, client-key replay, and bounded pagination.
+- [x] Run the focused worker test and observe failure before implementation.
+- [x] Add the migration and TypeScript input/output types.
+- [x] Run the focused worker test and typecheck.
+- [x] Commit `feat: add private goals schema contract`.
 
 ## Task 2: Add Goal repository and service
 
@@ -58,11 +58,11 @@
 - `GoalsRepositoryPort.insert/findOwned/findByClientKey/listOwned/update/updateStatus/updateProgress`
 - `GoalsService.create/list/get/update/setStatus/setProgress`
 
-- [ ] Write failing service tests for member isolation, validation, idempotent create, status transitions, and progress monotonicity rules.
-- [ ] Run focused unit tests and observe failure.
-- [ ] Implement repository queries with `member_id` predicates on every read/write.
-- [ ] Implement service validation and retry-safe behavior.
-- [ ] Run focused unit tests, typecheck, and commit `feat: add private goals service`.
+- [x] Write failing service tests for member isolation, validation, idempotent create, status transitions, and progress monotonicity rules.
+- [x] Run focused unit tests and observe failure.
+- [x] Implement repository queries with `member_id` predicates on every read/write.
+- [x] Implement service validation and retry-safe behavior.
+- [x] Run focused unit tests, typecheck, and commit `feat: add private goals service`.
 
 ## Task 3: Expose `/api/goals`
 
@@ -78,11 +78,11 @@
 - `POST /api/goals/:id/status` accepts `{ status }`.
 - `POST /api/goals/:id/progress` accepts `{ progress }`.
 
-- [ ] Add route tests that reject client `memberId`, pass the authenticated member only, enforce exact query/body keys, and map method errors.
-- [ ] Run focused route tests and observe failure.
-- [ ] Wire the route and service into the request service factory and dispatcher.
-- [ ] Run route tests, worker contract tests, and typecheck.
-- [ ] Commit `feat: expose private goals api`.
+- [x] Add route tests that reject client `memberId`, pass the authenticated member only, enforce exact query/body keys, and map method errors.
+- [x] Run focused route tests and observe failure.
+- [x] Wire the route and service into the request service factory and dispatcher.
+- [x] Run route tests, worker contract tests, and typecheck.
+- [x] Commit `feat: expose private goals api`.
 
 ## Task 4: Add the Goals workbench page
 
@@ -95,11 +95,11 @@
 - Modify: `frontend/components/shell/app-shell.tsx`
 - Test: `test/unit/frontend-goals-page.test.tsx`
 
-- [ ] Write failing SSR/component tests for empty, loading, error, create, progress, archive, restore, and locale rendering.
-- [ ] Run focused frontend tests and observe failure.
-- [ ] Add normalized API adapter and bounded page UI; never render raw API labels.
-- [ ] Add bilingual route/menu labels and command palette entry.
-- [ ] Run frontend tests, i18n verification, and build.
+- [x] Write failing SSR/component tests for empty, loading, error, create, progress, archive, restore, and locale rendering.
+- [x] Run focused frontend tests and observe failure.
+- [x] Add normalized API adapter and bounded page UI; never render raw API labels.
+- [x] Add bilingual route/menu labels and command palette entry.
+- [x] Run frontend tests, i18n verification, and build.
 - [ ] Commit `feat: add goals workbench page`.
 
 ## Task 5: Evidence and release ledger update
@@ -113,9 +113,9 @@
 - Modify: `ROADMAP.md`
 - Create: `docs/evidence/2026-09-09-goals-local-acceptance.md`
 
-- [ ] Add migration hash/count and route/menu contract evidence.
-- [ ] Record local-only acceptance and the known unrelated full worker-suite failures separately.
-- [ ] Run typecheck, i18n verification, focused tests, build, and smoke.
+- [x] Add migration hash/count and route/menu contract evidence.
+- [x] Record local-only acceptance and the known unrelated full worker-suite failures separately.
+- [x] Run typecheck, i18n verification, focused tests, build, and smoke.
 - [ ] Commit `docs: record goals vertical slice evidence`.
 
 ## Stop Gate
