@@ -16,6 +16,7 @@ import { Badge } from "../ui/badge";
 import { menuAvailability, routeCapability, type MenuAvailability } from "../../../shared/workspace-route-capabilities";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { collaborationQuickLinks, isCollaborationPath } from "./navigation-policy";
+import { CommandPalette } from "./command-palette";
 
 interface LocaleRuntime {
   readonly locale: FrontendLocale;
@@ -80,6 +81,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     setTheme(mode);
     applyTheme(mode, document, window.localStorage);
   };
+  const toggleTheme = () => changeTheme(theme === "dark" ? "light" : "dark");
   const access = resolveFrontendAccess({ session, route: matchRoute(pathname) });
 
   return (
@@ -106,6 +108,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
         <header data-shell-topbar className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
           <div className="flex min-w-0 items-center gap-3"><span className="text-sm font-semibold lg:hidden">MEMORY GARDEN</span><Breadcrumb pathname={pathname} locale={locale} /></div>
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-2">
+            <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} />
             <nav data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
               {collaborationLinks.map((link) => <a key={link.path} data-route-id={routeCapability(link.path)?.id} href={link.path} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} className={cn("flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-sm", isCollaborationActive(pathname, link.activePrefix) && "bg-accent font-medium text-accent-foreground")}><NavIcon path={link.icon} /><span className="max-w-16 truncate sm:max-w-28 lg:max-w-none">{locale.t(link.labelKey)}</span></a>)}
             </nav>

@@ -22,6 +22,8 @@ describe("frontend application shell", () => {
     expect(html).toContain("data-shell-sidebar");
     expect(html).toContain("data-shell-topbar");
     expect(topbar).toContain('aria-label="Language"');
+    expect(topbar).toContain('data-command-palette-trigger="true"');
+    expect(topbar).toContain("Command palette");
     expect(topbar).not.toContain("reader@example.com");
     expect(topbar).not.toContain("Settings");
     expect(topbar).not.toContain("Signing out");
