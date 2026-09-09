@@ -81,6 +81,8 @@ import { routeInboxApi } from "./routes/inbox";
 import { routeGoalsApi } from "./routes/goals";
 import { routeProjectsApi } from "./routes/projects";
 import { routeCalendarApi } from "./routes/calendar";
+import { TodayService } from "./today/service";
+import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
 import { ResearchReportService } from "./ai/research-report-service";
 import { MindmapService } from "./ai/mindmap-service";
@@ -337,6 +339,12 @@ function createRequestServices(
     goals: new GoalsService(goalRecords),
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
+    today: new TodayService({
+      tasks: new TasksService(taskRecords, { audit, notifications }),
+      inbox: new InboxService(inboxRecords),
+      projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
+      calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
+    }),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -381,6 +389,8 @@ async function dispatchApiRequest(
   if (projects) return projects;
   const calendar = await routeCalendarApi(request, url, context, principal, { calendar: services.calendar });
   if (calendar) return calendar;
+  const today = await routeTodayApi(request, url, context, principal, { today: services.today });
+  if (today) return today;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });

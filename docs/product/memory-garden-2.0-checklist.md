@@ -95,6 +95,20 @@
 - 已验证：事件/专注块类型、时间范围、成员任务/项目关联、client key 幂等、跨成员关联拒绝和 31 天范围上限；Calendar service 2 项、worker migration 2 项、typecheck 通过。
 - 范围：当前为后端/数据契约本地集成；Calendar 页面、Today、Focus、Review、生产 migration、部署与 signed browser 仍 pending。
 
+### P2-C C3 Calendar 视图本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现：`frontend/lib/calendar-data.ts`、`frontend/pages/calendar-page.tsx`、`/calendar` route capability、Shell 导航与双语文案。
+- 已验证：月/周/日视图共用 bounded range API；加载、失败、空态、跨日事件和 locale 展示均有页面测试；build、typecheck、i18n、smoke contract 通过。
+- 范围：当前为前端页面与现有 Calendar API 的本地集成；生产 migration、部署、signed browser 和真实跨模块跳转仍 pending。
+
+### P2-C C4 Today 聚合本地集成证据（2026-09-09）
+
+- 工作树分支：`codex/memory-garden-2.0-workbench-core`；未修改 main、生产 D1、生产 Worker 或 `SECRETS_FILE`。
+- 实现：`src/today/service.ts`、`src/routes/today.ts`、`frontend/lib/today-data.ts`、`frontend/pages/today-page.tsx`、`/today` route capability。
+- 已验证：Today 后端按成员一次性有界聚合今日任务、任务摘要、Inbox、活动项目和当日日程；worker 测试证明跨成员数据不泄露、查询参数被拒绝；service、页面、typecheck、i18n 通过。
+- 范围：当前为本地纵向切片；卡片跨模块跳转、生产 migration、部署、signed browser 和 release/acceptance 仍 pending。
+
 ## P3 知识与 AI
 
 - [ ] `R MG2-P3-001` 保留当前文本、Markdown、代码、PDF、Office、表格和网页解析。

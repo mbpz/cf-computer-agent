@@ -23,6 +23,7 @@ import { InboxPage, type InboxPageState } from "./pages/inbox-page";
 import { GoalsPage, type GoalsPageState } from "./pages/goals-page";
 import { ProjectsPage, type ProjectsPageState } from "./pages/projects-page";
 import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
+import { TodayPage, type TodayPageState } from "./pages/today-page";
 import { BoardsPage } from "./pages/boards/boards-page";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
@@ -46,6 +47,7 @@ import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type Inbox
 import { createGoal, loadGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, loadProjectSummary, loadProjects, setProjectStatus, type Project, type ProjectSummary } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
+import { loadToday } from "./lib/today-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
@@ -174,6 +176,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "goals": return <GoalsRoute locale={locale} />;
     case "projects": return <ProjectsRoute locale={locale} />;
     case "calendar": return <CalendarRoute locale={locale} />;
+    case "today": return <TodayRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
@@ -974,6 +977,18 @@ export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {
     onCreate={(input) => void mutate(() => createCalendarEvent(input))}
     onCancel={(event: CalendarEvent) => void mutate(() => cancelCalendarEvent(event.id))}
     onLoadMore={() => void refresh(true)} />;
+}
+
+export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<TodayPageState>({ kind: "loading" });
+  const [retryVersion, setRetryVersion] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
+    void loadToday().then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
+    return () => { active = false; };
+  }, [locale, retryVersion]);
+  return <TodayPage locale={locale} state={state} onRetry={() => setRetryVersion((value) => value + 1)} />;
 }
 
 export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
