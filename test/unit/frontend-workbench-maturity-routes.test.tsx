@@ -36,7 +36,7 @@ const staticReady = (subject: string): StateClaims => Object.freeze({
 });
 
 const ROUTE_STATE_MATRIX = Object.freeze({
-  home: { loading: gap("Home renders its ready shell while recent knowledge is pending."), empty: supported, error: gap("Home swallows recent-knowledge failures into the empty recent panel."), ready: supported },
+  home: { loading: supported, empty: supported, error: supported, ready: supported },
   submit: listWithRetry,
   knowledge: listWithRetry,
   search: listWithRetry,

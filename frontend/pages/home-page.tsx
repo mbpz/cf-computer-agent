@@ -55,9 +55,9 @@ function legacySummary(state: LegacyHomeState): WorkbenchSummary {
   };
 }
 
-export function HomePage({ state, locale }: { state: HomeState; locale?: LocaleRuntime }) {
+export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?: LocaleRuntime; onRetry?: () => void }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} />;
+  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}><button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button></PageState>;
 
   const summary = "summary" in state ? state.summary : legacySummary(state);
   if (!("summary" in state)) return <LegacyHomePage locale={locale} summary={summary} />;

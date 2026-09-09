@@ -140,6 +140,7 @@ interface NavigationNode { id: string; route?: typeof ROUTES[number]; path?: str
 function ModuleNavigation({ pathname, locale, session, collapsed, onNavigate }: { pathname: string; locale: LocaleRuntime; session: SessionSnapshot; collapsed: boolean; onNavigate: (path: string) => void }) {
   const current = moduleForPath(pathname) ?? WORKBENCH_MODULES.find((module) => module.entryPath !== "/" && pathname.startsWith(`${module.entryPath}/`));
   const modules = WORKBENCH_MODULES.filter((module) => {
+    if (isCollaborationPath(module.entryPath)) return false;
     if (module.adminOnly && session.member.role !== "admin") return false;
     const route = ROUTES.find((item) => item.path === module.entryPath);
     return !route || routeAccessAllowed(session, route);

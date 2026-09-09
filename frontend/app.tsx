@@ -190,6 +190,7 @@ function assertNever(value: never): never {
 
 function HomeRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; summary: WorkbenchSummary } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
     void Promise.allSettled([loadTaskSummary(), loadRecentKnowledge(), loadWorkspaceActivity()]).then(([taskResult, knowledgeResult, activityResult]) => {
@@ -197,7 +198,7 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
       const taskSummary = taskResult.status === "fulfilled" ? taskResult.value : undefined;
       const knowledge = knowledgeResult.status === "fulfilled" ? knowledgeResult.value : [];
       const activity = activityResult.status === "fulfilled" ? activityResult.value.items : [];
-      if (!taskSummary && knowledge.length === 0 && activity.length === 0) {
+      if (taskResult.status === "rejected" && knowledgeResult.status === "rejected" && activityResult.status === "rejected") {
         setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         return;
       }
@@ -205,8 +206,8 @@ function HomeRoute({ locale }: { locale: LocaleRuntime }) {
       setState({ kind: "ready", summary });
     });
     return () => { active = false; };
-  }, [locale]);
-  return <HomePage locale={locale} state={state} />;
+  }, [locale, retry]);
+  return <HomePage locale={locale} state={state} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
 }
 
 export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics }: { locale: LocaleRuntime; search: string; load?: (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview> }) {
