@@ -37,7 +37,8 @@ import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
-import { createTasksRequestController, deleteTask, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
+import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
+import { buildWorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
@@ -188,13 +189,24 @@ function assertNever(value: never): never {
 }
 
 function HomeRoute({ locale }: { locale: LocaleRuntime }) {
-  const [recent, setRecent] = useState<Array<{ id: string; title: string }>>([]);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; total: number; pending: number; published: number; recent: Array<{ id: string; title: string }> } | { kind: "error"; message: string }>({ kind: "loading" });
   useEffect(() => {
     let active = true;
-    void loadRecentKnowledge().then((items) => { if (active) setRecent(items.map((item) => ({ id: item.id, title: item.title }))); }).catch(() => { if (active) setRecent([]); });
+    void Promise.allSettled([loadTaskSummary(), loadRecentKnowledge(), loadWorkspaceActivity()]).then(([taskResult, knowledgeResult, activityResult]) => {
+      if (!active) return;
+      const taskSummary = taskResult.status === "fulfilled" ? taskResult.value : undefined;
+      const knowledge = knowledgeResult.status === "fulfilled" ? knowledgeResult.value : [];
+      const activity = activityResult.status === "fulfilled" ? activityResult.value.items : [];
+      if (!taskSummary && knowledge.length === 0 && activity.length === 0) {
+        setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        return;
+      }
+      const summary = buildWorkbenchSummary({ taskSummary, knowledge, activity });
+      setState({ kind: "ready", total: summary.taskCount, pending: summary.overdueTaskCount, published: summary.recentKnowledge.length, recent: summary.recentKnowledge.map((item) => ({ id: item.id, title: item.title })) });
+    });
     return () => { active = false; };
-  }, []);
-  return <HomePage locale={locale} state={{ kind: "ready", total: 0, pending: 0, published: 0, recent }} />;
+  }, [locale]);
+  return <HomePage locale={locale} state={state} />;
 }
 
 export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics }: { locale: LocaleRuntime; search: string; load?: (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview> }) {
