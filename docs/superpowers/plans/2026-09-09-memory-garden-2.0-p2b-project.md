@@ -47,10 +47,10 @@
 
 ### Task 4: Project workbench page
 
-- [ ] Add `frontend/lib/projects-data.ts` and `frontend/pages/projects-page.tsx`.
-- [ ] Add `/projects` route, navigation icon, bilingual copy, empty/loading/error states and no-`undefined` contract.
-- [ ] Render project status, progress summary, linked Goal and bounded task count; do not implement an unbounded project timeline.
-- [ ] Add SSR/component tests and route access tests.
+- [x] Add `frontend/lib/projects-data.ts` and `frontend/pages/projects-page.tsx`.
+- [x] Add `/projects` route, navigation icon, bilingual copy, empty/loading/error states and no-`undefined` contract.
+- [x] Render project status, progress summary, linked Goal and bounded task count; do not implement an unbounded project timeline.
+- [x] Add SSR/component tests and route access tests.
 
 ### Task 5: Evidence and checklist
 
