@@ -77,6 +77,9 @@ import { CaptureRepository } from "./capture/repository";
 import { CaptureClassificationService } from "./capture/service";
 import { ProjectTimelineRepository } from "./project-timeline/repository";
 import { ProjectTimelineService } from "./project-timeline/service";
+import { EnvironmentsRepository } from "./environments/repository";
+import { EnvironmentsService } from "./environments/service";
+import { routeEnvironmentsApi } from "./routes/environments";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -372,6 +375,7 @@ function createRequestServices(
       projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
       calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
     }),
+    environments: new EnvironmentsService(new EnvironmentsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -426,6 +430,8 @@ async function dispatchApiRequest(
   if (capture) return capture;
   const today = await routeTodayApi(request, url, context, principal, { today: services.today });
   if (today) return today;
+  const environments = await routeEnvironmentsApi(request, url, context, principal, { environments: services.environments });
+  if (environments) return environments;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });

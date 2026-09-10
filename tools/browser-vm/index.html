@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>浏览器 Linux · 本地验证</title>
+</head>
+<body>
+  <main>
+    <h1>浏览器内 Linux 验证</h1>
+    <p>仅用于开发验收，不是工作台正式入口。测试镜像尚未通过发布审核，网络默认关闭。</p>
+    <p>将使用 256 MiB 客体内存，验证真实命令、双向文件交换及销毁实例后的恢复。</p>
+    <p><label>Linux 镜像 <select id="image"><option value="buildroot">Buildroot 开发镜像</option><option value="alpine-iso">完整 Alpine 3.24.1（独立内核和系统）</option></select></label>（完整镜像需要约 66 MiB 启动资源，另计引擎、内存及快照开销）</p>
+    <p><label><input id="alpine" type="checkbox">包含 Alpine 包管理器验证</label>（需本地准备固定版本镜像；仍不验证联网）</p>
+    <p><label><input id="network" type="checkbox" disabled>包含受控联网验证</label>（会在临时 Linux 下载 Git/curl，并访问公开 GitHub 仓库和 API；只连接本机认证中继）</p>
+    <button id="run" type="button">运行 Linux 验证</button>
+    <button id="cancel" type="button" disabled>取消验证</button>
+    <p id="status" role="status">尚未运行</p>
+    <pre id="result" aria-label="验证结果"></pre>
+    <section aria-labelledby="terminal-heading">
+      <h2 id="terminal-heading">交互终端 · 离线 Alpine</h2>
+      <p>独立 Worker 内的真实 Linux。仅本地开发验收，关闭即丢弃状态；不访问宿主文件、不联网、不保存。与上方固定验证互斥。</p>
+      <button id="terminal-start" type="button">启动交互 Linux</button>
+      <button id="terminal-stop" type="button" disabled>停止交互 Linux</button>
+      <p id="terminal-status" role="status">尚未启动交互会话</p>
+      <p><label>串口输出（纯文本，非完整终端模拟器）<br>
+        <textarea id="terminal-output" rows="16" cols="90" readonly wrap="off" spellcheck="false"></textarea>
+      </label></p>
+      <p><label>Linux 输入（最多 4096 UTF-8 字节）<br>
+        <textarea id="terminal-input" rows="3" cols="90" disabled spellcheck="false" autocomplete="off"></textarea>
+      </label></p>
+      <button id="terminal-send" type="button" disabled>发送输入</button>
+      <button id="terminal-interrupt" type="button" disabled>中断命令 Ctrl+C</button>
+      <button id="terminal-clear" type="button">清空显示</button>
+      <p>发送只表示输入交给客体，不代表命令完成。不会自动重发。可用 /mnt/work 读写临时文件；连续输出超过缓冲上限会显示丢弃提示。</p>
+    </section>
+  </main>
+  <script type="module" src="/browser.mjs"></script>
+</body>
+</html>

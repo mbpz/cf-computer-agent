@@ -20,6 +20,8 @@ describe("admin roles API", () => {
        ('role-contributor', 'subject-role-contributor', 'role-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
     ).run();
     const members = new MembersRepository(env.DB);
+    // Creation and request-time validation must use the same clock; a fixed
+    // historical issue time makes unrelated role tests expire as time passes.
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     admin = (await sessions.create((await members.findById("role-admin"))!)).token;
     contributor = (await sessions.create((await members.findById("role-contributor"))!)).token;
