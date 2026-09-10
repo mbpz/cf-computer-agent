@@ -28,6 +28,11 @@
     "check": "npm run vendor:check && npm run types:check && npm run typecheck && npm run typecheck:landing && npm test && npm run build",
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
+    "test:browser-vm": "node --test scripts/browser-vm-artifacts.test.mjs scripts/browser-vm-checkpoint.test.mjs scripts/browser-vm-iso-artifacts.test.mjs scripts/browser-vm-serial.test.mjs scripts/browser-vm-server.test.mjs scripts/browser-vm-probe-failures.test.mjs scripts/browser-vm-probe-worker.test.mjs scripts/browser-vm-alpine-artifact.test.mjs scripts/browser-vm-network-policy.test.mjs scripts/browser-vm-relay.test.mjs scripts/browser-vm-probe-socket.test.mjs scripts/browser-vm-terminal.test.mjs scripts/browser-vm-terminal-client.test.mjs scripts/browser-vm-terminal-worker.test.mjs",
+    "test:browser-vm:recovery-page": "node --test scripts/browser-vm-recovery-page.test.mjs",
+    "test:browser-vm:linux": "node --test --test-concurrency=1 tools/browser-vm/probe.test.mjs tools/browser-vm/terminal.test.mjs tools/browser-vm/network-recovery.test.mjs tools/browser-vm/browser-recovery.test.mjs",
+    "test:browser-vm:network": "node --test tools/browser-vm/probe-network.test.mjs",
+    "dev:browser-vm": "node tools/browser-vm/server.mjs",
     "probe:automation:invalid": "node scripts/automation-probe.mjs --invalid-health",
     "probe:automation:admin-forbidden": "node scripts/automation-probe.mjs --admin-forbidden",
     "verify:m1:migrations": "node scripts/verify-m1-migrations.mjs",
@@ -67,8 +72,10 @@
     "shadcn": "^4.19.0",
     "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
+    "v86": "0.5.458",
     "vite": "^8.2.2",
     "vitest": "^4.1.10",
-    "wrangler": "4.119.0"
+    "wrangler": "4.119.0",
+    "ws": "8.21.0"
   }
 }

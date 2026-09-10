@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>浏览器 Linux 网络恢复验证</title></head>
+<body>
+  <h1>浏览器 Linux 网络恢复验证</h1>
+  <p>仅本机 HTTP 测试：真实 Linux / WISP / 快照，不代表公网 HTTPS、Git 或包安装验收。无账户数据、无持久存储。</p>
+  <button id="start">开始恢复验证</button>
+  <button id="grant" disabled>授权新连接并继续</button>
+  <button id="cancel" disabled>取消验证</button>
+  <p id="status" role="status">待运行</p>
+  <pre id="evidence"></pre>
+  <script type="module" src="/recovery-browser.mjs"></script>
+</body></html>

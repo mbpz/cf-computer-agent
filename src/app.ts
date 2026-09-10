@@ -61,6 +61,9 @@ import { SavedViewsRepository } from "./saved-views/repository";
 import { SavedViewsService } from "./saved-views/service";
 import { TasksRepository } from "./tasks/repository";
 import { TasksService } from "./tasks/service";
+import { EnvironmentsRepository } from "./environments/repository";
+import { EnvironmentsService } from "./environments/service";
+import { routeEnvironmentsApi } from "./routes/environments";
 import { NotificationsRepository } from "./notifications/repository";
 import { NotificationsService } from "./notifications/service";
 import { DiscussionTargetAuthorization } from "./discussions/authorization";
@@ -307,6 +310,7 @@ function createRequestServices(
     notifications,
     discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications }),
     tasks: new TasksService(taskRecords, { audit, notifications }),
+    environments: new EnvironmentsService(new EnvironmentsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
     recentVisits: new RecentVisitsService(new RecentVisitsRepository(env.DB)),
@@ -343,6 +347,8 @@ async function dispatchApiRequest(
   if (member) return member;
   const tasks = await routeTasksApi(request, url, context, principal, { tasks: services.tasks });
   if (tasks) return tasks;
+  const environments = await routeEnvironmentsApi(request, url, context, principal, { environments: services.environments });
+  if (environments) return environments;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });
   if (notifications) return notifications;
   const discussions = await routeDiscussionsApi(request, url, context, principal, { discussions: services.discussions });

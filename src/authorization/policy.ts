@@ -16,7 +16,8 @@ export type Capability =
   | "analytics:read"
   | "role:manage"
   | "menu:manage"
-  | "tasks:use";
+  | "tasks:use"
+  | "vm:use";
 
 const contributorCapabilities = Object.freeze<readonly Capability[]>([
   "legacy:read",
@@ -91,6 +92,7 @@ const capabilityPermission: Partial<Record<Capability, PermissionKey>> = {
   "audit:read": "audit:read",
   "analytics:read": "analytics:read",
   "tasks:use": "workspace.tasks",
+  "vm:use": "workspace.vm",
 };
 
 function permissionForCapability(capability: Capability, mask: bigint): boolean {
