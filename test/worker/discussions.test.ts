@@ -353,7 +353,6 @@ describe("discussion HTTP contract", () => {
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, {
       waitUntil: () => undefined,
-      now: () => new Date("2026-08-30T00:00:00.000Z"),
     });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;

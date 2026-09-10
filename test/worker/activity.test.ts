@@ -21,7 +21,7 @@ describe("member activity feed", () => {
     await seedKnowledge();
     await seedActivity();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     contributor = (await sessions.create((await members.findByIdentitySubject("subject-contributor"))!)).token;
     other = (await sessions.create((await members.findByIdentitySubject("subject-other"))!)).token;
     admin = (await sessions.create((await members.findByIdentitySubject("subject-admin"))!)).token;

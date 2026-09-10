@@ -136,7 +136,7 @@ describe("notifications HTTP contract", () => {
       "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('member-a', 'subject-a', 'a@example.test', 'contributor', 'active', ?, ?), ('member-b', 'subject-b', 'b@example.test', 'contributor', 'active', ?, ?)",
     ).bind(timestamp, timestamp, timestamp, timestamp).run();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(timestamp) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
     const repository = new NotificationsRepository(env.DB);

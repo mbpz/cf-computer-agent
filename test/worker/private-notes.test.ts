@@ -22,7 +22,7 @@ describe("private knowledge notes", () => {
     const members = new MembersRepository(env.DB);
     await seedMember("member-a", "a@example.test", "contributor");
     await seedMember("member-b", "b@example.test", "contributor");
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-member-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-member-b"))!)).token;
   });

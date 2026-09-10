@@ -20,7 +20,7 @@ describe("admin menus API", () => {
        ('menu-contributor', 'subject-menu-contributor', 'menu-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
     ).run();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     admin = (await sessions.create((await members.findById("menu-admin"))!)).token;
     contributor = (await sessions.create((await members.findById("menu-contributor"))!)).token;
     await env.DB.prepare("INSERT INTO menus (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at) VALUES ('menu-custom', 'menu-workspace', 'custom', 'NAV_HOME', '/custom', 'House', 'workspace', 99, '0x0', 'active', 1, 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
@@ -44,7 +44,7 @@ describe("admin menus API", () => {
     const contributorPayload = await contributorResponse.json() as { tree: MenuPayloadNode[] };
     expect(contributorPayload.tree.map((node) => node.key)).toEqual(["workspace"]);
     expect(contributorPayload.tree[0]?.children.map((node) => node.key)).toEqual([
-      "home", "knowledge", "submit", "my-submissions", "tasks", "boards", "notifications", "messages",
+      "home", "knowledge", "submit", "my-submissions", "tasks", "boards", "goals", "notifications", "projects", "messages", "inbox",
     ]);
     expect(contributorPayload.tree[0]?.children.find((node) => node.key === "knowledge")?.children.map((node) => node.key)).toEqual(["search", "agent"]);
 

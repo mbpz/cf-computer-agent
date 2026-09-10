@@ -24,7 +24,7 @@ describe("site analytics", () => {
        ('analytics-admin', 'subject-analytics-admin', 'analytics-admin@example.test', 'admin', 'active', ?, ?)`,
     ).bind(NOW, NOW, NOW, NOW).run();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     contributor = (await sessions.create((await members.findById("analytics-contributor"))!)).token;
     admin = (await sessions.create((await members.findById("analytics-admin"))!)).token;
   });

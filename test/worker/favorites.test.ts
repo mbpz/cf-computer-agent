@@ -18,7 +18,7 @@ describe("knowledge favorites", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await seedKnowledge();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-favorite-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-favorite-b"))!)).token;
   });

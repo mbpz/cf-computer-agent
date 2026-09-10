@@ -20,7 +20,7 @@ describe("admin roles API", () => {
        ('role-contributor', 'subject-role-contributor', 'role-contributor@example.test', 'contributor', 'active', '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')`,
     ).run();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date("2026-08-26T00:00:00.000Z") });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     admin = (await sessions.create((await members.findById("role-admin"))!)).token;
     contributor = (await sessions.create((await members.findById("role-contributor"))!)).token;
     await env.DB.prepare("INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES ('role-editor', 'editor', 'Editor', '', '0x4003', 'active', 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();

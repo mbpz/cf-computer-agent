@@ -1332,7 +1332,7 @@ describe("Phase 1 control-plane migrations", () => {
     ["key", "conflicting-boards-key", "boards", "/conflicting-boards-key"],
     ["path", "conflicting-boards-path", "conflicting-boards-path", "/boards"],
   ])("fails 0034 on an incompatible unique %s conflict", async (_kind, id, key, path) => {
-    const priorMigrations = MIGRATIONS.slice(0, -4);
+    const priorMigrations = MIGRATIONS.slice(0, 33);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1346,7 +1346,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("preserves canonical 0034 rows without overriding managed fields", async () => {
-    const priorMigrations = MIGRATIONS.slice(0, -4);
+    const priorMigrations = MIGRATIONS.slice(0, 33);
     await applyD1Migrations(env.DB, priorMigrations);
     await env.DB.prepare(
       `INSERT INTO menus
@@ -1364,7 +1364,7 @@ describe("Phase 1 control-plane migrations", () => {
   });
 
   it("adds 0035 as an idempotent position-only collaboration menu migration", async () => {
-    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, -2));
+    await applyD1Migrations(env.DB, MIGRATIONS.slice(0, 34));
     await env.DB.prepare("UPDATE menus SET position = 42, visible = 0, status = 'disabled' WHERE id = 'menu-boards'").run();
     const migrationSql = workbenchCollaborationMenusMigration.replace(/^--.*$/gmu, "");
     await env.DB.prepare(migrationSql).run();
@@ -1637,7 +1637,7 @@ describe("Phase 1 control-plane migrations", () => {
     expect(unreadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
     expect(markReadPlan).toContain("SEARCH notifications USING INDEX sqlite_autoindex_notifications_1 (id=?)");
     expect(markManyReadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
-    expect(casPlan).toContain("SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)");
+    expect(casPlan).toContain("SEARCH tasks USING INDEX idx_tasks_id_member (id=? AND member_id=?)");
     expect(pendingIntentPlan).toContain("SEARCH task_status_notification_intents USING INDEX idx_task_status_notification_intents_recipient_pending (recipient_member_id=? AND task_id=?)");
     expect(markIntentDeliveredPlan).toContain("SEARCH task_status_notification_intents USING INDEX sqlite_autoindex_task_status_notification_intents_1 (id=?)");
     expect(lazyDuePlan).toContain("SEARCH t USING INDEX idx_tasks_member_status_due (member_id=? AND status=? AND due_at>? AND due_at<?)");
@@ -1762,7 +1762,7 @@ describe("Phase 1 control-plane migrations", () => {
     expect(participantPlan).toContain("SEARCH discussion_participants USING COVERING INDEX idx_discussion_participants_member_thread (member_id=?)");
     expect(historyPlan).toContain("SEARCH discussion_messages USING COVERING INDEX idx_discussion_messages_thread_sequence (thread_id=?)");
     expect(replayPlan).toContain("SEARCH discussion_messages USING INDEX sqlite_autoindex_discussion_messages_4 (author_member_id=? AND client_key=?)");
-    expect(taskAuthorizationPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");
+    expect(taskAuthorizationPlan).toContain("SEARCH t USING COVERING INDEX idx_tasks_id_member (id=? AND member_id=?)");
     expect(taskAuthorizationPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");

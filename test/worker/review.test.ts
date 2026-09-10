@@ -20,7 +20,7 @@ describe("knowledge review", () => {
     await applyD1Migrations(env.DB, MIGRATIONS);
     await seedReviewCorpus();
     const members = new MembersRepository(env.DB);
-    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => new Date(NOW) });
+    const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined });
     contributor = (await sessions.create((await members.findByIdentitySubject("subject-review-contributor"))!)).token;
     admin = (await sessions.create((await members.findByIdentitySubject("subject-review-admin"))!)).token;
   });
