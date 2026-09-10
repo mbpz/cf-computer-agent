@@ -29,7 +29,7 @@
     "smoke": "node scripts/smoke.mjs",
     "probe:automation": "node scripts/automation-probe.mjs",
     "test:browser-vm": "node --test scripts/browser-vm-artifacts.test.mjs scripts/browser-vm-checkpoint.test.mjs scripts/browser-vm-iso-artifacts.test.mjs scripts/browser-vm-serial.test.mjs scripts/browser-vm-server.test.mjs scripts/browser-vm-probe-failures.test.mjs scripts/browser-vm-probe-worker.test.mjs scripts/browser-vm-alpine-artifact.test.mjs scripts/browser-vm-network-policy.test.mjs scripts/browser-vm-relay.test.mjs scripts/browser-vm-probe-socket.test.mjs scripts/browser-vm-terminal.test.mjs scripts/browser-vm-terminal-client.test.mjs scripts/browser-vm-terminal-worker.test.mjs",
-    "test:browser-vm:recovery-page": "node --test scripts/browser-vm-recovery-page.test.mjs",
+    "test:browser-vm:recovery-page": "node --test scripts/browser-vm-recovery-page.test.mjs scripts/browser-vm-recovery-core.test.mjs",
     "test:browser-vm:linux": "node --test --test-concurrency=1 tools/browser-vm/probe.test.mjs tools/browser-vm/terminal.test.mjs tools/browser-vm/network-recovery.test.mjs tools/browser-vm/browser-recovery.test.mjs",
     "test:browser-vm:network": "node --test tools/browser-vm/probe-network.test.mjs",
     "dev:browser-vm": "node tools/browser-vm/server.mjs",

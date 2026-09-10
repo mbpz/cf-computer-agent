@@ -333,7 +333,8 @@ Pinned native WISP emits numeric destination IPs and reconnects automatically. T
 - [x] Share real-engine recovery verification between Node and a dedicated browser Worker: POST once, hold GET, save, destroy, restore offline, park, explicit fresh grant, restore, fresh GET.
 - [x] Real Linux core regression passed (1 test, 26.3 seconds): exactly three requests, two grants, failed old held request, zero final relay sessions. The first implementation failed the existing 16-character command-ID contract; fixed without relaxing that contract.
 - [x] Page lifecycle unit regressions passed (5 tests): explicit grant, duplicate clicks, cancellation, stale replies, deadline/errors, page departure, result evidence and Worker-constructor failure. Constructor-failure regression was observed failing before its fix.
-- [ ] Run the new recovery page in an actual browser, including manual fresh-grant, cancellation and restart. Starting the local test service was denied because the approval service hit its retry/rate limit; no workaround was attempted. Node/page-unit evidence is not browser execution evidence.
+- [x] Execute the new recovery page in an actual browser. The earlier approval-service startup failure was resolved by a later authorized local start; results and remaining failures are recorded below.
+- [ ] Pass repeated browser recovery, including manual fresh-grant, cancellation and restart. One complete browser run passed; later independent repetitions timed out at `offline-request`. Do not treat the single success as stable acceptance.
 - [ ] Continue controlled public HTTPS/Git/package acceptance and the remaining G0 requirements below.
 
 New diagnostics live under `tools/browser-vm/recovery*` and are served only with the explicit `--recovery-fixture` option. This fixture cannot validate public TLS, production member authorization or encrypted persistence. G0 remains incomplete; no formal product runtime has been enabled.
@@ -352,3 +353,21 @@ No production deployment, remote migration, secret-file access, paid resource cr
 - Fresh merged-tree verification: `npm test` passed (39 Worker files / 575 tests); `npm run typecheck` and `npm run typecheck:landing` passed. The full test command includes smoke, i18n, delivery contracts, unit tests and a fresh UI build before Worker tests.
 - VM checks: `test:browser-vm` 101/101, `test:browser-vm:recovery-page` 5/5, and `test:browser-vm:linux` 6/6 using the existing verified local artifacts. No skipped Linux cases. Real-engine recovery again observed two grants, three upstream requests, one original POST, old stream closed and old guest request exit code 1.
 - This is local integration evidence, not a release or G0 completion. Actual browser recovery acceptance remains the next step; public HTTPS/Git/package reliability, reviewed image release, production authorization and encrypted persistence remain open.
+
+## 2026-09-10 browser execution after local merge f426d01
+
+Actual in-app browser, loopback-only recovery server, dedicated browser Worker, same verified Alpine ISO. This is a diagnostic harness, not the formal workbench page.
+
+1. First full run passed. Before the explicit fresh-grant click, the DOM reported `holdClosed: true`, `activeSessions: 0`, `grants: 1`, and exactly `POST /once` plus `GET /hold`. Grant remained a separate enabled user action.
+2. After clicking fresh grant, the DOM reported `completed: true`, `executionHost: browser-worker`, `grants: 2`, `oldRequestExitCode: 1`, `activeSessions: 0`, and exactly three requests: `POST /once`, `GET /hold`, `GET /after`. No duplicate POST was observed.
+3. A subsequent start followed by cancel returned the UI to a stopped state with Start enabled and Grant/Cancel disabled. This proves the observed UI behavior, not exhaustive resource-cleanup acceptance.
+4. Restart after cancel failed with a guest-command timeout. Another manually started run also failed; after adding phase-only diagnostics and reloading the page, the failure was localized to **`offline-request`**. Thus cancellation is not established as the cause. No timeout was increased and no guest command was automatically retried.
+5. Diagnostic regression: observed failing before implementation, then 6/6 recovery-page/core unit cases passed. The timeout test checks stage-only error reporting, serial listener removal and exactly one send. Fresh real Linux recovery regression also passed 1/1 in 27.2 seconds with the diagnostic change. These Node results do not override the browser failure.
+
+Next bounded investigation:
+
+- [ ] Measure guest-clock progress versus host deadline and bounded serial-result state during `offline-request`; distinguish an uncompleted guest request from missing command framing or browser scheduling effects. These are hypotheses, not established causes.
+- [ ] Fix the demonstrated cause without automatic mutation replay, broadening destinations or silently increasing timeout limits.
+- [ ] Re-run multiple complete browser cycles, cancellation during boot/offline wait, and restart; preserve both success and failure observations.
+
+G0 remains **not passed**. The local merge exists, but no push, deployment, remote migration, default VM permission or formal product runtime was enabled.
