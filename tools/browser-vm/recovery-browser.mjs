@@ -38,7 +38,10 @@ start.addEventListener('click', () => {
     } else if (data?.type === 'result') {
       output.textContent = JSON.stringify(data.evidence, null, 2);
       finish('通过：本机 HTTP 恢复验证（不代表公网验收）');
-    } else finish(`失败：${data?.message ?? '无效结果'}`);
+    } else {
+      if (data?.diagnostic) output.textContent = JSON.stringify(data.diagnostic, null, 2);
+      finish(`失败：${data?.message ?? '无效结果'}`);
+    }
   });
   current.postMessage({ type: 'run' });
 });

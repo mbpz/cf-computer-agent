@@ -9,10 +9,11 @@ import { startRecoveryFixture } from './recovery-fixture.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 
-export async function startProbeServer({ assets, isoAssets, recovery = false }) {
+export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false }) {
   if (typeof assets !== 'string' || !assets) throw new Error('Explicit development assets required');
   if (isoAssets !== undefined && (typeof isoAssets !== 'string' || !isoAssets)) throw new Error('Explicit ISO assets required');
   if (typeof recovery !== 'boolean' || (recovery && !isoAssets)) throw new Error('Recovery requires explicit ISO assets');
+  if (typeof directDownload !== 'boolean') throw new Error('Direct download requires explicit boolean opt-in');
   const files = new Map([
     ['/', [join(directory, 'index.html'), 'text/html; charset=utf-8']],
     ...['browser.mjs', 'probe-core.mjs', 'probe-checkpoint.mjs', 'serial-protocol.mjs', 'probe-worker.mjs', 'probe-worker-client.mjs', 'alpine-artifact.mjs', 'alpine-iso.mjs', 'authenticated-probe-socket.mjs',
@@ -31,6 +32,9 @@ export async function startProbeServer({ assets, isoAssets, recovery = false }) 
   if (recovery) for (const name of ['recovery.html', 'recovery-browser.mjs', 'recovery-worker.mjs', 'recovery-core.mjs']) {
     files.set(`/${name}`, [join(directory, name), name.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8']);
   }
+  if (directDownload) for (const name of ['direct-download.html', 'direct-download-browser.mjs', 'direct-download-page.mjs', 'direct-download.mjs']) {
+    files.set(`/${name}`, [join(directory, name), name.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8']);
+  }
   const recoveryFixture = recovery ? await startRecoveryFixture() : undefined;
   let origin;
   let relay;
@@ -39,6 +43,10 @@ export async function startProbeServer({ assets, isoAssets, recovery = false }) 
     response.setHeader('X-Content-Type-Options', 'nosniff');
     // v86's pinned scheduler creates a blob Worker. This policy is local-probe-only.
     response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+    if (directDownload && request.url === '/direct-download.html') {
+      // No same-origin connect permission: this document cannot contact the local relay.
+      response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src https://dl-cdn.alpinelinux.org https://api.github.com https://github.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+    }
     if (`http://${request.headers.host}` !== origin
       || (request.headers.origin && request.headers.origin !== origin)) {
       response.writeHead(403).end('Forbidden origin');
@@ -95,7 +103,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false }) 
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture' });
+  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download' });
   console.log(`Local-only Linux verification: ${server.url}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
     await server.close();

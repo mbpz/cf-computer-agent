@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>浏览器本机网络下载诊断</title></head>
+<body>
+  <main>
+    <h1>浏览器本机网络下载诊断</h1>
+    <p>仅供本地验收。点击后通过当前浏览器读取固定的公共资源，不使用服务器代下载或 WISP 中继。</p>
+    <p>使用浏览器自身的网络配置；不发送登录凭据、不跟随重定向、不自动重试。单次最多 30 秒、8 MiB。</p>
+    <p>下载只在内存中校验后释放，不导入 VM、不写入磁盘或账户。这里通过不等于 apk / git 已能在 VM 内联网。</p>
+    <fieldset><legend>选择一项进行实际下载</legend>
+      <button type="button" data-target="alpine-main">下载 Alpine main 索引</button>
+      <button type="button" data-target="alpine-community">下载 Alpine community 索引</button>
+      <button type="button" data-target="alpine-rootfs">下载 Alpine 根文件系统并校验</button>
+      <button type="button" data-target="github-api">读取 GitHub 公共仓库 API</button>
+      <button type="button" data-target="github-git">读取 GitHub Git 协议入口</button>
+    </fieldset>
+    <p><button type="button" id="cancel" disabled>取消下载</button></p>
+    <p id="status" role="status" aria-live="polite">尚未发起请求。</p>
+    <pre id="result" aria-label="诊断结果"></pre>
+    <p>只有固定根文件系统使用预先记录的可信 SHA-256 核验。其余摘要仅记录接收内容，不代表来源完整性已验证。</p>
+  </main>
+  <script type="module" src="/direct-download-browser.mjs"></script>
+</body>
+</html>

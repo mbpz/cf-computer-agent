@@ -44,6 +44,6 @@ self.addEventListener('message', async ({ data }) => {
     });
     self.postMessage({ type: 'result', evidence: { ...evidence, grants, executionHost: 'browser-worker' } });
   } catch (error) {
-    self.postMessage({ type: 'failure', message: error instanceof Error ? error.message : 'Recovery failed' });
+    self.postMessage({ type: 'failure', message: error instanceof Error ? error.message : 'Recovery failed', diagnostic: error?.diagnostic });
   }
 });

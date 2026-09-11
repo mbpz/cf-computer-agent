@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { get } from 'node:http';
 import { startProbeServer } from '../tools/browser-vm/server.mjs';
 
-async function fixture(t, { iso = false, recovery = false } = {}) {
+async function fixture(t, { iso = false, recovery = false, directDownload = false } = {}) {
   const assets = await mkdtemp(join(tmpdir(), 'workbench-vm-server-'));
   t.after(() => rm(assets, { recursive: true, force: true }));
   await writeFile(join(assets, 'seabios.bin'), new Uint8Array([7, 8, 9]));
@@ -16,12 +16,31 @@ async function fixture(t, { iso = false, recovery = false } = {}) {
     await writeFile(join(assets, 'alpine-virt-3.24.1-x86.iso'), new Uint8Array([3, 4]));
     await writeFile(join(assets, 'private.txt'), 'not public');
   }
-  const server = await startProbeServer({ assets, recovery, ...(iso ? { isoAssets: assets } : {}) });
+  const server = await startProbeServer({ assets, recovery, directDownload, ...(iso ? { isoAssets: assets } : {}) });
   t.after(async () => {
     await server.close();
   });
   return server;
 }
+
+test('direct download diagnostic is opt-in and external connect permission is scoped to its document', async t => {
+  const ordinary = await fixture(t);
+  assert.equal((await fetch(ordinary.url + '/direct-download.html')).status, 404);
+  const server = await fixture(t, { directDownload: true });
+  for (const path of ['/direct-download.html', '/direct-download.mjs', '/direct-download-page.mjs', '/direct-download-browser.mjs']) {
+    assert.equal((await fetch(server.url + path)).status, 200);
+    assert.equal((await fetch(server.url + path, { headers: { Origin: 'https://other.example' } })).status, 403);
+    assert.equal((await fetch(server.url + path, { method: 'POST' })).status, 405);
+  }
+  const policy = (await fetch(server.url + '/direct-download.html')).headers.get('content-security-policy');
+  assert.match(policy, /connect-src https:\/\/dl-cdn.alpinelinux.org https:\/\/api.github.com https:\/\/github.com;/);
+  assert.doesNotMatch(policy, /connect-src 'self'/);
+  const rootPolicy = (await fetch(server.url + '/')).headers.get('content-security-policy');
+  assert.match(rootPolicy, /connect-src 'self';/);
+  assert.doesNotMatch(rootPolicy, /github/);
+  assert.equal((await fetch(server.url + '/download?url=https://other.example')).status, 404);
+  assert.deepEqual(server.inspectRelay(), []);
+});
 
 test('recovery fixture is explicitly opt-in, bounded and origin protected', async t => {
   const ordinary = await fixture(t);

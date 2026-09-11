@@ -76,3 +76,11 @@ test('worker construction failure leaves the page retryable', () => {
   assert.equal(p.elements.cancel.disabled, true);
   assert.match(p.elements.status.textContent, /失败/);
 });
+
+test('command failure preserves bounded diagnostics while closing the worker', () => {
+  const p = page(); p.click('start');
+  p.workers[0].reply({ type: 'failure', message: 'command timeout', diagnostic: { beginSeen: false, receivedBytes: 0 } });
+  assert.deepEqual(JSON.parse(p.elements.evidence.textContent), { beginSeen: false, receivedBytes: 0 });
+  assert.equal(p.workers[0].terminated, true);
+  assert.equal(p.elements.start.disabled, false);
+});

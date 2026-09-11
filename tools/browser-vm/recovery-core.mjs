@@ -16,6 +16,7 @@ function engineEvent(machine, name) {
 
 export function runRecoveryCommand(machine, text, { stage, timeoutMs = 8000 } = {}) {
   const id = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+  const initialInstructions = machine.get_instruction_counter?.();
   return new Promise((resolve, reject) => {
     let output = '';
     const finish = (error, result) => {
@@ -27,9 +28,25 @@ export function runRecoveryCommand(machine, text, { stage, timeoutMs = 8000 } = 
       output += String.fromCharCode(byte);
       if (output.length > 65536) return finish(new Error('Bounded recovery output exceeded'));
       const reply = parseProbeReply(output, id);
-      if (reply) finish(null, reply);
+      // A result frame is emitted before ash returns to its input loop. Sending
+      // the next command (or snapshotting) here races terminal mode changes.
+      const end = reply && `\x1eEND:${id}:${reply.exitCode}\x1f`;
+      if (reply && output.slice(output.indexOf(end) + end.length).includes('localhost:~# ')) finish(null, reply);
     };
-    const timer = setTimeout(() => finish(new Error(`Recovery guest command timed out: ${stage ?? 'unspecified'}`)), timeoutMs);
+    const timer = setTimeout(() => {
+      const error = new Error(`Recovery guest command timed out: ${stage ?? 'unspecified'}`);
+      error.diagnostic = {
+        stage: stage ?? 'unspecified', receivedBytes: output.length,
+        beginSeen: output.includes(`\x1eBEGIN:${id}\x1f`),
+        instructionDelta: initialInstructions === undefined ? null : (machine.get_instruction_counter() - initialInstructions) >>> 0,
+        running: machine.is_running?.() ?? null,
+        endSeen: output.includes(`\x1eEND:${id}:`),
+        lineFeeds: output.split('\n').length - 1,
+        commandEchoComplete: output.replaceAll('\r', '').includes(encodeProbeCommand(text, id).trim()),
+        shellPromptSeen: output.includes('localhost:~# '),
+      };
+      finish(error);
+    }, timeoutMs);
     machine.add_listener('serial0-output-byte', receive);
     machine.serial0_send(encodeProbeCommand(text, id));
   });

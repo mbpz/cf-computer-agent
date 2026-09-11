@@ -334,7 +334,7 @@ Pinned native WISP emits numeric destination IPs and reconnects automatically. T
 - [x] Real Linux core regression passed (1 test, 26.3 seconds): exactly three requests, two grants, failed old held request, zero final relay sessions. The first implementation failed the existing 16-character command-ID contract; fixed without relaxing that contract.
 - [x] Page lifecycle unit regressions passed (5 tests): explicit grant, duplicate clicks, cancellation, stale replies, deadline/errors, page departure, result evidence and Worker-constructor failure. Constructor-failure regression was observed failing before its fix.
 - [x] Execute the new recovery page in an actual browser. The earlier approval-service startup failure was resolved by a later authorized local start; results and remaining failures are recorded below.
-- [ ] Pass repeated browser recovery, including manual fresh-grant, cancellation and restart. One complete browser run passed; later independent repetitions timed out at `offline-request`. Do not treat the single success as stable acceptance.
+- [x] Pass a bounded repeated browser recovery acceptance, including manual fresh-grant, cancellation and restart. After the terminal-ready sequencing fix below: three consecutive full runs, one full run after boot cancellation, and one after offline-wait cancellation passed. Earlier failures and a later overall-deadline expiry remain recorded; this is not cross-browser or public-network acceptance.
 - [ ] Continue controlled public HTTPS/Git/package acceptance and the remaining G0 requirements below.
 
 New diagnostics live under `tools/browser-vm/recovery*` and are served only with the explicit `--recovery-fixture` option. This fixture cannot validate public TLS, production member authorization or encrypted persistence. G0 remains incomplete; no formal product runtime has been enabled.
@@ -364,10 +364,108 @@ Actual in-app browser, loopback-only recovery server, dedicated browser Worker, 
 4. Restart after cancel failed with a guest-command timeout. Another manually started run also failed; after adding phase-only diagnostics and reloading the page, the failure was localized to **`offline-request`**. Thus cancellation is not established as the cause. No timeout was increased and no guest command was automatically retried.
 5. Diagnostic regression: observed failing before implementation, then 6/6 recovery-page/core unit cases passed. The timeout test checks stage-only error reporting, serial listener removal and exactly one send. Fresh real Linux recovery regression also passed 1/1 in 27.2 seconds with the diagnostic change. These Node results do not override the browser failure.
 
-Next bounded investigation:
+Investigation planned at that checkpoint (superseded by the follow-up below):
 
 - [ ] Measure guest-clock progress versus host deadline and bounded serial-result state during `offline-request`; distinguish an uncompleted guest request from missing command framing or browser scheduling effects. These are hypotheses, not established causes.
 - [ ] Fix the demonstrated cause without automatic mutation replay, broadening destinations or silently increasing timeout limits.
 - [ ] Re-run multiple complete browser cycles, cancellation during boot/offline wait, and restart; preserve both success and failure observations.
 
 G0 remains **not passed**. The local merge exists, but no push, deployment, remote migration, default VM permission or formal product runtime was enabled.
+
+## 2026-09-10 follow-up: terminal-ready sequencing and repeated browser recovery
+
+Scope: the local recovery harness on top of `3469ae4`, not the product runtime. Same pinned Alpine ISO, dedicated browser Worker and loopback-only fixed HTTP fixture.
+
+### Investigation and fix
+
+- Reproduced a first success followed by a timeout, including a new `restored-file` timeout before the offline network command. This ruled out treating the failure as exclusively an offline request timeout.
+- Bounded diagnostics showed the machine still running (one failure advanced 9,434,979 instructions) while the serial command's BEGIN and END markers were absent. Another observation reached BEGIN without END. These are different observed states, not proof of a guest-clock defect.
+- Found a concrete sequencing defect: `runRecoveryCommand` resolved on END before ash emitted its next ready prompt. The next command or checkpoint could therefore race the shell's return to its input loop. A regression failed against that implementation: the caller advanced before the full subsequent prompt.
+- The command waiter now requires the matching result frame **and the subsequent complete `localhost:~# ` prompt** for this fixed Alpine harness. The real exit status and output are retained. Earlier prompts, partial prompts and echo alone cannot complete the operation. No timeouts were raised, commands retried or destinations broadened.
+- Timeout diagnostics retain phase, byte/frame counts and execution state, not raw commands or serial content. Temporary fixed-fixture serial inspection was removed before verification. The page preserves bounded diagnostics while terminating the Worker.
+
+### Actual browser acceptance
+
+- [x] Three consecutive complete cycles without reloading the page.
+- [x] Cancel during boot, start a new cycle, explicitly grant and complete.
+- [x] Cancel while parked at the offline authorization boundary, start a new cycle, explicitly grant and complete.
+- All five completed cycles reported two grants, exactly `POST /once`, `GET /hold`, `GET /after`, `holdClosed: true`, `oldRequestExitCode: 1` and zero final active sessions. No original POST was replayed.
+- Preserve the non-success observation: an additional run reached the offline boundary but expired under the existing 120-second page-wide deadline while waiting for the manual grant. Its controls reset and the grant was disabled. This run is **not** counted among the five successes; the overall deadline includes human decision time and remains unchanged.
+
+### Fresh automated verification and remaining boundary
+
+- Recovery page/core: **10/10**; diagnostics and readiness regressions were observed failing before their implementation. Missing/partial prompts, cleanup, stale replies, explicit grants and no command replay are covered.
+- VM focused suite: **101/101**. The first sandbox attempt could not bind loopback (`EPERM`); the authorized local rerun passed, with no skips.
+- Real Linux suite: **6/6**, no skipped cases, 103.9 seconds. Shared browser recovery core, network checkpoint recovery, full ISO boot/file restoration, Buildroot file exchange, Alpine userspace and interactive UTF-8/Ctrl+C passed. A separate real recovery run also passed in 28.4 seconds.
+- Typecheck passed. The full application test/build suite was not rerun for this diagnostic-harness-only patch; previous merged-tree results remain historical, not evidence for this patch.
+
+This closes the bounded local browser recovery/cancel/restart item. **G0 remains not passed**: stable certificate-verified public HTTPS/Git/package downloads, reviewed image release, production member authorization and encrypted persistence remain open. No production source, default permission, deployment, remote migration or paid resource was changed by this follow-up.
+
+## 2026-09-10 follow-up: public HTTPS path comparison remains blocked
+
+Scope: continue the public-network gate using the existing complete Alpine ISO and local authenticated WISP relay. The previous terminal-ready changes remain in the working tree. This follow-up changes documentation only; no timeouts, TLS verification, destination policy, image source or runtime code were changed.
+
+### Controlled sequence and observations
+
+The real Node guest, host-direct Alpine downloads, host-over-WISP Alpine downloads and host-direct GitHub checks ran **sequentially**, not as competing downloads. Host HTTPS controls retained certificate/hostname verification, a 30-second deadline and bounded response consumption; only byte counts/status/timing were recorded, not response bodies or capabilities. The direct Alpine requests used the policy-validated numeric address `146.75.114.132`. The relay independently resolved the same allowlisted hostname for each connection; identical resolved IPs across transports were **not** established, so these are path observations, not an exact endpoint-controlled throughput benchmark.
+
+| Layer / fixed target | Fresh observation | Acceptance meaning |
+| --- | --- | --- |
+| Real Alpine ISO guest, `apk add --no-cache git curl` | Boot 18,452 ms; package phase timed out at 90,001 ms while fetching indexes. Relay had received 1,170,440 upstream bytes, with zero pending writes/queued frames; guest TCP established, no pending/buffered payload. Test failed 1/1, zero skipped. | Package installation did not complete; guest Git/API and subsequent network-run restoration were not reached. |
+| Host direct, main `APKINDEX.tar.gz` | 440,790 bytes at 30,009 ms; deadline failure | Partial transfer, not a successful index download. |
+| Host direct, community `APKINDEX.tar.gz` | 342,467 bytes at 30,004 ms; deadline failure | Failure is reproducible without either VM or relay. |
+| Host direct, `brotli-libs-1.2.0-r1.apk` | HTTP 200, 409,406 bytes, 10,969 ms | One complete public package download, not a guest installation. |
+| Host TLS over local WISP, main index | 424,407 bytes at 30,005 ms; deadline failure | Slow/incomplete transfer also occurs without the VM. |
+| Host TLS over local WISP, community index | 589,824 bytes at 30,004 ms; deadline failure | No complete index result. |
+| Host TLS over local WISP, same brotli package | HTTP 200, 409,406 bytes, 10,576 ms | One successful relay-path download, not aggregate networking acceptance. |
+| Host direct, GitHub public Git `info/refs?service=git-upload-pack` | HTTP 200, Git advertisement content type, 233,419 bytes, 9,232 ms | HTTPS Git discovery endpoint accessible from host; not a clone or guest Git proof. |
+| Host direct, public repository API | HTTP 200, JSON content type, 5,107 bytes, 625 ms | Host API endpoint accessible; body identity and guest API behavior not asserted in this control. |
+
+Alpine paths were `/alpine/v3.24/{main,community}/x86/APKINDEX.tar.gz` and `/alpine/v3.24/main/x86/brotli-libs-1.2.0-r1.apk`. GitHub targets remained the existing `octocat/Hello-World` public repository on `github.com` and `api.github.com`; no new destination was allowed.
+
+Diagnostic setup failures are separate from product/network failures: sandbox DNS returned `ECONNREFUSED`, then the authorized run resolved all three approved domains to public IPv4. The first host-direct diagnostic used an incompatible Node lookup callback shape and returned `ERR_INVALID_IP_ADDRESS` before traffic; after handling the callback's `all` option, the actual download observations above were obtained. These setup failures are not VM defects. The existing temporary `relay-https-experiment.mjs` prints per-request errors but exits zero; its two deadline failures were explicitly read and are not counted as passes.
+
+### Decision and bounded continuation
+
+- [x] Reproduce the existing public guest failure without increasing the 90-second command deadline.
+- [x] Compare the same Alpine targets without VM/relay and without VM only; keep partial transfers separate from successes.
+- [x] Check GitHub HTTPS independently of package installation, without treating host evidence as guest acceptance.
+- [x] Re-run local VM focused tests **101/101**, recovery tests **10/10**, and delivery-status checks **28/28**, zero skipped; `git diff --check` passed. They do not override the failed live public test.
+- [ ] Obtain a stable, authorized outbound path for the existing Alpine allowlist. No proxy, alternate mirror, public relay or production resource may be configured implicitly; any change needs explicit scope/authorization.
+- [ ] Once the path changes or connectivity is confirmed stable, repeat host-direct and host-over-WISP controls before the real Node package/Git/API probe. If transport attribution is still needed, record resolved endpoints in a bounded local comparison rather than assuming DNS equality.
+- [ ] Then run the dedicated-browser-Worker public workload and repeat public offline/restore/new-grant acceptance. This turn did not run a browser public workload; existing local HTTP browser acceptance remains separately scoped.
+
+The fresh controls demonstrate an incomplete **host-to-Alpine public path** independently of the VM and relay; they do not prove the cause of every prior guest stall or exonerate all relay/runtime code. No demonstrated implementation defect was found in this round, so no speculative fix or hidden retry was added. **VM-006 and G0 remain open**. Resume after a meaningful network-condition change or authorized path choice, not by repeating identical failing runs indefinitely. No deployment, push, remote migration, secret-file access or paid resource creation occurred. Full application tests/build and the offline real-Linux suite were not rerun in this documentation-only follow-up.
+
+## 2026-09-10 browser-computer direct-download diagnostic
+
+### New user constraint and implementation boundary
+
+The user clarified that downloads must use the computer running the workbench browser, then requested the next step. The new diagnostic uses ordinary browser `fetch` to five fixed public resources, without server download endpoints or WISP fallback. Existing host/relay observations above remain historical controls; they are not proof that the browser can read these resources. No auxiliary program is installed for the visitor. This local development HTTP server serves the diagnostic files, not the downloaded public response bodies.
+
+Implementation: `tools/browser-vm/direct-download{,-page,-browser}.mjs`, `direct-download.html`, explicit `--direct-download` option on the loopback-only probe server. Only this document receives three fixed HTTPS `connect-src` origins; same-origin relay fetch/WebSocket connections are not allowed by its policy. Other documents retain their existing policy. Every request is user initiated, GET, CORS-readable, credentialless, no-referrer, no redirect, no retry, 30-second absolute deadline, bounded streaming (at most 8 MiB across the fixed target profiles). Bodies are read into bounded memory, hashed, then released; no VM import, disk download, persistence, account data or product-page integration is implemented.
+
+The pinned Alpine rootfs uses the existing trusted artifact digest. Other SHA-256 values only record actual received bytes; they are not trusted upstream checksums. API success additionally checks `full_name`. A generic fetch error remains `network-or-cors`; its raw exception/body is not recorded and the error alone does not establish a CORS cause. Archive Content-Length checks are not applied to JSON/Git bodies, whose transfer encoding may differ from Fetch's decoded bytes.
+
+### Actual browser observations
+
+Actual in-app browser opened the diagnostic from `127.0.0.1`, then clicked each target sequentially. No browser evaluation issued hidden network requests. Measurements are from the visible diagnostic results, not Node download substitutes or mocked providers. The browser uses its own network configuration; no physical public-IP/route comparison or external Chrome/Edge acceptance was performed.
+
+| Fixed target | Actual browser result | Interpretation |
+| --- | --- | --- |
+| Alpine main index | `network-or-cors`, 0 readable bytes, 2,500 ms | No complete browser-readable response. |
+| Alpine community index | `network-or-cors`, 0 readable bytes, 309 ms | No complete browser-readable response. |
+| Pinned Alpine rootfs | `network-or-cors`, 0 readable bytes, 1,331 ms | Real trusted-digest acceptance not reached. |
+| GitHub public repository API | HTTP 200, response type `cors`, 5,566 bytes, 1,403 ms; `full_name=octocat/Hello-World` | Complete public API body read by this browser, not guest `curl` evidence. |
+| GitHub Git protocol discovery | `network-or-cors`, 0 readable bytes, 1,339 ms | No readable Git advertisement and no clone proof. |
+| Explicit cancel, then a new API run | UI changed to canceled with controls restored; next user click completed HTTP 200 / 5,566 bytes / 1,406 ms | Observed cancel/restart UI behavior; producer cancellation and stale-result suppression separately covered by tests. |
+
+Both completed API responses recorded SHA-256 `38494d9ddafe6d35f4e3e95e39b6ccb14e729800566606407059037c1df13cb1`. This mutable API digest is evidence of those responses only. All success objects explicitly retain `vmNetworkVerified: false`. A browser-readable-byte count of zero does not prove zero network traffic: the browser may reject visibility after network activity.
+
+### Verification and next gates
+
+- TDD: new core/page tests first failed on absent implementations; the added server test failed 404 vs 200 before the opt-in route existed. After implementation, **15/15** download/page tests and **8/8** server tests passed.
+- Fresh full focused suite: **102/102** VM tests (including those 8 server tests), **10/10** recovery tests, **28/28** delivery-status checks; typecheck passed. No skipped cases. Full application build/Worker suite and real-Linux suite were not rerun in this isolated browser-diagnostic batch; guest runtime code is unchanged by this batch.
+- Next: obtain response/network diagnostics for unreadable resources; define and test successful-browser-download → VM-file import separately; resolve native guest package/Git networking under the new browser-computer egress constraint. No remote fallback, new mirror or visitor-side helper is authorized by these observations.
+
+**VM-006/G0 remain open.** The local diagnostic is complete, not the product's networking capability. No formal VM UI enabled, no migration/deployment/push/secret-file access/paid resource creation. Changes are local and uncommitted in this batch.
