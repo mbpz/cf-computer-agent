@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript、React/shadcn、v86（候选固定版 0.5.458，实施前核对包内容）、Web Worker、IndexedDB/Web Crypto、Cloudflare Worker/D1、受控 WISP。
 
-**Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（细节待书面审阅）。
+**Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
 ## Global Constraints
 
@@ -45,7 +45,8 @@ G0 仍未通过，正式页面与依赖客体运行的集成不提前开放。�
 
 - [x] 用户接受本机网络组件；只修订网络传输，保留两种环境类型及浏览器内 Linux。
 - [x] 记录设计补充与 LC-001～015 原子验收项，区分用户已接受的方向和待审阅的细节。
-- [ ] 书面设计审阅后，补充首个兼容性/来源隔离探针的文件级实现计划；当前按顺序执行，不调用子代理。
+- [x] 用户要求按 checklist 顺序实施；补充 `2026-09-11-browser-vm-local-connector-probe.md`，当前分支顺序执行，不调用子代理。
+- [x] 实现仅握手的临时回环探针及控制/测试页面；18 项新增测试通过，尚无外网转发或正式账户授权。证据见 `design/browser-vm/local-connector-probe-evidence.md`。
 - [ ] 优先验证有效 HTTPS 页面到回环组件的连接、用户权限和非法来源拒绝；不能用现有 HTTP 本地页替代。
 - [ ] 依次完成配对/成员授权、出站策略、真实浏览器 `apk`/Git/API、断网恢复与账户撤销，按设计补充逐项记录证据。
 - [ ] 正式页面、安装维护和生产验收保持未完成；不得因为用户接受本机组件而将 G0 改为通过。

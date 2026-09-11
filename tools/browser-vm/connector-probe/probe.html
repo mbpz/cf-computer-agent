@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>HTTPS → 本机握手验证</title></head>
+<body><main><h1>HTTPS → 本机握手验证</h1><p>仅用于准入验收，不是 VM 联网功能。请手动启动连接器，并确认它允许本页来源。</p>
+<pre id="context"></pre>
+<p><label for="port">本机端口</label> <input id="port" inputmode="numeric" type="number" min="1" max="65535" autocomplete="off"></p>
+<p><label for="credential">一次性配对码</label> <input id="credential" type="password" autocomplete="off" spellcheck="false"></p>
+<button id="connect" type="button">验证连接</button> <button id="cancel" type="button" disabled>断开 / 取消</button>
+<p id="status" role="status">尚未连接。只连接你明确填写的端口，不自动重试。</p>
+<p>普通 HTTP、本地开发页面、证书豁免或关闭安全检查的结果不计 HTTPS 准入。成功也只代表握手，不代表 apk / Git 可用。</p>
+</main><script type="module" src="./page.mjs"></script></body></html>
