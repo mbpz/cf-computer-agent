@@ -22,7 +22,15 @@ rtk proxy npm run dev:browser-vm:connector -- https://YOUR-APPROVED-PREVIEW-ORIG
 
 ## HTTPS 文件与安全门槛
 
-2026-09-11 用户已授权独立 HTTPS 验收预览，仅限下述三个静态文件及必要的安全响应头，不修改生产工作台。发布账号检查发现 Wrangler 登录令牌过期且无法刷新，等待用户在本机重新登录；目前没有创建任何公网站点。
+2026-09-11 用户已授权独立 HTTPS 验收预览，仅限下述三个静态文件及必要的安全响应头，不修改生产工作台。2026-09-12（Asia/Shanghai）用户重新登录后，已发布独立 Pages 项目 `memory-garden-vm-connector-probe` 的 `connector-admission` 预览分支；没有部署生产工作台或使用其资源绑定。
+
+固定验收页面：`https://40b8e0aa.memory-garden-vm-connector-probe.pages.dev/probe`（`/probe.html` 自动重定向到 `/probe`）。启动时必须使用这个精确来源，不能混用分支别名：
+
+```sh
+rtk proxy npm run dev:browser-vm:connector -- https://40b8e0aa.memory-garden-vm-connector-probe.pages.dev
+```
+
+本例由操作系统分配端口，按终端输出填写，不扫描端口。线上三个文件的字节与仓库一致；`server.mjs`、`control.mjs`、`index.html` 和 `_headers` 均返回 404。已核对下述安全响应头，并设置 `X-Frame-Options: DENY` 与 `X-Robots-Tag: noindex, nofollow`。发布与文件核对不代表真实握手成功。
 
 只需要发布同目录的 `probe.html`、`page.mjs`、`client.mjs`，不发布本机控制页、`server.mjs`、仓库源码或环境配置。部署端应设置 `Cache-Control: no-store`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer`，以及响应头 CSP：
 
@@ -41,6 +49,8 @@ default-src 'none'; script-src 'self'; connect-src ws://127.0.0.1:*; base-uri 'n
 浏览器 WebSocket 的普通 error 事件不足以区分缺少组件、Origin 拒绝、CSP、权限、混合内容或证书问题。页面统一显示「原因未确定」，需要浏览器明确诊断和人工操作记录才能细分。只有协议关闭明确给出拒绝时显示「握手被拒绝」，仍不推断具体凭据失效原因。
 
 待真实验收：允许、拒绝、撤回权限；组件未启动/退出；非法来源；普通关闭与重新配对。未通过第一准入门前，不进入 LC-006 正式授权或把 `apk` / Git 标为可用。
+
+2026-09-12 内置浏览器已验证上述 HTTPS 页面加载、输入校验、虚构配对码被拒绝，以及组件停止后新连接失败。后续获准使用一次性测试码，真实 HTTPS 握手与主动断开成功；码值已清理，临时组件已停止。未操作权限提示，未完成有效码重放/过期或会话中组件退出验收。详见 `design/browser-vm/local-connector-probe-evidence.md`；当前只有内置浏览器可用，其结果不替代桌面 Chrome/Edge 完整版本与权限矩阵，也不代表 VM 已联网。
 
 ## 自动化验证
 
