@@ -174,7 +174,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} search={search} />;
     case "agent": return <AgentRoute locale={locale} search={search} />;
-    case "submit": return <SubmitRoute locale={locale} />;
+    case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
@@ -679,23 +679,46 @@ function agentScopeFromSearch(search: string): AgentScope {
     : { kind: "all" };
 }
 
-function SubmitRoute({ locale }: { locale: LocaleRuntime }) {
-  const [draft, setDraft] = useState<SubmissionDraft>(() => loadOfflineSubmissionDraft() ?? { mode: "markdown", title: "", content: "" });
+export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {
+  return <MemberSubmitForm key={memberId} locale={locale} memberId={memberId} />;
+}
+
+function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {
+  const [draft, setDraft] = useState<SubmissionDraft>(() => loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown", title: "", content: "" });
   const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
+  const draftRef = useRef(draft);
+  const requestRef = useRef<AbortController | null>(null);
+  const changeDraft = (nextDraft: SubmissionDraft) => {
+    draftRef.current = nextDraft;
+    setDraft(nextDraft);
+  };
+  useEffect(() => () => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+  }, []);
   const submit = async (nextDraft: SubmissionDraft) => {
-    if (state.kind === "pending") return;
+    if (requestRef.current) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
     setState({ kind: "pending" });
     try {
-      const result = await createSubmission(nextDraft);
-      clearOfflineSubmissionDraft();
-      setDraft({ mode: nextDraft.mode, title: "", content: "" });
+      const result = await createSubmission(nextDraft, fetch, controller.signal);
+      if (controller.signal.aborted || requestRef.current !== controller) return;
+      // A successful older submission must not erase edits made while it was pending.
+      if (draftRef.current === nextDraft) {
+        clearOfflineSubmissionDraft(memberId);
+        changeDraft({ mode: nextDraft.mode, title: "", content: "" });
+      }
       setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS"), similarCandidates: result.similarCandidates });
     } catch (error: unknown) {
+      if (controller.signal.aborted || requestRef.current !== controller) return;
       setState({ kind: error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "validation" : "error", message: frontendText(locale, error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "SUBMIT_VALIDATION_ERROR" : "SUBMIT_ERROR") });
+    } finally {
+      if (requestRef.current === controller) requestRef.current = null;
     }
   };
-  useEffect(() => { saveOfflineSubmissionDraft(draft); }, [draft]);
-  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={setDraft} onSubmit={submit} />;
+  useEffect(() => { saveOfflineSubmissionDraft(memberId, draft); }, [memberId, draft]);
+  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} />;
 }
 
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
