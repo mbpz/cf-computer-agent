@@ -1,12 +1,12 @@
-# Memory Garden Agent
+# 个人工作台 · Personal Workbench
 
-Memory Garden is a private personal workbench for a small invited team on Cloudflare's free tier. The AI knowledge base is its first major module: submit and govern sources, search and read them, then ask grounded questions with citations. The workbench adds personal execution and administration without turning local verification into a production claim.
+Personal Workbench is a private workspace for managing your knowledge and daily work on Cloudflare's free tier. Access is invitation-only, and each user's private data is isolated. The AI knowledge base is its first core module: submit and govern sources, search and read them, then ask grounded questions with citations. Tasks, boards, notifications, and messages connect knowledge to daily action. Local verification is not a production acceptance claim.
 
 ## Current maturity
 
 - Anonymous `/` now has a locally implemented bilingual 3D knowledge-studio demo, with original Blender assets, cited fictional samples and a complete static fallback. It does not read member data or call AI/business APIs. Local evidence and remaining browser/device gates are recorded in the [landing acceptance report](./design/workbench-landing/local-acceptance.md); this is not a production-release claim.
 - The member-isolated Tasks core, task-backed Boards, recipient-owned Notifications, and task/knowledge-context Messages are implemented and locally verified on this branch. Retention/cleanup policy and production role journeys remain open; general direct messages are out of scope.
-- Shared numbered pagination is fully localized in English and Simplified Chinese. The compact shadcn Shell keeps navigation and content independently scrollable, places account/settings/theme/logout controls in the desktop/mobile sidebar account area, and leaves only language selection in the top-right area.
+- Shared numbered pagination is localized in English and Simplified Chinese. The current uncommitted shadcn Shell repair keeps navigation and content independently scrollable, places account/settings/theme/logout controls in the sidebar account area, and consolidates task, board, notification, and message shortcuts in the global header alongside language selection. This does not establish that every list uses numbered pagination or that real signed-in browser acceptance is complete.
 - These collaboration routes are locally `ready`; that means an executable API/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser.
 - **Current-main release and acceptance are determined only by the [delivery status ledger](./docs/product/delivery-status-ledger.md).** A README statement, local gate, historical candidate, or anonymous smoke does not establish a current production release or signed browser acceptance.
 
@@ -16,6 +16,9 @@ The ledger records implementation, verification, release, and acceptance separat
 - [shadcn/ui frontend checklist](./docs/product/shadcn-ui-frontend-checklist.md)
 - [Production environment handbook](./docs/operations/production-environment-handbook.md)
 - [Current evidence index](./docs/operations/evidence/)
+- [Current completion audit and atomic checklist](./docs/product/2026-09-12-personal-workbench-completion-audit.md)
+- [32-route implementation inventory and known blockers](./docs/product/2026-09-12-personal-workbench-route-inventory.md)
+- [First repair batch: member-scoped submission drafts](./docs/superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)
 
 ## Product and architecture
 

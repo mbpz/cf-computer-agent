@@ -50,6 +50,68 @@ describe("shadcn workspace shell", () => {
     vi.restoreAllMocks();
   });
 
+  it.each(["settings", "dark", "logout"])("keeps %s actionable when pointer activation blurs the account trigger before click", async (action) => {
+    const onNavigate = vi.fn();
+    const onLogout = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate} onLogout={onLogout}><p>Home</p></AppShell>));
+    const trigger = container.querySelector<HTMLButtonElement>('[data-account-trigger-variant="expanded"]')!;
+    await act(async () => { trigger.focus(); trigger.click(); });
+    const selector = action === "dark" ? '[data-theme-option="dark"]' : `[data-account-${action}]`;
+    const item = container.querySelector<HTMLButtonElement>(selector)!;
+    await act(async () => {
+      item.dispatchEvent(new browser.PointerEvent("pointerdown", { bubbles: true }));
+      trigger.blur();
+    });
+    expect(container.querySelector(selector)).toBe(item);
+    await act(async () => item.click());
+    if (action === "settings") expect(onNavigate).toHaveBeenCalledWith("/settings");
+    if (action === "dark") expect(document.documentElement.classList.contains("dark")).toBe(true);
+    if (action === "logout") expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers each destination once in the primary sidebar and no competing right navigation", async () => {
+    await act(async () => root.render(<AppShell session={admin} pathname="/knowledge" locale={createLocaleRuntime()}><p>Knowledge</p></AppShell>));
+    const paths = Array.from(container.querySelectorAll<HTMLAnchorElement>('[data-shell-sidebar-scroll] a[href]'), (link) => link.getAttribute("href"));
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths.length).toBe(new Set(paths).size);
+    expect(container.querySelector('[data-context-rail]')).toBeNull();
+  });
+
+  it("focuses the command combobox and switches the resolved system theme", async () => {
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>));
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
+    const input = container.querySelector<HTMLInputElement>('[role="combobox"]')!;
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute('aria-controls')).toBe(container.querySelector('[role="listbox"]')!.id);
+    document.documentElement.classList.add('dark');
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-command-id="toggle-theme"]')!.click());
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it("keeps a focused command stable across palette renders and uses native button Enter", async () => {
+    const onNavigate = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onNavigate={onNavigate}><p>Home</p></AppShell>));
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
+    const command = container.querySelector<HTMLButtonElement>('[data-command-id="open-settings"]')!;
+    await act(async () => command.focus());
+    expect(document.activeElement).toBe(command);
+    const enter = new browser.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    await act(async () => command.dispatchEvent(enter));
+    expect(enter.defaultPrevented).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+    await act(async () => command.click());
+    expect(onNavigate).toHaveBeenCalledWith('/settings');
+  });
+
+  it("does not offer another logout command while logout is pending", async () => {
+    const onLogout = vi.fn();
+    await act(async () => root.render(<AppShell session={admin} pathname="/" locale={createLocaleRuntime()} onLogout={onLogout} logoutPending><p>Home</p></AppShell>));
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-command-palette-trigger]')!.click());
+    expect(container.querySelector('[data-command-id="logout"]')).toBeNull();
+    expect(onLogout).not.toHaveBeenCalled();
+  });
+
   it("renders a collapsible workspace rail with AI knowledge and site analytics entries", () => {
     const html = renderToStaticMarkup(
       <AppShell session={admin} pathname="/admin/analytics" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>

@@ -1,6 +1,6 @@
 {
-  "name": "Memory Garden",
-  "short_name": "Memory Garden",
+  "name": "个人工作台 · Personal Workbench",
+  "short_name": "个人工作台",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

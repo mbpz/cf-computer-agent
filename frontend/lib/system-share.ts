@@ -15,7 +15,7 @@ export async function shareKnowledgeItem(input: { id: string; title: string; ori
   if (!input.confirm()) return "cancelled";
   if (typeof input.navigator.share !== "function") throw new Error("SHARE_UNAVAILABLE");
   try {
-    await input.navigator.share({ title: input.title.trim().slice(0, 200) || "Memory Garden", url });
+    await input.navigator.share({ title: input.title.trim().slice(0, 200) || "Personal Workbench", url });
     return "shared";
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === "AbortError") return "cancelled";

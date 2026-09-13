@@ -38,14 +38,8 @@ export function DropdownMenu({
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const keyboardOpeningRef = React.useRef(false);
-  const mountedRef = React.useRef(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const isControlled = controlledOpen !== undefined;
-
-  React.useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
   const setOpen = React.useCallback((next: boolean, reason: CloseReason) => {
     if (!isControlled) setUncontrolledOpen(next);
@@ -55,14 +49,28 @@ export function DropdownMenu({
 
   React.useEffect(() => {
     if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
+    let active = true;
+    const dismissOutside = (event: PointerEvent | FocusEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
       if (triggerRef.current?.contains(target) || contentRef.current?.contains(target)) return;
       setOpen(false, "outside");
     };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    const dismissAfterFocus = (event: FocusEvent) => {
+      const target = event.target;
+      queueMicrotask(() => {
+        if (active && document.activeElement === target) dismissOutside(event);
+      });
+    };
+    // A blur can temporarily leave focus on body between pointerdown and click.
+    // Only dismiss when a pointer or new focus actually lands outside the menu.
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("focusin", dismissAfterFocus);
+    return () => {
+      active = false;
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("focusin", dismissAfterFocus);
+    };
   }, [open, setOpen]);
 
   React.useEffect(() => {
@@ -71,23 +79,13 @@ export function DropdownMenu({
     contentRef.current?.querySelector<HTMLElement>(ENABLED_MENU_ITEM_SELECTOR)?.focus();
   }, [open]);
 
-  const handleBlur = () => {
-    queueMicrotask(() => {
-      if (!mountedRef.current) return;
-      const activeElement = document.activeElement;
-      if (!activeElement) return;
-      if (triggerRef.current?.contains(activeElement) || contentRef.current?.contains(activeElement)) return;
-      setOpen(false, "outside");
-    });
-  };
-
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!open || event.defaultPrevented || event.key !== "Escape") return;
     event.preventDefault();
     setOpen(false, "escape");
   };
 
-  return <DropdownMenuContext.Provider value={{ open, triggerRef, contentRef, setOpen, keyboardOpeningRef }}><div data-menu-id={menuId} className="relative" onBlur={handleBlur} onKeyDown={handleKeyDown}>{children}</div></DropdownMenuContext.Provider>;
+  return <DropdownMenuContext.Provider value={{ open, triggerRef, contentRef, setOpen, keyboardOpeningRef }}><div data-menu-id={menuId} className="relative" onKeyDown={handleKeyDown}>{children}</div></DropdownMenuContext.Provider>;
 }
 
 export function DropdownMenuTrigger({ className, onClick, onKeyDown, type, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {

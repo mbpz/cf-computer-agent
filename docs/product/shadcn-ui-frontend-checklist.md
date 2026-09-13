@@ -6,6 +6,10 @@
 
 ## 当前前端交付映射
 
+当前增量对账见 [32 个登录后页面与已知阻断](./2026-09-12-personal-workbench-route-inventory.md) 和 [功能补齐原子清单](./2026-09-12-personal-workbench-completion-audit.md)。历史菜单数量和已勾选项目不代表新页面已验收；特别是成熟度测试中的 gap 断言通过，不应提升本清单完成状态。首个隐私修复按 [B02 草稿成员隔离计划](../superpowers/plans/2026-09-12-member-scoped-submission-drafts.md) 执行。
+
+2026-09-12 Shell 修复增量（账户弹层、导航收敛、顶部命令/协作区）的原子清单与本地验收见 [Shell navigation repair](../operations/evidence/2026-09-12-shell-navigation-repair.md)。该增量仅为本地实现与验证，不改变生产发布或真实登录验收状态。
+
 以下结论只同步已由源码和本地 UI contract 验证的 frontend slice；即使某项前端工作已验证，对应总账行的后端、发布或验收仍可为 `partial`/`pending`。
 
 - **shadcn Shell 与组件原语：已验证。** Sidebar、Sheet、Topbar、菜单、PageState、Tooltip portal 和键盘/焦点合同映射 `WB-001`、`WB-002`、`WB-A11Y`；证据：`frontend/components/shell/app-shell.tsx`、`frontend/components/ui/tooltip.tsx`；命令：`rtk npx vitest run test/unit/frontend-shell.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-menu-keyboard.test.tsx` 与 `rtk npm run verify:wcag`。

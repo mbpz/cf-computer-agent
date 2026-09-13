@@ -1,9 +1,9 @@
 import type { FrontendLocale, LocaleRuntime } from "../../lib/i18n";
 
 const en = {
-  BRAND: "Memory Garden",
+  BRAND: "Personal Workbench",
   HERO_TITLE: "Turn your knowledge into everyday action.",
-  HERO_DESCRIPTION: "Collect, organize and ask questions. Connect knowledge and action in your own workbench.",
+  HERO_DESCRIPTION: "A personal workbench built around your AI knowledge base. Collect sources, ask questions, and connect knowledge to tasks and boards.",
   START: "Try the knowledge journey",
   EXPLORE: "Explore the workbench",
   LOGIN: "Log in to your workbench",
@@ -94,9 +94,9 @@ export type LandingCopyKey = keyof typeof en;
 const catalogs: Record<FrontendLocale, Record<LandingCopyKey, string>> = {
   en,
   "zh-CN": {
-    BRAND: "Memory Garden",
+    BRAND: "个人工作台",
     HERO_TITLE: "让你的知识，成为每天的行动力。",
-    HERO_DESCRIPTION: "收集、整理、追问，在自己的工作台里连接知识与行动。",
+    HERO_DESCRIPTION: "以 AI 知识库为核心的个人工作台。收集资料、整理知识、追问答案，用任务与看板连接知识和行动。",
     START: "体验知识之旅",
     EXPLORE: "探索工作台",
     LOGIN: "登录工作台",

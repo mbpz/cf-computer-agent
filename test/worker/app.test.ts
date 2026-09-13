@@ -892,7 +892,7 @@ describe("Worker application", () => {
     expect(page.status).toBe(200);
     expectProtectedResponse(page);
     expect(page.headers.get("cache-control")).toBe("no-store");
-    await expect(page.text()).resolves.toContain("Memory Garden");
+    await expect(page.text()).resolves.toContain("个人工作台 · Personal Workbench");
 
     const manifest = await SELF.fetch("https://example.test/manifest.json");
     expect(manifest.status).toBe(200);
@@ -911,7 +911,7 @@ describe("Worker application", () => {
       expect(page.status, path).toBe(200);
       expectProtectedResponse(page);
       expect(page.headers.get("cache-control"), path).toBe("no-store");
-      await expect(page.text(), path).resolves.toContain("Memory Garden");
+      await expect(page.text(), path).resolves.toContain("个人工作台 · Personal Workbench");
     }
   });
 

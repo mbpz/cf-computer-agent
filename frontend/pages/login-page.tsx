@@ -7,7 +7,7 @@ export function LoginPage({ locale, error, githubEnabled = true }: { locale: Loc
   return <main data-login-page className="min-h-[100dvh] bg-muted/30 px-4 py-10 sm:px-6 lg:px-8">
     <div className="mx-auto grid min-h-[calc(100dvh-5rem)] max-w-5xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
       <section className="max-w-xl">
-        <p className="text-xs font-semibold tracking-[0.22em] text-primary">MEMORY GARDEN</p>
+        <p className="text-sm font-semibold text-primary">{frontendText(locale, "APP_BRAND_EYEBROW")}</p>
         <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">{frontendText(locale, "LOGIN_TITLE")}</h1>
         <p className="mt-5 max-w-lg text-lg leading-relaxed text-muted-foreground">{frontendText(locale, "LOGIN_DESCRIPTION")}</p>
         <div className="mt-8 flex items-center gap-3 text-sm text-muted-foreground"><ShieldCheck size={20} weight="duotone" className="text-primary" />{frontendText(locale, "LOGIN_PRIVATE_NOTE")}</div>

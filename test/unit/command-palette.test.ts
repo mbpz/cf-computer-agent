@@ -8,6 +8,10 @@ const commands: CommandPaletteItem[] = [
 ];
 
 describe("command palette model", () => {
+  it("matches the translated visible label, not only internal keys and keywords", () => {
+    const labels: Record<string, string> = { WORKBENCH_QUICK_SUBMIT: "快速记录", WORKBENCH_QUICK_TASKS: "新建任务", WORKBENCH_QUICK_AI: "询问助手" };
+    expect(filterCommands(commands, "快速记录", (key) => labels[key] ?? key).map((item) => item.id)).toEqual(["capture"]);
+  });
   it("filters case-insensitively by id, label key, and localized keywords while preserving order", () => {
     expect(filterCommands(commands, "COPILOT").map((item) => item.id)).toEqual(["ai"]);
     expect(filterCommands(commands, "知识").map((item) => item.id)).toEqual(["capture"]);
@@ -19,6 +23,8 @@ describe("command palette model", () => {
     const taskMember = { ...contributor, permissionMask: "0x100000" };
     expect(defaultCommands(contributor).map((item) => item.id)).not.toContain("open-tasks");
     expect(defaultCommands(taskMember).map((item) => item.id)).toContain("open-tasks");
+    expect(defaultCommands(taskMember).map((item) => item.id)).toContain("open-boards");
+    expect(defaultCommands(contributor).map((item) => item.id)).not.toContain("open-boards");
     expect(defaultCommands(taskMember).map((item) => item.id)).not.toContain("open-admin");
   });
 

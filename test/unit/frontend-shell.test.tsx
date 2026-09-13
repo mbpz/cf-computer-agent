@@ -24,10 +24,9 @@ describe("frontend application shell", () => {
     expect(topbar).toContain('aria-label="Language"');
     expect(topbar).toContain('data-command-palette-trigger="true"');
     expect(topbar).toContain("Command palette");
-    expect(html).toContain('data-shell-module-navigation="true"');
-    expect(html).toContain('data-context-rail="true"');
-    expect(html).toContain('aria-label="Workbench modules"');
-    expect(html).toContain('aria-label="Collapse context rail"');
+    expect(html).not.toContain('data-shell-module-navigation');
+    expect(html).not.toContain('data-context-rail');
+    expect(html).toContain('aria-label="Primary navigation"');
     expect(topbar).not.toContain("reader@example.com");
     expect(topbar).not.toContain("Settings");
     expect(topbar).not.toContain("Signing out");
@@ -67,10 +66,9 @@ describe("frontend application shell", () => {
     expect(html).not.toContain("Site analytics");
   });
 
-  it("renders admin-only modules and context actions only for an administrator", () => {
+  it("keeps authorized administration destinations in the single primary navigation", () => {
     const html = renderToStaticMarkup(<AppShell session={{ ...contributor, member: { ...contributor.member, role: "admin" }, capabilities: ["submission:read-all", "analytics:read", "knowledge:read"] }} pathname="/admin/analytics" locale={createLocaleRuntime({ navigatorLanguage: "en" })}><p>Analytics</p></AppShell>);
     expect(html).toContain("Administration");
-    expect(html).toContain("Data");
     expect(html).toContain("Site analytics");
     expect(html).toContain('aria-current="page"');
     expect(html).not.toContain("undefined");

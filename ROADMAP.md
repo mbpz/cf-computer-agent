@@ -1,10 +1,12 @@
-# Memory Garden Roadmap
+# 个人工作台 · Personal Workbench Roadmap
 
 更新时间：2026-09-09
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
+
+当前增量执行入口：[功能补齐审计与 checklist](./docs/product/2026-09-12-personal-workbench-completion-audit.md)、[32 个页面对账](./docs/product/2026-09-12-personal-workbench-route-inventory.md)。优先处理成员草稿隐私、稳定提交重试、审计页加载阻断与真实管理统计，再推进知识核心、执行协作和 VM 正式页面。首批细化计划：[B02 成员作用域草稿](./docs/superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)。这些是当前修复队列，不重算下方历史总账完成数，也不覆盖既有 atom ownership；仅有实现/测试证据时不得提升 release/acceptance。
 
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 

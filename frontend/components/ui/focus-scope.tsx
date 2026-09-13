@@ -10,6 +10,8 @@ export function nextFocusableIndex(current: number, length: number, backwards: b
 
 export function useFocusScope(active: boolean, onEscape?: () => void): RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null);
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => { onEscapeRef.current = onEscape; }, [onEscape]);
   useEffect(() => {
     const root = ref.current;
     if (!active || !root || typeof document === "undefined") return;
@@ -20,7 +22,7 @@ export function useFocusScope(active: boolean, onEscape?: () => void): RefObject
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onEscape?.();
+        onEscapeRef.current?.();
         return;
       }
       if (event.key !== "Tab") return;
@@ -40,6 +42,6 @@ export function useFocusScope(active: boolean, onEscape?: () => void): RefObject
       root.removeEventListener("keydown", onKeyDown);
       previous?.focus();
     };
-  }, [active, onEscape]);
+  }, [active]);
   return ref;
 }
