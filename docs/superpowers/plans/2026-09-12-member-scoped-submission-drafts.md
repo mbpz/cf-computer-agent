@@ -10,6 +10,10 @@
 
 **Spec:** `docs/product/2026-09-12-personal-workbench-completion-audit.md` 的 B02 及统一完成标准；当前缺口见 `docs/product/2026-09-12-personal-workbench-route-inventory.md`。
 
+## 执行状态（2026-09-13）
+
+Task 1 的 1–5 步、Task 2 的 1–6 与 8 步已完成，详见[逐项已勾选的实施证据](../../product/2026-09-13-member-scoped-submission-drafts-evidence.md)。下文保留原计划步骤；Task 2 第 7 步真实双账号验收仍待完成。用户本日追加授权提交并合入 main，代码提交 `ebc557c`、合并提交 `6f9d325`；原“不提交”限制仅描述初次实施阶段，推送和部署仍未获本轮授权。
+
 ## Global Constraints
 
 - 每个用户数据独立；成员 ID 仅来自认证 session，不从 URL、表单或草稿反推。

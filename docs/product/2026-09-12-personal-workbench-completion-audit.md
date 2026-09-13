@@ -1,6 +1,6 @@
 # 个人工作台：功能补齐增量审计
 
-日期：2026-09-12。基线：main `e46c512` 加当前未提交的 Shell 与产品定位修复。
+日期：2026-09-12；增量更新：2026-09-13。原基线：main `e46c512` 加当时未提交的 Shell 与产品定位修复；该修复随后提交为 `937ea87`。
 
 用户已确认按对账、知识闭环、执行协作、管理/VM、验收的方向继续。本文不是全部功能审计完成报告。沿用既有成熟度清单和交付总账，避免重复建设；历史 checkbox 不能直接推断当前状态。
 
@@ -18,7 +18,7 @@
 | 设置范围 | `frontend/pages/settings-page.tsx` 只有账户只读信息、主题和语言 | 当前基础设置可用；会话管理等扩展仍需接口与产品规则，不以新增空按钮交付 |
 | 清单与入口覆盖 | 成熟度清单更新于 2026-09-01，记录 21 个菜单路由；当前共享 registry 已有 today/focus/review/inbox/goals/projects 等条目 | 旧审计范围滞后；重新建立当前全路由/操作矩阵，不能直接把旧 98 个待办当作当前缺失数 |
 | 浏览器 Linux VM | main 已含 `tools/browser-vm`、`src/routes/environments.ts` 与 deletion reconciler；32 个页面仍无 VM 入口 | 历史基础实现已追溯，当前是工具/探针与元数据 API，需复用接入正式页面，不重复建设 |
-| 离线草稿隐私 | `frontend/lib/offline-submission-draft.ts` 使用全浏览器共用 v1 键；SubmitRoute 不接收 memberId | 优先 B02：按认证成员隔离；旧无主草稿不得自动归属给当前登录者 |
+| 离线草稿隐私 | B02 已采用认证成员 v2 命名空间、成员键控表单和迟到响应保护；旧无主 v1 不读不迁移 | 已在本地 main 合并（`6f9d325`）；[本地证据与验收边界](./2026-09-13-member-scoped-submission-drafts-evidence.md)，真实双账号与生产验收仍开放 |
 | 提交重试 | `frontend/lib/submission-data.ts` 每次 createSubmission 都生成新 idempotency-key | B01：服务端已支持成员作用域重放，前端仍需稳定提交身份；不能把新 key 重试等同幂等 |
 | 管理概览 | `frontend/app.tsx` 向 AdminDashboardPage 传三个写死的 0 | D01：接真实授权数据并区分 loading/error/empty，不显示虚假零值 |
 | 审计页加载阻断 | AdminAuditRoute 将裸 page 返回值解构为 generation/page | D02 优先修复：使用 request.generation 校验，成功结果直接作为 page；将 gap 测试升级为可用行为断言 |
@@ -48,6 +48,8 @@
 
 - [ ] B01 验证文本/Markdown/code 提交、稳定幂等键及失败重试。
 - [ ] B02 草稿恢复按成员隔离，切换账户/退出不暴露他人草稿。
+  - [x] 成员存储、身份接线、异步生命周期及自动化回归；合入本地 main `6f9d325`，见 [B02 证据](./2026-09-13-member-scoped-submission-drafts-evidence.md)。
+  - [ ] 真实浏览器双账号退出/登录验收与生产验收；不以 fixture 身份代替。
 - [ ] B03 核对存储 bindings 与免费层边界，确定附件可用性返回契约。
 - [ ] B04 接入附件选择、数量/大小/类型校验及可见错误。
 - [ ] B05 接入真实上传、进度、取消、失败重试与解析任务回读。

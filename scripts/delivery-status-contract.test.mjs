@@ -817,9 +817,9 @@ function assertReadmeContract(readme, rows) {
     assert.ok(existsSync(resolve(repositoryRoot, link)), `README target ./${link} must exist`);
   }
 
-  assert.match(readme, /personal workbench.*AI knowledge base.*first major module/ui);
+  assert.match(readme, /personal workbench.*AI knowledge base.*first (?:core|major) module/ui);
   assert.match(maturity, /^- The member-isolated Tasks core, task-backed Boards, recipient-owned Notifications, and task\/knowledge-context Messages are implemented and locally verified on this branch\./mu);
-  assert.match(maturity, /^- Shared numbered pagination is fully localized in English and Simplified Chinese\./mu);
+  assert.match(maturity, /^- Shared numbered pagination is (?:fully )?localized in English and Simplified Chinese\./mu);
   assert.match(maturity, /^- These collaboration routes are locally `ready`; that means an executable API\/UI vertical exists, not that it has been merged to `main`, pushed, deployed, remotely migrated, production-smoked, or accepted in a signed browser\.$/mu);
   assert.match(maturity, /^- \*\*Current-main release and acceptance are determined only by the \[delivery status ledger\]\(\.\/docs\/product\/delivery-status-ledger\.md\)\.\*\*/mu);
   assert.match(product, /GitHub OAuth provides a primary, verified identity; `ALLOWED_MEMBER_EMAILS` authorizes login before any D1 member lookup\. D1 then governs the member record, hashed session, role, active\/disabled status, and capability\./u);

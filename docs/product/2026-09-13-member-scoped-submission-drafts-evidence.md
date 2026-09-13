@@ -6,9 +6,9 @@
 
 - 对应 `2026-09-12-member-scoped-submission-drafts.md` 计划的 Task 1 / Task 2；仅覆盖全站完成度审计中的 B02。
 - 工作分支：`codex/member-scoped-submission-drafts`，基于 `e46c512` 的独立 worktree。
-- 本轮没有提交、推送、合并、部署、读取本地凭证或创建 Cloudflare 资源。
-- 原 main 工作区的 Shell / 品牌 / 审计文档不纳入本批修改。执行期间发现 main 已由其他操作推进至 `937ea87`，其工作区当前干净；本批未合入该提交。
-- 原计划及总审计位于主工作区，创建本 worktree 时尚未提交。为不覆盖并行修改，进度记录在本增量文档；合并时再同步总审计 B02，不能用本记录替代新 main 上的集成验证。
+- 初次实施未提交或合并；用户于 2026-09-13 追加授权后，提交为 `ebc557c`，合入包含 Shell / 品牌修复 `937ea87` 的本地 main，合并提交 `6f9d325`。
+- 合并后已同步 README、Roadmap、增量审计、路由矩阵与原计划状态；没有推送、部署或创建 Cloudflare 资源。
+- 首次 main 全量验证被既有 README 契约的旧文案断言阻断：产品定位已改为 first core module，分页说明不再声称 fully localized。同步两条兼容断言后，28 条文档契约及完整 npm test 均通过；未放松发布/验收完成声明的门禁。
 
 ## 原子 checklist
 
@@ -29,7 +29,7 @@
 - [x] 以真实 React 路由、DOM form / select 事件、受控 fetch Promise 和真实 Response 验证，不替换提交组件、存储模块或 createSubmission。
 - [x] 检查所有草稿调用点、定向回归、项目 typecheck、完整 npm test（含 UI 构建）。
 - [ ] 在真实浏览器执行同源 A → 退出 → B → 退出 → A 恢复验收。本轮仅使用测试身份，未使用第二个真实账号。
-- [ ] 在最新 main 上合并并重跑集成验证，同步总审计；等待单独授权。
+- [x] 按追加授权合入本地 main，重跑集成验证并同步总审计；不代表已推送或发布。
 - [ ] 生产部署与验收；等待单独授权。
 
 ## 失败再通过证据
@@ -52,6 +52,8 @@ rtk proxy git diff --check
 扩展验证：`rtk proxy npm test` 退出码 0，依次执行 smoke / i18n / delivery contracts、unit、UI 构建、Worker 回归；Worker 阶段为 39 个文件、575 条通过。完整运行先于最后新增的 3 条测试，新增测试及关联页面随后已由最终 144 条定向回归覆盖。现有 typecheck 受仓库 tsconfig 范围限制，不等同于独立的全前端严格类型检查。
 
 测试启动有既有 AI binding 提示及二进制资产 `.text()` 警告；测试配置为 `remoteBindings: false`。本轮未调用远程 AI 或执行部署。
+
+合并后追加验证（2026-09-13）：`npm test` 全链退出码 0，包含 smoke / i18n / delivery、unit、UI 构建和 Worker（39 files / 575 passed）；`npm run typecheck` 退出码 0。合并前分支也重跑了完整 `npm test` 并通过，覆盖最终追加测试。主工作区 Wrangler 日志提示自动加载 `.dev.vars`，未手动查看或输出其内容；此验证不能描述为未加载本地配置。Worker 的损坏 journal 负向用例仍输出预期异常，不能将通过描述成无警告、无错误日志。
 
 ## 变更文件
 

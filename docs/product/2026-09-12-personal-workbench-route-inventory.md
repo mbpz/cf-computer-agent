@@ -16,7 +16,7 @@
 | 页面 | 可见主要操作 / 数据接线 | 当前判定与下一验证 | 测试入口 |
 | --- | --- | --- | --- |
 | `/` | 最近知识、任务摘要、活动；`lib/workbench-data.ts` | 存在；核对部分请求失败是否被空数据掩盖 | `unit/workbench-data.test.ts` |
-| `/submit` | 模式切换、编辑、草稿恢复、提交、附件选择；`lib/submission-data.ts`、`lib/offline-submission-draft.ts` → `src/routes/member.ts` | 部分；共用草稿键、重试新幂等键、附件未接线 | `unit/offline-submission-draft.test.ts`、`unit/frontend-submission-data.test.ts`、`worker/submissions.test.ts` |
+| `/submit` | 模式切换、编辑、草稿恢复、提交、附件选择；`lib/submission-data.ts`、`lib/offline-submission-draft.ts` → `src/routes/member.ts` | 部分；B02 成员草稿隔离已本地合并，真实双账号待验收；重试新幂等键、附件未接线仍待修复 | `unit/offline-submission-draft.test.ts`、`unit/frontend-submit-owner-route.test.tsx`、`unit/frontend-submission-data.test.ts`、`worker/submissions.test.ts` |
 | `/knowledge` | 列表、过滤、分页、打开知识；`lib/knowledge-data.ts` → `src/routes/library.ts` | 存在；再验分页与权限撤销 | `unit/frontend-knowledge-data.test.ts` |
 | `/knowledge/:id` | 阅读、来源、引用；`lib/knowledge-reader-data.ts` → `src/routes/library.ts` | 存在；缺失版本显示错误不应机械改成空态；验精确引用与权限 | `unit/frontend-knowledge-reader-data.test.ts` |
 | `/search` | 搜索、结果跳转；`lib/search-data.ts` → `src/routes/library.ts` | 存在；再验中文、无结果、过滤与降级 | `unit/frontend-search-data.test.ts` |
@@ -84,7 +84,7 @@ rtk proxy npx vitest run test/worker/submissions.test.ts test/worker/assets.test
 
 ## 优先顺序调整
 
-1. B02 草稿按成员隔离（隐私）与 A02 写入契约核对；随后 B01 稳定提交重试身份。
+1. B02 草稿按成员隔离已合入本地 main `6f9d325`，保留真实双账号验收；继续 A02 写入契约核对与 B01 稳定提交重试身份。详见 [B02 证据](./2026-09-13-member-scoped-submission-drafts-evidence.md)。
 2. D02 审计页成功分支阻断与管理页初始错误重试；D01 移除虚假零统计，接真实授权数据。
 3. B03–B09 知识输入、审核、检索/阅读、AI 来源与任务关联；保留免费层不可用状态。
 4. C01–C07 对现有执行/协作能力逐条验收修补，接入全局未读。
