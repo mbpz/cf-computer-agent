@@ -43,6 +43,7 @@ import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } 
 import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
+import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
@@ -684,6 +685,11 @@ export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; membe
 }
 
 function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {
+  const [restored] = useState(() => loadSubmissionIntent(memberId));
+  const [intent, setIntent] = useState<SubmissionIntent | null>(() => restored.kind === "ready" ? restored.intent : null);
+  const intentRef = useRef(intent);
+  const [storageUnavailable, setStorageUnavailable] = useState(restored.kind === "unavailable");
+  const [invalidIntent, setInvalidIntent] = useState(restored.kind === "invalid");
   const [draft, setDraft] = useState<SubmissionDraft>(() => loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown", title: "", content: "" });
   const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
   const draftRef = useRef(draft);
@@ -697,28 +703,54 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
     requestRef.current = null;
   }, []);
   const submit = async (nextDraft: SubmissionDraft) => {
-    if (requestRef.current) return;
+    if (requestRef.current || invalidIntent) return;
     const controller = new AbortController();
     requestRef.current = controller;
+    const draftAtStart = draftRef.current;
     setState({ kind: "pending" });
     try {
-      const result = await createSubmission(nextDraft, fetch, controller.signal);
+      let active = intentRef.current;
+      if (!active) {
+        const stored = loadSubmissionIntent(memberId);
+        if (stored.kind === "invalid") { setInvalidIntent(true); setState({ kind: "idle" }); return; }
+        if (stored.kind === "ready") {
+          intentRef.current = stored.intent; setIntent(stored.intent); setState({ kind: "idle" }); return;
+        }
+        active = createSubmissionIntent(nextDraft);
+      }
+      if (!saveSubmissionIntent(memberId, active)) {
+        const stored = loadSubmissionIntent(memberId);
+        if (stored.kind === "invalid") { setInvalidIntent(true); setState({ kind: "idle" }); return; }
+        if (stored.kind === "ready" && JSON.stringify(stored.intent) !== JSON.stringify(active)) {
+          intentRef.current = stored.intent; setIntent(stored.intent); setState({ kind: "idle" }); return;
+        }
+        setStorageUnavailable(true);
+      }
+      intentRef.current = active;
+      setIntent(active);
+      const result = await createSubmission(active.draft, active.key, fetch, controller.signal);
       if (controller.signal.aborted || requestRef.current !== controller) return;
+      if (!clearSubmissionIntent(memberId, active.key)) setStorageUnavailable(true);
+      intentRef.current = null;
+      setIntent(null);
       // A successful older submission must not erase edits made while it was pending.
-      if (draftRef.current === nextDraft) {
+      if (draftRef.current === draftAtStart && draftAtStart.mode === active.draft.mode && draftAtStart.title.trim() === active.draft.title && draftAtStart.content === active.draft.content) {
         clearOfflineSubmissionDraft(memberId);
         changeDraft({ mode: nextDraft.mode, title: "", content: "" });
       }
       setState({ kind: "success", message: frontendText(locale, "SUBMIT_SUCCESS"), similarCandidates: result.similarCandidates });
     } catch (error: unknown) {
       if (controller.signal.aborted || requestRef.current !== controller) return;
-      setState({ kind: error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "validation" : "error", message: frontendText(locale, error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID" ? "SUBMIT_VALIDATION_ERROR" : "SUBMIT_ERROR") });
+      const validation = error instanceof Error && error.message === "SUBMISSION_DRAFT_INVALID";
+      const conflict = error !== null && typeof error === "object" && "code" in error && error.code === "IDEMPOTENCY_CONFLICT";
+      const identityError = error instanceof Error && error.message === "SUBMISSION_RANDOM_UNAVAILABLE";
+      setState({ kind: validation ? "validation" : "error", message: frontendText(locale, validation ? "SUBMIT_VALIDATION_ERROR" : conflict ? "SUBMIT_CONFLICT" : identityError ? "SUBMIT_IDENTITY_ERROR" : "SUBMIT_ERROR") });
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
   };
   useEffect(() => { saveOfflineSubmissionDraft(memberId, draft); }, [memberId, draft]);
-  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} />;
+  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} />;
 }
 
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

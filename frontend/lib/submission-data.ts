@@ -1,6 +1,6 @@
 import { apiFetch, type Fetcher } from "./api";
 import type { SubmissionDraft } from "../components/submissions/submission-form-model";
-import { createIdempotencyKey, validateSubmissionDraft } from "../components/submissions/submission-form-model";
+import { validateSubmissionDraft } from "../components/submissions/submission-form-model";
 
 export interface SimilarSubmissionCandidate {
   submissionId: string;
@@ -10,14 +10,15 @@ export interface SimilarSubmissionCandidate {
   similarity: number;
 }
 
-export async function createSubmission(draft: SubmissionDraft, requester: Fetcher = fetch, signal?: AbortSignal): Promise<{ id: string; similarCandidates: SimilarSubmissionCandidate[] }> {
+export async function createSubmission(draft: SubmissionDraft, key: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<{ id: string; similarCandidates: SimilarSubmissionCandidate[] }> {
   const validation = validateSubmissionDraft(draft);
   if (!validation.ok) throw new Error("SUBMISSION_DRAFT_INVALID");
+  if (typeof key !== "string" || !/^[A-Za-z0-9_-]{16,128}$/u.test(key)) throw new Error("SUBMISSION_KEY_INVALID");
   const data = await apiFetch<{ submission?: unknown; similarCandidates?: unknown }>("/api/submissions", {
     requester,
     signal,
     method: "POST",
-    headers: { "content-type": "application/json", "idempotency-key": createIdempotencyKey() },
+    headers: { "content-type": "application/json", "idempotency-key": key },
     body: JSON.stringify({
       requestedSpaceId: "default",
       requestedCollectionId: null,

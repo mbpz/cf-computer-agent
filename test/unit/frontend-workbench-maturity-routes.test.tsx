@@ -287,7 +287,10 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
   }
   await waitForApp(() => journey.container.querySelector('main [role="alert"]') !== null);
   expect(journey.container.querySelector('main [role="alert"]')).not.toBeNull();
-  if (routeId === "submit") expect(journey.container.querySelector("main form button[type=submit]:not([disabled])")).not.toBeNull();
+  if (routeId === "submit") {
+    expect(journey.container.querySelector("main [data-submission-retry]:not([disabled])")).not.toBeNull();
+    expect(journey.container.querySelector("main form button[type=submit][disabled]")).not.toBeNull();
+  }
   else expect(journey.container.querySelector('main [role="alert"] button')).not.toBeNull();
 }
 

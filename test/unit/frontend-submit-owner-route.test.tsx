@@ -4,6 +4,7 @@ import { act } from "react";
 import { SubmitRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "../../frontend/lib/offline-submission-draft";
+import { loadSubmissionIntent } from "../../frontend/lib/submission-intent";
 import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { createMaturityRouteFetch } from "../helpers/workbench-maturity-route-fixtures";
 
@@ -52,6 +53,60 @@ describe("submission owner lifecycle", () => {
 
   function content() { return (journey!.container.querySelector("#submission-content") as HTMLTextAreaElement).value; }
 
+  it("persists the snapshot before POST and never exposes another member's pending submission", async () => {
+    const attempts: string[] = [];
+    const mounted = await openOwner(async (_input, init) => {
+      const owner = attempts.length === 0 ? "member-a" : "member-b";
+      const stored = loadSubmissionIntent(owner, journey!.browser.localStorage);
+      expect(stored.kind).toBe("ready");
+      if (stored.kind === "ready") expect(stored.intent.key).toBe(new Headers(init?.headers).get("idempotency-key"));
+      attempts.push(String(init?.body));
+      throw new Error("unknown outcome");
+    });
+    await submit();
+    const original = loadSubmissionIntent("member-a", mounted.browser.localStorage);
+    await renderOwner("member-b");
+    expect(mounted.container.querySelector("[data-submission-retry]")).toBeNull();
+    expect(content()).toBe("private B");
+    await submit();
+    expect(loadSubmissionIntent("member-a", mounted.browser.localStorage)).toEqual(original);
+    await renderOwner("member-a");
+    expect(mounted.container.querySelector("[data-submission-retry]")).not.toBeNull();
+    expect(content()).toBe("private A");
+    expect(attempts).toHaveLength(2);
+  });
+
+  it("preserves corrupt identities and blocks a replacement POST after remount", async () => {
+    let calls = 0;
+    const mounted = await openOwner(async () => { calls++; return Response.json({ submission: { id: "unexpected" } }); });
+    const key = "personal-workbench:submission-intent:v1:member-a";
+    mounted.browser.localStorage.setItem(key, "{invalid");
+    await act(async () => { mounted.root.render(<p>Other page</p>); });
+    await renderOwner("member-a");
+    await submit();
+    expect(calls).toBe(0);
+    expect((mounted.container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(mounted.browser.localStorage.getItem(key)).toBe("{invalid");
+    expect(content()).toBe("private A");
+  });
+
+  it("reuses the exact request after a failed submit and route remount without automatic replay", async () => {
+    const attempts: { key: string | null; body: string }[] = [];
+    const mounted = await openOwner(async (_input, init) => {
+      attempts.push({ key: new Headers(init?.headers).get("idempotency-key"), body: String(init?.body) });
+      if (attempts.length === 1) throw new Error("response lost after commit");
+      return Response.json({ submission: { id: "submission-a" } });
+    });
+    await submit();
+    await act(async () => { mounted.root.render(<p>Other page</p>); });
+    await renderOwner("member-a");
+    expect(attempts).toHaveLength(1);
+    await submit();
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]).toEqual(attempts[0]);
+    expect(content()).toBe("");
+  });
+
   it("resets the rendered form when the same route changes member and restores A on return", async () => {
     const mounted = await openOwner();
     await renderOwner("member-a");
@@ -61,6 +116,51 @@ describe("submission owner lifecycle", () => {
     expect(loadOfflineSubmissionDraft("member-b", mounted.browser.localStorage)).toEqual(b);
     await renderOwner("member-a");
     expect(content()).toBe("private A");
+  });
+
+  it("retries the original snapshot after edits and gives the edited submission a fresh identity only after success", async () => {
+    const attempts: { key: string | null; body: string }[] = [];
+    const mounted = await openOwner(async (_input, init) => {
+      attempts.push({ key: new Headers(init?.headers).get("idempotency-key"), body: String(init?.body) });
+      if (attempts.length === 1) throw new Error("timeout");
+      return Response.json({ submission: { id: `submission-${attempts.length}` } });
+    });
+    await submit();
+    await act(async () => {
+      const mode = mounted.container.querySelector("#submission-mode") as HTMLSelectElement;
+      mode.value = "code"; mode.dispatchEvent(new mounted.browser.Event("change", { bubbles: true }));
+    });
+    expect((mounted.container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { (mounted.container.querySelector('[data-submission-retry]') as HTMLButtonElement).click(); });
+    await flush();
+    expect(attempts[1]).toEqual(attempts[0]);
+    expect(content()).toBe("private A");
+    await submit();
+    expect(attempts[2].key).not.toBe(attempts[0].key);
+    expect(JSON.parse(attempts[2].body).kind).toBe("code");
+  });
+
+  it("warns when persistence fails but reuses the in-memory key on retry", async () => {
+    const keys: (string | null)[] = [];
+    const mounted = await openOwner(async (_input, init) => { keys.push(new Headers(init?.headers).get("idempotency-key")); throw new Error("offline"); });
+    Object.defineProperty(mounted.browser, "localStorage", { configurable: true, get() { throw new Error("blocked"); } });
+    await submit();
+    expect(mounted.container.querySelector('[data-submission-storage-warning]')).not.toBeNull();
+    await submit();
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it("keeps the pending key on an idempotency conflict instead of silently issuing a new request", async () => {
+    const keys: (string | null)[] = [];
+    const mounted = await openOwner(async (_input, init) => {
+      keys.push(new Headers(init?.headers).get("idempotency-key"));
+      return Response.json({ error: { code: "IDEMPOTENCY_CONFLICT", message: "conflict", retryable: false } }, { status: 409 });
+    });
+    await submit(); await submit();
+    expect(keys[1]).toBe(keys[0]);
+    expect(content()).toBe("private A");
+    expect(mounted.container.querySelector('[data-submission-retry]')).not.toBeNull();
   });
 
   it.each(["success", "failure"] as const)("ignores a late %s after changing owners and cancels the old request", async (outcome) => {

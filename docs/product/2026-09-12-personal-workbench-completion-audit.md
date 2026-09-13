@@ -19,7 +19,7 @@
 | 清单与入口覆盖 | 成熟度清单更新于 2026-09-01，记录 21 个菜单路由；当前共享 registry 已有 today/focus/review/inbox/goals/projects 等条目 | 旧审计范围滞后；重新建立当前全路由/操作矩阵，不能直接把旧 98 个待办当作当前缺失数 |
 | 浏览器 Linux VM | main 已含 `tools/browser-vm`、`src/routes/environments.ts` 与 deletion reconciler；32 个页面仍无 VM 入口 | 历史基础实现已追溯，当前是工具/探针与元数据 API，需复用接入正式页面，不重复建设 |
 | 离线草稿隐私 | B02 已采用认证成员 v2 命名空间、成员键控表单和迟到响应保护；旧无主 v1 不读不迁移 | 已在本地 main 合并（`6f9d325`）；[本地证据与验收边界](./2026-09-13-member-scoped-submission-drafts-evidence.md)，真实双账号与生产验收仍开放 |
-| 提交重试 | `frontend/lib/submission-data.ts` 每次 createSubmission 都生成新 idempotency-key | B01：服务端已支持成员作用域重放，前端仍需稳定提交身份；不能把新 key 重试等同幂等 |
+| 提交重试 | `submission-intent.ts` 成员作用域持久化身份与快照；`createSubmission` 必须接收显式 key；页面手动恢复原请求 | B01 已在功能分支本地实现并定向验证；[证据与限制](./2026-09-13-stable-submission-intents-evidence.md)。真实刷新/双账号、移动端与生产验收仍开放 |
 | 管理概览 | `frontend/app.tsx` 向 AdminDashboardPage 传三个写死的 0 | D01：接真实授权数据并区分 loading/error/empty，不显示虚假零值 |
 | 审计页加载阻断 | AdminAuditRoute 将裸 page 返回值解构为 generation/page | D02 优先修复：使用 request.generation 校验，成功结果直接作为 page；将 gap 测试升级为可用行为断言 |
 
@@ -47,6 +47,9 @@
 ### B — AI 知识库核心闭环（首个业务批次）
 
 - [ ] B01 验证文本/Markdown/code 提交、稳定幂等键及失败重试。
+  - [x] 成员意图持久化、显式幂等键、手动恢复、新编辑保留、损坏/不可用存储反馈；见 [B01 证据](./2026-09-13-stable-submission-intents-evidence.md)。
+  - [x] 真实路由 DOM/Response 自动化与本地 D1 成员隔离/精确重放验证。
+  - [ ] 真实浏览器刷新/双账号、中英文键盘与移动端、发布后验收；不以 DOM fixture 替代。
 - [ ] B02 草稿恢复按成员隔离，切换账户/退出不暴露他人草稿。
   - [x] 成员存储、身份接线、异步生命周期及自动化回归；合入本地 main `6f9d325`，见 [B02 证据](./2026-09-13-member-scoped-submission-drafts-evidence.md)。
   - [ ] 真实浏览器双账号退出/登录验收与生产验收；不以 fixture 身份代替。

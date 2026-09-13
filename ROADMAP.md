@@ -8,7 +8,7 @@
 
 当前增量执行入口：[功能补齐审计与 checklist](./docs/product/2026-09-12-personal-workbench-completion-audit.md)、[32 个页面对账](./docs/product/2026-09-12-personal-workbench-route-inventory.md)。优先处理成员草稿隐私、稳定提交重试、审计页加载阻断与真实管理统计，再推进知识核心、执行协作和 VM 正式页面。首批细化计划：[B02 成员作用域草稿](./docs/superpowers/plans/2026-09-12-member-scoped-submission-drafts.md)。这些是当前修复队列，不重算下方历史总账完成数，也不覆盖既有 atom ownership；仅有实现/测试证据时不得提升 release/acceptance。
 
-B02 草稿隔离已合入本地 main（`6f9d325`），[实施与验收边界](./docs/product/2026-09-13-member-scoped-submission-drafts-evidence.md)保留真实双账号和生产验收待办。下一实施项为 B01：同一次提交跨失败重试和刷新恢复使用稳定幂等身份；当前处于契约核对与设计确认，尚未实现。
+B02 草稿隔离已合入 main（`6f9d325`），[实施与验收边界](./docs/product/2026-09-13-member-scoped-submission-drafts-evidence.md)保留真实双账号和生产验收待办。B01 稳定提交身份已在 `codex/stable-submission-intents` 本地实现：首次 POST 前保存成员快照、失败/恢复后手动原样重试、新编辑单独保留；[B01 证据与验收边界](./docs/product/2026-09-13-stable-submission-intents-evidence.md)。不据此提升 release/acceptance；下一小批为 D02 审计页加载阻断修复。
 
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 

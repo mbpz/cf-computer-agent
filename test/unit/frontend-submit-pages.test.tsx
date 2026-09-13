@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MySubmissionsPage } from "../../frontend/pages/my-submissions-page";
 import { createIdempotencyKey, validateSubmissionDraft } from "../../frontend/components/submissions/submission-form-model";
@@ -9,6 +9,11 @@ import { createAssetUploadQueue } from "../../frontend/components/assets/asset-u
 import { SubmitPage } from "../../frontend/pages/submit-page";
 
 describe("React submission and asset pages", () => {
+  it("fails closed without a secure random source instead of returning a shared zero key", () => {
+    vi.stubGlobal("crypto", undefined);
+    try { expect(() => createIdempotencyKey()).toThrow("SUBMISSION_RANDOM_UNAVAILABLE"); }
+    finally { vi.unstubAllGlobals(); }
+  });
   it("validates bounded text/code drafts and creates nonempty idempotency keys", () => {
     expect(validateSubmissionDraft({ mode: "text", title: "", content: "" })).toMatchObject({ ok: false, field: "title" });
     expect(validateSubmissionDraft({ mode: "code", title: "Guide", content: "const x = 1;" })).toEqual({ ok: true });

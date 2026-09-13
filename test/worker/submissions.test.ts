@@ -238,6 +238,19 @@ describe("submissions D1 control plane", () => {
     await expect(counts()).resolves.toEqual({ submissions: 1, sources: 1, sourceVersions: 1, audits: 1 });
   });
 
+  it("scopes the same browser submission key to each member and replays without extra rows", async () => {
+    const service = createService();
+    const input = { requestedSpaceId: "default", kind: "text" as const, title: "Same title", content: "Same body", idempotencyKey: "browser-shared-key-123" };
+    const first = await service.createWithSourceVersion("member-a", input);
+    const second = await service.createWithSourceVersion("member-b", input);
+    expect(first.submission!.id).not.toBe(second.submission!.id);
+    expect(first.submission!.submitterId).toBe("member-a");
+    expect(second.submission!.submitterId).toBe("member-b");
+    await expect(service.createWithSourceVersion("member-a", input)).resolves.toEqual(first);
+    await expect(service.createWithSourceVersion("member-b", input)).resolves.toEqual(second);
+    await expect(counts()).resolves.toEqual({ submissions: 2, sources: 2, sourceVersions: 2, audits: 2 });
+  });
+
   it("returns a duplicate candidate, preserves a rejected Submission audit, and creates no second source version", async () => {
     const service = createService();
     const first = await service.createWithSourceVersion("member-a", {
