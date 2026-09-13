@@ -19,9 +19,9 @@
 | 清单与入口覆盖 | 成熟度清单更新于 2026-09-01，记录 21 个菜单路由；当前共享 registry 已有 today/focus/review/inbox/goals/projects 等条目 | 旧审计范围滞后；重新建立当前全路由/操作矩阵，不能直接把旧 98 个待办当作当前缺失数 |
 | 浏览器 Linux VM | main 已含 `tools/browser-vm`、`src/routes/environments.ts` 与 deletion reconciler；32 个页面仍无 VM 入口 | 历史基础实现已追溯，当前是工具/探针与元数据 API，需复用接入正式页面，不重复建设 |
 | 离线草稿隐私 | B02 已采用认证成员 v2 命名空间、成员键控表单和迟到响应保护；旧无主 v1 不读不迁移 | 已在本地 main 合并（`6f9d325`）；[本地证据与验收边界](./2026-09-13-member-scoped-submission-drafts-evidence.md)，真实双账号与生产验收仍开放 |
-| 提交重试 | `submission-intent.ts` 成员作用域持久化身份与快照；`createSubmission` 必须接收显式 key；页面手动恢复原请求 | B01 已在功能分支本地实现并定向验证；[证据与限制](./2026-09-13-stable-submission-intents-evidence.md)。真实刷新/双账号、移动端与生产验收仍开放 |
+| 提交重试 | `submission-intent.ts` 成员作用域持久化身份与快照；`createSubmission` 必须接收显式 key；页面手动恢复原请求 | B01 已合入 main `6bb04ac`；[证据与限制](./2026-09-13-stable-submission-intents-evidence.md)。真实刷新/双账号、移动端与生产验收仍开放 |
 | 管理概览 | `frontend/app.tsx` 向 AdminDashboardPage 传三个写死的 0 | D01：接真实授权数据并区分 loading/error/empty，不显示虚假零值 |
-| 审计页加载阻断 | AdminAuditRoute 将裸 page 返回值解构为 generation/page | D02 优先修复：使用 request.generation 校验，成功结果直接作为 page；将 gap 测试升级为可用行为断言 |
+| 审计页加载与恢复 | AdminAuditRoute 使用 request.generation 与即时查询校验，成功结果直接作为 page；错误可原查询重试 | D02 审计子项本地修复，ready/empty/error 已升级 supported；[证据与限制](./2026-09-13-admin-audit-recovery-evidence.md)。其他管理页、浏览器及生产验收仍开放 |
 
 ## 统一完成标准
 
@@ -75,6 +75,9 @@
 
 - [ ] D01 管理仪表盘/统计数据与业务计数、日期范围、分页一致。
 - [ ] D02 审核/资产/成员/角色/菜单/空间/审计各页主操作逐项跑通。
+  - [x] 审计成功/空态、数字分页/筛选、原查询重试、重复点击与迟到响应保护本地实现及定向回归；见 [D02 审计原子清单](../superpowers/plans/2026-09-13-admin-audit-recovery.md)。
+  - [ ] 其余管理页初始失败重试及各主操作闭环，逐页细化后执行。
+  - [ ] 审计真实管理员/普通成员、中英文键盘/设备及发布后验收。
 - [ ] D03 知识版本、回收、导出/恢复及研究产物按原 roadmap 对账，确定未完成子项。
 - [ ] D04 VM 历史实现确认后补齐启动/停止/恢复、终端、存储与联网的未完成项。
 - [ ] D05 admin/contributor/第二成员正向与越权旅程验收。

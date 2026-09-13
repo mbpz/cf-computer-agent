@@ -2,6 +2,8 @@
 
 基线：`main e46c512` 加工作区未提交的 Shell/品牌修复。此表是源码入口清点，不是全部操作验收；不提升交付总账的 release / acceptance。
 
+2026-09-13 增量：main 已含 B01 `6bb04ac`；D02 审计页本地修复见[独立证据](./2026-09-13-admin-audit-recovery-evidence.md)。下方历史基线测试不替代本批门禁。
+
 ## 范围与判定
 
 权威入口：`shared/workspace-route-capabilities.ts` 的 28 个静态路由，及 `frontend/app-routes.ts` 的 4 个参数化路由，共 32 个登录后页面模式。实际接线在 `frontend/app.tsx`。未登录 `/` 是公共展示页，其他受保护路径由登录/授权控制；not-found、forbidden 和通用 coming-soon 是状态，不另算业务模块。
@@ -16,7 +18,7 @@
 | 页面 | 可见主要操作 / 数据接线 | 当前判定与下一验证 | 测试入口 |
 | --- | --- | --- | --- |
 | `/` | 最近知识、任务摘要、活动；`lib/workbench-data.ts` | 存在；核对部分请求失败是否被空数据掩盖 | `unit/workbench-data.test.ts` |
-| `/submit` | 模式切换、编辑、草稿/待确认提交恢复、原始快照重试、附件选择；`lib/submission-data.ts`、`lib/submission-intent.ts`、`lib/offline-submission-draft.ts` → `src/routes/member.ts` | 部分；B02 已合并，B01 稳定身份与手动重试已在功能分支本地验证；真实刷新/双账号待验收，附件仍未接线 | `unit/submission-intent.test.ts`、`unit/offline-submission-draft.test.ts`、`unit/frontend-submit-owner-route.test.tsx`、`unit/frontend-submission-data.test.ts`、`worker/submissions.test.ts` |
+| `/submit` | 模式切换、编辑、草稿/待确认提交恢复、原始快照重试、附件选择；`lib/submission-data.ts`、`lib/submission-intent.ts`、`lib/offline-submission-draft.ts` → `src/routes/member.ts` | 部分；B02/B01 已合并，B01 提交为 `6bb04ac`；真实刷新/双账号待验收，附件仍未接线 | `unit/submission-intent.test.ts`、`unit/offline-submission-draft.test.ts`、`unit/frontend-submit-owner-route.test.tsx`、`unit/frontend-submission-data.test.ts`、`worker/submissions.test.ts` |
 | `/knowledge` | 列表、过滤、分页、打开知识；`lib/knowledge-data.ts` → `src/routes/library.ts` | 存在；再验分页与权限撤销 | `unit/frontend-knowledge-data.test.ts` |
 | `/knowledge/:id` | 阅读、来源、引用；`lib/knowledge-reader-data.ts` → `src/routes/library.ts` | 存在；缺失版本显示错误不应机械改成空态；验精确引用与权限 | `unit/frontend-knowledge-reader-data.test.ts` |
 | `/search` | 搜索、结果跳转；`lib/search-data.ts` → `src/routes/library.ts` | 存在；再验中文、无结果、过滤与降级 | `unit/frontend-search-data.test.ts` |
@@ -55,7 +57,7 @@
 | `/admin/roles` | 角色与权限；`lib/admin-roles-data.ts` → `src/routes/admin-roles.ts` | 部分；初始错误无页面级重试；验撤权后缓存失效 | `unit/admin-roles-page.test.tsx`、`worker/admin-roles.test.ts` |
 | `/admin/menus` | 菜单配置；`lib/admin-menus-data.ts` → `src/routes/admin-menus.ts` | 部分；初始错误无页面级重试；菜单隐藏不替代 API 授权 | `unit/admin-menus-page.test.tsx`、`worker/admin-menus.test.ts` |
 | `/admin/spaces` | 空间管理；`lib/admin-spaces-data.ts` | 部分；初始错误无页面级重试；验知识归属/撤权 | `unit/frontend-admin-pagination-routes.test.tsx` |
-| `/admin/audit` | 审计过滤、数字分页；`lib/admin-audit-data.ts` | 阻断；controller 的 promise 返回裸 page，却被解构为 generation/page，成功结果不能进入 ready | `unit/frontend-workbench-maturity-routes.test.tsx`、`worker/admin-audit.test.ts` |
+| `/admin/audit` | 审计过滤、数字分页、初始/换页错误原查询重试；`lib/admin-audit-data.ts` | 本地加载阻断已修复；即时查询/generation/卸载保护，ready/empty/error 支持。真实浏览器及生产验收待完成 | `unit/frontend-admin-pagination-routes.test.tsx`、`unit/frontend-workbench-maturity-routes.test.tsx`、`worker/admin-audit.test.ts` |
 | `/admin/analytics` | 站点统计、时间范围与分页；`lib/admin-analytics-data.ts` | 部分；初始错误无页面级重试；需核对统计含义/范围/实际数据 | `unit/frontend-admin-analytics-route.test.tsx` |
 
 其余管理接线位于 `src/routes/admin.ts` / `src/routes/admin-review.ts`；逐个 mutation 的授权、存储表、冲突、删除限制仍属 A02，未在本表宣告完成。
@@ -84,8 +86,8 @@ rtk proxy npx vitest run test/worker/submissions.test.ts test/worker/assets.test
 
 ## 优先顺序调整
 
-1. B02 草稿按成员隔离已合入 main `6f9d325`；B01 稳定提交重试身份已在功能分支本地实现，保留真实双账号/刷新验收。详见 [B02 证据](./2026-09-13-member-scoped-submission-drafts-evidence.md)、[B01 证据](./2026-09-13-stable-submission-intents-evidence.md)。接下来处理 D02 审计页加载阻断。
-2. D02 审计页成功分支阻断与管理页初始错误重试；D01 移除虚假零统计，接真实授权数据。
+1. B02 草稿按成员隔离已合入 main `6f9d325`；B01 稳定提交重试身份已合入 main `6bb04ac`，保留真实双账号/刷新验收。详见 [B02 证据](./2026-09-13-member-scoped-submission-drafts-evidence.md)、[B01 证据](./2026-09-13-stable-submission-intents-evidence.md)。D02 审计加载/重试本地修复见[本批证据](./2026-09-13-admin-audit-recovery-evidence.md)。
+2. 下一小批 D01 移除虚假零统计、接真实授权数据；D02 其他管理页初始错误重试与主操作仍待逐页补齐。
 3. B03–B09 知识输入、审核、检索/阅读、AI 来源与任务关联；保留免费层不可用状态。
 4. C01–C07 对现有执行/协作能力逐条验收修补，接入全局未读。
 5. D04 复用现有 VM 基础实现产品页；D05–D08 执行角色、设备、完整门禁与授权后发布验收。

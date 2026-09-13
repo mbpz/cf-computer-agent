@@ -53,12 +53,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   "admin-roles": listWithoutRetry("Roles"),
   "admin-menus": listWithoutRetry("Menus"),
   "admin-spaces": listWithoutRetry("Spaces"),
-  "admin-audit": {
-    loading: supported,
-    empty: gap("Audit controller resolves a raw numbered page through an incompatible generation/page destructure, so empty never renders."),
-    error: gap("Audit renders an initial-load error but provides no route-owned retry action."),
-    ready: gap("Audit controller resolves a raw numbered page through an incompatible generation/page destructure, so ready never renders."),
-  },
+  "admin-audit": listWithRetry,
   "admin-analytics": { loading: supported, empty: supported, error: gap("Analytics renders an initial-load error but provides no route-owned retry action."), ready: supported },
   notifications: listWithRetry,
   messages: listWithRetry,
@@ -296,12 +291,6 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
 
 async function assertExplicitGap(journey: MountedApp, routeId: MaturityRouteId, state: MaturityProbeState, reason: string): Promise<void> {
   expect(reason.length).toBeGreaterThan(20);
-  if (routeId === "admin-audit" && (state === "empty" || state === "ready")) {
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
-    expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
-    expect(readyObservablePresent(journey, routeId)).toBe(false);
-    return;
-  }
   if (state === "error" && !["home", "settings", "admin"].includes(routeId)) {
     await waitForApp(() => journey.container.querySelector('main [role="alert"]') !== null);
     expect(journey.container.querySelector('main [role="alert"] button')).toBeNull();

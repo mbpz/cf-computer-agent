@@ -1726,16 +1726,67 @@ function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
-  const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
+  const initial = parsePageSearch(search);
+  const [page, setPage] = useState(initial.page);
+  const [pageSize, setPageSize] = useState(initial.pageSize);
   const [action, setAction] = useState(() => new URLSearchParams(search).get("action") || undefined);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; page: import("./lib/admin-audit-data").AdminAuditPage } | { kind: "error"; message: string }>({ kind: "loading" });
-  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
-  const controllerRef = useRef<ReturnType<typeof createAdminAuditRequestController> | null>(null);
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); setPage(next.page); setPageSize(next.pageSize); setAction(new URLSearchParams(window.location.search).get("action") || undefined); }), []);
-  useEffect(() => { const controller = createAdminAuditRequestController(); controllerRef.current = controller; setPending(true); setLocalError(undefined); const request = controller.request({ page, pageSize, action }); void request.promise.then(({ generation, page: data }) => { if (controller.isCurrent(generation)) { setState({ kind: "ready", page: data }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE") }); setLocalError(frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE")); setPending(false); } }); return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [action, locale, page, pageSize]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { const nextSearch = writePageSearch(window.location.search, next); writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`); setPage(next.page); setPageSize(next.pageSize); };
-  const changeFilter = (nextAction: string) => { const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize })); if (nextAction) params.set("action", nextAction); else params.delete("action"); const nextSearch = params.toString(); writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`); setAction(nextAction || undefined); setPage(1); };
-  return <AuditPage locale={locale} state={state} action={action || ""} pending={pending} localError={localError} onActionChange={changeFilter} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  const [pending, setPending] = useState(false);
+  const [localError, setLocalError] = useState<string | undefined>();
+  const [retryVersion, setRetryVersion] = useState(0);
+  const pendingRef = useRef(false);
+  const queryRef = useRef({ page, pageSize, action });
+
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    const next = parsePageSearch(window.location.search);
+    const nextAction = new URLSearchParams(window.location.search).get("action") || undefined;
+    // Invalidate the old query immediately, before React cleans up its effect.
+    queryRef.current = { ...next, action: nextAction };
+    setPage(next.page); setPageSize(next.pageSize); setAction(nextAction);
+  }), []);
+
+  useEffect(() => {
+    const controller = createAdminAuditRequestController();
+    const snapshot = { page, pageSize, action };
+    queryRef.current = snapshot;
+    pendingRef.current = true;
+    setPending(true); setLocalError(undefined);
+    const request = controller.request(snapshot);
+    const isCurrent = () => controller.isCurrent(request.generation)
+      && samePageQuery(snapshot, queryRef.current) && snapshot.action === queryRef.current.action;
+    void request.promise.then((data) => {
+      if (!isCurrent()) return;
+      setState({ kind: "ready", page: data });
+      pendingRef.current = false; setPending(false);
+    }).catch((error: unknown) => {
+      if (!isCurrent() || isAbort(error)) return;
+      const message = frontendText(locale, "ADMIN_AUDIT_UNAVAILABLE");
+      setState((old) => old.kind === "ready" ? old : { kind: "error", message });
+      setLocalError(message);
+      pendingRef.current = false; setPending(false);
+    });
+    return () => controller.dispose();
+  }, [action, locale, page, pageSize, retryVersion]);
+
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => {
+    queryRef.current = { ...next, action };
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`);
+    setPage(next.page); setPageSize(next.pageSize);
+  };
+  const changeFilter = (nextAction: string) => {
+    queryRef.current = { page: 1, pageSize, action: nextAction || undefined };
+    const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize }));
+    if (nextAction) params.set("action", nextAction); else params.delete("action");
+    const nextSearch = params.toString();
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`);
+    setAction(nextAction || undefined); setPage(1);
+  };
+  const retry = () => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true); setRetryVersion((value) => value + 1);
+  };
+  return <AuditPage locale={locale} state={state} action={action || ""} pending={pending} localError={localError} onRetry={retry} onActionChange={changeFilter} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 function memberStatusSearch(search: string): "active" | "disabled" | undefined { const value = new URLSearchParams(search).get("status"); return value === "active" || value === "disabled" ? value : undefined; }
