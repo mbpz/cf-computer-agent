@@ -164,7 +164,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-tasks", path: "frontend/lib/tasks-data.ts", symbol: "*" },
   { capabilityId: "workbench-boards", path: "frontend/app.tsx", symbol: "BoardsRoute" },
   { capabilityId: "workbench-settings", path: "frontend/pages/settings-page.tsx", symbol: "SettingsPage" },
-  { capabilityId: "workbench-admin", path: "frontend/pages/admin/admin-dashboard-page.tsx", symbol: "AdminDashboardPage" },
+  { capabilityId: "workbench-admin", path: "frontend/pages/admin/admin-dashboard-route.tsx", symbol: "AdminDashboardRoute" },
   { capabilityId: "workbench-admin-submissions", path: "frontend/app.tsx", symbol: "ReviewQueueRoute" },
   { capabilityId: "workbench-admin-duplicates", path: "frontend/app.tsx", symbol: "AdminDuplicateRoute" },
   { capabilityId: "workbench-admin-duplicates", path: "frontend/lib/admin-duplicates-data.ts", symbol: "*" },
@@ -290,7 +290,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-admin", routeId: "admin", pathname: "/admin", requiredRole: "admin",
     journey: "Review administration summary metrics and enter a governance area.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/admin-dashboard-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/navigation.ts"], testEvidence: ["test/unit/frontend-admin-pages.test.tsx", "test/worker/assets.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-001"], gaps: ["Current admin server projection, page-owned quick link, contributor omission, and forbidden direct route are runtime-probed. Dashboard metrics are hard-coded zeros with no route-owned loading, empty, retryable error, release, or signed-browser evidence."],
+    frontendEvidence: ["frontend/pages/admin/admin-dashboard-page.tsx", "frontend/pages/admin/admin-dashboard-route.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/admin.ts", "src/submissions/repository.ts", "src/assets/repository.ts", "src/members/repository.ts"], testEvidence: ["test/unit/frontend-admin-dashboard-route.test.tsx", "test/worker/submissions.test.ts", "test/worker/m2-assets.test.ts", "test/worker/members.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-001"], gaps: ["Authorized list totals, independent loading/zero/error/retry, bounded reads and stale-result protection are runtime-probed. Cross-page mutation reconciliation, site-analytics date-range consistency, release and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-admin-submissions", routeId: "admin-submissions", pathname: "/admin/submissions", requiredRole: "admin",
@@ -498,10 +498,10 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin",
-    apiPaths: ["/api/navigation"],
-    persistencePaths: ["src/authorization/menus-repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql"],
+    apiPaths: ["/api/admin/submissions", "/api/admin/assets", "/api/admin/members"],
+    persistencePaths: ["src/submissions/repository.ts", "src/assets/repository.ts", "src/members/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0003_m1_knowledge_loop.sql", "migrations/0005_m2_asset_ingestion.sql", "migrations/0033_numbered_pagination_indexes.sql"],
     ownerPredicate: null,
-    pagination: "not_applicable",
+    pagination: "numbered",
     mutations: [],
     mutationSafety: "not_applicable",
   },

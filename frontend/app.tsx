@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell } from "./components/shell/app-shell";
-import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
+import { AdminDashboardRoute } from "./pages/admin/admin-dashboard-route";
 import { AdminAnalyticsPage } from "./pages/admin/analytics-page";
 import { AdminRolesPage } from "./pages/admin/roles-page";
 import { AdminMenusPage } from "./pages/admin/menus-page";
@@ -192,7 +192,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
-    case "admin": return <AdminDashboardPage locale={locale} metrics={{ pending: 0, assets: 0, members: 0 }} />;
+    case "admin": return session ? <AdminDashboardRoute locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
     case "admin-analytics": return <AdminAnalyticsRoute locale={locale} search={search} />;
     case "admin-roles": return <AdminRolesRoute locale={locale} />;
     case "admin-menus": return <AdminMenusRoute locale={locale} />;

@@ -38,6 +38,41 @@ afterEach(() => {
 });
 
 describe("M2 asset upload boundary", () => {
+  it("serves dashboard totals beyond the first page with exact scopes and admin-only access", async () => {
+    const members = new MembersRepository(env.DB);
+    for (let index = 0; index < 22; index += 1) {
+      await members.insert({ id: `metric-member-${index}`, identitySubject: `github:metric-${index}`,
+        email: `metric-${index}@example.test`, role: "contributor", status: index % 2 ? "active" : "disabled", createdAt: now, updatedAt: now });
+    }
+    await env.DB.batch(Array.from({ length: 48 }, (_, index) => env.DB.prepare(
+      "INSERT INTO submissions (id, submitter_id, requested_space_id, requested_visibility, kind, status, title, content, created_at, updated_at) VALUES (?, ?, 'default', 'shared', 'text', ?, 'Counter fixture', 'Body', ?, ?)",
+    ).bind(`metric-submission-${index}`, index % 2 ? "asset-owner" : "asset-other", index < 47 ? "review_pending" : "published", now, now)));
+    const statuses = ["queued", "processing", "succeeded", "failed_retryable", "failed_terminal"];
+    for (let index = 0; index < 62; index += 1) {
+      await env.DB.prepare(
+        "INSERT INTO assets (id, owner_id, object_key, original_name, content_type, byte_size, content_sha256, idempotency_key, status, created_at, updated_at) VALUES (?, 'asset-owner', ?, 'metric.txt', 'text/plain', 1, ?, ?, 'ready', ?, ?)",
+      ).bind(`metric-asset-${index}`, `metric/${index}`, "a".repeat(64), `metric-${index}`, now, now).run();
+      if (index < 61) await env.DB.prepare(
+        "INSERT INTO parse_jobs (id, asset_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ).bind(`metric-job-${index}`, `metric-asset-${index}`, statuses[index % statuses.length], now, now).run();
+    }
+    const queries = [
+      ["/api/admin/submissions?page=1&pageSize=20&status=review_pending", 47],
+      ["/api/admin/assets?page=1&pageSize=20", 61],
+      ["/api/admin/members?page=1&pageSize=20", 25],
+    ] as const;
+    for (const [path, total] of queries) {
+      expect((await memberApi("asset-owner", path)).status).toBe(403);
+      for (let read = 0; read < 2; read += 1) {
+        const response = await memberApi("asset-admin", path);
+        expect(response.status).toBe(200);
+        const body = await response.json<{ items: unknown[]; pagination: unknown }>();
+        expect(body.items).toHaveLength(20);
+        expect(body.pagination).toEqual({ page: 1, pageSize: 20, total, totalPages: Math.ceil(total / 20) });
+      }
+    }
+  });
+
   it("keeps fixture sessions valid when the application resolves them", async () => {
     const response = await memberApi("asset-owner", "/api/session");
 

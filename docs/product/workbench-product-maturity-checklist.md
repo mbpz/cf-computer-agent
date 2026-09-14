@@ -19,7 +19,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 
 历史 R0 快照（24 项能力，以下 R0 atom 保留当时范围）：Task 6 与最终修正闭环证据见 `docs/operations/evidence/2026-08-31-workbench-r0-completion.md`。结构化 operation roots、capability-owned strategy bindings 与 GET side-effect binding 已使全部声明双向失败关闭；状态按 atom 证据恢复为 7 个 `[x]`、5 个 `[-]`。当时 24 个 capability 均为 `partial`，57 项缺口由 R1–R8 负责，98 个 R1–R8 implementation atoms 均保持 `[ ]`；本地 gate 不提升 release 或 acceptance。
 
-2026-09-14 M02 当前增量：补入七个扩展工作区及项目时间线，当前 32 项 capability 均保留 `partial`；83 项缺口（43 P0 / 39 P1 / 1 P2）分派到 R1–R8，新增 R4-013 至 R4-038 共 26 个待实施原子，当前 R1–R8 共 124 个 `[ ]`。本次只补齐审计与回归证据，不将这些原子标为业务完成。当前快照见 `docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md`；历史 R0 的 24 项范围和发布/验收状态不回填。
+2026-09-14 M02 当前增量：补入七个扩展工作区及项目时间线，当前 32 项 capability 均保留 `partial`；83 项缺口（43 P0 / 39 P1 / 1 P2）分派到 R1–R8，新增 R4-013 至 R4-038 共 26 个待实施原子，当前 R1–R8 共 124 个 `[ ]`。本次只补齐审计与回归证据，不将这些原子标为业务完成。M02 历史快照见 `docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md`；D01-A 计数接入后的当前快照为 `docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md`。历史 R0/M02 的范围和发布/验收状态不回填。
 
 - [x] `R0-001` 固化所有共享路由、参数化路由、菜单入口和权限映射。
   - `implementation`: `done` — `shared/workspace-route-capabilities.ts`、`frontend/app-routes.ts`、`shared/workbench-maturity-capabilities.ts`。
@@ -259,6 +259,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 ## R6 — 管理后台闭环
 
 - [ ] `R6-001` 管理 Dashboard 使用真实摘要、趋势、排行和活动数据。
+  - D01-A（2026-09-14）已本地接入待审核、解析队列和成员三个授权列表的权威总数，并覆盖加载/零值/错误重试/权限与过期响应；见 `docs/product/2026-09-14-admin-dashboard-authoritative-counts-evidence.md`。趋势、排行、活动与跨页对账未据此完成，父项保持未勾选。
 - [ ] `R6-002` 统计支持日期范围、趋势、来源、页面和访客数字分页。
 - [ ] `R6-003` 审核列表/详情支持发布、退回、拒绝和冲突恢复。
 - [ ] `R6-004` 资产列表支持解析状态、预览、隔离、重试和失败说明。

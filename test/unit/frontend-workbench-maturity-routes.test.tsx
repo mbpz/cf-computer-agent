@@ -48,7 +48,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   tasks: listWithRetry,
   boards: listWithRetry,
   settings: staticReady("Settings"),
-  admin: staticReady("Administration dashboard"),
+  admin: listWithRetry,
   "admin-submissions": listWithoutRetry("Review queue"),
   "admin-duplicates": listWithoutRetry("Duplicate queue"),
   "admin-assets": listWithoutRetry("Asset queue"),

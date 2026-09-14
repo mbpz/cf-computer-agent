@@ -15,7 +15,7 @@ import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 describe("React administrator pages", () => {
   it("renders dashboard metrics and a contributor 403 state", () => {
-    expect(renderToStaticMarkup(<AdminDashboardPage metrics={{ pending: 3, assets: 2, members: 5 }} />)).toContain("Review queue");
+    expect(renderToStaticMarkup(<AdminDashboardPage metrics={{ pending: { kind: "ready", total: 3 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 5 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />)).toContain("Review queue");
     const forbidden = renderToStaticMarkup(<AdminForbiddenPage />);
     expect(forbidden).toContain("403");
     expect(forbidden).not.toContain("undefined");
@@ -103,7 +103,7 @@ describe("React administrator pages", () => {
 
   it("localizes administrator copy through the shared locale runtime", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: 1, assets: 2, members: 3 }} />);
+    const dashboard = renderToStaticMarkup(<AdminDashboardPage locale={locale} metrics={{ pending: { kind: "ready", total: 1 }, assets: { kind: "ready", total: 2 }, members: { kind: "ready", total: 3 } }} links={[]} onRetry={() => {}} onRefresh={() => {}} />);
     const queue = renderToStaticMarkup(<ReviewQueuePage locale={locale} state={{ kind: "ready", data: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }} />);
     expect(dashboard).toContain("管理");
     expect(dashboard).toContain("审核队列");

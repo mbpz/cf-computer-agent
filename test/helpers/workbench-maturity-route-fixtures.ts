@@ -24,7 +24,7 @@ export const READY_MARKER_BY_ROUTE = {
   tasks: "READY::tasks",
   boards: "READY::boards",
   settings: "contributor@app.test",
-  admin: "a[href=\"/admin/analytics\"]",
+  admin: "[data-dashboard-metric=\"pending\"] [data-page-state=\"ready\"] [data-metric-value]",
   "admin-submissions": "READY::admin-submissions",
   "admin-duplicates": "READY::admin-duplicates",
   "admin-assets": "READY::admin-assets",
@@ -197,7 +197,12 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/discussions/thread-route-audit") return state === "empty" ? Response.json(thread()) : probeResponse(state, {}, thread());
       if (path === "/api/discussions/thread-route-audit/messages?limit=20") return probeResponse(state, { items: [] }, { items: [message()] });
       return null;
-    case "settings": case "admin":
+    case "settings":
+      return null;
+    case "admin":
+      if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-pending", title: "Pending", status: "review_pending" }]));
+      if (pathname(path) === "/api/admin/assets") return probeResponse(state, numbered([]), numbered([{ asset: { id: "dashboard-asset", originalName: "asset.txt" }, job: { status: "succeeded" } }]));
+      if (pathname(path) === "/api/admin/members") return probeResponse(state, numbered([]), numbered([{ id: "dashboard-member", email: "member@app.test", role: "contributor", status: "active" }]));
       return null;
     case "admin-submissions":
       if (pathname(path) === "/api/admin/submissions") return probeResponse(state, numbered([]), numbered([{ id: "ready-admin-submissions", title: "READY::admin-submissions", submitterId: "member-route-audit", status: "review_pending" }]));

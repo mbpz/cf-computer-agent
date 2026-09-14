@@ -1,6 +1,6 @@
 # 个人工作台：功能补齐增量审计
 
-日期：2026-09-12；增量更新：2026-09-13。原基线：main `e46c512` 加当时未提交的 Shell 与产品定位修复；该修复随后提交为 `937ea87`。
+日期：2026-09-12；增量更新：2026-09-14。原基线：main `e46c512` 加当时未提交的 Shell 与产品定位修复；该修复随后提交为 `937ea87`。
 
 用户已确认按对账、知识闭环、执行协作、管理/VM、验收的方向继续。本文不是全部功能审计完成报告。沿用既有成熟度清单和交付总账，避免重复建设；历史 checkbox 不能直接推断当前状态。
 
@@ -20,7 +20,7 @@
 | 浏览器 Linux VM | main 已含 `tools/browser-vm`、`src/routes/environments.ts` 与 deletion reconciler；32 个页面仍无 VM 入口 | 历史基础实现已追溯，当前是工具/探针与元数据 API，需复用接入正式页面，不重复建设 |
 | 离线草稿隐私 | B02 已采用认证成员 v2 命名空间、成员键控表单和迟到响应保护；旧无主 v1 不读不迁移 | 已在本地 main 合并（`6f9d325`）；[本地证据与验收边界](./2026-09-13-member-scoped-submission-drafts-evidence.md)，真实双账号与生产验收仍开放 |
 | 提交重试 | `submission-intent.ts` 成员作用域持久化身份与快照；`createSubmission` 必须接收显式 key；页面手动恢复原请求 | B01 已合入 main `6bb04ac`；[证据与限制](./2026-09-13-stable-submission-intents-evidence.md)。真实刷新/双账号、移动端与生产验收仍开放 |
-| 管理概览 | `frontend/app.tsx` 向 AdminDashboardPage 传三个写死的 0 | D01：接真实授权数据并区分 loading/error/empty，不显示虚假零值 |
+| 管理概览 | AdminDashboardRoute 读取三个已授权数字分页接口的 total，独立 loading/empty/error/forbidden，支持刷新/重试与迟到保护 | D01-A 本地实现；[证据及限制](./2026-09-14-admin-dashboard-authoritative-counts-evidence.md)。日期范围/站点统计及真实登录验收仍待 D01-B 和后续验收 |
 | 审计页加载与恢复 | AdminAuditRoute 使用 request.generation 与即时查询校验，成功结果直接作为 page；错误可原查询重试 | D02 审计子项本地修复，ready/empty/error 已升级 supported；[证据与限制](./2026-09-13-admin-audit-recovery-evidence.md)。其他管理页、浏览器及生产验收仍开放 |
 
 ## 统一完成标准
@@ -77,6 +77,9 @@
 ### D — 管理、VM 与发布验收
 
 - [ ] D01 管理仪表盘/统计数据与业务计数、日期范围、分页一致。
+  - [x] D01-A 概览三个权威总数、权限入口、独立五态、手动刷新/重试、请求去重和退出取消；[原子计划](../superpowers/plans/2026-09-14-admin-dashboard-authoritative-counts.md)。只读 GET 复用现有 COUNT 分页，无新增服务或迁移。
+  - [ ] D01-B 站点统计日期范围与分页一致性、初始失败恢复、跨页写后对账。
+  - [ ] D01 真实登录、中英文键盘/设备和发布后验收；不由本地自动化结果替代。
 - [ ] D02 审核/资产/成员/角色/菜单/空间/审计各页主操作逐项跑通。
   - [x] 审计成功/空态、数字分页/筛选、原查询重试、重复点击与迟到响应保护本地实现及定向回归；见 [D02 审计原子清单](../superpowers/plans/2026-09-13-admin-audit-recovery.md)。
   - [ ] 其余管理页初始失败重试及各主操作闭环，逐页细化后执行。

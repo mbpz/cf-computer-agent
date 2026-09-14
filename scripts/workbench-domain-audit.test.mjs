@@ -12,7 +12,7 @@ import {
 } from "./workbench-domain-audit.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md");
+const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md");
 
 function withRepositoryProbe(relativePath, transform, assertion) {
   const probeRoot = mkdtempSync(resolve(tmpdir(), "workbench-domain-audit-"));
@@ -63,13 +63,17 @@ test("focus union actions expand to four real routes and review GET persistence 
   assert.equal(facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"].strategy, "gap");
 });
 
-test("M02 extends current coverage without rewriting the historical R0 snapshot", () => {
+test("D01-A preserves historical M02 and R0 snapshots without backdating counter evidence", () => {
   const historical = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md"), "utf8");
+  const m02 = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md"), "utf8");
   const current = readFileSync(evidencePath, "utf8");
   assert.equal(historical.split("\n").filter((line) => line.startsWith("| workbench-")).length, 24);
   assert.equal(current.split("\n").filter((line) => line.startsWith("| workbench-")).length, 32);
   assert.match(historical, /^# Workbench R0 Domain Audit\n/u);
   assert.match(current, /historical 24-capability snapshot/u);
+  assert.match(m02, /Dashboard metrics are hard-coded zeros/u);
+  assert.doesNotMatch(current, /Dashboard metrics are hard-coded zeros/u);
+  assert.match(current, /Authorized list totals/u);
 });
 
 test("extended list APIs expose cursor pagination while bounded snapshots do not promise continuation", () => {
@@ -359,7 +363,7 @@ test("Markdown rendering is deterministic and follows maturity route order", asy
   const first = renderWorkbenchDomainAudit(audit);
   const second = renderWorkbenchDomainAudit([...audit].reverse());
   assert.equal(first, second);
-  assert.match(first, /^# Workbench M02 Domain Audit — 2026-09-14\n/u);
+  assert.match(first, /^# Workbench D01-A Domain Audit — 2026-09-14\n/u);
   assert.match(first, /\| Capability \| Route \| API and pagination \| Persistence \| Owner predicate \| Mutation safety \| Test evidence \| Classification \| Gaps \|/u);
   assert.match(first, /\/api\/knowledge\/recent \(cursor\)/u);
   assert.ok(first.indexOf("workbench-home") < first.indexOf("workbench-submit"));

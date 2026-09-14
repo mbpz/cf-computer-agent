@@ -31,7 +31,7 @@ const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
-const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
@@ -116,7 +116,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-tasks": { source: "manifest:0@f69e69f87dec", dimension: "isolation", slug: "revocation-and-mutation-convergence", symptom: "撤权路径虽有探针，但 mutation、删除恢复及并发收敛尚未形成完整私有任务旅程。", owner: "R4-012" },
   "workbench-boards": { source: "manifest:0@0f01e0145a2e", dimension: "query_or_idempotency", slug: "move-concurrency-and-rollback", symptom: "看板移动缺少键盘操作、并发冲突与精确乐观回滚的完整旅程。", owner: "R4-012" },
   "workbench-settings": { source: "manifest:0@5e57e601f4cd", dimension: "states", slug: "persisted-settings-boundary", symptom: "设置页没有路由级异步状态、持久化或保存 pending 边界。", owner: "R1-012" },
-  "workbench-admin": { source: "manifest:0@59434198411a", dimension: "api", slug: "real-dashboard-summary", symptom: "管理 Dashboard 使用硬编码零指标且无路由级加载、空态与错误恢复。", owner: "R6-001" },
+  "workbench-admin": { source: "manifest:0@87a1d186875c", dimension: "api", slug: "real-dashboard-summary", symptom: "管理概览权威总数与独立状态已本地验证；跨页写后对账、站点统计日期一致性及发布验收仍缺失。", owner: "R6-001" },
   "workbench-admin-submissions": { source: "manifest:0@e56a2c5a0b50", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列初始错误无重试，列表到详情发现、决策完成和幂等尚未闭环。", owner: "R6-003" },
   "workbench-admin-duplicates": { source: "manifest:0@52988e32a0b8", dimension: "journey", slug: "duplicate-decision-recovery", symptom: "重复候选页初始错误无重试且决策收敛旅程未证明。", owner: "R6-010" },
   "workbench-admin-assets": { source: "manifest:0@96b40fbd4a65", dimension: "states", slug: "parse-progress-and-recovery", symptom: "资产页初始加载不可重试，解析进度与完整恢复旅程不完整。", owner: "R6-004" },
