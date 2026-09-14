@@ -36,6 +36,9 @@ const staticReady = (subject: string): StateClaims => Object.freeze({
 });
 
 const ROUTE_STATE_MATRIX = Object.freeze({
+  "project-timeline": listWithRetry,
+  inbox: listWithRetry, goals: listWithRetry, projects: listWithRetry, calendar: listWithRetry,
+  today: listWithRetry, focus: listWithRetry, review: listWithRetry,
   home: { loading: supported, empty: supported, error: supported, ready: supported },
   submit: listWithRetry,
   knowledge: listWithRetry,
@@ -63,6 +66,9 @@ const ROUTE_STATE_MATRIX = Object.freeze({
 } as const satisfies Record<MaturityRouteId, StateClaims>);
 
 const PERMISSION_MASK_BY_ROUTE = Object.freeze({
+  "project-timeline": "0x100000",
+  inbox: "0x100000", goals: "0x100000", projects: "0x100000", calendar: "0x100000",
+  today: "0x100000", focus: "0x100000", review: "0x100000",
   home: "0x0", submit: "0x0", knowledge: "0x0", search: "0x0", agent: "0x0", "my-submissions": "0x0",
   tasks: "0x100000", boards: "0x100000", settings: "0x0", admin: "0x0", "admin-submissions": "0x0",
   "admin-duplicates": "0x0", "admin-assets": "0x0", "admin-members": "0x0", "admin-roles": "0x0",
@@ -268,7 +274,15 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
     return;
   }
   if (state === "empty") {
-    if (routeId === "home") {
+    if (routeId === "focus") {
+      await waitForApp(() => journey.container.querySelector('main input[aria-label="Task ID"]') !== null);
+      expect([...journey.container.querySelectorAll("main button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
+      expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
+    } else if (routeId === "today" || routeId === "review") {
+      const text = routeId === "today" ? "No tasks due today" : "No completed work in this snapshot";
+      await waitForApp(() => journey.container.querySelector("main")?.textContent?.includes(text) === true);
+      expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
+    } else if (routeId === "home") {
       await waitForApp(() => journey.container.textContent?.includes("No recent knowledge yet.") === true);
       expect(journey.container.textContent).toContain("No recent knowledge yet.");
     } else if (routeId === "admin-analytics") {

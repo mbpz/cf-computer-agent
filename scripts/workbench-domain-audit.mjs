@@ -23,7 +23,7 @@ import {
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
 
-const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md";
+const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md";
 const DOMAIN_KEYS = new Set(["id", "apiPaths", "persistencePaths", "ownerPredicate", "pagination", "mutations", "mutationSafety"]);
 const FRONTEND_INDEX_CACHE = new Map();
 const ROUTE_EVIDENCE_CACHE = new Map();
@@ -31,6 +31,14 @@ const ROUTE_EVIDENCE_CACHE = new Map();
 const symbolBinding = (path, symbol, ...tokens) => ({ path, symbol, tokens });
 const ownerEvidence = (predicate, ...bindings) => ({ predicate, bindings });
 const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
+  ownerEvidence("routeProjectTimelineApi passes authenticated member.memberId to ProjectTimelineService; ProjectTimelineRepository.listOwned binds member_id = ? and project_id = ?.", symbolBinding("src/routes/project-timeline.ts", "routeProjectTimelineApi", "member.memberId"), symbolBinding("src/project-timeline/repository.ts", "ProjectTimelineRepository.listOwned", "member_id = ?", "project_id = ?")),
+  ownerEvidence("routeInboxApi passes authenticated member.memberId to InboxService; InboxRepository.listOwned binds member_id = ?.", symbolBinding("src/routes/inbox.ts", "routeInboxApi", "member.memberId"), symbolBinding("src/inbox/repository.ts", "InboxRepository.listOwned", "member_id = ?")),
+  ownerEvidence("routeGoalsApi passes authenticated member.memberId to GoalsService; GoalsRepository.listOwned binds member_id = ?.", symbolBinding("src/routes/goals.ts", "routeGoalsApi", "member.memberId"), symbolBinding("src/goals/repository.ts", "GoalsRepository.listOwned", "member_id = ?")),
+  ownerEvidence("routeProjectsApi passes authenticated member.memberId to ProjectsService; ProjectsRepository.listOwned and summary bind member_id = ?.", symbolBinding("src/routes/projects.ts", "routeProjectsApi", "member.memberId"), symbolBinding("src/projects/repository.ts", "ProjectsRepository.listOwned", "member_id = ?"), symbolBinding("src/projects/repository.ts", "ProjectsRepository.summary", "member_id = ?")),
+  ownerEvidence("routeCalendarApi passes authenticated member.memberId to CalendarService; CalendarRepository.listOwned binds member_id = ?.", symbolBinding("src/routes/calendar.ts", "routeCalendarApi", "member.memberId"), symbolBinding("src/calendar/repository.ts", "CalendarRepository.listOwned", "member_id = ?")),
+  ownerEvidence("routeTodayApi passes authenticated principal.memberId to TodayService.get; all four private aggregates receive the same memberId.", symbolBinding("src/routes/today.ts", "routeTodayApi", "principal.memberId"), symbolBinding("src/today/service.ts", "TodayService.get", "tasks.list(memberId", "tasks.summary(memberId", "inbox.list(memberId", "projects.list(memberId", "calendar.list(memberId")),
+  ownerEvidence("routeFocusApi passes authenticated principal.memberId to FocusService; FocusRepository.findOpen and update bind member_id = ?.", symbolBinding("src/routes/focus.ts", "routeFocusApi", "principal.memberId"), symbolBinding("src/focus/repository.ts", "FocusRepository.findOpen", "member_id = ?"), symbolBinding("src/focus/repository.ts", "FocusRepository.update", "member_id = ?")),
+  ownerEvidence("routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.find binds member_id = ? and every aggregate receives memberId.", symbolBinding("src/routes/workbench-review.ts", "routeWorkbenchReviewApi", "principal.memberId"), symbolBinding("src/workbench-review/repository.ts", "WorkbenchReviewRepository.find", "member_id = ?"), symbolBinding("src/workbench-review/service.ts", "WorkbenchReviewService.get", "tasks.summary(memberId", "tasks.list(memberId", "inbox.list(memberId", "projects.list(memberId", "focus.current(memberId")),
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/recent-visits/repository.ts", "RecentVisitsRepository.list", "v.member_id = ?", "scope.memberId")),
   ownerEvidence("routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.", symbolBinding("src/routes/member.ts", "routeMemberApi", "member.memberId"), symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.findByIdempotencyKey", "submitterId", "idempotencyKey")),
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository authorization binds scope.memberId before applying revision visibility predicates.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.authorizeScope", "scope.memberId")),
@@ -232,6 +240,9 @@ function routeDefinition(path, literal, body, sourcePath, symbol) {
   const pagination = body.includes("parseNumberedPageRequest")
     ? "numbered"
     : /\b(?:parsePageRequest|cursorPage|pageRequest)\s*\(/u.test(body)
+      || ((/\blimit:\s*parseOptionalNumber\(url\.searchParams\.get\("limit"\)\)/u.test(body)
+        || (/\bconst limit = parseOptionalNumber\(url\.searchParams\.get\("limit"\)\)/u.test(body) && /\{\s*limit,\s*cursor:/u.test(body)))
+        && /\bcursor:\s*url\.searchParams\.get\("cursor"\)/u.test(body))
       ? "cursor"
       : "not_applicable";
   return { path, regex: literal ? regularExpression(literal) : null, sourcePath, symbol, methods, pagination };
@@ -314,7 +325,7 @@ function frontendSourceIndex(repositoryRoot) {
             }
           }
         }
-        if (isFunctionDeclaration(node) && node.name && node.body) functions.set(node.name.getText(source), frontendScope(node.body, source));
+        if (isFunctionDeclaration(node) && node.name && node.body) functions.set(node.name.getText(source), frontendScope(node, source));
         node.forEachChild(visit);
       };
       visit(source);
@@ -333,6 +344,15 @@ function frontendScope(node, source) {
   const unsupportedMutations = [];
   const invokedImports = new Set();
   const scopeText = node.getText(source);
+  // Expand only a finite literal union declared on this function's parameter.
+  // Unbounded/dynamic segments still fail source-route validation.
+  const parameterValues = new Map();
+  for (const parameter of node.parameters ?? []) {
+    const members = parameter.type?.types;
+    if (isIdentifier(parameter.name) && members?.length && members.every((member) => member.literal && isStringLiteral(member.literal))) {
+      parameterValues.set(parameter.name.text, members.map((member) => member.literal.text));
+    }
+  }
   for (const match of scopeText.matchAll(/<([A-Z][A-Za-z0-9_$]*)\b/gu)) invokedImports.add(match[1]);
   const visit = (child) => {
     if (isCallExpression(child)) {
@@ -345,7 +365,7 @@ function frontendScope(node, source) {
           unsupportedMutations.push(options?.getText(source) ?? "<missing options>");
           return;
         }
-        const paths = frontendCallPaths(argument, scopeText);
+        const paths = frontendCallPaths(argument, scopeText, parameterValues);
         for (const path of paths) calls.push({ path, method });
         if (method !== "GET" && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
       } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(expression)) {
@@ -378,11 +398,11 @@ function frontendCallMethod(options) {
   return method;
 }
 
-function frontendCallPaths(text, scopeText) {
+function frontendCallPaths(text, scopeText, parameterValues) {
   if (!text || (!text.startsWith("\"") && !text.startsWith("'") && !text.startsWith("`"))) return [];
   let candidates = [text.slice(1, -1)];
   for (const match of [...candidates[0].matchAll(/\$\{([A-Za-z_$][A-Za-z0-9_$]*)\}/gu)]) {
-    const values = scopeText.match(new RegExp(`(?:const|let)\\s+${match[1]}\\s*=.*?[?].*?["']([^"']+)["']\\s*:\\s*["']([^"']+)["']`, "u"))?.slice(1);
+    const values = parameterValues.get(match[1]) ?? scopeText.match(new RegExp(`(?:const|let)\\s+${match[1]}\\s*=.*?[?].*?["']([^"']+)["']\\s*:\\s*["']([^"']+)["']`, "u"))?.slice(1);
     if (values) candidates = candidates.flatMap((candidate) => values.map((value) => candidate.replace(match[0], value)));
   }
   return candidates
@@ -624,7 +644,9 @@ export function renderWorkbenchDomainAudit(records) {
     listCell(record.gaps),
   ].map(markdownCell).join(" | "));
   return [
-    "# Workbench R0 Domain Audit",
+    "# Workbench M02 Domain Audit — 2026-09-14",
+    "",
+    "Current 32-capability reconciliation. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
     "",
     "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",

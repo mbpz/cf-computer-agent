@@ -12,7 +12,7 @@ import {
 } from "./workbench-domain-audit.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md");
+const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md");
 
 function withRepositoryProbe(relativePath, transform, assertion) {
   const probeRoot = mkdtempSync(resolve(tmpdir(), "workbench-domain-audit-"));
@@ -33,8 +33,8 @@ function withRepositoryProbe(relativePath, transform, assertion) {
 }
 test("every maturity capability has one conservative domain audit record", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
-  assert.equal(audit.length, 24);
-  assert.equal(new Set(audit.map((record) => record.id)).size, 24);
+  assert.equal(audit.length, 32);
+  assert.equal(new Set(audit.map((record) => record.id)).size, 32);
 
   for (const record of audit) {
     for (const path of [
@@ -47,9 +47,44 @@ test("every maturity capability has one conservative domain audit record", async
     }
     assert.ok(Array.isArray(record.mutationFactIds), `${record.id}: source-derived mutation inventory missing`);
     if (record.ownerPredicate !== null) {
-      assert.match(record.ownerPredicate, /authenticated (?:member\.memberId|scope\.memberId|actorMemberId)/u);
+      assert.match(record.ownerPredicate, /authenticated (?:member\.memberId|principal\.memberId|scope\.memberId|actorMemberId)/u);
       assert.ok(record.backendEvidence.some((path) => path.startsWith("src/")), `${record.id}: runtime owner evidence required`);
     }
+  }
+});
+
+test("focus union actions expand to four real routes and review GET persistence remains a safety gap", () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  assert.deepEqual(Object.keys(facts.mutations["workbench-focus"]).sort(), [
+    "POST /api/focus", "POST /api/focus/:id/abandon", "POST /api/focus/:id/complete",
+    "POST /api/focus/:id/pause", "POST /api/focus/:id/resume",
+  ]);
+  for (const fact of Object.values(facts.mutations["workbench-focus"])) assert.equal(fact.strategy, "gap");
+  assert.equal(facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"].strategy, "gap");
+});
+
+test("M02 extends current coverage without rewriting the historical R0 snapshot", () => {
+  const historical = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md"), "utf8");
+  const current = readFileSync(evidencePath, "utf8");
+  assert.equal(historical.split("\n").filter((line) => line.startsWith("| workbench-")).length, 24);
+  assert.equal(current.split("\n").filter((line) => line.startsWith("| workbench-")).length, 32);
+  assert.match(historical, /^# Workbench R0 Domain Audit\n/u);
+  assert.match(current, /historical 24-capability snapshot/u);
+});
+
+test("extended list APIs expose cursor pagination while bounded snapshots do not promise continuation", () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  for (const path of ["/api/inbox", "/api/goals", "/api/projects", "/api/calendar/events", "/api/projects/:id/timeline"]) assert.equal(facts.apis[path].pagination, "cursor", path);
+  for (const path of ["/api/today", "/api/workbench/review", "/api/focus/current"]) assert.equal(facts.apis[path].pagination, "not_applicable", path);
+});
+
+test("focus actions fail closed when a union adds an unrouted action or becomes unbounded", () => {
+  for (const replacement of ['"pause" | "resume" | "complete" | "abandon" | "rewind"', "string"]) {
+    withRepositoryProbe("frontend/lib/focus-data.ts", (source) => source.replace(
+      'action: "pause" | "resume" | "complete" | "abandon"', `action: ${replacement}`,
+    ), (probeRoot) => {
+      assert.throws(() => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }), /unknown API evidence/u);
+    });
   }
 });
 
@@ -324,7 +359,7 @@ test("Markdown rendering is deterministic and follows maturity route order", asy
   const first = renderWorkbenchDomainAudit(audit);
   const second = renderWorkbenchDomainAudit([...audit].reverse());
   assert.equal(first, second);
-  assert.match(first, /^# Workbench R0 Domain Audit\n/u);
+  assert.match(first, /^# Workbench M02 Domain Audit — 2026-09-14\n/u);
   assert.match(first, /\| Capability \| Route \| API and pagination \| Persistence \| Owner predicate \| Mutation safety \| Test evidence \| Classification \| Gaps \|/u);
   assert.match(first, /\/api\/knowledge\/recent \(cursor\)/u);
   assert.ok(first.indexOf("workbench-home") < first.indexOf("workbench-submit"));

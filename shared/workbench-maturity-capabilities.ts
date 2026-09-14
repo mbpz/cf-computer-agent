@@ -128,6 +128,13 @@ export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
 
 export const WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-review",
+    operation: "GET /api/workbench/review#persist-snapshot",
+    apiPath: "/api/workbench/review",
+    source: { path: "src/workbench-review/service.ts", symbol: "WorkbenchReviewService.get", tokens: ["this.repository.find(memberId, value, range.periodKey)", "this.repository.upsert(memberId"] },
+    tests: [{ path: "test/worker/workbench-review.test.ts", tokens: ["returns a private deterministic snapshot and rejects unknown query keys", "periodKey"] }],
+  },
+  {
     capabilityId: "workbench-knowledge-reader",
     operation: "GET /api/knowledge/:id#record-visit",
     apiPath: "/api/knowledge/:id",
@@ -137,6 +144,14 @@ export const WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS = Object.freeze([
 ] as const satisfies readonly WorkbenchSourceSideEffectBinding[]);
 
 export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
+  { capabilityId: "workbench-project-timeline", path: "frontend/app.tsx", symbol: "ProjectTimelineRoute" },
+  { capabilityId: "workbench-inbox", path: "frontend/app.tsx", symbol: "InboxRoute" },
+  { capabilityId: "workbench-goals", path: "frontend/app.tsx", symbol: "GoalsRoute" },
+  { capabilityId: "workbench-projects", path: "frontend/app.tsx", symbol: "ProjectsRoute" },
+  { capabilityId: "workbench-calendar", path: "frontend/app.tsx", symbol: "CalendarRoute" },
+  { capabilityId: "workbench-today", path: "frontend/app.tsx", symbol: "TodayRoute" },
+  { capabilityId: "workbench-focus", path: "frontend/app.tsx", symbol: "FocusRoute" },
+  { capabilityId: "workbench-review", path: "frontend/app.tsx", symbol: "WorkbenchReviewRoute" },
   { capabilityId: "workbench-home", path: "frontend/app.tsx", symbol: "HomeRoute" },
   { capabilityId: "workbench-submit", path: "frontend/app.tsx", symbol: "SubmitRoute" },
   { capabilityId: "workbench-knowledge", path: "frontend/app.tsx", symbol: "KnowledgeRoute" },
@@ -187,6 +202,46 @@ const INITIAL_DIMENSIONS = {
 } as const satisfies WorkbenchMaturityCapability["dimensions"];
 
 export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
+  {
+    id: "workbench-project-timeline", routeId: "project-timeline", pathname: "/projects/:id/timeline", parentRouteId: "projects", routePattern: "/^\\/projects\\/[A-Za-z0-9_-]{1,128}\\/timeline$/u", requiredRole: "contributor",
+    journey: "Open an owned project timeline, record decisions or actions and update their status.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/project-timeline-page.tsx", "frontend/lib/projects-data.ts"], backendEvidence: ["src/routes/project-timeline.ts", "src/project-timeline/service.ts", "src/project-timeline/repository.ts", "src/routes/projects.ts"], testEvidence: ["test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-project-timeline-page.test.tsx", "test/worker/project-timeline.test.ts"], ledgerIds: ["PRJ-001"], gaps: ["Private timeline read states are locally probed. Numbered pagination, project-switch stale guards, complete editing, stable create intent and conditional status convergence remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-inbox", routeId: "inbox", pathname: "/inbox", requiredRole: "contributor",
+    journey: "Capture private material, archive it or promote it into an owned task.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/inbox-page.tsx", "frontend/lib/inbox-data.ts"], backendEvidence: ["src/routes/inbox.ts", "src/inbox/service.ts", "src/inbox/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/inbox.test.ts"], ledgerIds: ["INB-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. Numbered pagination, stable frontend create intent, archive/promotion retry convergence and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-goals", routeId: "goals", pathname: "/goals", requiredRole: "contributor",
+    journey: "Create private goals and maintain their status and progress.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/goals-page.tsx", "frontend/lib/goals-data.ts"], backendEvidence: ["src/routes/goals.ts", "src/goals/service.ts", "src/goals/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/goals.test.ts"], ledgerIds: ["GL-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. Numbered pagination, editing and relationship journeys, stable create intent, conditional progress/status writes and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-projects", routeId: "projects", pathname: "/projects", requiredRole: "contributor",
+    journey: "Create private projects and inspect their goal/task summaries.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/projects-page.tsx", "frontend/lib/projects-data.ts"], backendEvidence: ["src/routes/projects.ts", "src/projects/service.ts", "src/projects/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/projects.test.ts"], ledgerIds: ["PRJ-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. Numbered pagination, relationship editing, per-project summary recovery, stable create intent, status concurrency and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-calendar", routeId: "calendar", pathname: "/calendar", requiredRole: "contributor",
+    journey: "Schedule private events and cancel them within the calendar window.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/calendar-page.tsx", "frontend/lib/calendar-data.ts"], backendEvidence: ["src/routes/calendar.ts", "src/calendar/service.ts", "src/calendar/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/calendar.test.ts"], ledgerIds: ["CAL-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. The fixed fourteen-day window lacks date navigation and numbered pagination; editing, stable create intent, cancel concurrency and timezone boundaries remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-today", routeId: "today", pathname: "/today", requiredRole: "contributor",
+    journey: "Review today's owned tasks, inbox, projects and events and continue working.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/today-page.tsx", "frontend/lib/today-data.ts"], backendEvidence: ["src/routes/today.ts", "src/today/service.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/today.test.ts"], ledgerIds: ["TOD-001"], gaps: ["Private entry, read recovery and local section empty states are tested. The bounded snapshot lacks continuation, actionable drill-down, deep payload validation and complete timezone/two-member aggregation proof; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-focus", routeId: "focus", pathname: "/focus", requiredRole: "contributor",
+    journey: "Start focus on an owned task, pause, resume and finish or abandon the session.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/focus-page.tsx", "frontend/lib/focus-data.ts"], backendEvidence: ["src/routes/focus.ts", "src/focus/service.ts", "src/focus/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/focus.test.ts"], ledgerIds: ["FOC-001"], gaps: ["Private entry, read recovery and the null-session start form are locally tested. Task selection, stable start intent, transition concurrency, elapsed-time accuracy and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+  },
+  {
+    id: "workbench-review", routeId: "review", pathname: "/review", requiredRole: "contributor",
+    journey: "Inspect private daily or weekly review snapshots and continue from their source work.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/workbench-review-page.tsx", "frontend/lib/workbench-review-data.ts"], backendEvidence: ["src/routes/workbench-review.ts", "src/workbench-review/service.ts", "src/workbench-review/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/workbench-review.test.ts"], ledgerIds: ["REV-001"], gaps: ["Private entry, read recovery and local section empty states are tested. Period labels can lead stale content; bounded unfiltered aggregation, snapshot refresh semantics, GET write concurrency, deep payload validation and two-member proof remain incomplete; release and signed-browser acceptance are unproven."],
+  },
   {
     id: "workbench-home", routeId: "home", pathname: "/", requiredRole: "contributor",
     journey: "Open the workbench and review the current capability summary.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
@@ -313,6 +368,53 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
 // contract remains stable. scripts/workbench-domain-audit.mjs rejects missing,
 // duplicate, or unknown capability IDs before joining these records.
 export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
+  {
+    id: "workbench-project-timeline", apiPaths: ["/api/projects/:id", "/api/projects/:id/timeline", "/api/projects/:id/timeline/:id/status"],
+    persistencePaths: ["src/projects/repository.ts", "src/project-timeline/repository.ts", "migrations/0046_workbench_project_timeline.sql"],
+    ownerPredicate: "routeProjectTimelineApi passes authenticated member.memberId to ProjectTimelineService; ProjectTimelineRepository.listOwned binds member_id = ? and project_id = ?.", pagination: "cursor",
+    mutations: ["POST /api/projects/:id/timeline — gap: each frontend attempt generates a fresh client key", "POST /api/projects/:id/timeline/:id/status — gap: no expected status is supplied"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-inbox", apiPaths: ["/api/inbox", "/api/inbox/:id", "/api/inbox/:id/promote/task"],
+    persistencePaths: ["src/inbox/repository.ts", "migrations/0038_workbench_inbox.sql", "src/tasks/repository.ts", "migrations/0032_workspace_tasks.sql"],
+    ownerPredicate: "routeInboxApi passes authenticated member.memberId to InboxService; InboxRepository.listOwned binds member_id = ?.", pagination: "cursor",
+    mutations: ["POST /api/inbox — gap: each frontend attempt generates a fresh client key", "PATCH /api/inbox/:id — gap: no expected status is supplied", "POST /api/inbox/:id/promote/task — gap: end-to-end concurrent promotion recovery is unproven"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-goals", apiPaths: ["/api/goals", "/api/goals/:id/status", "/api/goals/:id/progress"],
+    persistencePaths: ["src/goals/repository.ts", "migrations/0039_workbench_goals.sql"],
+    ownerPredicate: "routeGoalsApi passes authenticated member.memberId to GoalsService; GoalsRepository.listOwned binds member_id = ?.", pagination: "cursor",
+    mutations: ["POST /api/goals — gap: each frontend attempt generates a fresh client key", "POST /api/goals/:id/status — gap: no expected status is supplied", "POST /api/goals/:id/progress — gap: no expected version is supplied"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-projects", apiPaths: ["/api/projects", "/api/projects/:id/summary", "/api/projects/:id/status"],
+    persistencePaths: ["src/projects/repository.ts", "migrations/0040_workbench_projects.sql"],
+    ownerPredicate: "routeProjectsApi passes authenticated member.memberId to ProjectsService; ProjectsRepository.listOwned and summary bind member_id = ?.", pagination: "cursor",
+    mutations: ["POST /api/projects — gap: each frontend attempt generates a fresh client key", "POST /api/projects/:id/status — gap: no expected status is supplied"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-calendar", apiPaths: ["/api/calendar/events", "/api/calendar/events/:id"],
+    persistencePaths: ["src/calendar/repository.ts", "migrations/0042_workbench_calendar.sql"],
+    ownerPredicate: "routeCalendarApi passes authenticated member.memberId to CalendarService; CalendarRepository.listOwned binds member_id = ?.", pagination: "cursor",
+    mutations: ["POST /api/calendar/events — gap: each frontend attempt generates a fresh client key", "DELETE /api/calendar/events/:id — gap: cancellation has no expected status or concurrent replay proof"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-today", apiPaths: ["/api/today"],
+    persistencePaths: ["src/today/service.ts", "src/tasks/repository.ts", "src/inbox/repository.ts", "src/projects/repository.ts", "src/calendar/repository.ts"],
+    ownerPredicate: "routeTodayApi passes authenticated principal.memberId to TodayService.get; all four private aggregates receive the same memberId.", pagination: "not_applicable", mutations: [], mutationSafety: "not_applicable",
+  },
+  {
+    id: "workbench-focus", apiPaths: ["/api/focus", "/api/focus/current", "/api/focus/:id/pause", "/api/focus/:id/resume", "/api/focus/:id/complete", "/api/focus/:id/abandon"],
+    persistencePaths: ["src/focus/repository.ts", "migrations/0043_workbench_focus.sql"],
+    ownerPredicate: "routeFocusApi passes authenticated principal.memberId to FocusService; FocusRepository.findOpen and update bind member_id = ?.", pagination: "not_applicable",
+    mutations: ["POST /api/focus — gap: each frontend attempt generates a fresh client key", "POST /api/focus/:id/pause — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/resume — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/complete — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/abandon — gap: no expected status or concurrent elapsed-time proof"], mutationSafety: "mixed",
+  },
+  {
+    id: "workbench-review", apiPaths: ["/api/workbench/review"],
+    persistencePaths: ["src/workbench-review/repository.ts", "migrations/0044_workbench_review.sql", "src/workbench-review/service.ts"],
+    ownerPredicate: "routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.find binds member_id = ? and every aggregate receives memberId.", pagination: "not_applicable",
+    mutations: ["GET /api/workbench/review#persist-snapshot — gap: read-before-upsert lacks concurrent snapshot and refresh semantics proof"], mutationSafety: "mixed",
+  },
   {
     id: "workbench-home",
     apiPaths: ["/api/knowledge/recent"],

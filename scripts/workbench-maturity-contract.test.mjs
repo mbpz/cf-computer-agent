@@ -31,13 +31,14 @@ const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
-const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
 const dimensions = new Set(["entry", "journey", "api", "persistence", "isolation", "query_or_idempotency", "states", "accessibility", "evidence"]);
 const dimensionStates = new Set(["proven", "gap", "not_applicable"]);
 const roles = new Set(["anonymous", "contributor", "admin"]);
+// Historical R0 scope. Current ready-route coverage is independently derived below.
 const ALL_CAPABILITY_IDS = [
   "workbench-home", "workbench-submit", "workbench-knowledge", "workbench-search", "workbench-agent",
   "workbench-my-submissions", "workbench-tasks", "workbench-boards", "workbench-settings", "workbench-admin",
@@ -98,6 +99,14 @@ const R0_EVIDENCE_CLASS_PATHS = new Map([
   ])],
 ]);
 const MANIFEST_GAP_POLICIES = new Map(Object.entries({
+  "workbench-project-timeline": {"source":"manifest:0@68e19ea2dd4d","dimension":"journey","slug":"timeline-edit-and-project-switch","symptom":"项目时间线缺少数字分页、跨项目旧响应保护及完整编辑旅程。","owner":"R4-036"},
+  "workbench-inbox": {"source":"manifest:0@923f12551753","dimension":"journey","slug":"capture-to-task-journey","symptom":"收集箱缺少数字分页、完整归档转任务旅程和过期响应保护。","owner":"R4-013"},
+  "workbench-goals": {"source":"manifest:0@c1a08c049848","dimension":"journey","slug":"goal-edit-and-progress-journey","symptom":"目标缺少数字分页、编辑关联和进度状态完整闭环。","owner":"R4-014"},
+  "workbench-projects": {"source":"manifest:0@17cb110cdd89","dimension":"journey","slug":"project-relationship-and-summary-recovery","symptom":"项目缺少数字分页、关联编辑、独立摘要恢复和过期响应保护。","owner":"R4-015"},
+  "workbench-calendar": {"source":"manifest:0@d81316992b36","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历固定十四天范围缺少日期导航、数字分页、编辑及时区边界闭环。","owner":"R4-016"},
+  "workbench-today": {"source":"manifest:0@972268dbab12","dimension":"journey","slug":"bounded-summary-drilldown","symptom":"今日摘要缺少截断后的继续入口、业务下钻、深层校验及时区和双成员聚合证明。","owner":"R4-017"},
+  "workbench-focus": {"source":"manifest:0@9b6828f13430","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注缺少任务选择、可靠耗时展示和旧响应保护的完整会话旅程。","owner":"R4-018"},
+  "workbench-review": {"source":"manifest:0@0b51f9f36a6a","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘周期标签可能领先旧内容，聚合未按周期完整过滤且缺少刷新、深层校验和双成员证明。","owner":"R4-019"},
   "workbench-home": { source: "manifest:0@edfe01e1ad3d", dimension: "api", slug: "authoritative-summary-and-recent-recovery", symptom: "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", owner: "R7-010" },
   "workbench-submit": { source: "manifest:0@edeb39c3614b", dimension: "evidence", slug: "signed-submission-acceptance", symptom: "本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。", owner: "R8-009" },
   "workbench-knowledge": { source: "manifest:0@edac5a3b202d", dimension: "states", slug: "auxiliary-data-recovery", symptom: "知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。", owner: "R2-010" },
@@ -124,6 +133,24 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-submission-detail": { source: "manifest:0@b139ccd7bb29", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情缺少空态、初始重试、队列发现和决策幂等闭环。", owner: "R6-003" },
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
+  "workbench-project-timeline|POST /api/projects/:id/timeline": {"slug":"create-timeline-item","symptom":"时间线创建缺少前端稳定意图键和断线重试去重证明。","owner":"R4-037"},
+  "workbench-project-timeline|POST /api/projects/:id/timeline/:id/status": {"slug":"transition-timeline-status","symptom":"时间线状态变更缺少预期版本条件及并发重放收敛证明。","owner":"R4-038"},
+  "workbench-inbox|POST /api/inbox": {"slug":"create-inbox","symptom":"收集创建的前端逻辑意图没有稳定客户端键，响应丢失重试可能重复写入。","owner":"R4-020"},
+  "workbench-inbox|PATCH /api/inbox/:id": {"slug":"archive-inbox","symptom":"采集归档缺少条件更新、重放和并发收敛证明。","owner":"R4-021"},
+  "workbench-inbox|POST /api/inbox/:id/promote/task": {"slug":"promote-inbox-task","symptom":"采集转任务缺少跨实体原子转换及响应丢失后的稳定重试证明。","owner":"R4-022"},
+  "workbench-goals|POST /api/goals": {"slug":"create-goal","symptom":"目标创建的前端逻辑意图缺少稳定客户端键与重复写入抑制证明。","owner":"R4-023"},
+  "workbench-goals|POST /api/goals/:id/status": {"slug":"transition-goal-status","symptom":"目标状态变更缺少预期状态约束和并发重放收敛证明。","owner":"R4-024"},
+  "workbench-goals|POST /api/goals/:id/progress": {"slug":"update-goal-progress","symptom":"目标进度更新缺少版本条件和旧请求覆盖防护证明。","owner":"R4-025"},
+  "workbench-projects|POST /api/projects": {"slug":"create-project","symptom":"项目创建缺少前端稳定意图键和端到端重试去重证明。","owner":"R4-026"},
+  "workbench-projects|POST /api/projects/:id/status": {"slug":"transition-project-status","symptom":"项目状态变更缺少条件更新和重试冲突恢复证明。","owner":"R4-027"},
+  "workbench-calendar|POST /api/calendar/events": {"slug":"create-calendar-event","symptom":"日历事件创建缺少前端稳定客户端键和断线重试去重证明。","owner":"R4-028"},
+  "workbench-calendar|DELETE /api/calendar/events/:id": {"slug":"cancel-calendar-event","symptom":"日历事件取消缺少与编辑并发时的条件约束及重放证明。","owner":"R4-029"},
+  "workbench-focus|POST /api/focus": {"slug":"start-focus","symptom":"专注启动缺少稳定意图键及并发启动的单会话约束证明。","owner":"R4-030"},
+  "workbench-focus|POST /api/focus/:id/pause": {"slug":"pause-focus","symptom":"专注暂停缺少预期状态约束和并发耗时累加防护证明。","owner":"R4-031"},
+  "workbench-focus|POST /api/focus/:id/resume": {"slug":"resume-focus","symptom":"专注恢复缺少条件状态迁移和并发重放证明。","owner":"R4-032"},
+  "workbench-focus|POST /api/focus/:id/complete": {"slug":"complete-focus","symptom":"专注完成缺少终态竞争约束和重复耗时统计抑制证明。","owner":"R4-033"},
+  "workbench-focus|POST /api/focus/:id/abandon": {"slug":"abandon-focus","symptom":"专注放弃缺少与完成竞争的条件写入和重试终态收敛证明。","owner":"R4-034"},
+  "workbench-review|GET /api/workbench/review#persist-snapshot": {"slug":"persist-review-snapshot","symptom":"复盘 GET 会查询后写入快照，缺少并发刷新、重试和唯一周期结果证明。","owner":"R4-035"},
   "workbench-tasks|DELETE /api/tasks/:id": { slug: "delete-task", symptom: "删除任务缺少已证明的重放与 uncertain-outcome 收敛策略。", owner: "R4-010" },
   "workbench-tasks|DELETE /api/tasks/:id/links/:linkId": { slug: "delete-knowledge-link", symptom: "删除任务知识关联缺少已证明的幂等与目标授权策略。", owner: "R4-005" },
   "workbench-tasks|PATCH /api/tasks/:id": { slug: "update-task", symptom: "任务详情更新缺少条件写入或幂等重放证明。", owner: "R4-003" },
@@ -199,7 +226,10 @@ test("maturity records are structural, complete, and evidence-backed", () => {
       assert.equal(record.routePattern, sourceRoute.routePattern, `${record.id} routePattern must match frontend/app-routes.ts`);
       assert.ok(record.parentRouteId && routesById.has(record.parentRouteId), `${record.id} parameterized route requires a menu parentRouteId`);
       const parentPath = routesById.get(record.parentRouteId).path;
-      assert.equal(record.pathname, `${parentPath === "/" ? "" : parentPath}/:id`, `${record.id} pathname must be the parent route template`);
+      const template = `${parentPath === "/" ? "" : parentPath}/:id${record.routeId === "project-timeline" ? "/timeline" : ""}`;
+      assert.equal(record.pathname, template, `${record.id} pathname must be the exact parent-owned route template`);
+      const pattern = new RegExp(sourceRoute.routePattern.slice(1, sourceRoute.routePattern.lastIndexOf("/")), "u");
+      assert.ok(pattern.test(record.pathname.replace(":id", "route-audit-1")), `${record.id} template must resolve through its source route`);
     }
     assert.ok(roles.has(record.requiredRole), `${record.id} has unsupported requiredRole`);
     assert.ok(record.journey.length > 0, `${record.id} journey is required`);
@@ -636,6 +666,7 @@ function expectedPriority(capability, source) {
   }
   if (new Set([
     "workbench-tasks", "workbench-admin-members", "workbench-admin-roles", "workbench-admin-menus", "workbench-messages",
+    "workbench-inbox", "workbench-goals", "workbench-projects", "workbench-calendar", "workbench-focus", "workbench-review", "workbench-project-timeline",
   ]).has(capability)) return "P0";
   if (capability === "workbench-knowledge-reader" && !source.includes("favorite")) return "P0";
   return "P1";

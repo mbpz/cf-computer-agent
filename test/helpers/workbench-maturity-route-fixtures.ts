@@ -1,15 +1,20 @@
 import { WORKBENCH_MATURITY_CAPABILITIES } from "../../shared/workbench-maturity-capabilities";
+import { extendedPayload } from "./workbench-extended-route-fixtures";
 
 export type MaturityRouteId = (typeof WORKBENCH_MATURITY_CAPABILITIES)[number]["routeId"];
 export type MaturityProbeState = "loading" | "empty" | "error" | "ready";
 
 export const DIRECT_PATH_BY_ROUTE = {
+  "project-timeline": "/projects/project-route-audit/timeline",
   "knowledge-reader": "/knowledge/knowledge-route-audit",
   "message-thread": "/messages/thread-route-audit",
   "admin-submission-detail": "/admin/submissions/submission-route-audit",
 } as const satisfies Partial<Record<MaturityRouteId, string>>;
 
 export const READY_MARKER_BY_ROUTE = {
+  "project-timeline": "READY::project-timeline",
+  inbox: "READY::inbox::first", goals: "READY::goals::first", projects: "READY::projects::first",
+  calendar: "READY::calendar::first", today: "READY::today::first", focus: "READY::focus::first", review: "READY::review::first",
   home: "READY::home",
   submit: "#submission-title",
   knowledge: "READY::knowledge",
@@ -83,6 +88,13 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
     navLeaf("submit", "NAV_SUBMIT", "/submit", "workspace"),
     navLeaf("my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", "workspace"),
     ...(permissionMask === "0x100000" ? [
+      navLeaf("inbox", "NAV_INBOX", "/inbox", "workspace"),
+      navLeaf("goals", "NAV_GOALS", "/goals", "workspace"),
+      navLeaf("projects", "NAV_PROJECTS", "/projects", "workspace"),
+      navLeaf("calendar", "NAV_CALENDAR", "/calendar", "workspace"),
+      navLeaf("today", "NAV_TODAY", "/today", "workspace"),
+      navLeaf("focus", "NAV_FOCUS", "/focus", "workspace"),
+      navLeaf("review", "NAV_REVIEW", "/review", "workspace"),
       navLeaf("tasks", "NAV_TASKS", "/tasks", "workspace"),
       navLeaf("boards", "NAV_BOARDS", "/boards", "workspace"),
     ] : []),
@@ -134,6 +146,16 @@ function commonAuxiliaryResponse(path: string): Response | null {
 
 function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState, path: string): Promise<Response> | Response | null {
   switch (routeId) {
+    case "project-timeline":
+      if (pathname(path) === "/api/projects/project-route-audit") return Response.json({ id: "project-route-audit", clientKey: "project-route-audit", title: "Timeline project", description: null, status: "active", progress: 0, targetAt: null, createdAt: NOW, updatedAt: NOW });
+      if (pathname(path) === "/api/projects/project-route-audit/timeline") return probeResponse(state, { items: [] }, { items: [{ id: "timeline-route-audit", projectId: "project-route-audit", clientKey: "timeline-route-audit", kind: "decision", title: "READY::project-timeline", body: "Owned decision", status: "open", startsAt: null, dueAt: null, createdAt: NOW, updatedAt: NOW }] });
+      return null;
+    case "inbox": case "goals": case "projects": case "calendar": case "today": case "focus": case "review": {
+      const endpoints = { inbox: "/api/inbox", goals: "/api/goals", projects: "/api/projects", calendar: "/api/calendar/events", today: "/api/today", focus: "/api/focus/current", review: "/api/workbench/review" };
+      if (pathname(path) === endpoints[routeId]) return probeResponse(state, extendedPayload(routeId, true), extendedPayload(routeId));
+      if (routeId === "projects" && path === "/api/projects/projects-first/summary") return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
+      return null;
+    }
     case "home":
       if (path === "/api/knowledge/recent?limit=8") return probeResponse(state, { items: [] }, { items: [{ knowledgeItemId: "ready-home", title: "READY::home", lastVisitedAt: NOW, visitCount: 1 }] });
       return null;

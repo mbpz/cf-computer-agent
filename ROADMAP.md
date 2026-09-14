@@ -10,7 +10,7 @@
 
 B02 草稿隔离已合入 main（`6f9d325`），[实施与验收边界](./docs/product/2026-09-13-member-scoped-submission-drafts-evidence.md)保留真实双账号和生产验收待办。B01 稳定提交身份已合入 main（`6bb04ac`）：首次 POST 前保存成员快照、失败/恢复后手动原样重试、新编辑单独保留；[B01 证据与验收边界](./docs/product/2026-09-13-stable-submission-intents-evidence.md)。D02 审计页在 `codex/admin-audit-recovery` 本地修复成功响应、原查询重试和导航竞态，见 [D02 原子清单](./docs/superpowers/plans/2026-09-13-admin-audit-recovery.md)及[本地证据](./docs/product/2026-09-13-admin-audit-recovery-evidence.md)。不据此提升 release/acceptance；下一小批为 D01 管理仪表盘真实统计，D02 其余管理页仍待补齐。
 
-D02 已本地提交 `5ebdaa0`，未合并/推送/部署。进入 D01 前插入成熟度对账检查点：[M01 七页读取证据与原子缺口](./docs/product/2026-09-13-workbench-extended-route-audit.md)已完成（32 项新路由测试 + 17 项 Worker 回归）；接下来先按 [M02 计划](./docs/superpowers/plans/2026-09-13-workbench-maturity-reconciliation.md)同步七页能力登记、操作证据与缺口分派，再继续 D01。当前成熟度门禁仍有 1 项登记覆盖失败；本检查点不升级业务完整性及发布/验收状态。
+D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，未合并/推送/部署。[M01 七页读取证据与原子缺口](./docs/product/2026-09-13-workbench-extended-route-audit.md)之后，2026-09-14 [M02 对账](./docs/operations/evidence/2026-09-14-workbench-m02-completion.md)补齐七页及项目时间线，当前覆盖 32 项能力、83 项缺口、124 个未来实施原子；完整测试与成熟度/域审计/交付门禁通过。当前能力仍全部为 partial，本检查点不升级业务完整性及发布/验收状态。下一环节恢复 D01 管理仪表盘权威统计，按[独立计划](./docs/superpowers/plans/2026-09-13-workbench-maturity-reconciliation.md)边界顺序实施。
 
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 
@@ -32,7 +32,7 @@ D02 已本地提交 `5ebdaa0`，未合并/推送/部署。进入 D01 前插入�
 | R1 | 1 | R1 入口门槛：R0 缺口账、身份边界、当前 Shell 基线。 | R1 退出门槛：设置、全局 Shell、键盘、overlay、主题、窄屏验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r1-design-system.md |
 | R2 | 1 | R2 入口门槛：R1 overlay、焦点、token、响应式 Shell 合同。 | R2 退出门槛：共享 DataTable、分页、AsyncBoundary、表单、URL 恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r2-shared-patterns.md |
 | R3 | 14 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
-| R4 | 8 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务与看板 CRUD、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
+| R4 | 34 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务、看板、七个扩展工作区及项目时间线的分页旅程、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
 | R5 | 4 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
 | R6 | 27 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
 | R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
