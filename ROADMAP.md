@@ -10,6 +10,8 @@
 
 B02 草稿隔离已合入 main（`6f9d325`），[实施与验收边界](./docs/product/2026-09-13-member-scoped-submission-drafts-evidence.md)保留真实双账号和生产验收待办。B01 稳定提交身份已合入 main（`6bb04ac`）：首次 POST 前保存成员快照、失败/恢复后手动原样重试、新编辑单独保留；[B01 证据与验收边界](./docs/product/2026-09-13-stable-submission-intents-evidence.md)。D02 审计页在 `codex/admin-audit-recovery` 本地修复成功响应、原查询重试和导航竞态，见 [D02 原子清单](./docs/superpowers/plans/2026-09-13-admin-audit-recovery.md)及[本地证据](./docs/product/2026-09-13-admin-audit-recovery-evidence.md)。不据此提升 release/acceptance；下一小批为 D01 管理仪表盘真实统计，D02 其余管理页仍待补齐。
 
+D02 已本地提交 `5ebdaa0`，未合并/推送/部署。进入 D01 前插入成熟度对账检查点：[M01 七页读取证据与原子缺口](./docs/product/2026-09-13-workbench-extended-route-audit.md)已完成（32 项新路由测试 + 17 项 Worker 回归）；接下来先按 [M02 计划](./docs/superpowers/plans/2026-09-13-workbench-maturity-reconciliation.md)同步七页能力登记、操作证据与缺口分派，再继续 D01。当前成熟度门禁仍有 1 项登记覆盖失败；本检查点不升级业务完整性及发布/验收状态。
+
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
