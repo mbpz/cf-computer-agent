@@ -69,7 +69,7 @@ export async function loadAdminAnalytics(input: LoadAdminAnalyticsInput, request
       return { key: item.key, pageViews: countValue(item.pageViews) };
     });
   };
-  return {
+  const overview = {
     range: { from, to, days },
     totals: parseCounts(totals),
     daily: daily.map((item) => {
@@ -85,6 +85,14 @@ export async function loadAdminAnalytics(input: LoadAdminAnalyticsInput, request
     },
     recentVisitors: visitors,
   };
+  // The server returns all sections from one transaction. UV is distinct
+  // across the entire range, so only PV is additive across daily rows.
+  if (overview.totals.pageViews !== visitors.pagination.total ||
+      overview.daily.reduce((sum, item) => sum + item.pageViews, 0) !== overview.totals.pageViews ||
+      new Set(overview.daily.map((item) => item.day)).size !== overview.daily.length) {
+    throw new Error("ANALYTICS_INVALID");
+  }
+  return overview;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }

@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminAnalyticsOverview, LoadAdminAnalyticsInput } from "../../frontend/lib/admin-analytics-data";
+import { loadAdminAnalytics } from "../../frontend/lib/admin-analytics-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { AdminAnalyticsRoute } from "../../frontend/app";
 import { ApiRequestError } from "../../frontend/lib/api";
@@ -161,6 +162,45 @@ describe("AdminAnalyticsRoute", () => {
     await flush();
     expect(container.textContent).toContain("/after-refresh");
     expect(container.querySelector('[data-analytics-stale]')).toBeNull();
+  });
+
+  it("replaces second-page counts and rows together after a write, rejecting mixed snapshots before retry", async () => {
+    browser.history.replaceState({}, "", "/admin/analytics?days=7&page=2&pageSize=20");
+    const before = overview(2, 20, 21, ["/old-last"]);
+    before.daily = [{ day: "2026-08-26", pageViews: 21, uniqueVisitors: 21, loginUsers: 0 }];
+    const after = overview(2, 20, 22, ["/shifted-row", "/old-last"]);
+    after.daily = [{ day: "2026-08-26", pageViews: 22, uniqueVisitors: 22, loginUsers: 0 }];
+    const mixed = { ...after, totals: before.totals };
+    const replies = [before, mixed, after];
+    const queries: string[] = [];
+    await renderRoute((input) => loadAdminAnalytics(input, async (url) => {
+      queries.push(String(url));
+      return new Response(JSON.stringify(replies.shift()), { status: 200 });
+    }));
+    // Response.json() and the lazy page settle beyond a single microtask flush.
+    await vi.waitFor(async () => {
+      await flush();
+      expect(container.querySelector('[data-analytics-refresh]')).not.toBeNull();
+    });
+    await act(async () => (container.querySelector('[data-analytics-refresh]') as HTMLButtonElement).click());
+    await vi.waitFor(async () => {
+      await flush();
+      expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    });
+    expect(container.querySelector('[data-analytics-stale]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("/shifted-row");
+    expect(container.textContent).toContain("21");
+    await act(async () => (container.querySelector('[data-analytics-retry]') as HTMLButtonElement).click());
+    await vi.waitFor(async () => {
+      await flush();
+      expect(container.textContent).toContain("/shifted-row");
+    });
+    expect(container.querySelector('[data-analytics-stale]')).toBeNull();
+    expect(container.textContent).toContain("/shifted-row");
+    expect(container.textContent).toContain("22");
+    expect(container.querySelector('button[aria-label="Page 2"]')?.getAttribute("aria-current")).toBe("page");
+    expect(queries).toEqual(Array(3).fill("/api/admin/analytics/overview?days=7&page=2&pageSize=20"));
   });
 
   it("shows a valid one-day URL selection and falls back for duplicate day filters", async () => {

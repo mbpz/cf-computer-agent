@@ -280,7 +280,7 @@ function analytics(withMarker: boolean) {
     totals: { pageViews: withMarker ? 1 : 0, uniqueVisitors: withMarker ? 1 : 0, loginUsers: withMarker ? 1 : 0 },
     daily: withMarker ? [{ day: "2026-08-31", pageViews: 1, uniqueVisitors: 1, loginUsers: 1 }] : [],
     breakdowns: { paths: withMarker ? [{ key: "/ready-admin-analytics", pageViews: 1 }] : [], regions: [], countries: [] },
-    recentVisitors: numbered([]),
+    recentVisitors: numbered(withMarker ? [{ occurredAt: NOW, path: "/ready-admin-analytics", ip: "203.0.113.0", country: null, region: null, city: null, colo: null, userAgent: null, member: { id: "admin-route-auditor", email: "admin@example.test" } }] : []),
   };
 }
 

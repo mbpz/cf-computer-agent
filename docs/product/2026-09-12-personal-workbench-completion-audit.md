@@ -78,9 +78,9 @@
 
 - [ ] D01 管理仪表盘/统计数据与业务计数、日期范围、分页一致。
   - [x] D01-A 概览三个权威总数、权限入口、独立五态、手动刷新/重试、请求去重和退出取消；[原子计划](../superpowers/plans/2026-09-14-admin-dashboard-authoritative-counts.md)。只读 GET 复用现有 COUNT 分页，无新增服务或迁移。
-  - [ ] D01-B 站点统计日期范围与分页一致性、初始失败恢复、跨页写后对账。
+  - [x] D01-B 站点统计日期范围与分页一致性、初始失败恢复、跨页写后对账（本地实现与验证）。
     - [x] D01-B1 读取恢复：原查询重试、刷新去重、日期隔离、撤权清理、UTC 标签、深层载荷校验；D1 日期与跨页回归。见[原子计划](../superpowers/plans/2026-09-15-admin-analytics-recovery.md)及[本地证据](./2026-09-15-admin-analytics-recovery-evidence.md)。
-    - [ ] D01-B2 服务端 overview 多查询同一快照，以及跨页写后计数与列表对账；现有 Promise.all 不等于统一事务快照。
+    - [x] D01-B2 六个 SELECT 同一 D1 batch，响应内 PV/分页/每日 PV 对账；写入及重复上报后两页重读、边界收缩和异常结果回归。见[原子计划](../superpowers/plans/2026-09-15-admin-analytics-snapshot.md)与[本地证据](./2026-09-15-admin-analytics-snapshot-evidence.md)。不同分页请求不承诺冻结快照。
   - [ ] D01 真实登录、中英文键盘/设备和发布后验收；不由本地自动化结果替代。
 - [ ] D02 审核/资产/成员/角色/菜单/空间/审计各页主操作逐项跑通。
   - [x] 审计成功/空态、数字分页/筛选、原查询重试、重复点击与迟到响应保护本地实现及定向回归；见 [D02 审计原子清单](../superpowers/plans/2026-09-13-admin-audit-recovery.md)。

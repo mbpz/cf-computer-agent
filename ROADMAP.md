@@ -1,6 +1,6 @@
 # 个人工作台 · Personal Workbench Roadmap
 
-更新时间：2026-09-13
+更新时间：2026-09-15
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
@@ -15,6 +15,8 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 2026-09-14 D01-A 管理概览已接真实授权分页总数，三卡独立加载/零值/错误重试/权限状态，支持刷新、重复点击拦截与过期响应保护。见[原子计划](./docs/superpowers/plans/2026-09-14-admin-dashboard-authoritative-counts.md)、[本地证据](./docs/product/2026-09-14-admin-dashboard-authoritative-counts-evidence.md)和[当前域审计](./docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md)。历史 M02 快照保留，D01/R6-001 父项仍未完成；下一环节为 D01-B 站点统计日期范围、分页、初始失败恢复及跨页对账，不新增 Cloudflare 服务。
 
 2026-09-15 D01-B1 本地完成站点统计读取恢复：初始/翻页错误原查询重试、重复刷新拦截、切换日期清除旧结果、401/403 清除访客、UTC 范围展示及严格响应校验；D1 覆盖 7/14/30 天、跨页 total 和跨日 UV 去重。见[原子计划](./docs/superpowers/plans/2026-09-15-admin-analytics-recovery.md)、[本地证据](./docs/product/2026-09-15-admin-analytics-recovery-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-15-workbench-d01b1-domain-audit.md)。D01-A/M02 历史不改写；下一环节 D01-B2 为服务端多查询快照一致性和跨页写后对账，D01/R6-001/R6-002 保持未完成，发布与真实浏览器验收未提升。
+
+2026-09-15 D01-B2 本地完成单事务统计快照、响应内 PV 对账和跨页写后重读，见[原子计划](./docs/superpowers/plans/2026-09-15-admin-analytics-snapshot.md)、[本地证据](./docs/product/2026-09-15-admin-analytics-snapshot-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-15-workbench-d01b2-domain-audit.md)。不同分页请求仍为实时读取，不承诺冻结快照。下一环节为 D02 审核队列与详情读取恢复，随后独立处理写操作幂等和发布闭环；D01/R6 父项、发布与真实浏览器验收状态保持开放。
 
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 

@@ -6,6 +6,8 @@ import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
 import { MIGRATIONS } from "../fixtures/d1";
+import { AnalyticsRepository } from "../../src/analytics/repository";
+import { writeAfterFirstRead } from "../fixtures/analytics-interleaving";
 
 const NOW = "2026-08-26T12:00:00.000Z";
 const RANGE_START_DAY = "2026-08-20";
@@ -145,6 +147,91 @@ describe("site analytics", () => {
     const response = await api("/api/admin/analytics/overview?days=7", admin);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ totals: { pageViews: 1, uniqueVisitors: 1, loginUsers: 0 } });
+  });
+
+  it("does not mix pre-write trends with post-write totals or visitor pages", async () => {
+    const repository = new AnalyticsRepository(env.DB, () => new Date(NOW));
+    const visit = (id: string) => repository.recordPageView({
+      id, path: `/${id}`, visitorHash: id, memberId: null, occurredAt: new Date(NOW),
+      ip: "203.0.113.0", country: "KR", region: "Seoul", city: null, colo: null, userAgent: null,
+    });
+    await visit("before");
+    const interleaved = new AnalyticsRepository(writeAfterFirstRead(env.DB, () => visit("after")), () => new Date(NOW));
+    const snapshot = await interleaved.overview(7, { page: 1, pageSize: 20 });
+    expect(snapshot).toMatchObject({
+      totals: { pageViews: 1, uniqueVisitors: 1 },
+      daily: [{ pageViews: 1, uniqueVisitors: 1 }],
+      breakdowns: { paths: [{ key: "/before", pageViews: 1 }], regions: [{ key: "Seoul", pageViews: 1 }], countries: [{ key: "KR", pageViews: 1 }] },
+      recentVisitors: { items: [{ path: "/before" }], pagination: { total: 1 } },
+    });
+    const fresh = await repository.overview(7, { page: 1, pageSize: 20 });
+    expect(fresh.totals.pageViews).toBe(2);
+    expect(fresh.daily[0].pageViews).toBe(2);
+    expect(fresh.recentVisitors.pagination.total).toBe(2);
+    expect(fresh.recentVisitors.items).toHaveLength(2);
+  });
+
+  it("reconciles both pages after collection and replay, then returns an empty removed last page", async () => {
+    const repository = new AnalyticsRepository(env.DB, () => new Date(NOW));
+    for (let index = 0; index < 21; index++) {
+      await repository.recordPageView({ id: `seed-${index}`, path: `/seed-${index}`, visitorHash: "seed", memberId: null,
+        occurredAt: new Date("2026-08-26T00:00:00.000Z"), ip: "unknown", country: null, region: null, city: null, colo: null, userAgent: null });
+    }
+    const beforeResponse = await api("/api/admin/analytics/overview?days=7&page=2&pageSize=20", admin);
+    expect(beforeResponse.status).toBe(200);
+    const before = await beforeResponse.json() as Awaited<ReturnType<AnalyticsRepository["overview"]>>;
+    expect(before.recentVisitors.items).toHaveLength(1);
+    expect(before.recentVisitors.pagination.total).toBe(21);
+
+    for (let replay = 0; replay < 2; replay++) {
+      expect((await api("/api/telemetry/pageview", contributor, { method: "POST", body: JSON.stringify({ path: "/new-write" }),
+        headers: { "user-agent": "write-reconcile", "cf-connecting-ip": "203.0.113.15" } })).status).toBe(202);
+    }
+    const paths: string[] = [];
+    for (const page of [1, 2]) {
+      const response = await api(`/api/admin/analytics/overview?days=7&page=${page}&pageSize=20`, admin);
+      expect(response.status).toBe(200);
+      const fresh = await response.json() as Awaited<ReturnType<AnalyticsRepository["overview"]>>;
+      expect(fresh.totals).toEqual({ pageViews: 22, uniqueVisitors: 2, loginUsers: 1 });
+      expect(fresh.daily).toEqual([{ day: "2026-08-26", pageViews: 22, uniqueVisitors: 2, loginUsers: 1 }]);
+      expect(fresh.recentVisitors.pagination).toEqual({ page, pageSize: 20, total: 22, totalPages: 2 });
+      expect(fresh.recentVisitors.items).toHaveLength(page === 1 ? 20 : 2);
+      paths.push(...fresh.recentVisitors.items.map((item) => item.path));
+    }
+    expect(new Set(paths).size).toBe(22);
+    expect(paths[0]).toBe("/new-write");
+
+    // Simulate retention via test SQL only; no public deletion endpoint is added.
+    await env.DB.prepare("DELETE FROM site_visit_events WHERE id IN ('seed-0', 'seed-1')").run();
+    const removed = await api("/api/admin/analytics/overview?days=7&page=2&pageSize=20", admin);
+    expect(removed.status).toBe(200);
+    await expect(removed.json()).resolves.toMatchObject({ totals: { pageViews: 20 },
+      recentVisitors: { items: [], pagination: { page: 2, pageSize: 20, total: 20, totalPages: 1 } } });
+  });
+
+  it.each(["rejected", "failed", "missing", "bad-count", "extra-total", "bad-rows", "short-page", "bad-daily", "bad-breakdown"])("fails closed for a %s batch instead of inventing zero statistics", async (failure) => {
+    const wrapped = new Proxy(env.DB, {
+      get(target, key) {
+        if (key === "batch") return async (statements: D1PreparedStatement[]) => {
+          if (failure === "rejected") throw new Error("D1 unavailable");
+          const results = await target.batch<Record<string, unknown>>(statements);
+          if (failure === "failed") (results[0] as { success: boolean }).success = false;
+          if (failure === "missing") results.pop();
+          if (failure === "bad-count") results[1].results[0].page_views = "0";
+          if (failure === "extra-total") results[1].results.push({ page_views: 0 });
+          if (failure === "bad-rows") results[5].results = [null as unknown as Record<string, unknown>];
+          if (failure === "short-page") results[1].results[0].page_views = 1;
+          if (failure === "bad-daily") results[0].results = [{ day: NOW.slice(0, 10), page_views: -1, unique_visitors: 0, login_users: 0 }];
+          if (failure === "bad-breakdown") results[2].results = [{ key: "/", page_views: 0.5 }];
+          return results;
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const request = new AnalyticsRepository(wrapped, () => new Date(NOW)).overview(7, { page: 1, pageSize: 20 });
+    if (failure === "rejected") await expect(request).rejects.toThrow("D1 unavailable");
+    else await expect(request).rejects.toMatchObject({ code: "ANALYTICS_RESULT_INVALID", status: 500 });
   });
 });
 

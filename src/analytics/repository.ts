@@ -1,6 +1,5 @@
 import { AppError } from "../http";
-import { queryNumberedPage } from "../pagination-d1";
-import { pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { buildPageMetadata, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
 
 export interface RecordPageViewInput {
   id: string;
@@ -40,9 +39,6 @@ export interface RecentVisitor {
   member: { id: string; email: string } | null;
 }
 
-type DailyRow = { day: string; page_views: number; unique_visitors: number; login_users: number };
-type TotalRow = { page_views: number; unique_visitors: number; login_users: number };
-type BreakdownRow = { key: string | null; page_views: number };
 type VisitorRow = {
   created_at: string;
   path: string;
@@ -83,7 +79,9 @@ export class AnalyticsRepository {
     const start = new Date(end.getTime() - days * 86_400_000);
     const fromDay = start.toISOString().slice(0, 10);
     const toDay = end.toISOString().slice(0, 10);
-    const [rows, total, pathRows, regionRows, countryRows, recentVisitors] = await Promise.all([
+    // All panels and the visitor page share one D1 transaction. Separate calls
+    // (even Promise.all) can observe different committed visits.
+    const results = await this.db.batch<Record<string, unknown>>([
       this.db.prepare(
       `SELECT day,
               COUNT(*) AS page_views,
@@ -93,37 +91,30 @@ export class AnalyticsRepository {
        WHERE day >= ? AND day < ?
        GROUP BY day
        ORDER BY day ASC`,
-      ).bind(fromDay, toDay).all<DailyRow>(),
+      ).bind(fromDay, toDay),
       this.db.prepare(
       `SELECT COUNT(*) AS page_views,
               COUNT(DISTINCT visitor_hash) AS unique_visitors,
               COUNT(DISTINCT member_id) AS login_users
        FROM site_visit_events
        WHERE day >= ? AND day < ?`,
-      ).bind(fromDay, toDay).first<TotalRow>(),
+      ).bind(fromDay, toDay),
       this.db.prepare(
         `SELECT path AS key, COUNT(*) AS page_views
          FROM site_visit_events WHERE day >= ? AND day < ?
          GROUP BY path ORDER BY page_views DESC, path ASC LIMIT 8`,
-      ).bind(fromDay, toDay).all<BreakdownRow>(),
+      ).bind(fromDay, toDay),
       this.db.prepare(
         `SELECT COALESCE(region, 'unknown') AS key, COUNT(*) AS page_views
          FROM site_visit_events WHERE day >= ? AND day < ?
          GROUP BY region ORDER BY page_views DESC, key ASC LIMIT 8`,
-      ).bind(fromDay, toDay).all<BreakdownRow>(),
+      ).bind(fromDay, toDay),
       this.db.prepare(
         `SELECT COALESCE(country, 'unknown') AS key, COUNT(*) AS page_views
          FROM site_visit_events WHERE day >= ? AND day < ?
          GROUP BY country ORDER BY page_views DESC, key ASC LIMIT 8`,
-      ).bind(fromDay, toDay).all<BreakdownRow>(),
-      queryNumberedPage(
-        this.db,
-        this.db.prepare(
-          `SELECT COUNT(*) AS total
-           FROM site_visit_events
-           WHERE day >= ? AND day < ?`,
-        ).bind(fromDay, toDay),
-        this.db.prepare(
+      ).bind(fromDay, toDay),
+      this.db.prepare(
         `SELECT e.created_at, e.path, e.ip_display, e.country, e.region, e.city, e.colo, e.user_agent,
                 e.member_id, m.email AS member_email
          FROM site_visit_events AS e
@@ -131,31 +122,27 @@ export class AnalyticsRepository {
          WHERE e.day >= ? AND e.day < ?
          ORDER BY e.created_at DESC, e.id DESC
          LIMIT ? OFFSET ?`,
-        ).bind(fromDay, toDay, pagination.pageSize, pageOffset(pagination)),
-        pagination,
-        mapVisitor,
-      ),
+      ).bind(fromDay, toDay, pagination.pageSize, pageOffset(pagination)),
     ]);
-    const daily = rows.results.map((row) => ({
-      day: row.day,
-      pageViews: Number(row.page_views) || 0,
-      uniqueVisitors: Number(row.unique_visitors) || 0,
-      loginUsers: Number(row.login_users) || 0,
-    }));
+    if (results.length !== 6) throw invalidResult();
+    const [rows, totals, pathRows, regionRows, countryRows, visitorRows] = results.map(resultRows);
+    if (totals.length !== 1) throw invalidResult();
+    const total = counts(totals[0]);
+    if (visitorRows.length !== Math.min(pagination.pageSize, Math.max(0, total.pageViews - pageOffset(pagination)))) throw invalidResult();
+    const daily = rows.map((row) => {
+      if (typeof row.day !== "string") throw invalidResult();
+      return { day: row.day, ...counts(row) };
+    });
     return {
       range: { from: start.toISOString().slice(0, 10), to: new Date(end.getTime() - 1).toISOString().slice(0, 10), days },
-      totals: {
-        pageViews: Number(total?.page_views) || 0,
-        uniqueVisitors: Number(total?.unique_visitors) || 0,
-        loginUsers: Number(total?.login_users) || 0,
-      },
+      totals: total,
       daily,
       breakdowns: {
-        paths: breakdown(pathRows.results),
-        regions: breakdown(regionRows.results),
-        countries: breakdown(countryRows.results),
+        paths: breakdown(pathRows),
+        regions: breakdown(regionRows),
+        countries: breakdown(countryRows),
       },
-      recentVisitors,
+      recentVisitors: { items: visitorRows.map(mapVisitor), pagination: buildPageMetadata(pagination, total.pageViews) },
     };
   }
 }
@@ -175,6 +162,28 @@ function mapVisitor(value: Record<string, unknown>): RecentVisitor {
   };
 }
 
-function breakdown(rows: BreakdownRow[]): Array<{ key: string; pageViews: number }> {
-  return rows.flatMap((row) => typeof row.key === "string" ? [{ key: row.key, pageViews: Number(row.page_views) || 0 }] : []);
+function breakdown(rows: Record<string, unknown>[]): Array<{ key: string; pageViews: number }> {
+  return rows.map((row) => {
+    if (typeof row.key !== "string") throw invalidResult();
+    return { key: row.key, pageViews: count(row.page_views) };
+  });
+}
+
+function resultRows(result: D1Result<Record<string, unknown>>): Record<string, unknown>[] {
+  if (result?.success !== true || !Array.isArray(result.results) ||
+      !result.results.every((row) => row !== null && typeof row === "object" && !Array.isArray(row))) throw invalidResult();
+  return result.results;
+}
+
+function counts(row: Record<string, unknown>): AnalyticsOverview["totals"] {
+  return { pageViews: count(row.page_views), uniqueVisitors: count(row.unique_visitors), loginUsers: count(row.login_users) };
+}
+
+function count(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw invalidResult();
+  return value;
+}
+
+function invalidResult(): AppError {
+  return new AppError("ANALYTICS_RESULT_INVALID", "Analytics query returned an invalid result", 500);
 }
