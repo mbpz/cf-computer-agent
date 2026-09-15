@@ -37,22 +37,7 @@ export async function loadAdminAnalytics(input: LoadAdminAnalyticsInput, request
   const breakdowns = value.breakdowns;
   const recentVisitors = value.recentVisitors;
   if (!isRecord(totals) || !isRecord(range) || !Array.isArray(daily) || !isRecord(breakdowns)) throw new Error("ANALYTICS_INVALID");
-  const parseBreakdown = (input: unknown): Array<{ key: string; pageViews: number }> => Array.isArray(input)
-    ? input.flatMap((item) => isRecord(item) && typeof item.key === "string" ? [{ key: item.key, pageViews: numberValue(item.pageViews) }] : [])
-    : [];
-  return {
-    range: { from: stringValue(range.from), to: stringValue(range.to), days: numberValue(range.days) },
-    totals: { pageViews: numberValue(totals.pageViews), uniqueVisitors: numberValue(totals.uniqueVisitors), loginUsers: numberValue(totals.loginUsers) },
-    daily: daily.flatMap((item) => {
-      if (!isRecord(item) || typeof item.day !== "string") return [];
-      return [{ day: item.day, pageViews: numberValue(item.pageViews), uniqueVisitors: numberValue(item.uniqueVisitors), loginUsers: numberValue(item.loginUsers) }];
-    }),
-    breakdowns: {
-      paths: parseBreakdown(breakdowns.paths),
-      regions: parseBreakdown(breakdowns.regions),
-      countries: parseBreakdown(breakdowns.countries),
-    },
-    recentVisitors: normalizeNumberedPage(recentVisitors, (item) => {
+  const visitors = normalizeNumberedPage(recentVisitors, (item) => {
       if (!isRecord(item) || typeof item.occurredAt !== "string" || typeof item.path !== "string" || typeof item.ip !== "string") throw new Error("ANALYTICS_INVALID");
       const member = isRecord(item.member) && typeof item.member.id === "string" && typeof item.member.email === "string"
         ? { id: item.member.id, email: item.member.email }
@@ -68,11 +53,52 @@ export async function loadAdminAnalytics(input: LoadAdminAnalyticsInput, request
         userAgent: nullableString(item.userAgent),
         member,
       };
+    });
+  const from = calendarDay(range.from);
+  const to = calendarDay(range.to);
+  const days = countValue(range.days);
+  if (days < 1 || days > 31 || days !== input.days ||
+      (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1 !== days ||
+      visitors.pagination.page !== input.page || visitors.pagination.pageSize !== input.pageSize) {
+    throw new Error("ANALYTICS_INVALID");
+  }
+  const parseBreakdown = (items: unknown): Array<{ key: string; pageViews: number }> => {
+    if (!Array.isArray(items)) throw new Error("ANALYTICS_INVALID");
+    return items.map((item) => {
+      if (!isRecord(item) || typeof item.key !== "string") throw new Error("ANALYTICS_INVALID");
+      return { key: item.key, pageViews: countValue(item.pageViews) };
+    });
+  };
+  return {
+    range: { from, to, days },
+    totals: parseCounts(totals),
+    daily: daily.map((item) => {
+      if (!isRecord(item)) throw new Error("ANALYTICS_INVALID");
+      const day = calendarDay(item.day);
+      if (day < from || day > to) throw new Error("ANALYTICS_INVALID");
+      return { day, ...parseCounts(item) };
     }),
+    breakdowns: {
+      paths: parseBreakdown(breakdowns.paths),
+      regions: parseBreakdown(breakdowns.regions),
+      countries: parseBreakdown(breakdowns.countries),
+    },
+    recentVisitors: visitors,
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
-function stringValue(value: unknown): string { return typeof value === "string" ? value : ""; }
-function numberValue(value: unknown): number { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
+function countValue(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("ANALYTICS_INVALID");
+  return value;
+}
+function parseCounts(value: Record<string, unknown>): AdminAnalyticsOverview["totals"] {
+  return { pageViews: countValue(value.pageViews), uniqueVisitors: countValue(value.uniqueVisitors), loginUsers: countValue(value.loginUsers) };
+}
+function calendarDay(value: unknown): string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) throw new Error("ANALYTICS_INVALID");
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) throw new Error("ANALYTICS_INVALID");
+  return value;
+}
 function nullableString(value: unknown): string | null { return typeof value === "string" && value.length > 0 ? value : null; }

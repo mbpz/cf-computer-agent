@@ -57,7 +57,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   "admin-menus": listWithoutRetry("Menus"),
   "admin-spaces": listWithoutRetry("Spaces"),
   "admin-audit": listWithRetry,
-  "admin-analytics": { loading: supported, empty: supported, error: gap("Analytics renders an initial-load error but provides no route-owned retry action."), ready: supported },
+  "admin-analytics": listWithRetry,
   notifications: listWithRetry,
   messages: listWithRetry,
   "knowledge-reader": { loading: supported, empty: gap("Knowledge reader treats a missing revision as an error, not an empty state."), error: supported, ready: supported },

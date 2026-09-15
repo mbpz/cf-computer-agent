@@ -28,4 +28,23 @@ describe("admin analytics data", () => {
     }), { status: 200 }));
     await expect(loadAdminAnalytics({ days: 7, page: 1, pageSize: 20 }, requester)).rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
   });
+
+  it.each([
+    ["negative total", (value: any) => { value.totals.pageViews = -1; }],
+    ["missing total", (value: any) => { delete value.totals.uniqueVisitors; }],
+    ["string total", (value: any) => { value.totals.loginUsers = "0"; }],
+    ["fractional daily count", (value: any) => { value.daily = [{ day: "2026-08-26", pageViews: 0.5, uniqueVisitors: 0, loginUsers: 0 }]; }],
+    ["invalid calendar day", (value: any) => { value.range.from = "2026-02-30"; }],
+    ["wrong range span", (value: any) => { value.range.from = "2026-08-19"; }],
+    ["other request days", (value: any) => { value.range = { from: "2026-08-13", to: "2026-08-26", days: 14 }; }],
+    ["other request page", (value: any) => { value.recentVisitors.pagination.page = 2; }],
+    ["other request page size", (value: any) => { value.recentVisitors.pagination.pageSize = 50; }],
+    ["missing breakdown", (value: any) => { delete value.breakdowns.paths; }],
+    ["invalid breakdown count", (value: any) => { value.breakdowns.paths = [{ key: "/", pageViews: "bad" }]; }],
+    ["daily outside range", (value: any) => { value.daily = [{ day: "2026-08-19", pageViews: 0, uniqueVisitors: 0, loginUsers: 0 }]; }],
+  ])("rejects %s instead of inventing empty or zero statistics", async (_label, mutate) => {
+    const value = { range: { from: "2026-08-20", to: "2026-08-26", days: 7 }, totals: { pageViews: 0, uniqueVisitors: 0, loginUsers: 0 }, daily: [], breakdowns: { paths: [], regions: [], countries: [] }, recentVisitors: { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } };
+    mutate(value);
+    await expect(loadAdminAnalytics({ days: 7, page: 1, pageSize: 20 }, async () => new Response(JSON.stringify(value)))).rejects.toThrow("ANALYTICS_INVALID");
+  });
 });

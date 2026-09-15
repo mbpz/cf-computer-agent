@@ -31,7 +31,7 @@ const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
-const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-15-workbench-d01b1-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
@@ -125,7 +125,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-menus": { source: "manifest:0@a0343c75e574", dimension: "journey", slug: "projection-invalidation", symptom: "菜单页初始错误无重试，跨 session 投影失效尚未形成产品旅程。", owner: "R6-007" },
   "workbench-admin-spaces": { source: "manifest:0@529d9702bce9", dimension: "journey", slug: "archive-content-impact", symptom: "Space 页初始错误无重试，归档与内容影响确认未闭环。", owner: "R6-008" },
   "workbench-admin-audit": { source: "manifest:0@bfef1ebcb5d4", dimension: "states", slug: "raw-page-shape-and-retry", symptom: "审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。", owner: "R6-009" },
-  "workbench-admin-analytics": { source: "manifest:0@5002e212125a", dimension: "journey", slug: "date-range-and-pagination", symptom: "统计页初始错误无重试，完整日期范围与数字分页旅程未证明。", owner: "R6-002" },
+  "workbench-admin-analytics": { source: "manifest:0@a9425b1b01ab", dimension: "journey", slug: "date-range-and-pagination", symptom: "统计读取与错误恢复已本地验证；服务端多查询快照、跨页写后对账及发布验收仍未闭环。", owner: "R6-002" },
   "workbench-notifications": { source: "manifest:0@a0f9955f2fa0", dimension: "isolation", slug: "revoked-target-navigation", symptom: "通知目标撤权后的跳转与顶部未读收敛尚未闭环。", owner: "R5-005" },
   "workbench-messages": { source: "manifest:0@6f83a4364e6d", dimension: "isolation", slug: "context-revocation-presentation", symptom: "上下文 thread 发现与 stale/revoked target 的明确呈现尚未闭环。", owner: "R5-011" },
   "workbench-knowledge-reader": { source: "manifest:0@823eea297a96", dimension: "isolation", slug: "secondary-object-reauthorization", symptom: "阅读器私有笔记、分享、收藏和访问记录的完整二级对象撤权旅程未证明。", owner: "R3-012" },

@@ -14,6 +14,8 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-14 D01-A 管理概览已接真实授权分页总数，三卡独立加载/零值/错误重试/权限状态，支持刷新、重复点击拦截与过期响应保护。见[原子计划](./docs/superpowers/plans/2026-09-14-admin-dashboard-authoritative-counts.md)、[本地证据](./docs/product/2026-09-14-admin-dashboard-authoritative-counts-evidence.md)和[当前域审计](./docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md)。历史 M02 快照保留，D01/R6-001 父项仍未完成；下一环节为 D01-B 站点统计日期范围、分页、初始失败恢复及跨页对账，不新增 Cloudflare 服务。
 
+2026-09-15 D01-B1 本地完成站点统计读取恢复：初始/翻页错误原查询重试、重复刷新拦截、切换日期清除旧结果、401/403 清除访客、UTC 范围展示及严格响应校验；D1 覆盖 7/14/30 天、跨页 total 和跨日 UV 去重。见[原子计划](./docs/superpowers/plans/2026-09-15-admin-analytics-recovery.md)、[本地证据](./docs/product/2026-09-15-admin-analytics-recovery-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-15-workbench-d01b1-domain-audit.md)。D01-A/M02 历史不改写；下一环节 D01-B2 为服务端多查询快照一致性和跨页写后对账，D01/R6-001/R6-002 保持未完成，发布与真实浏览器验收未提升。
+
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。

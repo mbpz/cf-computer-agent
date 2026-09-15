@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminAnalyticsOverview, LoadAdminAnalyticsInput } from "../../frontend/lib/admin-analytics-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { AdminAnalyticsRoute } from "../../frontend/app";
+import { ApiRequestError } from "../../frontend/lib/api";
 
 type Loader = (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview>;
 
@@ -117,6 +118,81 @@ describe("AdminAnalyticsRoute", () => {
     expect(container.textContent).toContain("0–0");
     expect(container.textContent).toContain("4 / 2");
     expect(container.querySelector('[aria-current="page"]')).toBeNull();
+  });
+
+  it("retries the original initial query once even on double click", async () => {
+    browser.history.replaceState({}, "", "/admin/analytics?days=14&page=3&pageSize=50");
+    const recovery = deferred<AdminAnalyticsOverview>();
+    const inputs: LoadAdminAnalyticsInput[] = [];
+    await renderRoute((input) => { inputs.push(input); return inputs.length === 1 ? Promise.reject(new Error("offline")) : recovery.promise; });
+    const retry = container.querySelector('[data-analytics-retry]') as HTMLButtonElement;
+    expect(retry).not.toBeNull();
+    await act(async () => { retry.click(); retry.click(); });
+    expect(inputs).toHaveLength(2);
+    expect(inputShape(inputs[1]!)).toEqual({ days: 14, page: 3, pageSize: 50 });
+    recovery.resolve({ ...overview(3, 50, 101, ["/recovered"]), range: { from: "2026-08-13", to: "2026-08-26", days: 14 } });
+    await flush();
+    expect(container.textContent).toContain("/recovered");
+  });
+
+  it("never labels seven-day results as a new range while pending or failed", async () => {
+    const next = deferred<AdminAnalyticsOverview>();
+    await renderRoute((input) => input.days === 7 ? Promise.resolve(overview(1, 20, 1, ["/old-seven-day-visitor"])) : next.promise);
+    expect(container.textContent).toContain("2026-08-20");
+    await changeSelect("#admin-analytics-range", "30");
+    expect(container.textContent).not.toContain("/old-seven-day-visitor");
+    next.reject(new Error("offline"));
+    await flush();
+    expect(container.textContent).not.toContain("/old-seven-day-visitor");
+    expect(container.querySelector('[data-analytics-retry]')).not.toBeNull();
+  });
+
+  it("disables refresh until its one pending read settles and marks old data stale", async () => {
+    const next = deferred<AdminAnalyticsOverview>();
+    let calls = 0;
+    await renderRoute(() => ++calls === 1 ? Promise.resolve(overview(1, 20, 1, ["/before-refresh"])) : next.promise);
+    const refresh = container.querySelector('[data-analytics-refresh]') as HTMLButtonElement;
+    expect(refresh).not.toBeNull();
+    await act(async () => { refresh.click(); refresh.click(); });
+    expect(calls).toBe(2);
+    expect(refresh.disabled).toBe(true);
+    expect(container.querySelector('[data-analytics-stale]')).not.toBeNull();
+    next.resolve(overview(1, 20, 2, ["/after-refresh", "/new-visit"]));
+    await flush();
+    expect(container.textContent).toContain("/after-refresh");
+    expect(container.querySelector('[data-analytics-stale]')).toBeNull();
+  });
+
+  it("shows a valid one-day URL selection and falls back for duplicate day filters", async () => {
+    browser.history.replaceState({}, "", "/admin/analytics?days=1");
+    const inputs: LoadAdminAnalyticsInput[] = [];
+    const load: Loader = async (input) => { inputs.push(input); return { ...overview(1, 20, 0, []), range: { from: "2026-08-26", to: "2026-08-26", days: input.days } }; };
+    await renderRoute(load);
+    expect((container.querySelector('#admin-analytics-range') as HTMLSelectElement).value).toBe("1");
+    await act(async () => {
+      browser.history.pushState({}, "", "/admin/analytics?days=14&days=30");
+      browser.dispatchEvent(new browser.PopStateEvent("popstate"));
+    });
+    expect(inputs.at(-1)!.days).toBe(7);
+  });
+
+  it.each([401, 403])("clears visitor details on HTTP %s instead of keeping stale private data", async (status) => {
+    let calls = 0;
+    await renderRoute(async () => { if (++calls > 1) throw new ApiRequestError("FORBIDDEN", "Denied", status, false); return overview(1, 20, 60, ["/private-visitor"]); });
+    await clickPage(2);
+    expect(container.textContent).not.toContain("/private-visitor");
+    expect(container.querySelector('[data-page-state="forbidden"]')).not.toBeNull();
+  });
+
+  it("aborts a pending read when the route unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    const next = deferred<AdminAnalyticsOverview>();
+    await renderRoute((input) => { signal = input.signal; return next.promise; });
+    await act(async () => root.render(<div>Other route</div>));
+    expect(signal?.aborted).toBe(true);
+    next.resolve(overview(1, 20, 1, ["/late"]));
+    await flush();
+    expect(container.textContent).toBe("Other route");
   });
 
   async function renderRoute(load: Loader): Promise<void> {

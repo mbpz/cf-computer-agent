@@ -96,6 +96,47 @@ describe("site analytics", () => {
     });
   });
 
+  it("keeps 7/14/30-day totals independent of visitor pages and deduplicates UV across days", async () => {
+    const visits = [
+      ...Array.from({ length: 21 }, (_, index) => ({ id: `current-${index}`, day: "2026-08-26", visitor: "returning" })),
+      { id: "yesterday", day: "2026-08-25", visitor: "returning" },
+      { id: "fourteen-start", day: "2026-08-13", visitor: "older" },
+      { id: "thirty-start", day: "2026-07-28", visitor: "oldest" },
+      { id: "outside", day: "2026-07-27", visitor: "excluded" },
+    ];
+    await env.DB.batch(visits.map(({ id, day, visitor }) => env.DB.prepare(
+      `INSERT INTO site_visit_events
+       (id, day, visit_bucket, path, visitor_hash, member_id, created_at, ip_display)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, '203.0.113.0')`,
+    ).bind(id, day, id, `/${id}`, visitor, `${day}T00:00:00.000Z`)));
+
+    for (const [days, from, pageViews, uniqueVisitors] of [
+      [7, "2026-08-20", 22, 1], [14, "2026-08-13", 23, 2], [30, "2026-07-28", 24, 3],
+    ] as const) {
+      const pages = [];
+      for (const page of [1, 2]) {
+        const response = await api(`/api/admin/analytics/overview?days=${days}&page=${page}&pageSize=20`, admin);
+        expect(response.status).toBe(200);
+        const body = await response.json() as {
+          totals: { pageViews: number; uniqueVisitors: number; loginUsers: number };
+          daily: Array<{ pageViews: number; uniqueVisitors: number }>;
+          recentVisitors: { items: Array<{ path: string }> };
+        };
+        expect(body).toMatchObject({
+          range: { from, to: "2026-08-26", days },
+          totals: { pageViews, uniqueVisitors, loginUsers: 0 },
+          recentVisitors: { pagination: { page, pageSize: 20, total: pageViews, totalPages: 2 } },
+        });
+        expect(body.daily.reduce((sum, item) => sum + item.pageViews, 0)).toBe(pageViews);
+        expect(body.daily.reduce((sum, item) => sum + item.uniqueVisitors, 0)).toBe(uniqueVisitors + 1);
+        expect(body.recentVisitors.items).toHaveLength(page === 1 ? 20 : pageViews - 20);
+        pages.push(...body.recentVisitors.items.map((item) => item.path));
+      }
+      expect(new Set(pages).size).toBe(pageViews);
+      expect(pages).not.toContain("/outside");
+    }
+  });
+
   it("deduplicates the same visitor, path, and five-minute bucket", async () => {
     const first = await api("/api/telemetry/pageview", undefined, { method: "POST", body: JSON.stringify({ path: "/" }), headers: { "user-agent": "dedupe-browser", "cf-connecting-ip": "203.0.113.11" } });
     const second = await api("/api/telemetry/pageview", undefined, { method: "POST", body: JSON.stringify({ path: "/" }), headers: { "user-agent": "dedupe-browser", "cf-connecting-ip": "203.0.113.11" } });

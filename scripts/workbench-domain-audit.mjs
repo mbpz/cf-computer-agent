@@ -23,7 +23,7 @@ import {
   isVariableDeclaration,
 } from "typescript/unstable/ast/is";
 
-const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md";
+const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-09-15-workbench-d01b1-domain-audit.md";
 const DOMAIN_KEYS = new Set(["id", "apiPaths", "persistencePaths", "ownerPredicate", "pagination", "mutations", "mutationSafety"]);
 const FRONTEND_INDEX_CACHE = new Map();
 const ROUTE_EVIDENCE_CACHE = new Map();
@@ -644,9 +644,9 @@ export function renderWorkbenchDomainAudit(records) {
     listCell(record.gaps),
   ].map(markdownCell).join(" | "));
   return [
-    "# Workbench D01-A Domain Audit — 2026-09-14",
+    "# Workbench D01-B1 Domain Audit — 2026-09-15",
     "",
-    "Current 32-capability reconciliation after D01-A; the M02 snapshot is preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
+    "Current 32-capability reconciliation after D01-B1; the D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
     "",
     "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",

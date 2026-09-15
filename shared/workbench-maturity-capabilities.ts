@@ -335,7 +335,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-admin-analytics", routeId: "admin-analytics", pathname: "/admin/analytics", requiredRole: "admin",
     journey: "Inspect analytical trends, rankings, and visitors across a date range.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/analytics-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/analytics/repository.ts", "src/routes/admin.ts"], testEvidence: ["test/unit/frontend-admin-analytics-route.test.tsx", "test/worker/analytics.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-010"], gaps: ["Current admin server-navigation entry plus loading, empty-data, initial error, and response-owned ready path are runtime-probed. Initial error has no retry action; full date-range/pagination, release, and signed-browser acceptance remain incomplete."],
+    frontendEvidence: ["frontend/pages/admin/analytics-page.tsx", "frontend/lib/admin-analytics-data.ts", "frontend/app.tsx"], backendEvidence: ["src/analytics/repository.ts", "src/routes/admin.ts"], testEvidence: ["test/unit/frontend-admin-analytics-route.test.tsx", "test/unit/frontend-admin-analytics-data.test.ts", "test/worker/analytics.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-010"], gaps: ["Initial retry, bounded date/page reads, strict response validation, stale-result and authorization recovery are locally tested. Server multi-query snapshot consistency, cross-page write reconciliation, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-notifications", routeId: "notifications", pathname: "/notifications", requiredRole: "contributor",
