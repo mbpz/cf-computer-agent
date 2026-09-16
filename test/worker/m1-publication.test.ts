@@ -1591,6 +1591,193 @@ describe("M1 publication control plane", () => {
     });
   });
 
+  it.each([
+    ["rejected", "shared"],
+    ["rejected", "admin_only"],
+    ["revision_requested", "shared"],
+    ["revision_requested", "admin_only"],
+  ] as const)("returns the persisted decision for %s / %s on first write and recreated-service replay", async (decision, visibility) => {
+    const submissionId = "submission-decision-replay";
+    await seedReviewPendingSubmission(submissionId, visibility);
+    const decide = (service: PublicationService, note: string) => decision === "rejected"
+      ? service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note })
+      : service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note });
+    const first = await decide(new PublicationService(
+      new PublicationRepository(env.DB, { now: () => new Date(now) }), durableContentCommitter(),
+    ), "  Private review note  ");
+    expect(first).toEqual({
+      submissionId, reviewerId: adminReviewer.id, decision,
+      reasonCode: decision === "rejected" ? "unsafe" : "needs_revision",
+      note: "Private review note", title: "Submitted title", visibility, createdAt: now,
+    });
+    const replay = await decide(new PublicationService(
+      new PublicationRepository(env.DB, { now: () => new Date("2026-09-16T00:00:00.000Z") }),
+      durableContentCommitter(),
+    ), "Private review note");
+    expect(replay).toEqual(first);
+    await expectDecisionStoredOnce(submissionId, first);
+  });
+
+  it.each(["rejected", "revision_requested"] as const)(
+    "deduplicates concurrent normalized %s decisions across independent services", async (decision) => {
+      const submissionId = "submission-decision-concurrent";
+      await seedReviewPendingSubmission(submissionId);
+      const decide = (note: string) => {
+        const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+        return decision === "rejected"
+          ? service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note })
+          : service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note });
+      };
+      const results = await Promise.all([decide("  Private note  "), decide("Private note"), decide("Private note ")]);
+      expect(results[0]).toMatchObject({ decision, visibility: "shared", note: "Private note" });
+      expect(results[1]).toEqual(results[0]);
+      expect(results[2]).toEqual(results[0]);
+      expect(await decide("Private note")).toEqual(results[0]);
+      await expectDecisionStoredOnce(submissionId, results[0]!);
+    },
+  );
+
+  it.each([
+    ["rejected", "same"], ["rejected", "changed"],
+    ["revision_requested", "same"], ["revision_requested", "changed"],
+  ] as const)("handles %s with %s payload committed between review lookup and preview", async (decision, payload) => {
+    const submissionId = "submission-decision-read-race";
+    await seedReviewPendingSubmission(submissionId);
+    const decide = (repository: PublicationRepository, note: string) => {
+      const service = new PublicationService(repository, durableContentCommitter());
+      return decision === "rejected"
+        ? service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note })
+        : service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note });
+    };
+    let winner: Awaited<ReturnType<typeof decide>> | undefined;
+    class InterleavedRepository extends PublicationRepository {
+      override async getPreview(id: string) {
+        // Only schedule the interleaving: both services still read/write real D1.
+        winner = await decide(new PublicationRepository(env.DB), "Original note");
+        return super.getPreview(id);
+      }
+    }
+    const result = decide(new InterleavedRepository(env.DB), payload === "same" ? "Original note" : "Changed note");
+    if (payload === "same") {
+      const replay = await result;
+      expect(replay).toEqual(winner);
+    } else {
+      await expect(result).rejects.toMatchObject({ code: "REVIEW_STATE_CONFLICT", status: 409 });
+    }
+    expect(winner).toBeDefined();
+    await expectDecisionStoredOnce(submissionId, winner!);
+  });
+
+  it.each(["rejected", "revision_requested"] as const)(
+    "recovers %s after a real D1 commit loses its response and the service is recreated", async (decision) => {
+      const submissionId = "submission-decision-lost-response";
+      await seedReviewPendingSubmission(submissionId);
+      let lostResponses = 0;
+      const database = new Proxy(env.DB, {
+        get(target, property) {
+          if (property === "batch") return async (statements: D1PreparedStatement[]) => {
+            const result = await target.batch(statements);
+            if (lostResponses === 0) {
+              lostResponses++;
+              throw new Error("Simulated response loss after D1 committed");
+            }
+            return result;
+          };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      const decide = (db: D1Database) => {
+        const service = new PublicationService(new PublicationRepository(db), durableContentCommitter());
+        return decision === "rejected"
+          ? service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Private note" })
+          : service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Private note" });
+      };
+      const recovered = await decide(database);
+      expect(lostResponses).toBe(1);
+      expect(recovered).toMatchObject({ decision, visibility: "shared" });
+      expect(await decide(env.DB)).toEqual(recovered);
+      await expectDecisionStoredOnce(submissionId, recovered);
+    },
+  );
+
+  it.each([
+    ["rejected", "reviewer"], ["rejected", "decision"], ["rejected", "reason"], ["rejected", "note"],
+    ["revision_requested", "reviewer"], ["revision_requested", "decision"], ["revision_requested", "note"],
+  ] as const)("preserves the original %s receipt when replay changes %s", async (decision, change) => {
+    const submissionId = "submission-decision-conflict";
+    await seedReviewPendingSubmission(submissionId);
+    const firstService = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const original = decision === "rejected"
+      ? await firstService.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Private note" })
+      : await firstService.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Private note" });
+    const auditBefore = await env.DB.prepare("SELECT * FROM audit_events WHERE resource_id = ?").bind(submissionId).all();
+    if (change === "reviewer") {
+      // Model admin succession without violating the one-active-admin constraint.
+      await env.DB.batch([
+        env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'admin-1'"),
+        env.DB.prepare(
+          "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('admin-2', 'github:admin-2', 'admin2@example.test', 'admin', 'active', ?, ?)",
+        ).bind(now, now),
+      ]);
+    }
+    const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const reviewer = change === "reviewer" ? { ...adminReviewer, id: "admin-2" } : adminReviewer;
+    const note = change === "note" ? "Changed private note" : "Private note";
+    const nextDecision = change === "decision"
+      ? (decision === "rejected" ? "revision_requested" : "rejected") : decision;
+    const result = nextDecision === "rejected"
+      ? service.reject(reviewer, submissionId, { reasonCode: change === "reason" ? "duplicate" : "unsafe", note })
+      : service.requestRevision(reviewer, submissionId, { reasonCode: "needs_revision", note });
+    await expect(result).rejects.toMatchObject({ code: "REVIEW_STATE_CONFLICT", status: 409 });
+    await expectDecisionStoredOnce(submissionId, original);
+    expect((await env.DB.prepare("SELECT * FROM audit_events WHERE resource_id = ?").bind(submissionId).all()).results)
+      .toEqual(auditBefore.results);
+  });
+
+  it("allows only one winner when different review decisions race", async () => {
+    const submissionId = "submission-different-decision-race";
+    await seedReviewPendingSubmission(submissionId);
+    const first = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const second = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    const results = await Promise.allSettled([
+      first.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Reject note" }),
+      second.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Revision note" }),
+    ]);
+    const successes = results.filter((result) => result.status === "fulfilled");
+    const failures = results.filter((result) => result.status === "rejected");
+    expect(successes).toHaveLength(1);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.reason).toMatchObject({ code: "REVIEW_STATE_CONFLICT", status: 409 });
+    await expectDecisionStoredOnce(submissionId, successes[0]!.value);
+  });
+
+  it.each([
+    ["rejected", "member"], ["rejected", "disabled_admin"],
+    ["revision_requested", "member"], ["revision_requested", "disabled_admin"],
+  ] as const)("requires an active admin for both initial %s and replay by %s", async (decision, principal) => {
+    const submissionId = "submission-decision-forbidden";
+    await seedReviewPendingSubmission(submissionId);
+    const unauthorized: PublicationReviewer = principal === "member"
+      ? { id: "member-1", role: "contributor", status: "active" }
+      : { ...adminReviewer, status: "disabled" };
+    const decide = (reviewer: PublicationReviewer) => {
+      const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+      return decision === "rejected"
+        ? service.reject(reviewer, submissionId, { reasonCode: "unsafe", note: "Private note" })
+        : service.requestRevision(reviewer, submissionId, { reasonCode: "needs_revision", note: "Private note" });
+    };
+    await expect(decide(unauthorized)).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    await expect(env.DB.prepare(
+      `SELECT status, (SELECT COUNT(*) FROM reviews WHERE submission_id = submissions.id) AS reviewCount,
+         (SELECT COUNT(*) FROM audit_events WHERE resource_id = submissions.id) AS auditCount
+       FROM submissions WHERE id = ?`,
+    ).bind(submissionId).first()).resolves.toEqual({ status: "review_pending", reviewCount: 0, auditCount: 0 });
+    const original = await decide(adminReviewer);
+    await expect(decide(unauthorized)).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    await expectDecisionStoredOnce(submissionId, original);
+  });
+
   it("persists reject and revision-request decisions atomically without leaking review notes to audit", async () => {
     await seedReviewPendingSubmission("submission-reject");
     await seedReviewPendingSubmission("submission-revise");
@@ -1763,6 +1950,28 @@ function durableContentRemover() {
 function unwrapPublishedContent(result: RpcResult<PublishedContentReceipt>): PublishedContentReceipt {
   if (result.ok) return result.value;
   throw new AppError(result.error.code, result.error.message, result.error.status, result.error.retryable);
+}
+
+async function expectDecisionStoredOnce(
+  submissionId: string,
+  decision: Awaited<ReturnType<PublicationService["reject"]>>,
+): Promise<void> {
+  const stored = await env.DB.prepare(
+    `SELECT submission_id AS submissionId, reviewer_id AS reviewerId, decision,
+       reason_code AS reasonCode, reason AS note, title, visibility, created_at AS createdAt
+     FROM reviews WHERE submission_id = ?`,
+  ).bind(submissionId).all();
+  expect(stored.results).toEqual([decision]);
+  await expect(env.DB.prepare(
+    `SELECT status,
+       (SELECT COUNT(*) FROM audit_events WHERE resource_id = submissions.id) AS auditCount,
+       (SELECT COUNT(*) FROM publication_intents WHERE submission_id = submissions.id) AS intentCount,
+       (SELECT COUNT(*) FROM revisions r JOIN source_versions sv ON sv.id = r.source_version_id
+        WHERE sv.submission_id = submissions.id) AS revisionCount
+     FROM submissions WHERE id = ?`,
+  ).bind(submissionId).first()).resolves.toEqual({
+    status: decision.decision, auditCount: 1, intentCount: 0, revisionCount: 0,
+  });
 }
 
 async function seedPublicationPrincipals(): Promise<void> {

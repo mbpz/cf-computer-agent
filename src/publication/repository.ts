@@ -1166,6 +1166,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
     if (existing) return exactDecisionOrThrow(existing, reviewerId, decision, reasonCode, note);
     const preview = await this.getPreview(submissionId);
     if (!preview || preview.status !== "review_pending") {
+      // A decision may commit between the initial lookup and the preview read.
+      const concurrent = await this.findReview(submissionId);
+      if (concurrent) return exactDecisionOrThrow(concurrent, reviewerId, decision, reasonCode, note);
       throw new PublicationRepositoryConflictError("decision_conflict");
     }
     const timestamp = this.now().toISOString();
@@ -1176,7 +1179,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
       reasonCode,
       note,
       title: preview.title,
-      visibility: "admin_only",
+      visibility: preview.requestedVisibility,
       createdAt: timestamp,
     };
     const audit = decisionAudit(review);
