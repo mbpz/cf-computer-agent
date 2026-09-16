@@ -3,6 +3,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
 import { loadReviewDetail, submitReviewDecision, type ReviewDecision, type ReviewDetailData } from "../../components/review/review-detail-data";
 import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } from "./review-detail-page";
+import { writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
 import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
 
@@ -79,5 +80,5 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   };
 
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
-  return <ReviewDetailPage locale={locale} state={pageState} decisionState={decisionState} onRetry={() => { void read(); }} onDecision={(action) => { void decide(action); }} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
+  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} onRetry={() => { void read(); }} onDecision={(action) => { void decide(action); }} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }

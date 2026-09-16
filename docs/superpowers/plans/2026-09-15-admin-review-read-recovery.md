@@ -81,12 +81,12 @@
 
 ## Task 3：队列到详情闭环证据与账本同步
 
-**Files:** `test/unit/frontend-workbench-maturity-routes.test.tsx`、`shared/workbench-maturity-capabilities.ts`、`docs/product/workbench-product-maturity-gap-matrix.md`、`scripts/workbench-maturity-contract.test.mjs`、`scripts/workbench-domain-audit.mjs`、`scripts/workbench-domain-audit.test.mjs`、独立 `docs/operations/evidence/2026-09-15-workbench-d02r1-domain-audit.md`、`docs/product/2026-09-15-admin-review-read-recovery-evidence.md`、README、ROADMAP、completion audit、delivery ledger。
+**Files:** `test/unit/frontend-workbench-maturity-routes.test.tsx`、`shared/workbench-maturity-capabilities.ts`、`docs/product/workbench-product-maturity-gap-matrix.md`、`scripts/workbench-maturity-contract.test.mjs`、`scripts/workbench-domain-audit.mjs`、`scripts/workbench-domain-audit.test.mjs`、独立 `docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md`、`docs/product/2026-09-16-admin-review-read-recovery-evidence.md`、README、ROADMAP、completion audit、delivery ledger。集成时补修改 queue/detail 的应用内链接回调，以及发布预览等待期间的导航/权限保护与对应回归。
 
-- [ ] 增加真实 App 队列标题点击到对应详情的回归：由响应 id 构造链接，进入同 id 后展示响应标题；404 可返回列表。不要仅用 href 字符串测试代替导航。
-- [ ] 跑 `npm test`、`npm run typecheck`、`npm run typecheck:landing`、`npm run verify:landing`；记录 fresh 数量和失败原因，不复用 B2 结果。
-- [ ] 更新 registry 的读取缺口，仅关闭有实际测试覆盖的内容；写操作幂等、审核后发布/索引/通知闭环和浏览器验收保留。同步 fingerprint 和矩阵，生成新域快照，保留 B2 历史。
-- [ ] 跑 `node --test scripts/workbench-maturity-contract.test.mjs scripts/workbench-domain-audit.test.mjs scripts/delivery-status-contract.test.mjs` 及 `npm run audit:workbench-domain`；`git diff --check` 后提交证据。
+- [x] 增加真实 App 队列标题点击到对应详情的回归：由响应 id 构造链接，进入同 id 后展示响应标题；404 可返回列表。不要仅用 href 字符串测试代替导航。
+- [x] 跑 `npm test`、`npm run typecheck`、`npm run typecheck:landing`、`npm run verify:landing`；记录 fresh 数量和失败原因，不复用 B2 结果。
+- [x] 更新 registry 的读取缺口，仅关闭有实际测试覆盖的内容；写操作幂等、审核后发布/索引/通知闭环和浏览器验收保留。同步 fingerprint 和矩阵，生成新域快照，保留 B2 历史。
+- [x] 跑 `node --test scripts/workbench-maturity-contract.test.mjs scripts/workbench-domain-audit.test.mjs scripts/delivery-status-contract.test.mjs` 及 `npm run audit:workbench-domain`；`git diff --check` 后提交证据。
 
 ## 后续独立批次：D02-R2（本计划不实现）
 
@@ -94,4 +94,4 @@
 
 ## 当前状态
 
-2026-09-16：Task 1 队列恢复已提交 `cab5693`（定向三个文件 33 项通过）；Task 2 详情恢复已实现，四个队列/详情文件 40 项通过，typecheck 与 typecheck:landing 通过；Task 3 待闭环导航与全量验证。D01-B2 已单独提交 `58f468c`，这份计划不是审核功能完成证据。
+2026-09-16：Task 1 队列恢复已提交 `cab5693`，Task 2 详情恢复已提交 `0e9f91f`；Task 3 补齐真实 App 导航及发布预览边界，五文件定向 178 项、全量 unit 1985 / Worker 589、两套 typecheck、landing 96、文档/域契约 64 均通过。详见[本地证据](../../product/2026-09-16-admin-review-read-recovery-evidence.md)。D02-R1 本地完成；D02-R2、D02/R6-003 父项、发布与真实浏览器验收仍未完成。

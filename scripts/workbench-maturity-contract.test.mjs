@@ -31,7 +31,7 @@ const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
-const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-15-workbench-d01b2-domain-audit.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
@@ -117,7 +117,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-boards": { source: "manifest:0@0f01e0145a2e", dimension: "query_or_idempotency", slug: "move-concurrency-and-rollback", symptom: "看板移动缺少键盘操作、并发冲突与精确乐观回滚的完整旅程。", owner: "R4-012" },
   "workbench-settings": { source: "manifest:0@5e57e601f4cd", dimension: "states", slug: "persisted-settings-boundary", symptom: "设置页没有路由级异步状态、持久化或保存 pending 边界。", owner: "R1-012" },
   "workbench-admin": { source: "manifest:0@87a1d186875c", dimension: "api", slug: "real-dashboard-summary", symptom: "管理概览权威总数与独立状态已本地验证；跨页写后对账、站点统计日期一致性及发布验收仍缺失。", owner: "R6-001" },
-  "workbench-admin-submissions": { source: "manifest:0@e56a2c5a0b50", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列初始错误无重试，列表到详情发现、决策完成和幂等尚未闭环。", owner: "R6-003" },
+  "workbench-admin-submissions": { source: "manifest:0@44b459ad5dc5", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列读取恢复与详情导航已本地验证；发布、索引、通知的决策闭环和服务端幂等仍待实现。", owner: "R6-003" },
   "workbench-admin-duplicates": { source: "manifest:0@52988e32a0b8", dimension: "journey", slug: "duplicate-decision-recovery", symptom: "重复候选页初始错误无重试且决策收敛旅程未证明。", owner: "R6-010" },
   "workbench-admin-assets": { source: "manifest:0@96b40fbd4a65", dimension: "states", slug: "parse-progress-and-recovery", symptom: "资产页初始加载不可重试，解析进度与完整恢复旅程不完整。", owner: "R6-004" },
   "workbench-admin-members": { source: "manifest:0@73518e6bede9", dimension: "journey", slug: "member-status-and-audit-navigation", symptom: "成员页初始错误无重试，禁用后的缓存失效与审计定位未闭环。", owner: "R6-005" },
@@ -130,7 +130,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-messages": { source: "manifest:0@6f83a4364e6d", dimension: "isolation", slug: "context-revocation-presentation", symptom: "上下文 thread 发现与 stale/revoked target 的明确呈现尚未闭环。", owner: "R5-011" },
   "workbench-knowledge-reader": { source: "manifest:0@823eea297a96", dimension: "isolation", slug: "secondary-object-reauthorization", symptom: "阅读器私有笔记、分享、收藏和访问记录的完整二级对象撤权旅程未证明。", owner: "R3-012" },
   "workbench-message-thread": { source: "manifest:0@fb654b86d344", dimension: "isolation", slug: "thread-context-revocation", symptom: "thread context 返回 403 时仍是通用错误，缺少明确撤权状态及深链发现证据。", owner: "R5-011" },
-  "workbench-admin-submission-detail": { source: "manifest:0@b139ccd7bb29", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情缺少空态、初始重试、队列发现和决策幂等闭环。", owner: "R6-003" },
+  "workbench-admin-submission-detail": { source: "manifest:0@ec730e821f69", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。", owner: "R6-003" },
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
   "workbench-project-timeline|POST /api/projects/:id/timeline": {"slug":"create-timeline-item","symptom":"时间线创建缺少前端稳定意图键和断线重试去重证明。","owner":"R4-037"},

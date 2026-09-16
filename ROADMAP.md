@@ -18,6 +18,8 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-15 D01-B2 本地完成单事务统计快照、响应内 PV 对账和跨页写后重读，见[原子计划](./docs/superpowers/plans/2026-09-15-admin-analytics-snapshot.md)、[本地证据](./docs/product/2026-09-15-admin-analytics-snapshot-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-15-workbench-d01b2-domain-audit.md)。不同分页请求仍为实时读取，不承诺冻结快照。下一环节为 D02 审核队列与详情读取恢复，随后独立处理写操作幂等和发布闭环；D01/R6 父项、发布与真实浏览器验收状态保持开放。
 
+2026-09-16 D02-R1 本地补齐审核队列/详情原查询重试、401/403 内容清理、真实 404、响应对象匹配、迟到请求隔离及应用内往返导航；发布预览未完成时离开原查询，不再继续旧对象 POST。见[原子计划](./docs/superpowers/plans/2026-09-15-admin-review-read-recovery.md)、[本地证据](./docs/product/2026-09-16-admin-review-read-recovery-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md)。下一环节 D02-R2 先核对服务端审核写协议、稳定操作身份和发布/索引/通知收敛；前端互斥不等于幂等。D02/R6-003、发布与真实浏览器验收保持未完成，历史快照不改写。
+
 总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。

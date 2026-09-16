@@ -1686,9 +1686,15 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
         const publish = action === "publish"
           ? (await loadReviewDetail(id)).publish
           : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+        if (controllerRef.current !== actionController || !sameQuery(actionQuery)) return;
         await submitReviewDecision(id, action, publish);
-      } catch {
-        if (controllerRef.current === actionController && sameQuery(actionQuery)) setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+      } catch (error: unknown) {
+        if (controllerRef.current === actionController && sameQuery(actionQuery)) {
+          if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+            setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
+            setLocalError(undefined); setActionError(undefined);
+          } else setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+        }
         return;
       }
       if (controllerRef.current !== actionController || !sameQuery(actionQuery)) return;
@@ -1697,7 +1703,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
       if (decisionRef.current === token) { decisionRef.current = null; setPendingId(null); }
     }
   };
-  return <ReviewQueuePage locale={locale} state={state} pendingId={pendingId} actionError={actionError} localError={localError} pending={pending} onRetry={() => { const controller = controllerRef.current; if (controller && !decisionRef.current) void read(controller, { ...queryRef.current }); }} onReview={(id, action) => void review(id, action)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state} pendingId={pendingId} actionError={actionError} localError={localError} pending={pending} onRetry={() => { const controller = controllerRef.current; if (controller && !decisionRef.current) void read(controller, { ...queryRef.current }); }} onReview={(id, action) => void review(id, action)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

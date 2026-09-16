@@ -179,6 +179,27 @@ describe("moderation numbered routes", () => {
     expect(gets).toBe(2); expect(container.textContent).toContain("item-1-0");
   });
 
+  it("does not publish after navigating away while its preview is still loading", async () => {
+    const preview = deferred<Response>(); let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      return String(input).endsWith("/item-2-0") ? preview.promise : pageResponse(String(input), (id) => ({ id, title: id }));
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Publish");
+    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => preview.resolve(json({ preview: { submissionId: "item-2-0", title: "Old item", status: "review_pending", requestedSpaceId: "default" } }))); await flush();
+    expect(posts).toBe(0); expect(container.textContent).toContain("item-1-0");
+  });
+
+  it.each([401, 403])("clears the queue if the publication preview returns %i", async (status) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/item-2-0") ? new Response(null, { status }) : pageResponse(String(input), (id) => ({ id, title: id })));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Publish"); await flush();
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+    expect(container.textContent).not.toContain("item-2-0");
+  });
+
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
   async function changeSelect(selector: string, value: string) { const select = container.querySelector(selector) as HTMLSelectElement; expect(select).toBeTruthy(); await act(async () => { select.value = value; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
   function buttonNames(): Array<string | null> { return [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")); }

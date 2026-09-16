@@ -49,7 +49,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   boards: listWithRetry,
   settings: staticReady("Settings"),
   admin: listWithRetry,
-  "admin-submissions": listWithoutRetry("Review queue"),
+  "admin-submissions": listWithRetry,
   "admin-duplicates": listWithoutRetry("Duplicate queue"),
   "admin-assets": listWithoutRetry("Asset queue"),
   "admin-members": listWithoutRetry("Members"),
@@ -62,7 +62,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   messages: listWithRetry,
   "knowledge-reader": { loading: supported, empty: gap("Knowledge reader treats a missing revision as an error, not an empty state."), error: supported, ready: supported },
   "message-thread": listWithRetry,
-  "admin-submission-detail": { loading: supported, empty: gap("Submission detail treats a missing preview as an error, not an empty state."), error: gap("Submission detail renders an initial-load error but provides no route-owned retry action."), ready: supported },
+  "admin-submission-detail": { loading: supported, empty: gap("Submission detail rejects malformed 200 previews; not-found is reserved for a real 404."), error: supported, ready: supported },
 } as const satisfies Record<MaturityRouteId, StateClaims>);
 
 const PERMISSION_MASK_BY_ROUTE = Object.freeze({
@@ -128,6 +128,39 @@ describe("workbench maturity server projection and authorization audit", () => {
   afterEach(async () => {
     await journey?.unmount();
     journey = undefined;
+  });
+
+  it.each([200, 404])("navigates from a response-owned queue title to its detail (%i), with a return path", async (status) => {
+    const requests: string[] = [];
+    const base = createMaturityRouteFetch({ routeId: "admin-submissions", state: "ready", role: "admin", permissionMask: "0x0", requests });
+    journey = await mountAuthenticatedApp({
+      url: "https://app.test/admin/submissions", role: "admin", permissionMask: "0x0",
+      fetch: async (input, init) => {
+        if (String(input) === "/api/admin/submissions/ready-admin-submissions") {
+          requests.push(String(input));
+          return status === 404 ? apiError(404, "SUBMISSION_NOT_FOUND") : Response.json({ preview: {
+            submissionId: "ready-admin-submissions", title: "Selected response-owned submission", submitterId: "member-route-audit",
+            status: "review_pending", requestedSpaceId: "default", requestedVisibility: "shared", sourceVersion: { content: "Selected content" },
+          } });
+        }
+        return base(input, init);
+      },
+    });
+    await waitForServerNavigation(journey, requests);
+    await waitForApp(() => journey!.container.querySelector('main a[href="/admin/submissions/ready-admin-submissions"]') !== null);
+    await act(async () => (journey!.container.querySelector('main a[href="/admin/submissions/ready-admin-submissions"]') as HTMLElement).click());
+    await waitForApp(() => journey!.browser.location.pathname === "/admin/submissions/ready-admin-submissions");
+    await waitForApp(() => journey!.container.querySelector("main")?.textContent?.includes(status === 404 ? "This submission was not found." : "Selected response-owned submission") === true);
+    expect(requests.filter((path) => path === "/api/admin/submissions/ready-admin-submissions")).toHaveLength(1);
+    if (status === 404) {
+      expect(journey.container.querySelector("main pre")).toBeNull();
+      await act(async () => (journey!.container.querySelector('main a[href="/admin/submissions"]') as HTMLElement).click());
+    } else {
+      expect(journey.container.querySelector("main pre")?.textContent).toBe("Selected content");
+      await ensureRouteEntry(journey, "admin-submissions");
+      await act(async () => (journey!.container.querySelector('[data-route-id="admin-submissions"]') as HTMLElement).click());
+    }
+    await waitForApp(() => journey!.browser.location.pathname === "/admin/submissions" && journey!.container.querySelector('main a[href="/admin/submissions/ready-admin-submissions"]') !== null);
   });
 
   it("renders Login instead of the workbench for an anonymous session", async () => {
