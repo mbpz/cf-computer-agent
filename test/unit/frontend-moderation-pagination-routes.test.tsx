@@ -112,6 +112,73 @@ describe("moderation numbered routes", () => {
     expect(buttonNames()).toEqual(expect.arrayContaining(["Associate Duplicate title", "Keep separate Duplicate title", "Reject Duplicate title", "Associate duplicate-fallback", "Keep separate duplicate-fallback", "Reject duplicate-fallback"]));
   });
 
+  it("retries the exact failed review query once for same-tick repeated clicks without a POST", async () => {
+    browser.history.replaceState({}, "", "/admin/submissions?page=2&pageSize=50");
+    const gets: string[] = []; const posts: string[] = []; const retry = deferred<Response>();
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") posts.push(String(input)); gets.push(String(input)); return gets.length === 1 ? new Response(null, { status: 500 }) : retry.promise; });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    const button = [...container.querySelectorAll("button")].find((item) => item.textContent === "Try again") as HTMLButtonElement;
+    expect(button).toBeTruthy();
+    await act(async () => { button.click(); button.click(); });
+    expect(gets).toHaveLength(2); expect(gets[1]).toBe(gets[0]); expect(posts).toHaveLength(0);
+    await act(async () => retry.resolve(json({ items: [], pagination: { page: 2, pageSize: 50, total: 0, totalPages: 0 } }))); await flush();
+    expect(container.querySelector('[data-page-state="empty"]')).toBeTruthy();
+  });
+
+  it.each([401, 403])("clears private review rows and decisions on %i during a page read", async (status) => {
+    let gets = 0;
+    vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered([{ id: "private-review", title: "Private review" }], 2, 21) : new Response(null, { status }));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(container.textContent).not.toContain("Private review");
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+    expect(buttonNames().some((name) => name?.startsWith("Reject"))).toBe(false);
+  });
+
+  it("retries a post-decision read without repeating the decision", async () => {
+    let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      gets++; if (gets === 2) return new Response(null, { status: 500 });
+      return numbered([{ id: "review-kept", title: gets === 1 ? "Before decision" : "After read retry" }], 2, 21);
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Reject"); await flush();
+    expect(container.textContent).toContain("Before decision");
+    await clickButton("Try again"); await flush();
+    expect(container.textContent).toContain("After read retry"); expect(posts).toBe(1); expect(gets).toBe(3);
+  });
+
+  it("ignores a late retry after browser navigation, aborts it, and restores the query on back", async () => {
+    const retry = deferred<Response>(); const gets: string[] = []; let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      gets.push(String(input));
+      if (gets.length === 1) return new Response(null, { status: 500 });
+      if (gets.length === 2) { signal = init?.signal as AbortSignal; return retry.promise; }
+      return pageResponse(String(input), (id) => ({ id, title: id }));
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Try again");
+    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => retry.resolve(numbered([{ id: "late", title: "Late stale retry" }], 2, 21))); await flush();
+    expect(container.textContent).toContain("item-1-0"); expect(container.textContent).not.toContain("Late stale retry");
+    await act(async () => browser.history.back()); await flush();
+    expect(queryOf(gets.at(-1)!, "page")).toBe("2"); expect(container.textContent).toContain("item-2-0");
+  });
+
+  it("does not leave the new query locked or refresh it when an old decision finishes", async () => {
+    const decision = deferred<Response>(); let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") { posts++; return decision.promise; } gets++; return pageResponse(String(input), (id) => ({ id, title: id })); });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    const reject = container.querySelector('button[aria-label="Reject item-2-0"]') as HTMLButtonElement;
+    await act(async () => { reject.click(); reject.click(); }); expect(posts).toBe(1);
+    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect((container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => decision.resolve(json({}))); await flush();
+    expect(gets).toBe(2); expect(container.textContent).toContain("item-1-0");
+  });
+
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
   async function changeSelect(selector: string, value: string) { const select = container.querySelector(selector) as HTMLSelectElement; expect(select).toBeTruthy(); await act(async () => { select.value = value; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
   function buttonNames(): Array<string | null> { return [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")); }

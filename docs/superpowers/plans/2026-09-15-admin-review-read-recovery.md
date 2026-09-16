@@ -33,15 +33,15 @@
 
 **Interfaces:** 保留现有分页/审核 props，增加 `onRetry?: () => void`；复用 `pending` 禁用按钮。controller 继续消费 `{ page, pageSize }` 并返回 `{ items, pagination }`。
 
-- [ ] 写实际 route RED：page=2&pageSize=50 首次 GET 500，点击“Retry”得到空态或 ready；断言两次 GET 查询一致且 POST 次数为零。异步断言等待实际按钮，不能假定一次微任务即完成。
+- [x] 写实际 route RED：page=2&pageSize=50 首次 GET 500，点击“Retry”得到空态或 ready；断言两次 GET 查询一致且 POST 次数为零。异步断言等待实际按钮，不能假定一次微任务即完成。
   ```ts
   await clickButton("Retry");
   await vi.waitFor(() => expect(gets).toHaveLength(2));
   expect(gets[1]).toBe(gets[0]);
   expect(posts).toHaveLength(0);
   ```
-- [ ] 跑 `npx --no-install vitest run test/unit/frontend-moderation-pagination-routes.test.tsx`，观察缺少 retry 按钮导致 RED。
-- [ ] 抽取队列 GET 执行为共享函数，初始、retry 和审核成功后刷新复用；每次保存查询与 generation，重试只执行当前查询。立即设置 in-flight ref，双击不重复请求；finally 只清理自身请求。
+- [x] 跑 `npx --no-install vitest run test/unit/frontend-moderation-pagination-routes.test.tsx`，观察缺少 retry 按钮导致 RED。
+- [x] 抽取队列 GET 执行为共享函数，初始、retry 和审核成功后刷新复用；每次保存查询与 generation，重试只执行当前查询。立即设置 in-flight ref，双击不重复请求；finally 只清理自身请求。
   ```ts
   const snapshot = { ...queryRef.current };
   const request = controller.request(snapshot);
@@ -49,9 +49,9 @@
   if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
   setState({ kind: "ready", data });
   ```
-- [ ] 补 401/403 状态分支：丢弃旧 rows 和动作入口，显示权限提示；普通读取失败保留旧列表并显示独立 retry。mutation 错误与 GET 错误保持分离。
-- [ ] 增加双击重试、旧查询迟到、重试中 back/forward、撤权清理、POST 成功但 GET 失败后 retry 不重复 POST 的回归。同步中英文，保留既有 pagination 和末页回退测试。
-- [ ] 跑上述文件及 `test/unit/frontend-admin-review-data.test.ts`、`test/unit/frontend-admin-pages.test.tsx`；通过后提交本任务代码及测试。
+- [x] 补 401/403 状态分支：丢弃旧 rows 和动作入口，显示权限提示；普通读取失败保留旧列表并显示独立 retry。mutation 错误与 GET 错误保持分离。
+- [x] 增加双击重试、旧查询迟到、重试中 back/forward、撤权清理、POST 成功但 GET 失败后 retry 不重复 POST 的回归。同步中英文，保留既有 pagination 和末页回退测试。
+- [x] 跑上述文件及 `test/unit/frontend-admin-review-data.test.ts`、`test/unit/frontend-admin-pages.test.tsx`；通过后提交本任务代码及测试。
 
 ## Task 2：详情恢复、对象匹配与请求归属
 
@@ -94,4 +94,4 @@
 
 ## 当前状态
 
-已完成源码核对与原子拆解；Task 1–3 尚未实现或验证。D01-B2 已单独提交 `58f468c`，这份计划不是审核功能完成证据。
+2026-09-16：Task 1 队列恢复已实现，定向三个文件 33 项通过；Task 2 正在执行 RED，Task 3 尚未开始。D01-B2 已单独提交 `58f468c`，这份计划不是审核功能完成证据。

@@ -1637,16 +1637,47 @@ function needsBoardReplacement(
 
 export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pending, setPending] = useState(false); const [actionError, setActionError] = useState<string | undefined>(); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createReviewQueueRequestController> | null>(null);
+  const readRef = useRef<object | null>(null);
+  const decisionRef = useRef<object | null>(null);
   const queryRef = useRef({ page, pageSize }); const sameQuery = (value: { page: number; pageSize: SupportedPageSize }) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
   useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
-  useEffect(() => { const controller = createReviewQueueRequestController(); controllerRef.current = controller; const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined); const request = controller.request(snapshot); void request.promise.then((data) => { if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); } }); return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale, page, pageSize]);
+  const read = async (controller: ReturnType<typeof createReviewQueueRequestController>, snapshot: { page: number; pageSize: SupportedPageSize }, afterDecision = false) => {
+    if (readRef.current || controllerRef.current !== controller) return;
+    const token = {}; readRef.current = token;
+    setPending(true); setLocalError(undefined);
+    const request = controller.request(snapshot);
+    try {
+      const data = await request.promise;
+      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      if (afterDecision && data.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true);
+      else setState({ kind: "ready", data });
+    } catch (error: unknown) {
+      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+        setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") }); setActionError(undefined);
+      } else {
+        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      }
+    } finally {
+      if (readRef.current === token) { readRef.current = null; setPending(false); }
+    }
+  };
+  useEffect(() => {
+    const controller = createReviewQueueRequestController(); controllerRef.current = controller;
+    const snapshot = { page, pageSize }; queryRef.current = snapshot;
+    setPendingId(null); setActionError(undefined); void read(controller, snapshot);
+    return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; decisionRef.current = null; } };
+  }, [locale, page, pageSize]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { queryRef.current = next; const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url); setPage(next.page); setPageSize(next.pageSize); };
   const review = async (id: string, action: ReviewDecision) => {
-    if (pendingId) return;
+    if (decisionRef.current || readRef.current || state.kind !== "ready" || localError) return;
+    const actionController = controllerRef.current; if (!actionController) return;
+    const token = {}; decisionRef.current = token;
     const actionQuery = { ...queryRef.current };
     setPendingId(id);
     setActionError(undefined);
@@ -1657,25 +1688,16 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
           : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
         await submitReviewDecision(id, action, publish);
       } catch {
-        if (sameQuery(actionQuery)) setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+        if (controllerRef.current === actionController && sameQuery(actionQuery)) setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
         return;
       }
-      if (!sameQuery(actionQuery)) return;
-      const snapshot = actionQuery; const controller = controllerRef.current; if (!controller) return;
-      setPending(true); setLocalError(undefined); const request = controller.request(snapshot);
-      try {
-        const refreshed = await request.promise;
-        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-        if (refreshed.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true);
-        else { setState({ kind: "ready", data: refreshed }); setPending(false); }
-      } catch (error: unknown) {
-        if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) { setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
-      }
+      if (controllerRef.current !== actionController || !sameQuery(actionQuery)) return;
+      await read(actionController, actionQuery, true);
     } finally {
-      setPendingId(null);
+      if (decisionRef.current === token) { decisionRef.current = null; setPendingId(null); }
     }
   };
-  return <ReviewQueuePage locale={locale} state={state} pendingId={pendingId} actionError={actionError} localError={localError} pending={pending} onReview={(id, action) => void review(id, action)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  return <ReviewQueuePage locale={locale} state={state} pendingId={pendingId} actionError={actionError} localError={localError} pending={pending} onRetry={() => { const controller = controllerRef.current; if (controller && !decisionRef.current) void read(controller, { ...queryRef.current }); }} onReview={(id, action) => void review(id, action)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
