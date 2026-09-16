@@ -8,12 +8,12 @@ import type { ReviewDetailModel } from "../../components/review/review-detail-mo
 import type { ReactNode } from "react";
 
 export type ReviewDecision = "publish" | "request_changes" | "reject";
-export type ReviewDetailState = { kind: "loading" } | { kind: "ready"; detail: ReviewDetailModel } | { kind: "error"; message: string };
+export type ReviewDetailState = { kind: "loading" } | { kind: "ready"; detail: ReviewDetailModel } | { kind: "error" | "forbidden" | "not-found"; message: string };
 export type ReviewDecisionState = { kind: "idle" } | { kind: "pending"; action: ReviewDecision } | { kind: "success"; action: ReviewDecision } | { kind: "error"; action: ReviewDecision; message: string };
 
-export function ReviewDetailPage({ state, onDecision, decisionState = { kind: "idle" }, locale, comments }: { state: ReviewDetailState; onDecision?: (action: ReviewDecision, reason?: string) => void; decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode }) {
+export function ReviewDetailPage({ state, onDecision, onRetry, decisionState = { kind: "idle" }, locale, comments }: { state: ReviewDetailState; onDecision?: (action: ReviewDecision, reason?: string) => void; onRetry?: () => void; decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode }) {
   if (state.kind === "loading") return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10" /><Skeleton className="h-64" /></div>;
-  if (state.kind === "error") return <Alert variant="destructive"><AlertDescription>{state.message}</AlertDescription></Alert>;
+  if (state.kind !== "ready") return <section className="space-y-4" data-page-state={state.kind}><Alert variant={state.kind === "not-found" ? "default" : "destructive"}><AlertDescription>{state.message}<div className="flex flex-wrap gap-2">{state.kind !== "not-found" && onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}<Button variant="outline" asChild><a href="/admin/submissions">{frontendText(locale, "ADMIN_REVIEW_BACK")}</a></Button></div></AlertDescription></Alert></section>;
   const { detail } = state;
   const busy = decisionState.kind === "pending";
   const terminal = detail.status !== "review_pending";

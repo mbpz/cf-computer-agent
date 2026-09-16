@@ -47,11 +47,11 @@ export function normalizeReviewPreview(input: unknown): ReviewDetailData | null 
   return detail && /^[A-Za-z0-9_-]+$/u.test(publish.spaceId) ? { detail, publish } : null;
 }
 
-export async function loadReviewDetail(id: string, requester: Fetcher = fetch): Promise<ReviewDetailData> {
+export async function loadReviewDetail(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ReviewDetailData> {
   if (!/^[A-Za-z0-9_-]+$/u.test(id)) throw new Error("REVIEW_DETAIL_INVALID");
-  const payload = await apiFetch<{ preview?: unknown }>(`/api/admin/submissions/${encodeURIComponent(id)}`, { requester });
-  const result = normalizeReviewPreview(payload.preview);
-  if (!result) throw new Error("REVIEW_DETAIL_INVALID");
+  const payload = await apiFetch<{ preview?: unknown }>(`/api/admin/submissions/${encodeURIComponent(id)}`, { requester, signal });
+  const result = normalizeReviewPreview(payload?.preview);
+  if (!result || result.detail.id !== id) throw new Error("REVIEW_DETAIL_INVALID");
   return result;
 }
 

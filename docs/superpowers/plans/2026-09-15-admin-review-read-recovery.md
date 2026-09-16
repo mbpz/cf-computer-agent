@@ -59,15 +59,15 @@
 
 **Interfaces:** `loadReviewDetail(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ReviewDetailData>`；页面增加 `onRetry?: () => void`。状态新增 `not-found` 与 `forbidden`（message 字段），error 保留 retry，ready 不变。
 
-- [ ] 写 loader RED：合法 preview 的 submissionId 与请求 id 不符时拒绝；AbortSignal 原样传到 Fetcher。断言：
+- [x] 写 loader RED：合法 preview 的 submissionId 与请求 id 不符时拒绝；AbortSignal 原样传到 Fetcher。断言：
   ```ts
   await expect(loadReviewDetail("sub-1", wrongIdRequester)).rejects.toThrow("REVIEW_DETAIL_INVALID");
   await loadReviewDetail("sub-1", requester, controller.signal);
   expect(requester.mock.calls[0][1]?.signal).toBe(controller.signal);
   ```
-- [ ] 跑 `npx --no-install vitest run test/unit/frontend-review-detail-data.test.ts` 观察 RED，再将 signal 传入 apiFetch，并在 normalize 后要求 `result.detail.id === id`。
-- [ ] 新增真实 route RED：500→Retry→成功；404→未找到且无审核按钮；401/403→权限提示无内容；200无preview→error；A请求未完成切B，A迟到不得覆盖B。requester 对 comments GET 单独返回 `{ comments: [] }`，不得计入详情读取次数。
-- [ ] 使用每轮 AbortController 与 owner token；切 id/卸载 abort 并 invalidate。重试仅针对当前 id，一次点击占有即时 ref；显示新 id 时不得保留旧 detail/actions/comments。
+- [x] 跑 `npx --no-install vitest run test/unit/frontend-review-detail-data.test.ts` 观察 RED，再将 signal 传入 apiFetch，并在 normalize 后要求 `result.detail.id === id`。
+- [x] 新增真实 route RED：500→Retry→成功；404→未找到且无审核按钮；401/403→权限提示无内容；200无preview→error；A请求未完成切B，A迟到不得覆盖B。requester 对 comments GET 单独返回 `{ comments: [] }`，不得计入详情读取次数。
+- [x] 使用每轮 AbortController 与 owner token；切 id/卸载 abort 并 invalidate。重试仅针对当前 id，一次点击占有即时 ref；显示新 id 时不得保留旧 detail/actions/comments。
   ```ts
   if (error instanceof ApiRequestError && error.status === 404) {
     setState({ kind: "not-found", message: frontendText(locale, "ADMIN_REVIEW_NOT_FOUND") });
@@ -75,9 +75,9 @@
     setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
   }
   ```
-- [ ] 验证并修复重复 decision 事件的 owner 问题：先判 ready/current id/status/ref，再 claim；同步 ref 锁住单次动作。回归同 tick 两次 click 只有一次 POST且成功可落地。这里只保证前端在途互斥，不声称服务端幂等。
-- [ ] `ReviewDetailPage` 用现有组件显示 retry、未找到/权限提示及返回审核队列链接；不渲染敏感旧内容。键盘原生 button/a 语义，所有新增文案双语。
-- [ ] 跑 `npx --no-install vitest run test/unit/frontend-review-detail-data.test.ts test/unit/frontend-review-detail.test.tsx test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx`，通过后提交本任务。
+- [x] 验证并修复重复 decision 事件的 owner 问题：先判 ready/current id/status/ref，再 claim；同步 ref 锁住单次动作。回归同 tick 两次 click 只有一次 POST且成功可落地。这里只保证前端在途互斥，不声称服务端幂等。
+- [x] `ReviewDetailPage` 用现有组件显示 retry、未找到/权限提示及返回审核队列链接；不渲染敏感旧内容。键盘原生 button/a 语义，所有新增文案双语。
+- [x] 跑 `npx --no-install vitest run test/unit/frontend-review-detail-data.test.ts test/unit/frontend-review-detail.test.tsx test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx`，通过后提交本任务。
 
 ## Task 3：队列到详情闭环证据与账本同步
 
@@ -94,4 +94,4 @@
 
 ## 当前状态
 
-2026-09-16：Task 1 队列恢复已实现，定向三个文件 33 项通过；Task 2 正在执行 RED，Task 3 尚未开始。D01-B2 已单独提交 `58f468c`，这份计划不是审核功能完成证据。
+2026-09-16：Task 1 队列恢复已提交 `cab5693`（定向三个文件 33 项通过）；Task 2 详情恢复已实现，四个队列/详情文件 40 项通过，typecheck 与 typecheck:landing 通过；Task 3 待闭环导航与全量验证。D01-B2 已单独提交 `58f468c`，这份计划不是审核功能完成证据。

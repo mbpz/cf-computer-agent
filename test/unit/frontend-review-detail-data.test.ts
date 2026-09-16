@@ -38,6 +38,16 @@ describe("review detail data boundary", () => {
     await expect(loadReviewDetail("sub-1", async () => new Response(JSON.stringify({ preview: { submissionId: "" } }), { status: 200 }))).rejects.toThrow("REVIEW_DETAIL_INVALID");
   });
 
+  it("rejects a valid preview for a different submission", async () => {
+    await expect(loadReviewDetail("sub-other", async () => new Response(JSON.stringify({ preview: preview() })))).rejects.toThrow("REVIEW_DETAIL_INVALID");
+  });
+
+  it("passes cancellation to the actual detail request", async () => {
+    const controller = new AbortController(); let received: AbortSignal | null | undefined;
+    const data = await loadReviewDetail("sub-1", async (_input, init) => { received = init?.signal; return new Response(JSON.stringify({ preview: preview() })); }, controller.signal);
+    expect(data.detail.id).toBe("sub-1"); expect(received).toBe(controller.signal);
+  });
+
   it("publishes with the approved target and maps decision endpoints", async () => {
     const calls: Array<{ input: string | URL | Request; init?: RequestInit }> = [];
     const requester = async (input: string | URL | Request, init?: RequestInit) => {
