@@ -1,4 +1,4 @@
-import { apiFetch, type Fetcher } from "../../lib/api";
+import { apiFetch, ApiRequestError, type Fetcher } from "../../lib/api";
 import { reviewDetailModel, type ReviewDetailModel } from "./review-detail-model";
 
 export interface ReviewPublishInput {
@@ -57,20 +57,69 @@ export async function loadReviewDetail(id: string, requester: Fetcher = fetch, s
 
 export type ReviewDecision = "publish" | "request_changes" | "reject";
 
-export async function submitReviewDecision(id: string, action: ReviewDecision, publish: ReviewPublishInput, requester: Fetcher = fetch): Promise<void> {
+export interface ReviewNoteInput {
+  readonly reasonCode: "not_relevant" | "duplicate" | "unsafe" | "needs_revision";
+  readonly note: string;
+}
+export type ReviewReceipt =
+  | { action: "publish"; status: "published"; revisionId: string; knowledgeItemId: string; searchStatus: "pending" | "indexed" | "search_degraded" | "failed" }
+  | { action: "reject"; status: "rejected"; submissionId: string }
+  | { action: "request_changes"; status: "revision_requested"; submissionId: string };
+export interface ReviewOperation { readonly id: string; readonly action: ReviewDecision; readonly path: string; readonly body: string }
+export const MAX_REVIEW_NOTE_BYTES = 4_000;
+
+export function validReviewNote(note: string): boolean {
+  // In Unicode mode the surrogate range matches lone units, not valid emoji pairs.
+  return new TextEncoder().encode(note).byteLength <= MAX_REVIEW_NOTE_BYTES
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(note) && !/[\uD800-\uDFFF]/u.test(note);
+}
+
+export function prepareReviewDecision(id: string, action: ReviewDecision, publish: ReviewPublishInput, details?: ReviewNoteInput): ReviewOperation {
   if (!/^[A-Za-z0-9_-]+$/u.test(id)) throw new Error("REVIEW_DETAIL_INVALID");
-  const encodedId = encodeURIComponent(id);
-  if (action === "publish") {
-    await apiFetch(`/api/admin/submissions/${encodedId}/publish`, {
-      requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(publish),
-    });
-    return;
-  }
-  const path = action === "request_changes" ? "request-revision" : "reject";
-  const body = action === "request_changes"
-    ? { reasonCode: "needs_revision", note: "" }
-    : { reasonCode: "not_relevant", note: "" };
-  await apiFetch(`/api/admin/submissions/${encodedId}/${path}`, {
-    requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  const input = details ?? { reasonCode: action === "request_changes" ? "needs_revision" : "not_relevant", note: "" };
+  if (action !== "publish" && (!validReviewNote(input.note) || (action === "request_changes"
+    ? input.reasonCode !== "needs_revision" : !["not_relevant", "duplicate", "unsafe"].includes(input.reasonCode)))) throw new Error("REVIEW_NOTE_INVALID");
+  const path = action === "request_changes" ? "request-revision" : action;
+  return Object.freeze({ id, action, path: `/api/admin/submissions/${encodeURIComponent(id)}/${path}`, body: JSON.stringify(action === "publish" ? publish : input) });
+}
+
+export async function sendReviewDecision(operation: ReviewOperation, requester: Fetcher = fetch): Promise<ReviewReceipt> {
+  const payload = await apiFetch<unknown>(operation.path, {
+    requester, method: "POST", headers: { "content-type": "application/json" }, body: operation.body,
   });
+  const record = asRecord(payload);
+  if (operation.action === "publish") {
+    const revision = asRecord(record?.revision);
+    const searchStatus = revision?.searchStatus;
+    if (typeof revision?.id === "string" && /^[A-Za-z0-9_-]+$/u.test(revision.id)
+      && typeof revision.knowledgeItemId === "string" && /^[A-Za-z0-9_-]+$/u.test(revision.knowledgeItemId)
+      && (searchStatus === "pending" || searchStatus === "indexed" || searchStatus === "search_degraded" || searchStatus === "failed")) {
+      return { action: "publish", status: "published", revisionId: revision.id, knowledgeItemId: revision.knowledgeItemId, searchStatus };
+    }
+  } else {
+    const decision = asRecord(record?.decision);
+    if (decision?.submissionId === operation.id) {
+      if (operation.action === "reject" && decision.decision === "rejected") return { action: "reject", status: "rejected", submissionId: operation.id };
+      if (operation.action === "request_changes" && decision.decision === "revision_requested") return { action: "request_changes", status: "revision_requested", submissionId: operation.id };
+    }
+  }
+  throw new Error("REVIEW_RECEIPT_INVALID");
+}
+
+export function submitReviewDecision(id: string, action: ReviewDecision, publish: ReviewPublishInput, requester: Fetcher = fetch, details?: ReviewNoteInput): Promise<ReviewReceipt> {
+  return sendReviewDecision(prepareReviewDecision(id, action, publish, details), requester);
+}
+
+export type ReviewRecovery = "retry" | "reload" | "edit";
+export function reviewRecovery(error: unknown, previouslyUncertain = false): ReviewRecovery {
+  if (error instanceof ApiRequestError) {
+    if (error.status === 409 || error.status === 404) return "reload";
+    // Validation of a replay cannot prove that the original attempt did not commit.
+    if (error.status === 400 || error.status === 422) return previouslyUncertain ? "reload" : "edit";
+  }
+  return "retry";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

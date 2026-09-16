@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
-import { loadReviewDetail, submitReviewDecision, type ReviewDecision, type ReviewDetailData } from "../../components/review/review-detail-data";
+import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewDetailData, type ReviewOperation, type ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } from "./review-detail-page";
 import { writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
@@ -20,10 +20,12 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   const owner = useMemo(() => createAsyncOwner(), []);
   const readRef = useRef<AbortController | null>(null);
   const decisionRef = useRef<object | null>(null);
+  const operationRef = useRef<ReviewOperation | null>(null);
 
   const read = useCallback(async () => {
     if (readRef.current || decisionRef.current) return;
     const controller = new AbortController();
+    operationRef.current = null;
     readRef.current = controller;
     const current = owner.claim();
     setState({ kind: "loading" });
@@ -52,33 +54,49 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
       readRef.current?.abort();
       readRef.current = null;
       decisionRef.current = null;
+      operationRef.current = null;
     };
   }, [owner, read]);
 
-  const decide = async (action: ReviewDecision) => {
-    if (readRef.current || decisionRef.current || state.kind !== "ready" || state.data.detail.id !== id || state.data.detail.status !== "review_pending") return;
+  const send = async (operation: ReviewOperation, previouslyUncertain = false) => {
+    if (readRef.current || decisionRef.current || state.kind !== "ready" || state.data.detail.id !== operation.id) return;
+    const { action } = operation;
     const decision = {};
     decisionRef.current = decision;
     const current = owner.claim();
     setDecisionState({ kind: "pending", action });
     try {
-      await submitReviewDecision(id, action, state.data.publish, requester);
+      const receipt = await sendReviewDecision(operation, requester);
       if (!owner.isCurrent(current)) return;
-      const status = action === "publish" ? "published" : action === "reject" ? "rejected" : "revision_requested";
-      setState({ kind: "ready", data: { ...state.data, detail: Object.freeze({ ...state.data.detail, status }) } });
-      setDecisionState({ kind: "success", action });
+      setState({ kind: "ready", data: { ...state.data, detail: Object.freeze({ ...state.data.detail, status: receipt.status }) } });
+      setDecisionState({ kind: "success", receipt });
     } catch (error) {
       if (!owner.isCurrent(current)) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
         setDecisionState({ kind: "idle" });
+        operationRef.current = null;
       } else {
-        setDecisionState({ kind: "error", action, message: frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR") });
+        const recovery = reviewRecovery(error, previouslyUncertain);
+        if (recovery === "edit") operationRef.current = null;
+        setDecisionState({ kind: "error", action, recovery });
       }
+    } finally {
       if (decisionRef.current === decision) decisionRef.current = null;
     }
   };
 
+  const decide = (action: ReviewDecision, details?: ReviewNoteInput) => {
+    if (readRef.current || decisionRef.current || operationRef.current || state.kind !== "ready" || state.data.detail.status !== "review_pending") return;
+    try {
+      const operation = prepareReviewDecision(id, action, state.data.publish, details);
+      operationRef.current = operation;
+      void send(operation);
+    } catch { setDecisionState({ kind: "error", action, recovery: "edit" }); }
+  };
+
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
-  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} onRetry={() => { void read(); }} onDecision={(action) => { void decide(action); }} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
+  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState}
+    onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
+    onDecision={decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }

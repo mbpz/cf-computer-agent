@@ -75,7 +75,8 @@ import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
-import { loadReviewDetail, submitReviewDecision, type ReviewDecision } from "./components/review/review-detail-data";
+import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
+import type { ReviewDecisionState } from "./components/review/review-decision-controls";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { postLogout } from "./lib/logout";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -1639,10 +1640,14 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
   const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [pending, setPending] = useState(false); const [actionError, setActionError] = useState<string | undefined>(); const [localError, setLocalError] = useState<string | undefined>();
+  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
+  const [decisionState, setDecisionState] = useState<ReviewDecisionState>({ kind: "idle" });
+  const [completedId, setCompletedId] = useState<string | null>(null);
   const controllerRef = useRef<ReturnType<typeof createReviewQueueRequestController> | null>(null);
   const readRef = useRef<object | null>(null);
   const decisionRef = useRef<object | null>(null);
+  const operationRef = useRef<ReviewOperation | null>(null);
+  const needsClampRef = useRef(false);
   const queryRef = useRef({ page, pageSize }); const sameQuery = (value: { page: number; pageSize: SupportedPageSize }) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
   useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
   const read = async (controller: ReturnType<typeof createReviewQueueRequestController>, snapshot: { page: number; pageSize: SupportedPageSize }, afterDecision = false) => {
@@ -1653,12 +1658,13 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
     try {
       const data = await request.promise;
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-      if (afterDecision && data.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true);
-      else setState({ kind: "ready", data });
+      if ((afterDecision || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)), pageSize: snapshot.pageSize }, true);
+      else { setState({ kind: "ready", data }); needsClampRef.current = false; }
+      if (operationRef.current && !decisionRef.current) { operationRef.current = null; setDecisionState({ kind: "idle" }); }
     } catch (error: unknown) {
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") }); setActionError(undefined);
+        setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") }); setDecisionState({ kind: "idle" }); operationRef.current = null; setCompletedId(null);
       } else {
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
@@ -1670,30 +1676,41 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
   useEffect(() => {
     const controller = createReviewQueueRequestController(); controllerRef.current = controller;
     const snapshot = { page, pageSize }; queryRef.current = snapshot;
-    setPendingId(null); setActionError(undefined); void read(controller, snapshot);
-    return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; decisionRef.current = null; } };
+    setPendingId(null); setDecisionState((old) => old.kind === "success" ? old : { kind: "idle" }); void read(controller, snapshot);
+    return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; decisionRef.current = null; operationRef.current = null; } };
   }, [locale, page, pageSize]);
   const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { queryRef.current = next; const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url); setPage(next.page); setPageSize(next.pageSize); };
-  const review = async (id: string, action: ReviewDecision) => {
-    if (decisionRef.current || readRef.current || state.kind !== "ready" || localError) return;
+  const review = async (id: string, action: ReviewDecision, details?: ReviewNoteInput, retryOperation?: ReviewOperation) => {
+    if (decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
     const actionController = controllerRef.current; if (!actionController) return;
     const token = {}; decisionRef.current = token;
     const actionQuery = { ...queryRef.current };
     setPendingId(id);
-    setActionError(undefined);
+    setDecisionState({ kind: "pending", action });
     try {
       try {
-        const publish = action === "publish"
-          ? (await loadReviewDetail(id)).publish
-          : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+        let operation = retryOperation;
+        if (!operation) {
+          const publish = action === "publish" ? (await loadReviewDetail(id)).publish
+            : { title: "", visibility: "shared" as const, spaceId: "default", collectionId: null, tagIds: [] };
+          if (controllerRef.current !== actionController || !sameQuery(actionQuery)) return;
+          operation = prepareReviewDecision(id, action, publish, details);
+        }
+        operationRef.current = operation;
+        const receipt = await sendReviewDecision(operation);
         if (controllerRef.current !== actionController || !sameQuery(actionQuery)) return;
-        await submitReviewDecision(id, action, publish);
+        operationRef.current = null;
+        setDecisionState({ kind: "success", receipt }); setCompletedId(id); needsClampRef.current = true;
       } catch (error: unknown) {
         if (controllerRef.current === actionController && sameQuery(actionQuery)) {
           if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
             setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
-            setLocalError(undefined); setActionError(undefined);
-          } else setActionError(frontendText(locale, "ADMIN_REVIEW_ACTION_ERROR"));
+            setLocalError(undefined); setDecisionState({ kind: "idle" }); operationRef.current = null; setCompletedId(null);
+          } else {
+            const recovery = operationRef.current ? reviewRecovery(error, Boolean(retryOperation)) : "edit";
+            if (recovery === "edit") operationRef.current = null;
+            setDecisionState({ kind: "error", action, recovery });
+          }
         }
         return;
       }
@@ -1703,7 +1720,18 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
       if (decisionRef.current === token) { decisionRef.current = null; setPendingId(null); }
     }
   };
-  return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state} pendingId={pendingId} actionError={actionError} localError={localError} pending={pending} onRetry={() => { const controller = controllerRef.current; if (controller && !decisionRef.current) void read(controller, { ...queryRef.current }); }} onReview={(id, action) => void review(id, action)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  const retryRead = (afterDecision = false) => {
+    const controller = controllerRef.current;
+    if (controller && !decisionRef.current && !(decisionState.kind === "error" && decisionState.recovery === "retry")) {
+      if (afterDecision) needsClampRef.current = true;
+      void read(controller, { ...queryRef.current }, afterDecision);
+    }
+  };
+  return <ReviewQueuePage onOpenDetail={(id) => writeWorkspaceHistory("push", `/admin/submissions/${encodeURIComponent(id)}`)} locale={locale} state={state}
+    pendingId={pendingId} completedId={completedId} decisionState={decisionState} localError={localError} pending={pending}
+    onRetry={() => retryRead()} onReloadDecision={() => retryRead(true)}
+    onRetryDecision={() => { const operation = operationRef.current; if (operation && decisionState.kind === "error" && decisionState.recovery === "retry") void review(operation.id, operation.action, undefined, operation); }}
+    onReview={(id, action, details) => void review(id, action, details)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
