@@ -69,3 +69,21 @@ Tests       12 passed (12)
 rtk npx tsc --noEmit
 TypeScript: No errors found
 ```
+
+## Review fixes, round 2 (2026-09-17)
+
+- Hardened the direct-D1 timeline fallback with an explicit owning-project join (`p.id = pti.project_id AND p.member_id = pti.member_id`) and active-member predicate, so a malformed/mismatched timeline row cannot expose another member's project ID.
+- Added a disabled-member-owned task fixture and verified the active-member join excludes it.
+- Added a mismatched-owner `project_tasks` relation fixture (`member-a` project row pointing at a `member-b` task) and verified the two-endpoint owner join excludes it from actual D1 results.
+- Added the missing `r.knowledge_item_id = k.id` invariant to both current revision and batched citation reads.
+
+Round-2 verification:
+
+```text
+rtk npx vitest run test/unit/graph-service.test.ts test/unit/graph-contract.test.ts
+Test Files  2 passed (2)
+Tests       12 passed (12)
+
+rtk npx tsc --noEmit
+TypeScript: No errors found
+```
