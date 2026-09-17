@@ -2281,7 +2281,7 @@ function unwrapExpression(expression) {
 }
 
 function roadmapBacktickIds(roadmap) {
-  return [...roadmap.matchAll(/`([A-Z][A-Z0-9]*-[A-Z0-9]+)`/gu)].map((match) => match[1]);
+  return [...roadmap.matchAll(/`([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)`/gu)].map((match) => match[1]);
 }
 
 function parseRoadmapStages(roadmap) {

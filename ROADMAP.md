@@ -1,6 +1,6 @@
 # 个人工作台 · Personal Workbench Roadmap
 
-更新时间：2026-09-16
+更新时间：2026-09-17
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
@@ -20,7 +20,9 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-16 D02-R1 本地补齐审核队列/详情原查询重试、401/403 内容清理、真实 404、响应对象匹配、迟到请求隔离及应用内往返导航；发布预览未完成时离开原查询，不再继续旧对象 POST。见[原子计划](./docs/superpowers/plans/2026-09-15-admin-review-read-recovery.md)、[本地证据](./docs/product/2026-09-16-admin-review-read-recovery-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md)。D02-R2 按[书面设计及原子清单](./docs/superpowers/specs/2026-09-16-admin-review-write-recovery-design.md)四批推进：A 已本地修复审核首次/重放可见性一致，新增 24 项真实 D1 回归，服务/Worker/API 合计 162 项通过，见[本地证据](./docs/product/2026-09-16-admin-review-replay-contract-evidence.md)；B 已本地实现权威回执、发布与索引分离、真实说明、原载荷手动重试与冲突重读，见[原子计划](./docs/superpowers/plans/2026-09-16-admin-review-write-ui.md)和[本地证据](./docs/product/2026-09-16-admin-review-write-ui-evidence.md)。C 已本地补齐三种审核通知、决定事务一致性、去重、当前目标权限与旧数据迁移，见[原子计划](./docs/superpowers/plans/2026-09-16-admin-review-notifications.md)和[本地证据](./docs/product/2026-09-16-admin-review-notifications-evidence.md)。下一环节 D 故障矩阵及交付验收。前端互斥不等于幂等。D02/R6-003、发布与真实浏览器验收保持未完成，历史快照不改写。
 
-总账成熟度：`atoms=94`; `implementation=done:74,partial:5,pending:15,n/a:0`; `verification=done:78,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:66,n/a:0`; `acceptance=done:0,partial:8,pending:86,n/a:0`
+2026-09-17 Personal Work Graph 后端合同闸门已本地完成：成员隔离、scope/root/depth/types/limit 解析、cursor 绑定、时间线投影、有界 loader 与 citation 授权均通过 focused unit/worker、TypeScript、smoke 和 delivery-status contract。`nextCursor` 延续字段与 malformed/cross-linked citation fixture 保留为 minor deferred；发布、生产与 signed browser acceptance 仍 pending，未执行远程迁移、部署或 push。
+
+总账成熟度：`atoms=95`; `implementation=done:75,partial:5,pending:15,n/a:0`; `verification=done:79,partial:0,pending:16,n/a:0`; `release=done:0,partial:28,pending:67,n/a:0`; `acceptance=done:0,partial:8,pending:87,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 
@@ -93,7 +95,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 当前证据：Tasks、四列 task-backed Boards、recipient-owned Notifications、任务/知识 contextual Messages 以及对应分页、隔离、重放和前端状态已在当前分支实现并通过本地自动化验证。R2 尚未退出：任务/通知/消息保留与清理策略、main 集成、远程 0035–0037 migration、生产发布、production smoke 和 admin/contributor signed browser acceptance 均未完成。
 
-范围：`INB-001`、`CAP-001`、`P4-001`、`GL-001`、`PRJ-001`、`CAL-001`、`TOD-001`、`FOC-001`、`REV-001`、`TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`TSK-011`、`NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`。
+范围：`INB-001`、`CAP-001`、`P4-001`、`GL-001`、`PRJ-001`、`CAL-001`、`TOD-001`、`FOC-001`、`REV-001`、`TSK-001`、`TSK-002`、`TSK-003`、`TSK-004`、`TSK-005`、`TSK-006`、`TSK-007`、`TSK-008`、`TSK-009`、`TSK-010`、`TSK-011`、`WB-GR-001`、`NTF-001`、`NTF-002`、`NTF-003`、`NTF-004`、`NTF-005`、`NTF-006`、`BRD-001`、`BRD-002`、`BRD-003`、`BRD-004`、`BRD-005`、`BRD-006`、`BRD-007`、`MSG-001`、`MSG-002`、`MSG-003`、`MSG-004`、`MSG-005`、`MSG-006`。
 
 前置依赖：消费 `IDN-004`、`IDN-005`、`WB-PAGE`、`WB-A11Y`、`ADM-009`、`KB-006` 的隔离、分页、可访问性、审计与知识上下文。
 
