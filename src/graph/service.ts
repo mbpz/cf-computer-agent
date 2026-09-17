@@ -183,7 +183,5 @@ function shouldLoad(kind: GraphNodeKind, query: GraphQuery): boolean {
     const scopeKind = query.scope === "knowledge" ? "knowledge" : query.scope === "project" ? "project" : null;
     if (scopeKind !== kind) return false;
   }
-  if (!query.rootId) return true;
-  if (!query.rootId.includes(":")) return true;
-  return query.rootId.startsWith(`${kind}:`);
+  return true;
 }

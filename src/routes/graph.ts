@@ -3,7 +3,7 @@ import { AppError, jsonResponse, methodNotAllowed, type RequestContext } from ".
 import type { Principal } from "../identity/principal";
 import { decodeOpaqueCursor, deriveCursorScopeKey } from "../pagination";
 import type { GraphProjectionService } from "../graph/service";
-import { parseGraphQuery } from "../graph/types";
+import { graphNodeMatchesRoot, parseGraphQuery } from "../graph/types";
 
 export interface GraphRouteServices {
   graph: Pick<GraphProjectionService, "get">;
@@ -33,7 +33,7 @@ export async function routeGraphApi(
   }
 
   const snapshot = await services.graph.get(member.memberId, query);
-  if (query.rootId !== null && !snapshot.nodes.some((node) => node.id === query.rootId || node.id.endsWith(`:${query.rootId}`))) {
+  if (query.rootId !== null && !snapshot.nodes.some((node) => graphNodeMatchesRoot(node.id, query.rootId!))) {
     throw new AppError("NOT_FOUND", "Not found", 404);
   }
   return jsonResponse(snapshot, 200, context.requestId);

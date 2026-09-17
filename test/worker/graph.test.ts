@@ -31,6 +31,12 @@ describe("private work graph route", () => {
       "project-a", "member-a", "project-a", "Private project", NOW.getTime(), NOW.getTime(),
       "project-b", "member-b", "project-b", "Other project", NOW.getTime(), NOW.getTime(),
     ).run();
+    await env.DB.prepare(
+      "INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at) VALUES (?, ?, ?, '', 'todo', 0, 'medium', NULL, ?, ?)",
+    ).bind("task-z", "member-a", "Task neighbor", NOW.getTime(), NOW.getTime()).run();
+    await env.DB.prepare(
+      "INSERT INTO project_tasks (project_id, member_id, task_id, created_at) VALUES (?, ?, ?, ?)",
+    ).bind("project-a", "member-a", "task-z", NOW.getTime()).run();
 
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => NOW });
@@ -62,11 +68,31 @@ describe("private work graph route", () => {
     const owned = await api(app, "/api/graph?scope=project&rootId=project-a&depth=1&limit=50", sessionA);
     expect(owned.status).toBe(200);
     expect(owned.headers.get("x-request-id")).toBeTruthy();
-    await expect(owned.json()).resolves.toMatchObject({ rootId: "project-a", nodes: [{ id: "project:project-a" }] });
+    const ownedBody = await owned.json() as { rootId: string; nodes: Array<{ id: string }> };
+    expect(ownedBody.rootId).toBe("project-a");
+    expect(ownedBody.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(["project:project-a"]));
 
     const crossMember = await api(app, "/api/graph?scope=project&rootId=project-b&depth=1&limit=50", sessionA);
     expect(crossMember.status).toBe(404);
     await expect(crossMember.json()).resolves.toMatchObject({ error: { code: "NOT_FOUND", message: "Not found" } });
+  });
+
+  it("preserves an authorized root when a neighbor sorts before it at limit one", async () => {
+    const bounded = await api(app, "/api/graph?scope=workspace&rootId=task-z&depth=1&limit=1", sessionA);
+    expect(bounded.status).toBe(200);
+    const boundedBody = await bounded.json() as { rootId: string; nodes: Array<{ id: string }>; truncated: boolean };
+    expect(boundedBody.rootId).toBe("task-z");
+    expect(boundedBody.nodes.map((node) => node.id)).toEqual(["task:task-z"]);
+    expect(boundedBody.truncated).toBe(true);
+
+    const canonical = await api(app, "/api/graph?scope=workspace&rootId=task:task-z&depth=1&limit=50", sessionA);
+    expect(canonical.status).toBe(200);
+    const canonicalBody = await canonical.json() as { rootId: string; nodes: Array<{ id: string }> };
+    expect(canonicalBody.rootId).toBe("task:task-z");
+    expect(canonicalBody.nodes.map((node) => node.id)).toEqual(expect.arrayContaining(["task:task-z", "project:project-a"]));
+
+    const crossMember = await api(app, "/api/graph?scope=workspace&rootId=project-b&depth=1&limit=1", sessionA);
+    expect(crossMember.status).toBe(404);
   });
 
   it("rejects unknown, duplicate, and out-of-range graph query parameters", async () => {

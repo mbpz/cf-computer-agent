@@ -95,7 +95,13 @@ export function normalizeGraphSnapshot(
   const sortedNodes = [...uniqueNodes.values()].sort(byId);
   const nodeLimit = query.limit;
   const nodesTruncated = sortedNodes.length > nodeLimit;
-  const visibleNodes = sortedNodes.slice(0, nodeLimit);
+  const rootId = query.rootId;
+  const rootNode = rootId === null
+    ? undefined
+    : sortedNodes.find((node) => graphNodeMatchesRoot(node.id, rootId));
+  const visibleNodes = rootNode === undefined
+    ? sortedNodes.slice(0, nodeLimit)
+    : [rootNode, ...sortedNodes.filter((node) => node.id !== rootNode.id).slice(0, nodeLimit - 1)];
   const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
 
   const uniqueEdges = new Map<string, GraphEdge>();
@@ -117,6 +123,10 @@ export function normalizeGraphSnapshot(
     depth: query.depth,
     truncated: nodesTruncated || edgesTruncated,
   };
+}
+
+export function graphNodeMatchesRoot(nodeId: string, rootId: string): boolean {
+  return nodeId === rootId || nodeId.endsWith(`:${rootId}`);
 }
 
 function normalizeNode(candidate: GraphNode): GraphNode | null {

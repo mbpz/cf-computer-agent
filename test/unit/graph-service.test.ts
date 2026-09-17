@@ -68,6 +68,41 @@ describe("GraphProjectionService", () => {
     expect(result.edges[0]?.kind).toBe("belongs_to");
   });
 
+  it("loads allowed neighbors for canonical roots at depth one and two", async () => {
+    const repository = new FakeGraphRepository({
+      knowledge: [knowledge("knowledge-a", "member-a")],
+      projects: [project("project-a", "member-a")],
+      tasks: [task("task-a", "member-a")],
+      timeline: [
+        { id: "meeting-a", projectId: "project-a", kind: "meeting", title: "Kickoff", status: "open", updatedAt: "2026-09-17T00:00:00.000Z" },
+      ],
+      relations: [
+        relation("project", "project-a", "task", "task-a", "belongs_to"),
+        relation("task", "task-a", "knowledge", "knowledge-a", "references"),
+        relation("meeting", "meeting-a", "project", "project-a", "belongs_to"),
+      ],
+    });
+    const service = new GraphProjectionService(repository);
+
+    const taskDepthOne = await service.get("member-a", { ...query, rootId: "task:task-a", depth: 1 });
+    expect(taskDepthOne.nodes.map((node) => node.id)).toEqual(["task:task-a", "knowledge:knowledge-a", "project:project-a"]);
+
+    const taskDepthTwo = await service.get("member-a", { ...query, rootId: "task:task-a", depth: 2 });
+    expect(taskDepthTwo.nodes.map((node) => node.id)).toEqual(["task:task-a", "knowledge:knowledge-a", "meeting:meeting-a", "project:project-a"]);
+
+    const projectDepthOne = await service.get("member-a", { ...query, rootId: "project:project-a", depth: 1 });
+    expect(projectDepthOne.nodes.map((node) => node.id)).toEqual(["project:project-a", "meeting:meeting-a", "task:task-a"]);
+
+    const projectDepthTwo = await service.get("member-a", { ...query, rootId: "project:project-a", depth: 2 });
+    expect(projectDepthTwo.nodes.map((node) => node.id)).toEqual(["project:project-a", "knowledge:knowledge-a", "meeting:meeting-a", "task:task-a"]);
+
+    const knowledgeDepthOne = await service.get("member-a", { ...query, rootId: "knowledge:knowledge-a", depth: 1 });
+    expect(knowledgeDepthOne.nodes.map((node) => node.id)).toEqual(["knowledge:knowledge-a", "task:task-a"]);
+
+    const knowledgeDepthTwo = await service.get("member-a", { ...query, rootId: "knowledge:knowledge-a", depth: 2 });
+    expect(knowledgeDepthTwo.nodes.map((node) => node.id)).toEqual(["knowledge:knowledge-a", "project:project-a", "task:task-a"]);
+  });
+
   it("keeps citation IDs only when they belong to an authorized knowledge source", async () => {
     const repository = new FakeGraphRepository({
       knowledge: [knowledge("knowledge-a", "member-a", ["citation-authorized"])],

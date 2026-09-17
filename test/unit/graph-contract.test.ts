@@ -125,6 +125,7 @@ describe("personal work graph contract", () => {
     expect(result.depth).toBe(1);
     expect(result.truncated).toBe(true);
     expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]?.id).toBe("root");
     expect(result.edges).toHaveLength(0);
   });
 });

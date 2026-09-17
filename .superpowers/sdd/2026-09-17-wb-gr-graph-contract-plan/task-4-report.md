@@ -63,3 +63,32 @@ The first sandbox attempts for the Graph Vitest suites and smoke suite were bloc
 - Local Vitest emits the existing warning that AI bindings can access remote resources. No AI request was made by this gate.
 - Release, remote D1 migration, deployment, production smoke, signed browser acceptance, and current-main acceptance remain pending. No Wrangler deploy, remote migration, push, or browser action was performed.
 - `SECRETS_FILE` was not read, uploaded, or modified. The test harness mentioned local `.dev.vars` in its own output; its contents were not inspected.
+
+## Final review fixes — 2026-09-17
+
+The final review identified two important bounded-projection issues. Both were fixed locally without changing production configuration, migrations, deployment state, or the progress ledger.
+
+### Fixes
+
+- Authorized-root preservation: `normalizeGraphSnapshot` now pins the authorized requested root into the bounded node result and fills the remaining slots in stable ID order. Root matching is shared with `/api/graph`, so a valid short or canonical root remains visible at `limit=1` while an unauthorized cross-member root still maps to uniform `NOT_FOUND`.
+- Canonical-root neighbor loading: canonical `kind:id` values are now used only to locate the root. They no longer suppress loaders for other allowed node kinds, so depth-1 and depth-2 neighborhoods retain authorized knowledge, project, task, and timeline neighbors while existing type/scope filtering and loader bounds remain in place.
+
+### Regression and verification results
+
+The original focused command could not start in the restricted sandbox because Wrangler/workerd attempted to write its user log and open a loopback listener (`EPERM` for `/Users/doug/Library/Preferences/.wrangler/logs/...` and `127.0.0.1`). After local runtime permission was granted, the newly added regressions were red against the old implementation: the root-at-limit test returned `leaf` instead of `root`, and the canonical task root returned only itself instead of its authorized neighbors.
+
+Final local results:
+
+```text
+rtk npx vitest run test/unit/graph-contract.test.ts test/unit/graph-service.test.ts test/worker/graph.test.ts --pool=workers
+Test Files  3 passed (3)
+Tests       19 passed (19)
+
+rtk npx tsc --noEmit
+TypeScript: No errors found
+
+rtk git diff --check
+passed (no output)
+```
+
+No Wrangler deploy, remote D1 migration, production smoke, browser acceptance, push, or other production action was executed. `SECRETS_FILE` was not read, uploaded, or modified.
