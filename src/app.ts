@@ -258,7 +258,8 @@ function createRequestServices(
     focus,
   });
   const capture = new CaptureClassificationService(new CaptureRepository(env.DB), new InboxService(inboxRecords));
-  const projectTimeline = new ProjectTimelineService(new ProjectTimelineRepository(env.DB), projectRecords);
+  const projectTimelineRecords = new ProjectTimelineRepository(env.DB);
+  const projectTimeline = new ProjectTimelineService(projectTimelineRecords, projectRecords);
   const discussionRecords = new DiscussionsRepository(env.DB);
   const discussionAuthorization = new DiscussionTargetAuthorization(env.DB);
   const notificationRecords = new NotificationsRepository(env.DB);
@@ -327,7 +328,7 @@ function createRequestServices(
     quizzes: new QuizService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library,
-    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB)),
+    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB, { projects: projectRecords, timeline: projectTimelineRecords })),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,

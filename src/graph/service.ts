@@ -9,20 +9,23 @@ import type {
   GraphProjectionRepositoryPort,
   GraphProjectRecord,
   GraphTaskRecord,
+  GraphTimelineRecord,
 } from "./repository";
 
 export class GraphProjectionService {
   constructor(private readonly repository: GraphProjectionRepositoryPort) {}
 
   async get(memberId: string, query: GraphQuery): Promise<GraphSnapshot> {
-    const [knowledge, tasks, projects, goals, inbox, calendar, relations] = await Promise.all([
-      this.repository.listKnowledge(memberId),
-      this.repository.listTasks(memberId),
-      this.repository.listProjects(memberId),
-      this.repository.listGoals(memberId),
-      this.repository.listInbox(memberId),
-      this.repository.listCalendar(memberId),
-      this.repository.listRelations(memberId),
+    const loaderLimit = Math.min(100, Math.max(1, query.limit));
+    const [knowledge, tasks, projects, goals, inbox, calendar, timeline, relations] = await Promise.all([
+      shouldLoad("knowledge", query) ? this.repository.listKnowledge(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("task", query) ? this.repository.listTasks(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("project", query) ? this.repository.listProjects(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("goal", query) ? this.repository.listGoals(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("inbox", query) ? this.repository.listInbox(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("calendar", query) || shouldLoad("focus", query) ? this.repository.listCalendar(memberId, loaderLimit) : Promise.resolve([]),
+      shouldLoad("meeting", query) || shouldLoad("decision", query) || shouldLoad("action_item", query) ? this.repository.listTimeline(memberId, loaderLimit) : Promise.resolve([]),
+      this.repository.listRelations(memberId, loaderLimit),
     ]);
 
     const allNodes = [
@@ -32,6 +35,7 @@ export class GraphProjectionService {
       ...goals.map((record) => goalNode(record)),
       ...inbox.map((record) => inboxNode(record)),
       ...calendar.map((record) => calendarNode(record)),
+      ...timeline.map((record) => timelineNode(record)),
     ];
     const allNodeById = new Map(allNodes.map((node) => [node.id, node]));
     const allEdges = relations
@@ -103,6 +107,10 @@ function calendarNode(record: GraphCalendarRecord): GraphNode {
   return node(kind, record.id, record.title, record.status, href, { updatedAt: record.updatedAt });
 }
 
+function timelineNode(record: GraphTimelineRecord): GraphNode {
+  return node(record.kind, record.id, record.title, record.status, `/projects/${record.projectId}/timeline/${record.id}`, { updatedAt: record.updatedAt });
+}
+
 function node(
   kind: GraphNodeKind,
   id: string,
@@ -168,4 +176,14 @@ function selectNeighborhood(
     }
   }
   return allNodes.filter((node) => distances.has(node.id));
+}
+
+function shouldLoad(kind: GraphNodeKind, query: GraphQuery): boolean {
+  if (query.types.length > 0 && !query.types.includes(kind)) {
+    const scopeKind = query.scope === "knowledge" ? "knowledge" : query.scope === "project" ? "project" : null;
+    if (scopeKind !== kind) return false;
+  }
+  if (!query.rootId) return true;
+  if (!query.rootId.includes(":")) return true;
+  return query.rootId.startsWith(`${kind}:`);
 }
