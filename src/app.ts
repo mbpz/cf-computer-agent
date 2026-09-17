@@ -69,6 +69,8 @@ import { ProjectsRepository } from "./projects/repository";
 import { ProjectsService } from "./projects/service";
 import { CalendarRepository } from "./calendar/repository";
 import { CalendarService } from "./calendar/service";
+import { GraphProjectionRepository } from "./graph/repository";
+import { GraphProjectionService } from "./graph/service";
 import { FocusRepository } from "./focus/repository";
 import { FocusService } from "./focus/service";
 import { WorkbenchReviewRepository } from "./workbench-review/repository";
@@ -325,6 +327,7 @@ function createRequestServices(
     quizzes: new QuizService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library,
+    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB)),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,
