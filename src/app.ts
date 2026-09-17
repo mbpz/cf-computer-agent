@@ -98,6 +98,7 @@ import { routeFocusApi } from "./routes/focus";
 import { routeWorkbenchReviewApi } from "./routes/workbench-review";
 import { routeCaptureApi } from "./routes/capture";
 import { routeProjectTimelineApi } from "./routes/project-timeline";
+import { routeGraphApi } from "./routes/graph";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -328,7 +329,7 @@ function createRequestServices(
     quizzes: new QuizService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library,
-    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB, { projects: projectRecords, timeline: projectTimelineRecords })),
+    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB)),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,
@@ -423,6 +424,8 @@ async function dispatchApiRequest(
   if (member) return member;
   const tasks = await routeTasksApi(request, url, context, principal, { tasks: services.tasks });
   if (tasks) return tasks;
+  const graph = await routeGraphApi(request, url, context, principal, { graph: services.graph });
+  if (graph) return graph;
   const inbox = await routeInboxApi(request, url, context, principal, { inbox: services.inbox });
   if (inbox) return inbox;
   const goals = await routeGoalsApi(request, url, context, principal, { goals: services.goals });

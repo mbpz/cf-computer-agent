@@ -24,6 +24,8 @@ const knowledgeChecklistPath = resolve(repositoryRoot, "docs/product/ai-knowledg
 const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-frontend-checklist.md");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
+const graphRoutePath = resolve(repositoryRoot, "src/routes/graph.ts");
+const appPath = resolve(repositoryRoot, "src/app.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const readmePath = resolve(repositoryRoot, "README.md");
 const collaborationEvidencePath = resolve(
@@ -347,6 +349,17 @@ test("route coverage uses exact structured route markers", () => {
   assert.deepEqual(tokens, new Set(["/admin/assets"]));
   assert.equal(tokens.has("/admin"), false);
   assert.equal(tokens.has("/"), false);
+});
+
+test("private graph API keeps authorization, strict parsing, and app wiring explicit", () => {
+  const route = readFileSync(graphRoutePath, "utf8");
+  const app = readFileSync(appPath, "utf8");
+  assert.match(route, /routeGraphApi/u);
+  assert.match(route, /requireCapability\(principal, "tasks:use"\)/u);
+  assert.match(route, /parseGraphQuery\(url\.searchParams\)/u);
+  assert.match(route, /GRAPH_PAGE_INVALID/u);
+  assert.match(app, /import \{ routeGraphApi \} from "\.\/routes\/graph"/u);
+  assert.match(app, /routeGraphApi\(request, url, context, principal, \{ graph: services\.graph \}\)/u);
 });
 
 test("completed dimensions require evidence and n/a dimensions require a reason", () => {
