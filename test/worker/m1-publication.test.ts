@@ -265,6 +265,7 @@ describe("M1 publication control plane", () => {
       chunkCount: 2,
       ftsCount: 2,
       auditCount: 1,
+      notificationCount: 1,
     });
     await expect(env.DB.prepare(
       "SELECT action, metadata FROM audit_events WHERE action = 'knowledge.published'",
@@ -906,6 +907,7 @@ describe("M1 publication control plane", () => {
       chunkCount: 2,
       ftsCount: 2,
       auditCount: 1,
+      notificationCount: 1,
     });
   });
 
@@ -948,6 +950,7 @@ describe("M1 publication control plane", () => {
       revisionCount: 1,
       reviewCount: 1,
       auditCount: 1,
+      notificationCount: 1,
     });
   });
 
@@ -1023,6 +1026,7 @@ describe("M1 publication control plane", () => {
       chunkCount: 0,
       auditCount: 0,
     });
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM notifications WHERE target_id = 'submission-rollback'").first()).resolves.toEqual({ count: 0 });
 
     await env.DB.prepare("DELETE FROM audit_events WHERE id = ?").bind("publish-revision-rollback").run();
     const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
@@ -1041,6 +1045,7 @@ describe("M1 publication control plane", () => {
       ftsCount: 2,
       auditCount: 1,
     });
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM notifications WHERE target_id = 'submission-rollback'").first()).resolves.toEqual({ count: 1 });
   });
 
   it("keeps the revision readable when FTS fails, records only a safe code, and later replays the same job", async () => {
@@ -1065,6 +1070,8 @@ describe("M1 publication control plane", () => {
       recoveredIndexJobs: 0,
       failures: [{ resourceId: "revision-degraded", code: "INDEX_RECOVERY_FAILED" }],
     });
+    const noticeBeforeIndexRetry = await env.DB.prepare("SELECT * FROM notifications WHERE target_id = 'submission-degraded'").all();
+    expect(noticeBeforeIndexRetry.results).toHaveLength(1);
     await expect(env.DB.prepare(
       "SELECT k.search_status, j.state, j.last_error_code FROM knowledge_items k JOIN jobs j ON j.resource_id = k.current_revision_id WHERE k.id = ?",
     ).bind("knowledge-degraded").first()).resolves.toEqual({
@@ -1102,6 +1109,7 @@ describe("M1 publication control plane", () => {
       auditCount: 1,
     });
     await expect(indexRowidMismatches("knowledge-degraded")).resolves.toEqual([]);
+    expect((await env.DB.prepare("SELECT * FROM notifications WHERE target_id = 'submission-degraded'").all()).results).toEqual(noticeBeforeIndexRetry.results);
   });
 
   it("terminalizes a repeatedly failing index Job and keeps the terminal state stable", async () => {
@@ -1499,6 +1507,9 @@ describe("M1 publication control plane", () => {
       intentState: "pending_content",
       currentRevisionId: null,
       revisionCount: 0,
+      reviewCount: 0,
+      auditCount: 0,
+      notificationCount: 0,
     });
 
     const stub = env.KNOWLEDGE.get(env.KNOWLEDGE.idFromName("publication:default"));
@@ -1519,6 +1530,7 @@ describe("M1 publication control plane", () => {
       chunkCount: 2,
       ftsCount: 2,
       auditCount: 1,
+      notificationCount: 1,
     });
     const workspace = await getWorkspace(stub as unknown as Parameters<typeof getWorkspace>[0]);
     try {
@@ -1554,11 +1566,62 @@ describe("M1 publication control plane", () => {
       reviewCount: 0,
       chunkCount: 0,
       auditCount: 0,
+      notificationCount: 0,
     });
 
     await env.DB.prepare("UPDATE collections SET status = 'active' WHERE id = 'collection-1'").run();
     const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
     await expect(recreated.recoverPending(20)).resolves.toMatchObject({ recoveredIntents: 1, failures: [] });
+    await expect(publicationState("submission-target-race")).resolves.toMatchObject({
+      submissionStatus: "published", revisionCount: 1, reviewCount: 1, auditCount: 1, notificationCount: 1,
+    });
+  });
+
+  it("recovers a committed finalize batch whose response is lost without duplicating or replacing its notification", async () => {
+    const submissionId = "submission-finalize-response-loss";
+    await seedReviewPendingSubmission(submissionId);
+    const repository = repositoryWithIds("knowledge-finalize-response-loss", "revision-finalize-response-loss");
+    const intent = await repository.createOrReadIntent(
+      submissionId, adminReviewer.id, { ...publicationInput, tagIds: ["tag-a", "tag-b"] },
+    );
+    const receipt = await durableContentCommitter().commit({
+      spaceId: intent.spaceId, knowledgeItemId: intent.knowledgeItemId, revisionId: intent.revisionId,
+      contentSha256: intent.contentSha256, markdown: intent.sourceVersion.content,
+    });
+    await repository.markContentWritten(submissionId, receipt);
+    let lostResponses = 0;
+    const responseLossDb = new Proxy(env.DB, {
+      get(target, property) {
+        if (property === "batch") return async (statements: D1PreparedStatement[]) => {
+          const result = await target.batch(statements);
+          if (lostResponses++ === 0) throw new Error("Lost committed finalize response");
+          return result;
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await expect(new PublicationRepository(responseLossDb).finalize(intent, chunksFor(intent)))
+      .resolves.toMatchObject({ id: intent.revisionId });
+    expect(lostResponses).toBe(1);
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "published", intentState: "completed", searchStatus: "pending",
+      revisionCount: 1, reviewCount: 1, auditCount: 1, notificationCount: 1,
+    });
+    const readNotification = () => env.DB.prepare(
+      "SELECT * FROM notifications WHERE target_kind = 'submission' AND target_id = ?",
+    ).bind(submissionId).first();
+    const notification = await readNotification();
+    expect(notification).not.toBeNull();
+    const recreated = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+    await expect(recreated.publish(adminReviewer, submissionId, publicationInput))
+      .resolves.toMatchObject({ id: intent.revisionId, searchStatus: "indexed" });
+    await expect(recreated.recoverPending(20)).resolves.toEqual({ recoveredIntents: 0, recoveredIndexJobs: 0, failures: [] });
+    await expect(publicationState(submissionId)).resolves.toMatchObject({
+      submissionStatus: "published", searchStatus: "indexed", revisionCount: 1,
+      reviewCount: 1, auditCount: 1, notificationCount: 1,
+    });
+    await expect(readNotification()).resolves.toEqual(notification);
   });
 
   it("rejects a cross-Space tag before intent creation and publishes an admin-only zero-tag selection", async () => {
@@ -1778,6 +1841,55 @@ describe("M1 publication control plane", () => {
     await expectDecisionStoredOnce(submissionId, original);
   });
 
+  it.each(["published", "rejected", "revision_requested"] as const)("emits exactly one private submission notification for %s including recreated-service replay", async (decision) => {
+    const submissionId = `submission-notify-${decision}`;
+    await seedReviewPendingSubmission(submissionId);
+    const decide = () => {
+      const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+      if (decision === "published") return service.publish(adminReviewer, submissionId, publicationInput);
+      if (decision === "rejected") return service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Private review note" });
+      return service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Private review note" });
+    };
+    await decide();
+    await decide();
+    const notices = await env.DB.prepare(
+      "SELECT recipient_member_id, actor_member_id, event_type, target_kind, target_id, payload_json, deduplication_key FROM notifications WHERE target_id = ?",
+    ).bind(submissionId).all();
+    expect(notices.results).toEqual([{
+      recipient_member_id: "member-1", actor_member_id: "admin-1", event_type: `submission.${decision}`,
+      target_kind: "submission", target_id: submissionId, payload_json: "{}",
+      deduplication_key: `submission:${submissionId}:${decision}`,
+    }]);
+  });
+
+  it.each(["published", "rejected", "revision_requested"] as const)("rolls back %s when notification insertion fails and permits recovery", async (decision) => {
+    const submissionId = `submission-notify-failure-${decision}`;
+    await seedReviewPendingSubmission(submissionId);
+    await env.DB.exec("CREATE TRIGGER fail_review_notice BEFORE INSERT ON notifications BEGIN SELECT RAISE(ABORT, 'notification fault'); END;");
+    const decide = () => {
+      const service = new PublicationService(new PublicationRepository(env.DB), durableContentCommitter());
+      if (decision === "published") return service.publish(adminReviewer, submissionId, publicationInput);
+      if (decision === "rejected") return service.reject(adminReviewer, submissionId, { reasonCode: "unsafe", note: "Private note" });
+      return service.requestRevision(adminReviewer, submissionId, { reasonCode: "needs_revision", note: "Private note" });
+    };
+    await expect(decide()).rejects.toThrow();
+    await expect(env.DB.prepare(
+      `SELECT status, (SELECT COUNT(*) FROM reviews WHERE submission_id = s.id) AS reviews,
+        (SELECT COUNT(*) FROM notifications WHERE target_id = s.id) AS notices,
+        (SELECT COUNT(*) FROM audit_events WHERE resource_id = s.id) AS audits
+       FROM submissions s WHERE id = ?`,
+    ).bind(submissionId).first()).resolves.toEqual({ status: "review_pending", reviews: 0, notices: 0, audits: 0 });
+    if (decision === "published") {
+      await expect(env.DB.prepare("SELECT state FROM publication_intents WHERE submission_id = ?").bind(submissionId).first())
+        .resolves.toEqual({ state: "content_written" });
+    }
+    await env.DB.exec("DROP TRIGGER fail_review_notice;");
+    await decide();
+    await decide();
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM notifications WHERE target_id = ?").bind(submissionId).first())
+      .resolves.toEqual({ count: 1 });
+  });
+
   it("persists reject and revision-request decisions atomically without leaking review notes to audit", async () => {
     await seedReviewPendingSubmission("submission-reject");
     await seedReviewPendingSubmission("submission-revise");
@@ -1966,11 +2078,12 @@ async function expectDecisionStoredOnce(
     `SELECT status,
        (SELECT COUNT(*) FROM audit_events WHERE resource_id = submissions.id) AS auditCount,
        (SELECT COUNT(*) FROM publication_intents WHERE submission_id = submissions.id) AS intentCount,
+       (SELECT COUNT(*) FROM notifications WHERE target_id = submissions.id) AS notificationCount,
        (SELECT COUNT(*) FROM revisions r JOIN source_versions sv ON sv.id = r.source_version_id
         WHERE sv.submission_id = submissions.id) AS revisionCount
      FROM submissions WHERE id = ?`,
   ).bind(submissionId).first()).resolves.toEqual({
-    status: decision.decision, auditCount: 1, intentCount: 0, revisionCount: 0,
+    status: decision.decision, auditCount: 1, intentCount: 0, revisionCount: 0, notificationCount: 1,
   });
 }
 
@@ -2147,6 +2260,7 @@ async function publicationState(submissionId: string) {
   if (!row) throw new Error("missing submission state");
   const revisionCount = await scalarCount("revisions", "source_version_id = ?", `source-version-${submissionId}`);
   const reviewCount = await scalarCount("reviews", "submission_id = ?", submissionId);
+  const notificationCount = await scalarCount("notifications", "target_kind = 'submission' AND target_id = ?", submissionId);
   const chunkCount = row.current_revision_id ? await scalarCount("chunks", "revision_id = ?", row.current_revision_id) : 0;
   const ftsExists = await env.DB.prepare("SELECT 1 AS found FROM sqlite_master WHERE name = 'chunks_fts'").first();
   const ftsCount = ftsExists && row.current_revision_id
@@ -2167,6 +2281,7 @@ async function publicationState(submissionId: string) {
     chunkCount,
     ftsCount,
     auditCount,
+    notificationCount,
   };
 }
 
@@ -2194,7 +2309,7 @@ function chunksFor(intent: Awaited<ReturnType<PublicationRepository["createOrRea
   });
 }
 
-async function scalarCount(table: "revisions" | "reviews" | "chunks", where: string, value: string): Promise<number> {
+async function scalarCount(table: "revisions" | "reviews" | "chunks" | "notifications", where: string, value: string): Promise<number> {
   const row = await env.DB.prepare(`SELECT count(*) AS count FROM ${table} WHERE ${where}`).bind(value).first<{ count: number }>();
   return row?.count ?? 0;
 }

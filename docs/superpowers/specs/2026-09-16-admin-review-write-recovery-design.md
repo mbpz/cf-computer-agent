@@ -2,7 +2,7 @@
 
 日期：2026-09-16。起点：`codex/admin-audit-recovery`，`2ca1349`。
 
-状态：用户于 2026-09-16 确认书面设计，A/B 批已实现并本地验证。A 见[实施计划](../plans/2026-09-16-admin-review-replay-contract.md)与[验收证据](../../product/2026-09-16-admin-review-replay-contract-evidence.md)；B 见[实施计划](../plans/2026-09-16-admin-review-write-ui.md)与[本地证据](../../product/2026-09-16-admin-review-write-ui-evidence.md)。C/D 待完成，不是 R2 整体完成或发布证据。D02-R1 的读取恢复成果保持不变。
+状态：用户于 2026-09-16 确认书面设计，A/B/C 批已实现并本地验证。A 见[实施计划](../plans/2026-09-16-admin-review-replay-contract.md)与[验收证据](../../product/2026-09-16-admin-review-replay-contract-evidence.md)；B 见[实施计划](../plans/2026-09-16-admin-review-write-ui.md)与[本地证据](../../product/2026-09-16-admin-review-write-ui-evidence.md)；C 见[实施计划](../plans/2026-09-16-admin-review-notifications.md)与[本地证据](../../product/2026-09-16-admin-review-notifications-evidence.md)。D 待完成，不是 R2 整体完成或发布证据。D02-R1 的读取恢复成果保持不变。
 
 ## 目标与约束
 
@@ -89,12 +89,16 @@
 - [x] A4 不同载荷/审核人/决定冲突，非管理员拒绝，原记录不变。
 - [x] A5 定向服务、Worker 与类型检查通过；本地证据随本批提交，不关闭 R2 父项。
 - [x] B 前端类型化结果、索引状态、真实说明及明确的手动重试（本地实现/自动化）。
-- [ ] C 审核通知、事务去重、目标授权及保留旧数据的迁移验证。
+- [x] C 审核通知、事务去重、目标授权及保留旧数据的迁移验证（本地实现/自动化，未执行远程迁移）。
 - [ ] D 故障矩阵、权限/交互验收和交付文档收口。
+  - [x] D1 本地故障矩阵：并发、DO/D1 回执丢失、最终事务回滚、索引恢复均映射到真实持久化断言；发布通知缺失 mutation 能使测试失败。
+  - [x] D2 本地三种决定/三身份 HTTP 闭环与 DOM 迟到/撤权回归；见 `docs/product/2026-09-17-admin-review-acceptance-matrix.md`。不同管理员覆盖交接后重放冲突，不声称两个同时活动管理员竞争。
+  - [ ] D3 真实登录、中英文、键盘、深浅主题和移动宽度；2026-09-17 浏览器检查为 Mac 锁屏且无可用标签页，待解锁。
+  - [ ] D4 授权发布、远程迁移与同版本上线验收；不得用本地自动化替代。
 
 ## 书面自查
 
 - 边界：A 无接口或 schema 扩张，B/C 依赖 A；当前不是一次提交完成所有管理功能。
 - 一致性：持久化记录始终是权威，前端锁只改善交互；索引恢复不创建新的决定。
 - 隔离：审核权限与通知目标权限分别检查，可见性字段不作为授权凭证。
-- 发布：当前 A/B 仅为本地修复与回归，未迁移、未部署；C/D 和后续验收需各自证据。
+- 发布：当前 A/B/C 及 D1/D2 仅为本地实现/回归，未执行远程迁移、未部署；D3/D4 和后续验收需各自证据。

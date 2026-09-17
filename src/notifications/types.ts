@@ -7,10 +7,13 @@ export const NOTIFICATION_EVENT_TYPES = [
   "discussion.reply",
   "task.due",
   "task.overdue",
+  "submission.published",
+  "submission.rejected",
+  "submission.revision_requested",
 ] as const;
 export type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
 
-export const NOTIFICATION_TARGET_KINDS = ["task", "discussion_thread", "knowledge_item"] as const;
+export const NOTIFICATION_TARGET_KINDS = ["task", "discussion_thread", "knowledge_item", "submission"] as const;
 export type NotificationTargetKind = typeof NOTIFICATION_TARGET_KINDS[number];
 
 export type NotificationPayloadValue = string | number | boolean | null;

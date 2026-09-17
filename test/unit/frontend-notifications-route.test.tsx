@@ -149,6 +149,79 @@ describe("notification inbox route", () => {
     expect(container.textContent).not.toContain("Stale filtered page");
   });
 
+  it.each([true, false])("revalidates the target on open and navigates only if still authorized (%s)", async (authorized) => {
+    browser.history.replaceState({}, "", "/notifications");
+    const posts: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (init?.method === "POST") {
+        posts.push(path);
+        return Response.json(notification({ targetKind: authorized ? "submission" : null, targetId: authorized ? "submission-1" : null, eventType: "submission.rejected", payload: {} }));
+      }
+      return path.endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(path, "Initial");
+    });
+    await renderRoute();
+    await click("Open"); await flush();
+    expect(posts).toEqual(["/api/notifications/notification-1/read"]);
+    expect(browser.location.pathname).toBe(authorized ? "/my-submissions" : "/notifications");
+    if (!authorized) expect(container.textContent).toContain("This item is no longer available");
+  });
+
+  it("does not navigate after an in-flight open leaves its location", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    let resolveRead!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveRead = resolve; });
+      return String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Initial");
+    });
+    await renderRoute(); await click("Open");
+    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
+    await act(async () => resolveRead(Response.json(notification()))); await flush();
+    expect(browser.location.pathname + browser.location.search).toBe("/notifications?read=read");
+  });
+
+  it.each([401, 403])("clears protected state and invalidates in-flight reads when open loses authorization (%s)", async (status) => {
+    browser.history.replaceState({}, "", "/notifications");
+    let resolveRead!: (response: Response) => void;
+    let resolveList!: (response: Response) => void;
+    let staleSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveRead = resolve; });
+      if (path.endsWith("/summary")) return Response.json({ unread: 1 });
+      if (path.includes("read=true")) { staleSignal = init?.signal ?? undefined; return new Promise<Response>((resolve) => { resolveList = resolve; }); }
+      return pageResponse(path, "Protected notification");
+    });
+    await renderRoute(); await click("Open");
+    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await settle();
+    await act(async () => resolveRead(Response.json({ error: { code: status === 401 ? "AUTH_REQUIRED" : "FORBIDDEN", message: "Denied", retryable: false } }, { status }))); await flush();
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.textContent).not.toContain("Unread total");
+    expect(staleSignal?.aborted).toBe(true);
+    expect(container.textContent).toContain("Sign in with an authorized account");
+    await act(async () => resolveList(pageResponse("/api/notifications?page=1", "Stale protected notification"))); await flush();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+  });
+
+  it("ignores late ordinary open failures in a different notification view", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    let resolveRead!: (response: Response) => void;
+    let listRequests = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveRead = resolve; });
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      listRequests += 1; return pageResponse(String(input), "Current view");
+    });
+    await renderRoute(); await click("Open");
+    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    const before = listRequests;
+    await act(async () => resolveRead(Response.json({ error: { code: "API_ERROR", message: "Failed", retryable: true } }, { status: 500 }))); await flush();
+    expect(container.textContent).not.toContain("Unable to update notifications");
+    expect(container.textContent).toContain("Current view");
+    expect(listRequests).toBe(before);
+  });
+
   async function renderRoute() {
     await act(async () => root.render(<NotificationsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();

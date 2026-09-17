@@ -195,6 +195,24 @@ describe("notifications HTTP contract", () => {
     expect(newOwner.items.some(({ id }) => id === "a-task-history")).toBe(false);
   });
 
+  it("rechecks submission ownership and current admin status on list and read without transferring history", async () => {
+    const timestamp = "2026-08-30T00:00:00.000Z";
+    await env.DB.prepare("INSERT INTO submissions (id, submitter_id, requested_space_id, kind, status, title, content, created_at, updated_at) VALUES ('review-target', 'member-a', 'default', 'markdown', 'rejected', 'Private', 'Private body', ?, ?)").bind(timestamp, timestamp).run();
+    await new NotificationsRepository(env.DB).insert(notificationInsert({ id: "review-notice", recipientMemberId: "member-a", eventType: "submission.rejected", targetKind: "submission", targetId: "review-target", payloadJson: "{}", deduplicationKey: "review-target:rejected" }));
+    expect(await notificationTarget("review-notice", sessionA)).toEqual({ targetKind: "submission", targetId: "review-target" });
+    expect((await api("/api/notifications/review-notice/read", sessionB, { method: "POST" })).status).toBe(404);
+    await env.DB.prepare("UPDATE submissions SET submitter_id = 'member-b' WHERE id = 'review-target'").run();
+    const revoked = await api("/api/notifications/review-notice/read", sessionA, { method: "POST" });
+    expect(await revoked.json()).toMatchObject({ targetKind: null, targetId: null, payload: {} });
+    expect(await notificationTarget("review-notice", sessionA)).toEqual({ targetKind: null, targetId: null });
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-a'").run();
+    expect(await notificationTarget("review-notice", sessionA)).toEqual({ targetKind: "submission", targetId: "review-target" });
+    await env.DB.prepare("UPDATE members SET role = 'contributor' WHERE id = 'member-a'").run();
+    expect(await notificationTarget("review-notice", sessionA)).toEqual({ targetKind: null, targetId: null });
+    await env.DB.prepare("DELETE FROM submissions WHERE id = 'review-target'").run();
+    expect(await notificationTarget("review-notice", sessionA)).toEqual({ targetKind: null, targetId: null });
+  });
+
   it("redacts revoked and missing knowledge targets without distinguishing their existence", async () => {
     await seedNotificationKnowledge();
     const repository = new NotificationsRepository(env.DB);

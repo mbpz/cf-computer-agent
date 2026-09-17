@@ -58,7 +58,7 @@ import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-da
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
-import { parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
+import { notificationTargetHref, parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
 import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
@@ -189,7 +189,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "focus": return <FocusRoute locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute locale={locale} search={search} />;
-    case "notifications": return <NotificationsRoute locale={locale} search={search} />;
+    case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
     case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
@@ -1139,7 +1139,7 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
   return <WorkbenchReviewPage locale={locale} period={period} state={state} onPeriodChange={setPeriod} onRetry={() => setRetryVersion((value) => value + 1)} />;
 }
 
-export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function NotificationsRoute({ locale, search, isAdmin = false }: { locale: LocaleRuntime; search: string; isAdmin?: boolean }) {
   const initial = useMemo(() => parseNotificationSearch(search), [search]);
   const [query, setQuery] = useState<NotificationQuery>(initial);
   const [state, setState] = useState<NotificationsPageState>({ kind: "loading" });
@@ -1153,6 +1153,16 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
   const actionPendingRef = useRef(false);
   const activeRef = useRef(true);
+  const locationEpochRef = useRef(0);
+
+  const clearRestrictedState = () => {
+    controllerRef.current?.dispose();
+    controllerRef.current = null;
+    setSummary(null);
+    setPending(false);
+    setActionError(undefined);
+    setState({ kind: "forbidden" });
+  };
 
   useEffect(() => {
     const controller = controllerRef.current ?? createNotificationsRequestController();
@@ -1175,12 +1185,16 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
       setPending(false);
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || !sameNotificationQuery(queryRef.current, snapshot) || isAbort(error)) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+        clearRestrictedState(); return;
+      }
       setState({ kind: "error" }); setPending(false);
     });
   }, [query, retryVersion]);
 
   useEffect(() => {
     const onPopState = () => {
+      locationEpochRef.current += 1;
       const next = parseNotificationSearch(window.location.search);
       setActionError(undefined);
       queryRef.current = next; setQuery(next);
@@ -1192,6 +1206,7 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
     activeRef.current = true;
     return () => {
       activeRef.current = false;
+      locationEpochRef.current += 1;
       actionPendingRef.current = false;
       controllerRef.current?.dispose();
       controllerRef.current = null;
@@ -1204,16 +1219,18 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
     queryRef.current = next; setQuery(next);
   };
 
-  const mutate = async (operation: () => Promise<unknown>) => {
+  const mutate = async (operation: () => Promise<unknown>, openEpoch?: number) => {
     if (actionPendingRef.current) return;
+    const actionEpoch = locationEpochRef.current;
     actionPendingRef.current = true;
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
-      if (activeRef.current) setRetryVersion((value) => value + 1);
+      if (activeRef.current && (openEpoch === undefined || openEpoch === locationEpochRef.current)) setRetryVersion((value) => value + 1);
     } catch (error: unknown) {
       if (activeRef.current && !isAbort(error)) {
-        setActionError(frontendText(locale, "NOTIFICATIONS_ACTION_FAILED"));
+        if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearRestrictedState();
+        else if (actionEpoch === locationEpochRef.current) setActionError(frontendText(locale, "NOTIFICATIONS_ACTION_FAILED"));
       }
     } finally {
       actionPendingRef.current = false;
@@ -1235,6 +1252,16 @@ export function NotificationsRoute({ locale, search }: { locale: LocaleRuntime; 
     onPageSizeChange={(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })}
     onMarkRead={(id) => void mutate(() => markNotificationRead(id))}
     onMarkVisibleRead={(ids) => void mutate(() => markVisibleNotificationsRead(ids))}
+    onOpen={(id) => {
+      const epoch = locationEpochRef.current;
+      void mutate(async () => {
+        const current = await markNotificationRead(id);
+        if (!activeRef.current || epoch !== locationEpochRef.current) return;
+        const href = notificationTargetHref(current, isAdmin);
+        if (href) writeWorkspaceHistory("push", href);
+        else setActionError(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
+      }, epoch);
+    }}
   />;
 }
 

@@ -269,6 +269,13 @@ function createRequestServices(
         if (targetKind === "discussion_thread") {
           return (await discussionAuthorization.findAuthorizedThread(recipientMemberId, targetId)) !== null;
         }
+        if (targetKind === "submission") {
+          return (await env.DB.prepare(
+            `SELECT s.id FROM submissions s JOIN members m ON m.id = ?
+             WHERE s.id = ? AND m.status = 'active'
+               AND (s.submitter_id = m.id OR m.role = 'admin') LIMIT 1`,
+          ).bind(recipientMemberId, targetId).first()) !== null;
+        }
         return false;
       },
     },

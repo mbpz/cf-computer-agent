@@ -1813,6 +1813,83 @@ describe("M1 trusted knowledge HTTP journey", () => {
     expect(publish.status).toBe(200);
   });
 
+  it.each([
+    ["publish", "published"],
+    ["reject", "rejected"],
+    ["request-revision", "revision_requested"],
+  ] as const)("isolates the complete %s review-to-inbox flow across three identities and member revocation", async (action, status) => {
+    const created = await createSubmission("contributor", {
+      requestedSpaceId: "default", requestedVisibility: "admin_only", kind: "text",
+      title: "Private reviewed submission", content: "Private review acceptance content",
+    }, `review-inbox-${action}-key`);
+    expect(created.response.status).toBe(201);
+    const submissionId = created.body.submission.id;
+    const actionPath = `/api/admin/submissions/${submissionId}/${action}`;
+    const payload = action === "publish"
+      ? { title: "Private reviewed submission", visibility: "admin_only", spaceId: "default", collectionId: null, tagIds: [] }
+      : { reasonCode: action === "reject" ? "not_relevant" : "needs_revision", note: "Private reviewer explanation" };
+    const decide = () => memberApi("admin", actionPath, { method: "POST", body: JSON.stringify(payload) });
+    const firstDecision = await decide();
+    expect(firstDecision.status).toBe(200);
+    const decisionBody = await firstDecision.json();
+    const replay = await decide();
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual(decisionBody);
+
+    const inboxPath = `/api/notifications?type=submission.${status}&page=1&pageSize=20`;
+    const inbox = await memberApi("contributor", inboxPath);
+    expect(inbox.status).toBe(200);
+    const inboxBody = await inbox.json() as { items: Array<{ id: string; readAt: string | null }>; pagination: { total: number } };
+    expect(inboxBody.pagination.total).toBe(1);
+    expect(inboxBody.items).toHaveLength(1);
+    const notice = inboxBody.items[0];
+    expect(notice).toMatchObject({
+      recipientMemberId: "member-contributor", eventType: `submission.${status}`,
+      targetKind: "submission", targetId: submissionId, payload: {}, readAt: null,
+    });
+    const readPath = `/api/notifications/${notice.id}/read`;
+    for (const identity of ["other", "admin"]) {
+      const otherInbox = await memberApi(identity, inboxPath);
+      expect(otherInbox.status).toBe(200);
+      expect(await otherInbox.json()).toMatchObject({ items: [], pagination: { total: 0 } });
+      await expectApiError(memberApi(identity, readPath, { method: "POST" }), 404, "NOTIFICATION_NOT_FOUND");
+    }
+    const read = await memberApi("contributor", readPath, { method: "POST" });
+    expect(read.status).toBe(200);
+    const readNotice = await read.json();
+    expect(readNotice).toMatchObject({ id: notice.id, readAt: expect.any(String) });
+    const readReplay = await memberApi("contributor", readPath, { method: "POST" });
+    expect(readReplay.status).toBe(200);
+    expect(await readReplay.json()).toEqual(readNotice);
+    expect((await decide()).status).toBe(200);
+    const inboxAfterReplay = await memberApi("contributor", inboxPath);
+    expect(await inboxAfterReplay.json()).toMatchObject({ items: [readNotice], pagination: { total: 1 } });
+
+    const minePath = `/api/submissions/mine?status=${status}`;
+    const mine = await memberApi("contributor", minePath);
+    expect(mine.status).toBe(200);
+    expect(await mine.json()).toMatchObject({ items: [expect.objectContaining({ id: submissionId, status })] });
+    const otherMine = await memberApi("other", minePath);
+    expect(otherMine.status).toBe(200);
+    expect(await otherMine.json()).toMatchObject({ items: [] });
+    const detailPath = `/api/admin/submissions/${submissionId}`;
+    expect((await memberApi("admin", detailPath)).status).toBe(200);
+    for (const identity of ["contributor", "other"]) {
+      expect((await memberApi(identity, detailPath)).status).toBe(403);
+    }
+
+    const persistedNotice = () => env.DB.prepare("SELECT * FROM notifications WHERE id = ?").bind(notice.id).first();
+    const beforeRevocation = await persistedNotice();
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-contributor'").run();
+    for (const [path, init] of [
+      [inboxPath, undefined], ["/api/notifications/summary", undefined],
+      [readPath, { method: "POST" }], [minePath, undefined],
+    ] as const) {
+      await expectApiError(memberApi("contributor", path, init), 403, "MEMBER_DISABLED");
+    }
+    await expect(persistedNotice()).resolves.toEqual(beforeRevocation);
+  });
+
   it("rejects and requests revision through admin-only bounded review APIs", async () => {
     const rejected = await createSubmission("contributor", {
       requestedSpaceId: "default", kind: "text", title: "Reject me", content: "reject body",

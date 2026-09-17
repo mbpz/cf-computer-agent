@@ -8,9 +8,12 @@ export const NOTIFICATION_EVENT_TYPES = [
   "discussion.reply",
   "task.due",
   "task.overdue",
+  "submission.published",
+  "submission.rejected",
+  "submission.revision_requested",
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
-export type NotificationTargetKind = "task" | "discussion_thread" | "knowledge_item";
+export type NotificationTargetKind = "task" | "discussion_thread" | "knowledge_item" | "submission";
 export type NotificationPayloadValue = string | number | boolean | null;
 export type NotificationPayload = Readonly<Record<string, NotificationPayloadValue>>;
 
@@ -129,7 +132,7 @@ function normalizeNotification(value: unknown): NotificationItem {
 
 function isCanonicalTarget(targetKind: unknown, targetId: unknown): boolean {
   if (targetKind === null || targetId === null) return targetKind === null && targetId === null;
-  return (targetKind === "task" || targetKind === "discussion_thread" || targetKind === "knowledge_item")
+  return (targetKind === "task" || targetKind === "discussion_thread" || targetKind === "knowledge_item" || targetKind === "submission")
     && isId(targetId);
 }
 

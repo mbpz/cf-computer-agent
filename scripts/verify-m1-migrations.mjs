@@ -51,6 +51,7 @@ const migrations = [
   ["0047_browser_environments.sql", "c3026495da00b12520063b99c633ff0047b719138b157440961775a5855cf447"],
   ["0048_browser_environment_operations.sql", "b7c86b06181190d08b61b7d887219b710003ae67d7e2f278230485d6ba22aca1"],
   ["0049_browser_environment_lifecycle.sql", "5d9e5512d8b7a13bf651e4f6f6326be5a7921c0c10c5a20f8ad90f74fb0a9220"],
+  ["0050_admin_review_notifications.sql", "1fe5cf8ffe42237804fb82a75efa509a70aa2862b1ab2c5403cc9b9ff13e9716"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
@@ -94,8 +95,8 @@ async function verifyLedger(phase, path) {
       migrations.slice(0, 4).map(([name]) => name),
       migrations.slice(0, 5).map(([name]) => name),
       migrations.slice(0, 6).map(([name]) => name),
-      // Preserve already reviewed main prefixes when adding the VM migrations.
-      ...[44, 45, 46, 47, 48].map((count) => migrations.slice(0, count).map(([name]) => name)),
+      // Preserve already reviewed main prefixes when adding forward migrations.
+      ...[44, 45, 46, 47, 48, 49].map((count) => migrations.slice(0, count).map(([name]) => name)),
       migrations.map(([name]) => name),
     ];
   const names = result.results.map((row, index) => {

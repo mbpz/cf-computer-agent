@@ -36,15 +36,19 @@ export function notificationEventKey(eventType: NotificationEventType): string {
     "discussion.reply": "NOTIFICATIONS_EVENT_DISCUSSION_REPLY",
     "task.due": "NOTIFICATIONS_EVENT_TASK_DUE",
     "task.overdue": "NOTIFICATIONS_EVENT_TASK_OVERDUE",
+    "submission.published": "NOTIFICATIONS_EVENT_SUBMISSION_PUBLISHED",
+    "submission.rejected": "NOTIFICATIONS_EVENT_SUBMISSION_REJECTED",
+    "submission.revision_requested": "NOTIFICATIONS_EVENT_SUBMISSION_REVISION_REQUESTED",
   }[eventType];
 }
 
-export function notificationTargetHref(target: Pick<NotificationItem, "targetKind" | "targetId">): string | null {
+export function notificationTargetHref(target: Pick<NotificationItem, "targetKind" | "targetId">, isAdmin = false): string | null {
   if (target.targetKind === null || target.targetId === null) return null;
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(target.targetId)) return null;
   if (target.targetKind === "knowledge_item") return `/knowledge/${encodeURIComponent(target.targetId)}`;
   if (target.targetKind === "task") return "/tasks";
   if (target.targetKind === "discussion_thread") return `/messages/${encodeURIComponent(target.targetId)}`;
+  if (target.targetKind === "submission") return isAdmin ? `/admin/submissions/${encodeURIComponent(target.targetId)}` : "/my-submissions";
   return null;
 }
 

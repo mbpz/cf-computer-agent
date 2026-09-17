@@ -14,9 +14,10 @@ type Pagination = { page: number; pageSize: SupportedPageSize; total: number; to
 export type NotificationsPageState =
   | { kind: "loading" }
   | { kind: "error" }
+  | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
-export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, onRetry, onFilterChange, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead }: {
+export function NotificationsPage({ locale, state, summary, filters, pending = false, actionPending = false, actionError, onRetry, onFilterChange, onPageChange, onPageSizeChange, onMarkRead, onMarkVisibleRead, onOpen }: {
   locale: LocaleRuntime;
   state: NotificationsPageState;
   summary: NotificationSummary | null;
@@ -30,9 +31,11 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   onPageSizeChange: (pageSize: SupportedPageSize) => void;
   onMarkRead: (id: string) => void;
   onMarkVisibleRead: (ids: readonly string[]) => void;
+  onOpen: (id: string) => void;
 }) {
   if (state.kind === "loading") return <div><span className="sr-only">{frontendText(locale, "NOTIFICATIONS_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "NOTIFICATIONS_LOADING")} /></div>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
+  if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   const visibleUnreadIds = state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100);
   return <section className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -53,13 +56,13 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
     </div>
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} /> : <div className="space-y-3" aria-busy={pending || actionPending || undefined}>
-      {state.items.map((item) => <NotificationCard key={item.id} item={item} locale={locale} disabled={actionPending} onMarkRead={onMarkRead} />)}
+      {state.items.map((item) => <NotificationCard key={item.id} item={item} locale={locale} disabled={actionPending || pending} onMarkRead={onMarkRead} onOpen={onOpen} />)}
     </div>}
     <DataPagination {...state.pagination} visibleCount={state.items.length} locale={locale} pending={pending || actionPending} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
   </section>;
 }
 
-function NotificationCard({ item, locale, disabled, onMarkRead }: { item: NotificationItem; locale: LocaleRuntime; disabled: boolean; onMarkRead: (id: string) => void }) {
+function NotificationCard({ item, locale, disabled, onMarkRead, onOpen }: { item: NotificationItem; locale: LocaleRuntime; disabled: boolean; onMarkRead: (id: string) => void; onOpen: (id: string) => void }) {
   const unread = item.readAt === null;
   const href = notificationTargetHref(item);
   const payloadTitle = typeof item.payload.title === "string" ? item.payload.title.trim() : "";
@@ -70,7 +73,7 @@ function NotificationCard({ item, locale, disabled, onMarkRead }: { item: Notifi
         <p className="text-sm text-muted-foreground">{frontendText(locale, notificationEventKey(item.eventType))}</p>
         <time className="block text-xs text-muted-foreground" dateTime={item.createdAt}>{item.createdAt}</time>
       </div>
-      <div className="flex flex-wrap gap-2">{href && <a href={href} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium hover:bg-accent">{frontendText(locale, "NOTIFICATIONS_OPEN")}</a>}{unread && <Button variant="outline" disabled={disabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}</div>
+      <div className="flex flex-wrap gap-2">{href ? <Button variant="outline" disabled={disabled} onClick={() => onOpen(item.id)}>{frontendText(locale, "NOTIFICATIONS_OPEN")}</Button> : <p className="text-sm text-muted-foreground">{frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE")}</p>}{unread && <Button variant="outline" disabled={disabled} onClick={() => onMarkRead(item.id)}>{frontendText(locale, "NOTIFICATIONS_MARK_READ")}</Button>}</div>
     </CardContent>
   </Card>;
 }

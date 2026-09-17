@@ -33,6 +33,15 @@ describe("notification inbox model", () => {
   it("maps every event to catalog copy and emits only safe internal targets", () => {
     expect(notificationEventKey("task.status_changed")).toBe("NOTIFICATIONS_EVENT_TASK_STATUS_CHANGED");
     expect(notificationTargetHref({ targetKind: "task", targetId: "task-1" })).toBe("/tasks");
+    expect(notificationTargetHref({ targetKind: "submission", targetId: "submission-1" })).toBe("/my-submissions");
+    expect(notificationTargetHref({ targetKind: "submission", targetId: "submission-1" }, true)).toBe("/admin/submissions/submission-1");
+    for (const event of ["submission.published", "submission.rejected", "submission.revision_requested"] as const) {
+      for (const language of ["en", "zh-CN"] as const) {
+        const key = notificationEventKey(event);
+        expect(key).toBeTruthy();
+        expect(frontendText(createLocaleRuntime({ navigatorLanguage: language }), key)).not.toBe(key);
+      }
+    }
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "knowledge-1" })).toBe("/knowledge/knowledge-1");
     expect(notificationTargetHref({ targetKind: "discussion_thread", targetId: "thread-1" })).toBe("/messages/thread-1");
     expect(notificationTargetHref({ targetKind: "knowledge_item", targetId: "javascript:alert(1)" })).toBeNull();
@@ -52,6 +61,7 @@ describe("notification inbox model", () => {
       onPageSizeChange={vi.fn()}
       onMarkRead={vi.fn()}
       onMarkVisibleRead={vi.fn()}
+      onOpen={vi.fn()}
     />);
     expect(html).toContain("Due soon");
     expect(html).not.toContain(frontendText(locale, "NOTIFICATIONS_OPEN"));
@@ -73,18 +83,20 @@ describe("notification inbox page", () => {
         onPageSizeChange={vi.fn()}
         onMarkRead={vi.fn()}
         onMarkVisibleRead={vi.fn()}
+        onOpen={vi.fn()}
       />);
       expect(html).toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 17`);
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_UNREAD"));
       expect(html).toContain(frontendText(locale, "NOTIFICATIONS_READ"));
-      expect(html).toContain('href="/knowledge/knowledge-1"');
+      expect(html).not.toContain('href="/knowledge/knowledge-1"');
+      expect(html).toContain(frontendText(locale, "NOTIFICATIONS_OPEN"));
       expect(html).not.toContain("javascript:");
     }
   });
 
   it("renders localized loading, error, and empty recovery states", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const base = { locale, summary: null, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn() };
+    const base = { locale, summary: null, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn(), onOpen: vi.fn() };
     const loading = renderToStaticMarkup(<NotificationsPage {...base} state={{ kind: "loading" }} />);
     const error = renderToStaticMarkup(<NotificationsPage {...base} state={{ kind: "error" }} />);
     const empty = renderToStaticMarkup(<NotificationsPage {...base} summary={{ unread: 0 }} state={{ kind: "ready", items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }} />);

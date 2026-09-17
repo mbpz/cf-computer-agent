@@ -263,7 +263,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 - [ ] `R6-002` 统计支持日期范围、趋势、来源、页面和访客数字分页。
 - [ ] `R6-003` 审核列表/详情支持发布、退回、拒绝和冲突恢复。
   - D02-R1 读取恢复、权限清理、对象匹配、导航隔离与队列/详情往返已本地验证，见 `docs/product/2026-09-16-admin-review-read-recovery-evidence.md`。前端同步互斥不等于服务端幂等；发布/索引/通知闭环、D02-R2、发布和真实浏览器验收仍待完成，因此父项保持开放。
-  - D02-R2 依 `docs/superpowers/specs/2026-09-16-admin-review-write-recovery-design.md` 分四批执行。A 已修复首次/重放可见性一致，新增 24 项真实 D1 并发/响应丢失/冲突/鉴权回归，见 `docs/product/2026-09-16-admin-review-replay-contract-evidence.md`。B 已本地补齐权威回执、四种索引状态、真实说明和原载荷恢复，见 `docs/product/2026-09-16-admin-review-write-ui-evidence.md`。C 审核通知、D 故障矩阵与发布验收仍未完成，不改变 R6-003 完成状态。
+  - D02-R2 依 `docs/superpowers/specs/2026-09-16-admin-review-write-recovery-design.md` 分四批执行。A 已修复首次/重放可见性一致，新增 24 项真实 D1 并发/响应丢失/冲突/鉴权回归，见 `docs/product/2026-09-16-admin-review-replay-contract-evidence.md`。B 已本地补齐权威回执、四种索引状态、真实说明和原载荷恢复，见 `docs/product/2026-09-16-admin-review-write-ui-evidence.md`。C 已本地补齐审核通知事务、去重、当前目标权限和旧通知迁移，见 `docs/product/2026-09-16-admin-review-notifications-evidence.md`。D1/D2 本地故障矩阵及三身份 HTTP/DOM 回归已补齐，15 文件 341 项通过，见 `docs/product/2026-09-17-admin-review-acceptance-matrix.md`；D3/D4 真实交互与发布验收仍未完成，不改变 R6-003 完成状态。
 - [ ] `R6-004` 资产列表支持解析状态、预览、隔离、重试和失败说明。
 - [ ] `R6-005` 成员列表支持状态、角色、最近活动、分页和审计定位。
 - [ ] `R6-006` 角色页支持权限矩阵、成员分配和系统角色只读。

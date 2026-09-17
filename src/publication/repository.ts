@@ -466,6 +466,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
       this.audit.prepareWriteAudit(audit),
       ...(metadataAudit ? [this.audit.prepareWriteAudit(metadataAudit)] : []),
       ...(visibilityAudit ? [this.audit.prepareWriteAudit(visibilityAudit)] : []),
+      this.prepareReviewNotification(current.submissionId, current.reviewerId, "published", timestamp),
     ];
     try {
       await this.db.batch(statements);
@@ -1206,6 +1207,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
           preview.requestedSpaceId, preview.requestedCollectionId, preview.requestedVisibility,
         ),
         this.audit.prepareWriteAudit(audit),
+        this.prepareReviewNotification(submissionId, reviewerId, decision, timestamp),
       ]);
     } catch (error) {
       const concurrent = await this.findReview(submissionId);
@@ -1221,6 +1223,26 @@ export class PublicationRepository implements PublicationRepositoryPort {
       throw error;
     }
     return review;
+  }
+
+  private prepareReviewNotification(
+    submissionId: string,
+    reviewerId: string,
+    decision: "published" | "rejected" | "revision_requested",
+    timestamp: string,
+  ): D1PreparedStatement {
+    // Final-decision transaction only: retries return the existing review/intent.
+    // Resolve the recipient from persisted ownership, never request-supplied data.
+    return this.db.prepare(
+      `INSERT INTO notifications (
+        id, recipient_member_id, event_type, actor_member_id, target_kind, target_id,
+        payload_json, deduplication_key, read_at, created_at
+      ) SELECT ?, s.submitter_id, ?, ?, 'submission', s.id, '{}', ?, NULL, ?
+        FROM submissions s WHERE s.id = ? AND s.status = ?`,
+    ).bind(
+      crypto.randomUUID(), `submission.${decision}`, reviewerId,
+      `submission:${submissionId}:${decision}`, Date.parse(timestamp), submissionId, decision,
+    );
   }
 
   private async findReview(submissionId: string): Promise<ReviewDecision | null> {
