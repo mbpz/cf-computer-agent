@@ -180,7 +180,7 @@ function navigationTree(group: "workspace" | "admin", session: SessionSnapshot):
   if (group === "workspace") {
     const knowledge = allowed("/knowledge");
     const item = (path: string, labelKey?: string): NavigationNode | false => { const value = allowed(path); return value ? { id: path, route: value, labelKey: labelKey ?? value.labelKey, ...menuAvailability(path) } : false; };
-    return [item("/"), item("/today"), item("/focus"), item("/review"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
+    return [item("/"), item("/graph"), item("/today"), item("/focus"), item("/review"), knowledge && { id: "knowledge-base", route: knowledge, labelKey: "NAV_KNOWLEDGE_BASE", ...menuAvailability("/knowledge"), children: [item("/search", "NAV_KNOWLEDGE_SEARCH"), item("/agent", "NAV_KNOWLEDGE_AGENT")].filter(Boolean) as NavigationNode[] }, item("/submit"), item("/my-submissions"), item("/tasks"), item("/goals"), item("/projects"), item("/calendar"), item("/boards"), item("/notifications"), item("/messages")].filter(Boolean) as NavigationNode[];
   }
   const admin = allowed("/admin");
   if (!admin) return [];
@@ -204,6 +204,7 @@ function NavIcon({ path }: { path: string | null }) {
   if (path === "/boards") return <Kanban {...props} />;
   if (path === "/notifications") return <Bell {...props} />;
   if (path === "/messages") return <ChatCircle {...props} />;
+  if (path === "/graph") return <ChartLine {...props} />;
   if (path === "/") return <House {...props} />;
   if (path === "/knowledge") return <BookOpen {...props} />;
   if (path === "/submit") return <UploadSimple {...props} />;

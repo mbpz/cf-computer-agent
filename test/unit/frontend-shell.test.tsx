@@ -54,6 +54,16 @@ describe("frontend application shell", () => {
     expect(html).toContain("lg:px-6 lg:py-5");
   });
 
+  it("keeps the work graph discoverable in the authenticated fallback sidebar", () => {
+    const html = renderToStaticMarkup(
+      <AppShell session={contributor} pathname="/graph" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+        <h1>Graph</h1>
+      </AppShell>,
+    );
+    expect(html).toContain('href="/graph"');
+    expect(html).toContain("Work graph");
+  });
+
   it("does not render admin navigation for a contributor", () => {
     const html = renderToStaticMarkup(
       <AppShell session={contributor} pathname="/" locale={createLocaleRuntime()}>

@@ -25,18 +25,18 @@ export async function loadNavigation(): Promise<NavigationDataNode[]> {
   return tree.map((node) => parseNode(node, 1));
 }
 
-const REQUIRED_COLLABORATION_ROUTE_IDS = new Set(["tasks", "boards", "notifications", "messages"]);
-const REQUIRED_COLLABORATION_PATHS: ReadonlySet<string> = new Set(
-  WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id)).map((route) => route.path),
+const REQUIRED_WORKSPACE_ROUTE_IDS = new Set(["graph", "tasks", "boards", "notifications", "messages"]);
+const REQUIRED_WORKSPACE_ROUTE_PATHS: ReadonlySet<string> = new Set(
+  WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_WORKSPACE_ROUTE_IDS.has(route.id)).map((route) => route.path),
 );
 
 export function mergeRequiredWorkspaceNavigation(serverTree: readonly NavigationDataNode[], session: SessionSnapshot): NavigationDataNode[] {
   const tree = serverTree.map(withoutSettings);
-  const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_COLLABORATION_ROUTE_IDS.has(route.id) && routeAccessAllowed(session, route));
+  const requiredRoutes = WORKSPACE_ROUTE_CAPABILITIES.filter((route) => REQUIRED_WORKSPACE_ROUTE_IDS.has(route.id) && routeAccessAllowed(session, route));
   const workspaceIndex = tree.findIndex((node) => node.groupName === "workspace" && node.path === null);
   const workspace = workspaceIndex === -1 ? emptyWorkspaceNode() : tree[workspaceIndex]!;
   const existingByPath = new Map(workspace.children.map((node) => [node.path, node]));
-  const nonCollaboration = workspace.children.filter((node) => !REQUIRED_COLLABORATION_ROUTE_IDS.has(node.key) && !REQUIRED_COLLABORATION_PATHS.has(node.path ?? ""));
+  const nonCollaboration = workspace.children.filter((node) => !REQUIRED_WORKSPACE_ROUTE_IDS.has(node.key) && !REQUIRED_WORKSPACE_ROUTE_PATHS.has(node.path ?? ""));
   const children = [
     ...nonCollaboration,
     ...requiredRoutes.map((route) => requiredNavigationNode(route, existingByPath.get(route.path))),

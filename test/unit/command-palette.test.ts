@@ -31,6 +31,7 @@ describe("command palette model", () => {
   it("keeps stable actions available for every signed-in member", () => {
     const session = { member: { id: "m1", email: "m@example.com", role: "contributor" as const }, capabilities: [], logoutUrl: "/auth/logout" };
     const ids = defaultCommands(session).map((item) => item.id);
-    expect(ids).toEqual(expect.arrayContaining(["toggle-theme", "logout", "open-settings"]));
+    expect(ids).toEqual(expect.arrayContaining(["toggle-theme", "logout", "open-settings", "open-graph"]));
+    expect(defaultCommands(session).find((item) => item.id === "open-graph")).toMatchObject({ href: "/graph", labelKey: "NAV_GRAPH" });
   });
 });

@@ -19,6 +19,7 @@ const COMMANDS: readonly CommandPaletteItem[] = [
   { id: "ask-ai", labelKey: "WORKBENCH_QUICK_AI", keywords: ["ai", "agent", "copilot", "assistant", "智能", "问答"], href: "/agent", action: "ask-ai", capability: "knowledge:read" },
   { id: "search-knowledge", labelKey: "WORKBENCH_QUICK_SEARCH", keywords: ["search", "find", "knowledge", "搜索", "查找"], href: "/search", capability: "knowledge:read" },
   { id: "open-knowledge", labelKey: "HOME_OPEN_KNOWLEDGE", keywords: ["library", "knowledge", "kb", "知识库", "库"], href: "/knowledge", capability: "knowledge:read" },
+  { id: "open-graph", labelKey: "NAV_GRAPH", keywords: ["graph", "network", "relationships", "work graph", "图谱", "关系"], href: "/graph" },
   { id: "open-notifications", labelKey: "NAV_NOTIFICATIONS", keywords: ["notifications", "alerts", "通知"], href: "/notifications" },
   { id: "open-messages", labelKey: "NAV_MESSAGES", keywords: ["messages", "discussion", "消息", "讨论"], href: "/messages" },
   { id: "open-settings", labelKey: "SHELL_SETTINGS", keywords: ["settings", "preferences", "设置", "偏好"], href: "/settings" },
