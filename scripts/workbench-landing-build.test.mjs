@@ -14,6 +14,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const isRuntime = id => /(^|\/)workbench-scene-runtime\.[^/]+$/.test(id.replaceAll('\\', '/').split('?')[0]);
 const isThree = id => /(^|\/)node_modules\/three\//.test(id.replaceAll('\\', '/'));
+const isCytoscape = id => /(^|\/)node_modules\/cytoscape\//.test(id.replaceAll('\\', '/'));
 
 export async function loadBuildGraph(manifestPath) {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -61,8 +62,19 @@ export async function loadBuildGraph(manifestPath) {
     }
   }
   assert.ok(closure(entries, true).has(sceneRuntimeKey), 'UNREACHABLE_SCENE_RUNTIME');
-  assert.ok([...closure([sceneRuntimeKey], true)].some(key => provenance.chunks[manifest[key].file].modules.some(isThree)), 'PROVENANCE_THREE');
-  const sceneExclusiveKeys = [...closure([sceneRuntimeKey], true)].filter(key => !initialStaticKeys.has(key));
+  const sceneClosureKeys = closure([sceneRuntimeKey], true);
+  assert.ok([...sceneClosureKeys].some(key => provenance.chunks[manifest[key].file].modules.some(isThree)), 'PROVENANCE_THREE');
+  const cytoscapeKeys = [...sceneClosureKeys].filter(key => provenance.chunks[manifest[key].file].modules.some(isCytoscape));
+  if (cytoscapeKeys.length > 0) {
+    assert.equal(cytoscapeKeys.length, 1, 'CYTOSCAPE_CHUNK_COUNT');
+    assert.equal(initialStaticKeys.has(cytoscapeKeys[0]), false, 'EAGER_CYTOSCAPE');
+  }
+  const cytoscapeChunks = cytoscapeKeys.map(key => ({
+    file: manifest[key].file,
+    gzipBytes: gzipSync(chunkBytes.get(manifest[key].file)).byteLength,
+    modules: provenance.chunks[manifest[key].file].modules.filter(isCytoscape),
+  }));
+  const sceneExclusiveKeys = [...sceneClosureKeys].filter(key => !initialStaticKeys.has(key) && !cytoscapeKeys.includes(key));
   let sceneExclusiveGzipBytes = 0;
   const sceneChunks = [];
   for (const key of sceneExclusiveKeys) {
@@ -93,7 +105,7 @@ export async function loadBuildGraph(manifestPath) {
     const bytes = emitted.length;
     assets.push({ source: suffix, file, bytes });
   }
-  return { initialStaticKeys, sceneRuntimeKey, sceneExclusiveGzipBytes, sceneChunks, assets, modelBytes: assets[0].bytes, assetReport };
+  return { initialStaticKeys, sceneRuntimeKey, sceneExclusiveGzipBytes, sceneChunks, cytoscapeChunks, assets, modelBytes: assets[0].bytes, assetReport };
 }
 
 test('real Vite output keeps all 3D JavaScript lazy and within its transitive gzip budget', async () => {
@@ -103,7 +115,7 @@ test('real Vite output keeps all 3D JavaScript lazy and within its transitive gz
   assert.ok(graph.sceneExclusiveGzipBytes <= 250 * 1024, `SCENE_JS_BUDGET:${graph.sceneExclusiveGzipBytes}`);
   assert.ok(graph.modelBytes <= 2 * 1024 * 1024, `GLB_BUDGET:${graph.modelBytes}`);
   for (const asset of graph.assets.slice(1)) assert.ok(asset.bytes <= 250 * 1024, `POSTER_BUDGET:${asset.source}:${asset.bytes}`);
-  console.log(JSON.stringify({ sceneExclusiveGzipBytes: graph.sceneExclusiveGzipBytes, sceneChunks: graph.sceneChunks, assets: graph.assets, assetReport: graph.assetReport }));
+  console.log(JSON.stringify({ sceneExclusiveGzipBytes: graph.sceneExclusiveGzipBytes, sceneChunks: graph.sceneChunks, cytoscapeChunks: graph.cytoscapeChunks, assets: graph.assets, assetReport: graph.assetReport }));
 });
 
 // Temporary wire-format fixtures deliberately do not depend on repository assets.
