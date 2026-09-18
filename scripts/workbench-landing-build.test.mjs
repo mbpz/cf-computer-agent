@@ -58,6 +58,7 @@ export async function loadBuildGraph(manifestPath) {
   assert.ok(provenance.chunks[manifest[sceneRuntimeKey].file]?.modules.some(isRuntime), 'PROVENANCE_RUNTIME');
   for (const key of initialStaticKeys) {
     for (const id of provenance.chunks[manifest[key].file].modules) {
+      assert.ok(!isCytoscape(id), `EAGER_CYTOSCAPE_MODULE:${id}`);
       assert.ok(!isThree(id) && !isRuntime(id), `EAGER_3D_MODULE:${id}`);
     }
   }
@@ -149,23 +150,26 @@ function fixtureWebp(width, height) {
   return buffer;
 }
 
-async function buildFixture(t, { eager = false, merged = false } = {}) {
+async function buildFixture(t, { eager = false, merged = false, cytoscapeEager = false } = {}) {
   const repository = await mkdtemp(resolve(tmpdir(), 'landing-build-gate-'));
   t.after(() => rm(repository, { recursive: true, force: true }));
   const directory = resolve(repository, 'frontend/dist');
   await mkdir(resolve(directory, 'assets'), { recursive: true });
   const runtime = 'pages/workbench-landing/workbench-scene-runtime.ts';
+  const cytoscape = '_cytoscape.js';
   const manifest = {
-    'index.html': { file: 'assets/index.js', isEntry: true, imports: ['_shared.js', ...(eager ? ['_three.js'] : [])], dynamicImports: [runtime] },
+    'index.html': { file: 'assets/index.js', isEntry: true, imports: ['_shared.js', ...(eager ? ['_three.js'] : []), ...(cytoscapeEager ? [cytoscape] : [])], dynamicImports: [runtime] },
     '_shared.js': { file: 'assets/shared.js' },
     [runtime]: { file: 'assets/scene.js', imports: ['_shared.js', ...(merged ? [] : ['_three.js'])], isDynamicEntry: true },
     ...(!merged ? { '_three.js': { file: 'assets/three.js' } } : {}),
+    ...(cytoscapeEager ? { [cytoscape]: { file: 'assets/cytoscape.js' } } : {}),
   };
   const modules = {
     'assets/index.js': ['frontend/main.tsx', ...(merged ? ['node_modules/three/build/three.core.js'] : [])],
     'assets/shared.js': ['node_modules/react/index.js', 'frontend/pages/workbench-landing/workbench-scene-config.ts'],
     'assets/scene.js': ['frontend/pages/workbench-landing/workbench-scene-runtime.ts'],
     'assets/three.js': ['node_modules/three/build/three.core.js'],
+    'assets/cytoscape.js': ['node_modules/cytoscape/dist/cytoscape.esm.mjs'],
   };
   const provenance = { schemaVersion: 1, chunks: {} };
   for (const item of Object.values(manifest)) {
@@ -203,6 +207,11 @@ async function buildFixture(t, { eager = false, merged = false } = {}) {
 test('regression: rejects eager Three shared with a still-dynamic runtime', async t => {
   const fixture = await buildFixture(t, { eager: true });
   await assert.rejects(loadBuildGraph(fixture.manifestPath), /EAGER_3D_MODULE/);
+});
+
+test('regression: rejects eager Cytoscape in the initial static inventory', async t => {
+  const fixture = await buildFixture(t, { cytoscapeEager: true });
+  await assert.rejects(loadBuildGraph(fixture.manifestPath), /EAGER_CYTOSCAPE_MODULE/);
 });
 
 test('regression: a real Vite build produces module provenance tied to emitted chunk bytes', async t => {
