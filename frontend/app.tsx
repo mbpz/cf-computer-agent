@@ -34,6 +34,7 @@ import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
 import { LoginPage } from "./pages/login-page";
 import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-page";
 import { SettingsPage } from "./pages/settings-page";
+import { GraphRoute } from "./pages/graph-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
 import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
@@ -179,6 +180,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "agent": return <AgentRoute locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
+    case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute locale={locale} />;

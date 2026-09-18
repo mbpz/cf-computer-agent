@@ -4,7 +4,7 @@ import type { WorkbenchModuleKey } from "./workbench-modules";
 export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
-  | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions"
+  | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions" | "graph"
   | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
@@ -35,6 +35,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
   { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
   { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", moduleKey: "knowledge", capability: "submission:read-own" },
+  { id: "graph", path: "/graph", pageKind: "graph", availability: "ready", labelKey: "NAV_GRAPH", group: "workspace", moduleKey: "workbench", capability: null },
   { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "goals", path: "/goals", pageKind: "goals", availability: "ready", labelKey: "NAV_GOALS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "projects", path: "/projects", pageKind: "projects", availability: "ready", labelKey: "NAV_PROJECTS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
