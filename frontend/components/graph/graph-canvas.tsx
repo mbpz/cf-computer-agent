@@ -161,6 +161,7 @@ function GraphCanvasView(
         });
         instanceRef.current = localInstance;
         localInstance.on("tap", tapHandler);
+        updateSelectedNode(localInstance, selectedId);
       }).catch(() => {
         // The semantic list remains available when Cytoscape cannot load.
       });

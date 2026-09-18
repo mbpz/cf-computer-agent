@@ -43,12 +43,21 @@ const snapshot: GraphSnapshot = {
 
 function makeCytoscapeInstance() {
   const handlers = new Map<string, (event: { target: { id: () => string } }) => void>();
+  const removeClass = vi.fn();
+  const addClass = vi.fn();
+  const selectedNodes = new Map<string, { addClass: typeof addClass; removeClass: typeof removeClass }>();
   const instance = {
     on: vi.fn((event: string, handler: (event: { target: { id: () => string } }) => void) => { handlers.set(event, handler); }),
     off: vi.fn((event: string) => { handlers.delete(event); }),
     destroy: vi.fn(),
     layout: vi.fn(() => ({ run: vi.fn() })),
-    getElementById: vi.fn(() => ({ select: vi.fn(), unselect: vi.fn() })),
+    elements: vi.fn(() => ({ removeClass })),
+    getElementById: vi.fn((id: string) => {
+      const node = selectedNodes.get(id) ?? { addClass, removeClass };
+      selectedNodes.set(id, node);
+      return node;
+    }),
+    selectedNodes,
     emitTap(id: string) { handlers.get("tap")?.({ target: { id: () => id } }); },
   };
   return instance;
@@ -125,6 +134,26 @@ describe("GraphCanvas", () => {
 
     first.emitTap("knowledge:k1");
     expect(onSelect).toHaveBeenCalledWith("knowledge:k1");
+  });
+
+  it("synchronizes the initial and changed selectedId after async Cytoscape creation", async () => {
+    const first = makeCytoscapeInstance();
+    cytoscapeMock.mockReturnValue(first);
+    const onSelect = vi.fn();
+    act(() => root.render(<GraphCanvas snapshot={snapshot} selectedId="task:t1" onSelect={onSelect} layout="grid" loadCytoscape={() => Promise.resolve({ default: cytoscapeMock })} />));
+    await flushEffects();
+
+    expect(first.elements).toHaveBeenCalled();
+    expect(first.elements.mock.results.at(-1)?.value.removeClass).toHaveBeenCalledWith("is-selected");
+    expect(first.getElementById).toHaveBeenCalledWith("task:t1");
+    expect(first.selectedNodes.get("task:t1")?.addClass).toHaveBeenCalledWith("is-selected");
+
+    act(() => root.render(<GraphCanvas snapshot={snapshot} selectedId="knowledge:k1" onSelect={onSelect} layout="grid" loadCytoscape={() => Promise.resolve({ default: cytoscapeMock })} />));
+    await flushEffects();
+
+    expect(first.getElementById).toHaveBeenCalledWith("knowledge:k1");
+    expect(first.selectedNodes.get("knowledge:k1")?.addClass).toHaveBeenCalledWith("is-selected");
+    expect(first.elements.mock.results.at(-1)?.value.removeClass).toHaveBeenCalledWith("is-selected");
   });
 
   it("destroys the instance and removes listeners on snapshot/layout changes and unmount", async () => {

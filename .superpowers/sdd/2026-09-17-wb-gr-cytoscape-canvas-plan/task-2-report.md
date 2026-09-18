@@ -19,3 +19,10 @@ Date: 2026-09-18
 
 - No production deployment, migration, remote data mutation, or secret handling was performed.
 - `SECRETS_FILE` was not read, uploaded, or modified.
+
+## Review follow-up (2026-09-18)
+
+- Fixed the async selection race: after Cytoscape creates an instance, the current `selectedId` is applied immediately; the existing selection effect continues to remove the prior class and add the current class on later changes.
+- Updated the regression mock to assert `removeClass("is-selected")` and `addClass("is-selected")` for initial and changed selections.
+- Replaced invalid `hsl(var(--...))` declarations with direct theme tokens (`var(--border)`, `var(--background)`, `var(--foreground)`, `var(--muted)`, `var(--accent)`, `var(--primary)`, and `var(--muted-foreground)`).
+- Review-fix verification: `rtk npx vitest run test/unit/frontend-graph-canvas.test.tsx` — 6 tests passed; `rtk npx tsc --noEmit` — passed; `rtk git diff --check` — passed.
