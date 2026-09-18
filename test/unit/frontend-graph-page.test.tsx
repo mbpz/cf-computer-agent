@@ -60,7 +60,7 @@ describe("GraphPage", () => {
   });
 
   it("registers and dispatches the authenticated graph route", () => {
-    expect(routeCapability("/graph")).toMatchObject({ id: "graph", path: "/graph", pageKind: "graph", group: "workspace" });
+    expect(routeCapability("/graph")).toMatchObject({ id: "graph", path: "/graph", pageKind: "graph", group: "workspace", requiredPermission: "workspace.tasks" });
     expect(pageKindForPath("/graph")).toBe("graph");
     expect(WORKSPACE_ROUTE_CAPABILITIES.some((route) => route.path === "/graph" && route.availability === "ready")).toBe(true);
   });

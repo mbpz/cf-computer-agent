@@ -35,7 +35,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "search", path: "/search", pageKind: "search", availability: "ready", labelKey: "NAV_SEARCH", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
   { id: "agent", path: "/agent", pageKind: "agent", availability: "ready", labelKey: "NAV_AGENT", group: "workspace", moduleKey: "knowledge", capability: "knowledge:read" },
   { id: "my-submissions", path: "/my-submissions", pageKind: "my-submissions", availability: "ready", labelKey: "NAV_MY_SUBMISSIONS", group: "workspace", moduleKey: "knowledge", capability: "submission:read-own" },
-  { id: "graph", path: "/graph", pageKind: "graph", availability: "ready", labelKey: "NAV_GRAPH", group: "workspace", moduleKey: "workbench", capability: null },
+  { id: "graph", path: "/graph", pageKind: "graph", availability: "ready", labelKey: "NAV_GRAPH", group: "workspace", moduleKey: "workbench", capability: null, requiredPermission: "workspace.tasks" },
   { id: "tasks", path: "/tasks", pageKind: "tasks", availability: "ready", labelKey: "NAV_TASKS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "goals", path: "/goals", pageKind: "goals", availability: "ready", labelKey: "NAV_GOALS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "projects", path: "/projects", pageKind: "projects", availability: "ready", labelKey: "NAV_PROJECTS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },

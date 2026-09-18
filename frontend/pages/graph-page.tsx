@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GraphCanvas } from "../components/graph/graph-canvas";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -37,7 +37,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
   if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
 
   const snapshot = state.snapshot;
-  const filteredSnapshot = filterSnapshot(snapshot, query, lens);
+  const filteredSnapshot = useMemo(() => filterSnapshot(snapshot, query, lens), [lens, query, snapshot]);
   return (
     <section className="space-y-5" data-graph-page>
       <div className="flex flex-wrap items-start justify-between gap-3">

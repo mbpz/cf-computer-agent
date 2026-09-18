@@ -29,9 +29,14 @@ describe("command palette model", () => {
   });
 
   it("keeps stable actions available for every signed-in member", () => {
-    const session = { member: { id: "m1", email: "m@example.com", role: "contributor" as const }, capabilities: [], logoutUrl: "/auth/logout" };
+    const session = { member: { id: "m1", email: "m@example.com", role: "contributor" as const }, capabilities: [], permissionMask: "0x100000", logoutUrl: "/auth/logout" };
     const ids = defaultCommands(session).map((item) => item.id);
     expect(ids).toEqual(expect.arrayContaining(["toggle-theme", "logout", "open-settings", "open-graph"]));
     expect(defaultCommands(session).find((item) => item.id === "open-graph")).toMatchObject({ href: "/graph", labelKey: "NAV_GRAPH" });
+  });
+
+  it("hides the graph command when the task permission bit is absent", () => {
+    const session = { member: { id: "m1", email: "m@example.com", role: "contributor" as const }, capabilities: [], permissionMask: "0x0", logoutUrl: "/auth/logout" };
+    expect(defaultCommands(session).map((item) => item.id)).not.toContain("open-graph");
   });
 });

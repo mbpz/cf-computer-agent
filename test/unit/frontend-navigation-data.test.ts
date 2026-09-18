@@ -30,8 +30,8 @@ describe("frontend navigation availability", () => {
       logoutUrl: "/auth/logout",
     });
     const children = tree[0]!.children;
-    expect(children.map((node) => node.path)).toEqual(["/", "/graph", "/notifications", "/messages"]);
-    expect(children.find((node) => node.path === "/graph")).toMatchObject({ key: "graph", labelKey: "NAV_GRAPH", availability: "ready" });
+    expect(children.map((node) => node.path)).toEqual(["/", "/notifications", "/messages"]);
+    expect(children.find((node) => node.path === "/graph")).toBeUndefined();
     expect(children.find((node) => node.path === "/settings")).toBeUndefined();
     expect(children.find((node) => node.path === "/tasks")).toBeUndefined();
     expect(children.find((node) => node.path === "/boards")).toBeUndefined();

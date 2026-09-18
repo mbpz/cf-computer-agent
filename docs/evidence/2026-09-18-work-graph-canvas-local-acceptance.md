@@ -4,13 +4,26 @@ Date: 2026-09-18
 
 Scope: `GR-CANVAS` frontend quality gate on local `main`, covering `/graph` route registration, GraphPage/GraphCanvas wiring, dynamic Cytoscape loading, bilingual copy contracts, semantic mobile fallback, emitted chunk inventory, and local build checks. This is local implementation and verification evidence only; it is not release or production acceptance evidence.
 
-Follow-up hardening: the route contract now structurally inspects `renderPage`'s `graph` case and `GraphRoute`'s JSX return, and the emitted inventory contract rejects Cytoscape modules in every initial static chunk with a dedicated eager-Cytoscape regression fixture.
+Follow-up hardening: the route contract now structurally inspects `renderPage`'s `graph` case and `GraphRoute`'s JSX return, and the emitted inventory contract rejects Cytoscape modules in every initial static chunk with a dedicated eager-Cytoscape regression fixture. Final review hardening additionally aligns `/graph` with the backend `workspace.tasks` permission, bounds every visual layout with animation disabled and a stoppable handle, and defers Cytoscape import/creation while the canvas is narrow or hidden.
 
 ## Verification commands
 
 All commands below were run from the repository root with the `rtk` command prefix. No production deployment was requested or performed.
 
 ```text
+rtk npx vitest run test/unit/frontend-graph-canvas.test.tsx test/unit/frontend-graph-page.test.tsx test/unit/frontend-shell.test.tsx test/unit/frontend-navigation-data.test.ts test/unit/command-palette.test.ts
+Test Files  5 passed (5)
+Tests       33 passed (33)
+
+rtk npx tsc --noEmit
+TypeScript: No errors found
+
+rtk node --test scripts/frontend-app-contract.test.mjs scripts/workbench-landing-build.test.mjs
+tests       41 passed (41)
+
+rtk git diff --check
+exit 0; no whitespace errors
+
 rtk npm run typecheck
 > tsc --noEmit
 
@@ -39,10 +52,12 @@ The first sandboxed focused Vitest run was blocked before test execution by Wran
 
 ## Contract coverage
 
-- `shared/workspace-route-capabilities.ts` registers `{ id: "graph", path: "/graph", pageKind: "graph", availability: "ready" }`; a structured source contract inspects `frontend/app.tsx`'s `renderPage` switch and requires the `graph` case to return `GraphRoute`. A second structured contract inspects `GraphRoute` and requires its JSX return tag to be `GraphPage`.
+- `shared/workspace-route-capabilities.ts` registers `{ id: "graph", path: "/graph", pageKind: "graph", availability: "ready", requiredPermission: "workspace.tasks" }`, matching the backend `/api/graph` `tasks:use` gate. Unit coverage proves permission-mask `0` hides the sidebar item, server-navigation merge, and command-palette action, and returns a server-shaped 403 for direct `/graph`; the task bit restores access. A structured source contract inspects `frontend/app.tsx`'s `renderPage` switch and requires the `graph` case to return `GraphRoute`. A second structured contract inspects `GraphRoute` and requires its JSX return tag to be `GraphPage`.
 - `frontend/pages/graph-page.tsx` imports `GraphCanvas`; the source contract scans all frontend TypeScript sources and requires `frontend/pages/graph-page.tsx` to be the only source with one `<GraphCanvas>` mount. `frontend/components/graph/graph-canvas.tsx` is the only source containing Cytoscape references, has no eager `from "cytoscape"` import, and uses exactly one `import("cytoscape")`.
 - Graph source contracts reject literal `undefined` UI output and direct JSX visible copy. The `GRAPH_*` catalog keys have exact parity in both locales: 17 keys in `en` and 17 keys in `zh-CN`. The existing i18n AST/HTML verifier and graph rendering tests also pass.
-- `GraphCanvas` always emits a `data-graph-fallback` semantic node list. At `@media (max-width: 48rem)`, `.graph-canvas__viewport` is hidden while the fallback list remains rendered; no mobile rule hides the fallback.
+- `GraphCanvas` always emits a `data-graph-fallback` semantic node list. At `@media (max-width: 48rem)`, `.graph-canvas__viewport` is hidden while the fallback list remains rendered; no mobile rule hides the fallback. Runtime tests prove mobile starts with the semantic list and does not call `loadCytoscape`; a media-query transition to desktop imports and creates Cytoscape, and unmount stops/destroys the instance without leaking the layout handle.
+- `GraphCanvas` now owns explicit layout options: all built-ins set `animate: false` and finite spacing/adjustment bounds; `cose` uses `numIter: 250` and a 1.5-second bounded timeout that stops and falls back to `grid`. Layout handles are stopped during snapshot/layout changes and unmount.
+- `GraphPage` memoizes its filtered snapshot so changing selection does not recreate the Cytoscape lifecycle.
 
 ## Emitted chunk and dynamic-import evidence
 

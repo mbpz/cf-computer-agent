@@ -56,12 +56,22 @@ describe("frontend application shell", () => {
 
   it("keeps the work graph discoverable in the authenticated fallback sidebar", () => {
     const html = renderToStaticMarkup(
-      <AppShell session={contributor} pathname="/graph" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
+      <AppShell session={{ ...contributor, permissionMask: "0x100000" }} pathname="/graph" locale={createLocaleRuntime({ navigatorLanguage: "en" })}>
         <h1>Graph</h1>
       </AppShell>,
     );
     expect(html).toContain('href="/graph"');
     expect(html).toContain("Work graph");
+  });
+
+  it("hides Graph in the sidebar and forbids its direct page without the task permission", () => {
+    const session = { ...contributor, permissionMask: "0x0" };
+    const navigation = renderToStaticMarkup(<AppShell session={session} pathname="/" locale={createLocaleRuntime()}><p>Home</p></AppShell>);
+    const direct = renderToStaticMarkup(<AppShell session={session} pathname="/graph" locale={createLocaleRuntime()}><p>Graph content must not render</p></AppShell>);
+
+    expect(navigation).not.toContain('href="/graph"');
+    expect(direct).toContain("403: Access denied");
+    expect(direct).not.toContain("Graph content must not render");
   });
 
   it("does not render admin navigation for a contributor", () => {
