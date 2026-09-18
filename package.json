@@ -55,6 +55,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-tooltip": "^1.2.16",
     "class-variance-authority": "^0.7.1",
+    "cytoscape": "3.33.1",
     "clsx": "^2.1.1",
     "dompurify": "3.4.14",
     "markdown-it": "15.0.0",
