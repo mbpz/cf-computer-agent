@@ -1,12 +1,35 @@
 // @vitest-environment node
 import React from "react";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { GraphPage, type GraphPageState } from "../../frontend/pages/graph-page";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GraphPage, GraphRoute, type GraphPageState } from "../../frontend/pages/graph-page";
 import { createLocaleRuntime, frontendText } from "../../frontend/lib/i18n";
 import { pageKindForPath } from "../../frontend/app-routes";
 import { routeCapability, WORKSPACE_ROUTE_CAPABILITIES } from "../../shared/workspace-route-capabilities";
 import type { GraphSnapshot } from "../../frontend/lib/graph-data";
+
+vi.mock("../../frontend/components/graph/graph-canvas", () => ({
+  GraphCanvas: ({ snapshot, fallbackLabel }: { snapshot: GraphSnapshot; fallbackLabel?: string }) => (
+    <div data-graph-canvas aria-label={fallbackLabel}>
+      {snapshot.nodes.map((node) => <button key={node.id} type="button" data-graph-node-id={node.id}>{node.label}</button>)}
+    </div>
+  ),
+}));
+
+const vmContexts = new WeakSet<object>();
+class InertVmScript {
+  runInContext(context: Record<string, unknown>) {
+    for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) {
+      context[name] = (globalThis as unknown as Record<string, unknown>)[name];
+    }
+  }
+}
+vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+
+const { Window } = await import("happy-dom");
 
 const snapshot: GraphSnapshot = {
   nodes: [
@@ -22,6 +45,34 @@ const snapshot: GraphSnapshot = {
 function renderState(locale: ReturnType<typeof createLocaleRuntime>, state: GraphPageState) {
   return renderToStaticMarkup(<GraphPage locale={locale} state={state} />);
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((yes) => { resolve = yes; });
+  return { promise, resolve };
+}
+
+let browser: InstanceType<typeof Window>;
+let host: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  browser = new Window({ url: "https://app.test/graph" });
+  for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "Event"] as const) {
+    vi.stubGlobal(key, key === "window" ? browser : browser[key]);
+  }
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(async () => {
+  act(() => root.unmount());
+  host.remove();
+  await browser.happyDOM.close();
+  vi.unstubAllGlobals();
+});
 
 describe("GraphPage", () => {
   it.each([
@@ -48,6 +99,26 @@ describe("GraphPage", () => {
     const truncated = renderState(locale, { kind: "truncated", snapshot: { ...snapshot, truncated: true } });
     expect(truncated).toContain(frontendText(locale, "GRAPH_TRUNCATED"));
     expect(truncated).not.toContain("undefined");
+  });
+
+  it("keeps Hook order stable across a real loading-to-ready transition", async () => {
+    const pending = deferred<GraphSnapshot>();
+    const load = vi.fn(() => pending.promise);
+    const locale = createLocaleRuntime({ navigatorLanguage: "en-US" });
+
+    act(() => root.render(<GraphRoute locale={locale} load={load} />));
+    await act(async () => { await Promise.resolve(); });
+    expect(host.querySelector("[data-graph-page-loading]")).not.toBeNull();
+
+    await act(async () => {
+      pending.resolve(snapshot);
+      await pending.promise;
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector("[data-graph-page]")).not.toBeNull();
+    expect(host.querySelector('[data-graph-node-id="project:p1"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("undefined");
   });
 
   it("renders the graph shell in both supported locales", () => {
