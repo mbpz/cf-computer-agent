@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { GraphCanvas } from "../components/graph/graph-canvas";
+import { GraphInspector } from "../components/graph/graph-inspector";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -34,6 +35,10 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
   const filteredSnapshot = useMemo(() => snapshot ? filterSnapshot(snapshot, query, lens) : null, [lens, query, snapshot]);
+  const selectedNode = filteredSnapshot?.nodes.find((node) => node.id === selectedId) ?? null;
+  useEffect(() => {
+    if (selectedId && !selectedNode) setSelectedId(null);
+  }, [selectedId, selectedNode]);
   if (state.kind === "loading") return <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
   if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
@@ -60,7 +65,10 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
         </CardContent>
       </Card>
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
-      <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
+        <GraphInspector locale={locale} node={selectedNode} onClose={() => setSelectedId(null)} />
+      </div>
     </section>
   );
 }
