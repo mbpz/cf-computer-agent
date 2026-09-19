@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { GraphCanvas } from "../components/graph/graph-canvas";
+import { GraphEvidencePanel } from "../components/graph/graph-evidence-panel";
 import { GraphInspector } from "../components/graph/graph-inspector";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -36,6 +37,9 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
   const filteredSnapshot = useMemo(() => snapshot ? filterSnapshot(snapshot, query, lens) : null, [lens, query, snapshot]);
   const selectedNode = filteredSnapshot?.nodes.find((node) => node.id === selectedId) ?? null;
+  const selectedCitationIds = filteredSnapshot?.edges
+    .filter((edge) => edge.source === selectedId || edge.target === selectedId)
+    .flatMap((edge) => edge.citationIds) ?? [];
   useEffect(() => {
     if (selectedId && !selectedNode) setSelectedId(null);
   }, [selectedId, selectedNode]);
@@ -67,7 +71,10 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
-        <GraphInspector locale={locale} node={selectedNode} onClose={() => setSelectedId(null)} />
+        <div className="grid gap-5 self-start">
+          <GraphInspector locale={locale} node={selectedNode} onClose={() => setSelectedId(null)} />
+          <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} />
+        </div>
       </div>
     </section>
   );
