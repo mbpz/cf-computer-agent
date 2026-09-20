@@ -29,7 +29,7 @@
 - Test: `test/worker/graph-temporal.test.ts`
 
 - [x] **Step 1:** 写测试覆盖 `from/to`、默认 7 天、最大 90 天、跨成员时间对象不可见。
-- [ ] **Step 2:** 运行 focused tests，确认失败。未保留独立 red-run 证据；最终 focused 与回归结果已记录。
+- [x] **Step 2:** 运行 focused tests，确认失败。独立基线 red-run 记录在 `docs/evidence/2026-09-20-work-graph-red-run-local-acceptance.md`。
 - [x] **Step 3:** 增加严格时间参数、稳定排序和 `changeKind: added|updated|completed|archived`，只返回有权对象。
 - [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-temporal-service.test.ts test/worker/graph-temporal.test.ts --pool=workers`。
 - [x] **Step 5:** 提交 `git commit -m "feat: add temporal work graph filters"`。
@@ -43,7 +43,7 @@
 - Test: `test/worker/graph-mindmap.test.ts`
 
 - [x] **Step 1:** 写测试覆盖节点/边 citation、未知 endpoint、证据不足和成员权限。
-- [ ] **Step 2:** 运行 focused tests，确认失败。未保留独立 red-run 证据；最终 focused 与回归结果已记录。
+- [x] **Step 2:** 运行 focused tests，确认失败。独立基线 red-run 记录在 `docs/evidence/2026-09-20-work-graph-red-run-local-acceptance.md`。
 - [x] **Step 3:** 将 MindmapResult 转为 `kind=knowledge` 和 `kind=derived` 的 GraphNode/GraphEdge；无 citation 的关系转为 evidence gap，不作为事实边。
 - [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-mindmap-adapter.test.ts test/worker/graph-mindmap.test.ts --pool=workers`。
 - [x] **Step 5:** 提交 `git commit -m "feat: adapt grounded mindmap to work graph"`。
@@ -63,7 +63,7 @@
 - [x] **Step 2:** 运行 focused tests，确认失败。初始 red-run 记录在本地终端；随后修正 Worker fixture 的外键种子顺序。
 - [x] **Step 3:** 实现严格 JSON schema、5 秒超时、最多 8 条建议、每条 suggestion 的 citationIds、显式 evidence gap 和 `promotionRequired=true`；不执行写入。
 - [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-ai-suggestions.test.ts test/worker/graph-suggestions.test.ts --pool=workers --maxWorkers=1`，5/5 通过。
-- [x] **Step 5:** 提交 `git commit -m "feat: add grounded graph suggestions"`，本地 commit `62a9a9d`。
+- [x] **Step 5:** 提交 `git commit -m "feat: add grounded graph suggestions"`，本地 commit `dbbe222`。
 
 ### Task 4: 性能、无障碍和完整回归
 
