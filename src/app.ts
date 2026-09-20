@@ -121,6 +121,7 @@ import { DuplicateCandidatesService } from "./duplicates/service";
 import { ReviewRepository } from "./review/repository";
 import { ReviewService } from "./review/service";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../shared/workspace-route-capabilities";
+import type { UncertaintyReason } from "./maintenance/lifecycle";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -132,6 +133,7 @@ export interface AppDependencies {
   oauthDiagnostic?: (diagnostic: GitHubOAuthDiagnostic & { requestId: string }) => void;
   analyticsNow?: () => Date;
   reviewNow?: () => Date;
+  onBackgroundFailure?: (reason: UncertaintyReason) => void;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -236,6 +238,7 @@ function createRequestServices(
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
     waitUntil: (promise) => ctx.waitUntil(promise),
+    onBackgroundFailure: dependencies.onBackgroundFailure,
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
@@ -313,7 +316,7 @@ function createRequestServices(
     agentSessions: env.AGENT_SESSIONS,
     agentTools,
     assets,
-    automation: new AutomationAuthenticator(env.DB, env, { waitUntil }),
+    automation: new AutomationAuthenticator(env.DB, env, { waitUntil, onBackgroundFailure: dependencies.onBackgroundFailure }),
     audit,
     analytics,
     analyticsNow,
@@ -356,7 +359,10 @@ function createRequestServices(
       appId: env.WECHAT_APP_ID || "",
       appSecret: env.WECHAT_APP_SECRET || "",
     }),
-    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil }),
+    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, {
+      waitUntil,
+      onBackgroundFailure: dependencies.onBackgroundFailure,
+    }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions,
     duplicates,

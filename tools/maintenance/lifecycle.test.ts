@@ -137,6 +137,31 @@ describe('tracked maintenance work', () => {
     expect(await g.beginDrain('failed', 0)).toMatchObject({ active: 1 });
   });
 
+  it('marks raw uncertainty explicitly and never reopens a sealed scope', async () => {
+    const g = gate(); const bg = background(); let saved!: WorkScope;
+    await guardFetch(g, bg.register, async scope => {
+      saved = scope;
+      scope.markUncertain('D1_OPERATION_FAILED');
+      return new Response(null);
+    });
+    expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
+    await expect(saved.run(async () => undefined)).rejects.toThrow('SCOPE_CLOSED');
+    expect(await g.beginDrain('explicit-uncertain', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+  });
+
+  it('reuses one D1 facade per scope and rejects it after sealing', async () => {
+    const g = gate(); const bg = background(); let first!: D1Database; let second!: D1Database; let saved!: WorkScope;
+    await guardFetch(g, bg.register, async scope => {
+      saved = scope;
+      first = scope.wrapDatabase(env.SYNTHETIC_DB);
+      second = scope.wrapDatabase(env.SYNTHETIC_DB);
+      return new Response(null);
+    });
+    expect(first).toBe(second);
+    await Promise.all(bg.tasks);
+    expect(() => saved.wrapDatabase(env.SYNTHETIC_DB)).toThrow('SCOPE_CLOSED');
+  });
+
   it('retains permits on root handler failure without leaking the error response', async () => {
     const g = gate(); const bg = background();
     const response = await guardFetch(g, bg.register, async () => { throw new Error('private details'); });

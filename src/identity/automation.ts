@@ -1,5 +1,6 @@
 import { fixedLengthBytesEqual, verifyAutomationToken, type AuthEnvironment } from "../auth";
 import { AppError, readBoundedBodyBytes } from "../http";
+import type { UncertaintyReason } from "../maintenance/lifecycle";
 
 const MAX_TIMESTAMP_SKEW_MS = 300_000;
 const NONCE_RETENTION_MS = MAX_TIMESTAMP_SKEW_MS + 1_000;
@@ -20,6 +21,7 @@ export interface AutomationEnvironment extends AuthEnvironment {
 export interface AutomationAuthenticatorOptions {
   now?: () => Date;
   waitUntil: (promise: Promise<unknown>) => void;
+  onBackgroundFailure?: (reason: UncertaintyReason) => void;
 }
 
 export interface VerifiedAutomationRequest {
@@ -36,6 +38,7 @@ interface AutomationHeaders {
 export class AutomationAuthenticator {
   private readonly now: () => Date;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly onBackgroundFailure?: (reason: UncertaintyReason) => void;
 
   constructor(
     private readonly db: D1Database,
@@ -45,6 +48,7 @@ export class AutomationAuthenticator {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.now = options.now || (() => new Date());
     this.waitUntil = options.waitUntil;
+    this.onBackgroundFailure = options.onBackgroundFailure;
   }
 
   async verify(request: Request, maxBodyBytes: number): Promise<VerifiedAutomationRequest> {
@@ -111,9 +115,12 @@ export class AutomationAuthenticator {
          LIMIT 50
        )`,
     ).bind(now).run()
-      .then(() => undefined)
-      .catch(() => { console.warn("expired automation nonce cleanup failed"); });
-    this.waitUntil(cleanup);
+      .then(() => undefined);
+    const observed = cleanup.catch(() => {
+      this.onBackgroundFailure?.("D1_OPERATION_FAILED");
+      console.warn("expired automation nonce cleanup failed");
+    });
+    this.waitUntil(observed);
   }
 }
 

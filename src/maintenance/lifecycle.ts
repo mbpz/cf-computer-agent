@@ -1,8 +1,14 @@
 import type { MaintenanceClient, Permit } from './contracts';
+import { createD1DatabaseFacade } from './d1';
+
+export type UncertaintyReason = 'D1_OPERATION_FAILED' | 'BACKGROUND_WORK_FAILED' | 'SCOPE_REGISTRATION_FAILED';
 
 export interface WorkScope {
   waitUntil(promise: Promise<unknown>): void;
   run<T>(factory: () => Promise<T>): Promise<T>;
+  assertOpen(): void;
+  markUncertain(reason?: UncertaintyReason): void;
+  wrapDatabase(database: D1Database): D1Database;
 }
 export type Completion = { released: true } | { released: false; reason: 'WORK_UNCERTAIN' | 'COMPLETION_UNCONFIRMED' };
 
@@ -11,13 +17,33 @@ class TrackedScope implements WorkScope {
   #pending = 1;
   #failed = false;
   #sealed = false;
+  #facades = new WeakMap<object, D1Database>();
   #resolve!: (result: Completion) => void;
   readonly done = new Promise<Completion>(resolve => { this.#resolve = resolve; });
 
   constructor(private client: MaintenanceClient, private permit: Permit) {}
 
-  waitUntil(promise: Promise<unknown>): void {
+  assertOpen(): void {
     if (this.#sealed) throw new Error('SCOPE_CLOSED');
+  }
+
+  markUncertain(reason: UncertaintyReason = 'BACKGROUND_WORK_FAILED'): void {
+    this.assertOpen();
+    this.#failed = true;
+    void reason;
+  }
+
+  wrapDatabase(database: D1Database): D1Database {
+    this.assertOpen();
+    const existing = this.#facades.get(database as unknown as object);
+    if (existing) return existing;
+    const facade = createD1DatabaseFacade(database, this);
+    this.#facades.set(database as unknown as object, facade);
+    return facade;
+  }
+
+  waitUntil(promise: Promise<unknown>): void {
+    this.assertOpen();
     this.#pending++;
     // Observe rejection immediately, even if callers catch/ignore their copy.
     void Promise.resolve(promise).then(() => this.#settle(true), () => this.#settle(false));

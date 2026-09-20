@@ -4,6 +4,7 @@ import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
 import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
 import type { WeChatIdentity } from "../identity/wechat-oauth";
+import type { UncertaintyReason } from "../maintenance/lifecycle";
 
 export interface MembersEnvironment {
   BOOTSTRAP_ADMIN_EMAIL?: string;
@@ -18,6 +19,7 @@ export interface MembersServiceOptions {
   now?: () => Date;
   lastSeenWindowMs?: number;
   waitUntil: (promise: Promise<unknown>) => void;
+  onBackgroundFailure?: (reason: UncertaintyReason) => void;
 }
 
 const defaultLastSeenWindowMs = 60_000;
@@ -28,6 +30,7 @@ export class MembersService {
   private readonly auditId: () => string;
   private readonly lastSeenWindowMs: number;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly onBackgroundFailure?: (reason: UncertaintyReason) => void;
   private readonly bootstrapAdminEmail: string | undefined;
   private readonly allowedMemberEmails: string | undefined;
   private readonly bootstrapWeChatSubject: string | undefined;
@@ -48,6 +51,7 @@ export class MembersService {
     this.now = options.now || (() => new Date());
     this.lastSeenWindowMs = options.lastSeenWindowMs ?? defaultLastSeenWindowMs;
     this.waitUntil = options.waitUntil;
+    this.onBackgroundFailure = options.onBackgroundFailure;
   }
 
   async resolveGitHubLogin(input: GitHubIdentity): Promise<Member> {
@@ -201,9 +205,12 @@ export class MembersService {
     const now = this.now();
     const staleBefore = new Date(now.getTime() - this.lastSeenWindowMs).toISOString();
     const update = this.repository.touchLastSeenIfStale(member.id, now.toISOString(), staleBefore)
-      .then(() => undefined)
-      .catch(() => { console.warn("member last_seen update failed"); });
-    this.waitUntil(update);
+      .then(() => undefined);
+    const observed = update.catch(() => {
+      this.onBackgroundFailure?.("D1_OPERATION_FAILED");
+      console.warn("member last_seen update failed");
+    });
+    this.waitUntil(observed);
     return member;
   }
 }

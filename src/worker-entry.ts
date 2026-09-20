@@ -20,12 +20,12 @@ export function createWorkerEntry(options: EntryOptions): WorkerEntry {
     fetch(request, env, ctx) {
       return guardFetch(lazyClient(() => options.maintenance(env)), promise => ctx.waitUntil(promise), async scope => {
         // Admission and host registration precede even service construction.
-        const app = createApp(options.dependencies);
-        return await app.fetch!(request, env, scopedContext(ctx, scope));
+        const app = createApp(scopedDependencies(options.dependencies, env, scope));
+        return await app.fetch!(request, scopedEnvironment(env, scope), scopedContext(ctx, scope));
       });
     },
     async scheduled(_controller, env) {
-      await guardScheduled(lazyClient(() => options.maintenance(env)), async () => sweepAssets(env));
+      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => sweepAssets(scopedEnvironment(env, scope)));
     },
   };
 }
@@ -43,6 +43,32 @@ function lazyClient(provider: () => MaintenanceClient): MaintenanceClient {
     },
     async complete(permit) { return await client.complete(permit); },
   };
+}
+
+function scopedDependencies(dependencies: AppDependencies | undefined, env: Env, scope: WorkScope): AppDependencies {
+  const current = dependencies || {};
+  return {
+    ...current,
+    sessionDatabase: current.sessionDatabase
+      ? scope.wrapDatabase(current.sessionDatabase)
+      : undefined,
+    onBackgroundFailure: reason => {
+      try {
+        scope.markUncertain(reason);
+      } catch {
+        // A late failure after sealing is already represented by the tracked promise.
+      }
+    },
+  };
+}
+
+function scopedEnvironment(env: Env, scope: WorkScope): Env {
+  return new Proxy(env, {
+    get(target, property, receiver) {
+      if (property === 'DB') return scope.wrapDatabase(Reflect.get(target, property, receiver) as D1Database);
+      return Reflect.get(target, property, receiver);
+    },
+  });
 }
 
 function scopedContext(ctx: ExecutionContext, scope: WorkScope): ExecutionContext {

@@ -36,6 +36,23 @@ function forbiddenEnvironment() {
   }
   return { value: value as Env, reads };
 }
+function failingD1(message: string): D1Database {
+  return {
+    prepare() { throw new Error(message); },
+    batch: async () => { throw new Error(message); },
+    exec: async () => { throw new Error(message); },
+    withSession() { throw new Error(message); },
+    dump: async () => { throw new Error(message); },
+  } as unknown as D1Database;
+}
+function withDatabase(base: Env, database: D1Database): Env {
+  return new Proxy(base, {
+    get(target, property, receiver) {
+      if (property === 'DB') return database;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+}
 function telemetry(path: string) {
   return incoming(`${ORIGIN}/api/telemetry/pageview`, {
     method: 'POST', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: JSON.stringify({ path }),
@@ -175,6 +192,22 @@ describe('real maintenance entry', () => {
     expect(registrations).toBe(1);
     expect(await env.SYNTHETIC_DB.prepare("SELECT token_hash FROM auth_sessions WHERE token_hash = 'expired-entry-session'").first()).toBeNull();
     expect(await g.status()).toMatchObject({ active: 0, phase: 'DRAINED' });
+  });
+
+  it('keeps the business error response while preserving a raw D1 failure as uncertain work', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const token = (await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('entry-member'))!)).token;
+    const g = gate(); const ctx = createExecutionContext();
+    const response = await guarded(g).fetch(incoming(`${ORIGIN}/api/session`, {
+      headers: { cookie: `__Host-memory-session=${token}` },
+    }), withDatabase(localEnvironment(env), failingD1('D1_DOWN')), ctx);
+    expect(response.status).toBe(500);
+    await response.text();
+    await waitOnExecutionContext(ctx);
+    expect(await g.beginDrain('d1-failure', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.status()).toMatchObject({ active: 1, phase: 'DRAINING' });
   });
 
   it('keeps concurrent request scopes separate and completes through each admitted client', async () => {
