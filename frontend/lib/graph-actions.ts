@@ -4,6 +4,11 @@ import type { GraphNode } from "./graph-data";
 export type GraphActionName = "create_task" | "create_action_item" | "start_focus" | "append_timeline";
 export type GraphTimelineKind = "meeting" | "decision" | "action_item" | "milestone";
 
+export interface GraphActionAvailability {
+  action: GraphActionName;
+  labelKey: "GRAPH_ACTION_CREATE_TASK" | "GRAPH_ACTION_CREATE_ACTION_ITEM" | "GRAPH_ACTION_START_FOCUS" | "GRAPH_ACTION_APPEND_TIMELINE";
+}
+
 export interface GraphActionRequest {
   node: GraphNode;
   clientKey: string;
@@ -13,6 +18,23 @@ export interface GraphActionRequest {
 export type GraphActionResult =
   | { status: "completed"; action: GraphActionName; clientKey: string; data: unknown }
   | { status: "deferred"; action: null; clientKey: string; reason: "unsupported" | "missing_context" };
+
+export function graphActionForNode(node: GraphNode | null | undefined): GraphActionAvailability | null {
+  if (!node) return null;
+  if (node.kind === "knowledge") return { action: "create_task", labelKey: "GRAPH_ACTION_CREATE_TASK" };
+  if (node.kind === "decision") return { action: "create_action_item", labelKey: "GRAPH_ACTION_CREATE_ACTION_ITEM" };
+  if (node.kind === "task") return { action: "start_focus", labelKey: "GRAPH_ACTION_START_FOCUS" };
+  if (node.kind === "project") return { action: "append_timeline", labelKey: "GRAPH_ACTION_APPEND_TIMELINE" };
+  return null;
+}
+
+export function createGraphActionClientKey(node: GraphNode): string {
+  const normalized = node.id.trim().replace(/[^a-zA-Z0-9._:-]+/gu, "-");
+  const uuid = typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `graph-action:${normalized}:${uuid}`;
+}
 
 export async function dispatchGraphAction(
   request: GraphActionRequest,

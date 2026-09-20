@@ -57,4 +57,11 @@ describe("graph inspector", () => {
     expect(html).toContain(frontendText(locale, "COMMON_VALUE_UNAVAILABLE"));
     expect(html).not.toContain("undefined");
   });
+
+  it("renders a localized action for supported nodes without undefined output", () => {
+    const html = renderToStaticMarkup(<GraphInspector locale={locale} node={node} onAction={() => undefined} />);
+    expect(html).toContain(frontendText(locale, "GRAPH_ACTIONS_TITLE"));
+    expect(html).toContain(frontendText(locale, "GRAPH_ACTION_START_FOCUS"));
+    expect(html).not.toContain("undefined");
+  });
 });

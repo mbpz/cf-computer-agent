@@ -3,14 +3,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { GraphNode } from "../../lib/graph-data";
 import { buildGraphInspectorModel, isGraphInspectorValueAvailable } from "../../lib/graph-inspector";
+import { graphActionForNode } from "../../lib/graph-actions";
+
+export type GraphInspectorActionStatus = "idle" | "running" | "success" | "error";
 
 export interface GraphInspectorProps {
   locale: LocaleRuntime;
   node: GraphNode | null | undefined;
   onClose?: () => void;
+  onAction?: () => void;
+  actionStatus?: GraphInspectorActionStatus;
 }
 
-export function GraphInspector({ locale, node, onClose }: GraphInspectorProps) {
+export function GraphInspector({ locale, node, onClose, onAction, actionStatus = "idle" }: GraphInspectorProps) {
   const model = buildGraphInspectorModel(node);
   const copy = inspectorCopy(locale);
 
@@ -56,6 +61,27 @@ export function GraphInspector({ locale, node, onClose }: GraphInspectorProps) {
               </dl>
             ) : <p className="mt-2 text-muted-foreground">{copy.metadataEmpty}</p>}
           </div>
+          {onAction && node && graphActionForNode(node) && (
+            <div data-graph-inspector-actions className="space-y-2 border-t pt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{copy.actions}</p>
+              <Button
+                type="button"
+                variant={actionStatus === "success" ? "secondary" : "default"}
+                disabled={actionStatus === "running" || actionStatus === "success"}
+                aria-live="polite"
+                onClick={onAction}
+              >
+                {actionStatus === "running"
+                  ? copy.running
+                  : actionStatus === "success"
+                    ? copy.success
+                    : actionStatus === "error"
+                      ? copy.retry
+                      : frontendText(locale, graphActionForNode(node)!.labelKey)}
+              </Button>
+              {actionStatus === "error" && <p role="status" className="text-xs text-destructive">{copy.error}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
     </aside>
@@ -78,5 +104,10 @@ function inspectorCopy(locale: LocaleRuntime) {
     metadata: frontendText(locale, "GRAPH_INSPECTOR_METADATA"),
     metadataEmpty: frontendText(locale, "GRAPH_INSPECTOR_METADATA_EMPTY"),
     close: frontendText(locale, "GRAPH_INSPECTOR_CLOSE"),
+    actions: frontendText(locale, "GRAPH_ACTIONS_TITLE"),
+    running: frontendText(locale, "GRAPH_ACTION_RUNNING"),
+    success: frontendText(locale, "GRAPH_ACTION_SUCCESS"),
+    retry: frontendText(locale, "GRAPH_ACTION_RETRY"),
+    error: frontendText(locale, "GRAPH_ACTION_ERROR"),
   };
 }

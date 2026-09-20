@@ -8,6 +8,8 @@ import { Input } from "../components/ui/input";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
+import { createGraphActionClientKey, dispatchGraphAction } from "../lib/graph-actions";
+import type { GraphInspectorActionStatus } from "../components/graph/graph-inspector";
 
 export type GraphPageState =
   | { kind: "loading" }
@@ -34,6 +36,7 @@ const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision
 
 export function GraphPage({ locale, state, query = "", lens = "workspace", onQueryChange, onLensChange, onRetry }: GraphPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<{ nodeId: string | null; clientKey: string | null; status: GraphInspectorActionStatus }>({ nodeId: null, clientKey: null, status: "idle" });
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
   const filteredSnapshot = useMemo(() => snapshot ? filterSnapshot(snapshot, query, lens) : null, [lens, query, snapshot]);
   const selectedNode = filteredSnapshot?.nodes.find((node) => node.id === selectedId) ?? null;
@@ -43,11 +46,26 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
   useEffect(() => {
     if (selectedId && !selectedNode) setSelectedId(null);
   }, [selectedId, selectedNode]);
+  useEffect(() => {
+    setActionState((current) => current.nodeId === selectedNode?.id ? current : { nodeId: selectedNode?.id ?? null, clientKey: null, status: "idle" });
+  }, [selectedNode?.id]);
   if (state.kind === "loading") return <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "GRAPH_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "GRAPH_RETRY")}</Button></PageState>;
   if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
 
   if (!filteredSnapshot) return null;
+  const runGraphAction = () => {
+    if (!selectedNode) return;
+    const clientKey = actionState.nodeId === selectedNode.id && actionState.clientKey
+      ? actionState.clientKey
+      : createGraphActionClientKey(selectedNode);
+    setActionState({ nodeId: selectedNode.id, clientKey, status: "running" });
+    void dispatchGraphAction({ node: selectedNode, clientKey }).then((result) => {
+      setActionState((current) => ({ ...current, status: result.status === "completed" ? "success" : "error" }));
+    }).catch(() => {
+      setActionState((current) => ({ ...current, status: "error" }));
+    });
+  };
   return (
     <section className="space-y-5" data-graph-page>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -72,7 +90,13 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
         <div className="grid gap-5 self-start">
-          <GraphInspector locale={locale} node={selectedNode} onClose={() => setSelectedId(null)} />
+          <GraphInspector
+            locale={locale}
+            node={selectedNode}
+            onClose={() => setSelectedId(null)}
+            onAction={selectedNode ? runGraphAction : undefined}
+            actionStatus={selectedNode && actionState.nodeId === selectedNode.id ? actionState.status : "idle"}
+          />
           <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} />
         </div>
       </div>
