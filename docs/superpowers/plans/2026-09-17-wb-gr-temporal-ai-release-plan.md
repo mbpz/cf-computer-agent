@@ -75,9 +75,9 @@
 - Modify: `ROADMAP.md`
 - Modify: `docs/product/delivery-status-ledger.md`
 
-- [ ] **Step 1:** 添加动态 Cytoscape chunk、节点/边上限、生命周期销毁、无 `undefined` 和 i18n 合同。
-- [ ] **Step 2:** 添加 graph API owner predicate、cursor、隐藏对象不泄漏、AI evidence gap 合同。
-- [ ] **Step 3:** 运行完整闸门：
+- [x] **Step 1:** 添加并复核动态 Cytoscape chunk、节点/边上限、生命周期销毁、无 `undefined` 和 i18n 合同；既有合同已覆盖图画布，新增建议面板合同已补齐。
+- [x] **Step 2:** 添加 graph API owner predicate、cursor、隐藏对象不泄漏、AI evidence gap 合同；新增 `/api/graph/suggestions` member/read-only/cursor 合同。
+- [x] **Step 3:** 运行完整闸门：
 
 ```bash
 rtk npm run typecheck
@@ -87,5 +87,5 @@ rtk npm run build
 rtk npm run test:smoke
 ```
 
-- [ ] **Step 4:** 记录本地证据，明确未执行远程 migration、生产部署和 `SECRETS_FILE` 操作。
-- [ ] **Step 5:** 提交 `git commit -m "docs: record work graph release readiness"`。
+- [x] **Step 4:** 记录本地证据，明确未执行远程 migration、生产部署和 `SECRETS_FILE` 操作：`docs/evidence/2026-09-20-work-graph-release-readiness.md`。
+- [x] **Step 5:** 提交 `git commit -m "docs: record work graph release readiness"`。

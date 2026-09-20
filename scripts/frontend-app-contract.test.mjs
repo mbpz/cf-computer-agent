@@ -10,6 +10,8 @@ const appRoutesSource = () => readFile(resolve(repositoryRoot, "frontend/app-rou
 const routeCapabilitiesSource = () => readFile(resolve(repositoryRoot, "shared/workspace-route-capabilities.ts"), "utf8");
 const graphPageSource = () => readFile(resolve(repositoryRoot, "frontend/pages/graph-page.tsx"), "utf8");
 const graphCanvasSource = () => readFile(resolve(repositoryRoot, "frontend/components/graph/graph-canvas.tsx"), "utf8");
+const graphSuggestionsRouteSource = () => readFile(resolve(repositoryRoot, "src/routes/graph-suggestions.ts"), "utf8");
+const graphSuggestionsDataSource = () => readFile(resolve(repositoryRoot, "frontend/lib/graph-suggestions.ts"), "utf8");
 const graphCanvasCss = () => readFile(resolve(repositoryRoot, "frontend/components/graph/graph-canvas.css"), "utf8");
 const shellSource = () => readFile(resolve(repositoryRoot, "frontend/components/shell/app-shell.tsx"), "utf8");
 const localeSource = () => readFile(resolve(repositoryRoot, "frontend/lib/i18n.ts"), "utf8");
@@ -178,6 +180,20 @@ test("graph UI has no undefined or hardcoded visible copy and keeps both locale 
   const zhKeys = catalogKeysForLocale(locales, '"zh-CN"');
   assert.ok(enKeys.length > 0, "graph locale keys are missing from en");
   assert.deepEqual(zhKeys.sort(), enKeys.sort());
+});
+
+test("graph suggestions stay member-scoped, read-only, and manually promoted", async () => {
+  const [route, page, data] = await Promise.all([graphSuggestionsRouteSource(), graphPageSource(), graphSuggestionsDataSource()]);
+  assert.match(route, /url\.pathname !== "\/api\/graph\/suggestions"/u);
+  assert.match(route, /requireCapability\(principal, "tasks:use"\)/u);
+  assert.match(route, /requireMember\(principal\)/u);
+  assert.match(route, /request\.method !== "GET"/u);
+  assert.match(route, /services\.graph\.get\(member\.memberId/u);
+  assert.match(route, /services\.suggestions\.suggest\(snapshot\)/u);
+  assert.doesNotMatch(route, /method === "POST"/u);
+  assert.match(page, /loadGraphSuggestions\(fetch\)/u);
+  assert.match(data, /promotionRequired/u);
+  assert.doesNotMatch(page, /promoteSuggestion|POST.*graph\/suggestions/u);
 });
 
 test("graph canvas keeps a semantic mobile fallback when the visual viewport is hidden", async () => {

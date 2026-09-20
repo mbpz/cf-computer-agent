@@ -25,6 +25,7 @@ const frontendChecklistPath = resolve(repositoryRoot, "docs/product/shadcn-ui-fr
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const routeCapabilitiesPath = resolve(repositoryRoot, "shared/workspace-route-capabilities.ts");
 const graphRoutePath = resolve(repositoryRoot, "src/routes/graph.ts");
+const graphSuggestionsRoutePath = resolve(repositoryRoot, "src/routes/graph-suggestions.ts");
 const appPath = resolve(repositoryRoot, "src/app.ts");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const readmePath = resolve(repositoryRoot, "README.md");
@@ -361,6 +362,18 @@ test("private graph API keeps authorization, strict parsing, and app wiring expl
   assert.match(route, /GRAPH_PAGE_INVALID/u);
   assert.match(app, /import \{ routeGraphApi \} from "\.\/routes\/graph"/u);
   assert.match(app, /routeGraphApi\(request, url, context, principal, \{ graph: services\.graph \}\)/u);
+});
+
+test("graph suggestions keep member ownership, cursor rejection, evidence gaps, and read-only wiring explicit", () => {
+  const route = readFileSync(graphSuggestionsRoutePath, "utf8");
+  const app = readFileSync(appPath, "utf8");
+  assert.match(route, /\/api\/graph\/suggestions/u);
+  assert.match(route, /requireCapability\(principal, "tasks:use"\)/u);
+  assert.match(route, /requireMember\(principal\)/u);
+  assert.match(route, /query\.cursor !== null/u);
+  assert.match(route, /services\.graph\.get\(member\.memberId/u);
+  assert.match(route, /services\.suggestions\.suggest\(snapshot\)/u);
+  assert.match(app, /routeGraphSuggestionsApi\(request, url, context, principal/u);
 });
 
 test("completed dimensions require evidence and n/a dimensions require a reason", () => {
