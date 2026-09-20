@@ -243,7 +243,9 @@ function createRequestServices(
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
   const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
-  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
+  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, {
+    onFailure: () => dependencies.onBackgroundFailure?.("BACKGROUND_WORK_FAILED"),
+  });
   const publicationRecords = new PublicationRepository(env.DB);
   const tags = new TagsService(new TagsRepository(env.DB));
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);

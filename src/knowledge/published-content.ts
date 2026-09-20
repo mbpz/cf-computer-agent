@@ -27,26 +27,42 @@ export interface RequestPublishedContent {
   dispose(): void;
 }
 
+export interface RequestPublishedContentOptions {
+  onFailure?: (error: unknown) => void;
+}
+
 export function createRequestPublishedContent(
   namespace: Env["KNOWLEDGE"],
   workspaceName: string,
+  options: RequestPublishedContentOptions = {},
 ): RequestPublishedContent {
   const stub = namespace.get(namespace.idFromName(workspaceName));
   let workspace: WorkspaceClient | undefined;
   const reader: PublishedContentReader = {
     async read(path, expectedSha256) {
       if (!workspace) {
-        workspace = await getWorkspace(
-          stub as unknown as Parameters<typeof getWorkspace>[0],
-        );
+        try {
+          workspace = await getWorkspace(
+            stub as unknown as Parameters<typeof getWorkspace>[0],
+          );
+        } catch (error) {
+          options.onFailure?.(error);
+          throw error;
+        }
       }
-      return createPublishedContentReader(workspace).read(path, expectedSha256);
+      return createPublishedContentReader(workspace, options.onFailure).read(path, expectedSha256);
     },
   };
   return {
     committer: {
       async commit(input) {
-        const result = await stub.commitPublishedContent(input);
+        let result: Awaited<ReturnType<typeof stub.commitPublishedContent>>;
+        try {
+          result = await stub.commitPublishedContent(input);
+        } catch (error) {
+          options.onFailure?.(error);
+          throw error;
+        }
         if (result.ok) return result.value;
         throw new AppError(
           result.error.code,
@@ -58,7 +74,13 @@ export function createRequestPublishedContent(
     },
     remover: {
       async remove(paths) {
-        const result = await stub.removePublishedContent({ paths: [...paths] });
+        let result: Awaited<ReturnType<typeof stub.removePublishedContent>>;
+        try {
+          result = await stub.removePublishedContent({ paths: [...paths] });
+        } catch (error) {
+          options.onFailure?.(error);
+          throw error;
+        }
         if (result.ok) return;
         throw new AppError(
           result.error.code,
@@ -153,7 +175,7 @@ export async function persistPublishedContent(
   return receipt(content);
 }
 
-export function createPublishedContentReader(workspace: WorkspaceClient): PublishedContentReader {
+export function createPublishedContentReader(workspace: WorkspaceClient, onFailure?: (error: unknown) => void): PublishedContentReader {
   return {
     async read(path: string, expectedSha256: string): Promise<string> {
       if (!isPublishedContentPath(path) || !SHA256_HEX.test(expectedSha256)) {
@@ -163,7 +185,8 @@ export function createPublishedContentReader(workspace: WorkspaceClient): Publis
       let content: string;
       try {
         content = await workspace.fs.readFile(path, "utf8");
-      } catch {
+      } catch (error) {
+        onFailure?.(error);
         throw publishedContentCorrupt();
       }
       const bytes = new TextEncoder().encode(content);

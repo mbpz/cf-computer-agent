@@ -118,6 +118,16 @@ describe("published content", () => {
     await expect(reader.read(path, input.contentSha256))
       .rejects.toMatchObject({ code: "PUBLISHED_CONTENT_CORRUPT", status: 500, retryable: false });
   });
+
+  it("reports a VFS read failure before mapping it to the typed corruption error", async () => {
+    const fake = fakeWorkspace();
+    let failures = 0;
+    const reader = createPublishedContentReader(fake.workspace, () => { failures += 1; });
+    fake.files.delete("/workspace/published/default/knowledge-1/revision-1.md");
+    await expect(reader.read("/workspace/published/default/knowledge-1/revision-1.md", "a".repeat(64)))
+      .rejects.toMatchObject({ code: "PUBLISHED_CONTENT_CORRUPT", status: 500 });
+    expect(failures).toBe(1);
+  });
 });
 
 async function publishedInput(markdown: string): Promise<CommitPublishedContentInput> {

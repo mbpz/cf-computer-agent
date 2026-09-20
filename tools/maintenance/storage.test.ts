@@ -43,6 +43,16 @@ function bucket() {
   } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer> };
 }
 
+function failingDeleteBucket() {
+  const objects = new Map<string, ArrayBuffer>();
+  return {
+    objects,
+    async put(key: string, body: ArrayBuffer | string) { objects.set(key, typeof body === 'string' ? new TextEncoder().encode(body).buffer : body); },
+    async get(key: string) { const body = objects.get(key); return body ? { arrayBuffer: async () => body } : null; },
+    async delete() { throw new Error('synthetic R2 delete failure'); },
+  } as unknown as R2Bucket & { objects: Map<string, ArrayBuffer> };
+}
+
 describe('guarded storage tail lifecycle', () => {
   it('reports an unexpected R2/D1 processing failure instead of releasing a sweep', async () => {
     const db = repository(); const originals = bucket(); let failures = 0;
@@ -62,5 +72,16 @@ describe('guarded storage tail lifecycle', () => {
     await expect(service.processDue(1)).resolves.toEqual({ attempted: 1, succeeded: 0 });
     expect(failures).toBe(1);
     db.findById = originalFind;
+  });
+
+  it('reports a failed compensating delete instead of hiding the cross-storage uncertainty', async () => {
+    const db = repository(); let failures = 0;
+    db.insertAssetWithJob = async () => { throw new Error('synthetic D1 insert failure'); };
+    const service = new AssetService(failingDeleteBucket(), db, { onFailure: () => { failures += 1; } });
+    await expect(service.create({
+      ownerId: 'member', originalName: 'note.txt', contentType: 'text/plain',
+      bytes: new TextEncoder().encode('note').buffer, idempotencyKey: 'compensation',
+    })).rejects.toMatchObject({ code: 'ASSET_PERSISTENCE_UNAVAILABLE', status: 503 });
+    expect(failures).toBe(1);
   });
 });

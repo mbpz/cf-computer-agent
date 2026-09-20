@@ -243,7 +243,9 @@ export class AssetService {
       await this.repository.insertAssetWithJob(asset, job);
       return { asset, job };
     } catch (error) {
-      await this.requireStorage().delete(objectKey).catch(() => undefined);
+      await this.requireStorage().delete(objectKey).catch(error => {
+        this.notifyFailure(error);
+      });
       if (error instanceof AppError) throw error;
       throw new AppError("ASSET_PERSISTENCE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
@@ -300,7 +302,9 @@ export class AssetService {
     }
     const removed = await this.repository.cancelOwned(ownerId, assetId);
     if (!removed) throw new AppError("ASSET_CANCEL_CONFLICT", "Asset cannot be cancelled in its current state", 409, true);
-    await this.requireStorage().delete(removed.objectKey).catch(() => undefined);
+    await this.requireStorage().delete(removed.objectKey).catch(error => {
+      this.notifyFailure(error);
+    });
   }
 
   async listOwned(ownerId: string, request: { limit?: number; cursor?: string } = {}): Promise<AssetPage> {
