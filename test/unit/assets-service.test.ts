@@ -639,6 +639,8 @@ describe("AssetService", () => {
     const timedOut = await service.process("member-1", created.asset.id);
     expect(timedOut.job).toMatchObject({ status: "failed_retryable", attempts: 1, lastErrorCode: "ASSET_PARSE_TIMEOUT" });
     expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(originals.objects.has(`parsed/${created.asset.id}.md`)).toBe(false);
 
     available = true;
     await expect(service.retry(created.asset.id)).resolves.toMatchObject({

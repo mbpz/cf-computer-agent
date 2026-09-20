@@ -109,4 +109,63 @@ describe('guarded agent stream lifecycle', () => {
     await waitOnExecutionContext(context);
     expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
   });
+
+  it('releases a permit only after a normal EOF and Durable Object completion', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const session = await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('stream-member'))!);
+    const encoder = new TextEncoder();
+    const ai = {
+      async run(): Promise<ReadableStream> {
+        return new ReadableStream({ start(controller) {
+          controller.enqueue(encoder.encode('data: {"response":"complete"}\n\n'));
+          controller.close();
+        } });
+      },
+    };
+    const g = gate();
+    const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
+    const sessionId = await createAgentSession(worker, session.token);
+    const context = createExecutionContext();
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${sessionId}/stream`, {
+      method: 'POST',
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'complete this stream' }),
+    }), localEnvironment(env), context);
+    await expect(response.text()).resolves.toContain('complete');
+    await waitOnExecutionContext(context);
+    expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 0 });
+  });
+
+  it('keeps a permit when reader cancellation itself fails', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const session = await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('stream-member'))!);
+    const encoder = new TextEncoder(); let cancelCalled = false;
+    const ai = {
+      async run(): Promise<ReadableStream> {
+        return new ReadableStream({
+          start(controller) { controller.enqueue(encoder.encode('data: {"response":"partial"}\n\n')); },
+          cancel() { cancelCalled = true; throw new Error('synthetic reader cancel failure'); },
+        });
+      },
+    };
+    const g = gate();
+    const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
+    const sessionId = await createAgentSession(worker, session.token);
+    const context = createExecutionContext();
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${sessionId}/stream`, {
+      method: 'POST',
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'cancel failure' }),
+    }), localEnvironment(env), context);
+    const reader = response.body!.getReader();
+    await reader.read();
+    await expect(reader.cancel('synthetic failure')).rejects.toThrow('synthetic reader cancel failure');
+    await waitOnExecutionContext(context);
+    expect(cancelCalled).toBe(true);
+    expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
+  });
 });

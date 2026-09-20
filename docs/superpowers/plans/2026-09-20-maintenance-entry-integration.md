@@ -7,7 +7,7 @@
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-20):** R02 与 R03 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)和[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。R03 已提交为 `95bd921`；R04 已完成流/存储最小切片，仍未关闭，未 push、未部署。
+**Status (2026-09-20):** R02–R04 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)和[流/存储生命周期证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。R03 起始提交为 `95bd921`；R04 已关闭，未 push、未部署。
 
 ## Global Constraints
 
@@ -67,14 +67,14 @@ Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 
 - [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
 - [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归和证据见[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。
 
-## R04 — 流、取消、超时和跨存储（后续独立执行）
+## R04 — 流、取消、超时和跨存储
 
 Files: `src/agent/service.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。
 
-- [ ] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。
-- [ ] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。
-- [ ] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。
-- [ ] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。
-- [ ] 真实合成资源故障回归+证据后才勾选 R04；R05/R06/R07 仍独立，不借本阶段开放生产。
+- [x] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。
+- [x] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。
+- [x] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。
+- [x] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。
+- [x] 真实合成资源故障回归+证据后关闭 R04；62/62 维护专项、完整 `npm test`、构建、交付合同和 `git diff --check` 通过。R05/R06/R07 仍独立，不借本阶段开放生产。
 
-当前进度（2026-09-20）：已完成 Agent stream pump 的 scope 登记/取消等待和 Asset sweep 失败回传最小切片，见[进行中证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。上述切片不关闭 R04；不消费流、上游 error、迟到 producer 及 typed R2/DO/VFS/RPC 边界仍待完成。
+R04 已关闭；完整本地证据见[流/存储生命周期证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。R05/R06/R07 仍独立，生产维护入口仍保持 legacy。
