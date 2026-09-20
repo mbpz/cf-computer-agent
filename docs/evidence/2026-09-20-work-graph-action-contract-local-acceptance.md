@@ -2,19 +2,20 @@
 
 日期：2026-09-20
 
-范围：`WB-GR-001` / `GR-ACT-01` 的 Graph → Action dispatcher 与 Inspector action button 本地切片。此切片验证前端根据节点类型生成成员无关的请求、在 Inspector 展示双语动作按钮，并保留调用方提供的稳定 `clientKey` 做重试；不代表生产部署或浏览器验收完成。
+范围：`WB-GR-001` / `GR-ACT-01` 的 Graph → Action dispatcher、Inspector action button 与 Worker 集成本地切片。此切片验证前端根据节点类型生成成员无关的请求、在 Inspector 展示双语动作按钮、Worker 侧保持成员隔离，并保留调用方提供的稳定 `clientKey` 做重试；不代表生产部署或浏览器验收完成。
 
 ## 已验证
 
 ```bash
 rtk npx vitest run test/unit/frontend-graph-actions.test.ts --pool=threads --maxWorkers=1
 rtk npx vitest run test/unit/frontend-graph-actions.test.ts test/unit/frontend-graph-inspector.test.tsx test/unit/frontend-graph-page.test.tsx --pool=threads --maxWorkers=1
+rtk npx vitest run test/unit/frontend-graph-actions.test.ts test/worker/graph-actions.test.ts --pool=workers --maxWorkers=1
 rtk npm run typecheck
 rtk node --test scripts/frontend-app-contract.test.mjs scripts/delivery-status-contract.test.mjs
 git diff --check
 ```
 
-结果：Graph Action dispatcher 6/6；Graph Inspector/GraphPage/dispatcher focused tests 17/17；TypeScript 通过；交付契约 36/36；差异检查通过。实现提交：`8f3e7c6` 及后续本地 UI 切片提交。
+结果：Graph Action dispatcher 6/6；Graph Inspector/GraphPage/dispatcher focused tests 17/17；前端与 Worker 联合 focused tests 9/9；TypeScript 通过；交付契约 36/36；差异检查通过。实现提交：`8f3e7c6`、`ce5df4e` 及 Worker fixture 提交。
 
 已覆盖：
 
@@ -25,9 +26,9 @@ git diff --check
 - 不支持的节点类型返回 `deferred`，不发起请求；
 - 空 `clientKey` 被拒绝，不临时生成重试身份。
 - Inspector 只为 knowledge、decision、task、project 节点显示动作入口；运行中、完成、失败重试状态均有双语文案，失败不会丢失原 `clientKey`。
+- Worker fixture 验证知识关联任务、Focus、项目行动项的创建与重放；跨成员任务、Focus 和项目访问均返回 404。
 
 ## 边界与下一步
 
-- 尚未添加 Worker 级 action route/幂等回读 fixture；
 - 尚未完成 Graph Action 的生产部署、远程 migration 或 signed browser acceptance；
 - 下一切片为 Inspector action button、请求中/成功/失败/重试状态，以及键盘可达性测试。
