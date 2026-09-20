@@ -8,7 +8,10 @@ export default defineConfig({
     miniflare: {
       compatibilityDate: '2026-08-08',
       compatibilityFlags: ['nodejs_compat'],
-      d1Databases: { SYNTHETIC_DB: 'maintenance-synthetic-only' },
+      d1Databases: {
+        SYNTHETIC_DB: 'maintenance-synthetic-only',
+        SYNTHETIC_SESSION_DB: 'maintenance-session-synthetic-only',
+      },
       r2Buckets: { SYNTHETIC_ORIGINALS: 'maintenance-synthetic-only' },
       // Resource bindings are local; any accidental public fetch is an error.
       outboundService: () => { throw new Error('UNEXPECTED_OUTBOUND'); },

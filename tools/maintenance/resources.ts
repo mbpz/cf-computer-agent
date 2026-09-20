@@ -3,6 +3,7 @@ import type { MaintenanceCoordinator } from '../../src/maintenance/coordinator';
 export interface LocalResources {
   MAINTENANCE: DurableObjectNamespace<MaintenanceCoordinator>;
   SYNTHETIC_DB: D1Database;
+  SYNTHETIC_SESSION_DB: D1Database;
   SYNTHETIC_ORIGINALS: R2Bucket;
   KNOWLEDGE: Env['KNOWLEDGE'];
   AGENT_SESSIONS: Env['AGENT_SESSIONS'];

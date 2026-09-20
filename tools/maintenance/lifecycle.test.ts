@@ -68,6 +68,76 @@ describe('tracked maintenance work', () => {
     expect(writes).toBe(0);
   });
 
+  it('allows synchronous admission checks while the root is still open', async () => {
+    const g = gate(); const bg = background(); let writes = 0;
+    const response = await guardFetch(g, bg.register, async scope => {
+      scope.assertOpen();
+      writes++;
+      return new Response(null);
+    });
+    expect(response.status).toBe(200);
+    expect(writes).toBe(1);
+    expect(await Promise.all(bg.tasks)).toEqual([{ released: true }]);
+  });
+
+  it('fences synchronous work before the completion RPC returns', async () => {
+    const g = gate(); const bg = background(); const completing = deferred(); const reply = deferred();
+    let saved!: WorkScope; let writes = 0;
+    const client: MaintenanceClient = {
+      acquire: id => g.acquire(id),
+      async complete(permit) {
+        completing.resolve();
+        await reply.promise;
+        return g.complete(permit);
+      },
+    };
+    await guardFetch(client, bg.register, async scope => { saved = scope; return new Response(null); });
+    await completing.promise;
+    try {
+      expect(() => { saved.assertOpen(); writes++; }).toThrow('SCOPE_CLOSED');
+      expect(writes).toBe(0);
+      expect(await g.status()).toMatchObject({ active: 1 });
+    } finally {
+      reply.resolve();
+      await Promise.all(bg.tasks);
+    }
+    expect(() => saved.assertOpen()).toThrow('SCOPE_CLOSED');
+  });
+
+  it('retains explicit uncertainty without changing a handled business response', async () => {
+    const g = gate(); const bg = background(); let saved!: WorkScope;
+    const response = await guardFetch(g, bg.register, async scope => {
+      saved = scope;
+      scope.markUncertain('D1_RESULT_INVALID');
+      return new Response(null, { status: 409 });
+    });
+    expect(response.status).toBe(409);
+    expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
+    expect(await g.beginDrain('explicit-uncertainty', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(() => saved.markUncertain('D1_RESULT_INVALID')).toThrow('SCOPE_CLOSED');
+  });
+
+  it('does not finish uncertain work until an already registered child settles', async () => {
+    const g = gate(); const bg = background(); const child = deferred(); let finished = false; let writes = 0;
+    const response = await guardFetch(g, bg.register, async scope => {
+      scope.waitUntil(child.promise.then(() => { scope.assertOpen(); writes++; }));
+      scope.markUncertain('APP_UNEXPECTED_ERROR');
+      return new Response(null);
+    });
+    const completion = Promise.all(bg.tasks).then(result => { finished = true; return result; });
+    try {
+      expect(response.status).toBe(200);
+      expect(await g.beginDrain('uncertain-child', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(finished).toBe(false);
+    } finally {
+      child.resolve();
+      await completion;
+    }
+    expect(writes).toBe(1);
+    expect(await completion).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
+    expect(await g.status()).toMatchObject({ active: 1, phase: 'DRAINING' });
+  });
+
   it('tracks run factories and holds Cron until all descendants finish', async () => {
     const g = gate(); const child = deferred(); const started = deferred(); let writes = 0;
     const scheduled = guardScheduled(g, async scope => {

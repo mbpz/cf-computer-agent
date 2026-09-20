@@ -4,6 +4,7 @@ import { WorkersAiImageConverter } from './assets/ai-image';
 import { AssetsRepository } from './assets/repository';
 import { AssetService } from './assets/service';
 import type { MaintenanceClient } from './maintenance/contracts';
+import { createD1Facade } from './maintenance/d1';
 import { guardFetch, guardScheduled, type WorkScope } from './maintenance/lifecycle';
 
 type EntryOptions = { mode: 'legacy'; dependencies?: AppDependencies }
@@ -20,14 +21,45 @@ export function createWorkerEntry(options: EntryOptions): WorkerEntry {
     fetch(request, env, ctx) {
       return guardFetch(lazyClient(() => options.maintenance(env)), promise => ctx.waitUntil(promise), async scope => {
         // Admission and host registration precede even service construction.
-        const app = createApp(options.dependencies);
-        return await app.fetch!(request, env, scopedContext(ctx, scope));
+        const bindings = scopedBindings(env, options.dependencies, scope);
+        const app = createApp(bindings.dependencies);
+        return await app.fetch!(request, bindings.env, scopedContext(ctx, scope));
       });
     },
     async scheduled(_controller, env) {
-      await guardScheduled(lazyClient(() => options.maintenance(env)), async () => sweepAssets(env));
+      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => {
+        await sweepAssets(scopedBindings(env, undefined, scope).env);
+      });
     },
   };
+}
+
+/** Created only after admission, never shared between HTTP requests or Cron runs. */
+function scopedBindings(env: Env, dependencies: AppDependencies | undefined, scope: WorkScope): {
+  env: Env; dependencies: AppDependencies;
+} {
+  const databases = new WeakMap<D1Database, D1Database>();
+  function database(native: D1Database): D1Database {
+    scope.assertOpen();
+    let facade = databases.get(native);
+    if (!facade) {
+      facade = createD1Facade(native, scope);
+      databases.set(native, facade);
+    }
+    return facade;
+  }
+  // Shadow only D1. Do not spread/eagerly read unrelated bindings: static
+  // requests and the optional-storage Cron skip must remain lazy.
+  const scopedEnv: Env = Object.create(env, {
+    DB: { enumerable: true, get: () => database(env.DB) },
+  });
+  const scopedDependencies: AppDependencies = Object.create(dependencies ?? null, {
+    sessionDatabase: { enumerable: true, get: () => {
+      const override = dependencies?.sessionDatabase;
+      return override ? database(override) : undefined;
+    } },
+  });
+  return { env: scopedEnv, dependencies: scopedDependencies };
 }
 
 /** Provider lookup runs inside admission's catch; never silently use legacy. */

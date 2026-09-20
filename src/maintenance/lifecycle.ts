@@ -1,6 +1,10 @@
 import type { MaintenanceClient, Permit } from './contracts';
 
+export type UncertaintyReason = 'D1_RESULT_INVALID' | 'APP_UNEXPECTED_ERROR';
+
 export interface WorkScope {
+  assertOpen(): void;
+  markUncertain(reason: UncertaintyReason): void;
   waitUntil(promise: Promise<unknown>): void;
   run<T>(factory: () => Promise<T>): Promise<T>;
 }
@@ -10,14 +14,24 @@ class TrackedScope implements WorkScope {
   // The root holds one count until the handler and response wrapping finish.
   #pending = 1;
   #failed = false;
+  #uncertainty?: UncertaintyReason;
   #sealed = false;
   #resolve!: (result: Completion) => void;
   readonly done = new Promise<Completion>(resolve => { this.#resolve = resolve; });
 
   constructor(private client: MaintenanceClient, private permit: Permit) {}
 
-  waitUntil(promise: Promise<unknown>): void {
+  assertOpen(): void {
     if (this.#sealed) throw new Error('SCOPE_CLOSED');
+  }
+
+  markUncertain(reason: UncertaintyReason): void {
+    this.assertOpen();
+    this.#uncertainty ??= reason;
+  }
+
+  waitUntil(promise: Promise<unknown>): void {
+    this.assertOpen();
     this.#pending++;
     // Observe rejection immediately, even if callers catch/ignore their copy.
     void Promise.resolve(promise).then(() => this.#settle(true), () => this.#settle(false));
@@ -36,7 +50,7 @@ class TrackedScope implements WorkScope {
     if (!success) this.#failed = true;
     if (--this.#pending !== 0) return;
     this.#sealed = true; // Fence local late factories before the completion RPC.
-    if (this.#failed) {
+    if (this.#failed || this.#uncertainty !== undefined) {
       this.#resolve({ released: false, reason: 'WORK_UNCERTAIN' });
       return;
     }
