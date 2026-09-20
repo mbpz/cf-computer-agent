@@ -19,6 +19,16 @@ async function seedMember() {
     .bind('2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z').run();
 }
 
+async function createAgentSession(worker: ReturnType<typeof createWorkerEntry>, token: string) {
+  const context = createExecutionContext();
+  const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions`, {
+    method: 'POST', headers: { cookie: `__Host-memory-session=${token}`, origin: ORIGIN },
+  }), localEnvironment(env), context);
+  const body = await response.json() as { session: { id: string } };
+  await waitOnExecutionContext(context);
+  return body.session.id;
+}
+
 describe('guarded agent stream lifecycle', () => {
   beforeEach(async () => { await reset(); });
 
@@ -37,15 +47,10 @@ describe('guarded agent stream lifecycle', () => {
     };
     const g = gate();
     const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
-    const createContext = createExecutionContext();
-    const created = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions`, {
-      method: 'POST', headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN },
-    }), localEnvironment(env), createContext);
-    const body = await created.json() as { session: { id: string } };
-    await waitOnExecutionContext(createContext);
+    const sessionId = await createAgentSession(worker, session.token);
 
     const streamContext = createExecutionContext();
-    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${body.session.id}/stream`, {
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${sessionId}/stream`, {
       method: 'POST',
       headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
       body: JSON.stringify({ question: 'hold this stream' }),
@@ -57,6 +62,51 @@ describe('guarded agent stream lifecycle', () => {
 
     // The cancellation chain completed, but the producer's final turn termination
     // is still an uncertain write and therefore cannot release the permit.
+    expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
+  });
+
+  it('holds a permit while a client never consumes an open stream', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const session = await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('stream-member'))!);
+    const ai = { async run(): Promise<ReadableStream> { return new ReadableStream(); } };
+    const g = gate();
+    const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
+    const sessionId = await createAgentSession(worker, session.token);
+    const context = createExecutionContext();
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${sessionId}/stream`, {
+      method: 'POST',
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'do not consume' }),
+    }), localEnvironment(env), context);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
+    await response.body!.getReader().cancel('test cleanup');
+    await waitOnExecutionContext(context);
+  });
+
+  it('retains uncertainty when the upstream stream errors before EOF', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const session = await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('stream-member'))!);
+    const ai = {
+      async run(): Promise<ReadableStream> {
+        return new ReadableStream({ start(controller) { controller.error(new Error('synthetic upstream error')); } });
+      },
+    };
+    const g = gate();
+    const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
+    const sessionId = await createAgentSession(worker, session.token);
+    const context = createExecutionContext();
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${sessionId}/stream`, {
+      method: 'POST',
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'fail this stream' }),
+    }), localEnvironment(env), context);
+    await expect(response.arrayBuffer()).rejects.toThrow();
+    await waitOnExecutionContext(context);
     expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
   });
 });

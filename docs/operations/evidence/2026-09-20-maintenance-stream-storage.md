@@ -5,7 +5,7 @@
 ## 已完成切片
 
 - Agent 流 pump 在启动前通过 `WorkScope.run` 登记；正常 EOF、生产者错误和消费者取消均不会把后台生产者变成 detached `void`。取消会等待 `reader.cancel`，并先将 scope 标记为不确定；迟到的 Durable Object 终止/完成调用仍在同一 producer 链中。
-- guarded 本地入口新增真实 stream harness：客户端只读取首块后取消，维护协调器仍保持 `active=1`，证明取消完成不等于安全释放。
+- guarded 本地入口新增真实 stream harness：客户端只读取首块后取消、完全不消费开放流、上游在 EOF 前报错，维护协调器均保持 `active=1`，证明取消/错误/未消费不等于安全释放。
 - Asset sweep 对每项意外 D1/R2 处理失败登记 `onFailure`，即使 `processDue` 为了继续处理剩余作业而捕获异常，外层维护 scope 仍保守保持不确定。
 - 保留已有解析超时语义：纯转换尾部不进入 success 写入；既有资产单元回归继续验证超时清理和可重试恢复。
 
@@ -13,7 +13,7 @@
 
 | 检查 | 结果 |
 | --- | --- |
-| `npm run test:ops:maintenance` | 6 个文件，57/57 通过 |
+| `npm run test:ops:maintenance` | 6 个文件，59/59 通过（新增 3 个流负向场景） |
 | `npm run typecheck` | 通过 |
 | `npx tsc --noEmit --project tools/maintenance/tsconfig.json` | 通过 |
 | `npm test` | 完整 smoke/unit/worker 回归通过 |
