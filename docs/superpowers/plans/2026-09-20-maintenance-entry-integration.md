@@ -7,11 +7,11 @@
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-20):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)。R03/R04 尚未开始；未提交、未部署。
+**Status (2026-09-20):** R02 与 R03 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)和[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。R03 已提交为 `95bd921`；R04 尚未开始，未 push、未部署。
 
 ## Global Constraints
 
-- 现有隔离工作区 `codex/admin-audit-recovery` 原地执行；保护既有未提交变更，不委派、不 commit/merge/push/deploy。
+- 现有隔离工作区 `codex/admin-audit-recovery` 原地执行；保护既有未提交变更，不 merge/push/deploy。R03 候选已形成本地提交，未进入远端。
 - 不改 `wrangler.jsonc`、生成 Env、迁移或生产 binding；不读 secrets，不连接生产资源，不备份真实数据。
 - harness `remoteBindings: false`，独立配置而非加载生产 Wrangler；本地 D1/R2/DO，AI 和静态资源端口为合成值，意外出站请求失败。
 - 每步先观察行为测试正确失败，再实现，再回归。完成标记必须有当前命令结果；R02 不代表 R03/R04 的原始存储失败、生产者或跨存储安全。
@@ -55,17 +55,17 @@ Files: `tools/maintenance/entry.test.ts`（必要时抽取同目录 fixtures）�
 Files: 新增 `docs/operations/evidence/2026-09-20-maintenance-entry.md`；更新顺序 checklist、规格状态、ROADMAP、delivery ledger 引言。
 
 - [x] 保存红/绿验证、当前 HEAD + 未提交候选的代码摘要、未覆盖范围；保持交付总账四维状态不变。
-- [x] 只有上述证据齐全才勾选 R02；恢复检查点为 2 关闭/23 剩余，下一项 R03 尚未执行。本轮停在这里。
+- [x] 只有上述证据齐全才勾选 R02；R02 关闭时恢复检查点为 2 关闭/23 剩余，后续 R03 已另行完成并有独立证据。
 
-## R03 — 后台与原始 D1 生命周期（后续独立执行）
+## R03 — 后台与原始 D1 生命周期
 
 Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 `src/maintenance/lifecycle.ts`、`src/worker-entry.ts`、`src/app.ts`，以及 `src/members/service.ts`、`src/identity/session.ts`、`src/identity/automation.ts` 和审计列出的并行服务边界。
 
-- [ ] 先红测 `assertOpen`、`markUncertain`（固定码），吞错原始拒绝仍保留许可、sealed 后零原生调用；扩展 WorkScope，不允许复活。
-- [ ] 先测试后添加 D1/statement facade：prepare/bind 惰性，first/run/all/raw 重载、batch 同 facade 归属检查；exec/withSession/dump 明确拒绝，成功 null/空 rows 不误报。
-- [ ] guard handler 内包装实际 DB 和 sessionDatabase 覆盖；同请求同 DB 复用 facade，跨请求不复用。失败 `success:false` 保留原返回同时标记不确定。
-- [ ] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
-- [ ] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
+- [x] 先红测 `assertOpen`、`markUncertain`（固定码），吞错原始拒绝仍保留许可、sealed 后零原生调用；扩展 WorkScope，不允许复活。
+- [x] 先测试后添加 D1/statement facade：prepare/bind 惰性，first/run/all/raw 重载、batch 同 facade 归属检查；exec/withSession/dump 明确拒绝，成功 null/空 rows 不误报。
+- [x] guard handler 内包装实际 DB 和 sessionDatabase 覆盖；同请求同 DB 复用 facade，跨请求不复用。失败 `success:false` 保留原返回同时标记不确定。
+- [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
+- [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归和证据见[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。
 
 ## R04 — 流、取消、超时和跨存储（后续独立执行）
 
