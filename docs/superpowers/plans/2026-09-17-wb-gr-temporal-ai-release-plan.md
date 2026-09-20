@@ -59,11 +59,11 @@
 - Test: `test/unit/graph-ai-suggestions.test.ts`
 - Test: `test/worker/graph-suggestions.test.ts`
 
-- [ ] **Step 1:** 写测试覆盖会议→决策、决策→行动项、任务→知识建议和 AI unavailable。
-- [ ] **Step 2:** 运行 focused tests，确认失败。
-- [ ] **Step 3:** 实现严格 JSON schema、5 秒超时、最多 8 条建议、每条 suggestion 的 citationIds 和 `promotionRequired=true`；不执行写入。
-- [ ] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-ai-suggestions.test.ts test/worker/graph-suggestions.test.ts --pool=workers`。
-- [ ] **Step 5:** 提交 `git commit -m "feat: add grounded graph suggestions"`。
+- [x] **Step 1:** 写测试覆盖会议→决策、决策→行动项、任务→知识建议和 AI unavailable。
+- [x] **Step 2:** 运行 focused tests，确认失败。初始 red-run 记录在本地终端；随后修正 Worker fixture 的外键种子顺序。
+- [x] **Step 3:** 实现严格 JSON schema、5 秒超时、最多 8 条建议、每条 suggestion 的 citationIds、显式 evidence gap 和 `promotionRequired=true`；不执行写入。
+- [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-ai-suggestions.test.ts test/worker/graph-suggestions.test.ts --pool=workers --maxWorkers=1`，5/5 通过。
+- [x] **Step 5:** 提交 `git commit -m "feat: add grounded graph suggestions"`，本地 commit `62a9a9d`。
 
 ### Task 4: 性能、无障碍和完整回归
 

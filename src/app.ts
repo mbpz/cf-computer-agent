@@ -71,6 +71,7 @@ import { CalendarRepository } from "./calendar/repository";
 import { CalendarService } from "./calendar/service";
 import { GraphProjectionRepository } from "./graph/repository";
 import { GraphProjectionService } from "./graph/service";
+import { GraphSuggestionService } from "./graph/ai-suggestions";
 import { FocusRepository } from "./focus/repository";
 import { FocusService } from "./focus/service";
 import { WorkbenchReviewRepository } from "./workbench-review/repository";
@@ -99,6 +100,7 @@ import { routeWorkbenchReviewApi } from "./routes/workbench-review";
 import { routeCaptureApi } from "./routes/capture";
 import { routeProjectTimelineApi } from "./routes/project-timeline";
 import { routeGraphApi } from "./routes/graph";
+import { routeGraphSuggestionsApi } from "./routes/graph-suggestions";
 import { TodayService } from "./today/service";
 import { routeTodayApi } from "./routes/today";
 import { ResearchRepository } from "./research/repository";
@@ -330,6 +332,7 @@ function createRequestServices(
     knowledge: new KnowledgeService(legacyRepository),
     library,
     graph: new GraphProjectionService(new GraphProjectionRepository(env.DB)),
+    graphSuggestions: new GraphSuggestionService(ai),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
     memberRecords,
@@ -426,6 +429,11 @@ async function dispatchApiRequest(
   if (tasks) return tasks;
   const graph = await routeGraphApi(request, url, context, principal, { graph: services.graph });
   if (graph) return graph;
+  const graphSuggestions = await routeGraphSuggestionsApi(request, url, context, principal, {
+    graph: services.graph,
+    suggestions: services.graphSuggestions,
+  });
+  if (graphSuggestions) return graphSuggestions;
   const inbox = await routeInboxApi(request, url, context, principal, { inbox: services.inbox });
   if (inbox) return inbox;
   const goals = await routeGoalsApi(request, url, context, principal, { goals: services.goals });

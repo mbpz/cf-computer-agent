@@ -8,6 +8,7 @@ import { Input } from "../components/ui/input";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
+import { loadGraphSuggestions, type GraphSuggestion, type GraphSuggestionResult } from "../lib/graph-suggestions";
 import { createGraphActionClientKey, dispatchGraphAction } from "../lib/graph-actions";
 import type { GraphInspectorActionStatus } from "../components/graph/graph-inspector";
 
@@ -20,6 +21,7 @@ export type GraphPageState =
 
 export type GraphLens = "workspace" | "knowledge" | "work";
 export type GraphTemporalRange = "all" | "7d" | "30d" | "90d";
+export type GraphSuggestionsState = { kind: "idle" | "loading" | "error"; result?: GraphSuggestionResult };
 
 export interface GraphPageProps {
   locale: LocaleRuntime;
@@ -32,6 +34,8 @@ export interface GraphPageProps {
   onLensChange?: (lens: GraphLens) => void;
   onTemporalRangeChange?: (range: GraphTemporalRange) => void;
   onChangeKindChange?: (changeKind: NonNullable<GraphPageProps["changeKind"]>) => void;
+  suggestionsState?: GraphSuggestionsState;
+  onGenerateSuggestions?: () => void;
   onRetry?: () => void;
 }
 
@@ -39,7 +43,7 @@ export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promi
 
 const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision", "action_item", "inbox", "calendar", "focus"]);
 
-export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onRetry }: GraphPageProps) {
+export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry }: GraphPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<{ nodeId: string | null; clientKey: string | null; status: GraphInspectorActionStatus }>({ nodeId: null, clientKey: null, status: "idle" });
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
@@ -113,6 +117,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
           </select>
         </CardContent>
       </Card>
+      <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} onClearSelection={() => setSelectedId(null)} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
@@ -137,6 +142,7 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
   const [lens, setLens] = useState<GraphLens>("workspace");
   const [temporalRange, setTemporalRange] = useState<GraphTemporalRange>("all");
   const [changeKind, setChangeKind] = useState<NonNullable<GraphPageProps["changeKind"]>>("all");
+  const [suggestionsState, setSuggestionsState] = useState<GraphSuggestionsState>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -159,7 +165,33 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
     });
     return () => { active = false; controller.abort(); };
   }, [changeKind, lens, load, retry, temporalRange]);
-  return <GraphPage locale={locale} state={state} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+  const generateSuggestions = () => {
+    setSuggestionsState({ kind: "loading" });
+    void loadGraphSuggestions(fetch).then((result) => setSuggestionsState({ kind: "idle", result })).catch(() => setSuggestionsState({ kind: "error" }));
+  };
+  return <GraphPage locale={locale} state={state} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+}
+
+function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRuntime; state: GraphSuggestionsState; onGenerate?: () => void }) {
+  const suggestions = state.result?.suggestions ?? [];
+  return <Card data-graph-suggestions>
+    <CardHeader className="flex flex-row items-start justify-between gap-3"><div><CardTitle>{frontendText(locale, "GRAPH_SUGGESTIONS_TITLE")}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_SUGGESTIONS_DESCRIPTION")}</p></div><Button variant="outline" onClick={onGenerate} disabled={state.kind === "loading"}>{frontendText(locale, state.kind === "loading" ? "GRAPH_SUGGESTIONS_LOADING" : "GRAPH_SUGGESTIONS_GENERATE")}</Button></CardHeader>
+    <CardContent>
+      {state.kind === "error" && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "GRAPH_SUGGESTIONS_ERROR")}</p>}
+      {state.kind !== "error" && suggestions.length === 0 && <p className="text-sm text-muted-foreground">{frontendText(locale, state.result?.messageKey === "GRAPH_SUGGESTIONS_EVIDENCE_INSUFFICIENT" ? "GRAPH_SUGGESTIONS_EVIDENCE_GAP" : "GRAPH_SUGGESTIONS_EMPTY")}</p>}
+      {suggestions.length > 0 && <div className="grid gap-3 md:grid-cols-2">{suggestions.map((suggestion) => <GraphSuggestionCard key={suggestion.id} locale={locale} suggestion={suggestion} />)}</div>}
+    </CardContent>
+  </Card>;
+}
+
+function GraphSuggestionCard({ locale, suggestion }: { locale: LocaleRuntime; suggestion: GraphSuggestion }) {
+  const kindKey = suggestion.kind === "meeting_to_decision" ? "GRAPH_SUGGESTION_MEETING_DECISION" : suggestion.kind === "decision_to_action_item" ? "GRAPH_SUGGESTION_DECISION_ACTION" : "GRAPH_SUGGESTION_TASK_KNOWLEDGE";
+  return <article className="rounded-lg border bg-muted/20 p-4" data-graph-suggestion={suggestion.id}>
+    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{frontendText(locale, kindKey)}</span><span className="rounded-full border px-2 py-1 text-[11px] text-muted-foreground">{frontendText(locale, "GRAPH_SUGGESTIONS_PROMOTION_REQUIRED")}</span></div>
+    <h3 className="mt-2 font-medium">{suggestion.title}</h3>
+    <p className="mt-1 text-sm text-muted-foreground">{suggestion.rationale}</p>
+    <div className="mt-3 flex flex-wrap gap-2 text-xs">{suggestion.evidenceGap && <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-900">{frontendText(locale, "GRAPH_SUGGESTIONS_EVIDENCE_GAP")}</span>}<span className="rounded-full border px-2 py-1 text-muted-foreground">{suggestion.citationIds.length} {frontendText(locale, suggestion.citationIds.length === 1 ? "GRAPH_SUGGESTIONS_CITATION_ONE" : "GRAPH_SUGGESTIONS_CITATION_MANY")}</span></div>
+  </article>;
 }
 
 function defaultGraphLoader(query: GraphQueryInput, signal: AbortSignal): Promise<GraphSnapshot> {
