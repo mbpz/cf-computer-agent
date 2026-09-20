@@ -57,11 +57,11 @@
 - Test: `test/unit/frontend-graph-actions.test.ts`
 - Test: `test/worker/graph-actions.test.ts`
 
-- [ ] **Step 1:** 写测试覆盖 knowledge→task、decision→action item、task→focus、project→timeline，以及重复 client key。
-- [ ] **Step 2:** 运行 focused tests，确认失败。
-- [ ] **Step 3:** 实现 action dispatcher：根据节点类型调用现有 API；将 client key 由浏览器生成一次并保留到重试结束；不接受客户端 memberId。
-- [ ] **Step 4:** 运行 `rtk npx vitest run test/unit/frontend-graph-actions.test.ts test/worker/graph-actions.test.ts --pool=workers`。
-- [ ] **Step 5:** 提交 `git commit -m "feat: add graph to action workflows"`。
+- [x] **Step 1:** 写测试覆盖 knowledge→task、decision→action item、task→focus、project→timeline，以及重复 client key。
+- [ ] **Step 2:** 运行 focused tests，确认失败。未保留独立 red-run 证据；实现采用先行契约方式，不能将现有 green-run 倒写成失败证据。
+- [x] **Step 3:** 实现 action dispatcher：根据节点类型调用现有 API；将 client key 由浏览器生成一次并保留到重试结束；不接受客户端 memberId。
+- [x] **Step 4:** 运行 `rtk npx vitest run test/unit/frontend-graph-actions.test.ts test/worker/graph-actions.test.ts --pool=workers`。
+- [x] **Step 5:** 提交 `git commit -m "feat: add graph to action workflows"`。
 
 ### Task 4: 键盘、命令和移动端闭环
 
@@ -72,8 +72,8 @@
 - Modify: `frontend/lib/i18n.ts`
 - Test: `test/unit/frontend-graph-a11y.test.tsx`
 
-- [ ] **Step 1:** 写测试覆盖 Tab → 节点列表 → Inspector → action button 的顺序和 focus-visible。
-- [ ] **Step 2:** 运行测试，确认失败。
-- [ ] **Step 3:** 实现 Escape 清除选择、Enter 打开 Inspector、箭头键切换列表、窄屏隐藏画布但保留列表。
-- [ ] **Step 4:** 运行 `rtk npx vitest run test/unit/frontend-graph-a11y.test.tsx`。
-- [ ] **Step 5:** 提交 `git commit -m "feat: make work graph keyboard accessible"`。
+- [x] **Step 1:** 写测试覆盖 Tab → 节点列表 → Inspector → action button 的顺序和 focus-visible。
+- [ ] **Step 2:** 运行测试，确认失败。未保留独立 red-run 证据；最终 focused 与回归结果已记录。
+- [x] **Step 3:** 实现 Escape 清除选择、Enter 打开 Inspector、箭头键切换列表、窄屏隐藏画布但保留列表。
+- [x] **Step 4:** 运行 `rtk npx vitest run test/unit/frontend-graph-a11y.test.tsx`。
+- [x] **Step 5:** 提交 `git commit -m "feat: make work graph keyboard accessible"`。
