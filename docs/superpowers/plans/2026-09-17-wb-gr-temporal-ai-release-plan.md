@@ -42,11 +42,11 @@
 - Test: `test/unit/graph-mindmap-adapter.test.ts`
 - Test: `test/worker/graph-mindmap.test.ts`
 
-- [ ] **Step 1:** 写测试覆盖节点/边 citation、未知 endpoint、证据不足和成员权限。
-- [ ] **Step 2:** 运行 focused tests，确认失败。
-- [ ] **Step 3:** 将 MindmapResult 转为 `kind=knowledge` 和 `kind=derived` 的 GraphNode/GraphEdge；无 citation 的关系转为 evidence gap，不作为事实边。
-- [ ] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-mindmap-adapter.test.ts test/worker/graph-mindmap.test.ts --pool=workers`。
-- [ ] **Step 5:** 提交 `git commit -m "feat: adapt grounded mindmap to work graph"`。
+- [x] **Step 1:** 写测试覆盖节点/边 citation、未知 endpoint、证据不足和成员权限。
+- [ ] **Step 2:** 运行 focused tests，确认失败。未保留独立 red-run 证据；最终 focused 与回归结果已记录。
+- [x] **Step 3:** 将 MindmapResult 转为 `kind=knowledge` 和 `kind=derived` 的 GraphNode/GraphEdge；无 citation 的关系转为 evidence gap，不作为事实边。
+- [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-mindmap-adapter.test.ts test/worker/graph-mindmap.test.ts --pool=workers`。
+- [x] **Step 5:** 提交 `git commit -m "feat: adapt grounded mindmap to work graph"`。
 
 ### Task 3: AI 工作建议
 
