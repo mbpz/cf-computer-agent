@@ -121,7 +121,7 @@ import { DuplicateCandidatesService } from "./duplicates/service";
 import { ReviewRepository } from "./review/repository";
 import { ReviewService } from "./review/service";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../shared/workspace-route-capabilities";
-import type { UncertaintyReason } from "./maintenance/lifecycle";
+import type { UncertaintyReason, WorkScope } from "./maintenance/lifecycle";
 
 export interface AppDependencies {
   ai?: Ai;
@@ -134,6 +134,7 @@ export interface AppDependencies {
   analyticsNow?: () => Date;
   reviewNow?: () => Date;
   onBackgroundFailure?: (reason: UncertaintyReason) => void;
+  workScope?: WorkScope;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -307,6 +308,7 @@ function createRequestServices(
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
       imageConverter: new WorkersAiImageConverter(env.AI),
       fetch: dependencies.assetFetch,
+      onFailure: () => dependencies.onBackgroundFailure?.("BACKGROUND_WORK_FAILED"),
     },
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
@@ -403,6 +405,7 @@ function createRequestServices(
     review,
     roles,
     menus,
+    workScope: dependencies.workScope,
   };
 }
 
@@ -427,7 +430,7 @@ async function dispatchApiRequest(
   if (session) return session;
   const navigation = await routeNavigationApi(request, url, context, principal, { menus: services.menus });
   if (navigation) return navigation;
-  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools);
+  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools, services.workScope);
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;

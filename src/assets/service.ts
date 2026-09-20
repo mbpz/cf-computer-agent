@@ -45,6 +45,7 @@ export interface AssetServiceOptions {
   imageConverter?: AssetMarkdownConverter;
   parseTimeoutMs?: number;
   fetch?: typeof fetch;
+  onFailure?: (error: unknown) => void;
 }
 
 export interface AssetMarkdownConverter {
@@ -148,6 +149,7 @@ export class AssetService {
   private readonly imageConverter?: AssetMarkdownConverter;
   private readonly parseTimeoutMs: number;
   private readonly fetcher: typeof fetch;
+  private readonly onFailure: ((error: unknown) => void) | undefined;
 
   constructor(
     private readonly originals: R2Bucket | undefined,
@@ -169,6 +171,7 @@ export class AssetService {
       ? Math.floor(options.parseTimeoutMs as number)
       : APP_CONFIG.assetParseTimeoutMs;
     this.fetcher = options.fetch || globalThis.fetch;
+    this.onFailure = options.onFailure;
   }
 
   /**
@@ -506,7 +509,8 @@ export class AssetService {
       try {
         const result = await this.processSystem(assetId);
         if (result?.job.status === "succeeded") succeeded += 1;
-      } catch {
+      } catch (error) {
+        this.notifyFailure(error);
         // A single broken asset must not prevent the bounded sweep from continuing.
       }
     }
@@ -552,11 +556,17 @@ export class AssetService {
       });
       await this.repository.markParseSucceeded(assetId, now);
     } catch (error) {
-      await this.requireStorage().delete(parsedKey).catch(() => undefined);
+      await this.requireStorage().delete(parsedKey).catch(error => {
+        this.notifyFailure(error);
+      });
       const { code, terminal } = classifyAssetParseFailure(error);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }
     return (await this.repository.findById(current.asset.id)) || current;
+  }
+
+  private notifyFailure(error: unknown): void {
+    try { this.onFailure?.(error); } catch { /* late scope failures are already represented by the tracked task */ }
   }
 
   private async parseRichAsset(asset: AssetRecord, bytes: ArrayBuffer) {

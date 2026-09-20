@@ -1,0 +1,62 @@
+import { applyD1Migrations, createExecutionContext, reset, waitOnExecutionContext } from 'cloudflare:test';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { env } from './env';
+import { localEnvironment } from './resources';
+import { createWorkerEntry } from '../../src/worker-entry';
+import { SessionService } from '../../src/identity/session';
+import { MembersRepository } from '../../src/members/repository';
+import { MIGRATIONS } from '../../test/fixtures/d1';
+
+const ORIGIN = 'https://memory.crgmhrc.asia';
+const incoming = (url: string, init?: RequestInit) => new Request(url, init) as Request<unknown, IncomingRequestCfProperties<unknown>>;
+const gate = () => env.MAINTENANCE.getByName(crypto.randomUUID());
+
+async function seedMember() {
+  await applyD1Migrations(env.SYNTHETIC_DB, MIGRATIONS);
+  await env.SYNTHETIC_DB.prepare(`INSERT INTO members
+    (id, access_sub, email, role, status, created_at, updated_at)
+    VALUES ('stream-member', 'github:stream', 'stream@example.test', 'contributor', 'active', ?, ?)`)
+    .bind('2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z').run();
+}
+
+describe('guarded agent stream lifecycle', () => {
+  beforeEach(async () => { await reset(); });
+
+  it('keeps the maintenance permit uncertain when a consumer cancels before EOF', async () => {
+    await seedMember();
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const session = await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('stream-member'))!);
+    const encoder = new TextEncoder();
+    const ai = {
+      async run(): Promise<ReadableStream> {
+        return new ReadableStream({
+          start(controller) { controller.enqueue(encoder.encode('data: {"response":"partial"}\n\n')); },
+        });
+      },
+    };
+    const g = gate();
+    const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies: { ai: ai as unknown as Ai } });
+    const createContext = createExecutionContext();
+    const created = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions`, {
+      method: 'POST', headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN },
+    }), localEnvironment(env), createContext);
+    const body = await created.json() as { session: { id: string } };
+    await waitOnExecutionContext(createContext);
+
+    const streamContext = createExecutionContext();
+    const response = await worker.fetch(incoming(`${ORIGIN}/api/agent/sessions/${body.session.id}/stream`, {
+      method: 'POST',
+      headers: { cookie: `__Host-memory-session=${session.token}`, origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'hold this stream' }),
+    }), localEnvironment(env), streamContext);
+    const reader = response.body!.getReader();
+    await expect(reader.read()).resolves.toMatchObject({ done: false });
+    await reader.cancel('client disconnected');
+    await waitOnExecutionContext(streamContext);
+
+    // The cancellation chain completed, but the producer's final turn termination
+    // is still an uncertain write and therefore cannot release the permit.
+    expect(await g.status()).toMatchObject({ phase: 'OPEN', active: 1 });
+  });
+});

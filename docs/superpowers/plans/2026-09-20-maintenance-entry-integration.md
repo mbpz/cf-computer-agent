@@ -76,3 +76,5 @@ Files: `src/agent/service.ts` 及审计定位的流/timeout 边界、`src/assets
 - [ ] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。
 - [ ] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。
 - [ ] 真实合成资源故障回归+证据后才勾选 R04；R05/R06/R07 仍独立，不借本阶段开放生产。
+
+当前进度（2026-09-20）：已完成 Agent stream pump 的 scope 登记/取消等待和 Asset sweep 失败回传最小切片，见[进行中证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。上述切片不关闭 R04；不消费流、上游 error、迟到 producer 及 typed R2/DO/VFS/RPC 边界仍待完成。

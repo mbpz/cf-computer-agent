@@ -25,7 +25,7 @@ export function createWorkerEntry(options: EntryOptions): WorkerEntry {
       });
     },
     async scheduled(_controller, env) {
-      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => sweepAssets(scopedEnvironment(env, scope)));
+      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => sweepAssets(scopedEnvironment(env, scope), scope));
     },
   };
 }
@@ -52,6 +52,7 @@ function scopedDependencies(dependencies: AppDependencies | undefined, env: Env,
     sessionDatabase: current.sessionDatabase
       ? scope.wrapDatabase(current.sessionDatabase)
       : undefined,
+    workScope: scope,
     onBackgroundFailure: reason => {
       try {
         scope.markUncertain(reason);
@@ -83,7 +84,7 @@ function scopedContext(ctx: ExecutionContext, scope: WorkScope): ExecutionContex
   };
 }
 
-async function sweepAssets(env: Env): Promise<void> {
+async function sweepAssets(env: Env, scope?: WorkScope): Promise<void> {
   if (!env.ORIGINALS) {
     console.log('asset parse sweep skipped: binary storage is not configured');
     return;
@@ -91,6 +92,7 @@ async function sweepAssets(env: Env): Promise<void> {
   const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
     markdownConverter: new WorkersAiMarkdownConverter(env.AI),
     imageConverter: new WorkersAiImageConverter(env.AI),
+    onFailure: () => scope?.markUncertain('BACKGROUND_WORK_FAILED'),
   }).processDue(3);
   console.log('asset parse sweep complete', result);
 }
