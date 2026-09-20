@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 顺序完成 R02–R04 的本地真实入口接入；本轮用户仅批准执行 R02。
+**Goal:** 顺序完成 R02–R04 的本地真实入口接入；按恢复 checklist 逐项留证，生产变更另行授权。
 **Architecture:** `index.ts` 显式选择 legacy；独立本地 harness 显式选择 guarded。两者共用 `createApp` 和 `AssetService.processDue(3)`，不复制业务路由。维护准入先于所有业务绑定读取和服务构建。
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
