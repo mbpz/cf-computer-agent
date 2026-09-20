@@ -52,6 +52,7 @@ const migrations = [
   ["0048_browser_environment_operations.sql", "b7c86b06181190d08b61b7d887219b710003ae67d7e2f278230485d6ba22aca1"],
   ["0049_browser_environment_lifecycle.sql", "5d9e5512d8b7a13bf651e4f6f6326be5a7921c0c10c5a20f8ad90f74fb0a9220"],
   ["0050_admin_review_notifications.sql", "1fe5cf8ffe42237804fb82a75efa509a70aa2862b1ab2c5403cc9b9ff13e9716"],
+  ["0051_calendar_reference_detach.sql", "30b4c77fc4e3198a1c6937adc0d95ba0c8bf142e707d670f0b12a233db47058d"],
 ];
 const repositoryRoot = new URL("../", import.meta.url);
 const maxLedgerBytes = 64 * 1024;
@@ -89,16 +90,16 @@ async function verifyLedger(phase, path) {
   if (result.success !== true || !Array.isArray(result.results)) {
     throw new Error("Unsuccessful Wrangler ledger result");
   }
-  const expectedNames = phase === "before"
-    ? [migrations.slice(0, 3).map(([name]) => name)]
-    : [
-      migrations.slice(0, 4).map(([name]) => name),
-      migrations.slice(0, 5).map(([name]) => name),
-      migrations.slice(0, 6).map(([name]) => name),
-      // Preserve already reviewed main prefixes when adding forward migrations.
-      ...[44, 45, 46, 47, 48, 49].map((count) => migrations.slice(0, count).map(([name]) => name)),
-      migrations.map(([name]) => name),
-    ];
+  // Catch-up gates are pinned to this reviewed batch, never "whatever is latest".
+  // Legacy M1 keeps its historical prefixes; 32 is not an M1 before/after state.
+  const counts = {
+    before: [3],
+    after: [4, 5, 6, 44, 45, 46, 47, 48, 49, 50, migrations.length],
+    "catchup-before": [32],
+    "catchup-after": [51],
+  }[phase];
+  if (!counts) throw new Error("Invalid ledger phase");
+  const expectedNames = counts.map((count) => migrations.slice(0, count).map(([name]) => name));
   const names = result.results.map((row, index) => {
     if (!isRecord(row)
       || !hasExactKeys(row, ["applied_at", "id", "name"])
@@ -159,6 +160,10 @@ try {
     await verifyLedger("before", path);
   } else if (mode === "--ledger-after" && path !== undefined) {
     await verifyLedger("after", path);
+  } else if (mode === "--ledger-catchup-before" && path !== undefined) {
+    await verifyLedger("catchup-before", path);
+  } else if (mode === "--ledger-catchup-after" && path !== undefined) {
+    await verifyLedger("catchup-after", path);
   } else if (mode === "--legacy-pending" && path !== undefined) {
     await verifyLegacyPending(path);
   } else {
