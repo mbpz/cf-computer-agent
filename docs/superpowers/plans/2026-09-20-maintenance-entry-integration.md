@@ -7,7 +7,7 @@
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-20):** R02 与 R03 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)和[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。R03 已提交为 `95bd921`；R04 尚未开始，未 push、未部署。
+**Status (2026-09-20):** R02 与 R03 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)和[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。R03 已提交为 `95bd921`；R04 已完成流/存储最小切片，仍未关闭，未 push、未部署。
 
 ## Global Constraints
 
