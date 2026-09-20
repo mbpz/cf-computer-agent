@@ -30,6 +30,7 @@ export interface GraphCanvasProps {
   snapshot: GraphSnapshot;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onClearSelection?: () => void;
   layout?: string;
   fallbackLabel?: string;
   loadCytoscape?: () => Promise<unknown>;
@@ -155,7 +156,7 @@ function graphCanvasIsHidden(container: HTMLElement): boolean {
 }
 
 function GraphCanvasView(
-  { snapshot, selectedId, onSelect, layout, fallbackLabel, loadCytoscape }: GraphCanvasProps,
+  { snapshot, selectedId, onSelect, onClearSelection, layout, fallbackLabel, loadCytoscape }: GraphCanvasProps,
   forwardedRef: ForwardedRef<GraphCanvasHandle>,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +168,7 @@ function GraphCanvasView(
   onSelectRef.current = onSelect;
   const safeLayout = normalizeGraphCanvasLayout(layout);
   const elements = useMemo(() => graphSnapshotToCytoscapeElements(snapshot), [snapshot]);
+  const nodeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useImperativeHandle(forwardedRef, () => ({
     destroy() {
@@ -291,7 +293,33 @@ function GraphCanvasView(
   return (
     <section data-graph-canvas className="graph-canvas" aria-label={fallbackLabel || undefined}>
       <div ref={containerRef} className="graph-canvas__viewport" aria-hidden="true" />
-      <ul data-graph-fallback className="graph-canvas__fallback">
+      <ul
+        data-graph-fallback
+        data-graph-node-list
+        className="graph-canvas__fallback"
+        aria-label={fallbackLabel || undefined}
+        onKeyDown={(event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLButtonElement)) return;
+          const index = snapshot.nodes.findIndex((node) => node.id === target.dataset.graphNodeId);
+          if (index < 0) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClearSelection?.();
+            return;
+          }
+          if (event.key === "Enter" || event.key === " ") {
+            onSelect(snapshot.nodes[index]!.id);
+            return;
+          }
+          const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
+          if (!direction) return;
+          event.preventDefault();
+          const next = (index + direction + snapshot.nodes.length) % snapshot.nodes.length;
+          const nextNode = snapshot.nodes[next];
+          if (nextNode) nodeButtonRefs.current.get(nextNode.id)?.focus();
+        }}
+      >
         {snapshot.nodes.map((node) => {
           const label = safeLabel(node.label, node.id);
           const isSelected = selectedId === node.id;
@@ -303,6 +331,10 @@ function GraphCanvasView(
                 data-graph-node-kind={node.kind}
                 aria-pressed={isSelected}
                 className="graph-canvas__node"
+                ref={(element) => {
+                  if (element) nodeButtonRefs.current.set(node.id, element);
+                  else nodeButtonRefs.current.delete(node.id);
+                }}
                 onClick={() => onSelect(node.id)}
               >
                 <span>{label}</span>

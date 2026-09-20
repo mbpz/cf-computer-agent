@@ -47,6 +47,15 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
     if (selectedId && !selectedNode) setSelectedId(null);
   }, [selectedId, selectedNode]);
   useEffect(() => {
+    if (!selectedId || typeof document !== "object" || document === null) return;
+    const focusInspector = () => document.querySelector<HTMLElement>("[data-graph-inspector]")?.focus();
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      const frame = globalThis.requestAnimationFrame(focusInspector);
+      return () => globalThis.cancelAnimationFrame?.(frame);
+    }
+    focusInspector();
+  }, [selectedId]);
+  useEffect(() => {
     setActionState((current) => current.nodeId === selectedNode?.id ? current : { nodeId: selectedNode?.id ?? null, clientKey: null, status: "idle" });
   }, [selectedNode?.id]);
   if (state.kind === "loading") return <section data-graph-page-loading><p className="mb-3 text-sm text-muted-foreground">{frontendText(locale, "GRAPH_LOADING")}</p><PageState kind="loading" title={frontendText(locale, "GRAPH_LOADING")} /></section>;
@@ -88,7 +97,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
       </Card>
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
+        <GraphCanvas snapshot={filteredSnapshot} selectedId={selectedId} onSelect={setSelectedId} onClearSelection={() => setSelectedId(null)} layout="concentric" fallbackLabel={frontendText(locale, "GRAPH_CANVAS_LABEL")} />
         <div className="grid gap-5 self-start">
           <GraphInspector
             locale={locale}

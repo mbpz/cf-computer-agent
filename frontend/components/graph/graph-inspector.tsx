@@ -29,7 +29,7 @@ export function GraphInspector({ locale, node, onClose, onAction, actionStatus =
   }
 
   return (
-    <aside data-graph-inspector className="min-w-0" aria-label={copy.title}>
+    <aside data-graph-inspector tabIndex={-1} className="min-w-0" aria-label={copy.title}>
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-3">
           <div className="min-w-0">
