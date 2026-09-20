@@ -204,6 +204,21 @@ describe("tasks HTTP contract", () => {
     expect((await api("/api/tasks?page=1&pageSize=20", sessionA)).status).toBe(200);
   });
 
+  it("deletes an owned calendar-and-VM-linked task without granting another member access", async () => {
+    expect((await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "linked-task", title: "Linked task" }) })).status).toBe(201);
+    await env.DB.exec("INSERT INTO calendar_events (id, member_id, client_key, kind, title, starts_at, ends_at, timezone, status, task_id, created_at, updated_at) VALUES ('linked-event', 'member-a', 'linked-event-key', 'event', 'Keep calendar', 100, 200, 'UTC', 'scheduled', 'linked-task', 1, 1);");
+    await env.DB.exec("INSERT INTO browser_environments (id, member_id, name, type, task_id, created_at, updated_at) VALUES ('linked-vm', 'member-a', 'Keep VM', 'personal', 'linked-task', 1, 1);");
+    expect((await api("/api/tasks/linked-task", sessionB, { method: "DELETE" })).status).toBe(404);
+    expect(await env.DB.prepare("SELECT task_id FROM calendar_events WHERE id = 'linked-event'").first()).toEqual({ task_id: "linked-task" });
+    expect((await api("/api/tasks/linked-task", sessionA, { method: "DELETE" })).status).toBe(204);
+    expect(await env.DB.prepare("SELECT member_id, task_id, title FROM calendar_events WHERE id = 'linked-event'").first()).toEqual({ member_id: "member-a", task_id: null, title: "Keep calendar" });
+    expect(await env.DB.prepare("SELECT member_id, task_id, version, name FROM browser_environments WHERE id = 'linked-vm'").first()).toEqual({ member_id: "member-a", task_id: null, version: 2, name: "Keep VM" });
+    expect(await env.DB.prepare("SELECT id FROM tasks WHERE id = 'linked-task'").first()).toBeNull();
+    // Existing DELETE contract: absent tasks return 404, with no second detach.
+    expect((await api("/api/tasks/linked-task", sessionA, { method: "DELETE" })).status).toBe(404);
+    expect(await env.DB.prepare("SELECT version FROM browser_environments WHERE id = 'linked-vm'").first()).toEqual({ version: 2 });
+  });
+
   it("strictly paginates every task filter without leaking another member's total", async () => {
     const today = Date.now() - (Date.now() % DAY) + 3_600_000;
     await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-a", title: "Alpha", priority: "high", dueAt: new Date(today).toISOString() }) });
