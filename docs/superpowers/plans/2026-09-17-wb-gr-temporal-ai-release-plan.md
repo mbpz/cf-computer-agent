@@ -28,11 +28,11 @@
 - Test: `test/unit/graph-temporal-service.test.ts`
 - Test: `test/worker/graph-temporal.test.ts`
 
-- [ ] **Step 1:** 写测试覆盖 `from/to`、默认 7 天、最大 90 天、跨成员时间对象不可见。
-- [ ] **Step 2:** 运行 focused tests，确认失败。
-- [ ] **Step 3:** 增加严格时间参数、稳定排序和 `changeKind: added|updated|completed|archived`，只返回有权对象。
-- [ ] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-temporal-service.test.ts test/worker/graph-temporal.test.ts --pool=workers`。
-- [ ] **Step 5:** 提交 `git commit -m "feat: add temporal work graph filters"`。
+- [x] **Step 1:** 写测试覆盖 `from/to`、默认 7 天、最大 90 天、跨成员时间对象不可见。
+- [ ] **Step 2:** 运行 focused tests，确认失败。未保留独立 red-run 证据；最终 focused 与回归结果已记录。
+- [x] **Step 3:** 增加严格时间参数、稳定排序和 `changeKind: added|updated|completed|archived`，只返回有权对象。
+- [x] **Step 4:** 运行 `rtk npx vitest run test/unit/graph-temporal-service.test.ts test/worker/graph-temporal.test.ts --pool=workers`。
+- [x] **Step 5:** 提交 `git commit -m "feat: add temporal work graph filters"`。
 
 ### Task 2: 现有 Mindmap 与 Graph DTO 适配
 

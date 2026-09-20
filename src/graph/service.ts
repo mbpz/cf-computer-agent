@@ -1,5 +1,6 @@
-import { normalizeGraphSnapshot } from "./types";
-import type { GraphEdge, GraphNode, GraphNodeKind, GraphQuery, GraphSnapshot } from "./types";
+import { AppError } from "../http";
+import { GRAPH_MAX_TEMPORAL_DAYS, normalizeGraphSnapshot } from "./types";
+import type { GraphChangeKind, GraphEdge, GraphNode, GraphNodeKind, GraphQuery, GraphSnapshot } from "./types";
 import type {
   GraphCalendarRecord,
   GraphGoalRecord,
@@ -13,7 +14,7 @@ import type {
 } from "./repository";
 
 export class GraphProjectionService {
-  constructor(private readonly repository: GraphProjectionRepositoryPort) {}
+  constructor(private readonly repository: GraphProjectionRepositoryPort, private readonly options: { now?: () => Date } = {}) {}
 
   async get(memberId: string, query: GraphQuery): Promise<GraphSnapshot> {
     const loaderLimit = Math.min(100, Math.max(1, query.limit));
@@ -37,7 +38,8 @@ export class GraphProjectionService {
       ...calendar.map((record) => calendarNode(record)),
       ...timeline.map((record) => timelineNode(record)),
     ];
-    const allNodeById = new Map(allNodes.map((node) => [node.id, node]));
+    const temporalNodes = filterTemporalNodes(allNodes, query, this.options.now?.() ?? new Date());
+    const allNodeById = new Map(temporalNodes.map((node) => [node.id, node]));
     const allEdges = relations
       .map((relation) => relationEdge(relation))
       .filter((edge): edge is GraphEdge => edge !== null)
@@ -50,8 +52,8 @@ export class GraphProjectionService {
     }));
 
     const typeFiltered = query.types.length === 0
-      ? allNodes
-      : allNodes.filter((node) => query.types.includes(node.kind));
+      ? temporalNodes
+      : temporalNodes.filter((node) => query.types.includes(node.kind));
     const scopeSeeds = typeFiltered.filter((node) => {
       if (query.scope === "knowledge") return node.kind === "knowledge";
       if (query.scope === "project") return node.kind === "project";
@@ -70,6 +72,7 @@ export class GraphProjectionService {
 function knowledgeNode(record: GraphKnowledgeRecord): GraphNode {
   return node("knowledge", record.id, record.title, record.status, `/knowledge/${record.id}`, {
     updatedAt: record.updatedAt,
+    changeKind: inferChangeKind(record.status),
   });
 }
 
@@ -78,6 +81,7 @@ function taskNode(record: GraphTaskRecord): GraphNode {
     priority: record.priority,
     progress: record.progress,
     updatedAt: record.updatedAt,
+    changeKind: inferChangeKind(record.status),
   });
 }
 
@@ -85,6 +89,7 @@ function projectNode(record: GraphProjectRecord): GraphNode {
   return node("project", record.id, record.title, record.status, `/projects/${record.id}`, {
     progress: record.progress,
     updatedAt: record.updatedAt,
+    changeKind: inferChangeKind(record.status),
   });
 }
 
@@ -92,23 +97,46 @@ function goalNode(record: GraphGoalRecord): GraphNode {
   return node("goal", record.id, record.title, record.status, `/goals/${record.id}`, {
     progress: record.progress,
     updatedAt: record.updatedAt,
+    changeKind: inferChangeKind(record.status),
   });
 }
 
 function inboxNode(record: GraphInboxRecord): GraphNode {
   return node("inbox", record.id, record.title, record.status, `/inbox/${record.id}`, {
     updatedAt: record.updatedAt,
+    changeKind: inferChangeKind(record.status),
   });
 }
 
 function calendarNode(record: GraphCalendarRecord): GraphNode {
   const kind: GraphNodeKind = record.kind === "focus" ? "focus" : "calendar";
   const href = record.kind === "focus" ? `/focus/${record.id}` : `/calendar/${record.id}`;
-  return node(kind, record.id, record.title, record.status, href, { updatedAt: record.updatedAt });
+  return node(kind, record.id, record.title, record.status, href, { updatedAt: record.updatedAt, changeKind: inferChangeKind(record.status) });
 }
 
 function timelineNode(record: GraphTimelineRecord): GraphNode {
-  return node(record.kind, record.id, record.title, record.status, `/projects/${record.projectId}/timeline/${record.id}`, { updatedAt: record.updatedAt });
+  return node(record.kind, record.id, record.title, record.status, `/projects/${record.projectId}/timeline/${record.id}`, { updatedAt: record.updatedAt, changeKind: inferChangeKind(record.status) });
+}
+
+function filterTemporalNodes(nodes: GraphNode[], query: GraphQuery, now: Date): GraphNode[] {
+  if (!query.from && !query.to && !query.changeKind) return nodes;
+  const to = query.to ? Date.parse(query.to) : now.getTime();
+  const from = query.from ? Date.parse(query.from) : to - 7 * 86_400_000;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from > to || to - from > GRAPH_MAX_TEMPORAL_DAYS * 86_400_000) {
+    throw new AppError("GRAPH_QUERY_INVALID", "Temporal graph range is invalid", 400);
+  }
+  return nodes.filter((node) => {
+    const changedAt = Date.parse(String(node.metadata.updatedAt ?? ""));
+    if (!Number.isFinite(changedAt) || changedAt < from || changedAt > to) return false;
+    return !query.changeKind || node.metadata.changeKind === query.changeKind;
+  });
+}
+
+function inferChangeKind(status: string | null): GraphChangeKind {
+  if (status === "done" || status === "completed") return "completed";
+  if (status === "archived" || status === "trashed" || status === "canceled" || status === "abandoned") return "archived";
+  if (status === "draft" || status === "todo" || status === "planned") return "added";
+  return "updated";
 }
 
 function node(

@@ -22,6 +22,10 @@ export const GRAPH_EDGE_KINDS = [
 ] as const;
 export type GraphEdgeKind = typeof GRAPH_EDGE_KINDS[number];
 
+export const GRAPH_CHANGE_KINDS = ["added", "updated", "completed", "archived"] as const;
+export type GraphChangeKind = typeof GRAPH_CHANGE_KINDS[number];
+export const GRAPH_MAX_TEMPORAL_DAYS = 90;
+
 export interface GraphNode {
   id: string;
   kind: GraphNodeKind;
@@ -56,9 +60,12 @@ export interface GraphQuery {
   types: GraphNodeKind[];
   limit: number;
   cursor?: string | null;
+  from?: string;
+  to?: string;
+  changeKind?: GraphChangeKind;
 }
 
-const QUERY_KEYS = new Set(["scope", "rootId", "depth", "types", "limit", "cursor"]);
+const QUERY_KEYS = new Set(["scope", "rootId", "depth", "types", "limit", "cursor", "from", "to", "changeKind"]);
 const MEMBER_ID_KEYS = new Set(["memberId", "member_id"]);
 
 export function parseGraphQuery(input: URLSearchParams): GraphQuery {
@@ -77,7 +84,23 @@ export function parseGraphQuery(input: URLSearchParams): GraphQuery {
   const cursorRaw = input.get("cursor");
   const cursor = cursorRaw === null ? null : nonEmpty(cursorRaw, "cursor");
 
-  return { scope, rootId, depth, types, limit, cursor };
+  const fromRaw = input.get("from");
+  const toRaw = input.get("to");
+  const from = fromRaw === null ? undefined : parseTimestamp(fromRaw);
+  const to = toRaw === null ? undefined : parseTimestamp(toRaw);
+  if (from && to && Date.parse(to) < Date.parse(from)) throw invalidQuery();
+  if (from && to && Date.parse(to) - Date.parse(from) > GRAPH_MAX_TEMPORAL_DAYS * 86_400_000) throw invalidQuery();
+  const changeKindRaw = input.get("changeKind");
+  const changeKind = changeKindRaw === null ? undefined : parseEnum(changeKindRaw, GRAPH_CHANGE_KINDS, "changeKind");
+
+  return { scope, rootId, depth, types, limit, cursor, ...(from ? { from } : {}), ...(to ? { to } : {}), ...(changeKind ? { changeKind } : {}) };
+}
+
+function parseTimestamp(value: string): string {
+  if (!value.trim()) throw invalidQuery();
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) throw invalidQuery();
+  return new Date(parsed).toISOString();
 }
 
 export function normalizeGraphSnapshot(

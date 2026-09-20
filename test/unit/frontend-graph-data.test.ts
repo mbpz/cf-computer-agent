@@ -75,6 +75,16 @@ describe("frontend graph data client", () => {
     });
   });
 
+  it("encodes temporal range and change kind without accepting member scope", async () => {
+    const requester = requesterReturning(snapshot());
+    await loadGraph({ from: "2026-09-13T00:00:00.000Z", to: "2026-09-20T00:00:00.000Z", changeKind: "completed" }, requester);
+    const [input] = requester.mock.calls[0]!;
+    expect(String(input)).toContain("from=2026-09-13T00%3A00%3A00.000Z");
+    expect(String(input)).toContain("to=2026-09-20T00%3A00%3A00.000Z");
+    expect(String(input)).toContain("changeKind=completed");
+    expect(String(input)).not.toContain("memberId");
+  });
+
   it("strictly normalizes valid response fields and preserves root, depth, and truncation", async () => {
     const requester = requesterReturning(snapshot({
       nodes: [node("task:t1", { metadata: { priority: 2, memberId: "private" }, extra: "ignored" })],

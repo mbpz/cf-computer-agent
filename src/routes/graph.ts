@@ -29,6 +29,9 @@ export async function routeGraphApi(
       rootId: query.rootId,
       depth: query.depth,
       types: query.types.join(","),
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(query.changeKind ? { changeKind: query.changeKind } : {}),
     });
   }
 
@@ -45,6 +48,9 @@ async function validateCursor(cursor: string, scope: {
   rootId: string | null;
   depth: number;
   types: string;
+  from?: string;
+  to?: string;
+  changeKind?: string;
 }): Promise<void> {
   let decoded: unknown;
   try {

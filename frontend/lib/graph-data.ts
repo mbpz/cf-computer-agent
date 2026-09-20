@@ -14,6 +14,7 @@ import {
   GRAPH_SCOPES,
   type GraphEdge,
   type GraphEdgeKind,
+  type GraphChangeKind,
   type GraphNode,
   type GraphNodeKind,
   type GraphScope,
@@ -29,6 +30,9 @@ export interface GraphQueryInput {
   types?: GraphNodeKind[];
   limit?: number;
   cursor?: string | null;
+  from?: string;
+  to?: string;
+  changeKind?: GraphChangeKind;
 }
 
 const MEMBER_ID_KEYS = new Set(["memberId", "member_id"]);
@@ -150,7 +154,10 @@ function encodeGraphQuery(query: GraphQueryInput): URLSearchParams {
     || (depth !== 1 && depth !== 2) || depth > GRAPH_MAX_DEPTH
     || !Number.isSafeInteger(limit) || limit < GRAPH_MIN_LIMIT || limit > GRAPH_MAX_LIMIT
     || !Array.isArray(types) || types.some((type) => !isGraphNodeKind(type)) || new Set(types).size !== types.length
-    || (query.cursor !== undefined && query.cursor !== null && !isNonEmptyString(query.cursor))) {
+    || (query.cursor !== undefined && query.cursor !== null && !isNonEmptyString(query.cursor))
+    || (query.from !== undefined && !isNonEmptyString(query.from))
+    || (query.to !== undefined && !isNonEmptyString(query.to))
+    || (query.changeKind !== undefined && !["added", "updated", "completed", "archived"].includes(query.changeKind))) {
     throw invalidQuery();
   }
 
@@ -161,6 +168,9 @@ function encodeGraphQuery(query: GraphQueryInput): URLSearchParams {
   if (types.length > 0) params.set("types", types.join(","));
   params.set("limit", String(limit));
   if (query.cursor !== undefined && query.cursor !== null) params.set("cursor", query.cursor);
+  if (query.from !== undefined) params.set("from", query.from);
+  if (query.to !== undefined) params.set("to", query.to);
+  if (query.changeKind !== undefined) params.set("changeKind", query.changeKind);
   return params;
 }
 

@@ -90,6 +90,17 @@ describe("personal work graph contract", () => {
     expect(() => parseGraphQuery(new URLSearchParams("cursor="))).toThrow("GRAPH_QUERY_INVALID");
   });
 
+  it("parses bounded temporal ranges and change kinds", () => {
+    expect(parseGraphQuery(new URLSearchParams("from=2026-09-13T00:00:00.000Z&to=2026-09-20T00:00:00.000Z&changeKind=completed"))).toMatchObject({
+      from: "2026-09-13T00:00:00.000Z",
+      to: "2026-09-20T00:00:00.000Z",
+      changeKind: "completed",
+    });
+    expect(() => parseGraphQuery(new URLSearchParams("from=2026-09-20T00:00:00.000Z&to=2026-09-13T00:00:00.000Z"))).toThrow("GRAPH_QUERY_INVALID");
+    expect(() => parseGraphQuery(new URLSearchParams("from=2026-01-01T00:00:00.000Z&to=2026-09-20T00:00:00.000Z"))).toThrow("GRAPH_QUERY_INVALID");
+    expect(() => parseGraphQuery(new URLSearchParams("changeKind=unknown"))).toThrow("GRAPH_QUERY_INVALID");
+  });
+
   it("sorts IDs stably, deduplicates nodes, filters invalid endpoints, and drops unknown fields", () => {
     const rawNodes = [
       { ...node("b"), extra: "ignored" },

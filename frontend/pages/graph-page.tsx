@@ -19,14 +19,19 @@ export type GraphPageState =
   | { kind: "truncated"; snapshot: GraphSnapshot };
 
 export type GraphLens = "workspace" | "knowledge" | "work";
+export type GraphTemporalRange = "all" | "7d" | "30d" | "90d";
 
 export interface GraphPageProps {
   locale: LocaleRuntime;
   state: GraphPageState;
   query?: string;
   lens?: GraphLens;
+  temporalRange?: GraphTemporalRange;
+  changeKind?: "all" | "added" | "updated" | "completed" | "archived";
   onQueryChange?: (query: string) => void;
   onLensChange?: (lens: GraphLens) => void;
+  onTemporalRangeChange?: (range: GraphTemporalRange) => void;
+  onChangeKindChange?: (changeKind: NonNullable<GraphPageProps["changeKind"]>) => void;
   onRetry?: () => void;
 }
 
@@ -34,7 +39,7 @@ export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promi
 
 const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision", "action_item", "inbox", "calendar", "focus"]);
 
-export function GraphPage({ locale, state, query = "", lens = "workspace", onQueryChange, onLensChange, onRetry }: GraphPageProps) {
+export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onRetry }: GraphPageProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<{ nodeId: string | null; clientKey: string | null; status: GraphInspectorActionStatus }>({ nodeId: null, clientKey: null, status: "idle" });
   const snapshot = state.kind === "ready" || state.kind === "truncated" ? state.snapshot : null;
@@ -86,12 +91,25 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", onQue
       </div>
       <Card>
         <CardHeader><CardTitle>{frontendText(locale, "GRAPH_LENS_TITLE")}</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <CardContent className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_12rem]">
           <Input data-graph-query aria-label={frontendText(locale, "GRAPH_QUERY_LABEL")} placeholder={frontendText(locale, "GRAPH_QUERY_PLACEHOLDER")} value={query} onChange={(event) => onQueryChange?.(event.currentTarget.value)} />
           <select data-graph-lens aria-label={frontendText(locale, "GRAPH_LENS_LABEL")} value={lens} onChange={(event) => onLensChange?.(event.currentTarget.value as GraphLens)} className="h-10 rounded-md border bg-background px-3 text-sm">
             <option value="workspace">{frontendText(locale, "GRAPH_LENS_WORKSPACE")}</option>
             <option value="knowledge">{frontendText(locale, "GRAPH_LENS_KNOWLEDGE")}</option>
             <option value="work">{frontendText(locale, "GRAPH_LENS_WORK")}</option>
+          </select>
+          <select data-graph-time-range aria-label={frontendText(locale, "GRAPH_TIME_RANGE_LABEL")} value={temporalRange} onChange={(event) => onTemporalRangeChange?.(event.currentTarget.value as GraphTemporalRange)} className="h-10 rounded-md border bg-background px-3 text-sm">
+            <option value="all">{frontendText(locale, "GRAPH_TIME_RANGE_ALL")}</option>
+            <option value="7d">{frontendText(locale, "GRAPH_TIME_RANGE_7D")}</option>
+            <option value="30d">{frontendText(locale, "GRAPH_TIME_RANGE_30D")}</option>
+            <option value="90d">{frontendText(locale, "GRAPH_TIME_RANGE_90D")}</option>
+          </select>
+          <select data-graph-change-kind aria-label={frontendText(locale, "GRAPH_CHANGE_KIND_LABEL")} value={changeKind} onChange={(event) => onChangeKindChange?.(event.currentTarget.value as NonNullable<GraphPageProps["changeKind"]>)} className="h-10 rounded-md border bg-background px-3 text-sm">
+            <option value="all">{frontendText(locale, "GRAPH_CHANGE_KIND_ALL")}</option>
+            <option value="added">{frontendText(locale, "GRAPH_CHANGE_KIND_ADDED")}</option>
+            <option value="updated">{frontendText(locale, "GRAPH_CHANGE_KIND_UPDATED")}</option>
+            <option value="completed">{frontendText(locale, "GRAPH_CHANGE_KIND_COMPLETED")}</option>
+            <option value="archived">{frontendText(locale, "GRAPH_CHANGE_KIND_ARCHIVED")}</option>
           </select>
         </CardContent>
       </Card>
@@ -117,6 +135,8 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
   const [state, setState] = useState<GraphPageState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [lens, setLens] = useState<GraphLens>("workspace");
+  const [temporalRange, setTemporalRange] = useState<GraphTemporalRange>("all");
+  const [changeKind, setChangeKind] = useState<NonNullable<GraphPageProps["changeKind"]>>("all");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -125,6 +145,12 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
     const input: GraphQueryInput = { scope: "workspace" };
     if (lens === "knowledge") input.scope = "knowledge";
     if (lens === "work") input.types = [...WORK_LENS_KINDS] as GraphQueryInput["types"];
+    if (temporalRange !== "all") {
+      const days = temporalRange === "7d" ? 7 : temporalRange === "30d" ? 30 : 90;
+      input.from = new Date(Date.now() - days * 86_400_000).toISOString();
+      input.to = new Date().toISOString();
+    }
+    if (changeKind !== "all") input.changeKind = changeKind;
     void load(input, controller.signal).then((snapshot) => {
       if (!active) return;
       setState(snapshot.nodes.length === 0 ? { kind: "empty" } : snapshot.truncated ? { kind: "truncated", snapshot } : { kind: "ready", snapshot });
@@ -132,8 +158,8 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
       if (active && !controller.signal.aborted) setState({ kind: "error" });
     });
     return () => { active = false; controller.abort(); };
-  }, [lens, load, retry]);
-  return <GraphPage locale={locale} state={state} query={query} lens={lens} onQueryChange={setQuery} onLensChange={setLens} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+  }, [changeKind, lens, load, retry, temporalRange]);
+  return <GraphPage locale={locale} state={state} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
 }
 
 function defaultGraphLoader(query: GraphQueryInput, signal: AbortSignal): Promise<GraphSnapshot> {
