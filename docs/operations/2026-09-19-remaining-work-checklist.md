@@ -32,7 +32,7 @@
 
 [产品增量清单](../product/2026-09-12-personal-workbench-completion-audit.md)还有 **30 个未关闭父项**：A 6、B 9、C 7、D 8。它们含已完成子项，且与下列恢复主线重叠。不能称为 30 个全新功能，也不能将 30 与 25 相加。
 
-当前优先恢复主线共 **25 个检查点，7 个关闭，18 个剩余；下一项 R08**。R01–R07 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)和[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。本轮维护专项 63/63；R08 的完整应用回归尚未执行。
+当前优先恢复主线共 **25 个检查点，8 个关闭，17 个剩余；下一项 R09**。R01–R08 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)、[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)和[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。本轮维护专项 63/63、完整应用回归和构建均已完成；未执行生产操作。
 
 ## 2. 执行规则
 
@@ -55,7 +55,7 @@
 - [x] **R05 — 完成维护控制面的授权与重放防护。** 2026-09-20 为 `beginDrain`/`resume` 增加显式合成控制能力校验；错误/缺失能力在状态变更前返回 `CONTROL_UNAUTHORIZED`，普通成员/session/permit/epoch 不具备控制权限。窗口、epoch、重复命令、旧命令和重放墓碑负向矩阵保持通过。见[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)。生产入口仍为 legacy，未配置生产控制密钥。
 - [x] **R06 — 完成容量、孤儿许可及人工退出规则。** 2026-09-20 新增 `capacity()` 只读快照和 8,000/9,500/10,000 分级保护；重启后的活动许可必须人工核实，无法证明时保持阻塞，无 TTL/强制释放/自动开闸。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。生产容量和安全压缩仍未批准。
 - [x] **R07 — 跑真实应用接线的合成故障矩阵。** 2026-09-20 通过本地真实 Worker entry、合成 D1/R2/DO 和维护专项 63/63 覆盖关闭零写入、慢请求、已开始 Cron、迟到/嵌套写入、catch 后原始失败、流断连、重启/失联、重复/跨窗口控制及不确定不放行。见[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)。生产 legacy/外部写者仍不在本地矩阵范围。
-- [ ] **R08 — 完成精确候选的回归与评审。** 维护专项、备份回归、应用及专项类型检查、完整测试/构建和迁移/交付合同均有新鲜证据；审阅变更，记录候选内容摘要。此处只证明本地可交付，不自动提交/发布。
+- [x] **R08 — 完成精确候选的回归与评审。** 2026-09-20 以本地 `HEAD 6e1934a` 完成维护专项 63/63、备份回归 21/21、应用/专项类型检查、完整 `npm test`、构建/landing 97/97、secret/legacy audit、Wrangler dry-run、交付合同 30/30 和 `git diff --check`；工作树干净，未 push/部署/生产 smoke。见[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。
 
 ### B. 发布与备份前置条件（R09–R15，共 7 项）
 
@@ -135,7 +135,8 @@ R01 内部进度（不是新增恢复主线检查点）：
 - R05：2026-09-20 本地授权与重放防护完成；维护专项 63/63、应用/专项类型检查和 `git diff --check` 通过。见[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)。
 - R06：2026-09-20 本地容量快照、告警阈值和人工退出规则完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。
 - R07：2026-09-20 本地真实入口合成故障矩阵完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)。
-- 后续游标：R08，尚未开始。本轮不执行生产变更。
+- R08：2026-09-20 本地候选 `6e1934a` 完成全量回归、构建和评审；备份 21/21、维护 63/63、交付合同 30/30 均通过。见[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。
+- 后续游标：R09，尚未开始。本轮不执行生产变更。
 - 初始清点文档校验：`npm run verify:delivery-status` 28/28 通过、退出 0；`git diff --check` 退出 0。当次只读 Node 核对了 R01–R25 连续且未勾选、90 项能力四维计数、30 个产品父项和 8 个相对链接。该记录不代替新增审计/规格后的校验；本次未重跑应用测试，未修改运行时代码。
 - 2026-09-19 接入规格文档校验：重新运行 `npm run verify:delivery-status`，28/28、退出 0；`git diff --check` 退出 0。只读 Node 断言检查本清单/审计/规格三个文件的 15 个相对链接、无占位、25 项主线仍开放、R01 三个子步骤完成/两个待办，以及审计源码摘要未变化。上述仅为文档及范围校验，不是接入实现或运行时验收。
 
