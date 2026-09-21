@@ -7,7 +7,7 @@
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-21):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)，现已提交至 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），并合入 main 的 `df69af8`；原工作区已快进到该基线。R03 前三项已核验并提交 `b408633`，见[接线证据](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)。第 4 项原始后台任务与完整并行分支已通过本地验证：maintenance 7 files / 118 tests、unit 229 files / 2113 tests、worker 47 files / 656 tests，见[本轮证据](../../operations/evidence/2026-09-21-maintenance-continuations.md)。当前游标为第 5 项，R03 整体仍开放，R04 尚未开始；后续提交以 git 记录为准，本轮未推送、未合入 main、未部署。
+**Status (2026-09-21):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)，现已提交至 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），并合入 main 的 `df69af8`；原工作区已快进到该基线。R03 前三项已核验并提交 `b408633`，见[接线证据](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)。第 4 项已提交 `eb685c3`，见[后台及并行分支证据](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项已完成真实入口集成验证：maintenance 8 files / 135 tests、完整 `npm test`、应用及专项类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)。R03 整体关闭，恢复主线 3 关闭 / 22 剩余；当前游标为 R04，尚未开始。收口提交以 git 记录为准，本轮未推送、未合入 main、未部署。
 
 ## Global Constraints
 
@@ -79,12 +79,13 @@ Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 
 - 第三项 GREEN：初次完整 maintenance 5 files / 92 tests passed。新增第八项真实成员状态变更 + 审计原子 batch 测试后，专项通过；临时禁用缓存时该测试失败（预期 200、实际 500），恢复缓存后完整 maintenance 5 files / 93 tests passed（07:44:32，4.81s）。反向验证改动已撤回。
 - R03 前三子项已于本轮重新核验并提交 `b408633`；恢复总计仍为 2 关闭 / 23 剩余。验证命令、结果与边界见接线证据，不以 D1 接线代替完整后台链证明。
 - 第 4 项 RED：成员/session/nonce 原始后台失败测试 3 failed；Today 并行兄弟链测试 4 failed，均为提前释放许可而非环境失败。GREEN：登记 catch 前原始任务、每分支完整 continuation 并显式传递请求 scope；扩展 Review、Library、Graph、4xx/5xx、正常与 legacy 路径、入口 scope 隔离测试后，maintenance 118 项及全量 unit/worker 回归通过。证据见[本轮记录](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项仍开放，未将服务层测试等同于完整入口验收。
+- 第 5 项 RED：五个 guarded app 异常场景在响应断言通过后错误释放许可，五个 legacy 对照通过。app catch 增加固定不确定性标记后全部通过；扩展真实 400/403/404、响应后嵌套 D1 与封闭后迟到调用，共 17 项。最终 maintenance 135 项、完整 `npm test` 和类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)，据此关闭 R03。R04 仍未执行。
 
 - [x] 先红测 `assertOpen`、`markUncertain`（固定码），吞错原始拒绝仍保留许可、sealed 后零原生调用；扩展 WorkScope，不允许复活。
 - [x] 先测试后添加 D1/statement facade：prepare/bind 惰性，first/run/all/raw 重载、batch 同 facade 归属检查；exec/withSession/dump 明确拒绝，成功 null/空 rows 不误报。
 - [x] guard handler 内包装实际 DB 和 sessionDatabase 覆盖；同请求同 DB 复用 facade，跨请求不复用。失败 `success:false` 保留原返回同时标记不确定。
 - [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
-- [ ] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
+- [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
 
 ## R04 — 流、取消、超时和跨存储（后续独立执行）
 

@@ -196,6 +196,12 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           services.publishedContent.dispose();
         }
       } catch (error) {
+        // A converted response is not proof that unexpected work completed.
+        // Known client/domain denials remain releasable; raw D1 failures have
+        // already been observed independently, before any business translation.
+        if (!(error instanceof AppError) || error.status >= 500) {
+          dependencies.workScope?.markUncertain("APP_UNEXPECTED_ERROR");
+        }
         logRequestFailure(request, context, error);
         const response = errorResponse(error, context.requestId);
         return url.pathname === "/auth/github/callback" ? clearOAuthCookies(response)
