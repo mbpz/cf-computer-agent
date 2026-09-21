@@ -59,7 +59,7 @@
 
 ### B. 发布与备份前置条件（R09–R15，共 7 项）
 
-- [ ] **R09 — 核实实际发布链和全部生产写者。** 已完成仓库 Wrangler/绑定/Cron/本地命令与 Cloudflare deployments 只读盘点，但 10 个部署没有 Git SHA/CI run 映射，仓库无 `.github` 工作流，Dashboard CI、旧版本、控制台/D1、外部 automation/其他 Worker 写者和未来时间戳异常仍未解释。见[发布链与写者盘点证据](evidence/2026-09-20-release-chain-writer-inventory.md)。在获得完整责任/停写顺序和 source-to-version 证据前保持开放。
+- [ ] **R09 — 核实实际发布链和全部生产写者。** 已完成仓库 Wrangler/绑定/Cron/本地命令与 Cloudflare deployments/versions 只读盘点：10 个 100% deployments、11 个版本，最新版本仍为 `Unknown (version_upload)`，没有 Git SHA/CI run 映射；仓库无 `.github` 工作流，Dashboard CI、旧版本、控制台/D1、外部 automation/其他 Worker 写者仍未形成清单。见[发布链与写者盘点证据](evidence/2026-09-20-release-chain-writer-inventory.md)。在获得完整责任/停写顺序和 source-to-version 证据前保持开放。
 - [ ] **R10 — 完成远程合成只读传输验证。** 单独批准测试库/fixture 及权限；验证正式工具的权限、PRAGMA、数值/二进制编码、响应封装、请求/大小限制。离线 fixture 不能替代真实接口验证；不访问生产私有内容。
 - [ ] **R11 — 补发布/schema 防漂移门禁。** 基于 R09 的实际平台，验证批准候选 hash、现有迁移前缀、待迁移清单、目标 binding 和同版本验收；本地负向测试覆盖缺迁移、错库、旧 SQL hash 变化及意外新增。实际平台配置变更须批准，不自动每次 push 执行迁移。
 - [ ] **R12 — 确认备份保管与隔离恢复条件。** 明确加密、访问限制、独立摘要、保留/清理、恢复隔离及真实内容处置；核对数据规模与工具资源预算。0700/0600 不是加密，临时目录不是长期备份；不将私有正文放进仓库/聊天/附件。
@@ -136,7 +136,7 @@ R01 内部进度（不是新增恢复主线检查点）：
 - R06：2026-09-20 本地容量快照、告警阈值和人工退出规则完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。
 - R07：2026-09-20 本地真实入口合成故障矩阵完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)。
 - R08：2026-09-20 本地候选 `6e1934a` 完成全量回归、构建和评审；备份 21/21、维护 63/63、交付合同 30/30 均通过。见[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。
-- R09：已完成仓库与 Cloudflare deployments 只读盘点，但 source-to-version、Dashboard CI 和全部生产写者证据不足，保持开放。见[发布链与写者盘点证据](evidence/2026-09-20-release-chain-writer-inventory.md)。
+- R09：已完成仓库与 Cloudflare deployments/versions 只读盘点，但 source-to-version、Dashboard CI 和全部生产写者证据不足，保持开放。见[发布链与写者盘点证据](evidence/2026-09-20-release-chain-writer-inventory.md)。
 - 后续游标：R09（补齐生产发布链/写者证据），本轮不执行生产变更。
 - 初始清点文档校验：`npm run verify:delivery-status` 28/28 通过、退出 0；`git diff --check` 退出 0。当次只读 Node 核对了 R01–R25 连续且未勾选、90 项能力四维计数、30 个产品父项和 8 个相对链接。该记录不代替新增审计/规格后的校验；本次未重跑应用测试，未修改运行时代码。
 - 2026-09-19 接入规格文档校验：重新运行 `npm run verify:delivery-status`，28/28、退出 0；`git diff --check` 退出 0。只读 Node 断言检查本清单/审计/规格三个文件的 15 个相对链接、无占位、25 项主线仍开放、R01 三个子步骤完成/两个待办，以及审计源码摘要未变化。上述仅为文档及范围校验，不是接入实现或运行时验收。
