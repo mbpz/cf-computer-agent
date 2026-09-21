@@ -146,4 +146,24 @@ describe('guarded entry D1 wiring', () => {
     expect(reads).toBe(0);
     expect(await g.status()).toMatchObject({ active: 0, phase: 'DRAINED' });
   });
+
+  it.each(['/api/today', '/api/workbench/review', '/api/graph'])('completes real parallel service route %s with a fresh request scope', async path => {
+    await seedMember(env.SYNTHETIC_DB);
+    const members = new MembersRepository(env.SYNTHETIC_DB);
+    const token = (await new SessionService(env.SYNTHETIC_DB, members, { waitUntil: () => undefined })
+      .create((await members.findById('wiring-member'))!)).token;
+    let inheritedReads = 0;
+    const dependencies: AppDependencies = {
+      get workScope(): never { inheritedReads++; throw new Error('STALE_SCOPE_READ'); },
+    };
+    const g = gate(); const worker = createWorkerEntry({ mode: 'guarded', maintenance: () => g, dependencies });
+    for (let request = 0; request < 2; request++) {
+      const ctx = createExecutionContext();
+      const response = await worker.fetch(incoming(path, { headers: { cookie: `__Host-memory-session=${token}` } }), localEnvironment(env), ctx);
+      const body = await response.json(); await waitOnExecutionContext(ctx);
+      expect(response.status, JSON.stringify(body)).toBe(200);
+      expect(await g.status()).toMatchObject({ active: 0 });
+    }
+    expect(inheritedReads).toBe(0);
+  });
 });

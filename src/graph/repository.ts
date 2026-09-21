@@ -1,4 +1,6 @@
 import { encodeCitationId } from "../library/service";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 import type { ProjectsRepositoryPort } from "../projects/repository";
 import type { ProjectTimelineRepositoryPort } from "../project-timeline/repository";
 import type { ProjectTimelineItem } from "../project-timeline/types";
@@ -106,7 +108,7 @@ type RelationRow = {
 
 /** Read-only projection adapter over the existing authoritative D1 tables. */
 export class GraphProjectionRepository implements GraphProjectionRepositoryPort {
-  constructor(private readonly db: D1Database, private readonly adapters: { projects?: Pick<ProjectsRepositoryPort, "listOwned">; timeline?: Pick<ProjectTimelineRepositoryPort, "listOwned"> } = {}) {}
+  constructor(private readonly db: D1Database, private readonly adapters: { projects?: Pick<ProjectsRepositoryPort, "listOwned">; timeline?: Pick<ProjectTimelineRepositoryPort, "listOwned"> } = {}, private readonly workScope?: WorkScope) {}
 
   async listKnowledge(memberId: string, limit = 100): Promise<GraphKnowledgeRecord[]> {
     const rows = await this.db.prepare(
@@ -206,7 +208,7 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
   async listTimeline(memberId: string, limit = 100): Promise<GraphTimelineRecord[]> {
     if (this.adapters.timeline && this.adapters.projects) {
       const projects = await this.adapters.projects.listOwned(memberId, { limit: limitValue(limit), cursor: undefined });
-      const pages = await Promise.all(projects.items.map((project) => this.adapters.timeline!.listOwned(memberId, { projectId: project.id, limit: limitValue(limit), cursor: undefined })));
+      const pages = await parallelWork(this.workScope, projects.items.map((project) => () => this.adapters.timeline!.listOwned(memberId, { projectId: project.id, limit: limitValue(limit), cursor: undefined })));
       return pages.flatMap((page) => page.items).filter((item): item is ProjectTimelineItem & { kind: "meeting" | "decision" | "action_item" } => item.kind !== "milestone").slice(0, limitValue(limit)).map((item) => ({ id: item.id, projectId: item.projectId, kind: item.kind, title: item.title, status: item.status, updatedAt: item.updatedAt }));
     }
     const rows = await this.db.prepare(`SELECT pti.id, pti.project_id, pti.kind, pti.title, pti.status, pti.updated_at
@@ -219,15 +221,15 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
   }
 
   async listRelations(memberId: string, limit = 100): Promise<GraphProjectionRelation[]> {
-    const [taskLinks, dependencies, projectGoals, projectTasks, calendar, inbox, timeline] = await Promise.all([
-      this.db.prepare(
+    const [taskLinks, dependencies, projectGoals, projectTasks, calendar, inbox, timeline] = await parallelWork(this.workScope, [
+      () => this.db.prepare(
         `SELECT 'task' AS source_kind, tl.task_id AS source_id, 'knowledge' AS target_kind,
                 tl.knowledge_item_id AS target_id, 'references' AS kind, 'References' AS label
          FROM task_links tl JOIN tasks t ON t.id = tl.task_id AND t.member_id = tl.member_id
          JOIN members m ON m.id = tl.member_id AND m.status = 'active'
          WHERE tl.member_id = ? ORDER BY tl.task_id ASC, tl.knowledge_item_id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT 'task' AS source_kind, td.task_id AS source_id, 'task' AS target_kind,
                 td.depends_on_task_id AS target_id, 'depends_on' AS kind, 'Depends on' AS label
          FROM task_dependencies td
@@ -236,7 +238,7 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
          JOIN members m ON m.id = td.member_id AND m.status = 'active'
          WHERE td.member_id = ? ORDER BY td.task_id ASC, td.depends_on_task_id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT 'project' AS source_kind, pg.project_id AS source_id, 'goal' AS target_kind,
                 pg.goal_id AS target_id, 'belongs_to' AS kind, 'Contains goal' AS label
          FROM project_goals pg
@@ -245,7 +247,7 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
          JOIN members m ON m.id = pg.member_id AND m.status = 'active'
          WHERE pg.member_id = ? ORDER BY pg.project_id ASC, pg.goal_id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT 'project' AS source_kind, pt.project_id AS source_id, 'task' AS target_kind,
                 pt.task_id AS target_id, 'belongs_to' AS kind, 'Contains task' AS label
          FROM project_tasks pt
@@ -254,7 +256,7 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
          JOIN members m ON m.id = pt.member_id AND m.status = 'active'
          WHERE pt.member_id = ? ORDER BY pt.project_id ASC, pt.task_id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT CASE WHEN c.kind = 'focus' THEN 'focus' ELSE 'calendar' END AS source_kind,
                 c.id AS source_id,
                 CASE WHEN c.task_id IS NOT NULL THEN 'task' WHEN c.project_id IS NOT NULL THEN 'project' ELSE NULL END AS target_kind,
@@ -265,13 +267,13 @@ export class GraphProjectionRepository implements GraphProjectionRepositoryPort 
          WHERE c.member_id = ? AND (c.task_id IS NOT NULL OR c.project_id IS NOT NULL)
          ORDER BY c.id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT 'inbox' AS source_kind, i.id AS source_id, 'task' AS target_kind,
                 i.promoted_task_id AS target_id, 'creates' AS kind, 'Promoted to task' AS label
          FROM inbox_items i JOIN members m ON m.id = i.member_id AND m.status = 'active'
          WHERE i.member_id = ? AND i.promoted_task_id IS NOT NULL ORDER BY i.id ASC LIMIT ?`,
       ).bind(memberId, limitValue(limit)).all<RelationRow>(),
-      this.db.prepare(
+      () => this.db.prepare(
         `SELECT pti.kind AS source_kind, pti.id AS source_id, 'project' AS target_kind,
                 pti.project_id AS target_id, 'belongs_to' AS kind, 'Belongs to project' AS label
          FROM project_timeline_items pti

@@ -4,6 +4,8 @@ import { AppError } from "../http";
 import { MembersConflictError, type MembersRepositoryPort } from "./repository";
 import type { CreateMember, Member, MemberIdentity, MemberStatus } from "./types";
 import type { WeChatIdentity } from "../identity/wechat-oauth";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { runWork } from "../maintenance/work";
 
 export interface MembersEnvironment {
   BOOTSTRAP_ADMIN_EMAIL?: string;
@@ -13,6 +15,7 @@ export interface MembersEnvironment {
 }
 
 export interface MembersServiceOptions {
+  workScope?: WorkScope;
   id?: () => string;
   auditId?: () => string;
   now?: () => Date;
@@ -28,6 +31,7 @@ export class MembersService {
   private readonly auditId: () => string;
   private readonly lastSeenWindowMs: number;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly workScope?: WorkScope;
   private readonly bootstrapAdminEmail: string | undefined;
   private readonly allowedMemberEmails: string | undefined;
   private readonly bootstrapWeChatSubject: string | undefined;
@@ -48,6 +52,7 @@ export class MembersService {
     this.now = options.now || (() => new Date());
     this.lastSeenWindowMs = options.lastSeenWindowMs ?? defaultLastSeenWindowMs;
     this.waitUntil = options.waitUntil;
+    this.workScope = options.workScope;
   }
 
   async resolveGitHubLogin(input: GitHubIdentity): Promise<Member> {
@@ -200,7 +205,7 @@ export class MembersService {
     requireActive(member);
     const now = this.now();
     const staleBefore = new Date(now.getTime() - this.lastSeenWindowMs).toISOString();
-    const update = this.repository.touchLastSeenIfStale(member.id, now.toISOString(), staleBefore)
+    const update = runWork(this.workScope, () => this.repository.touchLastSeenIfStale(member.id, now.toISOString(), staleBefore))
       .then(() => undefined)
       .catch(() => { console.warn("member last_seen update failed"); });
     this.waitUntil(update);

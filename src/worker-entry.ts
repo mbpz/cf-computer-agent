@@ -54,6 +54,7 @@ function scopedBindings(env: Env, dependencies: AppDependencies | undefined, sco
     DB: { enumerable: true, get: () => database(env.DB) },
   });
   const scopedDependencies: AppDependencies = Object.create(dependencies ?? null, {
+    workScope: { enumerable: true, value: scope },
     sessionDatabase: { enumerable: true, get: () => {
       const override = dependencies?.sessionDatabase;
       return override ? database(override) : undefined;

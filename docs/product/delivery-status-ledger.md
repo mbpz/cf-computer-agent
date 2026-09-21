@@ -1,6 +1,6 @@
 # 产品交付状态总账
 
-**2026-09-20 顺序清单推进：** [checklist](../operations/2026-09-19-remaining-work-checklist.md)中 R01 规格/计划和 R02 真实 HTTP/Cron 本地接线已完成，25 项中 2 关闭、23 剩余，下一项 R03 尚未开始。45 项维护专项、完整应用回归及类型检查通过，见[本轮证据](../operations/evidence/2026-09-20-maintenance-entry.md)；生产仍 legacy、未启用维护，R03/R04 尚未完成。总账维度保持：排除 4 个旧兼容映射后 90 项能力，实现 70 done / 5 partial / 15 pending，验证 74 done / 16 pending，发布 24 partial / 66 pending，验收 6 partial / 84 pending。30 个产品未关闭父项与恢复检查点重叠，不相加，不改变表内状态或声称生产已验证。
+**2026-09-21 顺序清单推进：** [checklist](../operations/2026-09-19-remaining-work-checklist.md)中 R01 规格/计划和 R02 真实 HTTP/Cron 本地接线已完成，25 项中 2 关闭、23 剩余；R03 进行中，前四个子项本地验证完成，下一项是第 5 项集成边界收口。118 项维护专项、完整应用回归及类型检查通过，见[本轮证据](../operations/evidence/2026-09-21-maintenance-continuations.md)；生产仍 legacy、未启用维护，R03/R04 尚未完成。总账维度保持：排除 4 个旧兼容映射后 90 项能力，实现 70 done / 5 partial / 15 pending，验证 74 done / 16 pending，发布 24 partial / 66 pending，验收 6 partial / 84 pending。30 个产品未关闭父项与恢复检查点重叠，不相加，不改变表内状态或声称生产已验证。
 
 **2026-09-19 本地维护协调器补充：** 已按确认范围实现持久化准入/排空及 HTTP/Cron 后台任务、嵌套回调、响应流生命周期适配器。28 项维护专项、21 项备份回归、完整 `npm test` 及应用/专项类型检查通过，见[交付证据](../operations/evidence/2026-09-19-maintenance-coordinator.md)。`DRAINED` 只证明该协调器登记工作清零，不是生产停写；真实入口、控制鉴权、容量/孤儿处理、部署及外部写者验证尚未完成。未变更生产入口或配置，未执行导出、迁移、部署、提交或推送，不提升下表发布/验收状态，不关闭 D02/R6-003 或 D3/D4。
 

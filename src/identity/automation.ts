@@ -1,5 +1,7 @@
 import { fixedLengthBytesEqual, verifyAutomationToken, type AuthEnvironment } from "../auth";
 import { AppError, readBoundedBodyBytes } from "../http";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { runWork } from "../maintenance/work";
 
 const MAX_TIMESTAMP_SKEW_MS = 300_000;
 const NONCE_RETENTION_MS = MAX_TIMESTAMP_SKEW_MS + 1_000;
@@ -18,6 +20,7 @@ export interface AutomationEnvironment extends AuthEnvironment {
 }
 
 export interface AutomationAuthenticatorOptions {
+  workScope?: WorkScope;
   now?: () => Date;
   waitUntil: (promise: Promise<unknown>) => void;
 }
@@ -36,6 +39,7 @@ interface AutomationHeaders {
 export class AutomationAuthenticator {
   private readonly now: () => Date;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly workScope?: WorkScope;
 
   constructor(
     private readonly db: D1Database,
@@ -45,6 +49,7 @@ export class AutomationAuthenticator {
     if (typeof options.waitUntil !== "function") throw new TypeError("waitUntil is required");
     this.now = options.now || (() => new Date());
     this.waitUntil = options.waitUntil;
+    this.workScope = options.workScope;
   }
 
   async verify(request: Request, maxBodyBytes: number): Promise<VerifiedAutomationRequest> {
@@ -102,7 +107,7 @@ export class AutomationAuthenticator {
   }
 
   private scheduleExpiredCleanup(now: string): void {
-    const cleanup = this.db.prepare(
+    const cleanup = runWork(this.workScope, () => this.db.prepare(
       `DELETE FROM automation_nonces
        WHERE rowid IN (
          SELECT rowid FROM automation_nonces
@@ -110,7 +115,7 @@ export class AutomationAuthenticator {
          ORDER BY expires_at ASC, client_id ASC, nonce ASC
          LIMIT 50
        )`,
-    ).bind(now).run()
+    ).bind(now).run())
       .then(() => undefined)
       .catch(() => { console.warn("expired automation nonce cleanup failed"); });
     this.waitUntil(cleanup);

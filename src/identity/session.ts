@@ -3,6 +3,8 @@ import { AppError } from "../http";
 import type { MembersRepositoryPort } from "../members/repository";
 import type { Member } from "../members/types";
 import { readUniqueCookie } from "./oauth-cookies";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { runWork } from "../maintenance/work";
 
 const SESSION_COOKIE_NAME = "__Host-memory-session";
 const SESSION_TOKEN_BYTES = 32;
@@ -16,6 +18,7 @@ export interface SessionPrincipalRecord {
 }
 
 export interface SessionServiceOptions {
+  workScope?: WorkScope;
   now?: () => Date;
   randomBytes?: (length: number) => Uint8Array;
   waitUntil: (promise: Promise<unknown>) => void;
@@ -32,6 +35,7 @@ export class SessionService {
   private readonly now: () => Date;
   private readonly randomBytes: (length: number) => Uint8Array;
   private readonly waitUntil: (promise: Promise<unknown>) => void;
+  private readonly workScope?: WorkScope;
 
   constructor(
     private readonly db: D1Database,
@@ -42,6 +46,7 @@ export class SessionService {
     this.now = options.now || (() => new Date());
     this.randomBytes = options.randomBytes || ((length) => crypto.getRandomValues(new Uint8Array(length)));
     this.waitUntil = options.waitUntil;
+    this.workScope = options.workScope;
   }
 
   async create(member: Member): Promise<{ token: string; expiresAt: string }> {
@@ -114,7 +119,7 @@ export class SessionService {
   }
 
   private scheduleExpiredCleanup(now: string): void {
-    const cleanup = this.db.prepare(
+    const cleanup = runWork(this.workScope, () => this.db.prepare(
       `DELETE FROM auth_sessions
        WHERE token_hash IN (
          SELECT token_hash FROM auth_sessions
@@ -122,7 +127,7 @@ export class SessionService {
          ORDER BY expires_at ASC, token_hash ASC
          LIMIT 50
        )`,
-    ).bind(now).run()
+    ).bind(now).run())
       .then(() => undefined)
       .catch(() => { console.warn("expired session cleanup failed"); });
     this.waitUntil(cleanup);
