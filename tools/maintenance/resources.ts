@@ -11,6 +11,7 @@ export interface LocalResources {
 /** Test-only ports. No production config, credentials or AI binding is loaded. */
 export function localEnvironment(resources: LocalResources): Env {
   return {
+    MAINTENANCE_CONTROL_TOKEN: 'synthetic-maintenance-control-token',
     get DB() { return resources.SYNTHETIC_DB; },
     get ORIGINALS() { return resources.SYNTHETIC_ORIGINALS; },
     get KNOWLEDGE() { return resources.KNOWLEDGE; },

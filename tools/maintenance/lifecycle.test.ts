@@ -2,8 +2,9 @@ import { env } from './env';
 import { describe, expect, it } from 'vitest';
 import { guardFetch, guardScheduled, type WorkScope, type Completion } from '../../src/maintenance/lifecycle';
 import type { MaintenanceClient } from '../../src/maintenance/contracts';
+import { authorizedMaintenance } from './control-client';
 
-function gate() { return env.MAINTENANCE.getByName(crypto.randomUUID()); }
+function gate() { return authorizedMaintenance(env.MAINTENANCE.getByName(crypto.randomUUID())); }
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;

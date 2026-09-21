@@ -2,8 +2,12 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Permit, Snapshot } from './contracts';
 
 export class MaintenanceCoordinator extends DurableObject<unknown> {
+  private readonly controlToken: string | null;
+
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env);
+    const candidate = (env as { MAINTENANCE_CONTROL_TOKEN?: unknown } | null | undefined)?.MAINTENANCE_CONTROL_TOKEN;
+    this.controlToken = typeof candidate === 'string' && candidate.length >= 16 ? candidate : null;
     ctx.storage.transactionSync(() => {
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS control (
         singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
@@ -44,7 +48,8 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
     });
   }
 
-  beginDrain(window: string, epoch: number): Snapshot {
+  beginDrain(window: string, epoch: number, capability: string): Snapshot {
+    this.assertControlCapability(capability);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {
@@ -56,7 +61,8 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
     });
   }
 
-  resume(window: string, epoch: number): Snapshot {
+  resume(window: string, epoch: number, capability: string): Snapshot {
+    this.assertControlCapability(capability);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {
@@ -83,6 +89,12 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
       'SELECT COUNT(*) AS active FROM permits WHERE done = 0',
     ).one();
     return { ...state, active, phase: state.window === null ? 'OPEN' : active === 0 ? 'DRAINED' : 'DRAINING' };
+  }
+
+  private assertControlCapability(capability: unknown): asserts capability is string {
+    if (this.controlToken === null || typeof capability !== 'string' || capability !== this.controlToken) {
+      throw new Error('CONTROL_UNAUTHORIZED');
+    }
   }
 }
 

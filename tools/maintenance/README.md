@@ -29,9 +29,15 @@ async helper before rejection assertions.
 - Exact completion retries are safe. `resume` requires matching window/epoch
   and no active work; it increments epoch. Only the latest matching resume may
   be retried while still open. Older control calls cannot reopen a newer window.
-- RPC clients are trusted internal callers. Permit IDs and epochs are not
-  authentication credentials or database-enforced fencing tokens. Control-plane
-  authentication and fleet/external-writer fencing are not implemented.
+- `beginDrain` and `resume` require an explicitly injected maintenance control
+  capability. The synthetic harness supplies `MAINTENANCE_CONTROL_TOKEN` only
+  through its local binding; ordinary member/session cookies, permit IDs and
+  epochs are rejected as `CONTROL_UNAUTHORIZED` and never become control
+  credentials. No public HTTP control route is exported, and production control
+  wiring remains intentionally disabled.
+- Permit IDs and epochs are still not authentication credentials or
+  fleet/external-writer fencing tokens. External-writer fencing is not
+  implemented.
 - Completed IDs remain as replay tombstones. At 10,000 total records admission
   fails closed. There is no cleanup/TTL, automatic recovery, or production
   capacity claim. Sizing and safe compaction are blockers before deployment.

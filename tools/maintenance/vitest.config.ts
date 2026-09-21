@@ -6,6 +6,7 @@ export default defineConfig({
     main: './tools/maintenance/worker.ts',
     remoteBindings: false,
     miniflare: {
+      bindings: { MAINTENANCE_CONTROL_TOKEN: 'synthetic-maintenance-control-token' },
       compatibilityDate: '2026-08-08',
       compatibilityFlags: ['nodejs_compat'],
       d1Databases: { SYNTHETIC_DB: 'maintenance-synthetic-only' },

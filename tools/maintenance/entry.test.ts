@@ -1,6 +1,7 @@
 import { SELF, reset, applyD1Migrations, createExecutionContext, createScheduledController, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env } from './env';
+import { authorizedMaintenance } from './control-client';
 import { localEnvironment } from './resources';
 import { createWorkerEntry } from '../../src/worker-entry';
 import type { MaintenanceClient } from '../../src/maintenance/contracts';
@@ -20,7 +21,7 @@ async function scheduledLocalWorker() {
   await localWorker.scheduled(createScheduledController({ cron: '*/5 * * * *' }), env, ctx);
   await waitOnExecutionContext(ctx);
 }
-function gate() { return env.MAINTENANCE.getByName(crypto.randomUUID()); }
+function gate() { return authorizedMaintenance(env.MAINTENANCE.getByName(crypto.randomUUID())); }
 function guarded(client: MaintenanceClient) { return createWorkerEntry({ mode: 'guarded', maintenance: () => client }); }
 function deferred() {
   let resolve!: () => void;
@@ -77,7 +78,7 @@ describe('real maintenance entry', () => {
   beforeEach(async () => { await reset(); });
 
   it('denies static, auth and API requests at the local Worker entry when drained', async () => {
-    await env.MAINTENANCE.getByName('local-entry').beginDrain('entry-closed', 0);
+    await authorizedMaintenance(env.MAINTENANCE.getByName('local-entry')).beginDrain('entry-closed', 0);
     for (const path of ['/boards', '/auth/session', '/api/auth/providers']) {
       const response = await SELF.fetch(`https://example.test${path}`);
       expect(response.status, path).toBe(503);
@@ -236,7 +237,7 @@ describe('real maintenance entry', () => {
     for (const { asset } of assets) {
       expect(await (await env.SYNTHETIC_ORIGINALS.get(`parsed/${asset.id}.md`))?.text()).toContain('Synthetic maintenance document');
     }
-    const g = env.MAINTENANCE.getByName('local-entry');
+    const g = authorizedMaintenance(env.MAINTENANCE.getByName('local-entry'));
     expect(await g.beginDrain('cron-closed', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
     await seedAsset(4);
     await scheduledLocalWorker();
