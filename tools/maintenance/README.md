@@ -39,8 +39,25 @@ async helper before rejection assertions.
   fleet/external-writer fencing tokens. External-writer fencing is not
   implemented.
 - Completed IDs remain as replay tombstones. At 10,000 total records admission
-  fails closed. There is no cleanup/TTL, automatic recovery, or production
-  capacity claim. Sizing and safe compaction are blockers before deployment.
+  fails closed. `capacity()` is read-only operator evidence: 8,000 records is
+  `WARNING`, 9,500 is `CRITICAL`, and 10,000 is `EXHAUSTED`; it never releases
+  work. There is no cleanup/TTL, automatic recovery, or production capacity
+  claim. Sizing and safe compaction are blockers before deployment.
+
+## Capacity and manual exit contract
+
+- A permit that survives a process, RPC or Durable Object restart is an
+  orphan/unknown result, not an expired task. `capacity()` marks a non-open
+  window with active permits as `requiresManualReview`; operators must keep the
+  window closed while verifying the exact permit and host/process outcome.
+- The only safe release is an exact `complete({ id, epoch })` after the owner
+  has evidence that the corresponding work finished. If the permit or outcome
+  cannot be proven, abort the backup window and leave admission blocked. There
+  is intentionally no force-release, TTL reclaim, or automatic `resume` path.
+- Once records reach `CRITICAL`, stop opening new maintenance work and schedule
+  an approved compaction design; at `EXHAUSTED`, admission fails closed. Any
+  compaction must preserve replay protection and be separately reviewed before
+  production use.
 
 ## Work lifetime contract
 

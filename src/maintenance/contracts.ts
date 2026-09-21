@@ -9,6 +9,18 @@ export interface Snapshot {
   active: number;
 }
 
+export type CapacityAlert = 'NONE' | 'WARNING' | 'CRITICAL' | 'EXHAUSTED';
+
+/** Read-only operator evidence; querying it never releases a permit. */
+export interface CapacitySnapshot extends Snapshot {
+  records: number;
+  tombstones: number;
+  capacityLimit: number;
+  capacityRemaining: number;
+  alert: CapacityAlert;
+  requiresManualReview: boolean;
+}
+
 export interface MaintenanceClient {
   acquire(id: string): Promise<Permit | null>;
   complete(permit: Permit): Promise<Snapshot>;

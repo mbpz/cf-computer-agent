@@ -67,6 +67,7 @@ describe('durable maintenance admission', () => {
     await abortAllDurableObjects();
     const restarted = authorizedMaintenance(env.MAINTENANCE.getByName(name));
     expect(await restarted.status()).toEqual({ phase: 'DRAINING', active: 1, epoch: 0, window: 'restart' });
+    expect(await restarted.capacity()).toMatchObject({ records: 1, tombstones: 0, capacityRemaining: 9_999, alert: 'NONE', requiresManualReview: true });
     expect(await restarted.acquire('new')).toBeNull();
     await expect(settled(restarted.resume('restart', 0))).rejects.toThrow('ACTIVE_WORK');
   });
@@ -107,6 +108,7 @@ describe('durable maintenance admission', () => {
         VALUES(1) UNION ALL SELECT i + 1 FROM n WHERE i < 9999
       ) INSERT INTO permits SELECT 'past-' || i, 0, 1 FROM n`);
     });
+    expect(await raw.capacity()).toMatchObject({ records: 9_999, tombstones: 9_999, capacityRemaining: 1, alert: 'CRITICAL', requiresManualReview: false });
     const last = (await raw.acquire('last'))!;
     await raw.complete(last);
     await expect(settled(raw.acquire('overflow'))).rejects.toThrow('CAPACITY_EXCEEDED');

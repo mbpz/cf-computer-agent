@@ -32,7 +32,7 @@
 
 [产品增量清单](../product/2026-09-12-personal-workbench-completion-audit.md)还有 **30 个未关闭父项**：A 6、B 9、C 7、D 8。它们含已完成子项，且与下列恢复主线重叠。不能称为 30 个全新功能，也不能将 30 与 25 相加。
 
-当前优先恢复主线共 **25 个检查点，5 个关闭，20 个剩余；下一项 R06**。R01–R05 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)和[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。本轮维护专项 63/63；R08 的完整应用回归尚未执行。
+当前优先恢复主线共 **25 个检查点，6 个关闭，19 个剩余；下一项 R07**。R01–R06 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)和[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。本轮维护专项 63/63；R08 的完整应用回归尚未执行。
 
 ## 2. 执行规则
 
@@ -53,7 +53,7 @@
 - [x] **R03 — 接管后台与隐式写生命周期。** 2026-09-20 完成本地 D1 facade、scope sealing/不确定状态、成员 last_seen/session/nonces 原始 Promise 观察及真实 guarded entry 回归；业务响应语义保留，失败或结果不明不会安全释放。见[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)。生产入口仍为 legacy；R04 已另行关闭。
 - [x] **R04 — 处理流、取消、超时和跨存储尾部工作。** 2026-09-20 完成 Agent 流正常 EOF/未消费/取消/上游错误/取消失败矩阵、解析 timeout 迟到写入负向测试、R2 补偿失败观察和 VFS/DO typed failure observer；62/62 维护专项及完整应用回归通过。见[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)。生产入口仍为 legacy，不承诺跨存储原子性。
 - [x] **R05 — 完成维护控制面的授权与重放防护。** 2026-09-20 为 `beginDrain`/`resume` 增加显式合成控制能力校验；错误/缺失能力在状态变更前返回 `CONTROL_UNAUTHORIZED`，普通成员/session/permit/epoch 不具备控制权限。窗口、epoch、重复命令、旧命令和重放墓碑负向矩阵保持通过。见[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)。生产入口仍为 legacy，未配置生产控制密钥。
-- [ ] **R06 — 完成容量、孤儿许可及人工退出规则。** 当前 10,000 条记录上限和永久 tombstone 不是生产容量方案。明确有证据的回收/容量边界、告警、失联时的人工核实与退出策略；不能以 TTL 到期替代完成证明。
+- [x] **R06 — 完成容量、孤儿许可及人工退出规则。** 2026-09-20 新增 `capacity()` 只读快照和 8,000/9,500/10,000 分级保护；重启后的活动许可必须人工核实，无法证明时保持阻塞，无 TTL/强制释放/自动开闸。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。生产容量和安全压缩仍未批准。
 - [ ] **R07 — 跑真实应用接线的合成故障矩阵。** 覆盖关闭时零写入、慢请求、已开始 Cron、迟到/嵌套写入、原始失败被 catch、流断连、协调器重启/失联、重复控制及跨窗口命令。保留“不确定就不放行”的负向用例。
 - [ ] **R08 — 完成精确候选的回归与评审。** 维护专项、备份回归、应用及专项类型检查、完整测试/构建和迁移/交付合同均有新鲜证据；审阅变更，记录候选内容摘要。此处只证明本地可交付，不自动提交/发布。
 
@@ -133,7 +133,8 @@ R01 内部进度（不是新增恢复主线检查点）：
 - 2026-09-20 R03 收尾校验：维护专项 55/55、应用/专项类型检查、完整 `npm test`、构建、交付合同 28/28 和 `git diff --check` 通过；候选提交 `95bd921`。
 - 2026-09-20 R04 收尾校验：维护专项 62/62、应用/专项类型检查、完整 `npm test`、构建、交付合同、VFS/资产回归和 `git diff --check` 通过；生产 Wrangler/生成 Env 未变，未执行生产变更。见[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)。
 - R05：2026-09-20 本地授权与重放防护完成；维护专项 63/63、应用/专项类型检查和 `git diff --check` 通过。见[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)。
-- 后续游标：R06，尚未开始。本轮不执行生产变更。
+- R06：2026-09-20 本地容量快照、告警阈值和人工退出规则完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。
+- 后续游标：R07，尚未开始。本轮不执行生产变更。
 - 初始清点文档校验：`npm run verify:delivery-status` 28/28 通过、退出 0；`git diff --check` 退出 0。当次只读 Node 核对了 R01–R25 连续且未勾选、90 项能力四维计数、30 个产品父项和 8 个相对链接。该记录不代替新增审计/规格后的校验；本次未重跑应用测试，未修改运行时代码。
 - 2026-09-19 接入规格文档校验：重新运行 `npm run verify:delivery-status`，28/28、退出 0；`git diff --check` 退出 0。只读 Node 断言检查本清单/审计/规格三个文件的 15 个相对链接、无占位、25 项主线仍开放、R01 三个子步骤完成/两个待办，以及审计源码摘要未变化。上述仅为文档及范围校验，不是接入实现或运行时验收。
 

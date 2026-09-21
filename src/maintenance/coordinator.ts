@@ -1,5 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { Permit, Snapshot } from './contracts';
+import type { CapacitySnapshot, Permit, Snapshot } from './contracts';
+
+export const MAINTENANCE_RECORD_LIMIT = 10_000;
+export const MAINTENANCE_WARNING_LIMIT = 8_000;
+export const MAINTENANCE_CRITICAL_LIMIT = 9_500;
 
 export class MaintenanceCoordinator extends DurableObject<unknown> {
   private readonly controlToken: string | null;
@@ -31,7 +35,7 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
       }
       const { count } = this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM permits').one();
       // Keep replay tombstones. Exhaustion fails closed; never expire an orphan.
-      if (count >= 10_000) throw new Error('CAPACITY_EXCEEDED');
+      if (count >= MAINTENANCE_RECORD_LIMIT) throw new Error('CAPACITY_EXCEEDED');
       this.ctx.storage.sql.exec('INSERT INTO permits VALUES (?, ?, 0)', id, state.epoch);
       return { id, epoch: state.epoch };
     });
@@ -89,6 +93,30 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
       'SELECT COUNT(*) AS active FROM permits WHERE done = 0',
     ).one();
     return { ...state, active, phase: state.window === null ? 'OPEN' : active === 0 ? 'DRAINED' : 'DRAINING' };
+  }
+
+  capacity(): CapacitySnapshot {
+    const state = this.status();
+    const { records } = this.ctx.storage.sql.exec<{ records: number }>(
+      'SELECT COUNT(*) AS records FROM permits',
+    ).one();
+    const tombstones = records - state.active;
+    const alert = records >= MAINTENANCE_RECORD_LIMIT
+      ? 'EXHAUSTED'
+      : records >= MAINTENANCE_CRITICAL_LIMIT
+        ? 'CRITICAL'
+        : records >= MAINTENANCE_WARNING_LIMIT
+          ? 'WARNING'
+          : 'NONE';
+    return {
+      ...state,
+      records,
+      tombstones,
+      capacityLimit: MAINTENANCE_RECORD_LIMIT,
+      capacityRemaining: Math.max(0, MAINTENANCE_RECORD_LIMIT - records),
+      alert,
+      requiresManualReview: state.phase !== 'OPEN' && state.active > 0,
+    };
   }
 
   private assertControlCapability(capability: unknown): asserts capability is string {
