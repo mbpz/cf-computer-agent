@@ -14,6 +14,7 @@
 | 部署历史 | `wrangler deployments list --name memory-garden-agent --json` 返回 10 个 100% `wrangler` deployment，均标注 `workers/triggered_by=deployment` | 可见部署版本历史，但没有 Git SHA、构建平台、CI run 或外部写者映射 |
 | 版本元数据刷新 | `wrangler versions list --name memory-garden-agent` 返回 11 个版本；最新 `aff4bda3-6bb1-4b47-a4a0-e6ba725536bc` 为 `Source: Unknown (version_upload)`、无 tag/message；`versions view` 显示 `fetch`/`scheduled`、D1/DO/AI/Assets 绑定 | 版本仍无法映射到当前 Git 提交或 CI run |
 | 密钥元数据 | `versions view` 仅列出 7 个 secret 名称，未读取值 | 只证明版本声明了 secret 名称，不证明生成来源、轮换责任或其他写者 |
+| Dashboard 内置浏览器 | 访问 Worker production 页面后重定向到 Cloudflare `/login`；未输入账号、密码、OTP 或密钥 | 当前没有可复用的 Dashboard 登录会话，CI/Git 集成和部署审批链仍无法从浏览器读取 |
 
 版本/部署时间以 Cloudflare API 返回的 UTC 值为准；本次刷新确认最新版本创建于 `2026-09-21T00:20:26.739Z`。时间戳本身不提供 Git source-to-version 证明。
 
@@ -23,4 +24,4 @@
 - 旧 Worker 版本、手工 Wrangler/控制台 D1 写入、Cron 触发、外部 automation client、其他 Worker/环境和 GitHub OAuth 回调写者尚未形成责任清单。
 - 当前本地维护入口仍是 guarded harness；生产 `src/index.ts` 仍为 legacy，不能据本盘点宣布所有写路径已接入维护协调器。
 
-因此 R09 保持未完成。关闭前至少需要：Dashboard/CI source-to-version 映射、生产路由与版本对应、全部写者责任/停写顺序、外部凭证使用者和旧版本退出证据；这些信息确认后才能进入 R10。
+因此 R09 保持未完成。关闭前至少需要：Dashboard/CI source-to-version 映射、生产路由与版本对应、全部写者责任/停写顺序、外部凭证使用者和旧版本退出证据；这些信息确认后才能进入 R10。当前内置浏览器无登录会话，未代替用户输入凭据。
