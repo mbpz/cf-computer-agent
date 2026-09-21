@@ -2,12 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 顺序完成 R02–R04 的本地真实入口接入；最初仅批准 R02，用户随后要求提交并进入下一步，当前推进 R03，R04 不随本次继续而启动。
+**Goal:** 顺序完成 R02–R04 的本地真实入口接入；最初仅批准 R02，用户随后逐步要求提交并进入下一步。R03 已关闭；2026-09-21 再次要求继续后，当前推进 R04，仍仅限本地。
 **Architecture:** `index.ts` 显式选择 legacy；独立本地 harness 显式选择 guarded。两者共用 `createApp` 和 `AssetService.processDue(3)`，不复制业务路由。维护准入先于所有业务绑定读取和服务构建。
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-21):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)，现已提交至 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），并合入 main 的 `df69af8`；原工作区已快进到该基线。R03 前三项已核验并提交 `b408633`，见[接线证据](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)。第 4 项已提交 `eb685c3`，见[后台及并行分支证据](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项已完成真实入口集成验证：maintenance 8 files / 135 tests、完整 `npm test`、应用及专项类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)。R03 整体关闭，恢复主线 3 关闭 / 22 剩余；当前游标为 R04，尚未开始。收口提交以 git 记录为准，本轮未推送、未合入 main、未部署。
+**Status (2026-09-21):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)，现已提交至 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），并合入 main 的 `df69af8`；原工作区已快进到该基线。R03 前三项已核验并提交 `b408633`，见[接线证据](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)。第 4 项已提交 `eb685c3`，见[后台及并行分支证据](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项以 `7ea7bee` 提交，maintenance 8 files / 135 tests、完整 `npm test`、应用及专项类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)。R03 整体关闭，恢复主线 3 关闭 / 22 剩余。R04 第 1 子项现已本地完成，见[生产者证据](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)；当前游标为第 2 子项 cancel 链。R04 父项未关闭，未推送、未合入 main、未部署。
 
 ## Global Constraints
 
@@ -87,11 +87,11 @@ Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 
 - [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
 - [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
 
-## R04 — 流、取消、超时和跨存储（后续独立执行）
+## R04 — 流、取消、超时和跨存储（本地进行中）
 
-Files: `src/agent/service.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。
+Files: `src/routes/agent.ts`、`src/app.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。原计划的 `src/agent/service.ts` 不存在，已按真实路由修正。
 
-- [ ] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。
+- [x] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。见[第 1 子项证据](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)。
 - [ ] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。
 - [ ] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。
 - [ ] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。

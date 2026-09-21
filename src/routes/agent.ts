@@ -4,6 +4,7 @@ import { APP_CONFIG } from "../config";
 import type { Principal } from "../identity/principal";
 import type { AgentMessagePage, AgentMessageRecord, AgentSession, AgentSessionRecord, AgentSessionResult, AgentTurnRecord } from "../agent/session-do";
 import type { AgentToolRunner } from "../agent/tool-runner";
+import type { WorkScope } from "../maintenance/lifecycle";
 
 const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
 
@@ -15,6 +16,7 @@ export async function routeAgentApi(
   namespace: DurableObjectNamespace<AgentSession>,
   ai: Ai,
   tools: AgentToolRunner,
+  workScope?: WorkScope,
 ): Promise<Response | undefined> {
   if (url.pathname !== "/api/agent/sessions" && !url.pathname.startsWith("/api/agent/sessions/")) return undefined;
   requireCapability(principal, "knowledge:read");
@@ -88,7 +90,7 @@ export async function routeAgentApi(
     } catch {
       throw new AppError("AGENT_STREAM_UNAVAILABLE", "Agent stream is temporarily unavailable", 503, true);
     }
-    return new Response(withPersistedAssistant(upstream, stub, principal.memberId, started.value.turnId), {
+    return new Response(withPersistedAssistant(upstream, stub, principal.memberId, started.value.turnId, workScope), {
       status: 200,
       headers: {
         "cache-control": "no-store",
@@ -163,36 +165,41 @@ function withPersistedAssistant(
   stub: DurableObjectStub<AgentSession>,
   memberId: string,
   turnId: string,
+  workScope?: WorkScope,
 ): ReadableStream<Uint8Array> {
   let activeReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let disconnected = false;
   return new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const reader = upstream.getReader();
-      activeReader = reader;
-      const chunks: Uint8Array[] = [];
-      try {
-        while (true) {
-          const next = await reader.read();
-          if (next.done) break;
-          if (next.value) {
-            chunks.push(next.value);
-            controller.enqueue(next.value);
+    start(controller) {
+      const produce = async () => {
+        const reader = upstream.getReader();
+        activeReader = reader;
+        const chunks: Uint8Array[] = [];
+        try {
+          while (true) {
+            const next = await reader.read();
+            if (next.done) break;
+            if (next.value) {
+              chunks.push(next.value);
+              controller.enqueue(next.value);
+            }
           }
+          if (disconnected) {
+            throwIfAgentError(await stub.terminateTurn(memberId, turnId));
+            return;
+          }
+          const answer = extractStreamAnswer(chunks);
+          if (answer) throwIfAgentError(await stub.completeTurn(memberId, turnId, answer));
+          if (!disconnected) controller.close();
+        } finally {
+          activeReader = undefined;
         }
-        if (disconnected) {
-          await stub.terminateTurn(memberId, turnId);
-          controller.close();
-          return;
-        }
-        const answer = extractStreamAnswer(chunks);
-        if (answer) throwIfAgentError(await stub.completeTurn(memberId, turnId, answer));
-        controller.close();
-      } catch (error) {
-        controller.error(error);
-      } finally {
-        activeReader = undefined;
-      }
+      };
+      // Register the whole factory before it starts, independently of response
+      // consumption/cancellation. Observe the raw rejection before notifying
+      // the consumer, including failures during final persistence.
+      const production = workScope ? workScope.run(produce) : produce();
+      return production.catch(error => { controller.error(error); });
     },
     cancel(reason) {
       disconnected = true;

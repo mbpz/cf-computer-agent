@@ -433,7 +433,7 @@ async function dispatchApiRequest(
   if (session) return session;
   const navigation = await routeNavigationApi(request, url, context, principal, { menus: services.menus });
   if (navigation) return navigation;
-  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools);
+  const agent = await routeAgentApi(request, url, context, principal, services.agentSessions, services.ai, services.agentTools, services.workScope);
   if (agent) return agent;
   const member = await routeMemberApi(request, url, context, principal, services);
   if (member) return member;
