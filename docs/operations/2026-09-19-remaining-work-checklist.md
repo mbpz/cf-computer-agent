@@ -64,7 +64,7 @@
 - [ ] **R11 — 补发布/schema 防漂移门禁。** 基于 R09 的实际平台，验证批准候选 hash、现有迁移前缀、待迁移清单、目标 binding 和同版本验收；本地负向测试覆盖缺迁移、错库、旧 SQL hash 变化及意外新增。实际平台配置变更须批准，不自动每次 push 执行迁移。
 - [ ] **R12 — 确认备份保管与隔离恢复条件。** 明确加密、访问限制、独立摘要、保留/清理、恢复隔离及真实内容处置；核对数据规模与工具资源预算。0700/0600 不是加密，临时目录不是长期备份；不将私有正文放进仓库/聊天/附件。
 - [ ] **R13 — 批准并形成可追溯维护发布候选。** 分别明确提交、合并、推送及维护代码部署的允许范围；获准后执行相应步骤，记录精确候选、所需 binding/配置和回滚/退出策略。未经授权不操作远程仓库或发布。
-- [ ] **R14 — 授权部署维护能力并核实写者覆盖。** 已完成本地 guarded production entry 候选，但尚未 push、应用 `v3` Durable Object migration 或配置生产 `MAINTENANCE_CONTROL_TOKEN`；见[生产维护入口候选](evidence/2026-09-22-maintenance-production-entry-candidate.md)。另需先补齐管理员专用维护控制入口，才能实际验证 `status/capacity/beginDrain/resume`，详见[R14 生产激活预检](evidence/2026-09-22-r14-production-activation-preflight.md)。部署已批准候选后，仍需确认所有可写入口使用该控制机制、旧版本/其他写者按方案停止或隔离，并验证控制鉴权。仅部署代码并不等于已经冻结数据；验证过程仍在批准范围内。
+- [ ] **R14 — 授权部署维护能力并核实写者覆盖。** `ee4c5b1` 已由 Cloudflare CI 成功部署，当前 100% 版本为 `733cb735`，`MAINTENANCE` Durable Object binding 已出现；但生产 secrets 尚未配置 `MAINTENANCE_CONTROL_TOKEN`，且管理员维护控制入口尚未实现，不能验证 `status/capacity/beginDrain/resume`。见[guarded 部署证据](evidence/2026-09-22-r14-guarded-deployment.md)和[R14 生产激活预检](evidence/2026-09-22-r14-production-activation-preflight.md)。仍需确认所有可写入口使用该控制机制、旧版本/其他写者按方案停止或隔离，并验证控制鉴权。仅部署代码并不等于已经冻结数据；验证过程仍在批准范围内。
 - [ ] **R15 — 批准实际停写/导出窗口并刷新预检。** 确认最长停机、终止条件、操作人、准确归档路径及保管策略；工具独占创建最终目录，禁止预建/覆盖。刷新 Worker/Git/binding、账本、migration hash 和容量；2026-09-17 的 32 条账本/19 个 pending 仅是历史快照。
 
 ### C. 停写、备份、迁移与恢复服务（R16–R21，共 6 项）
