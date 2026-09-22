@@ -59,7 +59,7 @@
 
 ### B. 发布与备份前置条件（R09–R15，共 7 项）
 
-- [ ] **R09 — 核实实际发布链和全部生产写者。** 2026-09-22 已通过已登录 Chrome 的 Cloudflare Dashboard 确认 `mbpz/cf-computer-agent` 的 `main` 分支自动构建：Build `#e2241b76`、commit `38c403bc…`、构建命令 `npm run build`、部署命令 `npx wrangler deploy`，当前生产版本 `7e902d7c` 为 100% 流量；同时确认 `memory.crgmhrc.asia` 为自定义生产域名，workers.dev/Preview URL 关闭，D1/DO/Assets/AI/Cron 配置已盘点。仍需完成 Automation、Dashboard/控制台、旧版本/其他 Worker 的生产写者责任、停写和恢复账本；见[Dashboard 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)。
+- [ ] **R09 — 核实实际发布链和全部生产写者。** 2026-09-22 已通过已登录 Chrome 的 Cloudflare Dashboard 确认 `mbpz/cf-computer-agent` 的 `main` 分支自动构建：Build `#e2241b76`、commit `38c403bc…`、构建命令 `npm run build`、部署命令 `npx wrangler deploy`，当前生产版本 `7e902d7c` 为 100% 流量；同时确认 `memory.crgmhrc.asia` 为自定义生产域名，workers.dev/Preview URL 关闭，D1/DO/Assets/AI/Cron 配置已盘点。当前 `main` 已同步 `850db38`、`2feb021` 等安全闸门和维护控制 API，但尚未刷新到新的 Cloudflare source-to-version 证据。仍需完成 Automation、Dashboard/控制台、旧版本/其他 Worker 的生产写者责任、停写和恢复账本；见[Dashboard 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)和[写者责任账本](evidence/2026-09-22-r09-writer-ledger.md)。
 - [ ] **R10 — 完成远程合成只读传输验证。** 单独批准测试库/fixture 及权限；验证正式工具的权限、PRAGMA、数值/二进制编码、响应封装、请求/大小限制。离线 fixture 不能替代真实接口验证；不访问生产私有内容。
 - [ ] **R11 — 补发布/schema 防漂移门禁。** 基于 R09 的实际平台，验证批准候选 hash、现有迁移前缀、待迁移清单、目标 binding 和同版本验收；本地负向测试覆盖缺迁移、错库、旧 SQL hash 变化及意外新增。实际平台配置变更须批准，不自动每次 push 执行迁移。
 - [ ] **R12 — 确认备份保管与隔离恢复条件。** 明确加密、访问限制、独立摘要、保留/清理、恢复隔离及真实内容处置；核对数据规模与工具资源预算。0700/0600 不是加密，临时目录不是长期备份；不将私有正文放进仓库/聊天/附件。

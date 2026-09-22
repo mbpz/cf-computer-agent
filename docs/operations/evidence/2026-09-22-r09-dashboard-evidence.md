@@ -82,4 +82,6 @@ export default createWorkerEntry({ mode: "legacy" });
 
 因此本记录证明的是“发布链和平台配置可追溯”，不证明“生产停写/排空/恢复控制已可执行”。R14 必须在单独批准维护接线候选并完成部署后，才能继续验证写者覆盖；在此之前不得执行 R16–R21 的生产停写、备份、迁移或恢复。
 
+当前 `main` 已包含 `850db38` 安全闸门和 `2feb021` 管理员维护控制 API，但本记录中的 Dashboard 版本仍是旧候选；新的 source-to-version、binding、migration 和控制 API 生产证据必须重新只读刷新。代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
+
 因此本证据将 R09 从“发布链未知”推进为“source-to-version 与平台配置已证实、生产写者责任账本待收口”，不直接勾选 R09 完成。
