@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { getWorkspace, type DurableObjectStorageLike, withWorkspace } from "@cloudflare/computer";
 import { createWorkerEntry } from "./worker-entry";
 export { AgentSession } from "./agent/session-do";
+export { MaintenanceCoordinator } from "./maintenance/coordinator";
 import { APP_CONFIG } from "./config";
 import { AppError } from "./http";
 import { persistPublishedContent, removePublishedContent, validatePublishedContentInput, validatePublishedContentPaths } from "./knowledge/published-content";
@@ -202,5 +203,7 @@ function disposeWorkspace(workspace: Awaited<ReturnType<typeof getWorkspace>>): 
   if (typeof dispose === "function") dispose.call(workspace);
 }
 
-// Maintenance is deliberately NOT enabled on the production entry.
-export default createWorkerEntry({ mode: "legacy" });
+export default createWorkerEntry({
+  mode: "guarded",
+  maintenance: env => env.MAINTENANCE.getByName("production"),
+});

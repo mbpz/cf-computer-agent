@@ -13,6 +13,8 @@ declare global {
     ALLOWED_MEMBER_EMAILS?: string;
     AUTOMATION_CLIENT_ID?: string;
     AUTOMATION_SECRET?: string;
+    MAINTENANCE: DurableObjectNamespace<import("./maintenance/coordinator").MaintenanceCoordinator>;
+    MAINTENANCE_CONTROL_TOKEN?: string;
   }
 }
 

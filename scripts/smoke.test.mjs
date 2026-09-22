@@ -142,10 +142,12 @@ test("disables production and preview workers.dev URLs", async () => {
   assert.deepEqual(configuration.durable_objects.bindings, [
     { name: "KNOWLEDGE", class_name: "KnowledgeBase" },
     { name: "AGENT_SESSIONS", class_name: "AgentSession" },
+    { name: "MAINTENANCE", class_name: "MaintenanceCoordinator" },
   ]);
   assert.deepEqual(configuration.migrations, [
     { tag: "v1", new_sqlite_classes: ["KnowledgeBase"] },
     { tag: "v2", new_sqlite_classes: ["AgentSession"] },
+    { tag: "v3", new_sqlite_classes: ["MaintenanceCoordinator"] },
   ]);
   assert.equal(configuration.assets.binding, "ASSETS");
   assert.equal(configuration.assets.run_worker_first, true);

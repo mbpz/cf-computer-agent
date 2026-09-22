@@ -24,12 +24,14 @@
   "durable_objects": {
     "bindings": [
       { "name": "KNOWLEDGE", "class_name": "KnowledgeBase" },
-      { "name": "AGENT_SESSIONS", "class_name": "AgentSession" }
+      { "name": "AGENT_SESSIONS", "class_name": "AgentSession" },
+      { "name": "MAINTENANCE", "class_name": "MaintenanceCoordinator" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["KnowledgeBase"] },
-    { "tag": "v2", "new_sqlite_classes": ["AgentSession"] }
+    { "tag": "v2", "new_sqlite_classes": ["AgentSession"] },
+    { "tag": "v3", "new_sqlite_classes": ["MaintenanceCoordinator"] }
   ],
   "assets": {
     "directory": "./frontend/dist",
