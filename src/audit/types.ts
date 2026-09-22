@@ -54,6 +54,8 @@ export interface AuditActionMap {
   "task.deleted": { resourceType: "task"; metadata: { status: TaskStatus } };
   "task.linked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
   "task.unlinked": { resourceType: "task"; metadata: { knowledgeItemId: string } };
+  "maintenance.drain_started": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
+  "maintenance.resumed": { resourceType: "maintenance"; metadata: { window: string; epoch: number } };
 }
 
 export type AuditAction = keyof AuditActionMap;
@@ -94,6 +96,8 @@ export const auditActions = Object.freeze<readonly AuditAction[]>([
   "task.deleted",
   "task.linked",
   "task.unlinked",
+  "maintenance.drain_started",
+  "maintenance.resumed",
 ]);
 
 export type CreateAuditEvent = {
@@ -435,6 +439,15 @@ function validateMetadata(action: unknown, resourceType: unknown, input: unknown
       const metadata = readPlainDataObject(input, new Set(["knowledgeItemId"]));
       if (!isBoundedId(metadata.knowledgeItemId)) throw invalidMetadata();
       return safeMetadata({ knowledgeItemId: metadata.knowledgeItemId });
+    }
+    case "maintenance.drain_started":
+    case "maintenance.resumed": {
+      assertResourceType(resourceType, "maintenance");
+      const metadata = readPlainDataObject(input, new Set(["window", "epoch"]));
+      const window = metadata.window;
+      const epoch = metadata.epoch;
+      if (!isBoundedId(window) || typeof epoch !== "number" || !Number.isSafeInteger(epoch) || epoch < 0) throw invalidMetadata();
+      return safeMetadata({ window, epoch });
     }
     default:
       throw new TypeError("Audit action is invalid");

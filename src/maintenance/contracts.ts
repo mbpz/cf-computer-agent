@@ -25,3 +25,11 @@ export interface MaintenanceClient {
   acquire(id: string): Promise<Permit | null>;
   complete(permit: Permit): Promise<Snapshot>;
 }
+
+/** Administrative control surface exposed only through the same-origin admin API. */
+export interface MaintenanceControlClient extends MaintenanceClient {
+  status(): Promise<Snapshot>;
+  capacity(): Promise<CapacitySnapshot>;
+  beginDrain(window: string, epoch: number, capability: string): Promise<Snapshot>;
+  resume(window: string, epoch: number, capability: string): Promise<Snapshot>;
+}

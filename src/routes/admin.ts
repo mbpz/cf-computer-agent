@@ -3,7 +3,7 @@ import type { AssetDownloadVariant, AssetService } from "../assets/service";
 import { auditActions } from "../audit/types";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
-import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
+import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, requireSameOrigin, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import type { MembersRepository } from "../members/repository";
 import type { MembersService } from "../members/service";
@@ -18,6 +18,7 @@ import type { PublicationService } from "../publication/service";
 import type { LibraryService } from "../library/service";
 import type { AnalyticsRepository } from "../analytics/repository";
 import type { DuplicateCandidatesService } from "../duplicates/service";
+import type { MaintenanceControlService } from "../maintenance/control";
 
 export interface AdminRouteServices {
   assets: AssetService;
@@ -32,6 +33,7 @@ export interface AdminRouteServices {
   library: LibraryService;
   analytics: AnalyticsRepository;
   duplicates: DuplicateCandidatesService;
+  maintenance: MaintenanceControlService;
 }
 
 export async function routeAdminApi(
@@ -41,6 +43,39 @@ export async function routeAdminApi(
   principal: Principal,
   services: AdminRouteServices,
 ): Promise<Response | undefined> {
+  if (url.pathname === "/api/admin/maintenance/status" || url.pathname === "/api/admin/maintenance/capacity") {
+    requireAdminMember(principal);
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const value = url.pathname.endsWith("/capacity")
+      ? await services.maintenance.capacity()
+      : await services.maintenance.status();
+    return jsonResponse(value, 200, context.requestId);
+  }
+
+  const maintenanceAction = /^\/api\/admin\/maintenance\/(begin-drain|resume)$/u.exec(url.pathname);
+  if (maintenanceAction) {
+    const actor = requireAdminMember(principal);
+    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    requireSameOrigin(request, APP_CONFIG.canonicalOrigin);
+    requireNoQuery(url);
+    const input = parseMaintenanceControlInput(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
+    const snapshot = maintenanceAction[1] === "begin-drain"
+      ? await services.maintenance.beginDrain(input.window, input.epoch)
+      : await services.maintenance.resume(input.window, input.epoch);
+    await services.audit.writeAudit({
+      id: crypto.randomUUID(),
+      actorKind: "member",
+      actorId: actor.memberId,
+      action: maintenanceAction[1] === "begin-drain" ? "maintenance.drain_started" : "maintenance.resumed",
+      resourceType: "maintenance",
+      resourceId: "production",
+      metadata: { window: input.window, epoch: input.epoch },
+      createdAt: new Date().toISOString(),
+    });
+    return jsonResponse(snapshot, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/admin/analytics/overview") {
     requireCapability(principal, "audit:read");
     if (request.method !== "GET") return methodNotAllowed("GET", context);
@@ -453,6 +488,15 @@ function recordStatus(value: unknown): "active" | "disabled" | undefined {
 
 function optionalString(value: unknown): string | undefined {
   return value === undefined ? undefined : stringValue(value);
+}
+
+function parseMaintenanceControlInput(value: unknown): { window: string; epoch: number } {
+  const input = strictRecord(value, ["window", "epoch"], "MAINTENANCE_REQUEST_INVALID");
+  if (typeof input.window !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(input.window)
+    || typeof input.epoch !== "number" || !Number.isSafeInteger(input.epoch) || input.epoch < 0) {
+    throw new AppError("MAINTENANCE_REQUEST_INVALID", "Maintenance control request is invalid", 400);
+  }
+  return { window: input.window, epoch: input.epoch };
 }
 
 function optionalNullableString(value: unknown): string | null | undefined {

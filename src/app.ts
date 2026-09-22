@@ -110,6 +110,7 @@ import { FlashcardService } from "./ai/flashcard-service";
 import { QuizService } from "./ai/quiz-service";
 import { createArtifactDraftTool, createCompareSourcesTool, createListSourceConflictsTool, createNoteDraftTool, createReadSourceTool, createSaveResearchDraftTool, createSearchKnowledgeTool } from "./agent/tools";
 import { AgentToolRunner } from "./agent/tool-runner";
+import { MaintenanceControlService } from "./maintenance/control";
 import { ReviewCommentsRepository } from "./review-comments/repository";
 import { ReviewCommentsService } from "./review-comments/service";
 import { FavoritesRepository } from "./favorites/repository";
@@ -232,6 +233,7 @@ function createRequestServices(
 ) {
   const ai = dependencies.ai || env.AI;
   const audit = new AuditRepository(env.DB);
+  const maintenance = new MaintenanceControlService(env.MAINTENANCE?.getByName("production"), env.MAINTENANCE_CONTROL_TOKEN);
   const roles = new RolesRepository(env.DB);
   const menus = new MenusRepository(env.DB);
   const analyticsNow = dependencies.analyticsNow ?? (() => new Date());
@@ -407,6 +409,7 @@ function createRequestServices(
     review,
     roles,
     menus,
+    maintenance,
     workScope: dependencies.workScope,
   };
 }

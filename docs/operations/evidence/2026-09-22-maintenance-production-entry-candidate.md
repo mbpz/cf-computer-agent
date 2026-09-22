@@ -8,6 +8,8 @@
 - `wrangler.jsonc` 增加 `MAINTENANCE` → `MaintenanceCoordinator` Durable Object binding，并增加 `v3` SQLite class migration。
 - `src/env.d.ts` 和生成的 `worker-configuration.d.ts` 声明 `MAINTENANCE` 与可选 `MAINTENANCE_CONTROL_TOKEN`。
 - `scripts/maintenance-production-entry-contract.test.mjs` 固化生产入口和 Wrangler 配置合同，并纳入 `test:smoke`。
+- `src/routes/admin.ts`、`src/maintenance/control.ts` 提供管理员同源维护控制 API；`begin-drain`/`resume` 成功后写入 typed audit event，控制 token 不进入响应。
+- `scripts/maintenance-admin-api-contract.test.mjs` 固化四个端点、鉴权、参数边界和 token 不泄露合同，并纳入 `test:smoke`。
 
 ## 本地验证
 
@@ -16,6 +18,10 @@
 | 生产入口合同 | 2/2 通过 |
 | TypeScript 类型检查 | `npm run typecheck` 通过 |
 | 维护专项测试 | 6 个文件、63/63 通过 |
+| 管理维护 API 合同 | 4/4 通过 |
+| 单元测试 | 通过（提升本地权限后） |
+| Smoke 回归 | 62/62 通过 |
+| Landing/build | 97/97 通过，Wrangler dry-run 通过 |
 | 失败环境说明 | 沙箱首次运行因无法监听 `127.0.0.1` 失败；提升本地权限后同一套测试通过 |
 
 ## 发布前置
