@@ -69,5 +69,17 @@ Dashboard 只读核对到以下名称；值均显示为加密或未展开，未�
 
 - 需要将 Worker fetch、Cron、Automation client、Dashboard/控制台、旧版本/其他 Worker 的责任人、停写动作和恢复动作写入生产写者账本
 - 需要确认外部 Automation client、Dashboard 手工写入和旧版本流量不存在未登记的生产写入路径
+- 当前生产入口仍是 `src/index.ts` 的 `createWorkerEntry({ mode: "legacy" })`；`src/worker-entry.ts` 的 `guardFetch`/`guardScheduled` 仅在 guarded 模式生效，维护协调器尚未接入生产 Worker，因此不能声称生产写者已被维护控制面统一围栏
+
+## 生产接线阻塞
+
+当前生产构建对应的仓库源码仍明确标记：
+
+```ts
+// Maintenance is deliberately NOT enabled on the production entry.
+export default createWorkerEntry({ mode: "legacy" });
+```
+
+因此本记录证明的是“发布链和平台配置可追溯”，不证明“生产停写/排空/恢复控制已可执行”。R14 必须在单独批准维护接线候选并完成部署后，才能继续验证写者覆盖；在此之前不得执行 R16–R21 的生产停写、备份、迁移或恢复。
 
 因此本证据将 R09 从“发布链未知”推进为“source-to-version 与平台配置已证实、生产写者责任账本待收口”，不直接勾选 R09 完成。
