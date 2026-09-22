@@ -20,8 +20,9 @@ export interface SerializableAppError {
 }
 
 export type RpcResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: SerializableAppError };
+  ({ ok: true; value: T } | { ok: false; error: SerializableAppError })
+  // Internal evidence only; never included in public error/receipt payloads.
+  & { storageUncertain?: true };
 
 export interface CommitPublishedContentInput {
   spaceId: string;

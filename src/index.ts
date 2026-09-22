@@ -4,6 +4,8 @@ import { createWorkerEntry } from "./worker-entry";
 export { AgentSession } from "./agent/session-do";
 import { APP_CONFIG } from "./config";
 import { AppError } from "./http";
+import { observeStorage, type StorageObserver } from "./maintenance/storage";
+import { captureKnowledgeRpc } from "./knowledge/observed-rpc";
 import { persistPublishedContent, removePublishedContent, validatePublishedContentInput, validatePublishedContentPaths } from "./knowledge/published-content";
 import { KnowledgeService } from "./knowledge/service";
 import type {
@@ -12,7 +14,6 @@ import type {
   NoteRecord,
   PublishedContentReceipt,
   RpcResult,
-  SerializableAppError,
 } from "./knowledge/types";
 import { type KnowledgeRepository, WorkspaceRepository } from "./knowledge/workspace-repository";
 
@@ -41,72 +42,52 @@ export class KnowledgeBase extends withWorkspace(
   }
 
   async commitNote(input: unknown): Promise<RpcResult<CreateNoteResult>> {
-    return this.ctx.blockConcurrencyWhile(async () => {
-      try {
-        return await this.withLocalWorkspace(async (repository) => {
-          await this.recoverPendingCommit(repository);
-          const journaled = new JournaledWorkspaceRepository(repository, (note, content) => this.writeJournal(note, content), () => this.clearJournal());
-          return { ok: true, value: await new KnowledgeService(journaled).createNoteWithOutcome(input) };
-        });
-      } catch (error) {
-        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
-        throw error;
-      }
-    });
+    return this.ctx.blockConcurrencyWhile(() => captureKnowledgeRpc(observer =>
+      this.withLocalWorkspace(async (repository) => {
+        await this.recoverPendingCommit(repository);
+        const journaled = new JournaledWorkspaceRepository(repository, (note, content) => this.writeJournal(note, content), () => this.clearJournal());
+        return new KnowledgeService(journaled).createNoteWithOutcome(input);
+      }, observer),
+    ));
   }
 
   async recoverWorkspace(): Promise<RpcResult<null>> {
-    return this.ctx.blockConcurrencyWhile(async () => {
-      try {
-        await this.withLocalWorkspace((repository) => this.recoverPendingCommit(repository));
-        return { ok: true, value: null };
-      } catch (error) {
-        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
-        throw error;
-      }
-    });
+    return this.ctx.blockConcurrencyWhile(() => captureKnowledgeRpc(async observer => {
+      await this.withLocalWorkspace((repository) => this.recoverPendingCommit(repository), observer);
+      return null;
+    }));
   }
 
   async commitPublishedContent(
     input: CommitPublishedContentInput,
   ): Promise<RpcResult<PublishedContentReceipt>> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => captureKnowledgeRpc(async observer => {
+      const content = await validatePublishedContentInput(input);
+      const workspace = await observeStorage(observer, () => getWorkspace(this));
       try {
-        const content = await validatePublishedContentInput(input);
-        const workspace = await getWorkspace(this);
-        try {
-          return { ok: true, value: await persistPublishedContent(workspace, content) };
-        } finally {
-          disposeWorkspace(workspace);
-        }
-      } catch (error) {
-        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
-        throw error;
+        return await persistPublishedContent(workspace, content, observer);
+      } finally {
+        disposeWorkspace(workspace);
       }
-    });
+    }));
   }
 
   async removePublishedContent(input: { paths: readonly string[] }): Promise<RpcResult<null>> {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(() => captureKnowledgeRpc(async observer => {
+      const paths = validatePublishedContentPaths(input?.paths ?? []);
+      const workspace = await observeStorage(observer, () => getWorkspace(this));
       try {
-        const paths = validatePublishedContentPaths(input?.paths ?? []);
-        const workspace = await getWorkspace(this);
-        try {
-          await removePublishedContent(workspace, paths);
-        } finally {
-          disposeWorkspace(workspace);
-        }
-        return { ok: true, value: null };
-      } catch (error) {
-        if (error instanceof AppError) return { ok: false, error: serializeAppError(error) };
-        throw error;
+        await removePublishedContent(workspace, paths, observer);
+      } finally {
+        disposeWorkspace(workspace);
       }
-    });
+      return null;
+    }));
   }
 
-  private async withLocalWorkspace<T>(operation: (repository: WorkspaceRepository) => Promise<T>): Promise<T> {
-    const workspace = await getWorkspace(this);
-    const repository = WorkspaceRepository.forLocalWorkspace(workspace);
+  private async withLocalWorkspace<T>(operation: (repository: WorkspaceRepository) => Promise<T>, observer: StorageObserver): Promise<T> {
+    const workspace = await observeStorage(observer, () => getWorkspace(this));
+    const repository = WorkspaceRepository.forLocalWorkspace(workspace, observer);
     try {
       return await operation(repository);
     } finally {
@@ -178,10 +159,6 @@ class JournaledWorkspaceRepository implements KnowledgeRepository {
     await this.workspace.save(note, content, nextIndex);
     this.clearJournal();
   }
-}
-
-function serializeAppError(error: AppError): SerializableAppError {
-  return { code: error.code, message: error.message, status: error.status, retryable: error.retryable };
 }
 
 function isNoteRecord(value: unknown): value is NoteRecord {

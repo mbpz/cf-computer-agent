@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { observeStorage, type StorageObserver } from "../maintenance/storage";
 import { APP_CONFIG } from "../config";
 import { deriveCursorScopeKey, parsePageRequest } from "../pagination";
 import { parseSource } from "../sources/parser";
@@ -36,6 +37,7 @@ export interface AssetRepositoryPort {
 }
 
 export interface AssetServiceOptions {
+  workScope?: StorageObserver;
   id?: () => string;
   now?: () => Date;
   maxBytes?: number;
@@ -152,7 +154,7 @@ export class AssetService {
   constructor(
     private readonly originals: R2Bucket | undefined,
     private readonly repository: AssetRepositoryPort,
-    options: AssetServiceOptions = {},
+    private readonly options: AssetServiceOptions = {},
   ) {
     this.id = options.id || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
@@ -233,14 +235,14 @@ export class AssetService {
       updatedAt: now,
     };
     try {
-      await this.requireStorage().put(objectKey, input.bytes, {
+      await observeStorage(this.options.workScope, () => this.requireStorage().put(objectKey, input.bytes, {
         httpMetadata: { contentType: asset.contentType },
         customMetadata: { assetId: asset.id, state: "staging" },
-      });
+      }));
       await this.repository.insertAssetWithJob(asset, job);
       return { asset, job };
     } catch (error) {
-      await this.requireStorage().delete(objectKey).catch(() => undefined);
+      await observeStorage(this.options.workScope, () => this.requireStorage().delete(objectKey)).catch(() => undefined);
       if (error instanceof AppError) throw error;
       throw new AppError("ASSET_PERSISTENCE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
@@ -297,7 +299,7 @@ export class AssetService {
     }
     const removed = await this.repository.cancelOwned(ownerId, assetId);
     if (!removed) throw new AppError("ASSET_CANCEL_CONFLICT", "Asset cannot be cancelled in its current state", 409, true);
-    await this.requireStorage().delete(removed.objectKey).catch(() => undefined);
+    await observeStorage(this.options.workScope, () => this.requireStorage().delete(removed.objectKey)).catch(() => undefined);
   }
 
   async listOwned(ownerId: string, request: { limit?: number; cursor?: string } = {}): Promise<AssetPage> {
@@ -351,7 +353,7 @@ export class AssetService {
       : 20;
     let listed: R2Objects;
     try {
-      listed = await this.requireStorage().list({ prefix, limit: limit + 1 });
+      listed = await observeStorage(this.options.workScope, () => this.requireStorage().list({ prefix, limit: limit + 1 }));
     } catch {
       throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
     }
@@ -396,7 +398,7 @@ export class AssetService {
       let object: R2Object | null;
       let referenced: boolean;
       try {
-        object = await this.requireStorage().head(key);
+        object = await observeStorage(this.options.workScope, () => this.requireStorage().head(key));
         if (!object || !(object.uploaded instanceof Date) || !Number.isFinite(object.uploaded.getTime()) || object.uploaded.getTime() > cutoff) {
           skipped.push(key);
           continue;
@@ -410,7 +412,7 @@ export class AssetService {
         continue;
       }
       try {
-        await this.requireStorage().delete(key);
+        await observeStorage(this.options.workScope, () => this.requireStorage().delete(key));
       } catch {
         throw new AppError("ASSET_ORPHAN_STORAGE_UNAVAILABLE", "Asset storage is temporarily unavailable", 503, true);
       }
@@ -457,7 +459,7 @@ export class AssetService {
       throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
     }
     const key = variant === "original" ? owned.asset.objectKey : `parsed/${owned.asset.id}.md`;
-    const object = await this.requireStorage().get(key);
+    const object = await observeStorage(this.options.workScope, () => this.requireStorage().get(key));
     if (!object) {
       throw new AppError(
         variant === "original" ? "ASSET_ORIGINAL_MISSING" : "ASSET_RESULT_MISSING",
@@ -467,7 +469,7 @@ export class AssetService {
       );
     }
     return {
-      body: await object.arrayBuffer(),
+      body: await observeStorage(this.options.workScope, () => object.arrayBuffer()),
       contentType: variant === "original" ? owned.asset.contentType : "text/markdown; charset=utf-8",
       filename: variant === "original" ? owned.asset.originalName : parsedFilename(owned.asset.originalName),
     };
@@ -478,9 +480,9 @@ export class AssetService {
     if (owned.job.status !== "succeeded") {
       throw new AppError("ASSET_RESULT_NOT_READY", "Parsed asset is not ready", 409, true);
     }
-    const object = await this.requireStorage().get(`parsed/${owned.asset.id}.md`);
+    const object = await observeStorage(this.options.workScope, () => this.requireStorage().get(`parsed/${owned.asset.id}.md`));
     if (!object) throw new AppError("ASSET_RESULT_MISSING", "Asset content is temporarily unavailable", 503, true);
-    const markdown = new TextDecoder().decode(await object.arrayBuffer());
+    const markdown = new TextDecoder().decode(await observeStorage(this.options.workScope, () => object.arrayBuffer()));
     return {
       assetId: owned.asset.id,
       originalName: owned.asset.originalName,
@@ -528,9 +530,9 @@ export class AssetService {
 
     const parsedKey = `parsed/${assetId}.md`;
     try {
-      const original = await this.requireStorage().get(current.asset.objectKey);
+      const original = await observeStorage(this.options.workScope, () => this.requireStorage().get(current.asset.objectKey));
       if (!original) throw new AppError("ASSET_ORIGINAL_MISSING", "Original asset is missing", 422);
-      const bytes = await original.arrayBuffer();
+      const bytes = await observeStorage(this.options.workScope, () => original.arrayBuffer());
       validateBinarySignature(current.asset, bytes);
       const input = parseInputForAsset(current.asset, bytes);
       const parsed = await withAssetParseTimeout(
@@ -539,7 +541,7 @@ export class AssetService {
       );
       assertReadableParsedMarkdown(parsed.normalizedMarkdown);
       assertParsedMarkdownSize(parsed.normalizedMarkdown);
-      await this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
+      await observeStorage(this.options.workScope, () => this.requireStorage().put(parsedKey, parsed.normalizedMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: {
           assetId,
@@ -549,10 +551,10 @@ export class AssetService {
           lineCount: String(parsed.lineCount),
           codeMetadata: JSON.stringify(parsed.codeMetadata),
         },
-      });
+      }));
       await this.repository.markParseSucceeded(assetId, now);
     } catch (error) {
-      await this.requireStorage().delete(parsedKey).catch(() => undefined);
+      await observeStorage(this.options.workScope, () => this.requireStorage().delete(parsedKey)).catch(() => undefined);
       const { code, terminal } = classifyAssetParseFailure(error);
       await this.repository.markParseFailed(assetId, now, code, terminal);
     }

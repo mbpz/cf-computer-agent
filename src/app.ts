@@ -249,8 +249,8 @@ function createRequestServices(
     waitUntil: (promise) => ctx.waitUntil(promise),
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
-  const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
-  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName);
+  const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName, undefined, dependencies.workScope);
+  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, dependencies.workScope);
   const publicationRecords = new PublicationRepository(env.DB, { workScope: dependencies.workScope });
   const tags = new TagsService(new TagsRepository(env.DB));
   const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit, dependencies.workScope);
@@ -311,6 +311,7 @@ function createRequestServices(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
     new AssetsRepository(env.DB),
     {
+      workScope: dependencies.workScope,
       maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
       imageConverter: new WorkersAiImageConverter(env.AI),

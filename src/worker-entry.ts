@@ -28,7 +28,7 @@ export function createWorkerEntry(options: EntryOptions): WorkerEntry {
     },
     async scheduled(_controller, env) {
       await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => {
-        await sweepAssets(scopedBindings(env, undefined, scope).env);
+        await sweepAssets(scopedBindings(env, undefined, scope).env, scope);
       });
     },
   };
@@ -90,12 +90,13 @@ function scopedContext(ctx: ExecutionContext, scope: WorkScope): ExecutionContex
   };
 }
 
-async function sweepAssets(env: Env): Promise<void> {
+async function sweepAssets(env: Env, workScope?: WorkScope): Promise<void> {
   if (!env.ORIGINALS) {
     console.log('asset parse sweep skipped: binary storage is not configured');
     return;
   }
   const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
+    workScope,
     markdownConverter: new WorkersAiMarkdownConverter(env.AI),
     imageConverter: new WorkersAiImageConverter(env.AI),
   }).processDue(3);

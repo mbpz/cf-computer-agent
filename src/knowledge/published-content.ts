@@ -2,6 +2,8 @@ import type { WorkspaceClient } from "@cloudflare/computer";
 import { getWorkspace } from "@cloudflare/computer";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { observeStorage, type StorageObserver } from "../maintenance/storage";
+import { observeKnowledgeRpc } from "./observed-rpc";
 import type { PublishedContentCommitter } from "../publication/types";
 import type {
   CommitPublishedContentInput,
@@ -30,23 +32,24 @@ export interface RequestPublishedContent {
 export function createRequestPublishedContent(
   namespace: Env["KNOWLEDGE"],
   workspaceName: string,
+  observer?: StorageObserver,
 ): RequestPublishedContent {
   const stub = namespace.get(namespace.idFromName(workspaceName));
   let workspace: WorkspaceClient | undefined;
   const reader: PublishedContentReader = {
     async read(path, expectedSha256) {
       if (!workspace) {
-        workspace = await getWorkspace(
+        workspace = await observeStorage(observer, () => getWorkspace(
           stub as unknown as Parameters<typeof getWorkspace>[0],
-        );
+        ));
       }
-      return createPublishedContentReader(workspace).read(path, expectedSha256);
+      return createPublishedContentReader(workspace, observer).read(path, expectedSha256);
     },
   };
   return {
     committer: {
       async commit(input) {
-        const result = await stub.commitPublishedContent(input);
+        const result = await observeKnowledgeRpc(observer, () => stub.commitPublishedContent(input));
         if (result.ok) return result.value;
         throw new AppError(
           result.error.code,
@@ -58,7 +61,7 @@ export function createRequestPublishedContent(
     },
     remover: {
       async remove(paths) {
-        const result = await stub.removePublishedContent({ paths: [...paths] });
+        const result = await observeKnowledgeRpc(observer, () => stub.removePublishedContent({ paths: [...paths] }));
         if (result.ok) return;
         throw new AppError(
           result.error.code,
@@ -87,9 +90,10 @@ export function validatePublishedContentPaths(paths: readonly string[]): string[
 export async function removePublishedContent(
   workspace: WorkspaceClient,
   paths: readonly string[],
+  observer?: StorageObserver,
 ): Promise<void> {
   for (const path of validatePublishedContentPaths(paths)) {
-    await workspace.fs.rm(path, { force: true });
+    await observeStorage(observer, () => workspace.fs.rm(path, { force: true }));
   }
 }
 
@@ -132,28 +136,29 @@ export async function validatePublishedContentInput(
 export async function persistPublishedContent(
   workspace: WorkspaceClient,
   content: ValidatedPublishedContent,
+  observer?: StorageObserver,
 ): Promise<PublishedContentReceipt> {
-  await ensurePublishedDirectory(workspace, "/", WORKSPACE_ROOT);
-  await ensurePublishedDirectory(workspace, WORKSPACE_ROOT, APP_CONFIG.publishedRoot);
-  await ensurePublishedDirectory(workspace, APP_CONFIG.publishedRoot, content.spaceDirectory);
-  await ensurePublishedDirectory(workspace, content.spaceDirectory, content.itemDirectory);
+  await ensurePublishedDirectory(workspace, "/", WORKSPACE_ROOT, observer);
+  await ensurePublishedDirectory(workspace, WORKSPACE_ROOT, APP_CONFIG.publishedRoot, observer);
+  await ensurePublishedDirectory(workspace, APP_CONFIG.publishedRoot, content.spaceDirectory, observer);
+  await ensurePublishedDirectory(workspace, content.spaceDirectory, content.itemDirectory, observer);
 
-  const entry = await findEntry(workspace, content.itemDirectory, fileName(content.path));
+  const entry = await findEntry(workspace, content.itemDirectory, fileName(content.path), observer);
   if (entry) {
     if (!entry.isFile || entry.isSymbolicLink) throw publishedContentConflict();
-    return reconcilePublishedContent(workspace, content);
+    return reconcilePublishedContent(workspace, content, observer);
   }
 
   try {
-    await workspace.fs.writeFile(content.path, content.markdown, { exclusive: true });
+    await observeStorage(observer, () => workspace.fs.writeFile(content.path, content.markdown, { exclusive: true }));
   } catch (error) {
     if (!isAlreadyExists(error)) throw error;
-    return reconcilePublishedContent(workspace, content);
+    return reconcilePublishedContent(workspace, content, observer);
   }
   return receipt(content);
 }
 
-export function createPublishedContentReader(workspace: WorkspaceClient): PublishedContentReader {
+export function createPublishedContentReader(workspace: WorkspaceClient, observer?: StorageObserver): PublishedContentReader {
   return {
     async read(path: string, expectedSha256: string): Promise<string> {
       if (!isPublishedContentPath(path) || !SHA256_HEX.test(expectedSha256)) {
@@ -162,7 +167,7 @@ export function createPublishedContentReader(workspace: WorkspaceClient): Publis
 
       let content: string;
       try {
-        content = await workspace.fs.readFile(path, "utf8");
+        content = await observeStorage(observer, () => workspace.fs.readFile(path, "utf8"));
       } catch {
         throw publishedContentCorrupt();
       }
@@ -195,23 +200,24 @@ async function ensurePublishedDirectory(
   workspace: WorkspaceClient,
   parent: string,
   path: string,
+  observer?: StorageObserver,
 ): Promise<void> {
-  const existing = await findEntry(workspace, parent, fileName(path));
+  const existing = await findEntry(workspace, parent, fileName(path), observer);
   if (existing) {
     if (!existing.isDirectory || existing.isSymbolicLink) throw publishedContentConflict();
     return;
   }
   try {
-    await workspace.fs.mkdir(path);
+    await observeStorage(observer, () => workspace.fs.mkdir(path));
   } catch (error) {
     if (!isAlreadyExists(error)) throw error;
-    const concurrent = await findEntry(workspace, parent, fileName(path));
+    const concurrent = await findEntry(workspace, parent, fileName(path), observer);
     if (!concurrent?.isDirectory || concurrent.isSymbolicLink) throw publishedContentConflict();
   }
 }
 
-async function findEntry(workspace: WorkspaceClient, directory: string, name: string) {
-  return (await workspace.fs.readdir(directory)).find((entry) => entry.name === name);
+async function findEntry(workspace: WorkspaceClient, directory: string, name: string, observer?: StorageObserver) {
+  return (await observeStorage(observer, () => workspace.fs.readdir(directory))).find((entry) => entry.name === name);
 }
 
 function receipt(content: ValidatedPublishedContent): PublishedContentReceipt {
@@ -225,10 +231,11 @@ function receipt(content: ValidatedPublishedContent): PublishedContentReceipt {
 async function reconcilePublishedContent(
   workspace: WorkspaceClient,
   content: ValidatedPublishedContent,
+  observer?: StorageObserver,
 ): Promise<PublishedContentReceipt> {
   let existing: string;
   try {
-    existing = await workspace.fs.readFile(content.path, "utf8");
+    existing = await observeStorage(observer, () => workspace.fs.readFile(content.path, "utf8"));
   } catch {
     throw publishedContentConflict();
   }

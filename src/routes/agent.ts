@@ -5,6 +5,7 @@ import type { Principal } from "../identity/principal";
 import type { AgentMessagePage, AgentMessageRecord, AgentSession, AgentSessionRecord, AgentSessionResult, AgentTurnRecord } from "../agent/session-do";
 import type { AgentToolRunner } from "../agent/tool-runner";
 import type { WorkScope } from "../maintenance/lifecycle";
+import { observeStorage } from "../maintenance/storage";
 
 const SESSION_ID = /^[A-Za-z0-9_-]{21,128}$/u;
 
@@ -27,11 +28,11 @@ export async function routeAgentApi(
     requireNoQuery(url);
     const id = namespace.newUniqueId();
     const sessionId = id.toString();
-    const result = await namespace.get(id).create({
+    const result = await observeStorage(workScope, async () => await namespace.get(id).create({
       sessionId,
       memberId: principal.memberId,
       now: new Date().toISOString(),
-    });
+    }));
     return jsonAgentResult(result, 201, context.requestId);
   }
 
@@ -40,7 +41,7 @@ export async function routeAgentApi(
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     const stub = sessionStub(namespace, decodePathId(toolPath[1]!));
-    throwIfAgentError(await stub.read(principal.memberId));
+    throwIfAgentError(await observeStorage(workScope, async () => await stub.read(principal.memberId)));
     const input = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
     const name = decodePathId(toolPath[2]!);
     const result = await tools.run(principal.memberId, name, input);
@@ -55,13 +56,13 @@ export async function routeAgentApi(
       requireNoQuery(url);
       const body = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
       if (!isMessageBody(body)) throw new AppError("AGENT_MESSAGE_INVALID", "Agent message is invalid", 400);
-      const result = await stub.appendMessage(principal.memberId, { role: "user", content: body.content });
+      const result = await observeStorage(workScope, async () => await stub.appendMessage(principal.memberId, { role: "user", content: body.content }));
       return jsonAgentResult(result, 201, context.requestId, "message");
     }
     if (request.method === "GET") {
       const rawLimit = url.searchParams.get("limit");
       const limit = rawLimit === null ? undefined : Number(rawLimit);
-      const result = await stub.listMessages(principal.memberId, { limit });
+      const result = await observeStorage(workScope, async () => await stub.listMessages(principal.memberId, { limit }));
       return jsonAgentResult(result, 200, context.requestId, "messages");
     }
     return methodNotAllowed("GET, POST", context);
@@ -75,7 +76,7 @@ export async function routeAgentApi(
     const stub = sessionStub(namespace, id);
     const body = await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes);
     if (!isQuestionBody(body)) throw new AppError("AGENT_STREAM_REQUEST_INVALID", "Agent stream request is invalid", 400);
-    const started = await stub.startTurn(principal.memberId, body.question);
+    const started = await observeStorage(workScope, async () => await stub.startTurn(principal.memberId, body.question));
     throwIfAgentError(started);
     let upstream: ReadableStream;
     try {
@@ -107,7 +108,8 @@ export async function routeAgentApi(
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireNoQuery(url);
     const stub = sessionStub(namespace, decodePathId(turnPath[1]!));
-    const result = await stub.getTurn(principal.memberId, decodePathId(turnPath[2]!));
+    const turnId = decodePathId(turnPath[2]!);
+    const result = await observeStorage(workScope, async () => await stub.getTurn(principal.memberId, turnId));
     return jsonAgentResult(result, 200, context.requestId, "turn");
   }
 
@@ -116,7 +118,7 @@ export async function routeAgentApi(
   if (request.method !== "GET") return methodNotAllowed("GET", context);
   requireNoQuery(url);
   const stub = sessionStub(namespace, id);
-  return jsonAgentResult(await stub.read(principal.memberId), 200, context.requestId);
+  return jsonAgentResult(await observeStorage(workScope, async () => await stub.read(principal.memberId)), 200, context.requestId);
 }
 
 function jsonAgentResult<T extends AgentSessionRecord | AgentMessageRecord | AgentMessagePage | AgentTurnRecord>(
@@ -185,11 +187,11 @@ function withPersistedAssistant(
             }
           }
           if (disconnected) {
-            throwIfAgentError(await stub.terminateTurn(memberId, turnId));
+            throwIfAgentError(await observeStorage(workScope, async () => await stub.terminateTurn(memberId, turnId)));
             return;
           }
           const answer = extractStreamAnswer(chunks);
-          if (answer) throwIfAgentError(await stub.completeTurn(memberId, turnId, answer));
+          if (answer) throwIfAgentError(await observeStorage(workScope, async () => await stub.completeTurn(memberId, turnId, answer)));
           if (!disconnected) controller.close();
         } finally {
           activeReader = undefined;

@@ -1,6 +1,6 @@
 import type { MaintenanceClient, Permit } from './contracts';
 
-export type UncertaintyReason = 'D1_RESULT_INVALID' | 'APP_UNEXPECTED_ERROR';
+export type UncertaintyReason = 'D1_RESULT_INVALID' | 'APP_UNEXPECTED_ERROR' | 'STORAGE_RESULT_UNCERTAIN';
 
 export interface WorkScope {
   assertOpen(): void;

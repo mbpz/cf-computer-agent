@@ -1,6 +1,8 @@
 import { getWorkspace, type WorkspaceClient } from "@cloudflare/computer";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
+import { observeStorage, type StorageObserver } from "../maintenance/storage";
+import { observeKnowledgeRpc } from "./observed-rpc";
 import type { CreateNoteResult, NoteRecord, RpcResult, SearchDocument } from "./types";
 
 const INDEX_DIRECTORY = APP_CONFIG.indexPath.slice(0, APP_CONFIG.indexPath.lastIndexOf("/"));
@@ -21,44 +23,45 @@ export class WorkspaceRepository implements KnowledgeRepository {
     namespace?: Env["KNOWLEDGE"],
     name?: string,
     workspace?: WorkspaceClient,
+    private readonly observer?: StorageObserver,
   ) {
     this.namespace = namespace;
     this.name = name;
     this.workspace = workspace;
   }
 
-  static forLocalWorkspace(workspace: WorkspaceClient): WorkspaceRepository {
-    return new WorkspaceRepository(undefined, undefined, workspace);
+  static forLocalWorkspace(workspace: WorkspaceClient, observer?: StorageObserver): WorkspaceRepository {
+    return new WorkspaceRepository(undefined, undefined, workspace, observer);
   }
 
   async commitNote(input: unknown): Promise<CreateNoteResult> {
-    const result = await this.getStub().commitNote(input);
+    const result = await observeKnowledgeRpc(this.observer, () => this.getStub().commitNote(input));
     return unwrapRpcResult(result);
   }
 
   async list(): Promise<NoteRecord[]> {
     return this.withWorkspace(async (workspace) => {
-      await ensureWorkspaceDirectories(workspace);
-      if (!(await hasEntry(workspace, INDEX_DIRECTORY, fileName(APP_CONFIG.indexPath)))) return [];
-      return parseIndex(await workspace.fs.readFile(APP_CONFIG.indexPath, "utf8"));
+      await ensureWorkspaceDirectories(workspace, this.observer);
+      if (!(await hasEntry(workspace, INDEX_DIRECTORY, fileName(APP_CONFIG.indexPath), this.observer))) return [];
+      return parseIndex(await observeStorage(this.observer, () => workspace.fs.readFile(APP_CONFIG.indexPath, "utf8")));
     });
   }
 
   async read(note: NoteRecord): Promise<string | null> {
     assertSafePath(note);
     return this.withWorkspace(async (workspace) => {
-      await ensureWorkspaceDirectories(workspace);
-      if (!(await hasEntry(workspace, APP_CONFIG.notesRoot, fileName(note.path)))) return null;
-      return workspace.fs.readFile(note.path, "utf8");
+      await ensureWorkspaceDirectories(workspace, this.observer);
+      if (!(await hasEntry(workspace, APP_CONFIG.notesRoot, fileName(note.path), this.observer))) return null;
+      return observeStorage(this.observer, () => workspace.fs.readFile(note.path, "utf8"));
     });
   }
 
   async save(note: NoteRecord, content: string, nextIndex: NoteRecord[]): Promise<void> {
     this.validateSave(note, nextIndex);
     await this.withWorkspace(async (workspace) => {
-      await ensureWorkspaceDirectories(workspace);
-      await workspace.fs.writeFile(note.path, content);
-      await workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify(nextIndex));
+      await ensureWorkspaceDirectories(workspace, this.observer);
+      await observeStorage(this.observer, () => workspace.fs.writeFile(note.path, content));
+      await observeStorage(this.observer, () => workspace.fs.writeFile(APP_CONFIG.indexPath, JSON.stringify(nextIndex)));
     });
   }
 
@@ -92,8 +95,8 @@ export class WorkspaceRepository implements KnowledgeRepository {
   private async getWorkspace(): Promise<WorkspaceClient> {
     if (!this.workspace) {
       const stub = this.getStub();
-      unwrapRpcResult(await stub.recoverWorkspace());
-      this.workspace = await getWorkspace(toWorkspaceHandle(stub));
+      unwrapRpcResult(await observeKnowledgeRpc(this.observer, () => stub.recoverWorkspace()));
+      this.workspace = await observeStorage(this.observer, () => getWorkspace(toWorkspaceHandle(stub)));
     }
     return this.workspace;
   }
@@ -148,23 +151,24 @@ export async function ensureDirectory(
   workspace: WorkspaceClient,
   parent: string,
   path: string,
+  observer?: StorageObserver,
 ): Promise<void> {
-  if (await hasEntry(workspace, parent, fileName(path))) return;
+  if (await hasEntry(workspace, parent, fileName(path), observer)) return;
   try {
-    await workspace.fs.mkdir(path);
+    await observeStorage(observer, () => workspace.fs.mkdir(path));
   } catch (error) {
     if (!isAlreadyExists(error)) throw error;
   }
 }
 
-async function ensureWorkspaceDirectories(workspace: WorkspaceClient): Promise<void> {
-  await ensureDirectory(workspace, "/", WORKSPACE_ROOT);
-  await ensureDirectory(workspace, WORKSPACE_ROOT, APP_CONFIG.notesRoot);
-  await ensureDirectory(workspace, WORKSPACE_ROOT, INDEX_DIRECTORY);
+async function ensureWorkspaceDirectories(workspace: WorkspaceClient, observer?: StorageObserver): Promise<void> {
+  await ensureDirectory(workspace, "/", WORKSPACE_ROOT, observer);
+  await ensureDirectory(workspace, WORKSPACE_ROOT, APP_CONFIG.notesRoot, observer);
+  await ensureDirectory(workspace, WORKSPACE_ROOT, INDEX_DIRECTORY, observer);
 }
 
-async function hasEntry(workspace: WorkspaceClient, directory: string, name: string): Promise<boolean> {
-  return (await workspace.fs.readdir(directory)).some((entry) => entry.name === name);
+async function hasEntry(workspace: WorkspaceClient, directory: string, name: string, observer?: StorageObserver): Promise<boolean> {
+  return (await observeStorage(observer, () => workspace.fs.readdir(directory))).some((entry) => entry.name === name);
 }
 
 function fileName(path: string): string {
