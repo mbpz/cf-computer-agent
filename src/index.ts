@@ -203,7 +203,25 @@ function disposeWorkspace(workspace: Awaited<ReturnType<typeof getWorkspace>>): 
   if (typeof dispose === "function") dispose.call(workspace);
 }
 
-export default createWorkerEntry({
+const legacyProductionEntry = createWorkerEntry({ mode: "legacy" });
+const guardedProductionEntry = createWorkerEntry({
   mode: "guarded",
   maintenance: env => env.MAINTENANCE.getByName("production"),
 });
+
+function productionMaintenanceEnabled(env: Env): boolean {
+  return typeof env.MAINTENANCE_CONTROL_TOKEN === "string" && env.MAINTENANCE_CONTROL_TOKEN.length >= 16;
+}
+
+const productionEntry: Required<Pick<ExportedHandler<Env>, "fetch" | "scheduled">> = {
+  fetch(request, env, ctx) {
+    const entry = productionMaintenanceEnabled(env) ? guardedProductionEntry : legacyProductionEntry;
+    return entry.fetch(request, env, ctx);
+  },
+  scheduled(controller, env, ctx) {
+    const entry = productionMaintenanceEnabled(env) ? guardedProductionEntry : legacyProductionEntry;
+    return entry.scheduled(controller, env, ctx);
+  },
+};
+
+export default productionEntry;

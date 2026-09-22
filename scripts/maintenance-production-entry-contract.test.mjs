@@ -9,6 +9,8 @@ test('production entry is wired through the guarded maintenance coordinator', ()
   assert.match(productionEntry, /export \{ MaintenanceCoordinator \} from ["']\.\/maintenance\/coordinator["'];/);
   assert.match(productionEntry, /mode:\s*["']guarded["']/);
   assert.match(productionEntry, /env\.MAINTENANCE\.getByName\(["']production["']\)/);
+  assert.match(productionEntry, /productionMaintenanceEnabled/);
+  assert.match(productionEntry, /legacyProductionEntry/);
 });
 
 test('wrangler declares the production maintenance durable object and migration', () => {
