@@ -145,10 +145,13 @@ function trackResponse(response: Response, scope: WorkScope): Response {
         controller.error(error);
       }
     },
-    async cancel(reason) {
+    cancel(reason) {
+      // Register before settling the response lifetime: cancellation may still
+      // run writable continuations after the reader/producer reports EOF.
+      const cancellation = scope.run(async () => { await reader.cancel(reason); });
       // Cancellation is NOT evidence the producer stopped writing.
       reject(new Error('STREAM_CANCELED'));
-      await reader.cancel(reason);
+      return cancellation;
     },
   }, { highWaterMark: 0 });
   return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });

@@ -197,6 +197,39 @@ describe('tracked maintenance work', () => {
     expect(await g.beginDrain('error', 0)).toMatchObject({ active: 1 });
   });
 
+  it.each([false, true])('tracks the entire response cancellation tail (reject: %s)', async fail => {
+    const g = gate(); const bg = background(); const entered = deferred(); const tail = deferred();
+    const failure = new Error('synthetic cancellation failure');
+    let saved!: WorkScope; let finished = false; let writes = 0; let cancelReason: unknown;
+    const response = await guardFetch(g, bg.register, async scope => {
+      saved = scope;
+      return new Response(new ReadableStream({ async cancel(reason) {
+        cancelReason = reason;
+        entered.resolve();
+        await tail.promise;
+        // The cancellation factory still owns this late continuation.
+        await saved.run(async () => { writes++; });
+        if (fail) throw failure;
+      } }));
+    });
+    const completion = Promise.all(bg.tasks).then(result => { finished = true; return result; });
+    const canceled = response.body!.cancel('synthetic disconnect').catch(error => error);
+    try {
+      await entered.promise;
+      expect(await g.beginDrain('cancel-tail', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(cancelReason).toBe('synthetic disconnect');
+      expect(finished).toBe(false);
+    } finally {
+      tail.resolve();
+      await canceled;
+      await completion;
+    }
+    expect(await canceled).toBe(fail ? failure : undefined);
+    expect(writes).toBe(1);
+    expect(await completion).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
+    expect(await g.status()).toMatchObject({ active: 1, phase: 'DRAINING' });
+  });
+
   it('retains failed background work even when its rejection is caught by the handler', async () => {
     const g = gate(); const bg = background();
     await guardFetch(g, bg.register, async scope => {

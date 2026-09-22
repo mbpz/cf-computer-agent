@@ -203,7 +203,13 @@ function withPersistedAssistant(
     },
     cancel(reason) {
       disconnected = true;
-      void activeReader?.cancel(reason);
+      // Capture before scheduling: the producer can finish and clear its
+      // reader while the independent cancellation factory is still pending.
+      const reader = activeReader;
+      const cancel = async () => { await reader?.cancel(reason); };
+      // Await cancellation itself, never the producer (which may be waiting
+      // on this reader). Both lifetimes are registered independently.
+      return workScope ? workScope.run(cancel) : cancel();
     },
   });
 }
