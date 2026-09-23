@@ -2,7 +2,7 @@
 
 日期：2026-09-19。分支：`codex/admin-audit-recovery`。
 
-状态：用户于 2026-09-20 确认进入 R02，书面规格获准；已形成[实施计划](../plans/2026-09-20-maintenance-entry-integration.md)。R02 已完成[本地实现验证](../../operations/evidence/2026-09-20-maintenance-entry.md)，2026-09-21 R03 五个子项已[本地实现验证](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)，R04 尚未实施；不是已部署或完整维护安全声明。用户后续已授权提交，精确版本见计划及 Git 记录。
+状态：用户于 2026-09-20 确认进入 R02，书面规格获准；已形成[实施计划](../plans/2026-09-20-maintenance-entry-integration.md)。R02 已完成[本地实现验证](../../operations/evidence/2026-09-20-maintenance-entry.md)，2026-09-21 R03 五个子项已[本地实现验证](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)，2026-09-23 R04 五个子项及限定范围故障矩阵已[本地收口](../../operations/evidence/2026-09-23-maintenance-r04-completion.md)。下一项 R05 独立设计确认，尚未实施；不是已部署或完整维护安全声明。用户后续已授权提交，精确版本见计划及 Git 记录。
 
 依据：[入口审计](../../operations/evidence/2026-09-19-maintenance-entry-audit.md)、[已有维护设计](../../operations/d1-backup-maintenance-design.md)、[R01–R25 执行清单](../../operations/2026-09-19-remaining-work-checklist.md)。
 
@@ -128,4 +128,4 @@ harness 必须沿真实入口、真实服务和真实本地 D1；只在外部资
 
 已检查：无未定占位；方向确认与书面规格审阅分开；正常业务错误/原始存储失败分开；R02 局部接入不冒充 R03/R04 完成；纯 provider 尾部不误报 D1 写者；生产默认路径、绑定和授权边界清晰。
 
-2026-09-20 用户确认进入 R02，本文包括“原始存储失败保守保留许可”的取舍已获准；实施计划形成后 R01 关闭，R02 已本地实现验证。2026-09-21 R03 本地实现及回归完成，下一项为 R04，尚未开始。控制鉴权、容量/孤儿处理和生产操作不随本规格获准而自动授权。
+2026-09-20 用户确认进入 R02，本文包括“原始存储失败保守保留许可”的取舍已获准；实施计划形成后 R01 关闭。R02/R03/R04 现均本地实现及回归完成，恢复主线 4 关闭 / 21 剩余，下一项为 R05 独立设计确认。控制鉴权、容量/孤儿处理和生产操作不随本规格获准而自动授权。

@@ -2,12 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 顺序完成 R02–R04 的本地真实入口接入；最初仅批准 R02，用户随后逐步要求提交并进入下一步。R03 已关闭；2026-09-21 再次要求继续后，当前推进 R04，仍仅限本地。
+**Goal:** 顺序完成 R02–R04 的本地真实入口接入；最初仅批准 R02，用户随后逐步要求提交并进入下一步。2026-09-23 R02–R04 均本地完成，下一项 R05 需独立确认设计；不扩大到生产。
 **Architecture:** `index.ts` 显式选择 legacy；独立本地 harness 显式选择 guarded。两者共用 `createApp` 和 `AssetService.processDue(3)`，不复制业务路由。维护准入先于所有业务绑定读取和服务构建。
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-23):** R02 本地实现与验证完成，见[执行证据](../../operations/evidence/2026-09-20-maintenance-entry.md)，现已提交至 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），并合入 main 的 `df69af8`；原工作区已快进到该基线。R03 前三项已核验并提交 `b408633`，见[接线证据](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)。第 4 项已提交 `eb685c3`，见[后台及并行分支证据](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项以 `7ea7bee` 提交，maintenance 8 files / 135 tests、完整 `npm test`、应用及专项类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)。R03 整体关闭，恢复主线 3 关闭 / 22 剩余。R04 第 1 子项已提交 `57cca2e`，见[生产者证据](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)；第 2 子项已提交 `8c01dc3`，见[取消链证据](../../operations/evidence/2026-09-22-maintenance-r04-cancel.md)。第 3 子项已提交 `2a367d5`，新增 37 项迟到结果回归，见[超时证据](../../operations/evidence/2026-09-22-maintenance-r04-timeout.md)。第 4 子项 typed R2/DO/VFS 原始失败观察本地完成，新增 50 项回归，237 项 maintenance、应用 smoke/unit/worker 全部分项和类型检查通过，见[存储边界证据](../../operations/evidence/2026-09-23-maintenance-r04-storage.md)。当前游标为第 5 子项真实合成资源完整故障矩阵与收口。R04 为 4/5 子项完成，父项未关闭，本轮未推送、未合入 main、未部署。
+**Status (2026-09-23):** R02 提交 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），已合入 main 的 `df69af8`，工作区快进至该基线；见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)。R03 提交 `b408633`、`eb685c3`、`7ea7bee` 并本地关闭，见[接线](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)、[后台](../../operations/evidence/2026-09-21-maintenance-continuations.md)及[收口](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)证据。R04 前四子项提交 `57cca2e`、`8c01dc3`、`2a367d5`、`786c8c9`，分别见[生产者](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)、[取消](../../operations/evidence/2026-09-22-maintenance-r04-cancel.md)、[超时](../../operations/evidence/2026-09-22-maintenance-r04-timeout.md)及[存储](../../operations/evidence/2026-09-23-maintenance-r04-storage.md)证据。第五子项新增 10 项跨存储组合测试并完成规格矩阵核对，维护专项 12 files / 247 tests、应用 smoke/unit/worker 分项及两套类型检查通过，见[本轮收口证据](../../operations/evidence/2026-09-23-maintenance-r04-completion.md)。R04 为 **5/5 完成、父项本地关闭**，恢复主线 **4 关闭 / 21 剩余**；下一项 R05 独立设计确认，尚未实施。本轮未推送、未合入 main、未部署。
 
 ## Global Constraints
 
@@ -87,7 +87,7 @@ Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 
 - [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
 - [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
 
-## R04 — 流、取消、超时和跨存储（本地进行中）
+## R04 — 流、取消、超时和跨存储（本地完成）
 
 Files: `src/routes/agent.ts`、`src/app.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。原计划的 `src/agent/service.ts` 不存在，已按真实路由修正。
 
@@ -95,4 +95,4 @@ Files: `src/routes/agent.ts`、`src/app.ts` 及审计定位的流/timeout 边界
 - [x] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。见[第 2 子项证据](../../operations/evidence/2026-09-22-maintenance-r04-cancel.md)。
 - [x] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。14 个 timeout/race 和 3 个 abort-only 边界已分类，37 项新增回归及迟到写变异验证通过；无需运行时代码改动。见[第 3 子项证据](../../operations/evidence/2026-09-22-maintenance-r04-timeout.md)。
 - [x] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。2026-09-23：50 项新增回归及完整本地维护/应用分项回归通过，见[存储边界证据](../../operations/evidence/2026-09-23-maintenance-r04-storage.md)。
-- [ ] 真实合成资源故障回归+证据后才勾选 R04；R05/R06/R07 仍独立，不借本阶段开放生产。
+- [x] 真实合成资源故障回归及规格矩阵核对完成：新增 10 项跨存储组合、三处临时回退负向测试检出提前释放并恢复；维护 247 项及应用分项回归通过后关闭 R04，见[收口证据](../../operations/evidence/2026-09-23-maintenance-r04-completion.md)。R05/R06/R07 仍独立，不借本阶段开放生产。
