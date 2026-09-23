@@ -22,6 +22,7 @@
 - `edgetunnel` 是独立 Worker，仅 KV、无自定义域/路由、过去 24 小时调用为 0，已排除其直接绑定本项目 D1/DO。
 - Queue 和 Email trigger 未配置；Cron 已配置。
 - `MAINTENANCE_CONTROL_TOKEN` 尚未配置，生产维护控制面尚未启用。
+- Dashboard Observability 默认“过去 1 小时”事件查询显示 `0 Success`、`0 Errors`；这只能证明当前查询窗口无可见事件，不能替代 Automation/OAuth/Cron 的历史调用者和停写责任确认。
 
 ## R09 关闭条件
 

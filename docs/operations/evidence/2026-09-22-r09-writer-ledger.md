@@ -42,3 +42,5 @@
 本轮责任预检见[2026-09-23 R09 responsibility preflight](2026-09-23-r09-responsibility-preflight.md)。
 
 R09 外部事实待确认项见[2026-09-23 R09 operator attestation](2026-09-23-r09-operator-attestation.md)。
+
+2026-09-23 Dashboard Observability 默认过去 1 小时查询为 `0 Success / 0 Errors`，已记录为限制性运行证据，不将其扩大解释为无历史写者。
