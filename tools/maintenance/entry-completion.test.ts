@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AppDependencies } from '../../src/app';
@@ -86,7 +87,7 @@ describe('real application completion boundary', () => {
         } });
         await waitOnExecutionContext(ctx);
         expect(await env.SYNTHETIC_DB.prepare('SELECT COUNT(*) AS n FROM site_visit_events').first('n')).toBe(0);
-        expect(await g.beginDrain(`completion-${fault}`, 0)).toMatchObject(mode === 'guarded'
+        expect(await g.beginDrain(`completion-${fault}`, 0, CONTROL_TOKEN)).toMatchObject(mode === 'guarded'
           ? { active: 1, phase: 'DRAINING' } : { active: 0, phase: 'DRAINED' });
       },
     );
@@ -106,7 +107,7 @@ describe('real application completion boundary', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     await response.json(); await waitOnExecutionContext(ctx);
     expect(await env.SYNTHETIC_DB.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE member_id = 'completion-member'").first('n')).toBe(1);
-    expect(await g.beginDrain(`known-${status}`, 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain(`known-${status}`, 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
   });
 
   it.each(['success', 'app-error', 'child-d1-error'] as const)(
@@ -141,7 +142,7 @@ describe('real application completion boundary', () => {
       try {
         expect(response.status).toBe(outcome === 'app-error' ? 500 : 202);
         await response.text();
-        expect(await g.beginDrain('nested-completion', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+        expect(await g.beginDrain('nested-completion', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
         expect(finished).toBe(false);
         parentGate.resolve(); await registered.promise; await parentTask;
         expect((await env.SYNTHETIC_DB.prepare('SELECT id FROM completion_writes ORDER BY id').all()).results).toEqual([{ id: 'parent' }]);
@@ -172,7 +173,7 @@ describe('real application completion boundary', () => {
     const ctx = createExecutionContext();
     const response = await worker.fetch(telemetry(), observed.appEnv, ctx);
     expect(response.status).toBe(202); await response.text(); await waitOnExecutionContext(ctx);
-    expect(await g.beginDrain('late-completion', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain('late-completion', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
     expect(() => observed.scope.assertOpen()).toThrow('SCOPE_CLOSED');
     expect(() => observed.scope.waitUntil(Promise.resolve())).toThrow('SCOPE_CLOSED');
     expect(() => observed.scope.markUncertain('APP_UNEXPECTED_ERROR')).toThrow('SCOPE_CLOSED');

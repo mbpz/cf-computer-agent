@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, createScheduledController, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkerEntry } from '../../src/worker-entry';
@@ -166,7 +167,7 @@ describe('timeout boundaries with real local storage', () => {
       timers.fire(boundary === 'outer-parser' ? 10_000 : 5_000);
       await cleanupStarted.promise;
       expect((await repository.findById(asset.id))?.job.status).toBe('processing');
-      expect(await g.beginDrain('timeout-cleanup', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('timeout-cleanup', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       allowCleanup.resolve();
       const response = await pending;
       if (response) { expect(response.status).toBe(200); await response.text(); }
@@ -235,7 +236,7 @@ describe('timeout boundaries with real local storage', () => {
     await waitOnExecutionContext(ctx);
     expect((await repository.findById(asset.id))?.job.status).toBe('succeeded');
     expect(await (await env.SYNTHETIC_ORIGINALS.get(`parsed/${asset.id}.md`))?.text()).toContain('Synthetic late image evidence.');
-    expect(await g.beginDrain('asset-on-time', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain('asset-on-time', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
   });
 
   it.each(['success', 'failure'] as const)('tracks an entire writable race loser through late %s', async outcome => {
@@ -257,7 +258,7 @@ describe('timeout boundaries with real local storage', () => {
     const response = await responseTask;
     try {
       expect(response.status).toBe(504);
-      expect(await g.beginDrain('writable-race', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('writable-race', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(await env.SYNTHETIC_DB.prepare('SELECT email FROM members WHERE id = ?').bind(owner.memberId).first('email'))
         .toBe('timeout@example.test');
     } finally { late.resolve(); await Promise.all(tasks); }
@@ -299,7 +300,7 @@ describe('timeout boundaries with real local storage', () => {
       if (mode === 'on-time') provider.resolve(valid); else timers.fire(5_000);
       const response = await pending; expect(response.status).toBe(mode === 'on-time' ? 200 : 503);
       await response.text(); expect(await Promise.all(tasks)).toEqual([{ released: true }]);
-      expect(await g.beginDrain('research-race', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+      expect(await g.beginDrain('research-race', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
       if (mode === 'late-report') provider.resolve(valid);
       if (mode === 'late-quota') provider.reject(new Error('quota exceeded'));
       await provider.promise.catch(() => undefined);

@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { env } from './env';
 import { describe, expect, it } from 'vitest';
 import { guardFetch, guardScheduled, type WorkScope, type Completion } from '../../src/maintenance/lifecycle';
@@ -18,7 +19,7 @@ function background() {
 describe('tracked maintenance work', () => {
   it('denies a GET-like handler before services, auth or analytics can write', async () => {
     const g = gate(); const bg = background(); let writes = 0;
-    await g.beginDrain('closed', 0);
+    await g.beginDrain('closed', 0, CONTROL_TOKEN);
     const response = await guardFetch(g, bg.register, async () => { writes++; return new Response(null); });
     expect(response.status).toBe(503);
     expect(response.headers.get('Retry-After')).toBe('60');
@@ -35,7 +36,7 @@ describe('tracked maintenance work', () => {
       return new Response(null);
     });
     expect(response.status).toBe(200);
-    expect(await g.beginDrain('drain', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+    expect(await g.beginDrain('drain', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
     late.resolve();
     expect(await Promise.all(bg.tasks)).toEqual([{ released: true }]);
     expect(writes).toBe(1);
@@ -52,7 +53,7 @@ describe('tracked maintenance work', () => {
       }));
       return new Response(null);
     });
-    await g.beginDrain('drain', 0);
+    await g.beginDrain('drain', 0, CONTROL_TOKEN);
     parent.resolve(); await registered.promise;
     expect(await g.status()).toMatchObject({ active: 1 });
     child.resolve(); await Promise.all(bg.tasks);
@@ -113,7 +114,7 @@ describe('tracked maintenance work', () => {
     });
     expect(response.status).toBe(409);
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('explicit-uncertainty', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('explicit-uncertainty', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
     expect(() => saved.markUncertain('D1_RESULT_INVALID')).toThrow('SCOPE_CLOSED');
   });
 
@@ -127,7 +128,7 @@ describe('tracked maintenance work', () => {
     const completion = Promise.all(bg.tasks).then(result => { finished = true; return result; });
     try {
       expect(response.status).toBe(200);
-      expect(await g.beginDrain('uncertain-child', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('uncertain-child', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(finished).toBe(false);
     } finally {
       child.resolve();
@@ -144,7 +145,7 @@ describe('tracked maintenance work', () => {
       void scope.run(async () => { started.resolve(); await child.promise; writes++; });
     });
     await started.promise;
-    expect(await g.beginDrain('cron', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+    expect(await g.beginDrain('cron', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
     child.resolve();
     expect(await scheduled).toBe(true);
     expect(writes).toBe(1);
@@ -154,7 +155,7 @@ describe('tracked maintenance work', () => {
   it('does not equate Response construction with stream completion', async () => {
     const g = gate(); const bg = background();
     const response = await guardFetch(g, bg.register, async () => new Response('streamed'));
-    expect(await g.beginDrain('stream', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('stream', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
     expect(await response.text()).toBe('streamed');
     expect(await Promise.all(bg.tasks)).toEqual([{ released: true }]);
     expect(await g.status()).toMatchObject({ active: 0, phase: 'DRAINED' });
@@ -167,7 +168,7 @@ describe('tracked maintenance work', () => {
       return new Response('finished body');
     });
     await response.text();
-    expect(await g.beginDrain('producer', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('producer', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
     producer.resolve(); await Promise.all(bg.tasks);
     expect(writes).toBe(1);
     expect(await g.status()).toMatchObject({ phase: 'DRAINED' });
@@ -180,7 +181,7 @@ describe('tracked maintenance work', () => {
       return new Response(new ReadableStream());
     });
     await response.body!.cancel();
-    await g.beginDrain('cancel', 0);
+    await g.beginDrain('cancel', 0, CONTROL_TOKEN);
     producer.resolve();
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
     expect(writes).toBe(1);
@@ -194,7 +195,7 @@ describe('tracked maintenance work', () => {
     })));
     await expect(response.text()).rejects.toThrow('source failed');
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('error', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('error', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it.each([false, true])('tracks the entire response cancellation tail (reject: %s)', async fail => {
@@ -216,7 +217,7 @@ describe('tracked maintenance work', () => {
     const canceled = response.body!.cancel('synthetic disconnect').catch(error => error);
     try {
       await entered.promise;
-      expect(await g.beginDrain('cancel-tail', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('cancel-tail', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(cancelReason).toBe('synthetic disconnect');
       expect(finished).toBe(false);
     } finally {
@@ -237,7 +238,7 @@ describe('tracked maintenance work', () => {
       return new Response(null);
     });
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('failed', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('failed', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it('retains permits on root handler failure without leaking the error response', async () => {
@@ -246,7 +247,7 @@ describe('tracked maintenance work', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain('private details');
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('root', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('root', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it('never starts work if acquire response is lost after durable admission', async () => {
@@ -257,7 +258,7 @@ describe('tracked maintenance work', () => {
     };
     expect((await guardFetch(network, bg.register, async () => { writes++; return new Response(null); })).status).toBe(503);
     expect(writes).toBe(0);
-    expect(await g.beginDrain('network', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('network', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it('does not drop durable work when the completion request fails', async () => {
@@ -268,7 +269,7 @@ describe('tracked maintenance work', () => {
     };
     await guardFetch(network, bg.register, async () => new Response(null));
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'COMPLETION_UNCONFIRMED' }]);
-    expect(await g.beginDrain('network', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('network', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it('does not invoke work if background lifetime registration fails', async () => {
@@ -278,7 +279,7 @@ describe('tracked maintenance work', () => {
     });
     expect(response.status).toBe(503);
     expect(writes).toBe(0);
-    expect(await g.beginDrain('context', 0)).toMatchObject({ active: 1 });
+    expect(await g.beginDrain('context', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
   });
 
   it('keeps a timed-out descendant uncertain even when remaining work later settles', async () => {
@@ -288,7 +289,7 @@ describe('tracked maintenance work', () => {
       scope.waitUntil(timeout.promise);
       return new Response(null);
     });
-    await g.beginDrain('timeout', 0);
+    await g.beginDrain('timeout', 0, CONTROL_TOKEN);
     timeout.reject(new Error('operation timed out'));
     expect(await g.status()).toMatchObject({ active: 1 });
     slow.resolve();
@@ -303,7 +304,7 @@ describe('tracked maintenance work', () => {
       async complete(p) { await g.complete(p); throw new Error('reply lost'); },
     };
     await guardFetch(network, bg.register, async scope => { scope.waitUntil(child.promise); return new Response(null); });
-    await g.beginDrain('reply', 0);
+    await g.beginDrain('reply', 0, CONTROL_TOKEN);
     child.resolve();
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'COMPLETION_UNCONFIRMED' }]);
     // Server saw valid completion, so local zero is truthful; admission stays closed.
@@ -321,7 +322,7 @@ describe('tracked maintenance work', () => {
       scope.waitUntil(late.promise.then(write));
       return new Response(null);
     });
-    expect(await g.beginDrain('d1', 0)).toMatchObject({ phase: 'DRAINING' });
+    expect(await g.beginDrain('d1', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING' });
     expect(await count()).toBe(0);
     late.resolve(); await Promise.all(bg.tasks);
     expect(await count()).toBe(1);

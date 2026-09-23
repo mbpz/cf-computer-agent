@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { SELF, reset, applyD1Migrations, createExecutionContext, createScheduledController, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env } from './env';
@@ -60,7 +61,7 @@ describe('real maintenance entry', () => {
   beforeEach(async () => { await reset(); });
 
   it('denies static, auth and API requests at the local Worker entry when drained', async () => {
-    await env.MAINTENANCE.getByName('local-entry').beginDrain('entry-closed', 0);
+    await env.MAINTENANCE.getByName('local-entry').beginDrain('entry-closed', 0, CONTROL_TOKEN);
     for (const path of ['/boards', '/auth/session', '/api/auth/providers']) {
       const response = await SELF.fetch(`https://example.test${path}`);
       expect(response.status, path).toBe(503);
@@ -71,7 +72,7 @@ describe('real maintenance entry', () => {
   });
 
   it('rejects all HTTP paths and Cron before reading any business binding', async () => {
-    const g = gate(); await g.beginDrain('zero-business', 0);
+    const g = gate(); await g.beginDrain('zero-business', 0, CONTROL_TOKEN);
     const worker = guarded(g); const blocked = forbiddenEnvironment(); const ctx = createExecutionContext();
     for (const path of ['/boards', '/auth/session', '/api/auth/providers', '/api/telemetry/pageview']) {
       const response = await worker.fetch(incoming(`${ORIGIN}${path}`), blocked.value, ctx);
@@ -116,7 +117,7 @@ describe('real maintenance entry', () => {
     const response = await guarded(g).fetch(incoming(`${ORIGIN}/boards`), blocked.value, ctx);
     expect(response.status).toBe(503); await response.text();
     expect(registrations).toBe(1); expect(blocked.reads).toEqual([]);
-    expect(await g.beginDrain('registration-failed', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('registration-failed', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
   });
 
   it('preserves legacy static, provider, auth rejection and validation contracts when open', async () => {
@@ -145,7 +146,7 @@ describe('real maintenance entry', () => {
     expect(response.status).toBe(202); await expect(response.json()).resolves.toMatchObject({ ok: true });
     await waitOnExecutionContext(ctx);
     expect(await env.SYNTHETIC_DB.prepare('SELECT path FROM site_visit_events').all()).toMatchObject({ results: [{ path: '/entry-open' }] });
-    expect(await g.beginDrain('http-written', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain('http-written', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
     const denied = await worker.fetch(telemetry('/entry-denied'), appEnv, createExecutionContext());
     expect(denied.status).toBe(503); await denied.text();
     expect(await env.SYNTHETIC_DB.prepare('SELECT COUNT(*) AS n FROM site_visit_events').first('n')).toBe(1);
@@ -169,7 +170,7 @@ describe('real maintenance entry', () => {
       headers: { cookie: `__Host-memory-session=${token}` },
     }), localEnvironment(env), host as ExecutionContext);
     expect(response.status).toBe(200);
-    expect(await g.beginDrain('session-body', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('session-body', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
     await expect(response.json()).resolves.toMatchObject({ member: { id: 'entry-member' } });
     await waitOnExecutionContext(native);
     expect(registrations).toBe(1);
@@ -183,8 +184,8 @@ describe('real maintenance entry', () => {
     const ctx1 = createExecutionContext(); const ctx2 = createExecutionContext();
     const response1 = await worker.fetch(incoming(`${ORIGIN}/boards`), localEnvironment(env), ctx1);
     const response2 = await worker.fetch(incoming(`${ORIGIN}/boards`), localEnvironment(env), ctx2);
-    expect(await first.beginDrain('first', 0)).toMatchObject({ active: 1 });
-    expect(await second.beginDrain('second', 0)).toMatchObject({ active: 1 });
+    expect(await first.beginDrain('first', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
+    expect(await second.beginDrain('second', 0, CONTROL_TOKEN)).toMatchObject({ active: 1 });
     await response1.text(); await waitOnExecutionContext(ctx1);
     expect(await first.status()).toMatchObject({ active: 0, phase: 'DRAINED' });
     expect(await second.status()).toMatchObject({ active: 1, phase: 'DRAINING' });
@@ -204,7 +205,7 @@ describe('real maintenance entry', () => {
       expect(await (await env.SYNTHETIC_ORIGINALS.get(`parsed/${asset.id}.md`))?.text()).toContain('Synthetic maintenance document');
     }
     const g = env.MAINTENANCE.getByName('local-entry');
-    expect(await g.beginDrain('cron-closed', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain('cron-closed', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
     await seedAsset(4);
     await scheduledLocalWorker();
     expect(await succeeded()).toBe(4);
@@ -222,7 +223,7 @@ describe('real maintenance entry', () => {
     const running = guarded(g).scheduled(createScheduledController(), appEnv, createExecutionContext());
     await entered.promise;
     try {
-      expect(await g.beginDrain('cron-running', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('cron-running', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect((await new AssetsRepository(env.SYNTHETIC_DB).findById(asset.id))?.job.status).toBe('processing');
     } finally { release.resolve(); await running; }
     expect((await new AssetsRepository(env.SYNTHETIC_DB).findById(asset.id))?.job.status).toBe('succeeded');

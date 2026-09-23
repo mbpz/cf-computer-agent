@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, reset } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { guardFetch, type Completion } from '../../src/maintenance/lifecycle';
@@ -73,7 +74,7 @@ describe('raw background continuation observation', () => {
     expect(await response.text()).toBe('business success');
     const retained = tracking && fail;
     await expect(Promise.all(background)).resolves.toEqual([retained ? { released: false, reason: 'WORK_UNCERTAIN' } : { released: true }]);
-    expect(await g.beginDrain('raw-background', 0)).toMatchObject({ active: retained ? 1 : 0, phase: retained ? 'DRAINING' : 'DRAINED' });
+    expect(await g.beginDrain('raw-background', 0, CONTROL_TOKEN)).toMatchObject({ active: retained ? 1 : 0, phase: retained ? 'DRAINING' : 'DRAINED' });
     if (kind === 'member') {
       expect(await db.prepare("SELECT last_seen_at FROM members WHERE id = 'background-member'").first('last_seen_at'))
         .toBe(fail ? null : NOW.toISOString());

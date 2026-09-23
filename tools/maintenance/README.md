@@ -1,8 +1,10 @@
 # Local maintenance coordination harness
 
-This is an independently configured, synthetic-only test harness for the dormant
-modules in `src/maintenance`. It does not load the production Wrangler config,
-export a public control endpoint, or connect the real app to a coordinator.
+This is an independently configured, synthetic-only test harness for the
+modules in `src/maintenance`. Its local worker connects the real app's guarded
+HTTP/Cron entry to a local coordinator. It does not load production Wrangler
+configuration, change the production legacy entry, or export an HTTP control
+endpoint (the HTTP adapter is a later R05 step).
 
 ```sh
 rtk proxy npm run test:ops:maintenance
@@ -11,7 +13,9 @@ rtk proxy npm exec tsc -- --project tools/maintenance/tsconfig.json
 
 The existing installed Workerd supports compatibility date `2026-08-08`; this
 harness pins that date without upgrading dependencies or production settings.
-Its only bindings are a local SQLite Durable Object and synthetic D1. Runtime
+Its bindings include a local SQLite coordinator, synthetic D1 databases and R2,
+local Knowledge/AgentSession Durable Objects, and a public synthetic control
+token used only in tests. Runtime
 RPC-denial tests print expected error logs; the test process must still exit 0
 with no Vitest unhandled-error summary. RPC thenables are normalized through an
 async helper before rejection assertions.
@@ -23,15 +27,21 @@ async helper before rejection assertions.
 - `acquire(id)` durably registers a unique permit before a handler may run.
   Closing admission and recording permits use synchronous SQL transactions.
   Reused IDs cannot acquire again, even after completion or a new epoch.
-- `beginDrain(window, epoch)` closes admission. `DRAINED` means only that this
+- `beginDrain(window, epoch, capability)` closes admission. `DRAINED` means only that this
   coordinator has zero registered active permits. It never means global
   production `FROZEN` or a consistent multi-storage backup.
-- Exact completion retries are safe. `resume` requires matching window/epoch
+- Exact completion retries are safe. `resume(window, epoch, capability)` requires matching window/epoch
   and no active work; it increments epoch. Only the latest matching resume may
   be retried while still open. Older control calls cannot reopen a newer window.
-- RPC clients are trusted internal callers. Permit IDs and epochs are not
-  authentication credentials or database-enforced fencing tokens. Control-plane
-  authentication and fleet/external-writer fencing are not implemented.
+- Internal `status`, `acquire` and `complete` RPC clients remain trusted callers.
+  Both mutation RPCs independently authenticate a dedicated capability on every
+  attempt, before parameter validation or control transactions, including retries.
+  The configured value is held in a JavaScript private field; no RPC secret getter
+  is exposed. Missing/malformed configuration rejects controls without disabling
+  business admission. Permit IDs and epochs are not authentication credentials
+  or database-enforced fencing tokens. Fleet/external-writer fencing remains
+  unimplemented. Synthetic new-configuration-instance tests are not evidence of
+  live production token rotation. Never use the public test token in production.
 - Completed IDs remain as replay tombstones. At 10,000 total records admission
   fails closed. There is no cleanup/TTL, automatic recovery, or production
   capacity claim. Sizing and safe compaction are blockers before deployment.

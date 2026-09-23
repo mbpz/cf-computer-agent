@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, createScheduledController, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createWorkerEntry } from '../../src/worker-entry';
@@ -42,7 +43,7 @@ describe('guarded entry D1 wiring', () => {
     expect(response.status).toBe(500);
     await response.text(); await waitOnExecutionContext(ctx);
     expect(await env.SYNTHETIC_DB.prepare('SELECT COUNT(*) AS n FROM site_visit_events').first('n')).toBe(0);
-    expect(await g.beginDrain('http-d1-failure', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('http-d1-failure', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
   });
 
   it.each(['default', 'same-db-override', 'distinct-db-override'] as const)(
@@ -70,7 +71,7 @@ describe('guarded entry D1 wiring', () => {
       await expect(response.json()).resolves.toMatchObject({ member: { id: 'wiring-member' } });
       await waitOnExecutionContext(ctx);
       expect(await sessionDb.prepare("SELECT COUNT(*) AS n FROM auth_sessions WHERE token_hash = 'expired-wiring-session'").first('n')).toBe(1);
-      expect(await g.beginDrain('session-d1-failure', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('session-d1-failure', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
     },
   );
 
@@ -111,7 +112,7 @@ describe('guarded entry D1 wiring', () => {
     expect((await env.SYNTHETIC_DB.prepare(`SELECT actor_id, resource_id FROM audit_events
       WHERE action = 'member.status_updated'`).all()).results)
       .toEqual([{ actor_id: 'wiring-admin', resource_id: 'wiring-member' }]);
-    expect(await g.beginDrain('shared-database-batch', 0)).toMatchObject({ active: 0, phase: 'DRAINED' });
+    expect(await g.beginDrain('shared-database-batch', 0, CONTROL_TOKEN)).toMatchObject({ active: 0, phase: 'DRAINED' });
   });
 
   it('retains a real Cron D1 failure even when asset compensation and the bounded sweep succeed', async () => {
@@ -131,11 +132,11 @@ describe('guarded entry D1 wiring', () => {
     await waitOnExecutionContext(ctx);
     expect((await repository.findById(asset.id))?.job.status).toBe('failed_retryable');
     expect(await env.SYNTHETIC_ORIGINALS.get(`parsed/${asset.id}.md`)).toBeNull();
-    expect(await g.beginDrain('cron-d1-failure', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('cron-d1-failure', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
   });
 
   it('does not read a sessionDatabase override before closed admission rejects the request', async () => {
-    const g = gate(); await g.beginDrain('closed-session-binding', 0);
+    const g = gate(); await g.beginDrain('closed-session-binding', 0, CONTROL_TOKEN);
     let reads = 0;
     const dependencies: AppDependencies = {
       get sessionDatabase(): D1Database { reads++; throw new Error('SESSION_BINDING_READ'); },

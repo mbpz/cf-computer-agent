@@ -1,9 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Permit, Snapshot } from './contracts';
+import { assertControlCapability } from './control-auth';
 
 export class MaintenanceCoordinator extends DurableObject<unknown> {
+  #controlToken: unknown;
+
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env);
+    this.#controlToken = typeof env === 'object' && env !== null
+      ? (env as { MAINTENANCE_CONTROL_TOKEN?: unknown }).MAINTENANCE_CONTROL_TOKEN : undefined;
     ctx.storage.transactionSync(() => {
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS control (
         singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
@@ -44,7 +49,8 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
     });
   }
 
-  beginDrain(window: string, epoch: number): Snapshot {
+  beginDrain(window: string, epoch: number, capability: string): Snapshot {
+    assertControlCapability(capability, this.#controlToken);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {
@@ -56,7 +62,8 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
     });
   }
 
-  resume(window: string, epoch: number): Snapshot {
+  resume(window: string, epoch: number, capability: string): Snapshot {
+    assertControlCapability(capability, this.#controlToken);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {

@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionService } from '../../src/identity/session';
@@ -94,7 +95,7 @@ describe('real Agent stream producer completion', () => {
       await f.entered.promise;
       f.gate.resolve(); await f.settled.promise;
       expect(await f.turn()).toMatchObject({ ok: true, value: { status: 'terminated' } });
-      expect(await f.g.beginDrain('cancel-after-producer', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await f.g.beginDrain('cancel-after-producer', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(canceled).toBe(false);
       expect(f.finished).toBe(false);
     } finally {
@@ -140,7 +141,7 @@ describe('real Agent stream producer completion', () => {
       await cancelEntered.promise; await f.entered.promise;
       f.gate.resolve(); await f.settled.promise;
       expect(await f.turn()).toMatchObject({ ok: true, value: { status: 'terminated' } });
-      expect(await f.g.beginDrain('cancel-rejection', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await f.g.beginDrain('cancel-rejection', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(f.finished).toBe(false);
     } finally {
       cancelGate.resolve(); f.gate.resolve();
@@ -163,7 +164,7 @@ describe('real Agent stream producer completion', () => {
         if (finalize === 'completeTurn') { f.upstream.close(); await f.entered.promise; }
         await reader.cancel('synthetic disconnect');
         await f.entered.promise;
-        expect(await f.g.beginDrain(`stream-${finalize}`, 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+        expect(await f.g.beginDrain(`stream-${finalize}`, 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
         expect(await f.turn()).toMatchObject({ ok: true, value: { status: 'active' } });
         expect(f.finished).toBe(false);
       } finally {
@@ -185,7 +186,7 @@ describe('real Agent stream producer completion', () => {
       f.upstream.close();
       if (consume) body = f.response.text().then(text => { bodyFinished = true; return text; });
       await f.entered.promise;
-      expect(await f.g.beginDrain('stream-eof', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await f.g.beginDrain('stream-eof', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(await f.turn()).toMatchObject({ ok: true, value: { status: 'active' } });
       expect(f.finished).toBe(false);
       expect(bodyFinished).toBe(false);
@@ -222,7 +223,7 @@ describe('real Agent stream producer completion', () => {
         terminal = reader.read().catch(error => error);
       } else terminal = reader.cancel('synthetic disconnect');
       await f.entered.promise;
-      expect(await f.g.beginDrain('stream-failed-write', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await f.g.beginDrain('stream-failed-write', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(f.finished).toBe(false);
     } finally {
       f.gate.resolve();
@@ -245,6 +246,6 @@ describe('real Agent stream producer completion', () => {
     await f.completion;
     expect((await Promise.allSettled(f.registered())).some(task => task.status === 'rejected' && task.reason === failure)).toBe(true);
     expect(await f.turn()).toMatchObject({ ok: true, value: { status: 'active' } });
-    expect(await f.g.beginDrain('stream-read-failure', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await f.g.beginDrain('stream-read-failure', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
   });
 });

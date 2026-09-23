@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, createScheduledController, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetService } from '../../src/assets/service';
@@ -68,7 +69,7 @@ describe('typed raw storage observation', () => {
     expect(response.status).toBe(200);
     expect(await Promise.all(tasks)).toEqual([outcome === 'resolve'
       ? { released: true } : { released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('r2-cancel', 0)).toMatchObject({
+    expect(await g.beginDrain('r2-cancel', 0, CONTROL_TOKEN)).toMatchObject({
       phase: outcome === 'resolve' ? 'DRAINED' : 'DRAINING', active: outcome === 'resolve' ? 0 : 1,
     });
     expect(await bucket.head(asset.objectKey)).toEqual(outcome === 'resolve' ? null : expect.anything());
@@ -99,7 +100,7 @@ describe('typed raw storage observation', () => {
     });
     expect(response.status).toBe(200);
     expect(await Promise.all(tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('r2-parse', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+    expect(await g.beginDrain('r2-parse', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
     expect(await bucket.head(`parsed/${asset.id}.md`)).toBeNull();
   });
 
@@ -251,7 +252,7 @@ describe('typed raw storage observation', () => {
       await waitOnExecutionContext(ctx);
       expect(get).toHaveBeenCalledOnce();
       const retained = mode === 'guarded' && outcome === 'failure';
-      expect(await g.beginDrain('entry-storage', 0)).toMatchObject({ phase: retained ? 'DRAINING' : 'DRAINED', active: retained ? 1 : 0 });
+      expect(await g.beginDrain('entry-storage', 0, CONTROL_TOKEN)).toMatchObject({ phase: retained ? 'DRAINING' : 'DRAINED', active: retained ? 1 : 0 });
       expect((await repository.findById(asset.id))?.job).toMatchObject({
         status: outcome === 'success' ? 'succeeded' : 'failed_retryable',
         lastErrorCode: outcome === 'success' ? null : outcome === 'missing' ? 'ASSET_ORIGINAL_MISSING' : 'ASSET_PARSE_RETRYABLE',
@@ -289,7 +290,7 @@ describe('typed raw storage observation', () => {
     });
     const completion = Promise.all(tasks).then(result => { settled = true; return result; });
     try {
-      expect(await g.beginDrain('pending-storage', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+      expect(await g.beginDrain('pending-storage', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
       expect(settled).toBe(false);
       if (outcome === 'reject') reject(new Error('synthetic late storage failure')); else resolve();
       expect(await completion).toEqual([outcome === 'resolve' ? { released: true } : { released: false, reason: 'WORK_UNCERTAIN' }]);

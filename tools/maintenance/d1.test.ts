@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env } from './env';
 import { createD1Facade } from '../../src/maintenance/d1';
@@ -118,7 +119,7 @@ describe('request scoped D1 facade', () => {
     });
     expect(response.status).toBe(409);
     expect(await Promise.all(bg.tasks)).toEqual([{ released: false, reason: 'WORK_UNCERTAIN' }]);
-    expect(await g.beginDrain('constraint', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+    expect(await g.beginDrain('constraint', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
     expect(await env.SYNTHETIC_DB.prepare('SELECT value FROM maintenance_facade_rows WHERE id = ?').bind(id).first('value')).toBe('original');
   });
 
@@ -175,7 +176,7 @@ describe('request scoped D1 facade', () => {
     await started.promise;
     try {
       expect(response.status).toBe(200);
-      expect(await g.beginDrain('slow-query', 0)).toMatchObject({ active: 1, phase: 'DRAINING' });
+      expect(await g.beginDrain('slow-query', 0, CONTROL_TOKEN)).toMatchObject({ active: 1, phase: 'DRAINING' });
       expect(finished).toBe(false);
     } finally { query.resolve(success()); await completion; }
     expect(await completion).toEqual([{ released: true }]);

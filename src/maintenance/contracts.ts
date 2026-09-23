@@ -13,3 +13,10 @@ export interface MaintenanceClient {
   acquire(id: string): Promise<Permit | null>;
   complete(permit: Permit): Promise<Snapshot>;
 }
+
+/** Separate operations capability: business clients do not receive this credential. */
+export interface MaintenanceControlClient {
+  status(): Promise<Snapshot>;
+  beginDrain(window: string, epoch: number, capability: string): Promise<Snapshot>;
+  resume(window: string, epoch: number, capability: string): Promise<Snapshot>;
+}

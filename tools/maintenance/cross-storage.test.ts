@@ -1,3 +1,4 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import { applyD1Migrations, createExecutionContext, createScheduledController, reset, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AssetService } from '../../src/assets/service';
@@ -95,7 +96,7 @@ describe('real entry cross-storage completion matrix', () => {
       await written.promise;
       expect(await bucket.head(parsedKey)).not.toBeNull();
       expect((await repository.findById(asset.id))?.job.status).toBe('processing');
-      expect(await coordinator.beginDrain('cross-storage', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+      expect(await coordinator.beginDrain('cross-storage', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
       expect(finished).toBe(false);
       // Closed admission must deny a second actual HTTP entry, not repeat work.
       const deniedCtx = createExecutionContext();
@@ -173,7 +174,7 @@ describe('real entry cross-storage completion matrix', () => {
     const reader = createRequestPublishedContent(env.KNOWLEDGE, name);
     try {
       expect(await response.text()).toBe('accepted');
-      expect(await coordinator.beginDrain('post-response-storage', 0)).toMatchObject({ phase: 'DRAINING', active: 1 });
+      expect(await coordinator.beginDrain('post-response-storage', 0, CONTROL_TOKEN)).toMatchObject({ phase: 'DRAINING', active: 1 });
       start.resolve(); await persisted.promise;
       expect(await reader.reader.read(validated.path, contentSha256)).toBe(markdown);
       expect(await env.SYNTHETIC_DB.prepare('SELECT COUNT(*) AS n FROM cross_storage_receipts').first('n')).toBe(0);

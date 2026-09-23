@@ -8,9 +8,17 @@
 
 **Tech Stack:** TypeScript、现有 Workerd/Cloudflare Vitest pool、SQLite Durable Object、合成 D1/R2；无新依赖。
 
-**Spec:** [已批准 R05 设计](../specs/2026-09-23-maintenance-control-design.md)。2026-09-23 用户确认书面规格；设计提交 `5d35ab4`。本文是待执行计划，所有执行步骤保持未勾选。
+**Spec:** [已批准 R05 设计](../specs/2026-09-23-maintenance-control-design.md)。2026-09-23 用户确认书面规格；设计提交 `5d35ab4`。本文是执行中计划，只按已完成动作勾选。
+
+**执行记录（2026-09-23）：** R05.1 已完成并提交 `a329ce9`。实施前维护基线为 12 文件 / 247 测试；鉴权 RED 为 22 failed / 12 passed，原生比较探针通过；实现后 GREEN 为 34/34，harness 类型检查通过。Workers 扩展以匹配生成声明的窄类型调用，无 mock、polyfill 或字符串比较替代。
+
+R05.2 的四项核心 RED 已由用户贴回真实执行结果确认：分支为 `codex/admin-audit-recovery`，`coordinator.test.ts` 为 4 failed / 10 passed（18:49:43），分别检出鉴权顺序错误及缺凭证未拒绝。随后按计划实现两个 RPC 的私有配置与入口鉴权，新增本地合成配置，完成 11 个旧测试文件的显式 capability 适配；新增配置异常、重试/事务前拒绝和合成配置实例测试。
+
+用户随后贴回完整维护回归（22:44:25）：13 文件中 12 通过、1 失败，291 测试中 289 通过、2 失败。两项失败均因测试将整个 env 传成 undefined/null，真实 DurableObject 基类在进入控制逻辑前拒绝构造（第二参数必须为对象）；不是 capability 断言失败。本轮仅修正夹具为 `{}`、`{ MAINTENANCE_CONTROL_TOKEN: undefined }`、`{ MAINTENANCE_CONTROL_TOKEN: null }`、非法字符串绑定四种对象，保留拒绝控制、持久状态不变与业务 acquire/complete 断言，未改生产逻辑或删除测试。用户再次贴回修正后完整回归（22:58:20，13.42s）：13 文件 / 291 测试全部通过，无 Vitest 未处理错误汇总；存在原有拒绝路径日志及 Vite native config 的非阻塞导入提示。本轮重新执行 harness 类型检查与差异检查均通过。仅暂存本步骤 16 个文件并创建本地提交的审批连续两次超时，Git 命令未启动；下一动作是完成提交，不重复要求用户运行已经通过的维护回归。R05 五个任务完成 1 个、剩余 4 个；27 个动作完成 9 个、剩余 18 个；恢复父项仍为 4/25。
 
 ## Global Constraints
+
+**后续授权与合并预检（2026-09-23）：** 用户明确要求“代码 merge 到 main，再继续完结”，因此本地提交、冲突整合及合并后验证获准；下列原始“不合并”限制仅描述此前实施边界，不再阻止本次本地整合。仍不推送、不部署、不操作生产凭证或数据。预检时 main 为 `426e313`、恢复分支已提交 tip 为 `a329ce9`，共同基点 `df69af8`；双方分别有 40/11 个独有提交，main 工作区干净。只读三方预览已发现入口、生命周期、D1、流/存储测试及进度文档冲突，且预览尚未包含未提交的 R05.2。必须保留 main 已有管理 API、容量检查和生产接线，并整合恢复分支的安全边界，禁止整文件选边覆盖。main 清单现有记录为 8/25、恢复分支为 4/25；两者是分支各自证据，不能当作合并候选的验证。当前提交审批已连续两次超时，Git 写操作尚未执行，未启动实际 merge；取得本地提交后先用 `--no-ff --no-commit` 合并并逐项消解冲突，重新验证候选后才创建 merge commit。保留恢复 worktree 供后续工作。
 
 - 全程本地合成资源、不委派、不推送或合并、不读本地 secrets。
 - 工作目录固定 `/Users/doug/ai/system/cf-computer-agent/.worktrees/admin-audit-recovery`；分支 `codex/admin-audit-recovery`；不在 main 实现，不合并 main 的另一套控制 API。
@@ -54,7 +62,7 @@
 - `authenticateControlRequest(request: Request, configured: unknown): string`；先校验配置，再解析唯一 Bearer，返回该次请求的 capability。
 - 测试夹具导出 `CONTROL_TOKEN`、`OTHER_CONTROL_TOKEN` 及 `controlRequest(action: 'status' | 'begin-drain' | 'resume', payload?: { window: string; epoch: number }, token?: string): Request`。
 
-- [ ] **1. 写本地运行时探针和行为测试。** 先为两个公开函数建立会抛 `CONTROL_UNAVAILABLE` 的最小可导入壳；模块缺失/收集失败不能充当行为 RED。`worker-configuration.d.ts` 当前声明 `crypto.subtle.timingSafeEqual`；以下运行时测试才是可用性门槛，失败时停下核对，不降级为字符串比较。
+- [x] **1. 写本地运行时探针和行为测试。** 先为两个公开函数建立会抛 `CONTROL_UNAVAILABLE` 的最小可导入壳；模块缺失/收集失败不能充当行为 RED。`worker-configuration.d.ts` 当前声明 `crypto.subtle.timingSafeEqual`；以下运行时测试才是可用性门槛，失败时停下核对，不降级为字符串比较。
 
 ```ts
 import { expect, it } from 'vitest';
@@ -77,8 +85,8 @@ it('accepts only a canonical matching dedicated capability', () => {
 });
 ```
 
-- [ ] **2. 运行 RED。** `rtk proxy npm run test:ops:maintenance -- tools/maintenance/control-auth.test.ts`；记录探针通过、合法凭证被壳拒绝的断言失败。若探针失败，不执行后续实现。
-- [ ] **3. 实现无副作用鉴权与合成夹具。** 解码失败返回 null；用规范重编码判定唯一编码，不能仅检查字符串长度。下面是比较核心；公开入口每次都调用它，不缓存授权结论。
+- [x] **2. 运行 RED。** `rtk proxy npm run test:ops:maintenance -- tools/maintenance/control-auth.test.ts`；记录探针通过、合法凭证被壳拒绝的断言失败。若探针失败，不执行后续实现。
+- [x] **3. 实现无副作用鉴权与合成夹具。** 解码失败返回 null；用规范重编码判定唯一编码，不能仅检查字符串长度。下面是比较核心；公开入口每次都调用它，不缓存授权结论。
 
 ```ts
 function decodeCanonical32(value: unknown): Uint8Array | null {
@@ -106,8 +114,8 @@ export function authenticateControlRequest(request: Request, configured: unknown
 
 夹具值必须注明公开、不可用于生产。`CONTROL_TOKEN = 'A'.repeat(43)`；另一值从 32 个 `1` 字节经相同 base64url 规则生成。`controlRequest` 使用 `https://local.test/__ops/maintenance/${action}`；status 为 GET，其余 POST 且设置 JSON content-type；使用显式 token（默认合成 token），绝不读环境秘密。
 
-- [ ] **4. 补边界测试并运行 GREEN。** 参数表覆盖 undefined/null/非字符串、42/44 字符、`=`、`+`、`/`、非法尾部编码、错值；Header 覆盖空值、Basic、重复 header 的逗号合并、双空格、尾部字段、仅 cookie。合法配置配坏请求为 UNAUTHORIZED；坏配置即使请求合法仍为 UNAVAILABLE。重复调用不能复用上次授权。命令同 RED，另运行 `rtk proxy npm exec tsc -- --project tools/maintenance/tsconfig.json`。
-- [ ] **5. 审阅并提交这一单元。** `rtk proxy git diff --check`；仅暂存上述三个文件，提交 `feat(maintenance): add dedicated control capability validation`。这不是 R05 父项完成。
+- [x] **4. 补边界测试并运行 GREEN。** 参数表覆盖 undefined/null/非字符串、42/44 字符、`=`、`+`、`/`、非法尾部编码、错值；Header 覆盖空值、Basic、重复 header 的逗号合并、双空格、尾部字段、仅 cookie。合法配置配坏请求为 UNAUTHORIZED；坏配置即使请求合法仍为 UNAVAILABLE。重复调用不能复用上次授权。命令同 RED，另运行 `rtk proxy npm exec tsc -- --project tools/maintenance/tsconfig.json`。
+- [x] **5. 审阅并提交这一单元。** `rtk proxy git diff --check`；仅暂存上述三个文件，提交 `feat(maintenance): add dedicated control capability validation`。这不是 R05 父项完成。
 
 ### Task 2 / R05.2: 协调器二次鉴权与旧调用适配
 
@@ -125,7 +133,7 @@ export interface MaintenanceControlClient {
 
 协调器本体仍同步返回 `Snapshot`，DO stub 作为异步 client。`LocalResources` 新增 `MAINTENANCE_CONTROL_TOKEN?: string`，可测试缺失配置；不扩展应用 Env。
 
-- [ ] **1. 写二次鉴权 RED。** 先在 contracts.ts 添加上面的纯类型接口供测试引用（不改变运行时）；在 coordinator 测试中，对真实新 DO 直接调用错误/缺失 capability 的 begin/resume，比较拒绝前后 snapshot；用窄测试类型断言构造非法旧签名调用，不能将正式参数改为 optional。给合法状态机断言显式传 token 后继续保留原测试。
+- [x] **1. 写二次鉴权 RED。** 先在 contracts.ts 添加上面的纯类型接口供测试引用（不改变运行时）；在 coordinator 测试中，对真实新 DO 直接调用错误/缺失 capability 的 begin/resume，比较拒绝前后 snapshot；用窄测试类型断言构造非法旧签名调用，不能将正式参数改为 optional。给合法状态机断言显式传 token 后继续保留原测试。
 
 ```ts
 it('rejects a control capability before validating or changing state', async () => {
@@ -139,8 +147,8 @@ it('rejects a control capability before validating or changing state', async () 
 });
 ```
 
-- [ ] **2. 运行 RED。** `rtk proxy npm run test:ops:maintenance -- tools/maintenance/coordinator.test.ts`；证明旧方法忽略 capability 或先给出参数错误，不是导入错误。
-- [ ] **3. 接入双层校验所需的协调器边界与合成绑定。** 在两个方法的参数校验和事务前加下面核心，构造函数只保存本地配置，不新增异步事务或 HTTP 锁。env 为 unknown 时安全提取；坏配置不在构造函数抛错，避免破坏业务 acquire/complete。保存字段使用私有 `#controlToken`，不新增可 RPC 调用的 secret getter。
+- [x] **2. 运行 RED。** `rtk proxy npm run test:ops:maintenance -- tools/maintenance/coordinator.test.ts`；证明旧方法忽略 capability 或先给出参数错误，不是导入错误。
+- [x] **3. 接入双层校验所需的协调器边界与合成绑定。** 在两个方法的参数校验和事务前加下面核心，构造函数只保存本地配置，不新增异步事务或 HTTP 锁。env 为 unknown 时安全提取；坏配置不在构造函数抛错，避免破坏业务 acquire/complete。保存字段使用私有 `#controlToken`，不新增可 RPC 调用的 secret getter。
 
 ```ts
 // class field and constructor assignment
@@ -155,7 +163,7 @@ assertControlCapability(capability, this.#controlToken);
 
 `vitest.config.ts` 导入公开 `CONTROL_TOKEN`，在现有 miniflare 配置添加 `bindings: { MAINTENANCE_CONTROL_TOKEN: CONTROL_TOKEN }`。不读取 `.env`；原有 remoteBindings:false、outbound 拒绝和合成存储不变。上列 11 个测试文件导入夹具并仅为维护 RPC 增补 capability；`test/unit` 中其他业务类的 `resume` 不动。
 
-- [ ] **4. 验证 GREEN 和配置错误。** 跑完整 `rtk proxy npm run test:ops:maintenance` 及本地 harness 类型检查。测试重复成功控制仍鉴权、错 capability 不进入任何控制事务、active work 不可强制释放；缺配置时控制失败但业务准入契约不变。新配置实例与旧凭证不匹配的测试用 `runInDurableObject` 中构造新的 `MaintenanceCoordinator(state, syntheticEnv)`，与原实例串行调用，检查持久 snapshot 不变；注明这是配置实例测试，不是生产热轮换证明。不得通过删除 R02–R04 断言获得通过。
+- [x] **4. 验证 GREEN 和配置错误。** 跑完整 `rtk proxy npm run test:ops:maintenance` 及本地 harness 类型检查。测试重复成功控制仍鉴权、错 capability 不进入任何控制事务、active work 不可强制释放；缺配置时控制失败但业务准入契约不变。新配置实例与旧凭证不匹配的测试用 `runInDurableObject` 中构造新的 `MaintenanceCoordinator(state, syntheticEnv)`，与原实例串行调用，检查持久 snapshot 不变；注明这是配置实例测试，不是生产热轮换证明。不得通过删除 R02–R04 断言获得通过。
 - [ ] **5. 更新 README 后提交。** 修正仅 D1/无真实入口的旧介绍，列出现有 D1/R2/DO 与本地 guarded 入口；此刻仍无 HTTP 控制路由，注明 RPC 已授权、HTTP 在 Task 4 接入。`rtk proxy git diff --check`，仅暂存本步骤文件，提交 `feat(maintenance): require capability for coordinator controls`。
 
 ### Task 3 / R05.3: 独立 HTTP 协议与早期拒绝

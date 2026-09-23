@@ -1,6 +1,7 @@
 import type { MaintenanceCoordinator } from '../../src/maintenance/coordinator';
 
 export interface LocalResources {
+  MAINTENANCE_CONTROL_TOKEN?: string;
   MAINTENANCE: DurableObjectNamespace<MaintenanceCoordinator>;
   SYNTHETIC_DB: D1Database;
   SYNTHETIC_SESSION_DB: D1Database;
