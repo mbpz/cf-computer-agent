@@ -17,7 +17,7 @@
 ## 已由仓库/Dashboard 证明的事实
 
 - 仓库没有 `.github/workflows`，不能将 GitHub Actions 认定为生产发布者。
-- Build `#d11574fa` 成功构建 commit `ea9f9c5`；生产版本 `6025488e` 当前为 100% 流量。
+- Build `#e8c34fd3` 成功构建 commit `616e1a6`；构建部署阶段结束于 18:51:23，生产版本 `34949fd7` 于 18:51:29 切换为 100% 流量。
 - 部署历史的来源字段为 Wrangler，操作者显示为 `apples398@gmail.com`。
 - `edgetunnel` 是独立 Worker，仅 KV、无自定义域/路由、过去 24 小时调用为 0，已排除其直接绑定本项目 D1/DO。
 - Queue 和 Email trigger 未配置；Cron 已配置。
@@ -26,4 +26,3 @@
 ## R09 关闭条件
 
 OP-01 至 OP-07 必须全部得到不含敏感值的生产事实确认；同时需要明确停写、排空、恢复和回滚顺序。仅凭代码搜索、secret 名称、Dashboard 构建成功或历史版本列表，不能替代这些确认。
-

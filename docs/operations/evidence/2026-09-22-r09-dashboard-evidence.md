@@ -8,16 +8,16 @@
 | --- | --- |
 | Git 仓库 | `mbpz/cf-computer-agent` |
 | 生产分支 | `main` |
-| 最近成功构建 | Build `#dee044b9` |
-| 构建 commit | `2be3c57303e1635a535f51506f3cc6479dbe6d23` |
-| 构建提交 | `docs: add r09 writer responsibility preflight` |
+| 最近成功构建 | Build `#e8c34fd3` |
+| 构建 commit | `616e1a6a89b18b255c0b272a659c2861163fff45` |
+| 构建提交 | `docs: track r09 production version drift` |
 | 构建命令 | `npm run build` |
 | 部署命令 | `npx wrangler deploy` |
 | 根目录 | `/` |
-| 当前 100% 生产版本 | `ca60bbc3`（Dashboard 展示短版本标识；前一版本 `43e689ac`） |
+| 当前 100% 生产版本 | `34949fd7`（Dashboard 展示短版本标识；前序版本 `ca60bbc3`、`43e689ac`） |
 | 当前生产 Worker | `memory-garden-agent` |
 
-Dashboard 的构建详情明确显示仓库、`main` 分支、`2be3c57` commit 链接、成功构建、构建命令和部署命令；部署历史随后出现 `43e689ac`、`ca60bbc3` 两个 Wrangler 100% 部署。当前页面未提供这两个版本与构建 commit 的直接一一映射，因此 source → build 已确认，build → 当前 production version 仍需补充版本详情或部署日志；部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
+Dashboard 的构建详情明确显示仓库、`main` 分支、`616e1a6` commit 链接、成功构建、构建命令和部署命令；构建部署阶段结束于 2026-09-23 18:51:23，部署历史记录在 18:51:29 由 `apples398@gmail.com` 通过 Wrangler 将 `34949fd7` 切换到 100% 流量。当前最新 source → build → production version 已可追溯；历史版本 `ca60bbc3`、`43e689ac` 保留为旧版本责任记录。部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
 
 ## 路由、绑定与触发器
 
@@ -78,6 +78,6 @@ Dashboard 只读核对到以下名称；值均显示为加密或未展开，未�
 
 当前生产已部署安全闸门和管理员维护控制 API，但因 `MAINTENANCE_CONTROL_TOKEN` 未配置，生产仍保持 legacy 业务入口。因而本记录证明的是“当前 source-to-version 与平台配置可追溯”，不证明“生产停写/排空/恢复控制已可执行”。R14 仍需单独批准 secret 和控制验证；在此之前不得执行 R16–R21 的生产停写、备份、迁移或恢复。
 
-当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 R09 账本刷新；Dashboard 构建已刷新到 `2be3c57` / Build `#dee044b9`，部署历史当前为 `ca60bbc3` 100%（前一版本 `43e689ac`）。由于版本详情未直接暴露 commit 映射，R09 保留 source-to-version 的补证任务。代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
+当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 R09 账本刷新；Dashboard 已确认 `616e1a6` / Build `#e8c34fd3` / production `34949fd7` 100%。最新 source-to-version 补证完成；代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
 
 因此本证据将 R09 从“发布链未知”推进为“source-to-version 与平台配置已证实、生产写者责任账本待收口”，不直接勾选 R09 完成。
