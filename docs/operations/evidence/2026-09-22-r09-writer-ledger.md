@@ -21,7 +21,7 @@
 | Cloudflare Dashboard Git 集成 | 当前已确认 Build `#b2621d18`、commit `6214a31f8c93a147cd6c2a0b3b61ecf203f7b718`、生产 `d73ffe49` 100% 流量 | 已完成 source-to-version；仍需责任人、停写顺序和恢复顺序 |
 | GitHub Actions | 仓库公开 API 旧记录显示无 workflow | 再次确认当前仓库仍无 Actions 写者；若新增，记录 workflow、token、环境和审批人 |
 | 手工 Wrangler | `wrangler whoami` 只能证明权限，不证明无人手工发布 | 记录允许操作人、版本上传/部署责任、审计留痕和回滚责任 |
-| 其他 Worker/环境 | Dashboard 首页显示另有 `edgetunnel` Worker；是否与本项目写入无关尚未证明 | 逐项核对其域名路由、绑定和是否访问本项目 D1/DO |
+| 其他 Worker/环境 | Dashboard 只读页显示 `edgetunnel` 来自独立仓库 `mbpz/edgetunnel`，仅有 `KV` binding、仅有 `edgetunnel.apples398.workers.dev`，无自定义域/路由，近 24 小时调用为 0 | 已排除其直接绑定本项目 D1/DO 的证据；仍保留旧版本责任记录，不纳入本项目当前写者集合 |
 | D1 控制台/远程脚本 | D1 可由 Wrangler 或 Dashboard 直接写入 | 生产迁移、控制台执行、备份工具的操作者和停写规则必须单独记录 |
 | OAuth 上游回调 | GitHub/WeChat callback 会创建 member/session | 仅允许当前 Worker 域名回调；核对 OAuth 应用回调 URL 和禁用旧回调 |
 | Queue/Email/外部 Cron | 当前 Dashboard 已确认 Queue 消费者和 Email 路由均未配置；Cron 已配置 | Queue/Email 可记录为 N/A；Cron 仍需停写/恢复责任 |
@@ -30,11 +30,11 @@
 
 - 代码内写者已完成本地分类，但这不是生产写者收口。
 - `850db38` 的安全闸门、`2feb021` 的维护控制 API 和 `6214a31` 账本已进入生产；当前 source-to-version、binding、Cron、Queue/Email 证据已刷新。
-- 生产 `MAINTENANCE_CONTROL_TOKEN` 未配置，外部 Automation/手工 Wrangler、`edgetunnel` Worker、旧版本流量及各写者责任仍是 R09 阻塞项。
+- 生产 `MAINTENANCE_CONTROL_TOKEN` 未配置，外部 Automation/手工 Wrangler、旧版本流量及各写者责任仍是 R09 阻塞项；`edgetunnel` 已有独立 KV/无路由/零调用的排除证据。
 - 在这些证据完成前，不得关闭 R09，也不得把 R10–R15 标记为生产执行完成。
 
 ## 4. 下一步只读顺序
 
-1. 补齐 Automation client、手工 Wrangler、D1 控制台、OAuth callback 和 `edgetunnel` Worker 的责任人/停写顺序/恢复顺序。
+1. 补齐 Automation client、手工 Wrangler、D1 控制台和 OAuth callback 的责任人/停写顺序/恢复顺序。
 2. 核对旧版本是否仍承接流量，并保留版本退出证据。
 3. 只有账本完整且所有生产写者都有责任与恢复动作后，才进入 R10 远程合成只读传输验证。
