@@ -17,7 +17,7 @@
 ## 已由仓库/Dashboard 证明的事实
 
 - 仓库没有 `.github/workflows`，不能将 GitHub Actions 认定为生产发布者。
-- Build `#e8c34fd3` 成功构建 commit `616e1a6`；构建部署阶段结束于 18:51:23，生产版本 `34949fd7` 于 18:51:29 切换为 100% 流量。
+- Build `#bf860b36` 成功构建 commit `4b0df2c`；构建部署阶段结束于 22:44:58.442，生产版本 `686168b3` 于 22:45:08 切换为 100% 流量。
 - 部署历史的来源字段为 Wrangler，操作者显示为 `apples398@gmail.com`。
 - `edgetunnel` 是独立 Worker，仅 KV、无自定义域/路由、过去 24 小时调用为 0，已排除其直接绑定本项目 D1/DO。
 - Queue 和 Email trigger 未配置；Cron 已配置。
