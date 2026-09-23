@@ -18,7 +18,7 @@
 
 | 写者 | 当前已知状态 | 关闭 R09 所需证据 |
 | --- | --- | --- |
-| Cloudflare Dashboard Git 集成 | 当前已确认 Build `#b2621d18`、commit `6214a31f8c93a147cd6c2a0b3b61ecf203f7b718`、生产 `d73ffe49` 100% 流量 | 已完成 source-to-version；仍需责任人、停写顺序和恢复顺序 |
+| Cloudflare Dashboard Git 集成 | 2026-09-23 已确认 Build `#d11574fa`、commit `ea9f9c58c03e489f2a342788ea700a052aa5ee5c`；部署历史记录 08:45:16 由 `apples398@gmail.com` 通过 Wrangler 将生产版本 `6025488e` 切换为 100% 流量 | 已完成 source-to-version；仍需责任人、停写顺序和恢复顺序；部署来源字段为 Wrangler，不额外推断为 GitHub Actions |
 | GitHub Actions | 仓库公开 API 旧记录显示无 workflow | 再次确认当前仓库仍无 Actions 写者；若新增，记录 workflow、token、环境和审批人 |
 | 手工 Wrangler | `wrangler whoami` 只能证明权限，不证明无人手工发布 | 记录允许操作人、版本上传/部署责任、审计留痕和回滚责任 |
 | 其他 Worker/环境 | 2026-09-23 Dashboard 只读页显示 `edgetunnel` 来自独立仓库 `mbpz/edgetunnel`；当前版本 `647b4555`，仅有 `KV` binding，仅有 `edgetunnel.apples398.workers.dev`，无自定义域/路由，过去 24 小时调用数/错误数均为 0；历史版本也均为约 8 个月前的 Dashboard 手动部署 | 已排除其直接绑定本项目 D1/DO 的证据；保留旧版本责任记录，不纳入本项目当前写者集合 |
@@ -29,7 +29,7 @@
 ## 3. 当前判定
 
 - 代码内写者已完成本地分类，但这不是生产写者收口。
-- `850db38` 的安全闸门、`2feb021` 的维护控制 API 和 `6214a31` 账本已进入生产；当前 source-to-version、binding、Cron、Queue/Email 证据已刷新。
+- `850db38` 的安全闸门、`2feb021` 的维护控制 API 和 `ea9f9c5` 账本刷新已进入生产；当前 source-to-version、binding、Cron、Queue/Email 证据已刷新，生产 100% 版本为 `6025488e`。
 - 生产 `MAINTENANCE_CONTROL_TOKEN` 未配置，外部 Automation/手工 Wrangler、旧版本流量及各写者责任仍是 R09 阻塞项；`edgetunnel` 已有独立 KV/无路由/零调用的排除证据。
 - 在这些证据完成前，不得关闭 R09，也不得把 R10–R15 标记为生产执行完成。
 
