@@ -38,3 +38,5 @@
 1. 补齐 Automation client、手工 Wrangler、D1 控制台和 OAuth callback 的责任人/停写顺序/恢复顺序。
 2. 核对旧版本是否仍承接流量，并保留版本退出证据。
 3. 只有账本完整且所有生产写者都有责任与恢复动作后，才进入 R10 远程合成只读传输验证。
+
+本轮责任预检见[2026-09-23 R09 responsibility preflight](2026-09-23-r09-responsibility-preflight.md)。
