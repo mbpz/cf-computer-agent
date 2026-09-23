@@ -136,8 +136,8 @@ R01 内部进度（不是新增恢复主线检查点）：
 - R06：2026-09-20 本地容量快照、告警阈值和人工退出规则完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)。
 - R07：2026-09-20 本地真实入口合成故障矩阵完成；维护专项 63/63、应用/专项类型检查、交付合同和 `git diff --check` 通过。见[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)。
 - R08：2026-09-20 本地候选 `6e1934a` 完成全量回归、构建和评审；备份 21/21、维护 63/63、交付合同 30/30 均通过。见[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。
-- R09：已完成仓库与 Cloudflare deployments/versions 只读盘点，但 source-to-version、Dashboard CI 和全部生产写者证据不足，保持开放。见[发布链与写者盘点证据](evidence/2026-09-20-release-chain-writer-inventory.md)。
-- 后续游标：R09（补齐生产发布链/写者证据），本轮不执行生产变更。
+- R09：source-to-version、Dashboard CI、当前 Worker 绑定/触发器和 `edgetunnel` 排除证据已补齐；仍缺 Automation、Dashboard/控制台、旧版本/其他环境及 OAuth callback 的生产写者责任、停写顺序和恢复顺序，保持开放。见[Dashboard 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)和[写者责任账本](evidence/2026-09-22-r09-writer-ledger.md)。
+- 后续游标：R09（补齐剩余生产写者责任证据），本轮不执行生产变更。
 - 初始清点文档校验：`npm run verify:delivery-status` 28/28 通过、退出 0；`git diff --check` 退出 0。当次只读 Node 核对了 R01–R25 连续且未勾选、90 项能力四维计数、30 个产品父项和 8 个相对链接。该记录不代替新增审计/规格后的校验；本次未重跑应用测试，未修改运行时代码。
 - 2026-09-19 接入规格文档校验：重新运行 `npm run verify:delivery-status`，28/28、退出 0；`git diff --check` 退出 0。只读 Node 断言检查本清单/审计/规格三个文件的 15 个相对链接、无占位、25 项主线仍开放、R01 三个子步骤完成/两个待办，以及审计源码摘要未变化。上述仅为文档及范围校验，不是接入实现或运行时验收。
 
