@@ -1,6 +1,6 @@
 # R09 生产写者责任账本（只读版本）
 
-日期：2026-09-22（Asia/Shanghai）。本记录基于当前 `main` 源码、`wrangler.jsonc` 和已保存的 Cloudflare Dashboard 只读证据整理；不读取 secret 值，不执行生产请求、迁移、停写、备份或部署。
+日期：2026-09-23（Asia/Shanghai，刷新记录）。本记录基于当前 `main` 源码、`wrangler.jsonc` 和 Cloudflare Dashboard 只读证据整理；不读取 secret 值，不执行生产请求、迁移、停写、备份或部署。
 
 ## 1. 代码内写者
 
@@ -21,7 +21,7 @@
 | Cloudflare Dashboard Git 集成 | 当前已确认 Build `#b2621d18`、commit `6214a31f8c93a147cd6c2a0b3b61ecf203f7b718`、生产 `d73ffe49` 100% 流量 | 已完成 source-to-version；仍需责任人、停写顺序和恢复顺序 |
 | GitHub Actions | 仓库公开 API 旧记录显示无 workflow | 再次确认当前仓库仍无 Actions 写者；若新增，记录 workflow、token、环境和审批人 |
 | 手工 Wrangler | `wrangler whoami` 只能证明权限，不证明无人手工发布 | 记录允许操作人、版本上传/部署责任、审计留痕和回滚责任 |
-| 其他 Worker/环境 | Dashboard 只读页显示 `edgetunnel` 来自独立仓库 `mbpz/edgetunnel`，仅有 `KV` binding、仅有 `edgetunnel.apples398.workers.dev`，无自定义域/路由，近 24 小时调用为 0 | 已排除其直接绑定本项目 D1/DO 的证据；仍保留旧版本责任记录，不纳入本项目当前写者集合 |
+| 其他 Worker/环境 | 2026-09-23 Dashboard 只读页显示 `edgetunnel` 来自独立仓库 `mbpz/edgetunnel`；当前版本 `647b4555`，仅有 `KV` binding，仅有 `edgetunnel.apples398.workers.dev`，无自定义域/路由，过去 24 小时调用数/错误数均为 0；历史版本也均为约 8 个月前的 Dashboard 手动部署 | 已排除其直接绑定本项目 D1/DO 的证据；保留旧版本责任记录，不纳入本项目当前写者集合 |
 | D1 控制台/远程脚本 | D1 可由 Wrangler 或 Dashboard 直接写入 | 生产迁移、控制台执行、备份工具的操作者和停写规则必须单独记录 |
 | OAuth 上游回调 | GitHub/WeChat callback 会创建 member/session | 仅允许当前 Worker 域名回调；核对 OAuth 应用回调 URL 和禁用旧回调 |
 | Queue/Email/外部 Cron | 当前 Dashboard 已确认 Queue 消费者和 Email 路由均未配置；Cron 已配置 | Queue/Email 可记录为 N/A；Cron 仍需停写/恢复责任 |
