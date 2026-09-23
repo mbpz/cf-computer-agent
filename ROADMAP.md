@@ -2,13 +2,13 @@
 
 更新时间：2026-09-23
 
-R05 设计进度：用户已确认独立运维入口、专用凭证和协调器二次校验；[书面规格](./docs/superpowers/specs/2026-09-23-maintenance-control-design.md)待审阅，尚未编排实施计划或实现。恢复主线仍 **4/25 完成、21 项剩余**，不提升产品交付状态，不修改生产配置。
+R05 设计进度：用户已确认[书面规格](./docs/superpowers/specs/2026-09-23-maintenance-control-design.md)，[五步实施计划](./docs/superpowers/plans/2026-09-23-maintenance-control.md)已编排；下一动作是 R05.1 凭证校验的运行时探针与失败测试，五步均未执行。恢复主线仍 **4/25 完成、21 项剩余**，不提升产品交付状态，不修改生产配置。
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
 
-2026-09-23 顺序执行入口：[剩余任务统计与 checklist](./docs/operations/2026-09-19-remaining-work-checklist.md)。排除旧兼容映射后，总账 90 项能力中 20 项实现、16 项验证尚未完成；发布/验收仍有各自未关闭范围。恢复主线 R01–R25 中 R01–R04 已本地完成，**4 项关闭、21 项剩余**。R04 五个子项含限定范围跨存储故障矩阵已收口，新增 10 项测试，维护专项 247 项、应用 smoke/unit/worker 分项及两套类型检查通过，见[收口证据](./docs/operations/evidence/2026-09-23-maintenance-r04-completion.md)。下一项为 R05 控制面授权与重放防护的独立设计确认，尚未实施；R07 完整控制组合矩阵及 R08 候选门禁仍开放。生产入口仍明确 legacy，未启用维护；不承诺跨存储原子性或全系统一致性备份。产品增量清单另有 30 个未关闭父项，含已完成子项并与恢复主线重叠，不相加。不提升产品交付四维状态。
+2026-09-23 顺序执行入口：[剩余任务统计与 checklist](./docs/operations/2026-09-19-remaining-work-checklist.md)。排除旧兼容映射后，总账 90 项能力中 20 项实现、16 项验证尚未完成；发布/验收仍有各自未关闭范围。恢复主线 R01–R25 中 R01–R04 已本地完成，**4 项关闭、21 项剩余**。R04 五个子项含限定范围跨存储故障矩阵已收口，新增 10 项测试，维护专项 247 项、应用 smoke/unit/worker 分项及两套类型检查通过，见[收口证据](./docs/operations/evidence/2026-09-23-maintenance-r04-completion.md)。这些是 R04 历史结果；R05 书面规格获准、实施计划已编排，尚未实施；R07 完整控制组合矩阵及 R08 候选门禁仍开放。生产入口仍明确 legacy，未启用维护；不承诺跨存储原子性或全系统一致性备份。产品增量清单另有 30 个未关闭父项，含已完成子项并与恢复主线重叠，不相加。不提升产品交付四维状态。
 
 2026-09-17 生产验收被 schema 落后阻塞：只读快照为 0001–0032，通知/消息请求出现 500；0033–0050 共 18 个待执行迁移已审查。Task 2 已本地追加 0051 修复日历关联删除，8 文件 168 项 Worker 回归通过，旧 50 个 SQL hash 不变，见[本地证据](./docs/product/2026-09-17-calendar-reference-detach-evidence.md)。Task 3 已获备份范围授权并刷新生产账本与 0033–0051 共 19 个 pending，但两个 FTS 虚拟表触及官方标准导出限制，独立备份尚未产生，见[备份预检](./docs/operations/evidence/2026-09-17-production-d1-backup-preflight.md)。下一步按[原子计划](./docs/superpowers/plans/2026-09-17-production-d1-catchup.md)先确定不删生产表的备份恢复方案和维护窗口，迁移另行批准。详见[生产浏览器验收记录](./docs/product/2026-09-17-production-browser-acceptance.md)。当前未执行生产迁移、导出或部署，不提升 D02/R6-003 及 D3/D4 的发布/验收状态；下文历史快照保留。
 
