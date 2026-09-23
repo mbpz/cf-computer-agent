@@ -2,6 +2,8 @@
 
 更新时间：2026-09-23
 
+R05 设计进度：用户已确认独立运维入口、专用凭证和协调器二次校验；[书面规格](./docs/superpowers/specs/2026-09-23-maintenance-control-design.md)待审阅，尚未编排实施计划或实现。恢复主线仍 **4/25 完成、21 项剩余**，不提升产品交付状态，不修改生产配置。
+
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
