@@ -40,3 +40,5 @@
 3. 只有账本完整且所有生产写者都有责任与恢复动作后，才进入 R10 远程合成只读传输验证。
 
 本轮责任预检见[2026-09-23 R09 responsibility preflight](2026-09-23-r09-responsibility-preflight.md)。
+
+R09 外部事实待确认项见[2026-09-23 R09 operator attestation](2026-09-23-r09-operator-attestation.md)。
