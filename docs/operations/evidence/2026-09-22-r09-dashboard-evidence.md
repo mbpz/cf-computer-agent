@@ -8,16 +8,16 @@
 | --- | --- |
 | Git 仓库 | `mbpz/cf-computer-agent` |
 | 生产分支 | `main` |
-| 最近成功构建 | Build `#d11574fa` |
-| 构建 commit | `ea9f9c58c03e489f2a342788ea700a052aa5ee5c` |
-| 构建提交 | `docs: refresh r09 edgetunnel evidence` |
+| 最近成功构建 | Build `#dee044b9` |
+| 构建 commit | `2be3c57303e1635a535f51506f3cc6479dbe6d23` |
+| 构建提交 | `docs: add r09 writer responsibility preflight` |
 | 构建命令 | `npm run build` |
 | 部署命令 | `npx wrangler deploy` |
 | 根目录 | `/` |
-| 当前 100% 生产版本 | `6025488e`（Dashboard 展示短版本标识） |
+| 当前 100% 生产版本 | `ca60bbc3`（Dashboard 展示短版本标识；前一版本 `43e689ac`） |
 | 当前生产 Worker | `memory-garden-agent` |
 
-Dashboard 的构建详情明确显示仓库、`main` 分支、`ea9f9c5` commit 链接、成功构建、构建命令和部署命令；部署历史记录显示 2026-09-23 08:45:16 由 `apples398@gmail.com` 通过 Wrangler 将 `6025488e` 切换到 100% 流量。因此当前 source → build → production version 已可追溯；部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
+Dashboard 的构建详情明确显示仓库、`main` 分支、`2be3c57` commit 链接、成功构建、构建命令和部署命令；部署历史随后出现 `43e689ac`、`ca60bbc3` 两个 Wrangler 100% 部署。当前页面未提供这两个版本与构建 commit 的直接一一映射，因此 source → build 已确认，build → 当前 production version 仍需补充版本详情或部署日志；部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
 
 ## 路由、绑定与触发器
 
@@ -78,6 +78,6 @@ Dashboard 只读核对到以下名称；值均显示为加密或未展开，未�
 
 当前生产已部署安全闸门和管理员维护控制 API，但因 `MAINTENANCE_CONTROL_TOKEN` 未配置，生产仍保持 legacy 业务入口。因而本记录证明的是“当前 source-to-version 与平台配置可追溯”，不证明“生产停写/排空/恢复控制已可执行”。R14 仍需单独批准 secret 和控制验证；在此之前不得执行 R16–R21 的生产停写、备份、迁移或恢复。
 
-当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 `ea9f9c5` 写者责任账本刷新；本次 Dashboard 已刷新到 `ea9f9c5` / Build `#d11574fa` / production `6025488e`。代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
+当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 R09 账本刷新；Dashboard 构建已刷新到 `2be3c57` / Build `#dee044b9`，部署历史当前为 `ca60bbc3` 100%（前一版本 `43e689ac`）。由于版本详情未直接暴露 commit 映射，R09 保留 source-to-version 的补证任务。代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
 
 因此本证据将 R09 从“发布链未知”推进为“source-to-version 与平台配置已证实、生产写者责任账本待收口”，不直接勾选 R09 完成。
