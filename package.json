@@ -17,6 +17,7 @@
     "test:ops:d1-backup": "node --test --test-timeout=90000 tools/d1-backup/*.test.mjs",
     "ops:d1-backup": "node tools/d1-backup/cli.mjs",
     "probe:ops:d1-read": "node scripts/r10-remote-read-probe.mjs",
+    "test:ops:r10-probe": "node --test scripts/r10-remote-read-probe.test.mjs",
     "test:ops:maintenance": "vitest run --config tools/maintenance/vitest.config.ts",
     "test:auth-compat": "vitest run test/worker/app.test.ts test/worker/m1-api.test.ts test/unit/github-oauth.test.ts test/unit/session.test.ts test/unit/automation.test.ts",
     "test:m2": "npm run build:ui && vitest run test/unit/m2-format-matrix.test.ts test/unit/assets-service.test.ts test/unit/pdf-pages.test.ts test/unit/docx.test.ts test/unit/xlsx.test.ts test/unit/csv.test.ts test/unit/html.test.ts test/unit/xml.test.ts test/unit/odf.test.ts test/unit/pptx.test.ts test/worker/m2-assets.test.ts",
