@@ -26,4 +26,22 @@
 
 ## R11 当前判定
 
-R11 **部分完成**：本地 schema 防漂移和配置门禁已通过；生产侧仍缺 Dashboard 只读核对的准确候选版本、D1 实际 migration ledger 前缀、待迁移清单与同版本绑定验收。下一步只允许做这些只读核对；未经单独批准不得执行 `d1 migrations apply`、部署、迁移或修改生产配置。
+## Dashboard 生产 migration ledger 核对
+
+用户于 2026-09-24 在已登录 Cloudflare Dashboard → D1 `memory-garden-control-plane` Console 执行：
+
+```sql
+SELECT id, name, applied_at FROM d1_migrations ORDER BY id;
+```
+
+结果为连续 `id=1..50`，最后一项为 `0050_admin_review_notifications.sql`；未出现 `0051_calendar_reference_detach.sql`。Dashboard Console URL 中的 database id 为 `653c9e43-c7ad-45b8-a109-bc144843bee7`，与当前 `wrangler.jsonc` 的 D1 binding 目标一致。该查询只读取 migration 元数据，不读取业务正文。
+
+本地候选迁移为 51 条，`0051_calendar_reference_detach.sql` 的 SHA-256 为：
+
+```text
+30b4c77fc4e3198a1c6937adc0d95ba0c8bf142e707d670f0b12a233db47058d
+```
+
+因此当前准确差异是：**生产已应用 0001–0050，本地候选存在 0051，生产 pending=1**。不得把该差异视为失败重试，也不得在没有单独生产迁移批准、新鲜备份和停写前置条件的情况下执行 `d1 migrations apply`。
+
+R11 **部分完成**：本地 schema 防漂移和配置门禁已通过，生产 migration ledger 前缀和唯一 pending migration 已获得 Dashboard 只读证据；仍缺当前候选 Worker 版本与生产 binding 的同版本验收，以及单独批准的 0051 迁移前置条件。下一步只允许补齐版本/binding 只读证据和迁移审批预检；未经单独批准不得执行 `d1 migrations apply`、部署、迁移或修改生产配置。
