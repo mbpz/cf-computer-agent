@@ -22,7 +22,7 @@
 - `edgetunnel` 是独立 Worker，仅 KV、无自定义域/路由、过去 24 小时调用为 0，已排除其直接绑定本项目 D1/DO。
 - Queue 和 Email trigger 未配置；Cron 已配置。
 - `MAINTENANCE_CONTROL_TOKEN` 尚未配置，生产维护控制面尚未启用。
-- Dashboard Observability 默认“过去 1 小时”事件查询显示 `0 Success`、`0 Errors`；这只能证明当前查询窗口无可见事件，不能替代 Automation/OAuth/Cron 的历史调用者和停写责任确认。
+- 2026-09-24 通过 Cloudflare Dashboard Observability“过去 1 小时”查询观察到 `24 Success`、`0 Errors`；事件均为生产 Cron `*/5 * * * *`，消息为 `asset parse sweep skipped: binary storage is not configured`。这证明 Cron 触发链路正在运行，但也证明二进制存储未配置、资产解析 sweep 当前按设计跳过；不能将其扩大解释为完整资产解析能力，也不能替代 Automation/OAuth/Cron 的责任人与停写确认。
 
 ## R09 关闭条件
 

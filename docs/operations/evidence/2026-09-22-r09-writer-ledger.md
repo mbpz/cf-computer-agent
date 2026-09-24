@@ -43,4 +43,4 @@
 
 R09 外部事实待确认项见[2026-09-23 R09 operator attestation](2026-09-23-r09-operator-attestation.md)。
 
-2026-09-23 Dashboard Observability 默认过去 1 小时查询为 `0 Success / 0 Errors`，已记录为限制性运行证据，不将其扩大解释为无历史写者。
+2026-09-24 Dashboard Observability“过去 1 小时”查询显示 `24 Success / 0 Errors`；可见事件均来自生产 Cron `*/5 * * * *`，并记录 `asset parse sweep skipped: binary storage is not configured`。该证据确认 Cron 触发正在发生，同时确认二进制存储未配置、资产解析 sweep 被跳过；不将其扩大解释为完整资产解析能力或全部历史写者收口。
