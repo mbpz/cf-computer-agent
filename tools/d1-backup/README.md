@@ -82,7 +82,7 @@ An archive writes exclusive files and flushes them, then renames the manifest la
 
 Reads reject unexpected/missing files, root/file symlinks, file hardlinks, wrong owner, exposed permissions, oversized files, mismatched identity, digests, counts, malformed rows or unsupported versions. Hashes provide integrity relative to the independently trusted digest, not authentication against an attacker replacing both archive and digest. Same-user malicious filesystem races and a compromised runtime are outside this tool's security boundary.
 
-File modes are not encryption or a retention policy. Session/private data is included. Approve encrypted storage, access, retention, independent recovery custody and cleanup before real capture. `/private/tmp` is only a temporary staging option, never a durable backup. This tool covers **D1 only**, not R2, Durable Objects, Vectorize, configuration, secrets or external effects.
+File modes are not encryption or a retention policy. Session/private data is included. Approve encrypted storage, access, retention, independent recovery custody and cleanup before real capture. For the current recovery only, the operator explicitly chose no additional backup encryption on 2026-09-24; the [R12 custody decision](../../docs/operations/evidence/2026-09-24-r12-backup-custody-preflight.md#8-最新决定不额外加密备份) records this exception. It does not waive access, retention, independent custody, cleanup, source-budget or production-authorization gates, and does not change existing system disk encryption. `/private/tmp` is only a temporary staging option, never a durable backup. This tool covers **D1 only**, not R2, Durable Objects, Vectorize, configuration, secrets or external effects.
 
 ## Open production gates
 
