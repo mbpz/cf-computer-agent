@@ -1,6 +1,6 @@
 # R09 Cloudflare Dashboard 发布链证据
 
-日期：2026-09-23（Asia/Shanghai，刷新记录）。本记录来自已登录的 Codex 自带浏览器 → Cloudflare Dashboard 只读检查；未打开、复制或修改任何 secret 值，未执行部署、回滚、迁移或其他生产写入。
+日期：2026-09-24（Asia/Shanghai，刷新记录）。本记录来自已登录的 Codex 自带浏览器 → Cloudflare Dashboard 只读检查；未打开、复制或修改任何 secret 值，未执行部署、回滚、迁移或其他生产写入。
 
 ## 发布链与当前生产版本
 
@@ -8,16 +8,16 @@
 | --- | --- |
 | Git 仓库 | `mbpz/cf-computer-agent` |
 | 生产分支 | `main` |
-| 最近成功构建 | Build `#bf860b36` |
-| 构建 commit | `4b0df2c9de51a96d2d82cf1c520e4012a1340cf4` |
-| 构建提交 | `docs: close latest r09 source to version evidence` |
+| 最近成功构建 | Build `#a1d02240` |
+| 构建 commit | `525bdfb945fd6d892bf48928dd75dea995bc9237` |
+| 构建提交 | `docs: record cron observability evidence` |
 | 构建命令 | `npm run build` |
 | 部署命令 | `npx wrangler deploy` |
 | 根目录 | `/` |
-| 当前 100% 生产版本 | `686168b3`（Dashboard 展示短版本标识；前序版本 `34949fd7`、`ca60bbc3`、`43e689ac`） |
+| 当前 100% 生产版本 | `ff4e0667`（Dashboard 展示短版本标识；前序版本 `686168b3`、`34949fd7`、`ca60bbc3`） |
 | 当前生产 Worker | `memory-garden-agent` |
 
-Dashboard 的构建详情明确显示仓库、`main` 分支、`4b0df2c` commit 链接、成功构建、构建命令和部署命令；构建部署阶段结束于 2026-09-23 22:44:58.442，部署历史记录在 22:45:08 由 `apples398@gmail.com` 通过 Wrangler 将 `686168b3` 切换到 100% 流量。当前最新 source → build → production version 已可追溯；历史版本 `34949fd7`、`ca60bbc3`、`43e689ac` 保留为旧版本责任记录。部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
+Dashboard 的构建详情明确显示仓库、`main` 分支、`525bdfb` commit 链接、成功构建、构建命令和部署命令；Build `#a1d02240` 的阶段时间为初始化 `08:35:31.109`、克隆 `08:35:35.310`、安装 `08:35:37.646`、构建 `08:36:24.811`、部署 `08:36:39.954`。部署页随后显示当前生产版本 `ff4e0667` 为 100% 流量。当前最新 source → build → production version 已可追溯；历史版本 `686168b3`、`34949fd7`、`ca60bbc3` 保留为旧版本责任记录。部署历史的来源字段是 Wrangler，不能额外推断为 GitHub Actions。
 
 ## 路由、绑定与触发器
 
@@ -78,6 +78,6 @@ Dashboard 只读核对到以下名称；值均显示为加密或未展开，未�
 
 当前生产已部署安全闸门和管理员维护控制 API，但因 `MAINTENANCE_CONTROL_TOKEN` 未配置，生产仍保持 legacy 业务入口。因而本记录证明的是“当前 source-to-version 与平台配置可追溯”，不证明“生产停写/排空/恢复控制已可执行”。R14 仍需单独批准 secret 和控制验证；在此之前不得执行 R16–R21 的生产停写、备份、迁移或恢复。
 
-当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 R09 账本刷新；Dashboard 已确认 `4b0df2c` / Build `#bf860b36` / production `686168b3` 100%。最新 source-to-version 补证完成；代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
+当前 `main` 已包含 `850db38` 安全闸门、`2feb021` 管理员维护控制 API 和 R09 账本刷新；Dashboard 已确认 `525bdfb` / Build `#a1d02240` / production `ff4e0667` 100%。最新 source-to-version 补证完成；代码内写者、DO、Cron、Automation、手工 Wrangler 与旧版本责任拆分见[2026-09-22 R09 writer ledger](2026-09-22-r09-writer-ledger.md)。
 
 因此本证据将 R09 从“发布链未知”推进为“source-to-version 与平台配置已证实、生产写者责任账本待收口”，不直接勾选 R09 完成。
