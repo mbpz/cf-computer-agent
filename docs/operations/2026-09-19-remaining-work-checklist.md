@@ -32,7 +32,9 @@
 
 [产品增量清单](../product/2026-09-12-personal-workbench-completion-audit.md)还有 **30 个未关闭父项**：A 6、B 9、C 7、D 8。它们含已完成子项，且与下列恢复主线重叠。不能称为 30 个全新功能，也不能将 30 与 25 相加。
 
-当前优先恢复主线共 **25 个检查点，8 个关闭，17 个剩余；下一项 R09**。R01–R08 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)、[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)和[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。本轮维护专项 63/63、完整应用回归和构建均已完成；未执行生产操作。
+当前优先恢复主线共 **25 个检查点，8 个关闭，17 个剩余；下一项 R09**。R01–R08 于 2026-09-20 关闭，见[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)、[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)和[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。该历史候选维护专项 63/63、完整应用回归和构建均已完成；未执行生产操作。
+
+**合并状态（2026-09-23）：** 用户授权将恢复分支 `7f7d3c6` 合入本地 `main`（合并前 `426e313`）。main 历史清单为 **8/25 完成、17 项剩余**，恢复分支原口径为 4/25；两者不相加、不相互覆盖。当前先完成合并候选验证与提交，再回到 R09；旧 R08 回归不证明本次候选。恢复分支 R05.1/R05.2 已提交，独立 HTTP 协议等 R05.3–R05.5 仍未执行，不能因 main 既有管理员 API 而视为自动完成。未 push、未部署、未读取 secrets 或执行生产操作。
 
 ## 2. 执行规则
 
@@ -138,6 +140,17 @@ R01 内部进度（不是新增恢复主线检查点）：
 - R08：2026-09-20 本地候选 `6e1934a` 完成全量回归、构建和评审；备份 21/21、维护 63/63、交付合同 30/30 均通过。见[候选完整回归证据](evidence/2026-09-20-maintenance-release-candidate.md)。
 - R09：source-to-version、Dashboard CI、当前 Worker 绑定/触发器和 `edgetunnel` 排除证据已补齐；2026-09-23 再次确认 `edgetunnel` 仅绑定 KV、无自定义域/路由、过去 24 小时调用为 0；仍缺 Automation、Dashboard/控制台、旧版本/其他环境及 OAuth callback 的生产写者责任、停写顺序和恢复顺序，保持开放。见[Dashboard 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)和[写者责任账本](evidence/2026-09-22-r09-writer-ledger.md)。
 - 后续游标：R09（补齐剩余生产写者责任证据），本轮不执行生产变更。
+
+以下为恢复分支历史执行记录，不覆盖上述 main 游标：
+- 2026-09-20 收尾校验：交付合同 28/28、`git diff --check` 通过；只读断言核对 25 项顺序及 2 关闭/23 开放、6 份文档 76 个相对链接、候选 SHA-256、R03/R04 计划仍未勾选。生产 Wrangler/生成 Env 无差异。
+- 2026-09-20 收尾时游标：R03，尚未开始；该轮停在 R02 完成点，未执行生产变更。
+- 2026-09-21 第 4 项完成时游标：R03 第 5 子项。前三项提交 `b408633`，第 4 项原始后台任务与完整并行 continuation 已验证，见[本地证据](evidence/2026-09-21-maintenance-continuations.md)。当时恢复总数为 2 关闭 / 23 剩余；未执行 R04 或任何生产变更。
+- 2026-09-21 R03 收口时游标：R04，尚未开始。R03 第 5 项以 `7ea7bee` 提交并关闭父项，见[收口证据](evidence/2026-09-21-maintenance-r03-completion.md)。恢复总数为 3 关闭 / 22 剩余；该轮未推送、未合并 main、未部署。
+- 2026-09-21 当时游标：R04 第 2 子项 cancel 链。第 1 子项先红后绿，已等待真实 Agent 生产者与最终落库并保留原始拒绝；维护专项 142 项通过，见[当轮证据](evidence/2026-09-21-maintenance-r04-producer.md)。R04 父项未关闭，恢复总数仍为 3 关闭 / 22 剩余；该轮不推送、不合并 main、不部署，不提升生产交付状态。
+- 2026-09-22 当时游标：R04 第 3 子项 timeout/race 分类。第 2 子项先红后绿，响应与 Agent 取消链独立登记并等待，新增 8 项回归；维护专项 150 项、完整 `npm test` 及类型检查通过，见[取消链证据](evidence/2026-09-22-maintenance-r04-cancel.md)。R04 当时为 2/5 子项完成，父项仍开放；恢复总数仍为 3 关闭 / 22 剩余。不推送、不合并 main、不部署、不提升生产交付状态。
+- 2026-09-22 当时游标：R04 第 4 子项 typed R2/DO/VFS 原始失败观察，尚未开始。第 3 子项完成 14 个 timeout/race 与 3 个 abort-only 边界分类，新增 37 项迟到结果回归；临时迟到写变异被 HTTP/Cron 两项拦截，撤销变异后维护专项 187 项、完整 `npm test` 及类型检查通过，见[超时证据](evidence/2026-09-22-maintenance-r04-timeout.md)。R04 为 3/5 子项完成，父项仍开放，恢复总数为 3 关闭 / 22 剩余；该轮仅测试/文档，无运行时代码改动，不推送、不合并 main、不部署。
+- 2026-09-23 第四子项完成时游标：R04 第五子项。原始 R2/DO/VFS 失败在补偿/映射前登记，RPC 内部吞错通过每次调用独立的固定标记传回；正常领域拒绝不标记失败。新增 50 项回归，维护专项 237 项、应用 smoke/unit/worker 分项及类型检查通过，见[存储边界证据](evidence/2026-09-23-maintenance-r04-storage.md)。当时 R04 为 4/5，恢复主线 3 关闭 / 22 剩余。
+- 2026-09-23 当前游标：R05 书面规格获准、实施计划已编排；R05.1 已提交 `a329ce9`，R05.2 完整回归 13 文件 / 291 测试通过，待本地提交，下一动作是完成 R05.2 本地提交，再进入 R05.3。R04 第五子项完成并关闭父项，新增 10 项跨存储组合及三处临时回退验证，维护专项 247 项、应用 smoke/unit/worker 分项和两套类型检查通过，见[收口证据](evidence/2026-09-23-maintenance-r04-completion.md)。这些是 R04 历史验证，不代表 R05 已通过。恢复主线 **4 关闭 / 21 剩余**；本轮不推送、不合并 main、不部署，不提升产品交付维度。
 - 初始清点文档校验：`npm run verify:delivery-status` 28/28 通过、退出 0；`git diff --check` 退出 0。当次只读 Node 核对了 R01–R25 连续且未勾选、90 项能力四维计数、30 个产品父项和 8 个相对链接。该记录不代替新增审计/规格后的校验；本次未重跑应用测试，未修改运行时代码。
 - 2026-09-19 接入规格文档校验：重新运行 `npm run verify:delivery-status`，28/28、退出 0；`git diff --check` 退出 0。只读 Node 断言检查本清单/审计/规格三个文件的 15 个相对链接、无占位、25 项主线仍开放、R01 三个子步骤完成/两个待办，以及审计源码摘要未变化。上述仅为文档及范围校验，不是接入实现或运行时验收。
 

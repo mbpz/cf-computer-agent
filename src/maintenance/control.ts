@@ -48,6 +48,7 @@ export function isValidToken(value: unknown): value is string {
 function mapMaintenanceError(error: unknown): AppError {
   const code = error instanceof Error ? error.message : "";
   switch (code) {
+    case "CONTROL_UNAVAILABLE":
     case "CONTROL_UNAUTHORIZED":
       return new AppError("MAINTENANCE_CONTROL_UNAVAILABLE", "Maintenance control is not enabled", 503, true);
     case "INVALID_ID":

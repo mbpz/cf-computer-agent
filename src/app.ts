@@ -124,7 +124,10 @@ import { ReviewService } from "./review/service";
 import { WORKSPACE_ROUTE_CAPABILITIES } from "../shared/workspace-route-capabilities";
 import type { UncertaintyReason, WorkScope } from "./maintenance/lifecycle";
 
+
 export interface AppDependencies {
+  /** Request-local only; supplied by the guarded entry after admission. */
+  workScope?: WorkScope;
   ai?: Ai;
   githubFetch?: typeof fetch;
   assetFetch?: typeof fetch;
@@ -135,7 +138,6 @@ export interface AppDependencies {
   analyticsNow?: () => Date;
   reviewNow?: () => Date;
   onBackgroundFailure?: (reason: UncertaintyReason) => void;
-  workScope?: WorkScope;
 }
 
 export function createApp(dependencies: AppDependencies = {}): ExportedHandler<Env> {
@@ -196,6 +198,12 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
           services.publishedContent.dispose();
         }
       } catch (error) {
+        // A converted response is not proof that unexpected work completed.
+        // Known client/domain denials remain releasable; raw D1 failures have
+        // already been observed independently, before any business translation.
+        if (!(error instanceof AppError) || error.status >= 500) {
+          dependencies.workScope?.markUncertain("APP_UNEXPECTED_ERROR");
+        }
         logRequestFailure(request, context, error);
         const response = errorResponse(error, context.requestId);
         return url.pathname === "/auth/github/callback" ? clearOAuthCookies(response)
@@ -240,17 +248,16 @@ function createRequestServices(
   const analytics = new AnalyticsRepository(env.DB, analyticsNow);
   const memberRecords = new MembersRepository(env.DB, audit);
   const members = new MembersService(memberRecords, env, {
+    workScope: dependencies.workScope,
     waitUntil: (promise) => ctx.waitUntil(promise),
     onBackgroundFailure: dependencies.onBackgroundFailure,
   });
   const spaceRecords = new SpacesRepository(env.DB, audit);
-  const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName);
-  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, {
-    onFailure: () => dependencies.onBackgroundFailure?.("BACKGROUND_WORK_FAILED"),
-  });
-  const publicationRecords = new PublicationRepository(env.DB);
+  const legacyRepository = new WorkspaceRepository(env.KNOWLEDGE, APP_CONFIG.workspaceName, undefined, dependencies.workScope);
+  const publishedContent = createRequestPublishedContent(env.KNOWLEDGE, APP_CONFIG.workspaceName, dependencies.workScope);
+  const publicationRecords = new PublicationRepository(env.DB, { workScope: dependencies.workScope });
   const tags = new TagsService(new TagsRepository(env.DB));
-  const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit);
+  const library = new LibraryService(new LibraryRepository(env.DB), publishedContent.reader, audit, dependencies.workScope);
   const sources = new SourcesRepository(env.DB);
   const submissions = new SubmissionsService(new SubmissionsRepository(env.DB, audit));
   const duplicates = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
@@ -267,7 +274,7 @@ function createRequestServices(
     inbox: new InboxService(inboxRecords),
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     focus,
-  });
+  }, undefined, dependencies.workScope);
   const capture = new CaptureClassificationService(new CaptureRepository(env.DB), new InboxService(inboxRecords));
   const projectTimelineRecords = new ProjectTimelineRepository(env.DB);
   const projectTimeline = new ProjectTimelineService(projectTimelineRecords, projectRecords);
@@ -308,6 +315,7 @@ function createRequestServices(
     dependencies.assetStorage === undefined ? env.ORIGINALS : dependencies.assetStorage ?? undefined,
     new AssetsRepository(env.DB),
     {
+      workScope: dependencies.workScope,
       maxTotalBytes: APP_CONFIG.maxAssetTotalBytes,
       markdownConverter: new WorkersAiMarkdownConverter(env.AI),
       imageConverter: new WorkersAiImageConverter(env.AI),
@@ -322,7 +330,7 @@ function createRequestServices(
     agentSessions: env.AGENT_SESSIONS,
     agentTools,
     assets,
-    automation: new AutomationAuthenticator(env.DB, env, { waitUntil, onBackgroundFailure: dependencies.onBackgroundFailure }),
+    automation: new AutomationAuthenticator(env.DB, env, { waitUntil, workScope: dependencies.workScope, onBackgroundFailure: dependencies.onBackgroundFailure }),
     audit,
     analytics,
     analyticsNow,
@@ -340,7 +348,7 @@ function createRequestServices(
     quizzes: new QuizService(ai),
     knowledge: new KnowledgeService(legacyRepository),
     library,
-    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB)),
+    graph: new GraphProjectionService(new GraphProjectionRepository(env.DB, {}, dependencies.workScope), { workScope: dependencies.workScope }),
     graphSuggestions: new GraphSuggestionService(ai),
     privateNotes: new PrivateNotesService(new PrivateNotesRepository(env.DB)),
     legacyRepository,
@@ -365,10 +373,7 @@ function createRequestServices(
       appId: env.WECHAT_APP_ID || "",
       appSecret: env.WECHAT_APP_SECRET || "",
     }),
-    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, {
-      waitUntil,
-      onBackgroundFailure: dependencies.onBackgroundFailure,
-    }),
+    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil, workScope: dependencies.workScope }),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions,
     duplicates,
@@ -394,6 +399,7 @@ function createRequestServices(
     calendar,
     focus,
     workbenchReview,
+    workScope: dependencies.workScope,
     capture,
     projectTimeline,
     today: new TodayService({
@@ -401,7 +407,7 @@ function createRequestServices(
       inbox: new InboxService(inboxRecords),
       projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
       calendar: new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords }),
-    }),
+    }, undefined, dependencies.workScope),
     environments: new EnvironmentsService(new EnvironmentsRepository(env.DB)),
     reviewComments: new ReviewCommentsService(new ReviewCommentsRepository(env.DB)),
     favorites: new FavoritesService(new FavoritesRepository(env.DB)),
@@ -410,7 +416,6 @@ function createRequestServices(
     roles,
     menus,
     maintenance,
-    workScope: dependencies.workScope,
   };
 }
 

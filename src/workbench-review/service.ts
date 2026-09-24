@@ -5,23 +5,25 @@ import type { TasksService } from "../tasks/service";
 import type { FocusService } from "../focus/service";
 import type { WorkbenchReviewRepositoryPort } from "./repository";
 import type { WorkbenchReviewPeriod, WorkbenchReviewSnapshot } from "./types";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 
 export class WorkbenchReviewService {
-  constructor(private readonly repository: WorkbenchReviewRepositoryPort, private readonly services: { tasks: TasksService; inbox: InboxService; projects: ProjectsService; focus: FocusService }, private readonly now: () => Date = () => new Date()) {}
+  constructor(private readonly repository: WorkbenchReviewRepositoryPort, private readonly services: { tasks: TasksService; inbox: InboxService; projects: ProjectsService; focus: FocusService }, private readonly now: () => Date = () => new Date(), private readonly workScope?: WorkScope) {}
   async get(memberId: string, period: unknown): Promise<WorkbenchReviewSnapshot> {
     if (period !== "daily" && period !== "weekly") throw new AppError("WORKBENCH_REVIEW_PERIOD_INVALID", "Review period is invalid", 400);
     const value = period as WorkbenchReviewPeriod;
     const range = reviewRange(value, this.now());
     const existing = await this.repository.find(memberId, value, range.periodKey);
     if (existing) return existing;
-    const [summary, completed, overdue, blocked, inbox, projects, focus] = await Promise.all([
-      this.services.tasks.summary(memberId),
-      this.services.tasks.list(memberId, { status: "done" }, { page: 1, pageSize: 20 }),
-      this.services.tasks.list(memberId, { due: "overdue" }, { page: 1, pageSize: 20 }),
-      this.services.tasks.list(memberId, { status: "blocked" }, { page: 1, pageSize: 20 }),
-      this.services.inbox.list(memberId, { status: "inbox" }, { limit: 20 }),
-      this.services.projects.list(memberId, { status: "active" }, { limit: 20 }),
-      this.services.focus.current(memberId),
+    const [summary, completed, overdue, blocked, inbox, projects, focus] = await parallelWork(this.workScope, [
+      () => this.services.tasks.summary(memberId),
+      () => this.services.tasks.list(memberId, { status: "done" }, { page: 1, pageSize: 20 }),
+      () => this.services.tasks.list(memberId, { due: "overdue" }, { page: 1, pageSize: 20 }),
+      () => this.services.tasks.list(memberId, { status: "blocked" }, { page: 1, pageSize: 20 }),
+      () => this.services.inbox.list(memberId, { status: "inbox" }, { limit: 20 }),
+      () => this.services.projects.list(memberId, { status: "active" }, { limit: 20 }),
+      () => this.services.focus.current(memberId),
     ]);
     const now = this.now().toISOString();
     return this.repository.upsert(memberId, { id: `review:${memberId}:${value}:${range.periodKey}`, period: value, periodKey: range.periodKey, from: range.from, to: range.to, taskSummary: summary, completed: completed.items, overdue: overdue.items, blocked: blocked.items, inbox: inbox.items, projects: projects.items, focusElapsedMs: focus?.elapsedMs ?? 0, createdAt: now, updatedAt: now });

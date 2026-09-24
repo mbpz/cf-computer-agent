@@ -1,17 +1,18 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { CapacitySnapshot, Permit, Snapshot } from './contracts';
+import { assertControlCapability } from './control-auth';
 
 export const MAINTENANCE_RECORD_LIMIT = 10_000;
 export const MAINTENANCE_WARNING_LIMIT = 8_000;
 export const MAINTENANCE_CRITICAL_LIMIT = 9_500;
 
 export class MaintenanceCoordinator extends DurableObject<unknown> {
-  private readonly controlToken: string | null;
+  #controlToken: unknown;
 
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env);
-    const candidate = (env as { MAINTENANCE_CONTROL_TOKEN?: unknown } | null | undefined)?.MAINTENANCE_CONTROL_TOKEN;
-    this.controlToken = typeof candidate === 'string' && candidate.length >= 16 ? candidate : null;
+    this.#controlToken = typeof env === 'object' && env !== null
+      ? (env as { MAINTENANCE_CONTROL_TOKEN?: unknown }).MAINTENANCE_CONTROL_TOKEN : undefined;
     ctx.storage.transactionSync(() => {
       ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS control (
         singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
@@ -53,7 +54,7 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
   }
 
   beginDrain(window: string, epoch: number, capability: string): Snapshot {
-    this.assertControlCapability(capability);
+    assertControlCapability(capability, this.#controlToken);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {
@@ -66,7 +67,7 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
   }
 
   resume(window: string, epoch: number, capability: string): Snapshot {
-    this.assertControlCapability(capability);
+    assertControlCapability(capability, this.#controlToken);
     validateId(window);
     validateEpoch(epoch);
     return this.ctx.storage.transactionSync(() => {
@@ -119,11 +120,6 @@ export class MaintenanceCoordinator extends DurableObject<unknown> {
     };
   }
 
-  private assertControlCapability(capability: unknown): asserts capability is string {
-    if (this.controlToken === null || typeof capability !== 'string' || capability !== this.controlToken) {
-      throw new Error('CONTROL_UNAUTHORIZED');
-    }
-  }
 }
 
 function validateId(id: unknown): asserts id is string {

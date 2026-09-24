@@ -1,4 +1,6 @@
 import { requireCapability } from "../authorization/policy";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 import { APP_CONFIG } from "../config";
 import {
   AppError,
@@ -32,6 +34,7 @@ import type { ReviewService } from "../review/service";
 import { strictRecord, stringValue } from "./member";
 
 export interface LibraryRouteServices {
+  workScope?: WorkScope;
   citedAnswers: CitedAnswerService;
   chatConversations: ChatConversationService;
   chatFeedback: ChatFeedbackService;
@@ -241,7 +244,7 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
       throw new AppError("SOURCE_SUMMARY_REQUEST_INVALID", "Request body is invalid", 400);
     }
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
@@ -261,7 +264,7 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
       throw new AppError("FAQ_REQUEST_INVALID", "Request body is invalid", 400);
     }
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
@@ -281,7 +284,7 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
       throw new AppError("TIMELINE_REQUEST_INVALID", "Request body is invalid", 400);
     }
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
@@ -301,7 +304,7 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
       throw new AppError("BRIEF_REQUEST_INVALID", "Request body is invalid", 400);
     }
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
@@ -321,7 +324,7 @@ export async function routeLibraryApi(
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) {
       throw new AppError("COMPARISON_REQUEST_INVALID", "Request body is invalid", 400);
     }
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) {
       throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     }
@@ -411,7 +414,7 @@ export async function routeLibraryApi(
     const knowledgeItemId = decodePathId(mindmap[1]!);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["citationIds"], "MINDMAP_REQUEST_INVALID");
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("MINDMAP_REQUEST_INVALID", "Request body is invalid", 400);
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     return jsonResponse(await services.mindmaps.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }
@@ -423,7 +426,7 @@ export async function routeLibraryApi(
     const knowledgeItemId = decodePathId(report[1]!);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["researchRunId", "citationIds"], "RESEARCH_REPORT_REQUEST_INVALID");
     if (!hasExactKeys(input, ["researchRunId", "citationIds"]) || typeof input.researchRunId !== "string" || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("RESEARCH_REPORT_REQUEST_INVALID", "Request body is invalid", 400);
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     return jsonResponse(await services.researchReports.generate(scope, input.researchRunId, citations), 200, context.requestId);
   }
@@ -435,7 +438,7 @@ export async function routeLibraryApi(
     const knowledgeItemId = decodePathId(flashcards[1]!);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["citationIds"], "FLASHCARD_REQUEST_INVALID");
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("FLASHCARD_REQUEST_INVALID", "Request body is invalid", 400);
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     return jsonResponse(await services.flashcards.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }
@@ -447,7 +450,7 @@ export async function routeLibraryApi(
     const knowledgeItemId = decodePathId(quiz[1]!);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["citationIds"], "QUIZ_REQUEST_INVALID");
     if (!hasExactKeys(input, ["citationIds"]) || !Array.isArray(input.citationIds) || input.citationIds.length < 1 || input.citationIds.length > 8 || !input.citationIds.every((id) => typeof id === "string" && id.length > 0)) throw new AppError("QUIZ_REQUEST_INVALID", "Request body is invalid", 400);
-    const citations = await Promise.all(input.citationIds.map((citationId) => services.library.readCitation(scope, citationId)));
+    const citations = await parallelWork(services.workScope, input.citationIds.map((citationId) => () => services.library.readCitation(scope, citationId)));
     if (citations.some((citation) => citation.knowledgeItemId !== knowledgeItemId)) throw new AppError("KNOWLEDGE_NOT_FOUND", "Knowledge item was not found", 404);
     return jsonResponse(await services.quizzes.generate(scope, knowledgeItemId, citations), 200, context.requestId);
   }

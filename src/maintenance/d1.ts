@@ -1,110 +1,95 @@
 import type { WorkScope } from './lifecycle';
 
-const FACADE_OWNER = Symbol('maintenance-d1-facade-owner');
-
-interface FacadeStatement extends D1PreparedStatement {
-  readonly [FACADE_OWNER]: symbol;
-  materialize(): D1PreparedStatement;
+function isResult(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const result = value as Record<string, unknown>;
+  return result.success === true && Array.isArray(result.results)
+    && typeof result.meta === 'object' && result.meta !== null;
 }
 
+/** Request-local facade; native handles never leave this closure. */
+export function createD1Facade(database: D1Database, scope: WorkScope): D1Database {
+  return scopedDatabase(database, scope, false);
+}
+
+/** Compatibility entry for existing callers, with the same closure-private handles. */
 export function createD1DatabaseFacade(database: D1Database, scope: WorkScope): D1Database {
-  const owner = Symbol('maintenance-d1-owner');
-  return new TrackedD1Database(database, scope, owner);
+  return scopedDatabase(database, scope, true);
 }
 
-class TrackedD1Database implements D1Database {
-  constructor(
-    private readonly database: D1Database,
-    private readonly scope: WorkScope,
-    private readonly owner: symbol,
-  ) {}
+function scopedDatabase(database: D1Database, scope: WorkScope, legacyErrors: boolean): D1Database {
+  const nativeStatements = new WeakMap<D1PreparedStatement, () => D1PreparedStatement>();
 
-  prepare(query: string): D1PreparedStatement {
-    if (typeof query !== 'string') throw new TypeError('D1_QUERY_INVALID');
-    this.scope.assertOpen();
-    return new TrackedPreparedStatement(this.database, this.scope, this.owner, query);
+  function execute<T>(factory: () => Promise<T>, valid?: (value: unknown) => boolean): Promise<T> {
+    // The request-local API fences synchronously; legacy callers consume rejections.
+    if (!legacyErrors) scope.assertOpen();
+    // run registers before invoking factory, including synchronous native throws.
+    // Validate inside that lifetime, before it can settle and seal the scope.
+    return scope.run(async () => {
+      const value = await factory();
+      if (valid && !valid(value)) scope.markUncertain('D1_RESULT_INVALID');
+      return value;
+    });
   }
 
-  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
-    try {
-      this.scope.assertOpen();
-      const candidates = statements.map((statement) => {
-        const candidate = statement as Partial<FacadeStatement>;
-        if (candidate[FACADE_OWNER] !== this.owner || typeof candidate.materialize !== 'function') {
-          throw new Error('D1_FACADE_MISMATCH');
-        }
-        return candidate;
-      });
-      return this.scope.run(() => this.database.batch<T>(candidates.map((candidate) => candidate.materialize!())));
-    } catch (error) {
-      return Promise.reject(error);
+  function wrap(materialize: () => D1PreparedStatement): D1PreparedStatement {
+    function first<T = unknown>(column: string): Promise<T | null>;
+    function first<T = Record<string, unknown>>(): Promise<T | null>;
+    function first<T>(column?: string): Promise<T | null> {
+      return execute(() => column === undefined ? materialize().first<T>() : materialize().first<T>(column));
     }
+
+    function raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
+    function raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
+    function raw<T>(options?: { columnNames?: boolean }): Promise<T[] | [string[], ...T[]]> {
+      return execute<T[] | [string[], ...T[]]>(() => {
+        if (options?.columnNames === true) return materialize().raw<T>({ columnNames: true });
+        return options === undefined ? materialize().raw<T>() : materialize().raw<T>({ columnNames: options.columnNames });
+      });
+    }
+
+    const statement: D1PreparedStatement = {
+      bind(...values: unknown[]) {
+        scope.assertOpen();
+        return wrap(() => materialize().bind(...values));
+      },
+      first,
+      run<T = Record<string, unknown>>() { return execute(() => materialize().run<T>(), isResult); },
+      all<T = Record<string, unknown>>() { return execute(() => materialize().all<T>(), isResult); },
+      raw,
+    };
+    nativeStatements.set(statement, materialize);
+    return statement;
   }
 
-  exec(_query: string): Promise<D1ExecResult> {
-    this.scope.assertOpen();
-    return Promise.reject(new Error('D1_OPERATION_UNSUPPORTED'));
+  function unsupported(): never {
+    scope.assertOpen();
+    throw new Error(legacyErrors ? 'D1_OPERATION_UNSUPPORTED' : 'D1_API_UNSUPPORTED');
   }
 
-  withSession(_constraintOrBookmark?: string): D1DatabaseSession {
-    this.scope.assertOpen();
-    throw new Error('D1_OPERATION_UNSUPPORTED');
-  }
-
-  dump(): Promise<ArrayBuffer> {
-    this.scope.assertOpen();
-    return Promise.reject(new Error('D1_OPERATION_UNSUPPORTED'));
-  }
-}
-
-class TrackedPreparedStatement implements FacadeStatement {
-  readonly [FACADE_OWNER]: symbol;
-
-  constructor(
-    private readonly database: D1Database,
-    private readonly scope: WorkScope,
-    owner: symbol,
-    private readonly query: string,
-    private readonly values: readonly unknown[] = [],
-  ) {
-    this[FACADE_OWNER] = owner;
-  }
-
-  bind(...values: unknown[]): D1PreparedStatement {
-    this.scope.assertOpen();
-    return new TrackedPreparedStatement(this.database, this.scope, this[FACADE_OWNER], this.query, values);
-  }
-
-  materialize(): D1PreparedStatement {
-    this.scope.assertOpen();
-    return this.database.prepare(this.query).bind(...this.values);
-  }
-
-  first<T = Record<string, unknown>>(): Promise<T | null>;
-  first<T = unknown>(columnName: string): Promise<T | null>;
-  first<T = Record<string, unknown>>(columnName?: string): Promise<T | null> {
-    return this.scope.run(() => {
-      const statement = this.materialize();
-      return columnName === undefined ? statement.first<T>() : statement.first<T>(columnName);
-    });
-  }
-
-  run<T = Record<string, unknown>>(): Promise<D1Result<T>> {
-    return this.scope.run(() => this.materialize().run<T>());
-  }
-
-  all<T = Record<string, unknown>>(): Promise<D1Result<T>> {
-    return this.scope.run(() => this.materialize().all<T>());
-  }
-
-  raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
-  raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
-  raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[]> {
-    return this.scope.run(async () => {
-      const statement = this.materialize();
-      return options?.columnNames
-        ? await statement.raw<T>({ columnNames: true }) as unknown as T[]
-        : await statement.raw<T>(options as { columnNames?: false });
-    });
-  }
+  return {
+    prepare(query: string) {
+      scope.assertOpen();
+      if (typeof query !== 'string') throw new TypeError('D1_QUERY_INVALID');
+      return wrap(() => database.prepare(query).bind());
+    },
+    batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+      try {
+        scope.assertOpen();
+        // Validate every handle before dispatch; never pass raw/foreign statements.
+        const native = statements.map(statement => {
+          const handle = nativeStatements.get(statement);
+          if (!handle) throw new Error(legacyErrors ? 'D1_FACADE_MISMATCH' : 'D1_STATEMENT_SCOPE_MISMATCH');
+          return handle;
+        });
+        return execute(() => database.batch<T>(native.map(materialize => materialize())), value => Array.isArray(value) && value.every(isResult));
+      } catch (error) {
+        if (legacyErrors) return Promise.reject(error);
+        throw error;
+      }
+    },
+    async exec() { return unsupported(); },
+    withSession: unsupported,
+    async dump() { return unsupported(); },
+  };
 }

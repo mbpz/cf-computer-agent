@@ -1,7 +1,7 @@
 import type { MaintenanceClient, Permit } from './contracts';
 import { createD1DatabaseFacade } from './d1';
 
-export type UncertaintyReason = 'D1_OPERATION_FAILED' | 'BACKGROUND_WORK_FAILED' | 'SCOPE_REGISTRATION_FAILED';
+export type UncertaintyReason = 'D1_OPERATION_FAILED' | 'BACKGROUND_WORK_FAILED' | 'SCOPE_REGISTRATION_FAILED' | 'D1_RESULT_INVALID' | 'APP_UNEXPECTED_ERROR' | 'STORAGE_RESULT_UNCERTAIN';
 
 export interface WorkScope {
   waitUntil(promise: Promise<unknown>): void;
@@ -16,6 +16,7 @@ class TrackedScope implements WorkScope {
   // The root holds one count until the handler and response wrapping finish.
   #pending = 1;
   #failed = false;
+  #uncertainty?: UncertaintyReason;
   #sealed = false;
   #facades = new WeakMap<object, D1Database>();
   #resolve!: (result: Completion) => void;
@@ -30,7 +31,7 @@ class TrackedScope implements WorkScope {
   markUncertain(reason: UncertaintyReason = 'BACKGROUND_WORK_FAILED'): void {
     this.assertOpen();
     this.#failed = true;
-    void reason;
+    this.#uncertainty ??= reason;
   }
 
   wrapDatabase(database: D1Database): D1Database {
@@ -62,7 +63,7 @@ class TrackedScope implements WorkScope {
     if (!success) this.#failed = true;
     if (--this.#pending !== 0) return;
     this.#sealed = true; // Fence local late factories before the completion RPC.
-    if (this.#failed) {
+    if (this.#failed || this.#uncertainty !== undefined) {
       this.#resolve({ released: false, reason: 'WORK_UNCERTAIN' });
       return;
     }
@@ -157,10 +158,13 @@ function trackResponse(response: Response, scope: WorkScope): Response {
         controller.error(error);
       }
     },
-    async cancel(reason) {
+    cancel(reason) {
+      // Register before settling the response lifetime: cancellation may still
+      // run writable continuations after the reader/producer reports EOF.
+      const cancellation = scope.run(async () => { await reader.cancel(reason); });
       // Cancellation is NOT evidence the producer stopped writing.
       reject(new Error('STREAM_CANCELED'));
-      await reader.cancel(reason);
+      return cancellation;
     },
   }, { highWaterMark: 0 });
   return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });

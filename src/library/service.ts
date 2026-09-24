@@ -1,4 +1,6 @@
 import { AppError } from "../http";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 import type { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import type { PublishedContentReader } from "../knowledge/types";
@@ -55,6 +57,7 @@ export class LibraryService {
     private readonly repository: LibraryRepositoryPort,
     private readonly content: PublishedContentReader,
     private readonly audit?: AuditWriter,
+    private readonly workScope?: WorkScope,
   ) {}
 
   async list(scope: LibraryScope, request: KnowledgePageRequest = {}): Promise<KnowledgePage> {
@@ -112,12 +115,12 @@ export class LibraryService {
     assertLookupId(knowledgeItemId);
     assertLookupId(fromRevisionId);
     assertLookupId(toRevisionId);
-    const [fromRecord, toRecord] = await Promise.all([
-      this.repository.findRevision(scope, knowledgeItemId, fromRevisionId),
-      this.repository.findRevision(scope, knowledgeItemId, toRevisionId),
+    const [fromRecord, toRecord] = await parallelWork(this.workScope, [
+      () => this.repository.findRevision(scope, knowledgeItemId, fromRevisionId),
+      () => this.repository.findRevision(scope, knowledgeItemId, toRevisionId),
     ]);
     if (!fromRecord || !toRecord) throw knowledgeNotFound();
-    const [from, to] = await Promise.all([this.readRevision(fromRecord), this.readRevision(toRecord)]);
+    const [from, to] = await parallelWork(this.workScope, [() => this.readRevision(fromRecord), () => this.readRevision(toRecord)]);
     return buildRevisionDiff(
       {
         id: from.id,

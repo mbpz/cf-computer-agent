@@ -1,12 +1,14 @@
 # 个人工作台 · Personal Workbench Roadmap
 
-更新时间：2026-09-20
+更新时间：2026-09-23
+
+**合并状态（2026-09-23）：** 用户授权将恢复分支 `7f7d3c6` 合入本地 `main`（合并前 `426e313`）。main 历史清单为 **8/25 完成、17 项剩余**，恢复分支原口径为 4/25；两者不相加、不相互覆盖。当前先完成合并候选验证与提交，再回到 R09；旧 R08 回归不证明本次候选。恢复分支 R05.1/R05.2 已提交，独立 HTTP 协议等 R05.3–R05.5 仍未执行，不能因 main 既有管理员 API 而视为自动完成。未 push、未部署、未读取 secrets 或执行生产操作。
 
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
 
-2026-09-20 顺序执行入口：[剩余任务统计与 checklist](./docs/operations/2026-09-19-remaining-work-checklist.md)。排除旧兼容映射后，总账 90 项能力中 20 项实现、16 项验证尚未完成；发布/验收仍有各自未关闭范围。恢复主线 R01–R25 中 R01 规格/计划和 R02 真实入口本地接线已完成，23 项剩余，下一项 R03 尚未开始；见[45 项维护专项及应用回归证据](./docs/operations/evidence/2026-09-20-maintenance-entry.md)。生产入口仍明确 legacy，未启用维护；后台原始失败、流及跨存储安全仍待 R03/R04。产品增量清单另有 30 个未关闭父项，含已完成子项并与恢复主线重叠，不相加。不提升产品交付四维状态。
+2026-09-23 顺序执行入口：[剩余任务统计与 checklist](./docs/operations/2026-09-19-remaining-work-checklist.md)。main 历史 R01–R08 关闭，R09–R25 共 17 项开放；合并候选验证尚未通过。产品增量另有 30 个开放父项，与恢复主线重叠，不相加，不提升发布/验收维度。
 
 2026-09-17 生产验收被 schema 落后阻塞：只读快照为 0001–0032，通知/消息请求出现 500；0033–0050 共 18 个待执行迁移已审查。Task 2 已本地追加 0051 修复日历关联删除，8 文件 168 项 Worker 回归通过，旧 50 个 SQL hash 不变，见[本地证据](./docs/product/2026-09-17-calendar-reference-detach-evidence.md)。Task 3 已获备份范围授权并刷新生产账本与 0033–0051 共 19 个 pending，但两个 FTS 虚拟表触及官方标准导出限制，独立备份尚未产生，见[备份预检](./docs/operations/evidence/2026-09-17-production-d1-backup-preflight.md)。下一步按[原子计划](./docs/superpowers/plans/2026-09-17-production-d1-catchup.md)先确定不删生产表的备份恢复方案和维护窗口，迁移另行批准。详见[生产浏览器验收记录](./docs/product/2026-09-17-production-browser-acceptance.md)。当前未执行生产迁移、导出或部署，不提升 D02/R6-003 及 D3/D4 的发布/验收状态；下文历史快照保留。
 

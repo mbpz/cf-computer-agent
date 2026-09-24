@@ -1,7 +1,8 @@
+import { CONTROL_TOKEN } from './control-fixtures';
 import type { Snapshot } from '../../src/maintenance/contracts';
 
 /** Synthetic-only capability. Production control is intentionally not wired. */
-export const LOCAL_CONTROL_TOKEN = 'synthetic-maintenance-control-token';
+export const LOCAL_CONTROL_TOKEN = CONTROL_TOKEN;
 
 type RawControlClient = {
   beginDrain(window: string, epoch: number, capability: string): PromiseLike<Snapshot>;

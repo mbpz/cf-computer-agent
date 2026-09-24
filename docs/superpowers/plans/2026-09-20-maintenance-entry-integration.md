@@ -2,16 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 顺序完成 R02–R04 的本地真实入口接入；按恢复 checklist 逐项留证，生产变更另行授权。
+**Goal:** 顺序完成 R02–R04 的本地真实入口接入；最初仅批准 R02，用户随后逐步要求提交并进入下一步。2026-09-23 R02–R04 均本地完成，下一项 R05 需独立确认设计；不扩大到生产。
 **Architecture:** `index.ts` 显式选择 legacy；独立本地 harness 显式选择 guarded。两者共用 `createApp` 和 `AssetService.processDue(3)`，不复制业务路由。维护准入先于所有业务绑定读取和服务构建。
 **Tech Stack:** TypeScript、Workers ExecutionContext、Vitest/workerd、本地 D1/R2/SQLite Durable Object。
 **Spec:** [已确认规格](../specs/2026-09-19-maintenance-entry-integration-design.md)。用户于 2026-09-20 确认进入 R02；R01 的书面审批与计划前置条件据此完成。
 
-**Status (2026-09-20):** R02–R04 本地实现和验证完成，分别见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)和[流/存储生命周期证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。R03 起始提交为 `95bd921`；R04 已关闭，未 push、未部署。
+**Status (2026-09-23):** R02 提交 `546aab52bc4710064edf082e8cd2ee8f6236cf0d`（前置日历提交 `dfc9590`），已合入 main 的 `df69af8`，工作区快进至该基线；见[入口证据](../../operations/evidence/2026-09-20-maintenance-entry.md)。R03 提交 `b408633`、`eb685c3`、`7ea7bee` 并本地关闭，见[接线](../../operations/evidence/2026-09-21-maintenance-d1-wiring.md)、[后台](../../operations/evidence/2026-09-21-maintenance-continuations.md)及[收口](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)证据。R04 前四子项提交 `57cca2e`、`8c01dc3`、`2a367d5`、`786c8c9`，分别见[生产者](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)、[取消](../../operations/evidence/2026-09-22-maintenance-r04-cancel.md)、[超时](../../operations/evidence/2026-09-22-maintenance-r04-timeout.md)及[存储](../../operations/evidence/2026-09-23-maintenance-r04-storage.md)证据。第五子项新增 10 项跨存储组合测试并完成规格矩阵核对，维护专项 12 files / 247 tests、应用 smoke/unit/worker 分项及两套类型检查通过，见[本轮收口证据](../../operations/evidence/2026-09-23-maintenance-r04-completion.md)。R04 为 **5/5 完成、父项本地关闭**，恢复主线 **4 关闭 / 21 剩余**；下一项 R05 独立设计确认，尚未实施。本轮未推送、未合入 main、未部署。
+
+**合并状态（2026-09-23）：** 用户授权将恢复分支 `7f7d3c6` 合入本地 `main`（合并前 `426e313`）。main 历史清单为 **8/25 完成、17 项剩余**，恢复分支原口径为 4/25；两者不相加、不相互覆盖。当前先完成合并候选验证与提交，再回到 R09；旧 R08 回归不证明本次候选。恢复分支 R05.1/R05.2 已提交，独立 HTTP 协议等 R05.3–R05.5 仍未执行，不能因 main 既有管理员 API 而视为自动完成。未 push、未部署、未读取 secrets 或执行生产操作。
+
+main 既有容量快照、管理员 API 和生产 guarded/legacy 选择接线均保留；以下 R03/R04 完成记录仅代表恢复分支的历史本地候选。
 
 ## Global Constraints
 
-- 现有隔离工作区 `codex/admin-audit-recovery` 原地执行；保护既有未提交变更，不 merge/push/deploy。R03 候选已形成本地提交，未进入远端。
+- 现有隔离工作区 `codex/admin-audit-recovery` 原地执行；保护既有未提交变更，不委派、不 push/deploy。用户后续明确授权将已提交分支合入 main，现已核验合并提交 `df69af8`；后续提交仍须先完成相应验证，不提交未验证实现。继续 R03 前将该工作区快进到合并后的 main，若未提交改动阻碍快进则停止，不丢弃或覆盖。
 - 不改 `wrangler.jsonc`、生成 Env、迁移或生产 binding；不读 secrets，不连接生产资源，不备份真实数据。
 - harness `remoteBindings: false`，独立配置而非加载生产 Wrangler；本地 D1/R2/DO，AI 和静态资源端口为合成值，意外出站请求失败。
 - 每步先观察行为测试正确失败，再实现，再回归。完成标记必须有当前命令结果；R02 不代表 R03/R04 的原始存储失败、生产者或跨存储安全。
@@ -61,20 +65,38 @@ Files: 新增 `docs/operations/evidence/2026-09-20-maintenance-entry.md`；更�
 
 Files: 新增 `src/maintenance/d1.ts`、`tools/maintenance/d1.test.ts`；修改 `src/maintenance/lifecycle.ts`、`src/worker-entry.ts`、`src/app.ts`，以及 `src/members/service.ts`、`src/identity/session.ts`、`src/identity/automation.ts` 和审计列出的并行服务边界。
 
+### 执行记录与当前停点（2026-09-20 至 2026-09-21）
+
+- 合并已核验：用户完成 main 合并提交 `df69af8`（父提交 `c2d9f63`、`546aab5`），main 工作区干净。代理读取 `/tmp/cf-admin-postmerge-20260920.log`，合并后 smoke 56/56、i18n 13/13、交付合同 30/30、unit 2113/2113、Worker 656/656、maintenance 45/45、备份 21/21 均通过。45 项仅对应已合入版本，不包含下列未提交的 4 项 lifecycle 测试或 D1 测试。
+- 原工作区 5 个未提交文件仍保留。代理尝试 `git merge --ff-only main` 因审批超时未启动；随后用户终端成功快进 `546aab5..df69af8`，输出已核验。不把合并后的回归当作 R03 完成证据。
+- 用户回传 maintenance 基线：3 files / 45 tests passed，12:50:06 开始，耗时 2.18s；这是用户终端结果，不是本轮代理执行结果。
+- 首项已完成：`tools/maintenance/lifecycle.test.ts` 新增 4 项行为测试，覆盖开放期 assertOpen、completion RPC 返回前封闭、markUncertain 保留原业务响应、标记后仍等待已有子任务。既有原始拒绝被捕获后保留许可的测试保持不变。
+- RED 已核验：用户终端 13:08:39 运行的完整日志 `/tmp/cf-r03-lifecycle-red-20260920.log` 已由代理读取；22 项中原有 18 项通过，新增 4 项失败。封闭检查报 `saved.assertOpen is not a function`；其余三项在缺失接口调用后被 guard 转为 500，而预期为 200/409/200。与当前缺失实现吻合，不是导入或启动错误。
+- `src/maintenance/lifecycle.ts` 已补最小实现：新增 assertOpen、markUncertain 和固定原因码类型；标记不改变任务计数，已有子任务仍被等待，计数归零后不释放不确定许可；封闭后拒绝标记，不复活作用域。尚未修改真实业务接线。
+- 当前验证：`npm run typecheck`、`npx --no-install tsc --noEmit --project tools/maintenance/tsconfig.json` 和 `git diff --check` 均 exit 0。直接调用工作区 `./node_modules/.bin/tsc` 因该路径不存在失败，随后通过已有 npm 依赖解析执行专项 tsc，未安装新依赖。
+- GREEN 已核验：用户终端 18:42:21 运行的完整日志 `/tmp/cf-r03-lifecycle-green-20260920.log` 已由代理读取；3 files / 49 tests passed，耗时 2.26s，包含新增 4 项 lifecycle 测试。该结果对应新增 D1 测试之前的 maintenance 套件，不代表 D1 facade 已完成。
+- 第二项 RED 已核验：新增 `tools/maintenance/d1.test.ts`，覆盖本地真实 D1 正常语义、原始同步/异步失败、失败/畸形结果、未 await 查询追踪、batch 归属、封闭后零原生调用和不支持接口。用户回传 22:30:11 的完整终端输出（日志路径 `/tmp/cf-r03-d1-red-20260920.log`）：36 项中 34 failed / 2 passed，耗时 957ms。两个正常数据库语义测试通过，其余失败对应原始 DB 占位缺少追踪和拒绝保护，不是启动或导入失败。
+- `src/maintenance/d1.ts` 已替换为显式包装实现：原生句柄保存在私有 WeakMap；prepare/bind 保持惰性；执行前登记 scope，保留返回值和错误；run/all/batch 的失败或畸形结果标记不确定；batch 拒绝外来句柄；封闭后全部接口拒绝，exec/withSession/dump 明确不支持。尚未接入真实业务入口。
+- 实现后 `npm run typecheck` 与 `npx --no-install tsc --noEmit --project tools/maintenance/tsconfig.json` 均 exit 0。代理尝试运行 maintenance 全套测试时自动权限审批超时，进程未启动；随后用户终端执行，代理已读取 `/tmp/cf-r03-d1-green-20260920.log`：22:40:13 开始，耗时 2.68s，4 files / 85 tests passed，D1 的 36 项全部通过。此结果不包含之后新增的接线测试。
+- 第三项 RED 已核验：代理读取用户执行的 `/tmp/cf-r03-entry-d1-red-20260920.log`，07:37:31 开始，耗时 1.31s，7 项中 5 failed / 2 passed。五项失败均为原始 D1 失败被业务映射或补偿后，预期 active=1/DRAINING，实际 active=0/DRAINED；HTTP 状态、session 响应和 Cron 补偿断言已通过。连续请求与关闭准入前不读取 sessionDatabase 两项通过。独立 harness 的 `SYNTHETIC_SESSION_DB` 仅为本地异库覆盖测试，生产配置和生成 Env 未修改。
+- 第三项实现：guard handler 内为每次 HTTP/Cron 创建独立 WeakMap；实际 DB 和 sessionDatabase 覆盖按原生数据库身份共用 facade。惰性 getter 不提前读取业务绑定，原 env/dependencies 不被修改，legacy 分支保持原行为；未修改 `src/app.ts`。
+- 第三项 GREEN：初次完整 maintenance 5 files / 92 tests passed。新增第八项真实成员状态变更 + 审计原子 batch 测试后，专项通过；临时禁用缓存时该测试失败（预期 200、实际 500），恢复缓存后完整 maintenance 5 files / 93 tests passed（07:44:32，4.81s）。反向验证改动已撤回。
+- R03 前三子项已于本轮重新核验并提交 `b408633`；恢复总计仍为 2 关闭 / 23 剩余。验证命令、结果与边界见接线证据，不以 D1 接线代替完整后台链证明。
+- 第 4 项 RED：成员/session/nonce 原始后台失败测试 3 failed；Today 并行兄弟链测试 4 failed，均为提前释放许可而非环境失败。GREEN：登记 catch 前原始任务、每分支完整 continuation 并显式传递请求 scope；扩展 Review、Library、Graph、4xx/5xx、正常与 legacy 路径、入口 scope 隔离测试后，maintenance 118 项及全量 unit/worker 回归通过。证据见[本轮记录](../../operations/evidence/2026-09-21-maintenance-continuations.md)。第 5 项仍开放，未将服务层测试等同于完整入口验收。
+- 第 5 项 RED：五个 guarded app 异常场景在响应断言通过后错误释放许可，五个 legacy 对照通过。app catch 增加固定不确定性标记后全部通过；扩展真实 400/403/404、响应后嵌套 D1 与封闭后迟到调用，共 17 项。最终 maintenance 135 项、完整 `npm test` 和类型检查通过，见[收口证据](../../operations/evidence/2026-09-21-maintenance-r03-completion.md)，据此关闭 R03。R04 仍未执行。
+
 - [x] 先红测 `assertOpen`、`markUncertain`（固定码），吞错原始拒绝仍保留许可、sealed 后零原生调用；扩展 WorkScope，不允许复活。
 - [x] 先测试后添加 D1/statement facade：prepare/bind 惰性，first/run/all/raw 重载、batch 同 facade 归属检查；exec/withSession/dump 明确拒绝，成功 null/空 rows 不误报。
 - [x] guard handler 内包装实际 DB 和 sessionDatabase 覆盖；同请求同 DB 复用 facade，跨请求不复用。失败 `success:false` 保留原返回同时标记不确定。
 - [x] 在成员/session/nonce 自身 catch 前登记 raw Promise，业务响应保留；并行服务每分支持有完整 continuation，Promise.all 首次拒绝不释放兄弟。
-- [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归和证据见[D1 生命周期证据](../../operations/evidence/2026-09-20-maintenance-d1-lifecycle.md)。
+- [x] 本地 D1 集成验证失败被映射成正常响应仍保留、正常 400/403/404 可完成、嵌套 waitUntil 与迟到调用；全量回归留证后才勾选 R03。
 
-## R04 — 流、取消、超时和跨存储
+## R04 — 流、取消、超时和跨存储（本地完成）
 
-Files: `src/agent/service.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。
+Files: `src/routes/agent.ts`、`src/app.ts` 及审计定位的流/timeout 边界、`src/assets/service.ts`、知识发布/VFS/RPC typed 边界、`src/maintenance/lifecycle.ts`，新增 `tools/maintenance/stream.test.ts` / `storage.test.ts`。原计划的 `src/agent/service.ts` 不存在，已按真实路由修正。
 
-- [x] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。
-- [x] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。
-- [x] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。
-- [x] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。
-- [x] 真实合成资源故障回归+证据后关闭 R04；62/62 维护专项、完整 `npm test`、构建、交付合同和 `git diff --check` 通过。R05/R06/R07 仍独立，不借本阶段开放生产。
-
-R04 已关闭；完整本地证据见[流/存储生命周期证据](../../operations/evidence/2026-09-20-maintenance-stream-storage.md)。R05/R06/R07 仍独立，生产维护入口仍保持 legacy。
+- [x] 对真实 agent pump 写可控迟到测试，EOF 前/后最终落库完成才能释放；启动前登记整个生产者 factory，controller.error 不吞原始失败。见[第 1 子项证据](../../operations/evidence/2026-09-21-maintenance-r04-producer.md)。
+- [x] cancel 链独立登记且等待 reader.cancel，不用 detached void，不让生产者互等；消费者取消保留许可，覆盖不消费和迟到生产者。见[第 2 子项证据](../../operations/evidence/2026-09-22-maintenance-r04-cancel.md)。
+- [x] 分类所有 race：纯 AI 尾部无写 continuation 可结束；有可写 continuation 的原始任务完整登记。可控迟到结果不得启动 success 写入。14 个 timeout/race 和 3 个 abort-only 边界已分类，37 项新增回归及迟到写变异验证通过；无需运行时代码改动。见[第 3 子项证据](../../operations/evidence/2026-09-22-maintenance-r04-timeout.md)。
+- [x] typed R2/DO/VFS helper 在补偿/转换 catch 前观察；原始失败保留，明确领域拒绝保持业务语义。不使用通用 Env proxy，不承诺跨存储原子性。2026-09-23：50 项新增回归及完整本地维护/应用分项回归通过，见[存储边界证据](../../operations/evidence/2026-09-23-maintenance-r04-storage.md)。
+- [x] 真实合成资源故障回归及规格矩阵核对完成：新增 10 项跨存储组合、三处临时回退负向测试检出提前释放并恢复；维护 247 项及应用分项回归通过后关闭 R04，见[收口证据](../../operations/evidence/2026-09-23-maintenance-r04-completion.md)。R05/R06/R07 仍独立，不借本阶段开放生产。

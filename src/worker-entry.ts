@@ -4,6 +4,7 @@ import { WorkersAiImageConverter } from './assets/ai-image';
 import { AssetsRepository } from './assets/repository';
 import { AssetService } from './assets/service';
 import type { MaintenanceClient } from './maintenance/contracts';
+import { createD1Facade } from './maintenance/d1';
 import { guardFetch, guardScheduled, type WorkScope } from './maintenance/lifecycle';
 
 type EntryOptions = { mode: 'legacy'; dependencies?: AppDependencies }
@@ -20,14 +21,50 @@ export function createWorkerEntry(options: EntryOptions): WorkerEntry {
     fetch(request, env, ctx) {
       return guardFetch(lazyClient(() => options.maintenance(env)), promise => ctx.waitUntil(promise), async scope => {
         // Admission and host registration precede even service construction.
-        const app = createApp(scopedDependencies(options.dependencies, env, scope));
-        return await app.fetch!(request, scopedEnvironment(env, scope), scopedContext(ctx, scope));
+        const bindings = scopedBindings(env, options.dependencies, scope);
+        const app = createApp(bindings.dependencies);
+        return await app.fetch!(request, bindings.env, scopedContext(ctx, scope));
       });
     },
     async scheduled(_controller, env) {
-      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => sweepAssets(scopedEnvironment(env, scope), scope));
+      await guardScheduled(lazyClient(() => options.maintenance(env)), async scope => {
+        await sweepAssets(scopedBindings(env, undefined, scope).env, scope);
+      });
     },
   };
+}
+
+/** Created only after admission, never shared between HTTP requests or Cron runs. */
+function scopedBindings(env: Env, dependencies: AppDependencies | undefined, scope: WorkScope): {
+  env: Env; dependencies: AppDependencies;
+} {
+  const databases = new WeakMap<D1Database, D1Database>();
+  function database(native: D1Database): D1Database {
+    scope.assertOpen();
+    let facade = databases.get(native);
+    if (!facade) {
+      facade = createD1Facade(native, scope);
+      databases.set(native, facade);
+    }
+    return facade;
+  }
+  // Shadow only D1. Do not spread/eagerly read unrelated bindings: static
+  // requests and the optional-storage Cron skip must remain lazy.
+  const scopedEnv: Env = Object.create(env, {
+    DB: { enumerable: true, get: () => database(env.DB) },
+  });
+  const scopedDependencies: AppDependencies = Object.create(dependencies ?? null, {
+    workScope: { enumerable: true, value: scope },
+    onBackgroundFailure: { enumerable: true, value: (reason: Parameters<WorkScope["markUncertain"]>[0]) => {
+      scope.markUncertain(reason);
+      dependencies?.onBackgroundFailure?.(reason ?? "BACKGROUND_WORK_FAILED");
+    } },
+    sessionDatabase: { enumerable: true, get: () => {
+      const override = dependencies?.sessionDatabase;
+      return override ? database(override) : undefined;
+    } },
+  });
+  return { env: scopedEnv, dependencies: scopedDependencies };
 }
 
 /** Provider lookup runs inside admission's catch; never silently use legacy. */
@@ -45,33 +82,6 @@ function lazyClient(provider: () => MaintenanceClient): MaintenanceClient {
   };
 }
 
-function scopedDependencies(dependencies: AppDependencies | undefined, env: Env, scope: WorkScope): AppDependencies {
-  const current = dependencies || {};
-  return {
-    ...current,
-    sessionDatabase: current.sessionDatabase
-      ? scope.wrapDatabase(current.sessionDatabase)
-      : undefined,
-    workScope: scope,
-    onBackgroundFailure: reason => {
-      try {
-        scope.markUncertain(reason);
-      } catch {
-        // A late failure after sealing is already represented by the tracked promise.
-      }
-    },
-  };
-}
-
-function scopedEnvironment(env: Env, scope: WorkScope): Env {
-  return new Proxy(env, {
-    get(target, property, receiver) {
-      if (property === 'DB') return scope.wrapDatabase(Reflect.get(target, property, receiver) as D1Database);
-      return Reflect.get(target, property, receiver);
-    },
-  });
-}
-
 function scopedContext(ctx: ExecutionContext, scope: WorkScope): ExecutionContext {
   return {
     waitUntil: promise => scope.waitUntil(promise),
@@ -84,15 +94,16 @@ function scopedContext(ctx: ExecutionContext, scope: WorkScope): ExecutionContex
   };
 }
 
-async function sweepAssets(env: Env, scope?: WorkScope): Promise<void> {
+async function sweepAssets(env: Env, workScope?: WorkScope): Promise<void> {
   if (!env.ORIGINALS) {
     console.log('asset parse sweep skipped: binary storage is not configured');
     return;
   }
   const result = await new AssetService(env.ORIGINALS, new AssetsRepository(env.DB), {
+    workScope,
     markdownConverter: new WorkersAiMarkdownConverter(env.AI),
     imageConverter: new WorkersAiImageConverter(env.AI),
-    onFailure: () => scope?.markUncertain('BACKGROUND_WORK_FAILED'),
+    onFailure: () => workScope?.markUncertain('BACKGROUND_WORK_FAILED'),
   }).processDue(3);
   console.log('asset parse sweep complete', result);
 }

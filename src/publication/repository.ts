@@ -1,4 +1,6 @@
 import { AuditRepository } from "../audit/repository";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 import type { CreateAuditEvent } from "../audit/types";
 import { APP_CONFIG } from "../config";
 import { AppError } from "../http";
@@ -47,6 +49,7 @@ export class PublicationRepositoryConflictError extends Error {
 }
 
 export interface PublicationRepositoryOptions {
+  workScope?: WorkScope;
   id?: () => string;
   now?: () => Date;
   leaseToken?: () => string;
@@ -177,12 +180,14 @@ export class PublicationRepository implements PublicationRepositoryPort {
   private readonly id: () => string;
   private readonly now: () => Date;
   private readonly leaseToken: () => string;
+  private readonly workScope?: WorkScope;
 
   constructor(private readonly db: D1Database, options: PublicationRepositoryOptions = {}) {
     this.audit = new AuditRepository(db);
     this.id = options.id || (() => crypto.randomUUID());
     this.now = options.now || (() => new Date());
     this.leaseToken = options.leaseToken || (() => crypto.randomUUID());
+    this.workScope = options.workScope;
   }
 
   async getPreview(submissionId: string): Promise<ReviewSubmissionSnapshot | null> {
@@ -197,9 +202,9 @@ export class PublicationRepository implements PublicationRepositoryPort {
   }
 
   async validateTarget(input: PublishSubmissionInput): Promise<void> {
-    const [target, tags] = await Promise.all([
-      this.readTargetSummary(input.spaceId, input.collectionId),
-      this.countActiveTags(input.spaceId, input.tagIds),
+    const [target, tags] = await parallelWork(this.workScope, [
+      () => this.readTargetSummary(input.spaceId, input.collectionId),
+      () => this.countActiveTags(input.spaceId, input.tagIds),
     ]);
     if (target?.available !== true || tags !== input.tagIds.length) {
       throw new PublicationRepositoryConflictError("target_invalid");
@@ -1061,7 +1066,7 @@ export class PublicationRepository implements PublicationRepositoryPort {
        WHERE state IN ('pending_content', 'content_written')
        ORDER BY updated_at ASC, submission_id ASC LIMIT ?`,
     ).bind(limit).all<{ submission_id: string }>();
-    const intents = await Promise.all(rows.results.map((row) => this.findIntent(row.submission_id)));
+    const intents = await parallelWork(this.workScope, rows.results.map((row) => () => this.findIntent(row.submission_id)));
     return intents.filter((intent): intent is PublicationIntent => intent !== null);
   }
 

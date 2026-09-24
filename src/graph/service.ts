@@ -1,4 +1,6 @@
 import { AppError } from "../http";
+import type { WorkScope } from "../maintenance/lifecycle";
+import { parallelWork } from "../maintenance/work";
 import { GRAPH_MAX_TEMPORAL_DAYS, normalizeGraphSnapshot } from "./types";
 import type { GraphChangeKind, GraphEdge, GraphNode, GraphNodeKind, GraphQuery, GraphSnapshot } from "./types";
 import type {
@@ -14,19 +16,19 @@ import type {
 } from "./repository";
 
 export class GraphProjectionService {
-  constructor(private readonly repository: GraphProjectionRepositoryPort, private readonly options: { now?: () => Date } = {}) {}
+  constructor(private readonly repository: GraphProjectionRepositoryPort, private readonly options: { now?: () => Date; workScope?: WorkScope } = {}) {}
 
   async get(memberId: string, query: GraphQuery): Promise<GraphSnapshot> {
     const loaderLimit = Math.min(100, Math.max(1, query.limit));
-    const [knowledge, tasks, projects, goals, inbox, calendar, timeline, relations] = await Promise.all([
-      shouldLoad("knowledge", query) ? this.repository.listKnowledge(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("task", query) ? this.repository.listTasks(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("project", query) ? this.repository.listProjects(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("goal", query) ? this.repository.listGoals(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("inbox", query) ? this.repository.listInbox(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("calendar", query) || shouldLoad("focus", query) ? this.repository.listCalendar(memberId, loaderLimit) : Promise.resolve([]),
-      shouldLoad("meeting", query) || shouldLoad("decision", query) || shouldLoad("action_item", query) ? this.repository.listTimeline(memberId, loaderLimit) : Promise.resolve([]),
-      this.repository.listRelations(memberId, loaderLimit),
+    const [knowledge, tasks, projects, goals, inbox, calendar, timeline, relations] = await parallelWork(this.options.workScope, [
+      () => shouldLoad("knowledge", query) ? this.repository.listKnowledge(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("task", query) ? this.repository.listTasks(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("project", query) ? this.repository.listProjects(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("goal", query) ? this.repository.listGoals(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("inbox", query) ? this.repository.listInbox(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("calendar", query) || shouldLoad("focus", query) ? this.repository.listCalendar(memberId, loaderLimit) : Promise.resolve([]),
+      () => shouldLoad("meeting", query) || shouldLoad("decision", query) || shouldLoad("action_item", query) ? this.repository.listTimeline(memberId, loaderLimit) : Promise.resolve([]),
+      () => this.repository.listRelations(memberId, loaderLimit),
     ]);
 
     const allNodes = [
