@@ -1,6 +1,6 @@
 # R09 生产写者操作人声明清单
 
-日期：2026-09-23（Asia/Shanghai）。本文件是 R09 的外部事实确认表，不包含任何 secret、OAuth code、Cookie、D1 私有正文或完整请求头。未完成签署前，不得将 R09 标记为完成，也不得进入 R10。
+日期：2026-09-24（Asia/Shanghai）。本文件是 R09 的外部事实确认表，不包含任何 secret、OAuth code、Cookie、D1 私有正文或完整请求头。未完成签署前，不得将 R09 标记为完成，也不得进入 R10。
 
 ## 需要由生产操作人确认的事实
 
@@ -23,6 +23,7 @@
 - Queue 和 Email trigger 未配置；Cron 已配置。
 - `MAINTENANCE_CONTROL_TOKEN` 尚未配置，生产维护控制面尚未启用。
 - 2026-09-24 通过 Cloudflare Dashboard Observability“过去 1 小时”查询观察到 `24 Success`、`0 Errors`；事件均为生产 Cron `*/5 * * * *`，消息为 `asset parse sweep skipped: binary storage is not configured`。这证明 Cron 触发链路正在运行，但也证明二进制存储未配置、资产解析 sweep 当前按设计跳过；不能将其扩大解释为完整资产解析能力，也不能替代 Automation/OAuth/Cron 的责任人与停写确认。
+- 2026-09-24 通过 Cloudflare Dashboard Production Settings 只读确认：当前登录账户显示为 `Apples398@gmail.com`；生产分支为 `main`；构建命令为 `npm run build`，部署命令为 `npx wrangler deploy`，版本命令为 `npx wrangler versions upload`；Cron 触发器为 `*/5 * * * *`；Queue 消费者和 Email 路由均未配置；生产绑定包括 `DB`、`AGENT_SESSIONS`、`KNOWLEDGE`、`MAINTENANCE`、`AI`；仅记录 secret 名称，不读取值。
 
 ## R09 关闭条件
 
