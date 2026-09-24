@@ -33,7 +33,8 @@ rtk npm run test:ops:d1-backup
 
 R10 **部分完成，尚未关闭**。Dashboard 已证明远程 D1 只读 SQL 可用，本地正式工具 21/21 通过；但正式 `tools/d1-backup/transport.mjs` 使用的 Cloudflare D1 REST API 尚未用真实窄权限只读 token 验证。当前 shell 没有 `CLOUDFLARE_D1_BACKUP_READ_TOKEN` 或 `CLOUDFLARE_API_TOKEN`，Wrangler OAuth 已过期；官方 OAuth 登录请求的权限范围过宽，未启动持久授权。
 
+已新增可复用探针 `scripts/r10-remote-read-probe.mjs`，入口为 `npm run probe:ops:d1-read`。缺少三个环境变量时会在发出网络请求前返回 `R10_READ_TOKEN_REQUIRED`；本地缺失凭据守卫已验证通过。
+
 ## 关闭 R10 的唯一剩余门槛
 
 由生产操作人创建或注入**仅限 D1 只读**的临时凭据（不提交、不粘贴到聊天、不读取 Worker secret），然后对同一生产 database/account 执行正式 transport 的 `SELECT 1`、允许的 `PRAGMA table_list/table_xinfo`、编码和 response metadata 验证。验证结束立即撤销或清理该临时凭据；不得借此执行 capture、migration、restore 或业务写入。
-
