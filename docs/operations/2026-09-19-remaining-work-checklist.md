@@ -32,9 +32,11 @@
 
 [产品增量清单](../product/2026-09-12-personal-workbench-completion-audit.md)还有 **30 个未关闭父项**：A 6、B 9、C 7、D 8。它们含已完成子项，且与下列恢复主线重叠。不能称为 30 个全新功能，也不能将 30 与 25 相加。
 
-当前优先恢复主线共 **25 个检查点，11 个关闭，14 个剩余；当前 R12**。R01–R08 于 2026-09-20 关闭，R09 于 2026-09-24 依据 Cloudflare Dashboard 证据及用户操作人声明关闭，R10 于 2026-09-24 依据 Cloudflare Dashboard 生产只读证据、本地正式工具回归及用户确认的浏览器证据方案关闭；R11 于 2026-09-24 依据候选/生产 binding 对齐证据及用户确认的分阶段关闭边界关闭（0051 仍 pending，备份与迁移授权不提前），见[R11 关闭证据](evidence/2026-09-24-r11-schema-drift-preflight.md)及[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)、[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)、[R09 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)、[R09 操作人声明](evidence/2026-09-23-r09-operator-attestation.md)和[R10 远程只读探针证据](evidence/2026-09-24-r10-remote-read-probe.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。
+当前优先恢复主线共 **25 个检查点，12 个关闭（11 个完成、1 个用户豁免），13 个剩余；当前 R13**。R01–R08 于 2026-09-20 关闭，R09 于 2026-09-24 依据 Cloudflare Dashboard 证据及用户操作人声明关闭，R10 于 2026-09-24 依据 Cloudflare Dashboard 生产只读证据、本地正式工具回归及用户确认的浏览器证据方案关闭；R11 于 2026-09-24 依据候选/生产 binding 对齐证据及用户确认的分阶段关闭边界关闭（0051 仍 pending，备份与迁移授权不提前），见[R11 关闭证据](evidence/2026-09-24-r11-schema-drift-preflight.md)及[真实入口本地证据](evidence/2026-09-20-maintenance-entry.md)、[D1 生命周期证据](evidence/2026-09-20-maintenance-d1-lifecycle.md)、[流/存储生命周期证据](evidence/2026-09-20-maintenance-stream-storage.md)、[控制面授权证据](evidence/2026-09-20-maintenance-control-auth.md)、[容量/人工退出证据](evidence/2026-09-20-maintenance-capacity-exit.md)、[合成故障矩阵证据](evidence/2026-09-20-maintenance-fault-matrix.md)、[R09 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)、[R09 操作人声明](evidence/2026-09-23-r09-operator-attestation.md)和[R10 远程只读探针证据](evidence/2026-09-24-r10-remote-read-probe.md)。前序 0051、备份可行性及备份工具不重复计入；旧测试记录见[迁移证据](../product/2026-09-17-calendar-reference-detach-evidence.md)、[备份工具证据](evidence/2026-09-18-d1-backup-tooling.md)、[协调器证据](evidence/2026-09-19-maintenance-coordinator.md)。
 
 **合并状态（2026-09-23）：** 用户授权将恢复分支 `7f7d3c6` 合入本地 `main`（合并前 `426e313`）。main 历史清单为 **8/25 完成、17 项剩余**，恢复分支原口径为 4/25；两者不相加、不相互覆盖。当前先完成合并候选验证与提交，再回到 R09；旧 R08 回归不证明本次候选。恢复分支 R05.1/R05.2 已提交，独立 HTTP 协议等 R05.3–R05.5 仍未执行，不能因 main 既有管理员 API 而视为自动完成。未 push、未部署、未读取 secrets 或执行生产操作。
+
+2026-09-24 最新范围决定：用户明确“无需备份 暂无重要数据”。R12 按用户豁免关闭，不是备份/恢复验证通过；本轮不执行 R17 真实备份及 R18 备份恢复演练，按序到达时登记豁免，不提前计为执行成功。取消备份不授权停写、迁移、清库、删除归档或关闭平台恢复功能。见[R12 最新豁免记录](evidence/2026-09-24-r12-backup-custody-preflight.md#10-最新决定无需备份)。
 
 ## 2. 执行规则
 
@@ -43,7 +45,7 @@
 - 本地实现、验证、commit、merge、push、部署、生产迁移、真实数据导出和验收分别记录；本次请求不合并这些授权。
 - 本地阶段使用合成数据；不读取本地 `SECRETS_FILE`，不输出凭证或备份正文。生产停写、迁移、恢复、测试业务写入各有独立授权。
 - `DRAINED` 仅表示已登记工作清零。全部署、Cron、旧版本、外部凭证写者均受控并有证据，才可记录生产 `FROZEN`。异常、失联、孤儿工作不得按超时直接清零。
-- R16–R20 默认是同一个获批的停写窗口。恢复演练不能在批准窗口内完成时停止迁移，并按批准的退出方案恢复服务；后续重新冻结并重新备份，不把旧备份称为新鲜备份。不得为完成清单无限延长停机。
+- R16–R20 默认是同一个获批的停写窗口。按本轮用户“不备份”决定，R17/R18 不执行，备份/恢复演练不再是窗口前置条件；其余冻结、准确批次批准及失败停止要求不变。若用户后续恢复备份要求，须重新批准保管与窗口，不复用历史备份证据。不得为完成清单无限延长停机。
 - 故障恢复是条件分支，不是必须执行的日常任务。迁移失败立即停止并检查账本/结构；禁止自动重跑、删除账本、改旧 SQL 或自动 Time Travel restore。是否恢复另行审批。
 
 ## 3. 当前恢复主线：25 项，严格顺序
@@ -64,17 +66,17 @@
 - [x] **R09 — 核实实际发布链和全部生产写者。** 2026-09-24 已通过自带浏览器的 Cloudflare Dashboard 确认 `mbpz/cf-computer-agent` 的 `main` 分支构建：Build `#738458bc`、commit `96ea03d6d85b1b5a1a3e9f0e0e1b4f4c0f2b3f6a`、构建命令 `npm run build`、部署命令 `npx wrangler deploy`；部署页显示生产版本 `1f613a4f` 为 100% 流量，前序 `ff4e0667`、`686168b3`、`34949fd7` 保留为旧版本责任记录；同时确认 `memory.crgmhrc.asia` 为自定义生产域名，workers.dev/Preview URL 关闭，D1/DO（含 MAINTENANCE）/Assets/AI/Cron 配置已盘点，Queue/Email 未配置；另有独立 `mbpz/edgetunnel` Worker 仅绑定 KV、无自定义域/路由且近 24 小时调用为 0，已排除其直接写入本项目 D1/DO。2026-09-24 用户以操作人声明确认 Automation、手工 Wrangler/D1、OAuth callback、Cron 和旧版本入口的责任、停写、恢复与回滚边界；详见[Dashboard 发布链证据](evidence/2026-09-22-r09-dashboard-evidence.md)、[写者责任账本](evidence/2026-09-22-r09-writer-ledger.md)、[责任预检](evidence/2026-09-23-r09-responsibility-preflight.md)和[操作人声明清单](evidence/2026-09-23-r09-operator-attestation.md)。
 - [x] **R10 — 完成远程合成只读传输验证。** 2026-09-24 已通过 Cloudflare Dashboard D1 控制台完成 `SELECT 1` 与 `PRAGMA table_list` 生产只读探针，本地正式工具 `rtk npm run test:ops:d1-backup` 在 listener 权限下 21/21 通过；用户确认采用“浏览器证据方案”，本检查点以 Dashboard 生产只读证据 + 本地 REST transport 回归作为验收边界，不创建或使用生产 API Token，不执行写入、迁移、导出或恢复。见[R10 远程只读探针证据](evidence/2026-09-24-r10-remote-read-probe.md)。`probe:ops:d1-read` 保留为后续需要正式 REST 端到端验证时的可选工具，不作为本次关闭门槛。
 - [x] **R11 — 补发布/schema 防漂移门禁。** 2026-09-24 已完成 51 条 migration hash、发布合同 34/34、配置 smoke 8/8，以及缺迁移/错库/旧 hash/异常新增的失败闭合断言；生产最近只读账本为 0001–0050、唯一 pending 为 `0051_calendar_reference_detach.sql`（SHA-256 `30b4c77fc4e3198a1c6937adc0d95ba0c8bf142e707d670f0b12a233db47058d`）；`1df36d4 → Build #40614a07 → 122fa777 → 100%` 及同次部署/生产 Settings binding 对齐证据齐备。用户明确同意按“防漂移检查与发布对齐证据齐备”关闭 R11；0051 未迁移，新鲜备份、冻结、隔离恢复和准确批次批准继续保留在 R15–R20，执行前刷新 ledger，不因关闭 R11 而授权生产操作。见[R11 证据与批准记录](evidence/2026-09-24-r11-schema-drift-preflight.md)。
-- [ ] **R12 — 确认备份保管与隔离恢复条件（当前）。** 已核对正式工具限制和隔离恢复机制，本轮本地合成回归 21/21 通过；Dashboard 只读容量概览显示 1.81 MB、75 张表，不等于归档逻辑行数/编码大小预算通过。用户最新要求“不加密”，停止加密磁盘映像方案，不修改本机已有磁盘加密；已获准创建仓库外普通父目录 `/Users/doug/Backups/memory-garden` 并核对 0700/所有者/非符号链接，本轮合成回归重新通过 21/21；仍需确认访问/保管责任、同步情况、独立副本与摘要、保留/清理、真实恢复临时区，以及真实来源规模预算和正式只读传输授权路线；不得读取或导出正文补证。见[R12 保管预检](evidence/2026-09-24-r12-backup-custody-preflight.md)。0700/0600 不是加密，临时目录不是长期备份；当前未执行真实 capture 或 restore-check。
-- [ ] **R13 — 批准并形成可追溯维护发布候选。** 分别明确提交、合并、推送及维护代码部署的允许范围；获准后执行相应步骤，记录精确候选、所需 binding/配置和回滚/退出策略。未经授权不操作远程仓库或发布。
+- [x] **R12 — 确认备份保管与隔离恢复条件（用户豁免关闭）。** 2026-09-24 用户明确“无需备份 暂无重要数据”，停止本轮备份及备份恢复演练；此前“不加密”与普通目录准备仅为历史记录。已说明没有本轮备份可用于恢复的风险，不据此保证无重要数据、可回滚或可恢复。不再要求备份目录、副本、保留策略、归档容量或备份专用 token；不删除已建目录、不导出数据、不自动执行迁移。见[R12 豁免记录](evidence/2026-09-24-r12-backup-custody-preflight.md#10-最新决定无需备份)。
+- [ ] **R13 — 批准并形成可追溯维护发布候选（当前）。** 分别明确提交、合并、推送及维护代码部署的允许范围；获准后执行相应步骤，记录精确候选、所需 binding/配置和回滚/退出策略。未经授权不操作远程仓库或发布。 本地候选预检见[R13 记录](evidence/2026-09-24-r13-candidate-preflight.md)；备份豁免不代替发布或生产变更批准。
 - [ ] **R14 — 授权部署维护能力并核实写者覆盖。** 2026-09-24 本轮只读核对确认当前 `1df36d4` 已由 Cloudflare CI 成功部署，当前 100% 版本为 `122fa777`（Build `#40614a07`），`MAINTENANCE` Durable Object binding 和管理员维护控制 API 已出现；但生产 secrets 仍未配置 `MAINTENANCE_CONTROL_TOKEN`，因此 guarded fetch/Cron 未启用，不能验证生产 `status/capacity/beginDrain/resume`。见[guarded 部署证据](evidence/2026-09-22-r14-guarded-deployment.md)和[R14 生产激活预检](evidence/2026-09-22-r14-production-activation-preflight.md)。仍需确认所有可写入口使用该控制机制、旧版本/其他写者按方案停止或隔离，并验证控制鉴权。仅部署代码并不等于已经冻结数据；验证过程仍在批准范围内。
-- [ ] **R15 — 批准实际停写/导出窗口并刷新预检。** 确认最长停机、终止条件、操作人、准确归档路径及保管策略；工具独占创建最终目录，禁止预建/覆盖。刷新 Worker/Git/binding、账本、migration hash 和容量；2026-09-17 的 32 条账本/19 个 pending 仅是历史快照。
+- [ ] **R15 — 批准实际停写/迁移窗口并刷新预检。** 确认最长停机、终止条件、操作人及无本轮备份的失败停止/退出方案；本轮不要求归档路径或导出窗口。刷新 Worker/Git/binding、账本、migration hash 和运行容量；2026-09-17 的 32 条账本/19 个 pending 仅是历史快照。
 
 ### C. 停写、备份、迁移与恢复服务（R16–R21，共 6 项）
 
 - [ ] **R16 — 实际冻结并排空所有写者。** 执行获批窗口，记录全写者拒绝新工作、在途/后台/Cron 排空及外部写入控制证据。存在孤儿、未确认错误或旧写者时停止，不能声明 `FROZEN`。
-- [ ] **R17 — 生成并校验真实独立备份。** 保持冻结，使用经验证工具导出；检查成功状态、非空字节数、摘要、schema/identity、UTC 时间和新鲜恢复 bookmark。两次扫描相等只是检查，不代替冻结；不能删 FTS 表绕过导出限制。
-- [ ] **R18 — 验证真实备份的受控隔离恢复。** 在批准的隔离环境恢复真实备份，核对表/索引/触发器/FTS 重建、类型/数据摘要、序列和完整性；不向生产恢复、不泄露正文。合成测试或“导出成功”不能替代此项。
-- [ ] **R19 — 单独批准准确生产迁移批次。** 复核备份新鲜度、冻结状态、pending、hash、失败停止和退出流程。只有新鲜账本仍匹配时才使用历史预期 0033–0051 共 19 个；差异必须停下重新审查，不假造 `--to` 或绕过迁移账本。
+- [ ] **R17 — 真实独立备份（本轮已获用户豁免，待按序登记）。** 用户“无需备份 暂无重要数据”，不执行导出、归档校验或副本创建；到达此步仅登记豁免及无备份风险，不能记录成备份成功。
+- [ ] **R18 — 真实备份隔离恢复（随本轮备份豁免，待按序登记）。** 本轮不创建备份，因此不执行真实备份恢复演练；到达此步登记不适用，不用合成测试冒充真实恢复成功。
+- [ ] **R19 — 单独批准准确生产迁移批次。** 复核本轮不备份决定仍有效、冻结状态、pending、hash、失败停止和退出流程；不再以备份新鲜度作为本轮前置，但不保证可恢复数据。只有新鲜账本仍匹配时才使用历史预期 0033–0051 共 19 个；差异必须停下重新审查，不假造 `--to` 或绕过迁移账本。
 - [ ] **R20 — 执行获批迁移并保存结果。** 执行前再次列出 pending；执行后记录每项结果。一旦失败停止，核对已成功前缀和结构；后续续跑/恢复重新批准，不自动抹除历史或重试。
 - [ ] **R21 — 结构/只读健康验收后按方案恢复服务。** 核对批准的完整账本、notifications 约束/索引、discussion 结构、tasks.status_version、calendar detach、FK 检查及通知/消息读取；证明运行的是批准候选。检查成功后按窗口规则恢复准入并核实健康；失败按已批准退出方案处理，不盲目开闸。
 
