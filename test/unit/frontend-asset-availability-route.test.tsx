@@ -19,12 +19,12 @@ describe("asset availability route", () => {
   }
   const panel = () => journey!.container.querySelector("[data-asset-availability]")!;
   const state = () => panel()?.getAttribute("data-asset-availability");
-  it.each([false, true])("shows configuration without prematurely enabling uploads: %s", async enabled => {
+  it.each([false, true])("enables the wired member upload only when storage is configured: %s", async enabled => {
     await open(async () => Response.json({ ...disabled, storageEnabled: enabled, reason: enabled ? null : disabled.reason }));
     await waitForApp(() => state() === "ready");
     expect(panel().textContent).toContain("1024");
-    expect(panel().textContent).toContain(enabled ? "not connected" : "not configured");
-    expect((panel().querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(true);
+    if (!enabled) expect(panel().textContent).toContain("not configured");
+    expect((panel().querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(!enabled);
     expect((journey!.container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
   });
   it("distinguishes loading and failure, retries only GET, and prevents duplicate retries", async () => {

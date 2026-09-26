@@ -38,6 +38,17 @@ afterEach(() => {
 });
 
 describe("M2 asset upload boundary", () => {
+  it("decodes explicitly encoded Unicode names while preserving legacy percent names", async () => {
+    for (const [name, encoded] of [["知识笔记.txt", true], ["literal%20.txt", false]] as const) {
+      const response = await memberApi("asset-owner", "/api/assets", { method: "POST", body: "hello", headers: { "content-type": "text/plain", "idempotency-key": `unicode-${encoded}`, "x-asset-name": encoded ? encodeURIComponent(name) : name, ...(encoded ? { "x-asset-name-encoding": "uri-component" } : {}) } });
+      expect(response.status).toBe(201); await expect(response.json()).resolves.toMatchObject({ asset: { originalName: name } });
+    }
+  });
+  it.each(["%broken", "%2Fetc%2Fpasswd.txt", "%00bad.txt"])("rejects malformed or unsafe encoded filename %s", async name => {
+    const response = await memberApi("asset-owner", "/api/assets", { method: "POST", body: "hello", headers: { "content-type": "text/plain", "idempotency-key": "unsafe-name", "x-asset-name": name, "x-asset-name-encoding": "uri-component" } });
+    expect(response.status).toBe(400);
+  });
+
   it("serves dashboard totals beyond the first page with exact scopes and admin-only access", async () => {
     const members = new MembersRepository(env.DB);
     for (let index = 0; index < 22; index += 1) {
@@ -207,6 +218,9 @@ describe("M2 asset upload boundary", () => {
       job: { status: "succeeded", attempts: 1, lastErrorCode: null },
     });
     await expect(testOriginals().get(`parsed/${uploaded.asset.id}.md`)).resolves.not.toBeNull();
+    const repeated = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`, { method: "POST" });
+    await expect(repeated.json()).resolves.toMatchObject({ job: { status: "succeeded", attempts: 1 } });
+    for (const suffix of ["", "/cancel", "/submit"]) await expectApiError(memberApi("asset-other", `/api/assets/${uploaded.asset.id}${suffix}`, { method: "POST" }), 404, "ASSET_NOT_FOUND");
   });
 
   it("atomically pairs a succeeded asset with its review submission", async () => {
@@ -314,6 +328,7 @@ describe("M2 asset upload boundary", () => {
 
     const cancelled = await memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/cancel`, { method: "POST" });
     expect(cancelled.status).toBe(204);
+    await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}/cancel`, { method: "POST" }), 404, "ASSET_NOT_FOUND");
     await expectApiError(memberApi("asset-owner", `/api/assets/${uploaded.asset.id}`), 404, "ASSET_NOT_FOUND");
     await expect(testOriginals().get(uploaded.asset.objectKey)).resolves.toBeNull();
     await expect(env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(uploaded.asset.id).first()).resolves.toBeNull();

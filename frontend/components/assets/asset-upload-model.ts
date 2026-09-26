@@ -1,7 +1,7 @@
 export type AssetUploadModel =
   | { kind: "disabled"; reason: "OBJECT_STORAGE_UNAVAILABLE" }
   | { kind: "idle" }
-  | { kind: "invalid"; reason: "NAME_REQUIRED" | "TOO_LARGE" | "TYPE_UNSUPPORTED" | "COUNT_EXCEEDED" };
+  | { kind: "invalid"; reason: "NAME_REQUIRED" | "TOO_LARGE" | "TYPE_UNSUPPORTED" | "COUNT_EXCEEDED" | "EMPTY" };
 
 export const ASSET_PICKER_ACCEPT = [
   ".pdf", ".docx", ".pptx", ".xlsx", ".csv", ".txt", ".md", ".html", ".xml", ".odt", ".ods",
@@ -42,10 +42,11 @@ export function assetUploadModel(input: {
   if (!files.length) return { kind: "idle" };
   if (files.length > (input.maxFiles ?? 1)) return { kind: "invalid", reason: "COUNT_EXCEEDED" };
   for (const file of files) {
-    if (typeof file.name !== "string" || !file.name.trim()) return { kind: "invalid", reason: "NAME_REQUIRED" };
+    if (typeof file.name !== "string" || !file.name.trim() || file.name.length > 200 || /[\/\\\u0000-\u001f\u007f]/u.test(file.name)) return { kind: "invalid", reason: "NAME_REQUIRED" };
+    if (file.size === 0) return { kind: "invalid", reason: "EMPTY" };
     const extension = `.${file.name.split(".").at(-1)?.toLowerCase() || ""}`;
     if (!acceptedExtensions.has(extension)) return { kind: "invalid", reason: "TYPE_UNSUPPORTED" };
-    if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > input.maxBytes) return { kind: "invalid", reason: "TOO_LARGE" };
+    if (typeof file.size !== "number" || !Number.isSafeInteger(file.size) || file.size < 0 || file.size > input.maxBytes) return { kind: "invalid", reason: "TOO_LARGE" };
   }
   return { kind: "idle" };
 }

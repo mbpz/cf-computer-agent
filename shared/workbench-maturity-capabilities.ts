@@ -62,6 +62,26 @@ export interface WorkbenchSourceSideEffectBinding {
 
 export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-submit", operation: "POST /api/assets", strategy: "idempotency_key",
+    source: {"path": "src/assets/service.ts", "symbol": "AssetService.create", "tokens": ["findByIdempotency", "if (replay) return replay"]},
+    tests: [{"path": "test/worker/m2-assets.test.ts", "tokens": ["replays an idempotent upload and hides another member's asset"]}],
+  },
+  {
+    capabilityId: "workbench-submit", operation: "POST /api/assets/:id", strategy: "conditional_write",
+    source: {"path": "src/assets/repository.ts", "symbol": "AssetsRepository.claimParseJob", "tokens": ["status IN ('queued', 'failed_retryable')", "result.meta.changes"]},
+    tests: [{"path": "test/worker/m2-assets.test.ts", "tokens": ["processes a text original and exposes the succeeded parse state", "attempts: 1"]}],
+  },
+  {
+    capabilityId: "workbench-submit", operation: "POST /api/assets/:id/cancel", strategy: "conditional_write",
+    source: {"path": "src/assets/repository.ts", "symbol": "AssetsRepository.cancelOwned", "tokens": ["owner_id = ?", "status IN ('queued', 'failed_retryable')", "meta.changes"]},
+    tests: [{"path": "test/worker/m2-assets.test.ts", "tokens": ["does not cancel an asset that is already processing or parsed", "ASSET_CANCEL_CONFLICT"]}],
+  },
+  {
+    capabilityId: "workbench-submit", operation: "POST /api/assets/:id/submit", strategy: "idempotency_key",
+    source: {"path": "src/routes/member.ts", "symbol": "routeMemberApi", "tokens": ["findByIdempotencyKey", "replay?.submission.assetId === assetId"]},
+    tests: [{"path": "test/worker/m2-assets.test.ts", "tokens": ["atomically pairs a succeeded asset with its review submission", "ASSET_ALREADY_SUBMITTED"]}],
+  },
+  {
     capabilityId: "workbench-submit",
     operation: "POST /api/submissions",
     strategy: "idempotency_key",
@@ -257,7 +277,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-submit", routeId: "submit", pathname: "/submit", requiredRole: "contributor",
     journey: "Submit knowledge for parsing and later review.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx", "frontend/components/assets/asset-availability-panel.tsx", "frontend/lib/asset-availability.ts"], backendEvidence: ["src/routes/member.ts", "src/assets/service.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-asset-availability.test.ts", "test/unit/frontend-asset-availability-route.test.tsx", "test/worker/m2-assets.test.ts"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Source-level persistence and submitter-scoped idempotency exist, but complete browser, release, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx", "frontend/components/assets/asset-availability-panel.tsx", "frontend/lib/asset-availability.ts", "frontend/components/assets/asset-upload-panel.tsx", "frontend/lib/asset-upload-workflow.ts", "frontend/lib/asset-upload-data.ts", "frontend/lib/asset-upload-intent.ts", "frontend/lib/asset-upload-transport.ts"], backendEvidence: ["src/routes/member.ts", "src/assets/service.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-asset-availability.test.ts", "test/unit/frontend-asset-availability-route.test.tsx", "test/unit/frontend-asset-workflow.test.ts", "test/unit/frontend-asset-transport.test.ts", "test/unit/frontend-asset-upload-route.test.tsx", "test/worker/m2-assets.test.ts"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Source-level persistence and submitter-scoped idempotency exist, but complete browser, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-knowledge", routeId: "knowledge", pathname: "/knowledge", requiredRole: "contributor",
@@ -439,12 +459,12 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-submit",
-    apiPaths: ["/api/submissions", "/api/assets/availability"],
-    persistencePaths: ["src/submissions/repository.ts", "migrations/0003_m1_knowledge_loop.sql"],
-    ownerPredicate: "routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.",
+    apiPaths: ["/api/submissions", "/api/assets/availability", "/api/assets", "/api/assets/resume", "/api/assets/:id", "/api/assets/:id/cancel", "/api/assets/:id/submit"],
+    persistencePaths: ["src/submissions/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "src/assets/repository.ts"],
+    ownerPredicate: "routeMemberApi derives authenticated member.memberId for submissions and assets; SubmissionsRepository scopes replay by submitter_id; AssetsRepository scopes asset reads and upload-key recovery by owner_id.",
     pagination: "not_applicable",
-    mutations: ["POST /api/submissions — proven: submitter-scoped Idempotency-Key replay"],
-    mutationSafety: "idempotency_key",
+    mutations: ["POST /api/submissions — proven: submitter-scoped Idempotency-Key replay", "POST /api/assets — proven: owner-scoped upload key replay; client verifies the persisted file hash", "POST /api/assets/:id — proven: conditional parse-job claim; not automatic retry", "POST /api/assets/:id/cancel — proven: owner-scoped conditional deletion; repeat may return 404, not convergent success", "POST /api/assets/:id/submit — proven: owned asset and persisted review-key replay"],
+    mutationSafety: "mixed",
   },
   {
     id: "workbench-knowledge",

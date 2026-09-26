@@ -52,3 +52,36 @@ rtk proxy npx vitest run test/unit/assets-service.test.ts test/unit/member-asset
 ### 下一步与计数
 
 B03 的配置核对及返回契约已本地关闭。本轮 29 个父项已完成 1、剩余 28；原 30 项中的 D08 仍独立保留为发布事项。本地下一步允许进入 B04/B05 上传接线；存储不可用时必须继续禁用，不为完成 checklist 开通收费资源。不需要备份或旧 R09 运维签认来继续本地功能。
+
+
+## B04/B05 — 附件上传、恢复、解析与提交审核（本地接线已完成）
+
+本段取代上文 B03 时点“所有状态禁用/尚未接线”的当前状态描述；上文保留为历史证据。范围仍为本地代码、测试、文档及提交，不部署、不迁移、不新增存储，不读取或上传 Secret 文件。
+
+### 实现与边界
+
+- 主提交入口在可用性接口确认已配置且成员身份存在时启用选择；未配置、读取失败或本地恢复存储不可用均保持禁用。文本投稿与附件投稿独立，附件动作不清空文本草稿。
+- 单文件数量、大小、扩展名、空文件、不安全/超长文件名校验；中文文件名用带明确 encoding 标记的 URI 编码头传输，后端兼容旧头并拒绝错误编码，不把字面 `%20` 自动解码。
+- 原生 XHR upload 事件报告字节进度。100% 仅表示字节传输，不表示后端接受或解析成功；响应丢失与停止本地传输进入未知态，保留恢复意图。
+- 意图按 memberId 隔离，仅存元数据/SHA256/稳定键和首次审核标题，不存文件内容。显式恢复先 GET；仅确认为 ASSET_NOT_FOUND 且重新选中同一文件时才原键重传。其他权限/网络/协议错误不自动 POST；双击互斥、卸载取消、忽略旧成员迟到响应。跨标签变更检测并非跨标签原子锁。
+- 解析、取消、提交审核均先回读。queued/failed_retryable 可解析或取消；processing/succeeded 不误报取消成功。解析状态由用户手动刷新，不自动轮询。终态失败仅可解除本地追踪，服务端附件保留。
+- 解析 succeeded 后使用现有提交审核接口；先持久化审核键及标题，丢响应重试使用原载荷，不因编辑标题产生第二次投稿。默认空间/共享审核语义沿用现有接口，未增加发布权限。
+- 后端上传是 owner/key 重放，不能宣称严格文件内容重放校验；客户端核对回读 hash。解析与取消依据条件更新，不把取消重复 404 描述为收敛成功。源代码证据与成熟度 manifest 已登记新增操作和 owner 谓词。
+
+### RED → GREEN 与验证
+
+- 实现前：workflow/transport 模块缺失，入口仍禁用，编码文件名处理不符合契约；新增用例 RED。空文件/不安全文件名与跨标签恢复记录变更用例另有 4 failed / 13 passed；解除终态本地追踪先出现 missing function 失败，之后实现通过。
+- 最终定向回归：13 files / 378 tests passed，包含既有服务/availability/投稿/成熟度入口，以及新增 workflow 19、transport 5、App route 3 和 Worker 附件新增 4 用例。
+
+```sh
+rtk proxy npx vitest run test/unit/assets-service.test.ts test/unit/member-asset-availability.test.ts test/unit/frontend-asset-availability.test.ts test/unit/frontend-asset-availability-route.test.tsx test/unit/frontend-asset-dropzone.test.tsx test/unit/frontend-submit-owner-route.test.tsx test/unit/frontend-submit-pages.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/worker/m2-assets.test.ts test/worker/submissions.test.ts test/unit/frontend-asset-workflow.test.ts test/unit/frontend-asset-transport.test.ts test/unit/frontend-asset-upload-route.test.tsx
+```
+
+- `npm run typecheck`、`npm run build:ui`、`npm run verify:i18n`、`npm run test:i18n`（13 tests）通过；既有大 chunk 警告保留。
+- 首次成熟度检查因改写未关闭 gap 的文字导致指纹漂移，2 tests 失败；保留原 gap/负责人及验收边界，只扩展实现证据，未放宽契约或消除验收 gap。
+- owner 证据描述补回 authenticated 限定，并重新生成当前快照。最终 `verify:workbench-maturity` 13 tests、`audit:workbench-domain`、`verify:delivery-status` 30 tests、`node --test scripts/workbench-domain-audit.test.mjs` 26 tests 及 `git diff --check` 全部通过。
+- 真实 App 组件与 Response/XHR 模拟、隔离本地 Worker/D1/R2 测试不等于原生浏览器网络、实际移动设备或生产验收。未执行全仓测试或 Secret 同步脚本。
+
+### 当前进度
+
+本轮仍为 29 个父项：整体完成 1（B03），待整体关闭 28；B04/B05 实现和自动化子项已勾选，原生浏览器/双账号/键盘触控验收保持待验，不提前关闭父项。D08 不在本轮本地范围。没有代码实现阻塞；后续允许补本地浏览器验收或继续 B06 既有审核/发布闭环核对，不需要备份、收费存储或旧运维签认。

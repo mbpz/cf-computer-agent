@@ -13,8 +13,8 @@ import type { SimilarSubmissionCandidate } from "../lib/submission-data";
 type SubmissionState = { kind: "idle" | "pending" } | { kind: "validation" | "error"; message: string } | { kind: "success"; message: string; similarCandidates?: readonly SimilarSubmissionCandidate[] };
 type Recovery = { title?: string; storageUnavailable: boolean; invalid: boolean; onRetry: () => void };
 
-export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, recovery }: {
-  draft: SubmissionDraft; state: SubmissionState; locale?: LocaleRuntime;
+export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, recovery, memberId }: {
+  memberId?: string; draft: SubmissionDraft; state: SubmissionState; locale?: LocaleRuntime;
   onSubmit?: (draft: SubmissionDraft) => void; onDraftChange?: (draft: SubmissionDraft) => void; recovery?: Recovery;
 }) {
   const pending = state.kind === "pending";
@@ -39,7 +39,7 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
           <option value="text">{frontendText(locale, "SUBMIT_CONTENT_LABEL")}</option><option value="markdown">{frontendText(locale, "SUBMIT_MARKDOWN_LABEL")}</option><option value="code">{frontendText(locale, "SUBMIT_CODE_LABEL")}</option>
         </select></div>
         <div><Label htmlFor="submission-content">{frontendText(locale, draft.mode === "code" ? "SUBMIT_CODE_LABEL" : draft.mode === "markdown" ? "SUBMIT_MARKDOWN_LABEL" : "SUBMIT_CONTENT_LABEL")}</Label><Textarea id="submission-content" value={draft.content} onChange={(event) => onDraftChange?.({ ...draft, content: event.currentTarget.value })} className="min-h-64 font-mono" /></div>
-        <AssetAvailabilityPanel locale={locale} />
+        <AssetAvailabilityPanel locale={locale} memberId={memberId} title={draft.title} />
         <Button type="submit" disabled={pending || unresolved || recovery?.invalid}>{frontendText(locale, pending ? "SUBMIT_BUTTON_PENDING" : "SUBMIT_BUTTON")}</Button>
       </CardContent></Card>
     </form>

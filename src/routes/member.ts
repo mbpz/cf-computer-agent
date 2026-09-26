@@ -69,7 +69,13 @@ export async function routeMemberApi(
     // before reporting that paid object storage is unavailable.
     services.assets.assertStorageEnabled();
     const idempotencyKey = request.headers.get("idempotency-key") || "";
-    const originalName = request.headers.get("x-asset-name") || "";
+    let originalName = request.headers.get("x-asset-name") || "";
+    const nameEncoding = request.headers.get("x-asset-name-encoding");
+    if (nameEncoding !== null) {
+      if (nameEncoding !== "uri-component") throw new AppError("ASSET_NAME_INVALID", "Asset name encoding is invalid", 400);
+      try { originalName = decodeURIComponent(originalName); }
+      catch { throw new AppError("ASSET_NAME_INVALID", "Asset name encoding is invalid", 400); }
+    }
     const contentType = request.headers.get("content-type") || "";
     const bytes = await readBoundedBodyBytes(request, APP_CONFIG.maxAssetBytes, "ASSET_TOO_LARGE", "Asset exceeds the upload limit");
     const result = await services.assets.create({

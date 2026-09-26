@@ -791,7 +791,7 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
     }
   };
   useEffect(() => { saveOfflineSubmissionDraft(memberId, draft); }, [memberId, draft]);
-  return <SubmitPage locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} />;
+  return <SubmitPage memberId={memberId} locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} />;
 }
 
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
