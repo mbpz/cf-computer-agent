@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadReviewDetail, normalizeReviewPreview, submitReviewDecision, prepareReviewDecision, sendReviewDecision } from "../../frontend/components/review/review-detail-data";
 
 const publish = { title: "Cloudflare guide", visibility: "shared" as const, spaceId: "space-1", collectionId: null, tagIds: [] };
@@ -17,6 +17,19 @@ function preview() {
 }
 
 describe("review detail data boundary", () => {
+  it.each([
+    { path: "/api/admin/members" },
+    { path: "https://external.invalid/capture" },
+    { id: "sub-other" },
+    { id: "../sub-1" },
+    { action: "publish" as const },
+  ])("rejects an inconsistent replay target before any request (%j)", async (change) => {
+    const operation = prepareReviewDecision("sub-1", "reject", publish);
+    const requester = vi.fn(async () => json({ decision: { submissionId: "sub-1", decision: "rejected" } }));
+    await expect(sendReviewDecision({ ...operation, ...change }, requester)).rejects.toThrow("REVIEW_OPERATION_INVALID");
+    expect(requester).not.toHaveBeenCalled();
+  });
+
   it("normalizes preview data and preserves the server-approved publish target", () => {
     const result = normalizeReviewPreview(preview());
     expect(result).toMatchObject({

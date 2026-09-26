@@ -12,7 +12,7 @@ import {
 } from "./workbench-domain-audit.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md");
+const evidencePath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md");
 
 function withRepositoryProbe(relativePath, transform, assertion) {
   const probeRoot = mkdtempSync(resolve(tmpdir(), "workbench-domain-audit-"));
@@ -31,10 +31,46 @@ function withRepositoryProbe(relativePath, transform, assertion) {
     rmSync(probeRoot, { recursive: true, force: true });
   }
 }
+test("review replay targets resolve to three bounded decisions alongside detail comments", () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  for (const capability of ["workbench-admin-submissions", "workbench-admin-submission-detail"]) {
+    assert.deepEqual(Object.keys(facts.mutations[capability]).sort(), [
+      ...(capability === "workbench-admin-submission-detail" ? ["POST /api/admin/submissions/:id/comments"] : []),
+      "POST /api/admin/submissions/:id/publish",
+      "POST /api/admin/submissions/:id/reject",
+      "POST /api/admin/submissions/:id/request-revision",
+    ]);
+  }
+});
+
+test("review path analysis rejects mutable, opaque, cyclic and shadowed aliases", () => {
+  const probes = [
+    (source) => source.replace('const path = operation.action', 'let path = operation.action'),
+    (source) => source.replace('apiFetch<unknown>(path, {', 'apiFetch<unknown>(operation.path, {'),
+    (source) => source.replace('const path = operation.action', 'const path = alias; const alias = operation.action'),
+    (source) => source.replace('const path = operation.action', 'const path = alias; const alias = path; const unused = operation.action'),
+    (source) => source.replace('  const payload = await apiFetch', '  { const path = operation.path; const payload = await apiFetch')
+      .replace('  const record = asRecord(payload);', '  } const payload = null; const record = asRecord(payload);'),
+  ];
+  for (const transform of probes) {
+    withRepositoryProbe("frontend/components/review/review-detail-data.ts", transform, (probeRoot) => {
+      assert.throws(() => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }), /unsupported frontend mutation invocation/u);
+    });
+  }
+});
+
+test("review path analysis discovers an undeclared conditional endpoint", () => {
+  withRepositoryProbe("frontend/components/review/review-detail-data.ts", (source) => source.replace(
+    '/${encodeURIComponent(operation.id)}/publish`', '/${encodeURIComponent(operation.id)}/destroy`',
+  ), (probeRoot) => {
+    assert.throws(() => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }), /unknown API evidence|mutation inventory/u);
+  });
+});
+
 test("every maturity capability has one conservative domain audit record", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
-  assert.equal(audit.length, 32);
-  assert.equal(new Set(audit.map((record) => record.id)).size, 32);
+  assert.equal(audit.length, 33);
+  assert.equal(new Set(audit.map((record) => record.id)).size, 33);
 
   for (const record of audit) {
     for (const path of [
@@ -67,7 +103,7 @@ test("D02-R1 preserves D01-B2, D01-B1, D01-A, M02 and R0 snapshots without backd
   const historical = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-08-31-workbench-r0-domain-audit.md"), "utf8");
   const m02 = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-m02-domain-audit.md"), "utf8");
   const d01a = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md"), "utf8");
-  const current = readFileSync(evidencePath, "utf8");
+  const current = readFileSync(resolve(repositoryRoot, "docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md"), "utf8");
   assert.equal(historical.split("\n").filter((line) => line.startsWith("| workbench-")).length, 24);
   assert.equal(current.split("\n").filter((line) => line.startsWith("| workbench-")).length, 32);
   assert.match(historical, /^# Workbench R0 Domain Audit\n/u);
@@ -374,7 +410,7 @@ test("Markdown rendering is deterministic and follows maturity route order", asy
   const first = renderWorkbenchDomainAudit(audit);
   const second = renderWorkbenchDomainAudit([...audit].reverse());
   assert.equal(first, second);
-  assert.match(first, /^# Workbench D02-R1 Domain Audit — 2026-09-16\n/u);
+  assert.match(first, /^# Workbench Functional Domain Audit — 2026-09-26\n/u);
   assert.match(first, /\| Capability \| Route \| API and pagination \| Persistence \| Owner predicate \| Mutation safety \| Test evidence \| Classification \| Gaps \|/u);
   assert.match(first, /\/api\/knowledge\/recent \(cursor\)/u);
   assert.ok(first.indexOf("workbench-home") < first.indexOf("workbench-submit"));

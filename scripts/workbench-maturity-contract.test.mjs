@@ -31,7 +31,7 @@ const appRoutesPath = resolve(repositoryRoot, "frontend/app-routes.ts");
 const maturityCapabilitiesPath = resolve(repositoryRoot, "shared/workbench-maturity-capabilities.ts");
 const maturityChecklistPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-checklist.md");
 const maturityGapMatrixPath = resolve(repositoryRoot, "docs/product/workbench-product-maturity-gap-matrix.md");
-const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md");
+const domainAuditPath = resolve(repositoryRoot, "docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md");
 const deliveryLedgerPath = resolve(repositoryRoot, "docs/product/delivery-status-ledger.md");
 const roadmapPath = resolve(repositoryRoot, "ROADMAP.md");
 const classifications = new Set(["usable", "partial", "unusable", "pseudo_entry", "unreachable"]);
@@ -134,6 +134,9 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-submission-detail": { source: "manifest:0@ec730e821f69", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。", owner: "R6-003" },
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
+  "workbench-graph|POST /api/tasks": {"slug": "create-task", "symptom": "图谱创建任务缺少完整动作重放与响应丢失收敛证明。", "owner": "R8-005"},
+  "workbench-graph|POST /api/focus": {"slug": "start-focus", "symptom": "图谱启动专注缺少完整动作重放与并发收敛证明。", "owner": "R8-005"},
+  "workbench-graph|POST /api/projects/:id/timeline": {"slug": "create-timeline-item", "symptom": "图谱创建时间线项缺少完整动作重放与重复结果抑制证明。", "owner": "R8-005"},
   "workbench-project-timeline|POST /api/projects/:id/timeline": {"slug":"create-timeline-item","symptom":"时间线创建缺少前端稳定意图键和断线重试去重证明。","owner":"R4-037"},
   "workbench-project-timeline|POST /api/projects/:id/timeline/:id/status": {"slug":"transition-timeline-status","symptom":"时间线状态变更缺少预期版本条件及并发重放收敛证明。","owner":"R4-038"},
   "workbench-inbox|POST /api/inbox": {"slug":"create-inbox","symptom":"收集创建的前端逻辑意图没有稳定客户端键，响应丢失重试可能重复写入。","owner":"R4-020"},

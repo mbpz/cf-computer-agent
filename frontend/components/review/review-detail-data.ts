@@ -84,7 +84,16 @@ export function prepareReviewDecision(id: string, action: ReviewDecision, publis
 }
 
 export async function sendReviewDecision(operation: ReviewOperation, requester: Fetcher = fetch): Promise<ReviewReceipt> {
-  const payload = await apiFetch<unknown>(operation.path, {
+  if (!/^[A-Za-z0-9_-]+$/u.test(operation.id)
+    || !["publish", "reject", "request_changes"].includes(operation.action)) throw new Error("REVIEW_OPERATION_INVALID");
+  // Reconstruct only the supported targets; a replay must match its saved intent.
+  const path = operation.action === "publish"
+    ? `/api/admin/submissions/${encodeURIComponent(operation.id)}/publish`
+    : operation.action === "reject"
+      ? `/api/admin/submissions/${encodeURIComponent(operation.id)}/reject`
+      : `/api/admin/submissions/${encodeURIComponent(operation.id)}/request-revision`;
+  if (path !== operation.path) throw new Error("REVIEW_OPERATION_INVALID");
+  const payload = await apiFetch<unknown>(path, {
     requester, method: "POST", headers: { "content-type": "application/json" }, body: operation.body,
   });
   const record = asRecord(payload);

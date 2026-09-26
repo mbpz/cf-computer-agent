@@ -8,6 +8,7 @@ import {
   isAsExpression,
   isCallExpression,
   isClassDeclaration,
+  isConditionalExpression,
   isFunctionDeclaration,
   isIdentifier,
   isIfStatement,
@@ -21,9 +22,10 @@ import {
   isSpreadAssignment,
   isStringLiteral,
   isVariableDeclaration,
+  isVariableStatement,
 } from "typescript/unstable/ast/is";
 
-const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-09-16-workbench-d02r1-domain-audit.md";
+const DEFAULT_EVIDENCE_PATH = "docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md";
 const DOMAIN_KEYS = new Set(["id", "apiPaths", "persistencePaths", "ownerPredicate", "pagination", "mutations", "mutationSafety"]);
 const FRONTEND_INDEX_CACHE = new Map();
 const ROUTE_EVIDENCE_CACHE = new Map();
@@ -345,6 +347,18 @@ function frontendScope(node, source) {
   const unsupportedMutations = [];
   const invokedImports = new Set();
   const scopeText = node.getText(source);
+  // Only direct const bindings in the owning function are eligible. Do not
+  // resolve closures, inner blocks, mutable bindings or opaque object fields.
+  const pathBindings = new Map();
+  for (const statement of node.body?.statements ?? []) {
+    if (!isVariableStatement(statement)) continue;
+    const immutable = /^const\b/u.test(statement.declarationList.getText(source));
+    for (const declaration of statement.declarationList.declarations) {
+      if (!isIdentifier(declaration.name)) continue;
+      const name = declaration.name.text;
+      pathBindings.set(name, immutable && !pathBindings.has(name) ? declaration.initializer : null);
+    }
+  }
   // Expand only a finite literal union declared on this function's parameter.
   // Unbounded/dynamic segments still fail source-route validation.
   const parameterValues = new Map();
@@ -355,7 +369,9 @@ function frontendScope(node, source) {
     }
   }
   for (const match of scopeText.matchAll(/<([A-Z][A-Za-z0-9_$]*)\b/gu)) invokedImports.add(match[1]);
-  const visit = (child) => {
+  const visit = (child, bindings = pathBindings) => {
+    // A block/function may shadow any outer name; deliberately fail closed.
+    if (child !== node && child !== node.body && (child.statements || child.parameters)) bindings = new Map();
     if (isCallExpression(child)) {
       const expression = child.expression.getText(source);
       if (expression === "apiFetch") {
@@ -366,14 +382,14 @@ function frontendScope(node, source) {
           unsupportedMutations.push(options?.getText(source) ?? "<missing options>");
           return;
         }
-        const paths = frontendCallPaths(argument, scopeText, parameterValues);
+        const paths = frontendExpressionPaths(child.arguments[0], source, scopeText, parameterValues, bindings);
         for (const path of paths) calls.push({ path, method });
         if (method !== "GET" && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
       } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(expression)) {
         invokedImports.add(expression);
       }
     }
-    child.forEachChild(visit);
+    child.forEachChild((nested) => visit(nested, bindings));
   };
   visit(node);
   return { calls, invokedImports, unsupportedMutations };
@@ -397,6 +413,21 @@ function frontendCallMethod(options) {
     method = value.text;
   }
   return method;
+}
+
+function frontendExpressionPaths(node, source, scopeText, parameterValues, bindings, depth = 0) {
+  if (!node || depth > 16) return [];
+  const expression = unwrapExpression(node);
+  if (isIdentifier(expression)) {
+    // One explicit const initializer only; chains/cycles are not source proof.
+    return frontendExpressionPaths(bindings.get(expression.text), source, scopeText, parameterValues, new Map(), depth + 1);
+  }
+  if (isConditionalExpression(expression)) {
+    const yes = frontendExpressionPaths(expression.whenTrue, source, scopeText, parameterValues, new Map(), depth + 1);
+    const no = frontendExpressionPaths(expression.whenFalse, source, scopeText, parameterValues, new Map(), depth + 1);
+    return yes.length && no.length ? [...new Set([...yes, ...no])] : [];
+  }
+  return frontendCallPaths(expression.getText(source), scopeText, parameterValues);
 }
 
 function frontendCallPaths(text, scopeText, parameterValues) {
@@ -645,9 +676,9 @@ export function renderWorkbenchDomainAudit(records) {
     listCell(record.gaps),
   ].map(markdownCell).join(" | "));
   return [
-    "# Workbench D02-R1 Domain Audit — 2026-09-16",
+    "# Workbench Functional Domain Audit — 2026-09-26",
     "",
-    "Current 32-capability reconciliation after D02-R1; the D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
+    "Current 33-capability reconciliation including graph and bounded review replay targets; the D02-R1, D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
     "",
     "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",
