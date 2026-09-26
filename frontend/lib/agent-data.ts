@@ -200,3 +200,28 @@ export async function submitAgentFeedback(conversationId: string, rating: AgentF
   const receipt = data?.feedback;
   if (!receipt || receipt.conversationId !== conversationId || receipt.rating !== rating || !Array.isArray(receipt.citationIds) || receipt.citationIds.length !== citationIds.length || receipt.citationIds.some((id, index) => id !== citationIds[index])) return invalidConversation();
 }
+
+
+export interface AgentConversationList {
+  items: Array<{ id: string; createdAt: string }>;
+  nextCursor?: string;
+}
+
+export async function loadAgentConversations({ cursor, requester = fetch, signal }: { cursor?: string; requester?: Fetcher; signal?: AbortSignal } = {}): Promise<AgentConversationList> {
+  const validCursor = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{1,512}$/u.test(value);
+  if (cursor !== undefined && !validCursor(cursor)) return invalidConversation();
+  const params = new URLSearchParams({ limit: "20" });
+  if (cursor !== undefined) params.set("cursor", cursor);
+  const data = await apiFetch<unknown>(`/api/knowledge/chat/conversations?${params}`, { method: "GET", requester, signal });
+  if (!data || typeof data !== "object") return invalidConversation();
+  const record = data as Record<string, unknown>;
+  if (!Array.isArray(record.items) || record.items.length > 20 || (record.nextCursor !== undefined && (!validCursor(record.nextCursor) || record.nextCursor === cursor || !record.items.length))) return invalidConversation();
+  const seen = new Set<string>();
+  const items = record.items.map((value) => {
+    if (!value || typeof value !== "object" || typeof value.id !== "string" || !resourceId.test(value.id) || seen.has(value.id)
+      || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) || new Date(value.createdAt).toISOString() !== value.createdAt) return invalidConversation();
+    seen.add(value.id);
+    return { id: value.id, createdAt: value.createdAt };
+  });
+  return { items, ...(record.nextCursor === undefined ? {} : { nextCursor: record.nextCursor as string }) };
+}

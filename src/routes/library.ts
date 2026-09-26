@@ -174,6 +174,12 @@ export async function routeLibraryApi(
     return methodNotAllowed("GET, PUT", context);
   }
 
+  if (url.pathname === "/api/knowledge/chat/conversations") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    const query = queryRecord(url, ["limit", "cursor"]);
+    return jsonResponse(await services.chatConversations.list(scope, parsePageRequest(query.limit === undefined ? undefined : Number(query.limit), query.cursor)), 200, context.requestId);
+  }
+
   const conversationRead = /^\/api\/knowledge\/chat\/conversations\/([^/]+)$/.exec(url.pathname);
   if (conversationRead) {
     if (request.method !== "GET") return methodNotAllowed("GET", context);

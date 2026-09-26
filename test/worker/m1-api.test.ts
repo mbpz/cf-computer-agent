@@ -249,6 +249,27 @@ describe("M1 API authorization and request boundaries", () => {
     expect(fakeAiCalls).toBe(calls);
   });
 
+  it("lists only owned conversation identifiers with stable creation cursors", async () => {
+    const createdAt = "2026-09-26T00:00:00.000Z";
+    for (const [id, owner] of [["list-a", "member-contributor"], ["list-b", "member-contributor"], ["list-c", "member-contributor"], ["list-private", "member-admin"]]) {
+      await env.DB.prepare("INSERT INTO chat_conversations (id, owner_member_id, scope_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(id, owner, '{"kind":"all"}', createdAt, createdAt).run();
+    }
+    const first = await memberApi("contributor", "/api/knowledge/chat/conversations?limit=2");
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toContain("no-store");
+    const page = await first.json<{ items: { id: string; createdAt: string }[]; nextCursor: string }>();
+    expect(page.items).toEqual([{ id: "list-c", createdAt }, { id: "list-b", createdAt }]);
+    expect(page.nextCursor).toBeTruthy();
+    await env.DB.prepare("UPDATE chat_conversations SET updated_at = ? WHERE id = ?").bind("2026-10-01T00:00:00.000Z", "list-a").run();
+    const second = await memberApi("contributor", `/api/knowledge/chat/conversations?limit=2&cursor=${page.nextCursor}`);
+    expect(await second.json()).toEqual({ items: [{ id: "list-a", createdAt }] });
+    expect((await memberApi("admin", `/api/knowledge/chat/conversations?cursor=${page.nextCursor}`)).status).toBe(400);
+    for (const query of ["limit=0", "limit=51", "limit=1&limit=2", "cursor=invalid", "ownerMemberId=member-admin"]) {
+      expect((await memberApi("contributor", `/api/knowledge/chat/conversations?${query}`)).status).toBe(400);
+    }
+    expect((await memberApi("contributor", "/api/knowledge/chat/conversations", { method: "POST", body: "{}" })).status).toBe(405);
+  });
+
   it("persists a bounded owner-scoped chat history and rejects scope widening", async () => {
     const published = await publishSubmission("admin", "Chat history", "conversationmarker is documented", "shared", "chat-history-key01");
     const first = await memberApi("contributor", "/api/knowledge/chat", {

@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { decodeOpaqueCursor, encodeOpaqueCursor, deriveCursorScopeKey, parsePageRequest, type Page, type PageRequest } from "../pagination";
 import type { ChatScope, LibraryScope } from "../library/types";
 
 export interface ChatConversation {
@@ -15,7 +16,10 @@ export interface ChatHistoryMessage {
   citationIds: string[];
 }
 
+export type ChatConversationSummary = Pick<ChatConversation, "id" | "createdAt">;
+
 export interface ChatConversationRepository {
+  list(ownerMemberId: string, limit: number, before?: ChatConversationSummary): Promise<ChatConversationSummary[]>;
   create(input: { id: string; ownerMemberId: string; scope: ChatScope; now: string }): Promise<ChatConversation>;
   find(ownerMemberId: string, id: string): Promise<ChatConversation | null>;
   updateScope(ownerMemberId: string, conversationId: string, scope: ChatScope, now: string): Promise<ChatConversation | null>;
@@ -53,6 +57,25 @@ export class ChatConversationService {
       throw new AppError("CHAT_CONVERSATION_SCOPE_MISMATCH", "Chat conversation scope cannot be changed", 409);
     }
     return conversation;
+  }
+
+  async list(scope: LibraryScope, request: Partial<PageRequest> = {}): Promise<Page<ChatConversationSummary>> {
+    const page = parsePageRequest(request.limit, request.cursor);
+    const scopeKey = await deriveCursorScopeKey("chat-conversations-created", { memberId: scope.memberId });
+    let before: ChatConversationSummary | undefined;
+    if (page.cursor !== undefined) {
+      const decoded = decodeOpaqueCursor(page.cursor) as Record<string, unknown> | null;
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded) || Object.keys(decoded).length !== 4
+        || decoded.v !== 1 || decoded.scopeKey !== scopeKey || typeof decoded.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(decoded.id)
+        || typeof decoded.createdAt !== "string" || !Number.isFinite(Date.parse(decoded.createdAt)) || new Date(decoded.createdAt).toISOString() !== decoded.createdAt) {
+        throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
+      }
+      before = { id: decoded.id, createdAt: decoded.createdAt };
+    }
+    const rows = await this.repository.list(scope.memberId, page.limit + 1, before);
+    const items = rows.slice(0, page.limit);
+    const last = items.at(-1);
+    return { items, ...(rows.length > page.limit && last ? { nextCursor: encodeOpaqueCursor({ v: 1, scopeKey, ...last }) } : {}) };
   }
 
   async read(scope: LibraryScope, conversationId: string): Promise<{ conversation: Pick<ChatConversation, "id" | "scope">; messages: ChatHistoryMessage[] }> {

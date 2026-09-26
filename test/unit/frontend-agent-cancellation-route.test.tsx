@@ -159,6 +159,39 @@ describe("agent request cancellation route", () => {
     expect(container.textContent).not.toContain("Feedback saved");
   });
 
+  it("opens history explicitly, pages and retries the same read without asking", async () => {
+    const urls: string[] = []; let fail = true;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input)); expect(init?.method).toBe("GET");
+      if (String(input).includes("cursor=")) {
+        if (fail) return new Response(null, { status: 503 });
+        return Response.json({ items: [{ id: "older", createdAt: "2026-09-25T00:00:00.000Z" }] });
+      }
+      return Response.json({ items: [{ id: "newer", createdAt: "2026-09-26T00:00:00.000Z" }], nextCursor: "opaque_123" });
+    });
+    await render(); expect(urls).toEqual([]);
+    await click("Conversation history");
+    expect(container.querySelector('a[href="/agent?conversationId=newer"]')).not.toBeNull();
+    await click("Older conversations");
+    expect(container.querySelector('a[href="/agent?conversationId=newer"]')).toBeNull();
+    expect(container.textContent).toContain("Conversation history could not be loaded");
+    fail = false; await click("Retry history");
+    expect(urls.at(-1)).toBe(urls.at(-2));
+    expect(container.querySelector('a[href="/agent?conversationId=older"]')).not.toBeNull();
+    await click("Newer conversations");
+    expect(container.querySelector('a[href="/agent?conversationId=newer"]')).not.toBeNull();
+  });
+
+  it("ignores a late conversation list after route replacement", async () => {
+    const late = deferred<Response>(); let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", (_input: RequestInfo | URL, init?: RequestInit) => { signal = init?.signal ?? undefined; return late.promise; });
+    await render(); await click("Conversation history");
+    await act(async () => root.render(<AgentRoute locale={language} search="?scope=space&spaceId=other" />));
+    expect(signal?.aborted).toBe(true);
+    await act(async () => late.resolve(Response.json({ items: [{ id: "old-private-list", createdAt: "2026-09-26T00:00:00.000Z" }] }))); await flush();
+    expect(container.textContent).not.toContain("old-private-list");
+  });
+
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }
   async function question(value: string) {
     const input = container.querySelector<HTMLInputElement>("#agent-question")!;

@@ -1,6 +1,6 @@
 import { AppError } from "../http";
 import type { ChatScope } from "../library/types";
-import type { ChatConversation, ChatConversationRepository, ChatHistoryMessage } from "./conversation-service";
+import type { ChatConversationSummary, ChatConversation, ChatConversationRepository, ChatHistoryMessage } from "./conversation-service";
 
 type ConversationRow = { id: string; owner_member_id: string; scope_json: string; created_at: string; updated_at: string };
 type MessageRow = { role: "user" | "assistant"; question: string; answer: string; citation_ids_json: string };
@@ -13,6 +13,14 @@ export class ChatRepository implements ChatConversationRepository {
       "INSERT INTO chat_conversations (id, owner_member_id, scope_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
     ).bind(input.id, input.ownerMemberId, JSON.stringify(input.scope), input.now, input.now).run();
     return { id: input.id, ownerMemberId: input.ownerMemberId, scope: input.scope, createdAt: input.now, updatedAt: input.now };
+  }
+
+  async list(ownerMemberId: string, limit: number, before?: ChatConversationSummary): Promise<ChatConversationSummary[]> {
+    // Creation time is immutable: new answers cannot move an entry across page boundaries.
+    const predicate = before ? " AND (created_at < ? OR (created_at = ? AND id < ?))" : "";
+    const args = before ? [ownerMemberId, before.createdAt, before.createdAt, before.id, limit] : [ownerMemberId, limit];
+    const rows = await this.db.prepare(`SELECT id, created_at FROM chat_conversations WHERE owner_member_id = ?${predicate} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...args).all<{ id: string; created_at: string }>();
+    return rows.results.map((row) => ({ id: row.id, createdAt: row.created_at }));
   }
 
   async find(ownerMemberId: string, id: string): Promise<ChatConversation | null> {

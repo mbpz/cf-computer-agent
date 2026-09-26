@@ -9,6 +9,10 @@ class FakeRepository implements ChatConversationRepository {
   conversations = new Map<string, { id: string; ownerMemberId: string; scope: ChatScope; createdAt: string; updatedAt: string }>();
   messages: Array<{ conversationId: string; question: string; answer: string; citationIds: string[]; now: string }> = [];
 
+  async list(ownerMemberId: string, limit: number, before?: { id: string; createdAt: string }) {
+    return [...this.conversations.values()].filter((row) => row.ownerMemberId === ownerMemberId && (!before || row.createdAt < before.createdAt || (row.createdAt === before.createdAt && row.id < before.id)))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).slice(0, limit).map(({ id, createdAt }) => ({ id, createdAt }));
+  }
   async create(input: { id: string; ownerMemberId: string; scope: ChatScope; now: string }) {
     const row = { id: input.id, ownerMemberId: input.ownerMemberId, scope: input.scope, createdAt: input.now, updatedAt: input.now };
     this.conversations.set(row.id, row);

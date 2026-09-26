@@ -1,8 +1,18 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { loadAgentConversations, submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
 
 describe("frontend agent data", () => {
+  it("loads bounded history pages and rejects malformed or duplicate identifiers", async () => {
+    const item = { id: "conv-1", createdAt: "2026-09-26T00:00:00.000Z" };
+    const requester = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ items: [item], nextCursor: "opaque_123" }));
+    await expect(loadAgentConversations({ cursor: "prior_123", requester })).resolves.toEqual({ items: [item], nextCursor: "opaque_123" });
+    expect(requester.mock.calls[0]?.[0]).toBe("/api/knowledge/chat/conversations?limit=20&cursor=prior_123");
+    for (const value of [{ items: [item, item] }, { items: [{ ...item, id: "../bad" }] }, { items: [{ ...item, createdAt: "yesterday" }] }, { items: [], nextCursor: "bad?" }, { items: [] , nextCursor: "opaque" }, { items: Array(21).fill(item) }]) {
+      await expect(loadAgentConversations({ requester: async () => Response.json(value) })).rejects.toThrow();
+    }
+  });
+
   it("parses explicit source scopes without silently widening malformed links", () => {
     expect(agentLocationFromSearch("")).toEqual({ scope: { kind: "all" } });
     expect(agentLocationFromSearch("?scope=space&spaceId=s-1")).toEqual({ scope: { kind: "space", spaceId: "s-1" } });
