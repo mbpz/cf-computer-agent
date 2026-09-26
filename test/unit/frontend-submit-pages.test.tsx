@@ -96,6 +96,28 @@ describe("React submission and asset pages", () => {
     expect(result[1]?.error).toBe("bad-file");
   });
 
+  it("publishes independent progress snapshots and never replays a queue run", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const upload = vi.fn(async () => { await gate; });
+    const onChange = vi.fn();
+    const queue = createAssetUploadQueue(["a"], upload, { onChange });
+    const first = queue.run();
+    const second = queue.run();
+    await Promise.resolve();
+    expect(upload).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalled();
+    const processing = onChange.mock.calls[0]![0];
+    expect(processing[0].status).toBe("processing");
+    release();
+    await Promise.all([first, second]);
+    await queue.run();
+    expect(upload).toHaveBeenCalledOnce();
+    expect(processing[0].status).toBe("processing");
+    expect(onChange.mock.calls.at(-1)![0][0].status).toBe("succeeded");
+    expect(onChange.mock.calls.at(-1)![0]).not.toBe(processing);
+  });
+
   it("extracts clipboard images while ignoring pasted text and unsupported media", () => {
     const image = new File(["png"], "", { type: "image/png" });
     const files = clipboardImageFiles([

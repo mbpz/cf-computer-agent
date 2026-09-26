@@ -144,6 +144,8 @@ export const WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS = Object.freeze([
 ] as const satisfies readonly WorkbenchSourceSideEffectBinding[]);
 
 export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
+  { capabilityId: "workbench-graph", path: "frontend/pages/graph-page.tsx", symbol: "GraphRoute" },
+  { capabilityId: "workbench-graph", path: "frontend/pages/graph-page.tsx", symbol: "GraphPage" },
   { capabilityId: "workbench-project-timeline", path: "frontend/app.tsx", symbol: "ProjectTimelineRoute" },
   { capabilityId: "workbench-inbox", path: "frontend/app.tsx", symbol: "InboxRoute" },
   { capabilityId: "workbench-goals", path: "frontend/app.tsx", symbol: "GoalsRoute" },
@@ -202,6 +204,11 @@ const INITIAL_DIMENSIONS = {
 } as const satisfies WorkbenchMaturityCapability["dimensions"];
 
 export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
+  {
+    id: "workbench-graph", routeId: "graph", pathname: "/graph", requiredRole: "contributor",
+    journey: "Explore authorized knowledge and private work relationships, inspect evidence and explicitly promote selected nodes into work.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
+    frontendEvidence: ["frontend/pages/graph-page.tsx", "frontend/lib/graph-data.ts", "frontend/lib/graph-actions.ts"], backendEvidence: ["src/routes/graph.ts", "src/graph/service.ts", "src/graph/repository.ts"], testEvidence: ["test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-graph-a11y.test.tsx", "test/worker/graph.test.ts", "test/worker/graph-actions.test.ts"], ledgerIds: ["WB-GR-001"], gaps: ["Graph entry, read states, keyboard navigation and bounded member-scoped projections have local coverage. Cursor continuation, cross-linked citation edge cases and complete action replay journeys remain incomplete; release and signed-browser acceptance are unproven."],
+  },
   {
     id: "workbench-project-timeline", routeId: "project-timeline", pathname: "/projects/:id/timeline", parentRouteId: "projects", routePattern: "/^\\/projects\\/[A-Za-z0-9_-]{1,128}\\/timeline$/u", requiredRole: "contributor",
     journey: "Open an owned project timeline, record decisions or actions and update their status.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
@@ -300,32 +307,32 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-admin-duplicates", routeId: "admin-duplicates", pathname: "/admin/duplicates", requiredRole: "admin",
     journey: "Review duplicate candidates and apply a decision.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/duplicate-queue-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/duplicates/service.ts"], testEvidence: ["test/unit/frontend-admin-duplicates.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-003"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned ready marker are runtime-probed. The initial error has no retry action; decision convergence, release, and signed-browser acceptance remain gaps."],
+    frontendEvidence: ["frontend/pages/admin/duplicate-queue-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/duplicates/service.ts"], testEvidence: ["test/unit/frontend-admin-duplicates.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-003"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned ready marker are runtime-probed. The initial error has no retry action; decision convergence, release, and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-admin-assets", routeId: "admin-assets", pathname: "/admin/assets", requiredRole: "admin",
     journey: "Review source assets, inspect previews, and retry failed parsing.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/asset-queue-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/assets/service.ts", "src/routes/admin.ts"], testEvidence: ["test/unit/frontend-admin-assets-data.test.ts", "test/worker/m2-assets.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-004"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned asset marker are runtime-probed. Initial-load retry is absent; parse-progress, full recovery, release, and signed-browser acceptance remain incomplete."],
+    frontendEvidence: ["frontend/pages/admin/asset-queue-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/assets/service.ts", "src/routes/admin.ts"], testEvidence: ["test/unit/frontend-admin-assets-data.test.ts", "test/worker/m2-assets.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-004"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned asset marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; parse-progress, full recovery, release, and signed-browser acceptance remain incomplete."],
   },
   {
     id: "workbench-admin-members", routeId: "admin-members", pathname: "/admin/members", requiredRole: "admin",
     journey: "List members and update an allowed member's status.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/members-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/members/service.ts"], testEvidence: ["test/unit/frontend-admin-pages.test.tsx", "test/worker/members.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-005"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned member marker are runtime-probed. Initial-load retry, disablement/cache invalidation, release, and signed-browser acceptance remain gaps."],
+    frontendEvidence: ["frontend/pages/admin/members-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/members/service.ts"], testEvidence: ["test/unit/frontend-admin-pages.test.tsx", "test/worker/members.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-005"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned member marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; disablement/cache invalidation, release, and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-admin-roles", routeId: "admin-roles", pathname: "/admin/roles", requiredRole: "admin",
     journey: "Manage role permission assignments and memberships.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/roles-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/authorization/roles-repository.ts"], testEvidence: ["test/worker/admin-roles.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-006"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned role marker are runtime-probed. Initial-load retry, malformed elevated contributor sessions, backend/signed projection, release, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/admin/roles-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/authorization/roles-repository.ts"], testEvidence: ["test/worker/admin-roles.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-006"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned role marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; malformed elevated contributor sessions, backend/signed projection, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-admin-menus", routeId: "admin-menus", pathname: "/admin/menus", requiredRole: "admin",
     journey: "Manage server-owned navigation menu hierarchy and availability.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/menus-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/authorization/menus-repository.ts"], testEvidence: ["test/unit/admin-menus-page.test.tsx", "test/worker/admin-menus.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-007"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned menu marker are runtime-probed. Initial-load retry, cross-session projection invalidation, release, and signed-browser acceptance remain gaps."],
+    frontendEvidence: ["frontend/pages/admin/menus-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/authorization/menus-repository.ts"], testEvidence: ["test/unit/admin-menus-page.test.tsx", "test/worker/admin-menus.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-007"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned menu marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; cross-session projection invalidation, release, and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-admin-spaces", routeId: "admin-spaces", pathname: "/admin/spaces", requiredRole: "admin",
     journey: "Create and govern knowledge spaces and collections.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/spaces-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/spaces/service.ts"], testEvidence: ["test/unit/spaces-service.test.ts", "test/worker/spaces.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-008"], gaps: ["Current admin server-navigation entry plus loading, empty, initial error, and response-owned space marker are runtime-probed. Initial-load retry, archive/content impact, release, and signed-browser acceptance remain incomplete."],
+    frontendEvidence: ["frontend/pages/admin/spaces-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/spaces/service.ts"], testEvidence: ["test/unit/spaces-service.test.ts", "test/worker/spaces.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-008"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned space marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; archive/content impact, release, and signed-browser acceptance remain incomplete."],
   },
   {
     id: "workbench-admin-audit", routeId: "admin-audit", pathname: "/admin/audit", requiredRole: "admin",
@@ -368,6 +375,12 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
 // contract remains stable. scripts/workbench-domain-audit.mjs rejects missing,
 // duplicate, or unknown capability IDs before joining these records.
 export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
+  {
+    id: "workbench-graph", apiPaths: ["/api/graph", "/api/graph/suggestions", "/api/tasks", "/api/focus", "/api/projects/:id/timeline"],
+    persistencePaths: ["src/graph/repository.ts", "src/tasks/repository.ts", "src/focus/repository.ts", "src/project-timeline/repository.ts"],
+    ownerPredicate: "routeGraphApi passes authenticated member.memberId to GraphProjectionService; GraphProjectionRepository.listTasks binds t.member_id = ?.", pagination: "not_applicable",
+    mutations: ["POST /api/tasks — gap: complete graph action replay is not bound to domain evidence", "POST /api/focus — gap: complete graph action replay is not bound to domain evidence", "POST /api/projects/:id/timeline — gap: complete graph action replay is not bound to domain evidence"], mutationSafety: "mixed",
+  },
   {
     id: "workbench-project-timeline", apiPaths: ["/api/projects/:id", "/api/projects/:id/timeline", "/api/projects/:id/timeline/:id/status"],
     persistencePaths: ["src/projects/repository.ts", "src/project-timeline/repository.ts", "migrations/0046_workbench_project_timeline.sql"],

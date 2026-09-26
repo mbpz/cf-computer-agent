@@ -12,6 +12,7 @@ export const DIRECT_PATH_BY_ROUTE = {
 } as const satisfies Partial<Record<MaturityRouteId, string>>;
 
 export const READY_MARKER_BY_ROUTE = {
+  graph: "READY::graph",
   "project-timeline": "READY::project-timeline",
   inbox: "READY::inbox::first", goals: "READY::goals::first", projects: "READY::projects::first",
   calendar: "READY::calendar::first", today: "READY::today::first", focus: "READY::focus::first", review: "READY::review::first",
@@ -88,6 +89,7 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
     navLeaf("submit", "NAV_SUBMIT", "/submit", "workspace"),
     navLeaf("my-submissions", "NAV_MY_SUBMISSIONS", "/my-submissions", "workspace"),
     ...(permissionMask === "0x100000" ? [
+      navLeaf("graph", "NAV_GRAPH", "/graph", "workspace"),
       navLeaf("inbox", "NAV_INBOX", "/inbox", "workspace"),
       navLeaf("goals", "NAV_GOALS", "/goals", "workspace"),
       navLeaf("projects", "NAV_PROJECTS", "/projects", "workspace"),
@@ -146,6 +148,11 @@ function commonAuxiliaryResponse(path: string): Response | null {
 
 function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState, path: string): Promise<Response> | Response | null {
   switch (routeId) {
+    case "graph":
+      if (pathname(path) === "/api/graph") return probeResponse(state,
+        { nodes: [], edges: [], rootId: null, depth: 1, truncated: false },
+        { nodes: [{ id: "task:graph-route-audit", kind: "task", label: "READY::graph", status: null, href: null, metadata: {} }], edges: [], rootId: null, depth: 1, truncated: false });
+      return null;
     case "project-timeline":
       if (pathname(path) === "/api/projects/project-route-audit") return Response.json({ id: "project-route-audit", clientKey: "project-route-audit", title: "Timeline project", description: null, status: "active", progress: 0, targetAt: null, createdAt: NOW, updatedAt: NOW });
       if (pathname(path) === "/api/projects/project-route-audit/timeline") return probeResponse(state, { items: [] }, { items: [{ id: "timeline-route-audit", projectId: "project-route-audit", clientKey: "timeline-route-audit", kind: "decision", title: "READY::project-timeline", body: "Owned decision", status: "open", startsAt: null, dueAt: null, createdAt: NOW, updatedAt: NOW }] });

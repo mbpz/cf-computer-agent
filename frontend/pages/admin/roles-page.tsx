@@ -18,9 +18,9 @@ const groups: ReadonlyArray<{ labelKey: string; keys: readonly PermissionKey[] }
   { labelKey: "ADMIN_ROLES_GROUP_OPERATIONS", keys: ["asset:manage", "duplicate:review", "agent:use", "search:use"] },
 ];
 
-export function AdminRolesPage({ state, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving = false, saveError }: { state: RolePageState; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => void; onAssignMember?: (role: AdminRole, memberId: string) => void; onUnassignMember?: (role: AdminRole, memberId: string) => void; saving?: boolean; saveError?: string | null }) {
+export function AdminRolesPage({ onLoadRetry, state, locale, onSelect, onSave, onCreate, onAssignMember, onUnassignMember, saving = false, saveError }: { onLoadRetry?: () => void; state: RolePageState; locale?: LocaleRuntime; onSelect?: (id: string) => void; onSave?: (role: AdminRole, allowBits: string) => void; onCreate?: (input: { key: string; name: string; allowBits: string }) => void; onAssignMember?: (role: AdminRole, memberId: string) => void; onUnassignMember?: (role: AdminRole, memberId: string) => void; saving?: boolean; saveError?: string | null }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")} />;
+  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "ADMIN_ROLES_UNAVAILABLE")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   if (!state.roles.length) return <PageState kind="empty" title={frontendText(locale, "ADMIN_ROLES_EMPTY")} description={frontendText(locale, "ADMIN_ROLES_DESCRIPTION")} />;
   return <RoleEditor roles={state.roles} locale={locale} onSelect={onSelect} onSave={onSave} onCreate={onCreate} onAssignMember={onAssignMember} onUnassignMember={onUnassignMember} saving={saving} saveError={saveError} />;
 }

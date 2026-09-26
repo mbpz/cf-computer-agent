@@ -22,12 +22,6 @@ type StateClaims = Readonly<Record<MaturityProbeState, Claim>>;
 const supported = Object.freeze({ kind: "supported" } as const);
 const gap = (reason: string): Claim => Object.freeze({ kind: "gap", reason });
 const listWithRetry = Object.freeze({ loading: supported, empty: supported, error: supported, ready: supported });
-const listWithoutRetry = (subject: string): StateClaims => Object.freeze({
-  loading: supported,
-  empty: supported,
-  error: gap(`${subject} renders an initial-load error but provides no route-owned retry action.`),
-  ready: supported,
-});
 const staticReady = (subject: string): StateClaims => Object.freeze({
   loading: gap(`${subject} has no route-owned loading controller.`),
   empty: gap(`${subject} has no route-owned empty state.`),
@@ -36,6 +30,7 @@ const staticReady = (subject: string): StateClaims => Object.freeze({
 });
 
 const ROUTE_STATE_MATRIX = Object.freeze({
+  graph: listWithRetry,
   "project-timeline": listWithRetry,
   inbox: listWithRetry, goals: listWithRetry, projects: listWithRetry, calendar: listWithRetry,
   today: listWithRetry, focus: listWithRetry, review: listWithRetry,
@@ -50,12 +45,12 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   settings: staticReady("Settings"),
   admin: listWithRetry,
   "admin-submissions": listWithRetry,
-  "admin-duplicates": listWithoutRetry("Duplicate queue"),
-  "admin-assets": listWithoutRetry("Asset queue"),
-  "admin-members": listWithoutRetry("Members"),
-  "admin-roles": listWithoutRetry("Roles"),
-  "admin-menus": listWithoutRetry("Menus"),
-  "admin-spaces": listWithoutRetry("Spaces"),
+  "admin-duplicates": listWithRetry,
+  "admin-assets": listWithRetry,
+  "admin-members": listWithRetry,
+  "admin-roles": listWithRetry,
+  "admin-menus": listWithRetry,
+  "admin-spaces": listWithRetry,
   "admin-audit": listWithRetry,
   "admin-analytics": listWithRetry,
   notifications: listWithRetry,
@@ -66,6 +61,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
 } as const satisfies Record<MaturityRouteId, StateClaims>);
 
 const PERMISSION_MASK_BY_ROUTE = Object.freeze({
+  graph: "0x100000",
   "project-timeline": "0x100000",
   inbox: "0x100000", goals: "0x100000", projects: "0x100000", calendar: "0x100000",
   today: "0x100000", focus: "0x100000", review: "0x100000",
@@ -83,6 +79,43 @@ describe("workbench maturity exhaustive route/state audit", () => {
     await journey?.unmount();
     journey = undefined;
   });
+
+  for (const routeId of ["admin-duplicates", "admin-assets", "admin-members", "admin-roles", "admin-menus", "admin-spaces"] as const) {
+    it(`${routeId} retries the failed read once and recovers without writing`, async () => {
+      let recovering = false;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const reads: string[] = [];
+      const failed = createMaturityRouteFetch({ routeId, state: "error", role: "admin", permissionMask: "0x0" });
+      const ready = createMaturityRouteFetch({ routeId, state: "ready", role: "admin", permissionMask: "0x0" });
+      journey = await mountAuthenticatedApp({
+        url: `https://app.test/admin/${routeId.slice(6)}?page=2&pageSize=20`, role: "admin", permissionMask: "0x0",
+        fetch: async (input, init) => {
+          const path = String(input);
+          if (path.startsWith(`/api/admin/${routeId.slice(6)}`)) {
+            expect(init?.method ?? "GET").toBe("GET");
+            if (path.split("?")[0] === `/api/admin/${routeId.slice(6)}`) {
+              reads.push(path);
+              if (recovering) await gate;
+            }
+          }
+          return (recovering ? ready : failed)(input, init);
+        },
+      });
+      await waitForApp(() => journey!.container.querySelector('main [role="alert"]') !== null);
+      const retry = journey.container.querySelector('main [role="alert"] button') as HTMLButtonElement | null;
+      expect(retry).not.toBeNull();
+      recovering = true;
+      await act(async () => { retry!.click(); retry!.click(); });
+      await waitForApp(() => reads.length === 2);
+      expect(journey.container.querySelector('main [data-page-state="loading"]')).not.toBeNull();
+      expect(reads[1]).toBe(reads[0]);
+      await act(async () => release());
+      await waitForApp(() => readyObservablePresent(journey!, routeId));
+      expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
+      expect(reads).toHaveLength(2);
+    });
+  }
 
   for (const capability of WORKBENCH_MATURITY_CAPABILITIES) {
     for (const state of ["loading", "empty", "error", "ready"] as const) {
@@ -205,17 +238,19 @@ describe("workbench maturity server projection and authorization audit", () => {
     }
   });
 
-  it("uses the revoked contributor projection and rejects the task direct route", async () => {
+  it.each(["tasks", "boards", "graph"] as const)("uses the revoked contributor projection and rejects the %s direct route", async (routeId) => {
     const requests: string[] = [];
     journey = await mountAuthenticatedApp({
-      url: "https://app.test/tasks",
+      url: `https://app.test/${routeId}`,
       role: "contributor",
       permissionMask: "0x0",
-      fetch: createMaturityRouteFetch({ routeId: "tasks", state: "ready", role: "contributor", permissionMask: "0x0", requests }),
+      fetch: createMaturityRouteFetch({ routeId, state: "ready", role: "contributor", permissionMask: "0x0", requests }),
     });
     await waitForServerNavigation(journey, requests);
     expect(journey.container.querySelector('[data-route-id="tasks"]')).toBeNull();
     expect(journey.container.querySelector('[data-route-id="boards"]')).toBeNull();
+    expect(journey.container.querySelector('[data-route-id="graph"]')).toBeNull();
+    expect(requests.some((path) => /^\/api\/(?:graph|tasks|boards)(?:[/?]|$)/u.test(path))).toBe(false);
     expect(journey.container.querySelector('main [data-page-state="forbidden"]')).not.toBeNull();
   });
 

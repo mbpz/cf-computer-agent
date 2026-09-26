@@ -6,12 +6,12 @@ import { Label } from "../../components/ui/label";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 
-export function SpacesPage({ spaces, loading = false, error, onCreate, locale }: { spaces: readonly { id: string; name?: string; slug?: string; collections?: readonly (string | { name?: string })[] }[]; loading?: boolean; error?: string; onCreate?: (input: { slug: string; name: string }) => Promise<void> | void; locale?: LocaleRuntime }) {
+export function SpacesPage({ onLoadRetry, spaces, loading = false, error, onCreate, locale }: { onLoadRetry?: () => void; spaces: readonly { id: string; name?: string; slug?: string; collections?: readonly (string | { name?: string })[] }[]; loading?: boolean; error?: string; onCreate?: (input: { slug: string; name: string }) => Promise<void> | void; locale?: LocaleRuntime }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [draft, setDraft] = useState({ slug: "", name: "" });
   const [createState, setCreateState] = useState<"idle" | "pending" | "error">("idle");
   if (loading) return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (error) return <PageState kind="error" title={error} />;
+  if (error) return <PageState kind="error" title={error} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const slug = draft.slug.trim().toLowerCase();
