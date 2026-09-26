@@ -573,3 +573,22 @@ function localEnv(): Env {
 function testOriginals(): R2Bucket {
   return (env as typeof env & { ORIGINALS: R2Bucket }).ORIGINALS;
 }
+
+
+describe("member asset availability", () => {
+  it.each([false, true])("returns only safe configuration fields: %s", async (configured) => {
+    const response = await memberApi("asset-owner", "/api/assets/availability", {}, createApp({ assetStorage: configured ? testOriginals() : null }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    await expect(response.json()).resolves.toEqual({ storageEnabled: configured, reason: configured ? null : "ASSET_STORAGE_NOT_CONFIGURED", maxBytes: APP_CONFIG.maxAssetBytes });
+  });
+  it("rejects queries and writes", async () => {
+    expect((await memberApi("asset-owner", "/api/assets/availability?memberId=asset-other")).status).toBe(400);
+    expect((await memberApi("asset-owner", "/api/assets/availability", { method: "POST" })).status).toBe(405);
+  });
+  it("requires an active authenticated member", async () => {
+    expect((await memberApi("missing", "/api/assets/availability")).status).toBe(401);
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = ?").bind("asset-owner").run();
+    expect((await memberApi("asset-owner", "/api/assets/availability")).status).toBe(403);
+  });
+});

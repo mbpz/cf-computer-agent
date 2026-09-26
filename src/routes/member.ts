@@ -47,6 +47,14 @@ export async function routeMemberApi(
     return jsonResponse(await services.audit.listMemberActivity(member.memberId, member.role, query), 200, context.requestId);
   }
 
+  if (url.pathname === "/api/assets/availability") {
+    requireMember(principal);
+    requireCapability(principal, "submission:create");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(services.assets.availability(), 200, context.requestId);
+  }
+
   if (url.pathname === "/api/assets") {
     const member = requireMember(principal);
     if (request.method === "GET") {

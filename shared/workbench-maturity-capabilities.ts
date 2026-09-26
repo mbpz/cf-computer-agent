@@ -257,7 +257,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-submit", routeId: "submit", pathname: "/submit", requiredRole: "contributor",
     journey: "Submit knowledge for parsing and later review.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/member.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Source-level persistence and submitter-scoped idempotency exist, but complete browser, release, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/submit-page.tsx", "frontend/app.tsx", "frontend/components/assets/asset-availability-panel.tsx", "frontend/lib/asset-availability.ts"], backendEvidence: ["src/routes/member.ts", "src/assets/service.ts"], testEvidence: ["test/unit/frontend-submit-pages.test.tsx", "test/worker/submissions.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-asset-availability.test.ts", "test/unit/frontend-asset-availability-route.test.tsx", "test/worker/m2-assets.test.ts"], ledgerIds: ["KB-001"], gaps: ["The current server-navigation entry, idle form, pending, retry-by-resubmit error, and success/empty transition are runtime-probed. Source-level persistence and submitter-scoped idempotency exist, but complete browser, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-knowledge", routeId: "knowledge", pathname: "/knowledge", requiredRole: "contributor",
@@ -439,7 +439,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-submit",
-    apiPaths: ["/api/submissions"],
+    apiPaths: ["/api/submissions", "/api/assets/availability"],
     persistencePaths: ["src/submissions/repository.ts", "migrations/0003_m1_knowledge_loop.sql"],
     ownerPredicate: "routeMemberApi passes authenticated member.memberId as submitterId; SubmissionsRepository scopes idempotency replay and writes by submitter_id.",
     pagination: "not_applicable",

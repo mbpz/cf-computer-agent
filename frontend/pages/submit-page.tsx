@@ -5,7 +5,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
 import type { SubmissionDraft } from "../components/submissions/submission-form-model";
-import { AssetDropzone } from "../components/assets/asset-dropzone";
+import { AssetAvailabilityPanel } from "../components/assets/asset-availability-panel";
 import { PageState } from "../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { SimilarSubmissionCandidate } from "../lib/submission-data";
@@ -39,7 +39,7 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
           <option value="text">{frontendText(locale, "SUBMIT_CONTENT_LABEL")}</option><option value="markdown">{frontendText(locale, "SUBMIT_MARKDOWN_LABEL")}</option><option value="code">{frontendText(locale, "SUBMIT_CODE_LABEL")}</option>
         </select></div>
         <div><Label htmlFor="submission-content">{frontendText(locale, draft.mode === "code" ? "SUBMIT_CODE_LABEL" : draft.mode === "markdown" ? "SUBMIT_MARKDOWN_LABEL" : "SUBMIT_CONTENT_LABEL")}</Label><Textarea id="submission-content" value={draft.content} onChange={(event) => onDraftChange?.({ ...draft, content: event.currentTarget.value })} className="min-h-64 font-mono" /></div>
-        <AssetDropzone locale={locale} />
+        <AssetAvailabilityPanel locale={locale} />
         <Button type="submit" disabled={pending || unresolved || recovery?.invalid}>{frontendText(locale, pending ? "SUBMIT_BUTTON_PENDING" : "SUBMIT_BUTTON")}</Button>
       </CardContent></Card>
     </form>

@@ -2,7 +2,7 @@
 
 ## 范围与状态
 
-延续 `codex/functional-checklist-completion`，上一批提交 `1ac279a`。原 30 个父项，排除 D08 生产部署后本轮 29 项；本批仍未整体关闭父项，完成的是 A02/D02 的有界子项。仅本地实现、验证、提交；没有 push、部署、迁移、生产写入、备份或 Secret 读取。
+延续 `codex/functional-checklist-completion`，上一批提交 `1ac279a`。原 30 个父项，排除 D08 生产部署后本轮 29 项；首批完成 A02/D02 的有界子项；本页追加 B03 批次后，本轮 29 项中已关闭 1 项（B03）、余 28 项。仅本地实现、验证、提交；没有 push、部署、迁移、生产写入、备份或 Secret 读取。
 
 ## 本批实际修复
 
@@ -21,4 +21,34 @@
 - `npm run typecheck`、`npm run build:ui`：通过；构建仍有 chunk 大于 500 kB 警告。
 - `npm run verify:delivery-status`：30/30 通过。
 
-以上为定向本地回归，不是全仓测试、真实浏览器或生产验收。原运维 R09 与备份不阻塞继续本地功能。下一环节为 B03 附件可用性契约；B04/B05 的实际上传、恢复、取消和解析回读仍未闭环。
+以上为定向本地回归，不是全仓测试、真实浏览器或生产验收。原运维 R09 与备份不阻塞继续本地功能。该批之后进入已获用户确认的 B03 附件可用性契约，结果见下；B04/B05 的实际上传、恢复、取消和解析回读仍未闭环。
+
+
+## B03 — 附件可用性契约（本地已完成）
+
+用户确认的范围：认证成员且具有 `submission:create` 能力才可读取；返回配置状态、禁用原因、单文件限制；前端区分未配置与读取失败并支持重试。不新增收费存储，也不因检测到 binding 就提前开放实际上传。
+
+- 本地配置核对：`wrangler.jsonc` 未声明 `ORIGINALS` R2 binding；`src/app.ts` 保留可选 binding。测试配置单独注入本地 R2，不能推断线上是否配置或健康。
+- `GET /api/assets/availability` 放在动态资产 ID 路由之前；只返回 `{storageEnabled, reason, maxBytes}`，`reason` 为 `null` 或 `ASSET_STORAGE_NOT_CONFIGURED`。只读配置，不查询 D1 资产/容量，不访问 R2，不返回桶名、对象键、凭据或成员数据。会话鉴权可能沿用既有会话维护，不将整个 HTTP 请求宣称为绝对无写入。
+- 既有权限策略仍适用：contributor 的兼容能力包含提交能力；未改变 role/mask 组合规则。未登录 401、停用成员 403、automation 403，查询参数 400、非 GET 405。响应保持 no-store。
+- `maxBytes` 为服务与 HTTP 限制的较小值（默认 10 MiB），不是管理员的总容量。既有上传总量/容量保护保留，当前契约不承诺剩余空间或成功上传。
+- 主提交页展示 loading、未配置、已配置但未接线、读取失败。失败可手动重试，快速重复点击只发一次 GET；卸载/切换成员取消旧请求并忽略晚到结果，不缓存其他成员状态。中英文文案，错误不泄露内部消息；文本提交保持可用。真实上传尚未接线，所有状态下文件选择均禁用。
+- 新端点与测试已写入成熟度 manifest 并更新当前 33 能力领域审计快照；未提升整体提交能力的 release/acceptance 状态。
+
+### 本轮实际验证
+
+先 RED 后 GREEN：初始 service 无 `availability()`、GET 被动态 ID 路由匹配而 404、前端 loader 不存在、DOM 四个场景失败；实现后以下定向回归通过。停用成员断言按既有 `MEMBER_DISABLED` 403 契约校正，未改鉴权行为。
+
+```sh
+rtk proxy npx vitest run test/unit/assets-service.test.ts test/unit/member-asset-availability.test.ts test/unit/frontend-asset-availability.test.ts test/unit/frontend-asset-availability-route.test.tsx test/unit/frontend-asset-dropzone.test.tsx test/unit/frontend-submit-owner-route.test.tsx test/unit/frontend-submit-pages.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/worker/m2-assets.test.ts test/worker/submissions.test.ts
+```
+
+- 10 files / 347 tests 通过：包括服务无存储 IO、限制、权限、协议校验、DOM 状态与重试、用户切换、原有附件与文本提交流程及成熟度路由。
+- `npm run typecheck`、`npm run build:ui` 通过；UI 构建既有大于 500 kB chunk 警告仍在。
+- `npm run verify:i18n`、`npm run test:i18n`（13 tests）通过。
+- `npm run verify:workbench-maturity`（13 tests）、`npm run audit:workbench-domain`、`npm run verify:delivery-status`（30 tests）、`node --test scripts/workbench-domain-audit.test.mjs`（26 tests）通过。
+- 仅本地定向测试；没有进行全仓测试、真实浏览器/设备验收、push、部署、迁移、收费资源开通或生产验证。
+
+### 下一步与计数
+
+B03 的配置核对及返回契约已本地关闭。本轮 29 个父项已完成 1、剩余 28；原 30 项中的 D08 仍独立保留为发布事项。本地下一步允许进入 B04/B05 上传接线；存储不可用时必须继续禁用，不为完成 checklist 开通收费资源。不需要备份或旧 R09 运维签认来继续本地功能。

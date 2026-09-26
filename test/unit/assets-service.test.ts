@@ -833,3 +833,16 @@ describe("AssetService", () => {
     expect(result.items[0]?.asset.ownerId).toBe("member-1");
   });
 });
+
+
+describe("asset availability", () => {
+  it.each([false, true])("reports configuration without storage or repository IO: %s", (configured) => {
+    const fail = new Proxy({}, { get() { throw new Error("unexpected IO"); } });
+    const service = new AssetService(configured ? fail as R2Bucket : undefined, fail as AssetRepositoryPort);
+    expect(service.availability()).toEqual({ storageEnabled: configured, reason: configured ? null : "ASSET_STORAGE_NOT_CONFIGURED", maxBytes: 10 * 1024 * 1024 });
+  });
+  it("reports the effective service and route upload limit", () => {
+    expect(new AssetService(undefined, repository(), { maxBytes: 1024 }).availability().maxBytes).toBe(1024);
+    expect(new AssetService(undefined, repository(), { maxBytes: 20 * 1024 * 1024 }).availability().maxBytes).toBe(10 * 1024 * 1024);
+  });
+});

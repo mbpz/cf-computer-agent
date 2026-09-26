@@ -131,6 +131,7 @@ function navLeaf(key: string, labelKey: string, path: string, groupName: "worksp
 }
 
 function commonAuxiliaryResponse(path: string): Response | null {
+  if (path === "/api/assets/availability") return Response.json({ storageEnabled: false, reason: "ASSET_STORAGE_NOT_CONFIGURED", maxBytes: 10 * 1024 * 1024 });
   if (path === "/api/saved-views?limit=50") return Response.json({ items: [] });
   if (path === "/api/knowledge/favorites?limit=20") return Response.json({ items: [] });
   if (path === "/api/knowledge/research-runs?limit=8") return Response.json({ items: [] });

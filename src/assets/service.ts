@@ -1,3 +1,4 @@
+import type { AssetAvailability } from "../../shared/asset-availability";
 import { AppError } from "../http";
 import { observeStorage, type StorageObserver } from "../maintenance/storage";
 import { APP_CONFIG } from "../config";
@@ -176,11 +177,15 @@ export class AssetService {
     this.onFailure = options.onFailure;
   }
 
-  /**
-   * R2 is an optional paid capability. Deployments that stay on the
-   * Cloudflare free tier run in text-only mode and must fail closed before
-   * reading a binary upload or creating any D1 metadata.
-   */
+  /** Configuration snapshot only; never reads private metadata or probes R2. */
+  availability(): AssetAvailability {
+    const maxBytes = Math.min(this.maxBytes, APP_CONFIG.maxAssetBytes);
+    return this.originals
+      ? { storageEnabled: true, reason: null, maxBytes }
+      : { storageEnabled: false, reason: "ASSET_STORAGE_NOT_CONFIGURED", maxBytes };
+  }
+
+  /** Fail closed before buffering an upload or creating metadata when R2 is absent. */
   assertStorageEnabled(): void {
     this.requireStorage();
   }
