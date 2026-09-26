@@ -304,3 +304,20 @@ rtk proxy npx vitest run test/unit/frontend-task-editor-route.test.tsx test/unit
 - 提交前关联回归：10 文件 **276/276**（任务编辑器、数据、列表/页面、服务/Worker、结构、成熟度路由、可访问性、看板）。`typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`audit:workbench-domain`、`verify:delivery-status` 30/30 通过。UI 构建仍有既有 >500 kB 提示；typecheck 不代表所有前端 TSX 的完整类型检查。
 - 边界：未知写入后的跨标签冲突解决、原生浏览器键盘/移动端/真实账号验收仍未完成；普通 500 沿用已有乐观回滚，不将其宣称为服务端未提交证明。
 - 总账仍为 **29 个父项，1 个关闭，28 个未关闭**；本批只关闭 C02 的本地撤权子项。未推送、部署、远程迁移、备份或读取/上传人工秘密文件。下一步允许进入 C03 的本地任务归属与摘要计数核对。
+
+
+## C03：项目摘要恢复与关联计数对账（接续 C02 提交 `123ef7d`）
+
+- 项目摘要的普通失败不再拖垮整页；失败行显示错误而非虚假 0/0，只显式重试该行且同步合并双击。其他项目时间线仍可操作；读取使用 AbortController 和请求代次，状态写后刷新取消旧摘要回执。401/403 清空全部私有项目并取消在途读取，App 按成员 ID 重挂载。
+- 摘要计数要求非负安全整数、completedTaskCount 不大于 taskCount，目标预览不超过 total/10 且 ID 唯一；允许 total 大于预览长度。合法 ID `constructor` 的继承属性反例使用 Object.hasOwn 修复，防止把原型属性误认成已加载摘要。
+- 真实本地 D1：任务重复关联不重复计数，完成/重开/取消、解除关联及任务删除后对账正确；12 个目标仅预览 10 个且 total 保留 12；跨成员关联与读取返回 404。项目 progress 是独立手工字段，不冒充关联任务完成比例。时间线稳定键重放、2+1 分页及项目绑定游标正确，timeline action 不进入关联任务总数。
+- RED → GREEN：首批行为反例 12 failed / 1 passed；实现后 13 passed。追加过期回执、分页与继承属性反例，`constructor` 用例实际 RED 为 1 failed / 16 passed，修复后项目路由/摘要 17/17。
+- 最终关联回归 **13 文件 269/269**，运行命令：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/worker/projects.test.ts test/worker/goals.test.ts test/worker/project-timeline.test.ts test/unit/projects-service.test.ts test/unit/projects-route.test.ts test/unit/goals-service.test.ts test/unit/goals-route.test.ts test/unit/frontend-boards-route.test.tsx test/unit/frontend-task-editor-route.test.tsx
+```
+
+- 本地门禁：typecheck、build:ui、verify:i18n、test:i18n 13/13、verify:workbench-maturity 13/13、verify:delivery-status 30/30 均通过。领域审计因新增测试证据先报告 STALE，重新生成快照后 audit:workbench-domain 通过；冻结 gap 指纹未改。保留既有 >500 kB chunk 提示，typecheck 不代表全部前端 TSX 类型覆盖。
+- 范围边界：本批关闭 EXT-PRJ-02 本地子项及 C03 计数子项，不关闭 C03 父项。目标/项目数字分页与 URL 恢复、创建稳定意图、完整关联编辑 UI、未知写入/并发恢复和真实浏览器验收仍开放。摘要普通失败可恢复不等于流式加载，首次页面仍等待当前摘要批次结束。
+- 总清单仍为 **29 父项 / 已关闭 1（B03）/ 未关闭 28**。下一步允许继续 C03 剩余功能或 C04 既有原子待办；不需要重复新建已有模块。未 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；以上不是全仓或生产验收。

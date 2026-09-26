@@ -10,11 +10,11 @@ export type ProjectTimelineStatus = "open" | "done" | "archived";
 export interface ProjectTimelineItem { id: string; projectId: string; clientKey: string; kind: ProjectTimelineKind; title: string; body: string; status: ProjectTimelineStatus; startsAt: string | null; dueAt: string | null; createdAt: string; updatedAt: string; }
 export interface ProjectTimelinePage { items: ProjectTimelineItem[]; nextCursor?: string; }
 
-export async function loadProjects(input: { limit?: number; cursor?: string; status?: ProjectStatus } = {}, requester: Fetcher = fetch): Promise<ProjectPage> {
+export async function loadProjects(input: { limit?: number; cursor?: string; status?: ProjectStatus } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectPage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });
   if (input.cursor) params.set("cursor", input.cursor);
   if (input.status) params.set("status", input.status);
-  const value = await apiFetch<unknown>(`/api/projects?${params.toString()}`, { requester });
+  const value = await apiFetch<unknown>(`/api/projects?${params.toString()}`, { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
   const items = Array.isArray(record.items) ? record.items.map(normalizeProject).filter((item): item is Project => item !== null) : [];
@@ -22,12 +22,15 @@ export async function loadProjects(input: { limit?: number; cursor?: string; sta
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
 
-export async function loadProjectSummary(id: string, requester: Fetcher = fetch): Promise<ProjectSummary> {
-  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/summary`, { requester });
+export async function loadProjectSummary(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectSummary> {
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/summary`, { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_SUMMARY_INVALID");
   const record = value as Record<string, unknown>;
   const goals = Array.isArray(record.goals) ? record.goals.map(normalizeGoal).filter((item): item is ProjectGoalSummary => item !== null) : [];
-  if (!Number.isInteger(record.goalCount) || !Number.isInteger(record.taskCount) || !Number.isInteger(record.completedTaskCount) || !Array.isArray(record.goals) || goals.length !== record.goals.length) throw new Error("PROJECT_SUMMARY_INVALID");
+  const isCount = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  if (!isCount(record.goalCount) || !isCount(record.taskCount) || !isCount(record.completedTaskCount)
+    || record.completedTaskCount > record.taskCount || !Array.isArray(record.goals) || goals.length !== record.goals.length
+    || goals.length > record.goalCount || goals.length > 10 || new Set(goals.map((goal) => goal.id)).size !== goals.length) throw new Error("PROJECT_SUMMARY_INVALID");
   return { goalCount: record.goalCount as number, taskCount: record.taskCount as number, completedTaskCount: record.completedTaskCount as number, goals };
 }
 

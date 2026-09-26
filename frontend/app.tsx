@@ -189,7 +189,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute locale={locale} />;
-    case "projects": return <ProjectsRoute locale={locale} />;
+    case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} />;
     case "project-timeline": return <ProjectTimelineRoute locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
@@ -1100,42 +1100,106 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
 export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
+  const [summaryPending, setSummaryPending] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
+  const pendingRef = useRef(false);
+  const generationRef = useRef(0);
+  const listControllerRef = useRef<AbortController | null>(null);
+  const rowControllersRef = useRef(new Map<string, AbortController>());
   const stateRef = useRef<ProjectsPageState>({ kind: "loading" });
   stateRef.current = state;
+
+  const cancelReads = useCallback(() => {
+    listControllerRef.current?.abort();
+    for (const controller of rowControllersRef.current.values()) controller.abort();
+    rowControllersRef.current.clear();
+  }, []);
+  const clearDeniedProjects = useCallback((error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    generationRef.current += 1; cancelReads();
+    pendingRef.current = false; setPending(false); setSummaryPending([]); setActionError(undefined);
+    const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+    stateRef.current = cleared; setState(cleared);
+    return true;
+  }, [cancelReads, locale]);
 
   const refresh = useCallback(async (append = false) => {
     const currentState = stateRef.current;
     const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    setPending(true); setActionError(undefined);
+    if (append && (pendingRef.current || !cursor)) return;
+    cancelReads();
+    const generation = ++generationRef.current;
+    const controller = new AbortController(); listControllerRef.current = controller;
+    pendingRef.current = true; setPending(true); setSummaryPending([]); setActionError(undefined);
     try {
-      const page = await loadProjects({ limit: 20, ...(cursor ? { cursor } : {}) });
-      const entries = await Promise.all(page.items.map(async (project) => [project.id, await loadProjectSummary(project.id)] as const));
-      if (!activeRef.current) return;
-      const summaries = Object.fromEntries(entries) as Record<string, ProjectSummary>;
+      const page = await loadProjects({ limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal);
+      if (!activeRef.current || generationRef.current !== generation) return;
+      const entries = await Promise.all(page.items.map(async (project) => {
+        try { return [project.id, await loadProjectSummary(project.id, fetch, controller.signal)] as const; }
+        catch (error) {
+          if (isAbort(error) || (error instanceof ApiRequestError && (error.status === 401 || error.status === 403))) throw error;
+          return [project.id, undefined] as const;
+        }
+      }));
+      if (!activeRef.current || generationRef.current !== generation) return;
+      const summaries = Object.fromEntries(entries.filter((entry) => entry[1] !== undefined)) as Record<string, ProjectSummary>;
       setState((current) => append && current.kind === "ready"
         ? { kind: "ready", items: [...current.items, ...page.items], summaries: { ...current.summaries, ...summaries }, nextCursor: page.nextCursor }
         : { kind: "ready", items: page.items, summaries, nextCursor: page.nextCursor });
     } catch (error: unknown) {
-      if (!activeRef.current || isAbort(error)) return;
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
+      if (clearDeniedProjects(error)) return;
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED"));
-    } finally { if (activeRef.current) setPending(false); }
-  }, [locale]);
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
+  }, [locale, cancelReads, clearDeniedProjects]);
 
-  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
+  useEffect(() => {
+    activeRef.current = true; void refresh();
+    return () => { activeRef.current = false; generationRef.current += 1; cancelReads(); };
+  }, [refresh, retryVersion, cancelReads]);
 
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pending) return;
-    setPending(true); setActionError(undefined);
-    try { await operation(); await refresh(); }
-    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED")); setPending(false); }
+  const retrySummary = async (project: Project) => {
+    const current = stateRef.current;
+    if (pendingRef.current || rowControllersRef.current.has(project.id) || current.kind !== "ready"
+      || !current.items.some((item) => item.id === project.id) || Object.hasOwn(current.summaries, project.id)) return;
+    const generation = generationRef.current;
+    const controller = new AbortController(); rowControllersRef.current.set(project.id, controller);
+    setSummaryPending((ids) => [...ids, project.id]);
+    try {
+      const summary = await loadProjectSummary(project.id, fetch, controller.signal);
+      if (!activeRef.current || generationRef.current !== generation || controller.signal.aborted) return;
+      setState((current) => current.kind === "ready" ? { ...current, summaries: { ...current.summaries, [project.id]: summary } } : current);
+    } catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
+      clearDeniedProjects(error);
+    } finally {
+      if (rowControllersRef.current.get(project.id) === controller) rowControllersRef.current.delete(project.id);
+      if (activeRef.current && generationRef.current === generation) setSummaryPending((ids) => ids.filter((id) => id !== project.id));
+    }
   };
 
-  return <ProjectsPage locale={locale} state={state} pending={pending} actionError={actionError}
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pendingRef.current) return;
+    const generation = generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
+    try {
+      await operation();
+      if (activeRef.current && generationRef.current === generation) await refresh();
+    } catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
+      if (clearDeniedProjects(error)) return;
+      setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED"));
+    } finally {
+      if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); }
+    }
+  };
+
+  return <ProjectsPage locale={locale} state={state} pending={pending} summaryPending={summaryPending} actionError={actionError}
     onRetry={() => setRetryVersion((value) => value + 1)}
+    onRetrySummary={(project) => void retrySummary(project)}
     onCreate={(input) => void mutate(() => createProject(input))}
     onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
