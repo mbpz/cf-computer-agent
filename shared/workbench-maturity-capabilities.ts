@@ -62,6 +62,11 @@ export interface WorkbenchSourceSideEffectBinding {
 
 export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-agent", operation: "POST /api/knowledge/chat/conversations/:id/feedback", strategy: "conditional_write",
+    source: { path: "src/chat/feedback-repository.ts", symbol: "D1ChatFeedbackRepository.save", tokens: ["ON CONFLICT(conversation_id, member_id) DO UPDATE", "rating = excluded.rating", "citation_ids_json = excluded.citation_ids_json"] },
+    tests: [{ path: "test/worker/m1-api.test.ts", tokens: ["persists a bounded owner-scoped chat history and rejects scope widening", "feedbackReplay.status", "SELECT COUNT(*) AS count FROM chat_feedback", "count: 1"] }],
+  },
+  {
     capabilityId: "workbench-submit", operation: "POST /api/assets", strategy: "idempotency_key",
     source: {"path": "src/assets/service.ts", "symbol": "AssetService.create", "tokens": ["findByIdempotency", "if (replay) return replay"]},
     tests: [{"path": "test/worker/m2-assets.test.ts", "tokens": ["replays an idempotent upload and hides another member's asset"]}],
@@ -182,6 +187,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentRoute" },
   { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentConversationRoute" },
   { capabilityId: "workbench-agent", path: "frontend/lib/agent-data.ts", symbol: "*" },
+  { capabilityId: "workbench-agent", path: "frontend/components/agent/agent-feedback.tsx", symbol: "AgentFeedback" },
   { capabilityId: "workbench-my-submissions", path: "frontend/app.tsx", symbol: "MySubmissionsRoute" },
   { capabilityId: "workbench-tasks", path: "frontend/app.tsx", symbol: "TasksRoute" },
   { capabilityId: "workbench-tasks", path: "frontend/lib/tasks-data.ts", symbol: "*" },
@@ -489,11 +495,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-agent",
-    apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations/:id", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel"],
-    persistencePaths: ["src/chat/repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql"],
+    apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations/:id", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel", "/api/knowledge/chat/conversations/:id/feedback"],
+    persistencePaths: ["src/chat/repository.ts", "src/chat/feedback-repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql", "migrations/0021_m5_chat_feedback.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.",
     pagination: "not_applicable",
-    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — gap: no expected version is supplied", "POST /api/knowledge/chat/conversations/:id/cancel — gap: no replay key is supplied"],
+    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — gap: no expected version is supplied", "POST /api/knowledge/chat/conversations/:id/cancel — gap: no replay key is supplied", "POST /api/knowledge/chat/conversations/:id/feedback — proven: conversation/member conflict-target upsert prevents duplicate rows for identical feedback retries; no cross-tab ordering guarantee"],
     mutationSafety: "mixed",
   },
   {

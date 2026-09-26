@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { submitAgentFeedback, agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
 
 describe("frontend agent data", () => {
   it("parses explicit source scopes without silently widening malformed links", () => {
@@ -29,6 +29,20 @@ describe("frontend agent data", () => {
     const payload = { conversation: { id: "conv-1", scope: { spaceId: "s-1", kind: "space" } }, messages: [], sources: [] };
     await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify(payload)) })).resolves.toMatchObject({ scope: { kind: "space", spaceId: "s-1" } });
     await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify({ ...payload, conversation: { ...payload.conversation, scope: { kind: "all", spaceId: "private" } } })) })).rejects.toThrow();
+  });
+
+  it("preserves the server's insufficient-evidence marker and allowlists suggestions", async () => {
+    await expect(askAgent({ question: "unknown", scope: { kind: "all" }, requester: async () => new Response(JSON.stringify({ answer: "No evidence", messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "run-untrusted-action", "KNOWLEDGE_CHAT_EXPAND_SCOPE", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] })) })).resolves.toMatchObject({ insufficientEvidence: true, suggestions: ["rewrite", "sources"] });
+    await expect(askAgent({ question: "unknown", scope: { kind: "all" }, requester: async () => new Response(JSON.stringify({ messageKey: "something-else", suggestedActionKeys: ["KNOWLEDGE_CHAT_EXPAND_SCOPE"] })) })).resolves.not.toHaveProperty("insufficientEvidence");
+  });
+
+  it("requires a matching feedback receipt before confirming a write", async () => {
+    const feedback = { conversationId: "conv-1", rating: "not_useful", citationIds: ["c-1"] };
+    const requester = vi.fn(async () => new Response(JSON.stringify({ feedback })));
+    await expect(submitAgentFeedback("conv-1", "not_useful", ["c-1"], requester)).resolves.toBeUndefined();
+    for (const receipt of [null, { ...feedback, conversationId: "other" }, { ...feedback, rating: "useful" }, { ...feedback, citationIds: [] }]) {
+      await expect(submitAgentFeedback("conv-1", "not_useful", ["c-1"], async () => new Response(JSON.stringify({ feedback: receipt })))).rejects.toThrow();
+    }
   });
 
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {

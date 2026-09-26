@@ -120,6 +120,45 @@ describe("agent request cancellation route", () => {
     expect(methods).toEqual(["GET", "GET"]);
   });
 
+  it("shows insufficient evidence without broadening sources and retries only the uncertain feedback", async () => {
+    const bodies: Array<{ url: string; body: unknown }> = []; let feedbackCalls = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input); const body = JSON.parse(String(init?.body)); bodies.push({ url, body });
+      if (url.endsWith("/feedback")) {
+        if (++feedbackCalls === 1) return new Response(null, { status: 503 });
+        return new Response(JSON.stringify({ feedback: { conversationId: "conv-1", ...body } }));
+      }
+      return new Response(JSON.stringify({ answer: "Not enough grounded evidence", conversationId: "conv-1", citations: [], messageKey: "KNOWLEDGE_EVIDENCE_INSUFFICIENT", suggestedActionKeys: ["KNOWLEDGE_CHAT_REWRITE_QUESTION", "KNOWLEDGE_CHAT_EXPAND_SCOPE"] }));
+    });
+    await act(async () => root.render(<AgentRoute locale={language} search="?scope=items&knowledgeItemId=k-1" />)); await flush();
+    await question("Unclear question"); await submit();
+    expect(container.textContent).toContain("Not enough evidence");
+    expect(container.textContent).toContain("Rewrite the question");
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.body).toMatchObject({ scope: { kind: "items", knowledgeItemIds: ["k-1"] } });
+    await click("Not useful");
+    expect(container.textContent).toContain("Feedback delivery is not confirmed");
+    await click("Retry the same feedback");
+    expect(container.textContent).toContain("Feedback saved");
+    expect(bodies.slice(1)).toEqual(Array(2).fill({ url: "/api/knowledge/chat/conversations/conv-1/feedback", body: { rating: "not_useful", citationIds: [] } }));
+  });
+
+  it("prevents concurrent feedback writes and ignores receipt from a replaced conversation", async () => {
+    const late = deferred<Response>(); let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/feedback")) { writes++; return late.promise; }
+      return answer("Answer", "conv-1");
+    });
+    await render(); await question("Question"); await submit();
+    const useful = [...container.querySelectorAll("button")].find((button) => button.textContent === "Useful")!;
+    expect(useful).toBeTruthy();
+    await act(async () => { useful.click(); useful.click(); });
+    expect(writes).toBe(1);
+    await act(async () => root.render(<AgentRoute locale={language} search="?scope=items&knowledgeItemId=k-2" />)); await flush();
+    await act(async () => late.resolve(new Response(JSON.stringify({ feedback: { conversationId: "conv-1", rating: "useful", citationIds: [] } })))); await flush();
+    expect(container.textContent).not.toContain("Feedback saved");
+  });
+
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }
   async function question(value: string) {
     const input = container.querySelector<HTMLInputElement>("#agent-question")!;

@@ -274,7 +274,7 @@ test("validation rejects collection methods borrowed by the role detail branch",
 test("current frontend ownership discovers the required visible mutation minimum", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const expected = {
-    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel"],
+    "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
     "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/links/:linkId", "PATCH /api/tasks/:id", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
     "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],
     "workbench-admin-members": ["PATCH /api/admin/members/:id/status"],

@@ -21,6 +21,8 @@ export interface AgentCitation {
 export interface AgentAnswer {
   answer: string;
   confidence: "high" | "medium" | "low";
+  insufficientEvidence?: true;
+  suggestions?: Array<"rewrite" | "sources">;
   citations: AgentCitation[];
   conversationId?: string;
   conflicts?: Array<{ text: string; citationIds: string[] }>;
@@ -33,7 +35,7 @@ export async function askAgent({ question, scope, conversationId, requester = fe
   requester?: Fetcher;
   signal?: AbortSignal;
 }): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[] }>("/api/knowledge/chat", {
+  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown }>("/api/knowledge/chat", {
     requester,
     signal,
     method: "POST",
@@ -56,7 +58,13 @@ export async function askAgent({ question, scope, conversationId, requester = fe
     if (typeof record.text !== "string" || !Array.isArray(record.citationIds) || !record.citationIds.every((id) => typeof id === "string")) return [];
     return [{ text: record.text, citationIds: record.citationIds as string[] }];
   }) : [];
-  return { answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(conflicts.length > 0 ? { conflicts } : {}), ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
+  const insufficient = data.messageKey === "KNOWLEDGE_EVIDENCE_INSUFFICIENT";
+  const suggestions: Array<"rewrite" | "sources"> = [];
+  if (insufficient && Array.isArray(data.suggestedActionKeys)) {
+    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_REWRITE_QUESTION")) suggestions.push("rewrite");
+    if (data.suggestedActionKeys.includes("KNOWLEDGE_CHAT_EXPAND_SCOPE")) suggestions.push("sources");
+  }
+  return { ...(insufficient ? { insufficientEvidence: true as const, suggestions } : {}), answer: typeof data.answer === "string" ? data.answer : "", confidence, citations, ...(conflicts.length > 0 ? { conflicts } : {}), ...(typeof data.conversationId === "string" ? { conversationId: data.conversationId } : {}) };
 }
 
 export async function updateAgentConversationScope(conversationId: string, scope: AgentScope, requester: Fetcher = fetch): Promise<void> {
@@ -180,4 +188,15 @@ export async function loadAgentConversation(id: string, { requester = fetch, sig
     return { role: message.role, content: message.content, citations: sources as AgentCitation[] };
   });
   return { id, scope: parsedScope, messages };
+}
+
+export type AgentFeedbackRating = "useful" | "not_useful" | "citation_error";
+
+export async function submitAgentFeedback(conversationId: string, rating: AgentFeedbackRating, citationIds: readonly string[], requester: Fetcher = fetch): Promise<void> {
+  if (!resourceId.test(conversationId) || !["useful", "not_useful", "citation_error"].includes(rating) || citationIds.length > 8 || citationIds.some((id) => !/^[A-Za-z0-9:_-]{1,256}$/u.test(id))) return invalidConversation();
+  const data = await apiFetch<{ feedback?: { conversationId?: unknown; rating?: unknown; citationIds?: unknown } }>(`/api/knowledge/chat/conversations/${encodeURIComponent(conversationId)}/feedback`, {
+    requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rating, citationIds }),
+  });
+  const receipt = data?.feedback;
+  if (!receipt || receipt.conversationId !== conversationId || receipt.rating !== rating || !Array.isArray(receipt.citationIds) || receipt.citationIds.length !== citationIds.length || receipt.citationIds.some((id, index) => id !== citationIds[index])) return invalidConversation();
 }

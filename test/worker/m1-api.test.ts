@@ -278,6 +278,12 @@ describe("M1 API authorization and request boundaries", () => {
       body: JSON.stringify({ rating: "citation_error", citationIds: firstBody.citations }),
     });
     expect(feedback.status).toBe(201);
+    const feedbackReplay = await memberApi("contributor", `/api/knowledge/chat/conversations/${firstBody.conversationId}/feedback`, {
+      method: "POST", body: JSON.stringify({ rating: "citation_error", citationIds: firstBody.citations }),
+    });
+    expect(feedbackReplay.status).toBe(201);
+    await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM chat_feedback WHERE conversation_id = ? AND member_id = 'member-contributor'").bind(firstBody.conversationId).first()).resolves.toEqual({ count: 1 });
+    expect((await memberApi("admin", `/api/knowledge/chat/conversations/${firstBody.conversationId}/feedback`, { method: "POST", body: JSON.stringify({ rating: "useful", citationIds: [] }) })).status).toBe(404);
     await expect(env.DB.prepare("SELECT rating, citation_ids_json FROM chat_feedback WHERE conversation_id = ?").bind(firstBody.conversationId).first()).resolves.toEqual({ rating: "citation_error", citation_ids_json: JSON.stringify(firstBody.citations) });
     await expect(env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE conversation_id = ?").bind(firstBody.conversationId).first<{ count: number }>()).resolves.toMatchObject({ count: 2 });
     await expectApiError(memberApi("contributor", "/api/knowledge/chat", {

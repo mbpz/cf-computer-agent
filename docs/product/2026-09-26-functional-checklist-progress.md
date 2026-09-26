@@ -170,3 +170,23 @@ rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx te
 - 不宣称：历史列表/分页、任何普通问题页自动刷新恢复、后端问题幂等、原生浏览器或生产完成。Worker 测试 fake AI；未手工读取 Secret、未推送/部署/远程迁移/生产写入/备份。
 
 当前 **29 父项、关闭 1（B03）、剩余 28**。B08 局部功能有真实测试，父项保持未关闭。下一步允许继续本地证据不足提示/反馈与幂等核对。
+
+
+## B08 — 证据不足与会话反馈（本地子项完成）
+
+承接提交 `8b37fd4`，不新增 AI 调用、数据库迁移或平行反馈存储。
+
+- 只识别服务端 `KNOWLEDGE_EVIDENCE_INSUFFICIENT`，显示双语证据不足提示；改写问题/修改来源建议采用白名单，不自动扩大范围或重新发问。
+- 接入已有会话级 useful/not_useful/citation_error 反馈接口，明确同一会话后续评价会覆盖前次；无引用时禁用引用错误评价。
+- 同页同步 pending guard 阻止重复写；不确定结果保留原载荷并锁住相反评价，只允许显式同载荷重试。回执必须匹配会话、评价及引用列表；卸载忽略晚到回执。
+- Worker 验证现有 `(conversation_id, member_id)` upsert 重试仍只有一行、其他成员写入 404。该条件写证明仅限重复行收敛，不保证不同评价跨标签顺序、刷新后未知反馈恢复或请求时间戳完全一致。
+- 四个新增产品用例先 **4 failed**，实现后定向 71/71；最终 **12 文件 354/354**：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx test/unit/frontend-agent-data.test.ts test/unit/frontend-user-read-pages.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/chat-conversation-service.test.ts test/unit/chat-feedback-service.test.ts test/unit/frontend-knowledge-citation-route.test.tsx test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx test/worker/m1-api.test.ts test/unit/cited-answer-service.test.ts
+```
+
+- `typecheck`、`build:ui`、`verify:i18n` 通过；`test:i18n` 13/13、`verify:workbench-maturity` 13/13、领域快照核对及审计测试 26/26、`verify:delivery-status` 30/30 通过。保留 canonical gaps，新增反馈操作根与实际条件写/测试绑定，不放宽门禁。构建仍有大 chunk 警告。
+- 所有测试为本地 DOM/隔离 Worker（fake AI）；未做原生浏览器或生产验收，未运行全仓测试、Secret 同步、push、部署、远程迁移、生产写入或备份。
+
+当前 **29 父项、关闭 1（B03）、剩余 28**，B08 父项仍未完成。允许继续既有历史列表/分页和问题回合幂等核对；不将这些局部证据冒充全部 checklist 已完结。
