@@ -225,3 +225,29 @@ rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx te
 - happy-dom 与本地 Worker/fake AI 不代表原生浏览器、真实成员或生产 AI 验收。旧无键 API 保留兼容且不宣称幂等；不同标签的独立新意图不保证语义去重。外部 AI 与 D1 不组成分布式事务，pending 可长期未知。
 
 当前仍为 **29 个父项、已关闭 1（B03）、未关闭 28**。B08 此本地功能子项完成但父项不关闭；下一步允许进入 B09 的知识关联任务/讨论跨模块权限核对，真实浏览器验收单独保留，禁止据此宣称全部 checklist 完成。
+
+
+## B09 — 任务关联目标重新授权（本地修复与回归完成）
+
+承接 B08 提交 `5ad04d9`。本批不新增界面、迁移或授权模型，修复既有跨模块关系对当前知识权限的遗漏。
+
+- `TasksRepository.listLinks/findLink` 过去直接 JOIN 当前 revision 标题，历史关联可继续读取已撤权目标标题。现在复用知识读取的 active member、active item、active non-legacy space、shared/admin 条件，在同一 SQL 语句中仅投影可读标题。
+- 失效关联仍属于当前任务所有者，只保留原关联 ID/目标 ID/时间，`knowledgeTitle: null`；这不是读取目标的授权。所有者仍可删除失效关联，其他成员仍 404；没有自动删除用户关系。
+- `TasksService.linkKnowledge` 的当前知识可见性检查移到幂等回读前，已有链接不再绕过撤权；拒绝时不新增链接或审计。
+- 覆盖 admin_only、知识 trashed、空间 disabled/legacy、角色升降级、成员停用、恢复可读、跨成员与失效关系删除。讨论使用既有当前任务/知识授权，随本批一起回归，未改为参与者授权。
+
+### RED → GREEN 与验证
+
+- 修复前有效回归 **5 failed / 30 passed**：四种撤权仍泄露标题，服务层撤权重放错误成功。首次运行有两个测试 fixture 状态枚举写错；按真实 schema 修正后重新跑 RED，五项均为实际行为断言失败，随后才修改实现。
+- 最终 **10 文件 97/97** 通过：
+
+```sh
+rtk proxy npx vitest run test/unit/tasks-service.test.ts test/worker/tasks.test.ts test/worker/task-structure.test.ts test/unit/discussions-service.test.ts test/worker/discussions.test.ts test/unit/frontend-discussion-route.test.tsx test/unit/frontend-discussions-data.test.ts test/unit/frontend-tasks-route.test.tsx test/unit/frontend-tasks-data.test.ts test/unit/frontend-knowledge-citation-route.test.tsx
+```
+
+- `typecheck`、`build:ui`、`verify:workbench-maturity`（13/13）、`audit:workbench-domain` 与 `verify:delivery-status`（30/30）通过。构建保留既有 >500 kB chunk 警告。本批没有修改 UI 文案，B08 双语证据不重新冒充本批执行。
+- 定向本地回归不是全仓测试或真实双账号浏览器验收。本批未执行 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret。
+
+### 下一环节与总进度
+
+本轮仍为 **29 父项，关闭 1（B03），剩余 28**。B09 上述本地子项完成，完整真实身份跨模块跳转验收仍未完成，不提前勾选父项。下一环节允许继续 **C01 任务创建/编辑/状态/截止时间/标签/知识关联逐项核对**；无需等待备份或旧运维签认，但不得把未验证的生产/浏览器项写成完成。

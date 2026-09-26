@@ -177,6 +177,19 @@ describe("TasksService", () => {
     await expect(service.addLink("member-a", "task-1", "knowledge-c")).rejects.toMatchObject({ code: "TASK_LINK_LIMIT", status: 409 });
   });
 
+  it("reauthorizes an existing knowledge link before returning an idempotent replay", async () => {
+    const repository = new FakeTasksRepository();
+    repository.visibleKnowledge.add("knowledge-a");
+    const audit = new FakeAudit();
+    const service = createService(repository, audit);
+    await service.create("member-a", { id: "task-1", title: "Alpha" });
+    await service.addLink("member-a", "task-1", "knowledge-a");
+    repository.visibleKnowledge.delete("knowledge-a");
+    await expect(service.addLink("member-a", "task-1", "knowledge-a"))
+      .rejects.toMatchObject({ code: "TASK_KNOWLEDGE_NOT_FOUND", status: 404 });
+    expect(audit.events.filter((event) => event.action === "task.linked")).toHaveLength(1);
+  });
+
   it("writes audit events for every mutation and skips idempotent replays", async () => {
     const repository = new FakeTasksRepository();
     repository.visibleKnowledge.add("knowledge-a");

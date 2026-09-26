@@ -176,6 +176,47 @@ describe("tasks HTTP contract", () => {
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
   });
 
+  it.each([
+    "UPDATE revisions SET visibility = 'admin_only' WHERE id = 'task-revision'",
+    "UPDATE knowledge_items SET status = 'trashed' WHERE id = 'knowledge-a'",
+    "UPDATE spaces SET status = 'disabled' WHERE id = (SELECT space_id FROM knowledge_items WHERE id = 'knowledge-a')",
+    "UPDATE spaces SET kind = 'legacy' WHERE id = (SELECT space_id FROM knowledge_items WHERE id = 'knowledge-a')",
+  ])("redacts revoked knowledge metadata and rejects link replay: %s", async (revoke) => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    const response = await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
+    const { link } = await response.json() as { link: { id: string } };
+    await env.DB.prepare(revoke).run();
+    const repository = new TasksRepository(env.DB);
+    expect(await repository.findLink("member-a", "task-1", "knowledge-a")).toMatchObject({ id: link.id, knowledgeTitle: null });
+    const detail = await api("/api/tasks/task-1", sessionA);
+    expect(await detail.json()).toMatchObject({ links: [{ id: link.id, knowledgeTitle: null }] });
+    const replay = await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
+    expect(replay.status).toBe(404);
+    expect(await replay.json()).toMatchObject({ error: { code: "TASK_KNOWLEDGE_NOT_FOUND" } });
+    expect((await api("/api/tasks/task-1", sessionB)).status).toBe(404);
+    // An owner can still remove their own stale association without reading its target.
+    expect((await api(`/api/tasks/task-1/links/${link.id}`, sessionA, { method: "DELETE" })).status).toBe(204);
+  });
+
+  it("uses the current member role and status when projecting linked knowledge titles", async () => {
+    await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha" }) });
+    await api("/api/tasks/task-1/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a" }) });
+    const repository = new TasksRepository(env.DB);
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only', title = 'New private title' WHERE id = 'task-revision'").run();
+    expect(await repository.listLinks("member-a", "task-1")).toMatchObject([{ knowledgeTitle: null }]);
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-a'").run();
+    expect(await repository.listLinks("member-a", "task-1")).toMatchObject([{ knowledgeTitle: "New private title" }]);
+    await env.DB.prepare("UPDATE members SET role = 'contributor' WHERE id = 'member-a'").run();
+    expect(await repository.listLinks("member-a", "task-1")).toMatchObject([{ knowledgeTitle: null }]);
+    await env.DB.prepare("UPDATE revisions SET visibility = 'shared' WHERE id = 'task-revision'").run();
+    expect(await repository.findLink("member-a", "task-1", "knowledge-a")).toMatchObject({ knowledgeTitle: "New private title" });
+    expect(await repository.listLinks("member-b", "task-1")).toEqual([]);
+    expect(await repository.findLink("member-b", "task-1", "knowledge-a")).toBeNull();
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-a'").run();
+    expect(await repository.listLinks("member-a", "task-1")).toMatchObject([{ knowledgeTitle: null }]);
+    expect(await repository.findLink("member-a", "task-1", "knowledge-a")).toMatchObject({ knowledgeTitle: null });
+  });
+
   it("creates idempotently, lists, updates, transitions, and deletes", async () => {
     const created = await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-1", title: "Alpha", priority: "high", dueAt: "2026-08-30T00:00:00.000Z" }) });
     expect(created.status).toBe(201);

@@ -193,13 +193,19 @@ export class TasksRepository implements TasksRepositoryPort {
 
   async listLinks(memberId: string, taskId: string): Promise<TaskLink[]> {
     const rows = await this.db.prepare(
-      `SELECT tl.id, tl.task_id, tl.knowledge_item_id, r.title, tl.created_at
+      `WITH ${authorizedKnowledgeMemberCteSql(false)}, readable_task_knowledge AS (
+         SELECT k.id, r.title FROM authorized_member am
+         JOIN knowledge_items k
+         JOIN revisions r ON r.id = k.current_revision_id
+         ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+         WHERE ${ACTIVE_KNOWLEDGE_ITEM_SQL} AND ${readableKnowledgeRevisionSql()}
+       )
+       SELECT tl.id, tl.task_id, tl.knowledge_item_id, readable.title, tl.created_at
        FROM task_links tl
-       LEFT JOIN knowledge_items ki ON ki.id = tl.knowledge_item_id
-       LEFT JOIN revisions r ON r.id = ki.current_revision_id
+       LEFT JOIN readable_task_knowledge readable ON readable.id = tl.knowledge_item_id
        WHERE tl.member_id = ? AND tl.task_id = ?
        ORDER BY tl.created_at DESC, tl.id DESC`,
-    ).bind(memberId, taskId).all<LinkRow>();
+    ).bind(memberId, memberId, taskId).all<LinkRow>();
     return rows.results.map(mapLinkRow);
   }
 
@@ -212,12 +218,18 @@ export class TasksRepository implements TasksRepositoryPort {
 
   async findLink(memberId: string, taskId: string, knowledgeItemId: string): Promise<TaskLink | null> {
     const row = await this.db.prepare(
-      `SELECT tl.id, tl.task_id, tl.knowledge_item_id, r.title, tl.created_at
+      `WITH ${authorizedKnowledgeMemberCteSql(false)}, readable_task_knowledge AS (
+         SELECT k.id, r.title FROM authorized_member am
+         JOIN knowledge_items k
+         JOIN revisions r ON r.id = k.current_revision_id
+         ${ACTIVE_KNOWLEDGE_SPACE_JOIN_SQL}
+         WHERE ${ACTIVE_KNOWLEDGE_ITEM_SQL} AND ${readableKnowledgeRevisionSql()}
+       )
+       SELECT tl.id, tl.task_id, tl.knowledge_item_id, readable.title, tl.created_at
        FROM task_links tl
-       LEFT JOIN knowledge_items ki ON ki.id = tl.knowledge_item_id
-       LEFT JOIN revisions r ON r.id = ki.current_revision_id
+       LEFT JOIN readable_task_knowledge readable ON readable.id = tl.knowledge_item_id
        WHERE tl.member_id = ? AND tl.task_id = ? AND tl.knowledge_item_id = ? LIMIT 1`,
-    ).bind(memberId, taskId, knowledgeItemId).first<LinkRow>();
+    ).bind(memberId, memberId, taskId, knowledgeItemId).first<LinkRow>();
     return row ? mapLinkRow(row) : null;
   }
 

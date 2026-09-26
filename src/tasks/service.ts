@@ -223,11 +223,12 @@ export class TasksService {
   }
 
   private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string): Promise<{ link: TaskLink; created: boolean }> {
-    const existing = await this.repository.findLink(memberId, task.id, knowledgeItemId);
-    if (existing) return { link: existing, created: false };
+    // Replays must authorize the current target, not rely on a past association.
     if (!await this.repository.isKnowledgeVisible(memberId, knowledgeItemId)) {
       throw new AppError("TASK_KNOWLEDGE_NOT_FOUND", "Knowledge item is not visible", 404);
     }
+    const existing = await this.repository.findLink(memberId, task.id, knowledgeItemId);
+    if (existing) return { link: existing, created: false };
     if (await this.repository.countLinks(memberId, task.id) >= APP_CONFIG.maxTaskLinksPerTask) {
       throw new AppError("TASK_LINK_LIMIT", "Task link limit reached", 409);
     }
