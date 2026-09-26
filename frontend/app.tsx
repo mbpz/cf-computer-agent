@@ -188,7 +188,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
-    case "goals": return <GoalsRoute locale={locale} />;
+    case "goals": return <GoalsRoute key={session?.member.id} locale={locale} />;
     case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} />;
     case "project-timeline": return <ProjectTimelineRoute locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
@@ -1057,41 +1057,71 @@ export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
 export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<GoalsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
+  const [createLocked, setCreateLocked] = useState(false);
+  const createLockedRef = useRef(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
+  const pendingRef = useRef(false);
+  const generationRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
   const stateRef = useRef<GoalsPageState>({ kind: "loading" });
   stateRef.current = state;
+  const clearDeniedGoals = useCallback((error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    generationRef.current++; controllerRef.current?.abort();
+    pendingRef.current = false; setPending(false); setActionError(undefined);
+    createLockedRef.current = false; setCreateLocked(false);
+    const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+    stateRef.current = cleared; setState(cleared); return true;
+  }, [locale]);
 
-  const refresh = useCallback(async (append = false) => {
+  const refresh = useCallback(async (append = false): Promise<boolean> => {
     const currentState = stateRef.current;
     const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    setPending(true); setActionError(undefined);
+    if (append && (pendingRef.current || createLockedRef.current || !cursor)) return false;
+    controllerRef.current?.abort();
+    const controller = new AbortController(); controllerRef.current = controller;
+    const generation = ++generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
-      const page = await loadGoals({ limit: 20, ...(cursor ? { cursor } : {}) });
-      if (!activeRef.current) return;
+      const page = await loadGoals({ limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal);
+      if (!activeRef.current || generationRef.current !== generation) return false;
       setState((current) => append && current.kind === "ready"
         ? { kind: "ready", items: [...current.items, ...page.items], nextCursor: page.nextCursor }
         : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+      return true;
     } catch (error: unknown) {
-      if (!activeRef.current || isAbort(error)) return;
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
+      if (clearDeniedGoals(error)) return false;
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      setActionError(frontendText(locale, "GOALS_ACTION_FAILED"));
-    } finally { if (activeRef.current) setPending(false); }
-  }, [locale]);
+      setActionError(frontendText(locale, "GOALS_ACTION_FAILED")); return false;
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
+  }, [locale, clearDeniedGoals]);
 
-  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
+  useEffect(() => {
+    activeRef.current = true; void refresh();
+    return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
+  }, [refresh, retryVersion]);
 
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (pending) return;
-    setPending(true); setActionError(undefined);
-    try { await operation(); await refresh(); }
-    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "GOALS_ACTION_FAILED")); setPending(false); }
+    if (pendingRef.current || createLockedRef.current) return;
+    const generation = generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
+    try { await operation(); if (activeRef.current && generationRef.current === generation) await refresh(); }
+    catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
+      if (!clearDeniedGoals(error)) setActionError(frontendText(locale, "GOALS_ACTION_FAILED"));
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
-  return <GoalsPage locale={locale} state={state} pending={pending} actionError={actionError}
+  return <GoalsPage locale={locale} state={state} pending={pending} actionError={actionError} createLocked={createLocked}
     onRetry={() => setRetryVersion((value) => value + 1)}
-    onCreate={(input) => void mutate(() => createGoal(input))}
+    onCreate={async (input) => {
+      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      return createGoal(input);
+    }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedGoals}
+    onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(goal: Goal, status) => void mutate(() => setGoalStatus(goal.id, status))}
     onProgressChange={(goal: Goal, progress) => void mutate(() => setGoalProgress(goal.id, progress))}
     onLoadMore={() => void refresh(true)} />;
@@ -1100,6 +1130,8 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
 export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
+  const [createLocked, setCreateLocked] = useState(false);
+  const createLockedRef = useRef(false);
   const [summaryPending, setSummaryPending] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
@@ -1120,22 +1152,23 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
     generationRef.current += 1; cancelReads();
     pendingRef.current = false; setPending(false); setSummaryPending([]); setActionError(undefined);
+    createLockedRef.current = false; setCreateLocked(false);
     const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared);
     return true;
   }, [cancelReads, locale]);
 
-  const refresh = useCallback(async (append = false) => {
+  const refresh = useCallback(async (append = false): Promise<boolean> => {
     const currentState = stateRef.current;
     const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    if (append && (pendingRef.current || !cursor)) return;
+    if (append && (pendingRef.current || createLockedRef.current || !cursor)) return false;
     cancelReads();
     const generation = ++generationRef.current;
     const controller = new AbortController(); listControllerRef.current = controller;
     pendingRef.current = true; setPending(true); setSummaryPending([]); setActionError(undefined);
     try {
       const page = await loadProjects({ limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal);
-      if (!activeRef.current || generationRef.current !== generation) return;
+      if (!activeRef.current || generationRef.current !== generation) return false;
       const entries = await Promise.all(page.items.map(async (project) => {
         try { return [project.id, await loadProjectSummary(project.id, fetch, controller.signal)] as const; }
         catch (error) {
@@ -1143,16 +1176,17 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
           return [project.id, undefined] as const;
         }
       }));
-      if (!activeRef.current || generationRef.current !== generation) return;
+      if (!activeRef.current || generationRef.current !== generation) return false;
       const summaries = Object.fromEntries(entries.filter((entry) => entry[1] !== undefined)) as Record<string, ProjectSummary>;
       setState((current) => append && current.kind === "ready"
         ? { kind: "ready", items: [...current.items, ...page.items], summaries: { ...current.summaries, ...summaries }, nextCursor: page.nextCursor }
         : { kind: "ready", items: page.items, summaries, nextCursor: page.nextCursor });
+      return true;
     } catch (error: unknown) {
-      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
-      if (clearDeniedProjects(error)) return;
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
+      if (clearDeniedProjects(error)) return false;
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED"));
+      setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   }, [locale, cancelReads, clearDeniedProjects]);
 
@@ -1163,7 +1197,7 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
 
   const retrySummary = async (project: Project) => {
     const current = stateRef.current;
-    if (pendingRef.current || rowControllersRef.current.has(project.id) || current.kind !== "ready"
+    if (pendingRef.current || createLockedRef.current || rowControllersRef.current.has(project.id) || current.kind !== "ready"
       || !current.items.some((item) => item.id === project.id) || Object.hasOwn(current.summaries, project.id)) return;
     const generation = generationRef.current;
     const controller = new AbortController(); rowControllersRef.current.set(project.id, controller);
@@ -1182,7 +1216,7 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
   };
 
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || createLockedRef.current) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
@@ -1197,10 +1231,17 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     }
   };
 
-  return <ProjectsPage locale={locale} state={state} pending={pending} summaryPending={summaryPending} actionError={actionError}
+  return <ProjectsPage locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRetrySummary={(project) => void retrySummary(project)}
-    onCreate={(input) => void mutate(() => createProject(input))}
+    onCreate={async (input) => {
+      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      return createProject(input);
+    }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedProjects}
+    onCreateLock={(locked) => {
+      if (locked && !createLockedRef.current && !pendingRef.current) { generationRef.current++; cancelReads(); setSummaryPending([]); }
+      createLockedRef.current = locked; setCreateLocked(locked);
+    }}
     onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
     onLoadMore={() => void refresh(true)} />;

@@ -1,3 +1,4 @@
+import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
 
 export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "archived";
@@ -60,8 +61,13 @@ export async function setProjectTimelineStatus(projectId: string, id: string, st
   return apiFetch<ProjectTimelineItem>(`/api/projects/${encodeURIComponent(projectId)}/timeline/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
 }
 
-export async function createProject(input: { title: string; description?: string | null }, requester: Fetcher = fetch): Promise<{ project: Project; created: boolean }> {
-  return apiFetch<{ project: Project; created: boolean }>("/api/projects", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input }) });
+export async function createProject(input: PlanningCreateIntent, requester: Fetcher = fetch): Promise<{ project: Project; created: boolean }> {
+  const value = await apiFetch<unknown>("/api/projects", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_CREATE_INVALID");
+  const record = value as Record<string, unknown>;
+  const project = normalizeProject(record.project);
+  if (!project || project.id !== input.id || project.clientKey !== input.clientKey || typeof record.created !== "boolean") throw new Error("PROJECT_CREATE_INVALID");
+  return { project, created: record.created };
 }
 
 export async function setProjectStatus(id: string, status: ProjectStatus, requester: Fetcher = fetch): Promise<Project> {

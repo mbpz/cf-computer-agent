@@ -321,3 +321,33 @@ rtk proxy npx vitest run test/unit/frontend-project-summary-recovery.test.tsx te
 - 本地门禁：typecheck、build:ui、verify:i18n、test:i18n 13/13、verify:workbench-maturity 13/13、verify:delivery-status 30/30 均通过。领域审计因新增测试证据先报告 STALE，重新生成快照后 audit:workbench-domain 通过；冻结 gap 指纹未改。保留既有 >500 kB chunk 提示，typecheck 不代表全部前端 TSX 类型覆盖。
 - 范围边界：本批关闭 EXT-PRJ-02 本地子项及 C03 计数子项，不关闭 C03 父项。目标/项目数字分页与 URL 恢复、创建稳定意图、完整关联编辑 UI、未知写入/并发恢复和真实浏览器验收仍开放。摘要普通失败可恢复不等于流式加载，首次页面仍等待当前摘要批次结束。
 - 总清单仍为 **29 父项 / 已关闭 1（B03）/ 未关闭 28**。下一步允许继续 C03 剩余功能或 C04 既有原子待办；不需要重复新建已有模块。未 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；以上不是全仓或生产验收。
+
+
+## C03 — 目标/项目同页面创建意图恢复（本地子项完成）
+
+承接项目摘要恢复提交 `25ee5fe`，本批严格对应 EXT-GL-02 / EXT-PRJ-03 的创建子项，不提前关闭 C03 父项。
+
+- 共享创建表单在首次提交时固定 `id`、`clientKey`、标题和描述。网络异常、超时、可重试响应或不可信回执保留原意图与草稿；仅显式重试同一请求，不生成新键或自动重放。
+- 校验服务端回执的实体 ID、clientKey 与 created 布尔值。首次确定的非重试 4xx 拒绝允许修改原草稿；未知结果之后收到拒绝仍不释放未知意图。
+- 写入已确认但列表读取失败时，仅重试读取，不再 POST；读取成功后才清空草稿。401/403 清理私有列表和草稿，卸载后的迟到回执不触发读取。目标路由补齐成员 key、AbortController 与 generation 隔离。
+- 同步状态门防止重复创建点击，并覆盖同一时刻状态修改与创建互斥。项目路由拒绝忙碌创建时不破坏已有写入 generation，避免永久 busy。
+- 未解决写入提供离开页面提示，但不声称跨 SPA 路由/刷新持久恢复。标题按 Unicode 码点 200、描述按后端 200000 上限校验，没有新增任意 10000 字符限制。
+
+### RED → GREEN 与验证
+
+- 初始用例装载等待空表单创建按钮可用造成 harness 失败，修正为等待标题字段；该错误不作为业务 RED 证据。
+- 增补边界回归出现 **4 failed / 38 passed**，暴露可重试 404 被错误释放及描述长度限制不一致；修复后通过。
+- 同时点击状态与创建回归出现 **2 failed / 42 passed**，原实现产生两次 POST；补齐同步入口守卫后通过。
+- 新增 **44 项**真实 App / happy-dom 用例；联合 **13 文件、273/273** 通过：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+```
+
+- `typecheck`、`build:ui`、`verify:i18n`、`test:i18n`（13/13）通过；构建仍有既有 >500 kB chunk 警告。仓库 typecheck 不覆盖所有前端 TSX，因此不表述为全前端严格类型检查。
+- 成熟度契约（13/13）、交付契约（30/30）及领域审计通过。领域 AST 审计不追踪直接函数引用形式的回调；改为显式 API 调用后恢复调用证据，新增测试清单后重生成领域报告。没有弱化冻结 gap 指纹或提前提升成熟度。
+- 仅执行本地选定套件，没有全仓/真实浏览器/生产验收；未 push、部署、远程迁移、生产写入、备份或手工读取上传 Secret。
+
+### 下一环节与总进度
+
+原审计共 **30 个父项**；按用户功能范围排除 D08 发布环节后，仍为 **29 个范围内父项、关闭 1（B03）、未关闭 28**。C03 两个创建恢复子项可勾选，EXT-GL-02 / EXT-PRJ-03 与 C03 父项保持未完成。下一步允许继续 C03 编号分页/URL 状态及关系编辑核对；跨刷新恢复、条件写入、完整关系 UI 和真实浏览器验收仍待完成。没有新的外部阻塞，也不以“不需备份”代替功能完成证据。

@@ -1,14 +1,15 @@
+import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
 
 export type GoalStatus = "active" | "paused" | "completed" | "archived";
 export interface Goal { id: string; clientKey: string; title: string; description: string | null; status: GoalStatus; progress: number; targetAt: string | null; createdAt: string; updatedAt: string; }
 export interface GoalPage { items: Goal[]; nextCursor?: string; }
 
-export async function loadGoals(input: { limit?: number; cursor?: string; status?: GoalStatus } = {}, requester: Fetcher = fetch): Promise<GoalPage> {
+export async function loadGoals(input: { limit?: number; cursor?: string; status?: GoalStatus } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<GoalPage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });
   if (input.cursor) params.set("cursor", input.cursor);
   if (input.status) params.set("status", input.status);
-  const value = await apiFetch<unknown>(`/api/goals?${params.toString()}`, { requester });
+  const value = await apiFetch<unknown>(`/api/goals?${params.toString()}`, { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("GOAL_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
   const items = Array.isArray(record.items) ? record.items.map(normalizeGoal).filter((item): item is Goal => item !== null) : [];
@@ -16,11 +17,13 @@ export async function loadGoals(input: { limit?: number; cursor?: string; status
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
 
-export async function createGoal(input: { title: string; description?: string | null; targetAt?: number | null }, requester: Fetcher = fetch): Promise<{ goal: Goal; created: boolean }> {
-  return apiFetch<{ goal: Goal; created: boolean }>("/api/goals", {
-    requester, method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input }),
-  });
+export async function createGoal(input: PlanningCreateIntent & { targetAt?: number | null }, requester: Fetcher = fetch): Promise<{ goal: Goal; created: boolean }> {
+  const value = await apiFetch<unknown>("/api/goals", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("GOAL_CREATE_INVALID");
+  const record = value as Record<string, unknown>;
+  const goal = normalizeGoal(record.goal);
+  if (!goal || goal.id !== input.id || goal.clientKey !== input.clientKey || typeof record.created !== "boolean") throw new Error("GOAL_CREATE_INVALID");
+  return { goal, created: record.created };
 }
 
 export async function updateGoal(id: string, input: { title: string; description?: string | null; targetAt?: number | null }, requester: Fetcher = fetch): Promise<Goal> {

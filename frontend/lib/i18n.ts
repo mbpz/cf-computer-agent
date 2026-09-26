@@ -11,6 +11,11 @@ export interface LocaleRuntime {
 
 const catalogs: Record<FrontendLocale, Record<string, string>> = {
   en: {
+    PLANNING_CREATE_UNKNOWN: "Creation is unconfirmed. Keep this page open and retry the original request; do not refresh or create the same item elsewhere.",
+    PLANNING_CREATE_RETRY: "Retry original creation",
+    PLANNING_CREATE_READ_FAILED: "Creation was confirmed, but the list could not be read. Retry reading only; do not create again.",
+    PLANNING_CREATE_READ_RETRY: "Retry list read",
+
     ASSET_FLOW_MEMBER_REQUIRED: "A signed-in member is required to upload files.",
     ASSET_FLOW_BUSY: "An attachment operation is in progress. Wait for its result before choosing another file.",
     ASSET_FLOW_EMPTY: "Empty files cannot be uploaded.",
@@ -1022,6 +1027,11 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "Submitter",
   },
   "zh-CN": {
+    PLANNING_CREATE_UNKNOWN: "创建结果未知。请保留此页面并重试原请求，勿刷新或在别处重复创建。",
+    PLANNING_CREATE_RETRY: "重试原创建",
+    PLANNING_CREATE_READ_FAILED: "创建已确认，但列表读取失败。请仅重试读取，勿重复创建。",
+    PLANNING_CREATE_READ_RETRY: "重试列表读取",
+
     ASSET_FLOW_MEMBER_REQUIRED: "登录成员账户后才能上传附件。",
     ASSET_FLOW_BUSY: "附件操作进行中，请等待结果后再选择文件。",
     ASSET_FLOW_EMPTY: "不能上传空文件。",
