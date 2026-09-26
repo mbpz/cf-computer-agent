@@ -927,6 +927,15 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize
       && JSON.stringify(value.filters) === JSON.stringify(queryRef.current.filters);
 
+  const clearDeniedTasks = (error: unknown): boolean => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    // Invalidate pending reads so a late response cannot restore protected rows.
+    controllerRef.current?.dispose();
+    setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    setPending(false); setLocalLoadError(undefined); setActionError(undefined);
+    return true;
+  };
+
   useEffect(() => {
     const onPopState = () => {
       setActionError(undefined);
@@ -949,6 +958,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
       if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); }
     }).catch((error: unknown) => {
       if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) {
+        if (clearDeniedTasks(error)) return;
         setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false);
       }
@@ -978,7 +988,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     actionPendingRef.current = true; setActionPendingId(id); setActionError(undefined); setLocalLoadError(undefined);
     try { await mutation(); }
     catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED"));
+      if (sameQuery(snapshot) && !isAbort(error) && !clearDeniedTasks(error)) setActionError(frontendText(locale, "TASKS_ACTION_FAILED"));
       actionPendingRef.current = false; setActionPendingId(null);
       return;
     }
@@ -991,7 +1001,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
       if (data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: snapshot.page - 1 }, true);
       else { setState({ kind: "ready", data }); setPending(false); }
     } catch (error: unknown) {
-      if (sameQuery(snapshot) && !isAbort(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
+      if (sameQuery(snapshot) && !isAbort(error) && !clearDeniedTasks(error)) { setLocalLoadError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
     } finally { actionPendingRef.current = false; setActionPendingId(null); }
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;

@@ -251,3 +251,21 @@ rtk proxy npx vitest run test/unit/tasks-service.test.ts test/worker/tasks.test.
 ### 下一环节与总进度
 
 本轮仍为 **29 父项，关闭 1（B03），剩余 28**。B09 上述本地子项完成，完整真实身份跨模块跳转验收仍未完成，不提前勾选父项。下一环节允许继续 **C01 任务创建/编辑/状态/截止时间/标签/知识关联逐项核对**；无需等待备份或旧运维签认，但不得把未验证的生产/浏览器项写成完成。
+
+
+## C01 — 任务页面撤权清理（本地有界子项完成）
+
+承接 B09 提交 `149a8b8`，进入 C01 后核对真实 TasksRoute，而非仅以 API 客户端存在判断功能完成。
+
+- 列表加载、状态 mutation、mutation 成功后的读取三条路径，401/403 均清除旧任务标题、行与操作入口；废弃当前请求控制器，晚到的成功读取不得恢复受保护行。
+- 显式“重新搜索”只重新 GET，恢复权限后可以正常显示列表，不重放上一次状态操作。普通 500/网络错误沿用保留列表与本地重试反馈的体验。
+- RED：新增六个 401/403 反例在实现前全部失败，19 个既有测试通过。修复后另加迟到读取反例，最后联合 **8 文件 227/227** 通过：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-tasks-route.test.tsx test/unit/frontend-tasks-page.test.tsx test/unit/frontend-tasks-data.test.ts test/unit/tasks-service.test.ts test/worker/tasks.test.ts test/worker/task-structure.test.ts test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx
+```
+
+- `typecheck`、`build:ui`、成熟度契约 13/13、领域审计快照检查通过；保留既有大 chunk 警告，无新界面文案或迁移。
+- **尚未闭环的具体功能**：`loadTaskDetail/createTask/updateTask/replaceTaskTags/addTaskLink` 存在于客户端模块，但没有在当前 TasksRoute 中调用；任务创建/编辑/截止时间/标签/知识关联的界面交互及未知结果恢复需要后续接线。后端可调用不等于成员界面可用。
+- 总清单仍 **29 父项、关闭 1、剩余 28**。当前在 C01，继续本地实施允许，无需新生产权限；下一步应完成上述任务编辑工作流，不越过未完成项直接宣称 C01 或全部清单完成。
+- 没有 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret。以上不是全仓测试、真实浏览器或生产验收。

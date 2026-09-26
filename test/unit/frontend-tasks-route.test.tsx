@@ -145,6 +145,66 @@ describe("private task numbered route", () => {
     expect(gets).toBe(3); expect(container.textContent).toContain("Beta");
   });
 
+  it.each([401, 403])("clears protected tasks when a list refresh returns %s", async (status) => {
+    let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => ++gets === 1 ? taskPage(String(input)) : Response.json({ error: { code: "DENIED", message: "private detail" } }, { status }));
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    expect(container.textContent).toContain("Alpha");
+    await clickButton("Page 1"); await flush();
+    expect(container.textContent).not.toContain("Alpha");
+    expect(container.querySelector('[aria-label="Complete: Alpha (task-alpha)"]')).toBeNull();
+    expect(container.textContent).toContain("Try search again");
+    expect(container.textContent).not.toContain("private detail");
+  });
+
+  it.each([401, 403])("clears protected tasks when a mutation returns %s", async (status) => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return Response.json({ error: { code: "DENIED" } }, { status }); }
+      return taskPage(String(input));
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
+    expect(container.textContent).not.toContain("Alpha");
+    expect(container.textContent).toContain("Try search again");
+    await clickButton("Try search again"); await flush();
+    expect(container.textContent).toContain("Alpha");
+    expect(posts).toBe(1); // Explicit recovery is a GET, never a replayed mutation.
+  });
+
+  it.each([401, 403])("clears protected tasks when the post-mutation read returns %s", async (status) => {
+    let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Response.json(createTask("Alpha"));
+      return ++gets === 1 ? taskPage(String(input)) : Response.json({ error: { code: "DENIED" } }, { status });
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)"); await flush();
+    expect(container.textContent).not.toContain("Alpha");
+    expect(container.textContent).toContain("Try search again");
+  });
+
+  it("ignores a late list response after a mutation revokes access", async () => {
+    let gets = 0;
+    let resolveRead!: (response: Response) => void;
+    let resolveMutation!: (response: Response) => void;
+    const read = new Promise<Response>((resolve) => { resolveRead = resolve; });
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return mutation;
+      return ++gets === 1 ? taskPage(String(input)) : read;
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Complete: Alpha (task-alpha)");
+    await act(async () => browser.dispatchEvent(new browser.PopStateEvent("popstate"))); await flush();
+    expect(gets).toBe(2);
+    await act(async () => resolveMutation(Response.json({ error: { code: "DENIED" } }, { status: 403 }))); await flush();
+    expect(container.textContent).not.toContain("Alpha");
+    await act(async () => resolveRead(taskPage(browser.location.href, false, "Late private title"))); await flush();
+    expect(container.textContent).not.toContain("Late private title");
+    expect(container.textContent).toContain("Try search again");
+  });
+
   it("does not let a mutation refresh overwrite a newer query", async () => {
     let gets = 0; let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
