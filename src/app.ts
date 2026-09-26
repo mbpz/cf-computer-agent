@@ -4,6 +4,7 @@ import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
 import { WorkersAiImageConverter } from "./assets/ai-image";
 import { AssetService } from "./assets/service";
 import { CitedAnswerService } from "./ai/cited-answer-service";
+import { ChatTurnReceipts } from "./chat/turn-receipts";
 import { ChatRepository } from "./chat/repository";
 import { ChatConversationService } from "./chat/conversation-service";
 import { D1ChatFeedbackRepository } from "./chat/feedback-repository";
@@ -335,6 +336,7 @@ function createRequestServices(
     analytics,
     analyticsNow,
     citedAnswers: new CitedAnswerService(ai),
+    chatTurnReceipts: new ChatTurnReceipts(env.DB),
     chatConversations: new ChatConversationService(new ChatRepository(env.DB)),
     chatFeedback: new ChatFeedbackService(new ChatRepository(env.DB), new D1ChatFeedbackRepository(env.DB)),
     sourceSummaries: new SourceSummaryService(ai),

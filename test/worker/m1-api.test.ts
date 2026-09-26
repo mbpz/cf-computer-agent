@@ -28,10 +28,12 @@ const APP_TOKEN = "worker-test-token";
 const sessionBySubject = new Map<string, string>();
 let automationNonce = 0;
 let fakeAiCalls = 0;
+let beforeFakeAnswer: (() => Promise<void>) | undefined;
 
 const fakeAi = {
   async run(_model: string, input: { messages: Array<{ content: string }>; response_format?: unknown }): Promise<unknown> {
     fakeAiCalls += 1;
+    await beforeFakeAnswer?.();
     if (!input.response_format) return { response: "legacy local answer" };
     const marker = "输入 JSON：\n";
     const content = input.messages.at(-1)?.content || "";
@@ -144,6 +146,7 @@ beforeEach(async () => {
   sessionBySubject.clear();
   automationNonce = 0;
   fakeAiCalls = 0;
+  beforeFakeAnswer = undefined;
   const repository = new MembersRepository(env.DB);
   const sessions = new SessionService(env.DB, repository, { waitUntil: () => undefined });
   for (const subject of ["contributor", "admin", "other"]) {
@@ -247,6 +250,77 @@ describe("M1 API authorization and request boundaries", () => {
     expect(revoked.status).toBe(404);
     expect(await revoked.text()).not.toContain("recoverymarker");
     expect(fakeAiCalls).toBe(calls);
+  });
+
+  it("replays a keyed chat turn without another generation or conversation and rejects payload reuse", async () => {
+    const published = await publishSubmission("admin", "Idempotent chat", "turnreceiptmarker is documented", "shared", "turn-receipt-key01");
+    const body = { question: "turnreceiptmarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } };
+    const init = { method: "POST", headers: { "idempotency-key": "chat-replay-key-0001" }, body: JSON.stringify(body) };
+    const first = await memberApi("contributor", "/api/knowledge/chat", init);
+    expect(first.status).toBe(200);
+    const result = await first.json<{ conversationId: string; answer: string }>();
+    const calls = fakeAiCalls;
+    const replay = await memberApi("contributor", "/api/knowledge/chat", init);
+    expect(replay.status).toBe(200); expect(await replay.json()).toEqual(result);
+    expect(fakeAiCalls).toBe(calls);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE conversation_id = ?").bind(result.conversationId).first()).toEqual({ count: 1 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM chat_conversations WHERE owner_member_id = ?").bind("member-contributor").first()).toEqual({ count: 1 });
+    expect((await memberApi("contributor", "/api/knowledge/chat", { ...init, body: JSON.stringify({ ...body, question: "different" }) })).status).toBe(409);
+    expect(fakeAiCalls).toBe(calls);
+    const other = await memberApi("other", "/api/knowledge/chat", init);
+    expect(other.status).toBe(200); expect((await other.json<{ conversationId: string }>()).conversationId).not.toBe(result.conversationId);
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE knowledge_item_id = ?").bind(published.knowledgeItemId).run();
+    const callsBeforeRevoked = fakeAiCalls;
+    const revoked = await memberApi("contributor", "/api/knowledge/chat", init);
+    expect(revoked.status).toBe(404); expect(fakeAiCalls).toBe(callsBeforeRevoked);
+    expect(await revoked.text()).not.toContain(result.answer);
+  });
+
+  it("does not take over an in-flight keyed turn and does not cache cancellation as success", async () => {
+    const published = await publishSubmission("admin", "Pending chat", "pendingturnmarker is documented", "shared", "pending-turn-key01");
+    let entered!: () => void; let release!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    beforeFakeAnswer = async () => { entered(); await gate; };
+    const init = { method: "POST", headers: { "idempotency-key": "pending-chat-key-01" }, body: JSON.stringify({ question: "pendingturnmarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }) };
+    const first = memberApi("contributor", "/api/knowledge/chat", init);
+    await started;
+    try {
+      const pending = await memberApi("contributor", "/api/knowledge/chat", init);
+      expect(pending.status).toBe(409); expect(await pending.text()).toContain("CHAT_TURN_PENDING");
+      expect(fakeAiCalls).toBe(1);
+      const conversation = await env.DB.prepare("SELECT id FROM chat_conversations WHERE owner_member_id = 'member-contributor'").first<{ id: string }>();
+      expect((await memberApi("contributor", `/api/knowledge/chat/conversations/${conversation!.id}/cancel`, { method: "POST", body: "{}" })).status).toBe(202);
+    } finally { release(); }
+    expect((await first).status).toBe(409);
+    const retry = await memberApi("contributor", "/api/knowledge/chat", init);
+    expect(retry.status).toBe(409); expect(await retry.text()).toContain("CHAT_TURN_FAILED");
+    expect(fakeAiCalls).toBe(1);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages").first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT status FROM chat_turn_requests").first()).toEqual({ status: "failed" });
+  });
+
+  it("atomically rolls back the message if receipt completion fails and never regenerates an unknown commit", async () => {
+    const published = await publishSubmission("admin", "Atomic chat", "atomicturnmarker is documented", "shared", "atomic-turn-key01");
+    await env.DB.prepare("CREATE TRIGGER reject_chat_receipt BEFORE UPDATE OF status ON chat_turn_requests WHEN NEW.status = 'completed' BEGIN SELECT RAISE(ABORT, 'injected receipt failure'); END").run();
+    const init = { method: "POST", headers: { "idempotency-key": "atomic-chat-key-001" }, body: JSON.stringify({ question: "atomicturnmarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }) };
+    expect((await memberApi("contributor", "/api/knowledge/chat", init)).status).toBe(500);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM chat_messages").first()).toEqual({ count: 0 });
+    expect(await env.DB.prepare("SELECT status FROM chat_turn_requests").first()).toEqual({ status: "pending" });
+    expect(await env.DB.prepare("SELECT active_turn_id FROM chat_conversations").first()).toEqual({ active_turn_id: null });
+    await env.DB.prepare("DROP TRIGGER reject_chat_receipt").run();
+    const calls = fakeAiCalls;
+    const retry = await memberApi("contributor", "/api/knowledge/chat", init);
+    expect(retry.status).toBe(409); expect(await retry.text()).toContain("CHAT_TURN_PENDING");
+    expect(fakeAiCalls).toBe(calls);
+  });
+
+  it("rejects malformed chat intent keys before creating a conversation", async () => {
+    for (const key of ["short", "bad key with spaces", "x".repeat(129)]) {
+      const response = await memberApi("contributor", "/api/knowledge/chat", { method: "POST", headers: { "idempotency-key": key }, body: JSON.stringify({ question: "hello", scope: { kind: "all" } }) });
+      expect(response.status).toBe(400);
+    }
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM chat_conversations").first()).toEqual({ count: 0 });
   });
 
   it("lists only owned conversation identifiers with stable creation cursors", async () => {

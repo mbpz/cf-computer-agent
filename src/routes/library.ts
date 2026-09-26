@@ -16,6 +16,7 @@ import type { LibraryService } from "../library/service";
 import type { ChatScope, LibraryFilters, LibraryScope, SearchRequest } from "../library/types";
 import type { CitedAnswerService } from "../ai/cited-answer-service";
 import type { ChatConversationService } from "../chat/conversation-service";
+import type { ChatTurnReceipts } from "../chat/turn-receipts";
 import type { ChatFeedbackService } from "../chat/feedback-service";
 import type { SourceSummaryService } from "../ai/source-summary-service";
 import type { FaqService } from "../ai/faq-service";
@@ -38,6 +39,7 @@ export interface LibraryRouteServices {
   citedAnswers: CitedAnswerService;
   chatConversations: ChatConversationService;
   chatFeedback: ChatFeedbackService;
+  chatTurnReceipts: ChatTurnReceipts;
   sourceSummaries: SourceSummaryService;
   faqs: FaqService;
   timelines: TimelineService;
@@ -233,6 +235,43 @@ export async function routeLibraryApi(
     const chatScope = chatScopeRequest(input.scope);
     const conversationId = input.conversationId === undefined ? undefined : stringValue(input.conversationId);
     if (conversationId !== undefined && !/^[A-Za-z0-9_-]{1,128}$/u.test(conversationId)) throw invalidChatRequest();
+    const key = request.headers.get("idempotency-key");
+    if (key !== null) {
+      const claim = await services.chatTurnReceipts.claim(scope.memberId, key, { question, scope: chatScope, conversationId });
+      if (claim.kind === "replay") {
+        // Cached prose can depend on earlier context, not just displayed citations.
+        await services.chatConversations.read(scope, claim.response.conversationId);
+        await parallelWork(services.workScope, claim.authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
+        return jsonResponse(claim.response, 200, context.requestId);
+      }
+      let activeConversationId: string | undefined;
+      let commitAttempted = false;
+      try {
+        const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
+        await services.chatConversations.startTurn(scope, conversation.id, claim.id);
+        activeConversationId = conversation.id;
+        const history = await services.chatConversations.history(scope, conversation.id);
+        const historyCitations = history.flatMap((message) => message.citationIds);
+        await parallelWork(services.workScope, [...new Set(historyCitations)].map((citationId) => () => services.library.readCitation(scope, citationId)));
+        const hits = await services.library.searchInternal(scope, { query: question, limit: 8 }, chatScope);
+        const answer = await services.citedAnswers.answer(scope, question, hits.items, history);
+        const authorizationCitations = [...new Set([...historyCitations, ...hits.items.map((hit) => hit.citationId), ...answer.citations])];
+        // Recheck after generation too: access may have changed during the AI call.
+        await parallelWork(services.workScope, authorizationCitations.map((citationId) => () => services.library.readCitation(scope, citationId)));
+        if (await services.chatConversations.isCancelled(scope, conversation.id, claim.id)) throw new AppError("CHAT_CANCELLED", "Chat generation was cancelled", 409);
+        const response = { ...answer, conversationId: conversation.id, idempotencyKey: key };
+        commitAttempted = true;
+        await services.chatTurnReceipts.complete({ memberId: scope.memberId, id: claim.id, question, response, authorizationCitations });
+        return jsonResponse(response, 200, context.requestId);
+      } catch (error) {
+        // A lost commit response is not proof of failure. Preserve the durable receipt.
+        if (!commitAttempted) await services.chatTurnReceipts.fail(scope.memberId, claim.id);
+        throw error;
+      } finally {
+        if (activeConversationId) await services.chatConversations.finishTurn(scope, activeConversationId, claim.id);
+      }
+    }
+    // Compatibility path: older clients without a key do not get replay guarantees.
     const conversation = await services.chatConversations.ensure(scope, conversationId, chatScope);
     const turnId = crypto.randomUUID();
     await services.chatConversations.startTurn(scope, conversation.id, turnId);

@@ -204,3 +204,24 @@ rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx te
 - 没有 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；测试 fake AI，无远程 AI 调用；未运行全仓测试或原生浏览器验收。
 
 **29 父项，关闭 1（B03），剩余 28；B08 仍未关闭。** 本轮累计完成来源切换/单会话恢复、证据不足/反馈、历史列表/分页三个本地切片。下一项是跨刷新/重复问题的持久回合幂等，尚无完成证据，不能用同页禁用提交或反馈 upsert 冒充完成。后续本地工作允许继续，生产操作仍不在本轮范围。
+
+
+## B08 — 带键回合幂等与当前标签刷新恢复（本地子项完成）
+
+承接 `a3be700`，本批不新增平行会话/消息系统，不扩大生产权限。
+
+- 新增 `0052_chat_turn_requests.sql` 与 `ChatTurnReceipts`：`(member_id, idempotency_key)` 唯一，原子占位发生在建会话之前；指纹包含 question、scope、原 conversationId。带键同载荷重放返回原回执，不再调用 AI；异载荷 409，跨成员键隔离。
+- pending 不是可过期接管的租约；失败请求不重新生成。消息和成功回执同一 D1 batch 保存，取消不缓存成功；触发器故障证明回执写失败会回滚消息。未知 commit 保留 pending，显式同键请求只回查状态，不擅自补跑。
+- 生成前重验历史引用、生成后重验历史/检索/回答引用；重放验证 owner 与当时保存的授权引用，不因缓存绕过当前权限。
+- App 传入当前会话成员；新 React 路由在 POST 前将原意图写入成员分区 sessionStorage。只保存问题/来源/会话/key，不保存回答。刷新/路由返回不会自动重发，手动恢复使用原载荷；不同成员不显示其他意图。存储损坏/写入失败阻断新问题，错误 key 或 conversation 回执不显示成功。
+- Stop/明确放弃清理当前意图，仍明示服务端取消未确认，后续新问题可能独立执行；同标签未确认意图不能被新问题静默覆盖。成功后下一问题生成新 key，并沿用已确认 conversation。
+- RED→GREEN：后端同键重复/非法 key；前端缺失 key/错误回执；回执会话不匹配反例。存储故障测试最初错误地覆盖 happy-dom Storage 属性，修正为明确的故障端口后证明没有 POST。
+
+验证：
+
+- 14 文件 **399/399**：`frontend-agent-cancellation-route`、`frontend-agent-data`、`frontend-agent-turn-intent`、`frontend-user-read-pages`、`frontend-a11y`、`frontend-workbench-maturity-routes`、`chat-conversation-service`、`chat-feedback-service`、`frontend-knowledge-citation-route`、`frontend-review-detail-route`、`frontend-moderation-pagination-routes`、`m1-api`、`cited-answer-service`、`migrations`。
+- `typecheck`、`build:ui`、`verify:i18n` 通过；`test:i18n` 13/13、`verify:workbench-maturity` 13/13、领域审计测试 26/26、`verify:delivery-status` 30/30，更新清单后交付契约与领域快照再次通过。构建仍有既有 >500 kB chunk 警告。
+- 只验证选定本地套件，未运行全仓测试或 secrets 同步；未 push、部署、远程迁移、生产写入或备份。
+- happy-dom 与本地 Worker/fake AI 不代表原生浏览器、真实成员或生产 AI 验收。旧无键 API 保留兼容且不宣称幂等；不同标签的独立新意图不保证语义去重。外部 AI 与 D1 不组成分布式事务，pending 可长期未知。
+
+当前仍为 **29 个父项、已关闭 1（B03）、未关闭 28**。B08 此本地功能子项完成但父项不关闭；下一步允许进入 B09 的知识关联任务/讨论跨模块权限核对，真实浏览器验收单独保留，禁止据此宣称全部 checklist 完成。

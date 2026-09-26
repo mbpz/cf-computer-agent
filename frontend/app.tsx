@@ -44,6 +44,7 @@ import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKno
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
+import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
@@ -180,7 +181,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} search={search} />;
-    case "agent": return <AgentRoute key={session?.member.id} locale={locale} search={search} />;
+    case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
@@ -696,21 +697,25 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
   return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
 }
 
-export function AgentRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   let location: ReturnType<typeof agentLocationFromSearch>;
   try { location = agentLocationFromSearch(search); } catch {
     return <PageState kind="error" title={frontendText(locale, "AGENT_SCOPE_INVALID")}><a href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
   }
-  return <AgentConversationRoute key={search} locale={locale} initialScope={location.scope} restoreId={location.conversationId} />;
+  return <AgentConversationRoute key={`${memberId ?? "preview"}:${search}`} memberId={memberId} locale={locale} initialScope={location.scope} restoreId={location.conversationId} />;
 }
 
-function AgentConversationRoute({ locale, initialScope, restoreId }: { locale: LocaleRuntime; initialScope?: AgentScope; restoreId?: string }) {
+function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: { locale: LocaleRuntime; initialScope?: AgentScope; restoreId?: string; memberId?: string }) {
+  const [stored] = useState<StoredAgentIntent>(() => memberId ? loadAgentIntent(memberId) : { kind: "empty" });
+  const intentRef = useRef<AgentTurnIntent | null>(stored.kind === "ready" ? stored.intent : null);
+  const [unconfirmed, setUnconfirmed] = useState(stored.kind === "ready");
+  const [storageBlocked, setStorageBlocked] = useState(stored.kind === "blocked");
   const [scope, setScope] = useState<AgentScope>(initialScope ?? { kind: "all" });
   const [history, setHistory] = useState<AgentConversation["messages"]>([]);
   const [recovery, setRecovery] = useState<"loading" | "ready" | "error">(restoreId ? "loading" : "ready");
   const [recoveryVersion, setRecoveryVersion] = useState(0);
   useEffect(() => {
-    if (!restoreId) return;
+    if (!restoreId || stored.kind !== "empty") return;
     const abort = new AbortController(); let current = true;
     setRecovery("loading");
     void loadAgentConversation(restoreId, { signal: abort.signal }).then((conversation) => {
@@ -730,21 +735,36 @@ function AgentConversationRoute({ locale, initialScope, restoreId }: { locale: L
   useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
   const submit = (nextQuestion = question) => {
     const normalized = nextQuestion.trim();
-    if (!normalized || !controllerRef.current || pendingRef.current || recovery !== "ready") return;
+    if (!normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
+    let intent = intentRef.current;
+    if (memberId) {
+      try {
+        if (!intent) intent = createAgentIntent(memberId, normalized, scope, conversationIdRef.current);
+        if (!saveAgentIntent(intent)) { setStorageBlocked(true); return; }
+        intentRef.current = intent;
+      } catch { setStorageBlocked(true); return; }
+    }
+    const sentQuestion = intent?.question ?? normalized;
     pendingRef.current = true;
-    setQuestion(normalized);
-    setLastQuestion(normalized);
+    setUnconfirmed(false);
+    setQuestion(sentQuestion);
+    setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
-    const request = controllerRef.current.request(normalized, scope, conversationIdRef.current);
+    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scope, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
     void request.promise.then(({ generation, answer }) => {
       if (controllerRef.current?.isCurrent(generation)) {
         pendingRef.current = false;
+        if (memberId && intent && !clearAgentIntent(memberId, intent.key)) { setStorageBlocked(true); return; }
+        intentRef.current = null;
+        if (intent) setScope(intent.scope);
+        setRecovery("ready");
         conversationIdRef.current = answer.conversationId;
         setState({ kind: "ready", ...answer });
       }
     }).catch((error: unknown) => {
       if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
         pendingRef.current = false;
+        if (intent) setUnconfirmed(true);
         setState({ kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
       }
     });
@@ -755,6 +775,8 @@ function AgentConversationRoute({ locale, initialScope, restoreId }: { locale: L
     // A delayed conversation-level cancellation must not target a subsequent turn.
     conversationIdRef.current = undefined;
     pendingRef.current = false;
+    if (memberId && !clearAgentIntent(memberId, intentRef.current?.key)) { setStorageBlocked(true); return; }
+    intentRef.current = null; setUnconfirmed(false); setRecovery("ready");
     setState({ kind: "cancelled" });
   };
   const startScope = (nextScope: AgentScope) => {
@@ -764,7 +786,17 @@ function AgentConversationRoute({ locale, initialScope, restoreId }: { locale: L
     writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`);
     setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
   };
-  if (recovery === "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
+  const abandon = () => {
+    if (pendingRef.current) return;
+    if (memberId && !clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
+    controllerRef.current?.cancel(); intentRef.current = null; conversationIdRef.current = undefined;
+    setStorageBlocked(false); setUnconfirmed(false); setRecovery("ready");
+    setScope(initialScope ?? { kind: "all" }); setHistory([]); setQuestion(""); setLastQuestion("");
+    setState({ kind: "cancelled" });
+  };
+  if (storageBlocked) return <PageState kind="error" title={frontendText(locale, "AGENT_INTENT_STORAGE_BLOCKED")} description={frontendText(locale, "AGENT_INTENT_STORAGE_DETAIL")}><Button onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
+  if (unconfirmed && intentRef.current) return <PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p><Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
+  if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
   if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
   return <div className="space-y-6">
     {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}

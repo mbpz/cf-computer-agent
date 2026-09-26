@@ -187,6 +187,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentRoute" },
   { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentConversationRoute" },
   { capabilityId: "workbench-agent", path: "frontend/lib/agent-data.ts", symbol: "*" },
+  { capabilityId: "workbench-agent", path: "frontend/lib/agent-turn-intent.ts", symbol: "*" },
   { capabilityId: "workbench-agent", path: "frontend/components/agent/agent-feedback.tsx", symbol: "AgentFeedback" },
   { capabilityId: "workbench-agent", path: "frontend/components/agent/agent-history-list.tsx", symbol: "AgentHistoryList" },
   { capabilityId: "workbench-my-submissions", path: "frontend/app.tsx", symbol: "MySubmissionsRoute" },
@@ -302,7 +303,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-agent", routeId: "agent", pathname: "/agent", requiredRole: "contributor",
     journey: "Ask the bounded knowledge Agent and inspect its cited response.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/agent-page.tsx", "frontend/app.tsx", "frontend/components/agent/agent-feedback.tsx", "frontend/components/agent/agent-history-list.tsx", "frontend/lib/agent-data.ts"], backendEvidence: ["src/routes/agent.ts", "src/agent/session-do.ts", "src/routes/library.ts", "src/chat/conversation-service.ts", "src/chat/repository.ts", "src/chat/feedback-service.ts", "src/chat/feedback-repository.ts"], testEvidence: ["test/unit/agent-tool-runner.test.ts", "test/worker/agent-session.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-agent-cancellation-route.test.tsx", "test/unit/frontend-agent-data.test.ts", "test/worker/m1-api.test.ts"], ledgerIds: ["KB-009"], gaps: ["Current server-navigation entry, initial form/answer, and post-submit loading and retryable error are runtime-probed. There is no explicit empty-answer state; cited completion, cancellation recovery, release, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/agent-page.tsx", "frontend/app.tsx", "frontend/components/agent/agent-feedback.tsx", "frontend/components/agent/agent-history-list.tsx", "frontend/lib/agent-data.ts", "frontend/lib/agent-turn-intent.ts"], backendEvidence: ["src/routes/agent.ts", "src/agent/session-do.ts", "src/routes/library.ts", "src/chat/conversation-service.ts", "src/chat/repository.ts", "src/chat/feedback-service.ts", "src/chat/feedback-repository.ts", "src/chat/turn-receipts.ts"], testEvidence: ["test/unit/agent-tool-runner.test.ts", "test/worker/agent-session.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-agent-cancellation-route.test.tsx", "test/unit/frontend-agent-data.test.ts", "test/unit/frontend-agent-turn-intent.test.ts", "test/worker/m1-api.test.ts"], ledgerIds: ["KB-009"], gaps: ["Current server-navigation entry, initial form/answer, and post-submit loading and retryable error are runtime-probed. There is no explicit empty-answer state; cited completion, cancellation recovery, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-my-submissions", routeId: "my-submissions", pathname: "/my-submissions", requiredRole: "contributor",
@@ -497,10 +498,10 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   {
     id: "workbench-agent",
     apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations", "/api/knowledge/chat/conversations/:id", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel", "/api/knowledge/chat/conversations/:id/feedback"],
-    persistencePaths: ["src/chat/repository.ts", "src/chat/feedback-repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql", "migrations/0021_m5_chat_feedback.sql"],
+    persistencePaths: ["src/chat/repository.ts", "src/chat/feedback-repository.ts", "src/chat/turn-receipts.ts", "migrations/0052_chat_turn_requests.sql", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql", "migrations/0021_m5_chat_feedback.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.",
     pagination: "cursor",
-    mutations: ["POST /api/knowledge/chat — gap: no stable client idempotency key for repeated questions", "PATCH /api/knowledge/chat/conversations/:id/scope — gap: no expected version is supplied", "POST /api/knowledge/chat/conversations/:id/cancel — gap: no replay key is supplied", "POST /api/knowledge/chat/conversations/:id/feedback — proven: conversation/member conflict-target upsert prevents duplicate rows for identical feedback retries; no cross-tab ordering guarantee"],
+    mutations: ["POST /api/knowledge/chat — gap: legacy clients without a key remain non-idempotent; member React route uses tab-persisted intent keys and durable member/key receipts with atomic message completion and reauthorized replay; pending receipts are never automatically regenerated", "PATCH /api/knowledge/chat/conversations/:id/scope — gap: no expected version is supplied", "POST /api/knowledge/chat/conversations/:id/cancel — gap: no replay key is supplied", "POST /api/knowledge/chat/conversations/:id/feedback — proven: conversation/member conflict-target upsert prevents duplicate rows for identical feedback retries; no cross-tab ordering guarantee"],
     mutationSafety: "mixed",
   },
   {

@@ -28,20 +28,22 @@ export interface AgentAnswer {
   conflicts?: Array<{ text: string; citationIds: string[] }>;
 }
 
-export async function askAgent({ question, scope, conversationId, requester = fetch, signal }: {
+export async function askAgent({ question, scope, conversationId, idempotencyKey, requester = fetch, signal }: {
   question: string;
   scope: AgentScope;
   conversationId?: string;
+  idempotencyKey?: string;
   requester?: Fetcher;
   signal?: AbortSignal;
 }): Promise<AgentAnswer> {
-  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown }>("/api/knowledge/chat", {
+  const data = await apiFetch<{ answer?: unknown; evidenceConfidence?: unknown; citations?: unknown[]; sources?: unknown[]; conversationId?: unknown; conflicts?: unknown[]; messageKey?: unknown; suggestedActionKeys?: unknown; idempotencyKey?: unknown }>("/api/knowledge/chat", {
     requester,
     signal,
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}) },
     body: JSON.stringify({ question: question.trim(), scope, ...(conversationId ? { conversationId } : {}) }),
   });
+  if (idempotencyKey && (data.idempotencyKey !== idempotencyKey || (conversationId !== undefined && data.conversationId !== conversationId) || typeof data.answer !== "string" || typeof data.conversationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(data.conversationId))) throw new Error("CHAT_RECEIPT_UNKNOWN");
   const confidence = typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.8
     ? "high"
     : typeof data.evidenceConfidence === "number" && data.evidenceConfidence >= 0.5 ? "medium" : "low";
@@ -107,11 +109,11 @@ export function createAgentRequestController(requester: Fetcher = fetch) {
   let active: AbortController | null = null;
   const owner = createAsyncOwner();
   return {
-    request(question: string, scope: AgentScope, conversationId?: string) {
+    request(question: string, scope: AgentScope, conversationId?: string, idempotencyKey?: string) {
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = askAgent({ question, scope, conversationId, requester, signal: active.signal }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
+      const promise = askAgent({ question, scope, conversationId, idempotencyKey, requester, signal: active.signal }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },

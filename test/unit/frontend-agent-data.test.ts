@@ -55,6 +55,16 @@ describe("frontend agent data", () => {
     }
   });
 
+  it("requires the original key and conversation in a keyed answer receipt", async () => {
+    const key = "original-chat-key01";
+    const request = { question: "Follow up", scope: { kind: "all" as const }, conversationId: "conv-1", idempotencyKey: key };
+    const valid = { answer: "Done", conversationId: "conv-1", idempotencyKey: key, citations: [] };
+    for (const receipt of [{ ...valid, conversationId: "conv-other" }, { ...valid, idempotencyKey: "different-chat-key" }, { ...valid, answer: null }]) {
+      await expect(askAgent({ ...request, requester: async () => Response.json(receipt) })).rejects.toThrow();
+    }
+    await expect(askAgent({ ...request, requester: async () => Response.json(valid) })).resolves.toMatchObject({ answer: "Done", conversationId: "conv-1" });
+  });
+
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
     const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       expect(String(input)).toBe("/api/knowledge/chat");

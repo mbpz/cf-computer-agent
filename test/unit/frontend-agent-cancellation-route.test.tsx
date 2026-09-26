@@ -192,6 +192,77 @@ describe("agent request cancellation route", () => {
     expect(container.textContent).not.toContain("old-private-list");
   });
 
+  it("persists an unknown member intent across remount and retries the original payload and key only explicitly", async () => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(init!);
+      if (requests.length === 1) throw new Error("response lost");
+      return Response.json({ answer: "Recovered answer", conversationId: "recovered-turn", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
+    await question("Original question"); await submit();
+    expect(new Headers(requests[0]?.headers).get("idempotency-key")).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    await act(async () => root.render(<div />));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" search="?scope=space&spaceId=other-scope" />)); await flush();
+    expect(requests).toHaveLength(1);
+    expect(container.textContent).toContain("Original question");
+    expect(container.textContent).toContain("Unconfirmed question");
+    await click("Retry original question");
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.body).toBe(requests[0]?.body);
+    expect(new Headers(requests[1]?.headers).get("idempotency-key")).toBe(new Headers(requests[0]?.headers).get("idempotency-key"));
+    expect(container.textContent).toContain("Recovered answer");
+    await act(async () => root.render(<div />));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />)); await flush();
+    expect(container.textContent).not.toContain("Unconfirmed question");
+  });
+
+  it("does not expose another member's unconfirmed intent or accept a mismatched receipt", async () => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(init!); return Response.json({ answer: "Wrong receipt answer", conversationId: "conv-wrong", idempotencyKey: "different-key-0001", citations: [] });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />));
+    await question("Private pending question"); await submit();
+    expect(container.textContent).not.toContain("Wrong receipt answer");
+    expect(container.textContent).toContain("Unconfirmed question");
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-b" />)); await flush();
+    expect(container.textContent).not.toContain("Private pending question");
+    expect(requests).toHaveLength(1);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-a" />)); await flush();
+    expect(container.textContent).toContain("Private pending question");
+    await click("Abandon unconfirmed question");
+    expect(container.textContent).not.toContain("Unconfirmed question");
+  });
+
+  it("blocks new writes when the member intent cannot be stored durably in this tab", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    const original = browser.sessionStorage;
+    Object.defineProperty(browser, "sessionStorage", { configurable: true, value: {
+      getItem: (key: string) => original.getItem(key),
+      setItem: () => { throw new Error("quota exceeded"); },
+      removeItem: (key: string) => original.removeItem(key),
+    } });
+    try {
+      await act(async () => root.render(<AgentRoute locale={language} memberId="member-storage" />));
+      await question("Do not send without recovery"); await submit();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Question recovery storage is unavailable or invalid");
+    } finally { Object.defineProperty(browser, "sessionStorage", { configurable: true, value: original }); }
+  });
+
+  it("uses a new key with the recovered conversation for the next distinct question", async () => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(init!); return Response.json({ answer: "Verified answer", conversationId: "conv-stable", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: [], sources: [] });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="member-sequence" />));
+    await question("First"); await submit(); await question("Second"); await submit();
+    expect(requests).toHaveLength(2);
+    expect(new Headers(requests[0]?.headers).get("idempotency-key")).not.toBe(new Headers(requests[1]?.headers).get("idempotency-key"));
+    expect(JSON.parse(String(requests[1]?.body))).toEqual({ question: "Second", scope: { kind: "all" }, conversationId: "conv-stable" });
+  });
+
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }
   async function question(value: string) {
     const input = container.querySelector<HTMLInputElement>("#agent-question")!;
