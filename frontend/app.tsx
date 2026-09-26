@@ -446,7 +446,18 @@ function decodeRouteId(pathname: string): string {
   try { return decodeURIComponent(value); } catch { return ""; }
 }
 
-function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRuntime; knowledgeItemId: string }) {
+export function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRuntime; knowledgeItemId: string }) {
+  const [citationHash, setCitationHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const update = () => setCitationHash(window.location.hash);
+    const unsubscribe = subscribeWorkspaceLocation(update);
+    window.addEventListener("hashchange", update);
+    return () => { unsubscribe(); window.removeEventListener("hashchange", update); };
+  }, []);
+  return <KnowledgeReaderSession key={`${knowledgeItemId}:${citationHash}`} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
+}
+
+function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash }: { locale: LocaleRuntime; knowledgeItemId: string; citationHash: string }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
@@ -457,7 +468,7 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
   useEffect(() => {
     const controller = createKnowledgeReaderRequestController();
     const routeGeneration = ++diffGeneration.current;
-    const request = controller.request(knowledgeItemId);
+    const request = controller.request(knowledgeItemId, citationHash);
     setState({ kind: "loading" });
     setDiffState({ kind: "idle" });
     setRelatedState({ kind: "idle" });
@@ -490,7 +501,7 @@ function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRunti
       }
     });
     return () => { controller.cancel(); if (diffGeneration.current === routeGeneration) diffGeneration.current += 1; };
-  }, [knowledgeItemId, locale, retry]);
+  }, [knowledgeItemId, citationHash, locale, retry]);
   const showDiff = async () => {
     if (state.kind !== "ready" || !state.revision.previousRevisionId || diffState.kind === "loading") return;
     const generation = diffGeneration.current;

@@ -206,6 +206,8 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-notifications", path: "frontend/lib/notifications-data.ts", symbol: "*" },
   { capabilityId: "workbench-messages", path: "frontend/app.tsx", symbol: "MessagesRoute" },
   { capabilityId: "workbench-knowledge-reader", path: "frontend/app.tsx", symbol: "KnowledgeReaderRoute" },
+  { capabilityId: "workbench-knowledge-reader", path: "frontend/app.tsx", symbol: "KnowledgeReaderSession" },
+  { capabilityId: "workbench-knowledge-reader", path: "frontend/lib/graph-evidence.ts", symbol: "loadGraphCitation" },
   { capabilityId: "workbench-knowledge-reader", path: "frontend/lib/knowledge-reader-data.ts", symbol: "*" },
   { capabilityId: "workbench-message-thread", path: "frontend/app.tsx", symbol: "DiscussionThreadRoute" },
   { capabilityId: "workbench-admin-submission-detail", path: "frontend/pages/admin/review-detail-route.tsx", symbol: "ReviewDetailRoute" },
@@ -377,7 +379,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-knowledge-reader", routeId: "knowledge-reader", pathname: "/knowledge/:id", parentRouteId: "knowledge", routePattern: "/^\\/knowledge\\/[A-Za-z0-9_-]+$/u", requiredRole: "contributor",
     journey: "Open an authorized knowledge item and inspect its reader content.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/knowledge-reader-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/library.ts", "src/library/service.ts"], testEvidence: ["test/unit/frontend-knowledge-reader-data.test.ts", "test/worker/m1-library.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["KB-006"], gaps: ["The current knowledge owner entry plus direct loading, retryable error, and response-owned reader marker are runtime-probed without a duplicate global entry; the route harness isolates DOM sanitization. Missing revision is an error, not empty, and list-to-reader discovery, integrated sanitizer rendering, related/backlink/favorite/revision journeys, release, and signed-browser acceptance remain gaps."],
+    frontendEvidence: ["frontend/pages/knowledge-reader-page.tsx", "frontend/app-routes.ts"], backendEvidence: ["src/routes/library.ts", "src/library/service.ts"], testEvidence: ["test/unit/frontend-knowledge-citation-route.test.tsx", "test/unit/frontend-knowledge-reader-data.test.ts", "test/worker/m1-library.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["KB-006"], gaps: ["The current knowledge owner entry plus direct loading, retryable error, and response-owned reader marker are runtime-probed without a duplicate global entry; the route harness isolates DOM sanitization. Missing revision is an error, not empty, and list-to-reader discovery, integrated sanitizer rendering, related/backlink/favorite/revision journeys, release, and signed-browser acceptance remain gaps."],
   },
   {
     id: "workbench-message-thread", routeId: "message-thread", pathname: "/messages/:id", parentRouteId: "messages", routePattern: "/^\\/messages\\/[A-Za-z0-9_-]{1,128}$/u", requiredRole: "contributor",
@@ -639,7 +641,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-knowledge-reader",
-    apiPaths: ["/api/knowledge/:id", "/api/knowledge/:id/favorite", "/api/knowledge/:id/note", "/api/knowledge/:id/note/shares", "/api/knowledge/:id/note/shares/:recipientId", "/api/knowledge/:id/related", "/api/knowledge/:id/backlinks"],
+    apiPaths: ["/api/knowledge/:id", "/api/knowledge/citations/:citationId", "/api/knowledge/:id/revisions/:revisionId", "/api/knowledge/:id/favorite", "/api/knowledge/:id/note", "/api/knowledge/:id/note/shares", "/api/knowledge/:id/note/shares/:recipientId", "/api/knowledge/:id/related", "/api/knowledge/:id/backlinks"],
     persistencePaths: ["src/library/repository.ts", "src/favorites/repository.ts", "src/private-notes/repository.ts", "src/recent-visits/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0012_m5_private_notes.sql", "migrations/0023_m4_knowledge_favorites.sql", "migrations/0024_m4_knowledge_visits.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; reader, favorite, private-note, and visit repositories bind scope.memberId and re-authorize the current knowledge revision.",
     pagination: "not_applicable",

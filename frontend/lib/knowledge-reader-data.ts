@@ -1,7 +1,9 @@
 import { apiFetch, type Fetcher } from "./api";
 import { createAsyncOwner } from "./async-owner";
+import { loadGraphCitation } from "./graph-evidence";
 
 export interface KnowledgeRevision {
+  selectedChunkId?: string;
   id: string;
   knowledgeItemId: string;
   title?: string;
@@ -258,11 +260,28 @@ function normalizeDiff(value: unknown): KnowledgeRevisionDiff | null {
   };
 }
 
-export async function loadKnowledgeRevision(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<KnowledgeRevision> {
+export async function loadKnowledgeRevision(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal, citationHash = ""): Promise<KnowledgeRevision> {
   assertKnowledgeId(knowledgeItemId);
+  if (citationHash && citationHash !== "#") {
+    if (!citationHash.startsWith("#")) throw new Error("KNOWLEDGE_CITATION_INVALID");
+    const citationId = decodeURIComponent(citationHash.slice(1));
+    if (!citationId.trim() || citationId.length > 2048) throw new Error("KNOWLEDGE_CITATION_INVALID");
+    const citation = await loadGraphCitation(citationId, requester, signal);
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    if (citation.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_CITATION_INVALID");
+    assertKnowledgeId(citation.revisionId);
+    const data = await apiFetch<{ revision?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/revisions/${encodeURIComponent(citation.revisionId)}`, { requester, signal });
+    const revision = normalizeRevision(data.revision);
+    const chunk = revision?.chunks.find((item) => item.id === citation.chunkId);
+    if (!revision || revision.knowledgeItemId !== knowledgeItemId || revision.id !== citation.revisionId
+      || !chunk || chunk.citationId !== citationId || chunk.startLine !== citation.startLine || chunk.endLine !== citation.endLine) {
+      throw new Error("KNOWLEDGE_CITATION_INVALID");
+    }
+    return { ...revision, selectedChunkId: chunk.id };
+  }
   const data = await apiFetch<{ knowledge?: { currentRevision?: unknown } }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}`, { requester, signal });
   const revision = normalizeRevision(data.knowledge?.currentRevision);
-  if (!revision) throw new Error("KNOWLEDGE_REVISION_INVALID");
+  if (!revision || revision.knowledgeItemId !== knowledgeItemId) throw new Error("KNOWLEDGE_REVISION_INVALID");
   return revision;
 }
 
@@ -274,11 +293,11 @@ export function createKnowledgeReaderRequestController(requester: Fetcher = fetc
   let active: AbortController | null = null;
   const owner = createAsyncOwner();
   return {
-    request(knowledgeItemId: string) {
+    request(knowledgeItemId: string, citationHash = "") {
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = loadKnowledgeRevision(knowledgeItemId, requester, active.signal).then((revision) => ({ generation, revision }));
+      const promise = loadKnowledgeRevision(knowledgeItemId, requester, active.signal, citationHash).then((revision) => ({ generation, revision }));
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },

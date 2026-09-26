@@ -109,3 +109,30 @@ rtk proxy npx vitest run test/worker/m1-publication.test.ts test/worker/notifica
 - 没有 push、部署、远程迁移、生产写入、开通收费资源、备份或手工读取/上传 Secret；未运行 `build:secrets`。
 
 本轮 29 父项，关闭 1（B03），剩余 28；B06 仅完成上述本地实现/回归子项，父项保持未勾选。下一步允许继续 B07 既有知识列表/阅读/精确引用闭环，无新增设计或生产权限依赖。
+
+
+## B07 — 精确历史引用回读（本地定向回归完成）
+
+承接 B06 提交 `eca4297`。沿用既有知识系统设计的版本绑定与引用重新授权要求，不新增接口、数据库迁移或平行阅读器。
+
+- 原阅读器忽略引用 hash，只读当前版本；现在先读取 citation，再 GET 引用绑定的 revision。严格核对知识 ID、版本 ID、chunk ID、citation ID 和行范围，自动选择来源片段。
+- 引用失效、撤权、服务暂时失败、版本/片段不匹配时显示失败，不静默回退当前正文。无引用的普通阅读仍读取当前版本。
+- hash/历史导航重新建立阅读会话并清除旧正文，取消旧请求、忽略晚到结果；显式重试保持原引用目标。
+- 成熟度清单扩展实际控制器/API/测试归属，重新生成当前领域快照。保留原 gap 指纹和负责人，不借实现证据关闭发布或浏览器验收维度。
+
+### RED → GREEN 与验证
+
+- 数据层新增反例在实现前为 **10 failed / 5 passed**；实现后该文件 15/15。
+- 路由 DOM 测试覆盖历史正文/选中片段、撤权清除与重试、导航后旧响应。首轮一个测试使用错误的按钮文本 `Retry`，更正为现有 `Try again`，未修改产品文案或降低断言。
+- 最终 9 文件 **319/319**：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-knowledge-citation-route.test.tsx test/unit/frontend-knowledge-reader-data.test.ts test/unit/frontend-reader-pagination-routes.test.tsx test/unit/frontend-knowledge-data.test.ts test/unit/frontend-graph-evidence.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/library-service.test.ts test/worker/m1-library.test.ts test/worker/m1-api.test.ts
+```
+
+- `typecheck`、`build:ui`、`verify:i18n` 通过；`verify:workbench-maturity` 13/13、`audit:workbench-domain` 快照核对、领域审计测试 26/26、`verify:delivery-status` 30/30 通过。前端构建仍有大于 500 kB 的 chunk 警告。
+- 追加上一批审核路由回归：`rtk proxy npx vitest run test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx`，2 文件 65/65 通过；文档更新后交付契约再次 30/30 通过。
+- DOM 测试使用模拟网络和简化 Markdown 渲染器，只验证路由数据所有权与来源选择，不声称验证原生浏览器或 Markdown 消毒集成。Worker 测试为本地隔离验证，不代表生产权限验收。
+- 未运行全仓测试、Secret 同步脚本；无 push、部署、远程迁移、生产写入或备份。
+
+当前仍为 **29 个父项、已关闭 1（B03）、未关闭 28**。B07 本地修复和回归子项已勾选，完整浏览器/真实身份验收待补，父项未关闭。下一步允许继续 B08 既有 AI 会话/来源/取消恢复核对，无需新增生产权限；不能宣称全部功能 checklist 已完结。

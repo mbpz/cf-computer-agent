@@ -30,8 +30,12 @@ export function KnowledgeReaderPage({ revision, renderMarkdown, locale, state = 
     visibility: revision.visibility,
     chunks: Array.isArray(revision.chunks) ? revision.chunks : [],
   };
-  const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
-  const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(null);
+  const [selectedChunkId, setSelectedChunkId] = useState<string | null>(revision.selectedChunkId ?? null);
+  const [mobilePanel, setMobilePanel] = useState<"outline" | "sources" | null>(revision.selectedChunkId ? "sources" : null);
+  useEffect(() => {
+    setSelectedChunkId(revision.selectedChunkId ?? null);
+    setMobilePanel(revision.selectedChunkId ? "sources" : null);
+  }, [revision.id, revision.selectedChunkId]);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [noteAccess, setNoteAccess] = useState<"owner" | "shared">("owner");

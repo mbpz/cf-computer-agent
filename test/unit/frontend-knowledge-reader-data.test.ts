@@ -64,6 +64,37 @@ describe("knowledge reader data boundary", () => {
     );
   });
 
+  it("loads the exact historical revision behind a citation, never the current revision", async () => {
+    const requester = vi.fn(async (url: RequestInfo | URL) => json(String(url).includes("/citations/") ? { citation: citation() } : { revision: historicalRevision() }));
+    await expect(loadKnowledgeRevision("knowledge-1", requester, undefined, "#citation-1")).resolves.toMatchObject({ id: "revision-old", isCurrent: false, selectedChunkId: "chunk-old", markdown: "Old text" });
+    expect(requester.mock.calls.map(([url]) => url)).toEqual(["/api/knowledge/citations/citation-1", "/api/knowledge/knowledge-1/revisions/revision-old"]);
+  });
+
+  it.each(["knowledge", "revision", "chunk", "lines"])("rejects a citation whose %s binding differs from its exact revision", async (mismatch) => {
+    const source = citation(); const revision = historicalRevision();
+    if (mismatch === "knowledge") source.knowledgeItemId = "other";
+    if (mismatch === "revision") revision.id = "revision-new";
+    if (mismatch === "chunk") revision.chunks[0]!.id = "other";
+    if (mismatch === "lines") revision.chunks[0]!.startLine = 2;
+    const requester = vi.fn(async (url: RequestInfo | URL) => json(String(url).includes("/citations/") ? { citation: source } : { revision }));
+    await expect(loadKnowledgeRevision("knowledge-1", requester, undefined, "#citation-1")).rejects.toThrow();
+    expect(requester.mock.calls.every(([url]) => url !== "/api/knowledge/knowledge-1")).toBe(true);
+    expect(requester).toHaveBeenCalledTimes(mismatch === "knowledge" ? 1 : 2);
+  });
+
+  it.each([401, 403, 404, 503])("does not substitute current text when citation resolution fails (%i)", async (status) => {
+    const requester = vi.fn(async (_url: RequestInfo | URL) => new Response(null, { status }));
+    await expect(loadKnowledgeRevision("knowledge-1", requester, undefined, "#citation-1")).rejects.toThrow();
+    expect(requester).toHaveBeenCalledTimes(1);
+    expect(requester.mock.calls[0]?.[0]).toBe("/api/knowledge/citations/citation-1");
+  });
+
+  it("rejects malformed encoded citations without any request", async () => {
+    const requester = vi.fn();
+    await expect(loadKnowledgeRevision("knowledge-1", requester, undefined, "#%ZZ")).rejects.toThrow();
+    expect(requester).not.toHaveBeenCalled();
+  });
+
   it("rejects unsafe IDs and missing revision payloads", async () => {
     const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ knowledge: {} }), { status: 200 }));
     await expect(loadKnowledgeRevision("../secret", requester)).rejects.toThrow("KNOWLEDGE_ID_INVALID");
@@ -93,3 +124,7 @@ describe("knowledge reader data boundary", () => {
     expect(requester).toHaveBeenCalledWith("/api/knowledge/knowledge-1/backlinks", expect.objectContaining({ credentials: "same-origin" }));
   });
 });
+
+function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }
+function citation() { return { knowledgeItemId: "knowledge-1", title: "Historical", revisionId: "revision-old", chunkId: "chunk-old", headingPath: [], startLine: 1, endLine: 2 }; }
+function historicalRevision() { return { id: "revision-old", knowledgeItemId: "knowledge-1", markdown: "Old text", isCurrent: false, chunks: [{ id: "chunk-old", citationId: "citation-1", text: "Old text", startLine: 1, endLine: 2 }] }; }
