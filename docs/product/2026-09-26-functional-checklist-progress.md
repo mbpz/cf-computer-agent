@@ -136,3 +136,23 @@ rtk proxy npx vitest run test/unit/frontend-knowledge-citation-route.test.tsx te
 - 未运行全仓测试、Secret 同步脚本；无 push、部署、远程迁移、生产写入或备份。
 
 当前仍为 **29 个父项、已关闭 1（B03）、未关闭 28**。B07 本地修复和回归子项已勾选，完整浏览器/真实身份验收待补，父项未关闭。下一步允许继续 B08 既有 AI 会话/来源/取消恢复核对，无需新增生产权限；不能宣称全部功能 checklist 已完结。
+
+
+## B08 — 停止等待与并发重复提交（本地子项完成）
+
+承接 B07 提交 `a132d0d`，本批仅修复现有 AI 页取消恢复，不宣称整个 B08 完成。
+
+- 原 Stop 只中止请求，页面一直加载；现在退出加载并保留问题，双语明确“尚未确认服务端已取消；再次提问将开启新会话”。首次回答前通常尚无 conversation ID，不把前端 abort 视为服务端停止证明。
+- 停止后清除本地会话 ID，后续显式提问创建新会话，避免迟到的会话级取消作用于下一轮。取消请求失败也不自动重放；迟到回答被所有权代次丢弃。
+- 同步 pending guard 加禁用按钮阻止同一页面的重复并发提交；这不是跨刷新或后端幂等保证。请求完成后清除活动控制器，卸载已完成页面不再发送取消。
+- 四个产品反例实现前 **4 failed / 7 passed**，实现后 11/11。最初 DOM 输入模拟没有触发 React onChange，已改为现有测试通用的 props 驱动，随后才确认四个真实产品失败；未将测试框架错误算作产品 RED。
+
+最终定向回归 **10 文件 249/249**：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx test/unit/frontend-agent-data.test.ts test/unit/frontend-user-read-pages.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/chat-conversation-service.test.ts test/unit/chat-feedback-service.test.ts test/unit/frontend-knowledge-citation-route.test.tsx test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-moderation-pagination-routes.test.tsx
+```
+
+`typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`audit:workbench-domain` 和 `verify:delivery-status` 30/30 通过。保留现有 gap 指纹，生成快照增加有界测试证据。构建仍有大 chunk 警告。测试为本地模拟网络/DOM；未调用远程 AI、未运行全仓测试，不等于原生浏览器或生产验收。
+
+**仍未全部完结：29 父项、关闭 1（B03）、剩余 28。** 当前停在 B08 子项完成；来源选择/范围切换、历史会话恢复、跨刷新或重复请求幂等、完整证据不足反馈及真实浏览器验收仍待核对，不勾选父项。允许继续本地 B08 后续，不需要备份或生产权限。无 push、部署、迁移、生产写入或手工 Secret 读取/上传。

@@ -103,12 +103,12 @@ export function createAgentRequestController(requester: Fetcher = fetch) {
       active?.abort();
       active = new AbortController();
       const generation = owner.claim();
-      const promise = askAgent({ question, scope, conversationId, requester, signal: active.signal }).then((answer) => ({ generation, answer }));
+      const promise = askAgent({ question, scope, conversationId, requester, signal: active.signal }).then((answer) => ({ generation, answer })).finally(() => { if (owner.isCurrent(generation)) active = null; });
       return { generation, promise };
     },
     isCurrent(generation: number) { return owner.isCurrent(generation); },
     cancel(conversationId?: string) {
-      if (conversationId) void cancelAgentConversation(conversationId, requester).catch(() => undefined);
+      if (active && conversationId) void cancelAgentConversation(conversationId, requester).catch(() => undefined);
       owner.invalidate(); active?.abort(); active = null;
     },
   };

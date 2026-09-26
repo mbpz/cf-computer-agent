@@ -71,4 +71,12 @@ describe("frontend agent data", () => {
     await expect(second.promise).rejects.toMatchObject({ name: "AbortError" });
     expect(controller.isCurrent(second.generation)).toBe(false);
   });
+  it("does not send remote cancellation after an answer has completed", async () => {
+    const requester = vi.fn(async () => new Response(JSON.stringify({ answer: "Done", conversationId: "conversation-1", citations: [] })));
+    const controller = createAgentRequestController(requester);
+    await controller.request("Question", { kind: "all" }, "conversation-1").promise;
+    controller.cancel("conversation-1");
+    expect(requester).toHaveBeenCalledTimes(1);
+  });
+
 });

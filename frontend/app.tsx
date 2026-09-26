@@ -693,34 +693,46 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
   return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
 }
 
-function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {
+export function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {
   const scope = agentScopeFromSearch(search ?? "");
   const [question, setQuestion] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
-  const [state, setState] = useState<{ kind: "loading" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
+  const pendingRef = useRef(false);
   const conversationIdRef = useRef<string | undefined>(undefined);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
   useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
   const submit = (nextQuestion = question) => {
     const normalized = nextQuestion.trim();
-    if (!normalized || !controllerRef.current) return;
+    if (!normalized || !controllerRef.current || pendingRef.current) return;
+    pendingRef.current = true;
     setQuestion(normalized);
     setLastQuestion(normalized);
     setState({ kind: "loading" });
     const request = controllerRef.current.request(normalized, scope, conversationIdRef.current);
     void request.promise.then(({ generation, answer }) => {
       if (controllerRef.current?.isCurrent(generation)) {
+        pendingRef.current = false;
         conversationIdRef.current = answer.conversationId;
         setState({ kind: "ready", ...answer });
       }
     }).catch((error: unknown) => {
       if (controllerRef.current?.isCurrent(request.generation) && !(error instanceof DOMException && error.name === "AbortError")) {
+        pendingRef.current = false;
         setState({ kind: "error", message: frontendText(locale, "COMMON_ANSWER_UNAVAILABLE") });
       }
     });
   };
-  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={() => controllerRef.current?.cancel(conversationIdRef.current)} onRetry={() => submit(lastQuestion)} />;
+  const cancel = () => {
+    if (!pendingRef.current) return;
+    controllerRef.current?.cancel(conversationIdRef.current);
+    // A delayed conversation-level cancellation must not target a subsequent turn.
+    conversationIdRef.current = undefined;
+    pendingRef.current = false;
+    setState({ kind: "cancelled" });
+  };
+  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} />;
 }
 
 function agentScopeFromSearch(search: string): AgentScope {
