@@ -1,8 +1,36 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
+import { agentLocationFromSearch, loadAgentConversation, askAgent, cancelAgentConversation, createAgentRequestController, updateAgentConversationScope } from "../../frontend/lib/agent-data";
 
 describe("frontend agent data", () => {
+  it("parses explicit source scopes without silently widening malformed links", () => {
+    expect(agentLocationFromSearch("")).toEqual({ scope: { kind: "all" } });
+    expect(agentLocationFromSearch("?scope=space&spaceId=s-1")).toEqual({ scope: { kind: "space", spaceId: "s-1" } });
+    expect(agentLocationFromSearch("?scope=collection&collectionId=c-1")).toEqual({ scope: { kind: "collection", collectionId: "c-1" } });
+    expect(agentLocationFromSearch("?scope=items&knowledgeItemId=k-1&knowledgeItemId=k-2")).toEqual({ scope: { kind: "items", knowledgeItemIds: ["k-1", "k-2"] } });
+    expect(agentLocationFromSearch("?conversationId=conv-1")).toEqual({ conversationId: "conv-1" });
+    for (const search of ["?scope=items", "?scope=wat", "?scope=all&spaceId=s", "?spaceId=s", "?scope=all&scope=items", "?scope=items&knowledgeItemId=x&knowledgeItemId=x", "?scope=space&spaceId=a.b", "?conversationId=", "?conversationId=x&scope=all", "?conversationId=x&conversationId=y"]) {
+      expect(() => agentLocationFromSearch(search), search).toThrow();
+    }
+  });
+
+  it("loads a validated conversation without a mutation and rejects mismatched recovery data", async () => {
+    const valid = { conversation: { id: "conv-1", scope: { kind: "all" } }, messages: [{ role: "user", content: "Earlier question", citationIds: [] }], sources: [] };
+    const requester = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(valid)));
+    await expect(loadAgentConversation("conv-1", { requester })).resolves.toMatchObject({ id: "conv-1", scope: { kind: "all" }, messages: [{ role: "user", content: "Earlier question" }] });
+    expect(String(requester.mock.calls[0]?.[0])).toBe("/api/knowledge/chat/conversations/conv-1");
+    expect(requester.mock.calls[0]?.[1]?.method).toBe("GET");
+    for (const data of [null, { ...valid, conversation: { ...valid.conversation, id: "other" } }, { ...valid, messages: [{ role: "assistant", content: "private answer", citationIds: ["missing"] }] }, { ...valid, messages: Array(9).fill(valid.messages[0]) }]) {
+      await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify(data)) })).rejects.toThrow();
+    }
+  });
+
+  it("accepts valid recovery scope regardless of JSON key order while rejecting unknown scope fields", async () => {
+    const payload = { conversation: { id: "conv-1", scope: { spaceId: "s-1", kind: "space" } }, messages: [], sources: [] };
+    await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify(payload)) })).resolves.toMatchObject({ scope: { kind: "space", spaceId: "s-1" } });
+    await expect(loadAgentConversation("conv-1", { requester: async () => new Response(JSON.stringify({ ...payload, conversation: { ...payload.conversation, scope: { kind: "all", spaceId: "private" } } })) })).rejects.toThrow();
+  });
+
   it("posts an explicit scope and normalizes grounded citations/confidence", async () => {
     const requester = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       expect(String(input)).toBe("/api/knowledge/chat");

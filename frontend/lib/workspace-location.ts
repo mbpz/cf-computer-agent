@@ -9,7 +9,7 @@ const NUMBERED_PAGE_QUERY_KEYS = ["page", "pageSize"] as const;
 const PRIMARY_QUERY_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/knowledge": [...NUMBERED_PAGE_QUERY_KEYS, "spaceId", "collectionId", "tagId", "kind", "authorId", "publishedFrom", "publishedTo"],
   "/search": [...NUMBERED_PAGE_QUERY_KEYS, "q", "spaceId", "collectionId", "tagId", "tagMode", "kind", "authorId", "publishedFrom", "publishedTo"],
-  "/agent": ["scope", "knowledgeItemId"],
+  "/agent": ["scope", "knowledgeItemId", "spaceId", "collectionId", "conversationId"],
   "/my-submissions": [...NUMBERED_PAGE_QUERY_KEYS, "status"],
   "/tasks": [...NUMBERED_PAGE_QUERY_KEYS, "status", "priority", "due", "tag", "q"],
   "/notifications": [...NUMBERED_PAGE_QUERY_KEYS, "read", "type"],

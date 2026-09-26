@@ -59,6 +59,67 @@ describe("agent request cancellation route", () => {
     expect(container.textContent).toContain("Fresh answer");
   });
 
+  it("blocks an invalid source link instead of asking across all sources", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<AgentRoute locale={language} search="?scope=items" />)); await flush();
+    expect(container.textContent).toContain("Invalid source scope");
+    expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled ?? true).toBe(true);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("restores authorized history and follows up using its server scope and id", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "GET") return new Response(JSON.stringify({ conversation: { id: "conv-1", scope: { kind: "space", spaceId: "s-1" } }, messages: [{ role: "user", content: "Previous question", citationIds: [] }, { role: "assistant", content: "Previous answer", citationIds: [] }], sources: [] }));
+      bodies.push(JSON.parse(String(init?.body))); return answer("Follow-up answer", "conv-1");
+    });
+    await act(async () => root.render(<AgentRoute locale={language} search="?conversationId=conv-1" />)); await flush();
+    expect(container.textContent).toContain("Previous question"); expect(container.textContent).toContain("Previous answer");
+    await question("Next"); await submit();
+    expect(bodies).toEqual([{ question: "Next", scope: { kind: "space", spaceId: "s-1" }, conversationId: "conv-1" }]);
+  });
+
+  it("keeps failed recovery read-only and suppresses late history after navigation", async () => {
+    const late = deferred<Response>(); const calls: RequestInit[] = [];
+    vi.stubGlobal("fetch", (_input: RequestInfo | URL, init?: RequestInit) => { calls.push(init!); return late.promise; });
+    await act(async () => root.render(<AgentRoute locale={language} search="?conversationId=conv-1" />)); await flush();
+    expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled ?? true).toBe(true);
+    await act(async () => root.render(<AgentRoute locale={language} search="?scope=items&knowledgeItemId=k-2" />)); await flush();
+    await act(async () => late.resolve(new Response(JSON.stringify({ conversation: { id: "conv-1", scope: { kind: "all" } }, messages: [{ role: "user", content: "Old private history", citationIds: [] }], sources: [] })))); await flush();
+    expect(container.textContent).not.toContain("Old private history");
+    expect(calls.every((call) => call.method === "GET")).toBe(true);
+  });
+
+  it("applies explicit source choices in a fresh conversation without a scope mutation", async () => {
+    const bodies: unknown[] = []; const methods: string[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => { methods.push(init?.method ?? "GET"); bodies.push(JSON.parse(String(init?.body))); return answer("Answer", "conv-existing"); });
+    await render(); await question("First"); await submit();
+    const select = container.querySelector<HTMLSelectElement>("#agent-scope-kind")!;
+    expect(select).toBeTruthy();
+    await act(async () => { select.value = "items"; select.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event); });
+    const ids = container.querySelector<HTMLInputElement>("#agent-scope-ids")!;
+    await act(async () => {
+      ids.value = "k-1, k-2";
+      const key = Object.keys(ids).find((name) => name.startsWith("__reactProps$"))!;
+      (ids as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: ids });
+    });
+    await click("Start with these sources");
+    expect(browser.location.search).toBe("?scope=items&knowledgeItemId=k-1&knowledgeItemId=k-2");
+    await question("Scoped"); await submit();
+    expect(methods).toEqual(["POST", "POST"]);
+    expect(bodies[1]).toEqual({ question: "Scoped", scope: { kind: "items", knowledgeItemIds: ["k-1", "k-2"] } });
+  });
+
+  it("keeps recovery failures locked and retries only the GET", async () => {
+    const methods: string[] = [];
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => { methods.push(init?.method ?? "GET"); return new Response(null, { status: 503 }); });
+    await act(async () => root.render(<AgentRoute locale={language} search="?conversationId=conv-1" />)); await flush();
+    expect(container.textContent).toContain("Conversation could not be restored");
+    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    await click("Try again");
+    expect(methods).toEqual(["GET", "GET"]);
+  });
+
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }
   async function question(value: string) {
     const input = container.querySelector<HTMLInputElement>("#agent-question")!;

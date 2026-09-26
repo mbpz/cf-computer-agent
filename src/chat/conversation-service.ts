@@ -55,6 +55,13 @@ export class ChatConversationService {
     return conversation;
   }
 
+  async read(scope: LibraryScope, conversationId: string): Promise<{ conversation: Pick<ChatConversation, "id" | "scope">; messages: ChatHistoryMessage[] }> {
+    const conversation = await this.repository.find(scope.memberId, conversationId);
+    if (!conversation) throw new AppError("CHAT_CONVERSATION_NOT_FOUND", "Chat conversation was not found", 404);
+    const messages = await this.repository.listMessages(scope.memberId, conversationId);
+    return { conversation: { id: conversation.id, scope: conversation.scope }, messages: messages.slice(-MAX_HISTORY_MESSAGES) };
+  }
+
   async history(scope: LibraryScope, conversationId: string): Promise<ChatHistoryMessage[]> {
     const conversation = await this.repository.find(scope.memberId, conversationId);
     if (!conversation) throw new AppError("CHAT_CONVERSATION_NOT_FOUND", "Chat conversation was not found", 404);

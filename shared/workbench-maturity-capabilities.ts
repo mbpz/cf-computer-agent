@@ -180,6 +180,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-search", path: "frontend/app.tsx", symbol: "SearchRoute" },
   { capabilityId: "workbench-search", path: "frontend/lib/search-data.ts", symbol: "*" },
   { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentRoute" },
+  { capabilityId: "workbench-agent", path: "frontend/app.tsx", symbol: "AgentConversationRoute" },
   { capabilityId: "workbench-agent", path: "frontend/lib/agent-data.ts", symbol: "*" },
   { capabilityId: "workbench-my-submissions", path: "frontend/app.tsx", symbol: "MySubmissionsRoute" },
   { capabilityId: "workbench-tasks", path: "frontend/app.tsx", symbol: "TasksRoute" },
@@ -294,7 +295,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-agent", routeId: "agent", pathname: "/agent", requiredRole: "contributor",
     journey: "Ask the bounded knowledge Agent and inspect its cited response.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/agent-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/agent.ts", "src/agent/session-do.ts"], testEvidence: ["test/unit/agent-tool-runner.test.ts", "test/worker/agent-session.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-agent-cancellation-route.test.tsx", "test/unit/frontend-agent-data.test.ts"], ledgerIds: ["KB-009"], gaps: ["Current server-navigation entry, initial form/answer, and post-submit loading and retryable error are runtime-probed. There is no explicit empty-answer state; cited completion, cancellation recovery, release, and signed-browser acceptance remain unproven."],
+    frontendEvidence: ["frontend/pages/agent-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/agent.ts", "src/agent/session-do.ts", "src/routes/library.ts", "src/chat/conversation-service.ts", "src/chat/repository.ts"], testEvidence: ["test/unit/agent-tool-runner.test.ts", "test/worker/agent-session.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/unit/frontend-agent-cancellation-route.test.tsx", "test/unit/frontend-agent-data.test.ts", "test/worker/m1-api.test.ts"], ledgerIds: ["KB-009"], gaps: ["Current server-navigation entry, initial form/answer, and post-submit loading and retryable error are runtime-probed. There is no explicit empty-answer state; cited completion, cancellation recovery, release, and signed-browser acceptance remain unproven."],
   },
   {
     id: "workbench-my-submissions", routeId: "my-submissions", pathname: "/my-submissions", requiredRole: "contributor",
@@ -488,7 +489,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-agent",
-    apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel"],
+    apiPaths: ["/api/knowledge/chat", "/api/knowledge/chat/conversations/:id", "/api/knowledge/chat/conversations/:id/scope", "/api/knowledge/chat/conversations/:id/cancel"],
     persistencePaths: ["src/chat/repository.ts", "migrations/0019_m5_chat_conversations.sql", "migrations/0020_m5_chat_cancel.sql"],
     ownerPredicate: "routeLibraryApi derives authenticated scope.memberId; ChatConversationService and ChatRepository bind owner_member_id to scope.memberId for conversation reads and writes.",
     pagination: "not_applicable",

@@ -222,6 +222,33 @@ describe("M1 API authorization and request boundaries", () => {
     expect(aiCalls).toBe(1);
   });
 
+  it("recovers only the owner's conversation and reauthorizes persisted citations without AI", async () => {
+    const published = await publishSubmission("admin", "Recovery history", "recoverymarker is documented", "shared", "chat-recovery-key01");
+    const first = await memberApi("contributor", "/api/knowledge/chat", { method: "POST", body: JSON.stringify({ question: "recoverymarker", scope: { kind: "items", knowledgeItemIds: [published.knowledgeItemId] } }) });
+    expect(first.status).toBe(200);
+    const result = await first.json<{ conversationId: string; citations: string[] }>();
+    expect(result.citations).toHaveLength(1);
+    const calls = fakeAiCalls;
+    const path = `/api/knowledge/chat/conversations/${result.conversationId}`;
+    const recovered = await memberApi("contributor", path);
+    expect(recovered.status).toBe(200);
+    expect(recovered.headers.get("cache-control")).toContain("no-store");
+    const body = await recovered.json<{ conversation: { id: string; ownerMemberId?: string }; messages: Array<{ role: string; content: string }>; sources: unknown[] }>();
+    expect(body.conversation.id).toBe(result.conversationId);
+    expect(body.conversation).not.toHaveProperty("ownerMemberId");
+    expect(body.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(body.messages[0]?.content).toBe("recoverymarker");
+    expect(body.sources).toHaveLength(1);
+    expect((await memberApi("admin", path)).status).toBe(404);
+    expect((await memberApi("contributor", `${path}?memberId=member-admin`)).status).toBe(400);
+    expect((await memberApi("contributor", path, { method: "POST" })).status).toBe(405);
+    await env.DB.prepare("UPDATE spaces SET status = 'disabled' WHERE id = 'default'").run();
+    const revoked = await memberApi("contributor", path);
+    expect(revoked.status).toBe(404);
+    expect(await revoked.text()).not.toContain("recoverymarker");
+    expect(fakeAiCalls).toBe(calls);
+  });
+
   it("persists a bounded owner-scoped chat history and rejects scope widening", async () => {
     const published = await publishSubmission("admin", "Chat history", "conversationmarker is documented", "shared", "chat-history-key01");
     const first = await memberApi("contributor", "/api/knowledge/chat", {

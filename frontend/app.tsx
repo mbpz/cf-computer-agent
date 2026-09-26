@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Button } from "./components/ui/button";
+import { PageState } from "./components/ui/page-state";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardRoute } from "./pages/admin/admin-dashboard-route";
 import { AdminAnalyticsPage, type AdminAnalyticsState } from "./pages/admin/analytics-page";
@@ -41,7 +43,7 @@ import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKno
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
 import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
-import { createAgentRequestController, type AgentAnswer, type AgentScope } from "./lib/agent-data";
+import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
@@ -177,7 +179,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} search={search} />;
-    case "agent": return <AgentRoute locale={locale} search={search} />;
+    case "agent": return <AgentRoute key={session?.member.id} locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
@@ -693,8 +695,30 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
   return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
 }
 
-export function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?: string }) {
-  const scope = agentScopeFromSearch(search ?? "");
+export function AgentRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+  let location: ReturnType<typeof agentLocationFromSearch>;
+  try { location = agentLocationFromSearch(search); } catch {
+    return <PageState kind="error" title={frontendText(locale, "AGENT_SCOPE_INVALID")}><a href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
+  }
+  return <AgentConversationRoute key={search} locale={locale} initialScope={location.scope} restoreId={location.conversationId} />;
+}
+
+function AgentConversationRoute({ locale, initialScope, restoreId }: { locale: LocaleRuntime; initialScope?: AgentScope; restoreId?: string }) {
+  const [scope, setScope] = useState<AgentScope>(initialScope ?? { kind: "all" });
+  const [history, setHistory] = useState<AgentConversation["messages"]>([]);
+  const [recovery, setRecovery] = useState<"loading" | "ready" | "error">(restoreId ? "loading" : "ready");
+  const [recoveryVersion, setRecoveryVersion] = useState(0);
+  useEffect(() => {
+    if (!restoreId) return;
+    const abort = new AbortController(); let current = true;
+    setRecovery("loading");
+    void loadAgentConversation(restoreId, { signal: abort.signal }).then((conversation) => {
+      if (!current) return;
+      setScope(conversation.scope); setHistory(conversation.messages);
+      conversationIdRef.current = conversation.id; setRecovery("ready");
+    }).catch(() => { if (current) setRecovery("error"); });
+    return () => { current = false; abort.abort(); };
+  }, [restoreId, recoveryVersion]);
   const [question, setQuestion] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<{ kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
@@ -705,7 +729,7 @@ export function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?:
   useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
   const submit = (nextQuestion = question) => {
     const normalized = nextQuestion.trim();
-    if (!normalized || !controllerRef.current || pendingRef.current) return;
+    if (!normalized || !controllerRef.current || pendingRef.current || recovery !== "ready") return;
     pendingRef.current = true;
     setQuestion(normalized);
     setLastQuestion(normalized);
@@ -732,16 +756,20 @@ export function AgentRoute({ locale, search }: { locale: LocaleRuntime; search?:
     pendingRef.current = false;
     setState({ kind: "cancelled" });
   };
-  return <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} />;
-}
-
-function agentScopeFromSearch(search: string): AgentScope {
-  const params = new URLSearchParams(search);
-  if (params.get("scope") !== "items") return { kind: "all" };
-  const knowledgeItemId = params.get("knowledgeItemId");
-  return knowledgeItemId !== null && /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,127})$/u.test(knowledgeItemId)
-    ? { kind: "items", knowledgeItemIds: [knowledgeItemId] }
-    : { kind: "all" };
+  const startScope = (nextScope: AgentScope) => {
+    if (pendingRef.current || recovery !== "ready") return;
+    controllerRef.current?.cancel(); conversationIdRef.current = undefined;
+    setScope(nextScope); setHistory([]); setQuestion(""); setLastQuestion("");
+    writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`);
+    setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
+  };
+  if (recovery === "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
+  if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
+  return <div className="space-y-6">
+    {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
+    {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
+    <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} />
+  </div>;
 }
 
 export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {

@@ -174,6 +174,17 @@ export async function routeLibraryApi(
     return methodNotAllowed("GET, PUT", context);
   }
 
+  const conversationRead = /^\/api\/knowledge\/chat\/conversations\/([^/]+)$/.exec(url.pathname);
+  if (conversationRead) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    const snapshot = await services.chatConversations.read(scope, decodePathId(conversationRead[1]!));
+    // Stored prose must not bypass current source authorization on recovery.
+    const citationIds = [...new Set(snapshot.messages.flatMap((message) => message.citationIds))];
+    const sources = await parallelWork(services.workScope, citationIds.map((id) => () => services.library.readCitation(scope, id)));
+    return jsonResponse({ ...snapshot, sources }, 200, context.requestId);
+  }
+
   const conversationScope = /^\/api\/knowledge\/chat\/conversations\/([^/]+)\/scope$/.exec(url.pathname);
   if (conversationScope) {
     if (request.method !== "PATCH") return methodNotAllowed("PATCH", context);

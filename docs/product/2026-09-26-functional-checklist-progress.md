@@ -156,3 +156,17 @@ rtk proxy npx vitest run test/unit/frontend-agent-cancellation-route.test.tsx te
 `typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`audit:workbench-domain` 和 `verify:delivery-status` 30/30 通过。保留现有 gap 指纹，生成快照增加有界测试证据。构建仍有大 chunk 警告。测试为本地模拟网络/DOM；未调用远程 AI、未运行全仓测试，不等于原生浏览器或生产验收。
 
 **仍未全部完结：29 父项、关闭 1（B03）、剩余 28。** 当前停在 B08 子项完成；来源选择/范围切换、历史会话恢复、跨刷新或重复请求幂等、完整证据不足反馈及真实浏览器验收仍待核对，不勾选父项。允许继续本地 B08 后续，不需要备份或生产权限。无 push、部署、迁移、生产写入或手工 Secret 读取/上传。
+
+
+## B08 — 显式来源与单会话恢复（本地子项完成）
+
+承接 `7200493`，沿用既有会话 D1 表；计划见 `2026-09-26-agent-scope-recovery-plan.md`。
+
+- 增加只读 GET `/api/knowledge/chat/conversations/:id`：session member owner 过滤、最多最近 8 条消息、no-store；每次恢复逐个重新检查保存的引用，任一失权则不返回历史正文；不调用 AI，不返回 ownerMemberId。
+- all/space/collection/items 显式选择，条目最多 8 个、不重复。未知类型/缺失或非法 ID/重复参数/会话与范围混用均拒绝，不回退 all。应用来源开启新会话，更新 URL，不 PATCH 旧会话。
+- 回答后显示专属恢复链接；恢复后可在服务端确认的范围和原会话继续问。恢复失败只重试 GET，不静默新建、不自动重放问题；页面/成员切换丢弃旧响应。历史正文仅 React 文本展示，不解析任意 HTML。
+- 8 个新增产品用例先 RED，后 65/65 通过；复查新增 JSON 字段顺序和来源 URL 2 个 RED 后修复。最终 11 文件 **304/304**（同前批 10 文件加 `test/worker/m1-api.test.ts`）。
+- `typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、领域快照生成/核对、`verify:delivery-status` 30/30 通过；仍有大 chunk 警告。保留 canonical gap 与验收维度，增加实际控制器/API/测试证据。
+- 不宣称：历史列表/分页、任何普通问题页自动刷新恢复、后端问题幂等、原生浏览器或生产完成。Worker 测试 fake AI；未手工读取 Secret、未推送/部署/远程迁移/生产写入/备份。
+
+当前 **29 父项、关闭 1（B03）、剩余 28**。B08 局部功能有真实测试，父项保持未关闭。下一步允许继续本地证据不足提示/反馈与幂等核对。

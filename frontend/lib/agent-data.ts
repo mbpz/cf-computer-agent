@@ -113,3 +113,71 @@ export function createAgentRequestController(requester: Fetcher = fetch) {
     },
   };
 }
+
+export interface AgentConversation {
+  id: string;
+  scope: AgentScope;
+  messages: Array<{ role: "user" | "assistant"; content: string; citations: AgentCitation[] }>;
+}
+
+const resourceId = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+function invalidConversation(): never { throw new Error("Invalid agent conversation or scope"); }
+
+export function agentLocationFromSearch(search: string): { scope?: AgentScope; conversationId?: string } {
+  const params = new URLSearchParams(search);
+  const sourceKeys = ["scope", "spaceId", "collectionId", "knowledgeItemId"];
+  if (params.has("conversationId")) {
+    const ids = params.getAll("conversationId");
+    if (ids.length !== 1 || !resourceId.test(ids[0]!) || sourceKeys.some((key) => params.has(key))) return invalidConversation();
+    return { conversationId: ids[0]! };
+  }
+  const kinds = params.getAll("scope");
+  const kind = kinds[0] ?? "all";
+  if (kinds.length > 1) return invalidConversation();
+  const allowed = kind === "space" ? "spaceId" : kind === "collection" ? "collectionId" : kind === "items" ? "knowledgeItemId" : undefined;
+  if (sourceKeys.slice(1).some((key) => key !== allowed && params.has(key))) return invalidConversation();
+  if (kind === "all") return { scope: { kind: "all" } };
+  const ids = allowed ? params.getAll(allowed) : [];
+  if (!ids.length || ids.some((id) => !resourceId.test(id)) || new Set(ids).size !== ids.length) return invalidConversation();
+  if (kind === "items" && ids.length <= 8) return { scope: { kind, knowledgeItemIds: ids } };
+  if (ids.length !== 1) return invalidConversation();
+  if (kind === "space") return { scope: { kind, spaceId: ids[0]! } };
+  if (kind === "collection") return { scope: { kind, collectionId: ids[0]! } };
+  return invalidConversation();
+}
+
+export function agentScopeSearch(scope: AgentScope): string {
+  const params = new URLSearchParams({ scope: scope.kind });
+  if (scope.kind === "space") params.set("spaceId", scope.spaceId);
+  if (scope.kind === "collection") params.set("collectionId", scope.collectionId);
+  if (scope.kind === "items") for (const id of scope.knowledgeItemIds) params.append("knowledgeItemId", id);
+  return `?${params}`;
+}
+
+export async function loadAgentConversation(id: string, { requester = fetch, signal }: { requester?: Fetcher; signal?: AbortSignal } = {}): Promise<AgentConversation> {
+  if (!resourceId.test(id)) return invalidConversation();
+  const data = await apiFetch<unknown>(`/api/knowledge/chat/conversations/${encodeURIComponent(id)}`, { method: "GET", requester, signal });
+  if (!data || typeof data !== "object") return invalidConversation();
+  const record = data as Record<string, unknown>;
+  const conversation = record.conversation as { id?: unknown; scope?: AgentScope } | undefined;
+  if (!conversation || conversation.id !== id || !conversation.scope || typeof conversation.scope !== "object") return invalidConversation();
+  const scope = conversation.scope;
+  if (!["all", "space", "collection", "items"].includes(scope.kind) || (scope.kind === "items" && !Array.isArray(scope.knowledgeItemIds))) return invalidConversation();
+  // Reuse URL scope validation so malformed recovery cannot expand the source set.
+  const parsedScope = agentLocationFromSearch(agentScopeSearch(scope)).scope;
+  if (!parsedScope || Object.keys(parsedScope).length !== Object.keys(scope).length
+    || Object.entries(parsedScope).some(([key, value]) => JSON.stringify(value) !== JSON.stringify((scope as unknown as Record<string, unknown>)[key]))) return invalidConversation();
+  if (!Array.isArray(record.messages) || record.messages.length > 8 || !Array.isArray(record.sources)) return invalidConversation();
+  const citations = record.sources.map(normalizeCitation);
+  if (citations.some((citation) => citation === null)) return invalidConversation();
+  const byId = new Map(citations.map((citation) => [citation!.id, citation!]));
+  const messages = record.messages.map((value): AgentConversation["messages"][number] => {
+    if (!value || typeof value !== "object") return invalidConversation();
+    const message = value as Record<string, unknown>;
+    if ((message.role !== "user" && message.role !== "assistant") || typeof message.content !== "string" || !Array.isArray(message.citationIds)) return invalidConversation();
+    const sources = message.citationIds.map((citationId) => typeof citationId === "string" ? byId.get(citationId) : undefined);
+    if (sources.some((source) => !source)) return invalidConversation();
+    return { role: message.role, content: message.content, citations: sources as AgentCitation[] };
+  });
+  return { id, scope: parsedScope, messages };
+}
