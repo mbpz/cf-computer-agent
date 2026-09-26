@@ -1703,9 +1703,19 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
     try {
       const data = await request.promise;
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
-      if ((afterDecision || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)), pageSize: snapshot.pageSize }, true);
+      // A paginated pending queue cannot establish the outcome of a missing row.
+      // Resolve that exact object before releasing its unknown-operation lock.
+      const operation = operationRef.current;
+      if (operation && !decisionRef.current) {
+        const row = data.items.find((item) => item.id === operation.id);
+        const status = row?.status ?? (await loadReviewDetail(operation.id)).detail.status;
+        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+        if (["published", "rejected", "revision_requested"].includes(status)) {
+          operationRef.current = null; setDecisionState({ kind: "idle" });
+        }
+      }
+      if (!operationRef.current && (afterDecision || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)), pageSize: snapshot.pageSize }, true);
       else { setState({ kind: "ready", data }); needsClampRef.current = false; }
-      if (operationRef.current && !decisionRef.current) { operationRef.current = null; setDecisionState({ kind: "idle" }); }
     } catch (error: unknown) {
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {

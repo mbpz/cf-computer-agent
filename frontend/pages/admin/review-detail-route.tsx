@@ -25,18 +25,25 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   const read = useCallback(async () => {
     if (readRef.current || decisionRef.current) return;
     const controller = new AbortController();
-    operationRef.current = null;
     readRef.current = controller;
     const current = owner.claim();
     setState({ kind: "loading" });
-    setDecisionState({ kind: "idle" });
+    if (!operationRef.current) setDecisionState({ kind: "idle" });
     try {
       const data = await loadReviewDetail(id, requester, controller.signal);
-      if (owner.isCurrent(current)) setState({ kind: "ready", data });
+      if (owner.isCurrent(current)) {
+        setState({ kind: "ready", data });
+        // Pending (or an unrecognized status) cannot disprove an in-flight commit.
+        if (operationRef.current && ["published", "rejected", "revision_requested"].includes(data.detail.status)) {
+          operationRef.current = null;
+          setDecisionState({ kind: "idle" });
+        }
+      }
     } catch (error) {
       if (!owner.isCurrent(current) || controller.signal.aborted) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
+        operationRef.current = null; setDecisionState({ kind: "idle" });
       } else if (error instanceof ApiRequestError && error.status === 404) {
         setState({ kind: "not-found", message: frontendText(locale, "ADMIN_REVIEW_NOT_FOUND") });
       } else {

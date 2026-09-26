@@ -180,6 +180,26 @@ describe("review detail read recovery", () => {
     expect(reads).toBe(2); expect(bodies).toHaveLength(2); expect(button("Reject").disabled).toBe(true);
   });
 
+  it.each([false, true])("keeps an uncertain decision locked when readback remains pending (read failure: %s)", async (failRead) => {
+    const bodies: string[] = []; let reads = 0;
+    await render(withComments(async (_input, init) => {
+      if (init?.method === "POST") {
+        bodies.push(String(init.body));
+        return new Response(null, { status: bodies.length === 1 ? 503 : 400 });
+      }
+      reads++;
+      if (failRead && reads === 2) return new Response(null, { status: 503 });
+      return preview("sub-1");
+    }));
+    await act(async () => button("Publish").click()); await flush();
+    await act(async () => button("Retry same decision").click()); await flush();
+    await act(async () => button("Reload current state").click()); await flush();
+    if (failRead) { await act(async () => button("Try again").click()); await flush(); }
+    expect(button("Publish").disabled).toBe(true); expect(button("Reject").disabled).toBe(true);
+    expect(button("Reload current state")).toBeTruthy();
+    expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+  });
+
   it("reloads a conflict without reissuing the write or allowing overwrite", async () => {
     let reads = 0; let posts = 0;
     await render(withComments(async (_input, init) => {

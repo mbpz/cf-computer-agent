@@ -234,8 +234,9 @@ describe("moderation numbered routes", () => {
   it("reloads a conflict without repeating the write and keeps page size and other query parameters", async () => {
     browser.history.replaceState({}, "", "/admin/submissions?page=2&pageSize=50&view=pending");
     let gets = 0; let posts = 0;
-    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") { posts++; return new Response(null, { status: 409 }); }
+      if (String(input).endsWith("/review-1")) return json({ preview: { submissionId: "review-1", title: "Review", submitterId: "m1", requestedSpaceId: "default", status: "rejected" } });
       gets++; return json({ items: gets === 1 ? [{ id: "review-1", title: "Review" }] : [], pagination: { page: gets < 3 ? 2 : 1, pageSize: 50, total: gets === 1 ? 51 : 0, totalPages: gets === 1 ? 2 : 0 } });
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
@@ -298,6 +299,64 @@ describe("moderation numbered routes", () => {
     await clickButton("Reload current state"); await flush();
     expect(gets).toBe(2); expect(bodies).toHaveLength(2);
     expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([false, true])("keeps an uncertain queue decision locked when the same row remains pending (read failure: %s)", async (failRead) => {
+    const bodies: string[] = []; let reads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { bodies.push(String(init.body)); return new Response(null, { status: bodies.length === 1 ? 503 : 400 }); }
+      if (String(input).endsWith("/review-1")) return reviewPreview();
+      reads++;
+      if (failRead && reads === 2) return new Response(null, { status: 503 });
+      return numbered([{ id: "review-1", title: "Review", status: "review_pending" }], 2, 21);
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await clickButton("Reload current state"); await flush();
+    if (failRead) { await clickButton("Try again"); await flush(); }
+    expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((container.querySelector('button[aria-label="Publish Review"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(container.textContent).toContain("Reload current state"); expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+  });
+
+  it.each(["review_pending", "forbidden"])("resolves a missing queue row before releasing an uncertain decision (%s)", async (outcome) => {
+    let reads = 0; let detailReads = 0; const bodies: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { bodies.push(String(init.body)); return new Response(null, { status: bodies.length === 1 ? 503 : 400 }); }
+      if (String(input).endsWith("/review-1")) {
+        detailReads++;
+        if (detailReads > 1 && outcome === "forbidden") return new Response(null, { status: 403 });
+        return reviewPreview();
+      }
+      reads++;
+      return numbered(reads === 1 ? [{ id: "review-1", title: "Review", status: "review_pending" }] : [], 2, reads === 1 ? 21 : 20);
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await clickButton("Reload current state"); await flush();
+    expect(detailReads).toBe(2); expect(reads).toBe(2); expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
+    expect(browser.location.search).toBe("?page=2");
+    if (outcome === "review_pending") expect(container.textContent).toContain("Reload current state");
+    else { expect(container.textContent).not.toContain("Reload current state"); expect(container.querySelector('button[aria-label="Publish Review"]')).toBeNull(); }
+  });
+
+  it("ignores a missing-row detail read arriving after navigation", async () => {
+    const late = deferred<Response>(); let detailReads = 0; let reads = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Response(null, { status: ++posts === 1 ? 503 : 400 });
+      if (String(input).endsWith("/review-1")) return ++detailReads === 1 ? reviewPreview() : late.promise;
+      reads++;
+      if (queryOf(String(input), "page") === "1") return numbered([{ id: "review-new", title: "New page", status: "review_pending" }], 1, 1);
+      return numbered(reads === 1 ? [{ id: "review-1", title: "Review", status: "review_pending" }] : [], 2, reads === 1 ? 21 : 20);
+    });
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
+    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await clickButton("Reload current state"); await flush(); expect(detailReads).toBe(2);
+    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => late.resolve(new Response(null, { status: 403 }))); await flush();
+    expect(container.textContent).toContain("New page");
+    expect((container.querySelector('button[aria-label="Publish New page"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(posts).toBe(2); expect(reads).toBe(3);
   });
 
   it("preserves queue replay and its note across language changes without another read", async () => {

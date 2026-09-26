@@ -85,3 +85,27 @@ rtk proxy npx vitest run test/unit/assets-service.test.ts test/unit/member-asset
 ### 当前进度
 
 本轮仍为 29 个父项：整体完成 1（B03），待整体关闭 28；B04/B05 实现和自动化子项已勾选，原生浏览器/双账号/键盘触控验收保持待验，不提前关闭父项。D08 不在本轮本地范围。没有代码实现阻塞；后续允许补本地浏览器验收或继续 B06 既有审核/发布闭环核对，不需要备份、收费存储或旧运维签认。
+
+
+## B06 — 审核、发布与重复请求恢复（本地回归完成）
+
+承接 `b654b6d`，复用用户已批准的 D02-R2 设计。后端决定、持久化发布意图、事务通知和索引失败反馈已有实现，本轮未新增平行系统或修改数据库。
+
+- 修复审核详情/队列显式回读无条件解除未知操作锁的问题。`review_pending` 或未知状态不能证明原写入未发生，保留原决定与恢复入口，不允许相反决定。
+- 临时读取失败后重读仍保留锁；401/403 清除受保护状态。分页中缺失目标不证明终态，读取原对象详情后再决定是否解除锁及回退空末页；跨页后的晚到详情响应被忽略。
+- 仅覆盖当前挂载会话的显式恢复，不声称浏览器刷新或跨导航持久化。原生浏览器、真实双账号、键盘/触控验收保持待验。
+
+### RED → GREEN 与本轮验证
+
+- 实现前详情/队列四个新增反例失败：`4 failed / 58 passed`，均为 pending 回读错误开放相反决定。
+- 修复后补充分页缺失目标仍待审、详情撤权、导航后晚到回读，最终 15 文件 **353/353**：
+
+```sh
+rtk proxy npx vitest run test/worker/m1-publication.test.ts test/worker/notifications.test.ts test/worker/review-notifications-migration.test.ts test/worker/migrations.test.ts test/worker/m1-api.test.ts test/unit/frontend-notifications-page.test.tsx test/unit/frontend-notifications-route.test.tsx test/unit/frontend-notifications-data.test.ts test/unit/notifications-service.test.ts test/unit/publication-service.test.ts test/unit/frontend-review-detail.test.tsx test/unit/frontend-review-detail-route.test.tsx test/unit/frontend-review-detail-data.test.ts test/unit/frontend-admin-review-data.test.ts test/unit/frontend-moderation-pagination-routes.test.tsx
+```
+
+- `typecheck`、`build:ui`、`verify:i18n` 通过；`test:i18n` 13/13、`verify:workbench-maturity` 13/13、领域审计 33 能力快照核对通过、领域审计测试 26/26、`verify:delivery-status` 30/30 通过。
+- 构建仍提示大于 500 kB 的 chunk；测试输出有已删除发布文件的 `WorkspaceFsError`，测试最终退出 0、无失败。未运行全仓测试，不据此宣称无全部缺陷。
+- 没有 push、部署、远程迁移、生产写入、开通收费资源、备份或手工读取/上传 Secret；未运行 `build:secrets`。
+
+本轮 29 父项，关闭 1（B03），剩余 28；B06 仅完成上述本地实现/回归子项，父项保持未勾选。下一步允许继续 B07 既有知识列表/阅读/精确引用闭环，无新增设计或生产权限依赖。
