@@ -482,6 +482,91 @@ describe("task-backed boards route", () => {
     expect(column("todo").querySelector('[aria-label="Page 1"][aria-current="page"]')).not.toBeNull();
   });
 
+  it.each([401, 403])("clears every column after a move is denied with %s", async (status) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST" ? deniedResponse(status) : pageResponseFor(String(input), 1, "Private"));
+    await renderBoard();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(4);
+    await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing");
+    await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Private");
+  });
+
+  it.each([401, 403])("clears old pages on read denial %s and only explicitly retries all columns", async (status) => {
+    let denied = false;
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method ?? "GET").toBe("GET");
+      const url = String(input); requests.push(url);
+      return denied && statusFromUrl(url) === "todo" ? deniedResponse(status) : pageResponseFor(url, 21, "Private");
+    });
+    await renderBoard(); denied = true;
+    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click());
+    await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+    const count = requests.length;
+    await act(async () => writeWorkspaceHistory("push", "/boards?doingPage=2")); await flush();
+    expect(requests).toHaveLength(count);
+    denied = false;
+    await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
+    expect(requests).toHaveLength(count + 4);
+    for (const name of ["todo", "doing", "blocked", "done"]) expect(boardTaskIds(column(name)).length).toBeGreaterThan(0);
+  });
+
+  it.each([401, 403])("clears optimistic cards if authoritative readback is denied with %s", async (status) => {
+    let posted = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posted = true; return Response.json(task("doing", "Private", "todo-task")); }
+      return posted ? deniedResponse(status) : pageResponseFor(String(input), 1, "Private");
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing"); await flush();
+    expect(posted).toBe(true);
+    // The successful write schedules a render, then a separate authoritative-read effect.
+    await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+  });
+
+  it("aborts other reads and ignores late successful pages after a denial", async () => {
+    let resolveLate!: (response: Response) => void;
+    let lateSignal: AbortSignal | undefined;
+    let deny = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (statusFromUrl(url) === "doing") {
+        lateSignal = init?.signal ?? undefined;
+        return new Promise<Response>((resolve) => { resolveLate = resolve; });
+      }
+      return deny ? deniedResponse(403) : pageResponseFor(url, 21, "Private");
+    });
+    await renderBoard(); deny = true;
+    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    expect(lateSignal?.aborted).toBe(true);
+    await act(async () => resolveLate(pageResponse("doing", 1, 1, "Late private"))); await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+  });
+
+  it.each([true, false])("does not restore cards from a pending move after read denial (success=%s)", async (success) => {
+    let resolveMove!: (response: Response) => void;
+    let deny = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveMove = resolve; });
+      return deny ? deniedResponse(401) : pageResponseFor(String(input), 21, "Private");
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing");
+    deny = true;
+    await act(async () => writeWorkspaceHistory("push", "/boards?blockedPage=2")); await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+    deny = false;
+    await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
+    const recoveredIds = [...container.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task"));
+    expect(recoveredIds.length).toBeGreaterThan(0);
+    await act(async () => resolveMove(success ? Response.json(task("doing", "Private", "todo-task")) : errorResponse())); await flush();
+    expect([...container.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task"))).toEqual(recoveredIds);
+  });
+
   async function renderBoard() {
     await act(async () => root.render(<BoardsRoute locale={createLocaleRuntime()} search={browser.location.search} />));
     await flush();
@@ -542,3 +627,5 @@ function errorResponse(): Response { return Response.json({ error: { code: "TEST
 async function change(select: HTMLSelectElement, value: string) { await act(async () => { select.value = value; select.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
+
+function deniedResponse(status: number): Response { return Response.json({ error: { code: "FORBIDDEN", message: "denied", retryable: false } }, { status }); }

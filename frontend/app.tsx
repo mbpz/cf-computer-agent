@@ -195,7 +195,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
-    case "boards": return <BoardsRoute locale={locale} search={search} />;
+    case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
     case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
@@ -1539,10 +1539,29 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const actionGenerationRef = useRef(0);
   const activeRef = useRef(true);
 
-  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
-  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
-  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
-  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, setQueries, setColumns);
+  const deniedRef = useRef(false);
+  const controllersRef = useRef<Partial<Record<BoardStatus, ReturnType<typeof createTasksRequestController>>>>({});
+  const clearDeniedBoard = useCallback((error: unknown): boolean => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    // Revoke the entire view before any stale read or optimistic rollback can restore private cards.
+    deniedRef.current = true;
+    for (const status of BOARD_STATUSES) {
+      controllersRef.current[status]?.dispose();
+      requestStatesRef.current[status] = { revision: requestStatesRef.current[status].revision + 1, pending: false, superseded: false };
+      mutationOwnersRef.current[status] = null;
+    }
+    actionGenerationRef.current += 1;
+    actionPendingRef.current = false;
+    setActionPendingId(null); setActionError(undefined);
+    const cleared: BoardColumnStates = { todo: { kind: "error" }, doing: { kind: "error" }, blocked: { kind: "error" }, done: { kind: "error" } };
+    columnsRef.current = cleared; setColumns(cleared);
+    return true;
+  }, []);
+
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
 
   useEffect(() => {
     const onPopState = () => {
@@ -1565,7 +1584,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   };
 
   const move = async (task: TaskItem, target: BoardTargetStatus) => {
-    if (actionPendingRef.current || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
+    if (deniedRef.current || actionPendingRef.current || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
     const source = task.status as BoardStatus;
     const before = columnsRef.current;
     const optimistic = moveTaskBetweenColumns(before, task, source, target);
@@ -1599,6 +1618,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
       setRetryVersions((current) => ({ ...current, [source]: current[source] + 1, ...(isBoardStatus(target) ? { [target]: current[target] + 1 } : {}) }));
     } catch (error: unknown) {
       if (activeRef.current && generation === actionGenerationRef.current && !isAbort(error)) {
+        if (clearDeniedBoard(error)) return;
         const sourceMatches = sameBoardQuery(queriesRef.current[source], delta.sourceQuery)
           && requestStatesRef.current[source].revision === delta.sourceRequestRevision
           && mutationOwnersRef.current[source] === delta.owner;
@@ -1628,7 +1648,12 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   };
 
   return <BoardsPage locale={locale} columns={columns} actionError={actionError} actionPendingId={actionPendingId}
-    onRetry={(status) => setRetryVersions((current) => ({ ...current, [status]: current[status] + 1 }))}
+    onRetry={(status) => {
+      if (deniedRef.current) {
+        deniedRef.current = false;
+        setRetryVersions((current) => ({ todo: current.todo + 1, doing: current.doing + 1, blocked: current.blocked + 1, done: current.done + 1 }));
+      } else setRetryVersions((current) => ({ ...current, [status]: current[status] + 1 }));
+    }}
     onPageChange={(status, page) => navigate(status, { page, pageSize: queries[status].pageSize })}
     onPageSizeChange={(status, pageSize) => navigate(status, { page: 1, pageSize })}
     onStatusChange={(task, status) => void move(task, status)} />;
@@ -1641,11 +1666,16 @@ function useBoardColumnRequest(
   queriesRef: { current: BoardPagination },
   requestStatesRef: { current: Record<BoardStatus, BoardRequestState> },
   mutationOwnersRef: { current: Record<BoardStatus, number | null> },
+  deniedRef: { current: boolean },
+  controllersRef: { current: Partial<Record<BoardStatus, ReturnType<typeof createTasksRequestController>>> },
+  clearDeniedBoard: (error: unknown) => boolean,
   setQueries: Dispatch<SetStateAction<BoardPagination>>,
   setColumns: Dispatch<SetStateAction<BoardColumnStates>>,
 ) {
   useEffect(() => {
+    if (deniedRef.current) return;
     const controller = createTasksRequestController();
+    controllersRef.current[status] = controller;
     const querySnapshot = { ...query };
     const revision = requestStatesRef.current[status].revision + 1;
     const owner = mutationOwnersRef.current[status];
@@ -1670,14 +1700,18 @@ function useBoardColumnRequest(
       setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || requestStatesRef.current[status].revision !== revision || isAbort(error)) return;
+      if (clearDeniedBoard(error)) return;
       if (!sameBoardQuery(queriesRef.current[status], querySnapshot) || mutationOwnersRef.current[status] !== owner) {
         requestStatesRef.current[status] = { revision, pending: false, superseded: true }; return;
       }
       requestStatesRef.current[status] = { revision, pending: false, superseded: false };
       setColumns((current) => ({ ...current, [status]: current[status].kind === "ready" ? { ...current[status], pending: false, loadError: true } : { kind: "error" } }));
     });
-    return () => controller.dispose();
-  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status]);
+    return () => {
+      controller.dispose();
+      if (controllersRef.current[status] === controller) delete controllersRef.current[status];
+    };
+  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status, clearDeniedBoard]);
 }
 
 function initialBoardColumns(): BoardColumnStates {
