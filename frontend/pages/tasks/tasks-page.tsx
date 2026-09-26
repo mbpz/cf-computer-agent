@@ -16,7 +16,7 @@ export type TasksPageState =
   | { kind: "error"; message: string }
   | { kind: "ready"; items: readonly TaskItem[]; pagination: Pagination };
 
-export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onPageChange, onPageSizeChange, onStatusChange, onDelete }: {
+export function TasksPage({ state, filters, locale, pending = false, localLoadError, actionError, actionPendingId, onRetry, onFilterChange, onTextFilterChange, onPageChange, onPageSizeChange, onStatusChange, onDelete, onCreate, onOpen }: {
   state: TasksPageState;
   filters: TaskFilterState;
   locale: LocaleRuntime;
@@ -24,6 +24,8 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   localLoadError?: string;
   actionError?: string;
   actionPendingId?: string | null;
+  onCreate?: () => void;
+  onOpen?: (id: string) => void;
   onRetry?: () => void;
   onFilterChange?: (filters: TaskFilterState) => void;
   onTextFilterChange?: (filters: TaskFilterState) => void;
@@ -36,6 +38,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
   if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>;
   return <section className="space-y-5">
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "TASKS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "TASKS_DESCRIPTION")}</p></div>
+    {onCreate && <Button disabled={Boolean(actionPendingId)} onClick={onCreate}>{frontendText(locale, "TASKS_NEW")}</Button>}
     <div className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
       <Input aria-label={frontendText(locale, "TASKS_SEARCH")} value={filters.q ?? ""} onChange={(event) => onTextFilterChange?.({ ...filters, q: event.currentTarget.value || undefined })} placeholder={frontendText(locale, "TASKS_SEARCH")} />
       <FilterSelect label={frontendText(locale, "TASKS_STATUS")} value={filters.status ?? ""} onChange={(value) => onFilterChange?.({ ...filters, status: (value || undefined) as TaskStatus | undefined })} options={["todo", "doing", "blocked", "done", "canceled"]} />
@@ -49,7 +52,7 @@ export function TasksPage({ state, filters, locale, pending = false, localLoadEr
       const trimmedTitle = task.title.trim();
       const taskLabel = trimmedTitle ? `${trimmedTitle} (${task.id})` : task.id;
       const statusAction = frontendText(locale, task.status === "done" ? "TASKS_REOPEN" : "TASKS_COMPLETE");
-      return <Card key={task.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p><Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>{task.notes && <p className="mt-1 truncate text-sm text-muted-foreground">{task.notes}</p>}</div><div className="flex flex-wrap gap-2"><a href={contextDiscussionHref({ kind: "task", id: task.id })} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium transition hover:bg-accent hover:text-accent-foreground">{frontendText(locale, "MESSAGES_DISCUSS")}</a><Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onStatusChange?.(task.id, task.status === "done" ? "todo" : "done")}>{statusAction}</Button><Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onDelete?.(task.id)}>{frontendText(locale, "TASKS_DELETE")}</Button></div></CardContent></Card>;
+      return <Card key={task.id}><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{task.title}</p>{onOpen && <Button variant="outline" disabled={Boolean(actionPendingId)} aria-label={`${frontendText(locale, "TASKS_EDIT")}: ${task.title ? `${task.title} (${task.id})` : task.id}`} onClick={() => onOpen(task.id)}>{frontendText(locale, "TASKS_EDIT")}</Button>}<Badge variant="outline">{frontendText(locale, taskStatusKey(task.status))}</Badge><Badge variant="outline">{frontendText(locale, taskPriorityKey(task.priority))}</Badge></div>{task.notes && <p className="mt-1 truncate text-sm text-muted-foreground">{task.notes}</p>}</div><div className="flex flex-wrap gap-2"><a href={contextDiscussionHref({ kind: "task", id: task.id })} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs font-medium transition hover:bg-accent hover:text-accent-foreground">{frontendText(locale, "MESSAGES_DISCUSS")}</a><Button aria-label={`${statusAction}: ${taskLabel}`} size="sm" variant="outline" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onStatusChange?.(task.id, task.status === "done" ? "todo" : "done")}>{statusAction}</Button><Button aria-label={`${frontendText(locale, "TASKS_DELETE")}: ${taskLabel}`} size="sm" variant="destructive" disabled={actionPendingId !== null && actionPendingId !== undefined} onClick={() => onDelete?.(task.id)}>{frontendText(locale, "TASKS_DELETE")}</Button></div></CardContent></Card>;
     })}</div> : <PageState kind="empty" title={frontendText(locale, "TASKS_EMPTY")} />}
     <DataPagination {...state.pagination} locale={locale} pending={pending} onPageChange={(page) => onPageChange?.(page)} onPageSizeChange={(size) => onPageSizeChange?.(size)} />
   </section>;

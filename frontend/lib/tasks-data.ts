@@ -19,7 +19,7 @@ export interface TaskSummary { todo: number; doing: number; blocked: number; don
 export interface TaskFilters { status?: string; priority?: string; tag?: string; due?: string; q?: string; }
 export type TaskPage = FrontendNumberedPage<TaskItem>;
 export interface TaskDetail { task: TaskItem; tags: string[]; links: TaskLinkItem[]; }
-export interface TaskCreateInput { title: string; notes?: string; priority?: string; dueAt?: string | null; knowledgeItemId?: string; }
+export interface TaskCreateInput { id?: string; title: string; notes?: string; priority?: string; dueAt?: string | null; knowledgeItemId?: string; }
 
 function taskQuery(filters: TaskFilters, pagination: FrontendPageRequest): string {
   const params = new URLSearchParams({ page: String(pagination.page), pageSize: String(pagination.pageSize) });
@@ -52,19 +52,25 @@ export async function loadTaskSummary(requester: Fetcher = fetch): Promise<TaskS
   return apiFetch<TaskSummary>("/api/tasks/summary", { requester });
 }
 
-export async function loadTaskDetail(id: string, requester: Fetcher = fetch): Promise<TaskDetail> {
-  return apiFetch<TaskDetail>(`/api/tasks/${encodeURIComponent(id)}`, { requester });
+export async function loadTaskDetail(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<TaskDetail> {
+  const data = await apiFetch<TaskDetail>(`/api/tasks/${encodeURIComponent(id)}`, { requester, signal });
+  const task = taskReceipt(data?.task, id);
+  if (!Array.isArray(data.tags) || !data.tags.every((tag) => typeof tag === "string") || !Array.isArray(data.links)) throw new Error("TASK_DETAIL_INVALID");
+  return { task, tags: data.tags, links: data.links.map((link) => linkReceipt(link, id)) };
 }
 
 export async function createTask(input: TaskCreateInput, requester: Fetcher = fetch): Promise<{ task: TaskItem; created: boolean }> {
-  return apiFetch<{ task: TaskItem; created: boolean }>("/api/tasks", {
+  const id = input.id ?? crypto.randomUUID();
+  const data = await apiFetch<{ task: TaskItem; created: boolean }>("/api/tasks", {
     requester, method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id: crypto.randomUUID(), ...input }),
+    body: JSON.stringify({ ...input, id }),
   });
+  if (typeof data?.created !== "boolean") throw new Error("TASK_RESPONSE_INVALID");
+  return { task: taskReceipt(data.task, id), created: data.created };
 }
 
 export async function updateTask(id: string, patch: { title: string; notes: string; priority: string; dueAt: string | null }, requester: Fetcher = fetch): Promise<TaskItem> {
-  return apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) });
+  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }), id);
 }
 
 export async function deleteTask(id: string, requester: Fetcher = fetch): Promise<void> {
@@ -76,27 +82,30 @@ export async function deleteTask(id: string, requester: Fetcher = fetch): Promis
 }
 
 export async function setTaskStatus(id: string, status: string, requester: Fetcher = fetch): Promise<TaskItem> {
-  return apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) }), id);
 }
 
 export async function setTaskProgress(id: string, progress: number, requester: Fetcher = fetch): Promise<TaskItem> {
-  return apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress }) });
+  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress }) }), id);
 }
 
 export async function replaceTaskTags(id: string, tags: string[], requester: Fetcher = fetch): Promise<string[]> {
   const data = await apiFetch<{ tags?: unknown }>(`/api/tasks/${encodeURIComponent(id)}/tags`, { requester, method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tags }) });
-  return Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [];
+  if (!Array.isArray(data?.tags) || !data.tags.every((tag) => typeof tag === "string")) throw new Error("TASK_TAGS_INVALID");
+  return data.tags;
 }
 
 export async function addTaskLink(taskId: string, knowledgeItemId: string, requester: Fetcher = fetch): Promise<TaskLinkItem> {
   const data = await apiFetch<{ link?: unknown }>(`/api/tasks/${encodeURIComponent(taskId)}/links`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ knowledgeItemId }) });
-  const link = data.link as TaskLinkItem | undefined;
-  if (!link || typeof link.id !== "string") throw new Error("TASK_LINK_INVALID");
-  return link;
+  return linkReceipt(data?.link, taskId, knowledgeItemId);
 }
 
 export async function removeTaskLink(taskId: string, linkId: string, requester: Fetcher = fetch): Promise<void> {
-  await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, { requester, method: "DELETE" });
+  try {
+    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, { requester, method: "DELETE" });
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
+  }
 }
 
 function normalizeTask(value: unknown): TaskItem | null {
@@ -127,4 +136,24 @@ function isStatus(value: unknown): value is TaskItem["status"] {
 
 function isPriority(value: unknown): value is TaskItem["priority"] {
   return value === "low" || value === "medium" || value === "high";
+}
+
+function taskReceipt(value: unknown, expectedId: string): TaskItem {
+  const record = value as TaskItem | undefined;
+  const validDate = (date: unknown) => typeof date === "string" && Number.isFinite(Date.parse(date));
+  if (!record || record.id !== expectedId || typeof record.title !== "string" || typeof record.notes !== "string"
+    || !isStatus(record.status) || !isPriority(record.priority) || !Number.isSafeInteger(record.progress) || record.progress < 0 || record.progress > 100
+    || (record.dueAt !== null && !validDate(record.dueAt)) || (record.completedAt !== null && !validDate(record.completedAt))
+    || !validDate(record.createdAt) || !validDate(record.updatedAt)) throw new Error("TASK_RESPONSE_INVALID");
+  return record;
+}
+
+function linkReceipt(value: unknown, taskId: string, knowledgeItemId?: string): TaskLinkItem {
+  const link = value as TaskLinkItem | undefined;
+  if (!link || typeof link.id !== "string" || !link.id || link.taskId !== taskId
+    || typeof link.knowledgeItemId !== "string" || !link.knowledgeItemId
+    || (knowledgeItemId !== undefined && link.knowledgeItemId !== knowledgeItemId)
+    || (link.knowledgeTitle !== null && typeof link.knowledgeTitle !== "string")
+    || typeof link.createdAt !== "string") throw new Error("TASK_LINK_INVALID");
+  return link;
 }

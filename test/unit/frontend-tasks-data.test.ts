@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTask, createTasksRequestController, deleteTask, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
+import { createTask, createTasksRequestController, deleteTask, loadTaskDetail, setTaskStatus, setTaskProgress, updateTask, addTaskLink, removeTaskLink, loadTaskSummary, loadTasks } from "../../frontend/lib/tasks-data";
 import { dueInfo, taskPriorityKey, taskStatusKey } from "../../frontend/pages/tasks/tasks-model";
 
 function fetchJson(payload: unknown, status = 200): typeof fetch {
@@ -41,13 +41,50 @@ describe("tasks data layer", () => {
     let capturedBody = "";
     const requester = (async (_input: RequestInfo | URL, init?: RequestInit) => {
       capturedBody = String(init?.body ?? "");
-      return new Response(JSON.stringify({ task: { id: "task-1", title: "Alpha", status: "todo", progress: 0, priority: "medium", createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:00.000Z" }, created: true }), { status: 201 });
+      return new Response(JSON.stringify({ task: { notes: "", dueAt: null, completedAt: null, id: JSON.parse(capturedBody).id, title: "Alpha", status: "todo", progress: 0, priority: "medium", createdAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:00.000Z" }, created: true }), { status: 201 });
     }) as unknown as typeof fetch;
     const result = await createTask({ title: "Alpha" }, requester);
     expect(result.task.title).toBe("Alpha");
     const body = JSON.parse(capturedBody) as { id: unknown };
     expect(typeof body.id).toBe("string");
     expect(body.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u);
+  });
+
+  it("reuses an explicit creation intent id across manual retries", async () => {
+    const bodies: string[] = [];
+    const requester = (async (_: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body));
+      return Response.json({ task: { ...JSON.parse(String(init?.body)), notes: "", dueAt: null, completedAt: null, status: "todo", progress: 0, priority: "medium", createdAt: "2026-09-26T00:00:00Z", updatedAt: "2026-09-26T00:00:00Z" }, created: false });
+    }) as typeof fetch;
+    await createTask({ id: "intent-one", title: "Alpha" }, requester);
+    await createTask({ id: "intent-one", title: "Alpha" }, requester);
+    expect(JSON.parse(bodies[0]!).id).toBe("intent-one");
+    expect(bodies[0]).toBe(bodies[1]);
+  });
+
+  it("rejects a creation receipt for a different intent", async () => {
+    await expect(createTask({ id: "intent-one", title: "Alpha" }, fetchJson({ task: { id: "other", title: "Alpha" }, created: true }))).rejects.toThrow();
+  });
+
+  it("rejects details and link receipts belonging to a different target", async () => {
+    await expect(loadTaskDetail("owned", fetchJson({ task: { id: "other", title: "Secret" }, tags: [], links: [] }))).rejects.toThrow();
+    await expect(loadTaskDetail("owned", fetchJson({ task: { id: "owned", title: "Alpha" }, tags: [], links: [{ id: "l", taskId: "other", knowledgeItemId: "k" }] }))).rejects.toThrow();
+    await expect(addTaskLink("owned", "k", fetchJson({ link: { id: "l", taskId: "owned", knowledgeItemId: "wrong" } }))).rejects.toThrow();
+  });
+
+  it("rejects malformed details instead of inventing editable defaults", async () => {
+    await expect(loadTaskDetail("owned", fetchJson({ task: { id: "owned", title: "Alpha" }, tags: [], links: [] }))).rejects.toThrow();
+  });
+
+  it("validates the target of every task mutation receipt", async () => {
+    const wrong = fetchJson({ id: "other", title: "Alpha" });
+    await expect(setTaskStatus("owned", "done", wrong)).rejects.toThrow();
+    await expect(setTaskProgress("owned", 10, wrong)).rejects.toThrow();
+    await expect(updateTask("owned", { title: "Alpha", notes: "", priority: "medium", dueAt: null }, wrong)).rejects.toThrow();
+  });
+
+  it("treats an already removed association as a successful removal", async () => {
+    await expect(removeTaskLink("owned", "link-gone", fetchJson({}, 404))).resolves.toBeUndefined();
   });
 
   it("treats a 404 on delete as success", async () => {

@@ -21,6 +21,7 @@ import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
 import { SubmitPage } from "./pages/submit-page";
 import { MySubmissionsPage } from "./pages/my-submissions-page";
+import { TaskEditor } from "./pages/tasks/task-editor";
 import { TasksPage } from "./pages/tasks/tasks-page";
 import { InboxPage, type InboxPageState } from "./pages/inbox-page";
 import { GoalsPage, type GoalsPageState } from "./pages/goals-page";
@@ -185,7 +186,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
-    case "tasks": return <TasksRoute locale={locale} search={search} />;
+    case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute locale={locale} />;
     case "projects": return <ProjectsRoute locale={locale} />;
@@ -907,6 +908,7 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
 }
 
 export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const [editor, setEditor] = useState<{ taskId: string | null } | null>(null);
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const initialFilters = useMemo(() => taskFiltersFromSearch(search), [search]);
   const [page, setPage] = useState(initialPage.page);
@@ -931,6 +933,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
     // Invalidate pending reads so a late response cannot restore protected rows.
     controllerRef.current?.dispose();
+    setEditor(null);
     setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     setPending(false); setLocalLoadError(undefined); setActionError(undefined);
     return true;
@@ -1005,7 +1008,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
     } finally { actionPendingRef.current = false; setActionPendingId(null); }
   };
   const ready = state.kind === "ready" ? { kind: "ready" as const, items: state.data.items, pagination: state.data.pagination } : state;
-  return <TasksPage locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} />;
+  return <><div inert={editor ? true : undefined}><TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
 export function InboxRoute({ locale }: { locale: LocaleRuntime }) {

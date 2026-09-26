@@ -193,6 +193,7 @@ export const WORKBENCH_OPERATION_ROOTS = Object.freeze([
   { capabilityId: "workbench-my-submissions", path: "frontend/app.tsx", symbol: "MySubmissionsRoute" },
   { capabilityId: "workbench-tasks", path: "frontend/app.tsx", symbol: "TasksRoute" },
   { capabilityId: "workbench-tasks", path: "frontend/lib/tasks-data.ts", symbol: "*" },
+  { capabilityId: "workbench-tasks", path: "frontend/pages/tasks/task-editor.tsx", symbol: "TaskEditor" },
   { capabilityId: "workbench-boards", path: "frontend/app.tsx", symbol: "BoardsRoute" },
   { capabilityId: "workbench-settings", path: "frontend/pages/settings-page.tsx", symbol: "SettingsPage" },
   { capabilityId: "workbench-admin", path: "frontend/pages/admin/admin-dashboard-route.tsx", symbol: "AdminDashboardRoute" },
@@ -313,7 +314,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-tasks", routeId: "tasks", pathname: "/tasks", requiredRole: "contributor",
     journey: "Create, filter, update, and remove private workspace tasks.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/tasks/tasks-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/tasks.ts", "src/tasks/service.ts"], testEvidence: ["test/unit/frontend-tasks-route.test.tsx", "test/worker/tasks.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["TSK-001", "TSK-002"], gaps: ["Current permitted/revoked server projections, forbidden direct route, and loading, empty, retryable error, and response-owned ready marker are runtime-probed. Mutations, deletion recovery, idempotency/concurrency, release, and signed-browser acceptance remain incomplete."],
+    frontendEvidence: ["frontend/pages/tasks/tasks-page.tsx", "frontend/pages/tasks/task-editor.tsx", "frontend/app.tsx"], backendEvidence: ["src/routes/tasks.ts", "src/tasks/service.ts"], testEvidence: ["test/unit/frontend-tasks-route.test.tsx", "test/unit/frontend-task-editor-route.test.tsx", "test/unit/frontend-tasks-data.test.ts", "test/worker/tasks.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["TSK-001", "TSK-002"], gaps: ["Current permitted/revoked server projections, forbidden direct route, and loading, empty, retryable error, and response-owned ready marker are runtime-probed. Mutations, deletion recovery, idempotency/concurrency, release, and signed-browser acceptance remain incomplete."],
   },
   {
     id: "workbench-boards", routeId: "boards", pathname: "/boards", requiredRole: "contributor",

@@ -269,3 +269,28 @@ rtk proxy npx vitest run test/unit/frontend-tasks-route.test.tsx test/unit/front
 - **尚未闭环的具体功能**：`loadTaskDetail/createTask/updateTask/replaceTaskTags/addTaskLink` 存在于客户端模块，但没有在当前 TasksRoute 中调用；任务创建/编辑/截止时间/标签/知识关联的界面交互及未知结果恢复需要后续接线。后端可调用不等于成员界面可用。
 - 总清单仍 **29 父项、关闭 1、剩余 28**。当前在 C01，继续本地实施允许，无需新生产权限；下一步应完成上述任务编辑工作流，不越过未完成项直接宣称 C01 或全部清单完成。
 - 没有 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret。以上不是全仓测试、真实浏览器或生产验收。
+
+
+## C01 — 任务创建与详情编辑工作流（本地实现与回归）
+
+承接 `4d85e07`，沿用已批准的 `docs/superpowers/plans/2026-08-27-workbench-tasks.md`，没有增加新的存储或领域模型。
+
+- TasksRoute 接入新建 Dialog 和详情 Sheet：创建、标题/备注/优先级/截止时间修改、合法状态迁移、绝对进度、替换标签、按知识 ID 关联及移除失效关系。当前创建只写基本任务；知识关联作为后续独立操作，避免后端组合创建中“任务已创建但关联失败”的部分成功被误报为整体成功。
+- 同一挂载内一次创建意图固定 ID/body；写入未决期间阻止双击和 Escape，未知结果冻结输入，仅显式重试原操作。成功后列表/详情重新 GET；读取失败不自动重放 mutation。401/403 同时清空详情及列表，成员切换通过 keyed route 重新挂载，取消详情读取后忽略迟到响应。
+- 详情与写回执严格验证任务 ID、可编辑字段、日期；知识链接回执核对 taskId/knowledgeItemId。移除已不存在关联的 404 收敛成功。不可访问关联只显示安全占位，不推断目标权限。
+- 截止时间按设备时区编辑，未修改时保留原始 ISO 精度（包括毫秒）；清空表示 null。终态禁止进度编辑，标签数量与 Unicode 码点限制对齐后端。新增文案中英齐全。
+- 未完成边界：当前恢复意图未跨刷新/路由离开持久化；勿刷新提示和 beforeunload 不是跨路由持久化保证。跨标签并发覆盖、真实身份/原生浏览器/移动布局完整旅程仍待验收；不因此关闭 C01 父项。
+
+### RED → GREEN 与本地验证
+
+- 首批实际行为 RED：9 failed / 8 passed（缺少创建/编辑入口、错误目标回执未拒绝、关联 404 未收敛）。在实现后补充严格详情与状态/进度目标校验，第二批 RED 为 2 failed / 25 passed；Unicode 边界 RED 为 1 failed / 14 passed。
+- 测试 DOM harness 按既有路由测试提供 HTMLElement 和输入 onChange；不把测试环境错误算作功能反例。真实浏览器键盘/布局仍保留未验收。
+- 最终联合回归：10 文件 **267/267**（任务编辑路由 15、任务数据层 13，以及既有任务/看板/权限/无障碍等回归）。命令：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-task-editor-route.test.tsx test/unit/frontend-tasks-data.test.ts test/unit/frontend-tasks-route.test.tsx test/unit/frontend-tasks-page.test.tsx test/unit/tasks-service.test.ts test/worker/tasks.test.ts test/worker/task-structure.test.ts test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-boards-route.test.tsx
+```
+
+- 安全门禁：typecheck、build:ui、verify:i18n、test:i18n（13/13）、verify:workbench-maturity（13/13）、audit:workbench-domain、verify:delivery-status（30/30）。领域审计因为新增 UI 调用根/测试证据而重新生成快照，不修改冻结的 gap 指纹或宣称发布验收完成。保留既有 >500 kB chunk 警告。
+- 总清单 **29 父项、关闭 1（B03）、剩余 28**。C01 本地主要编辑旅程已接通，下一环节允许继续 C02 看板权威数据/键盘移动/并发恢复的本地核对；C01 未完成项明确保留。
+- 没有 push、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；以上不是全仓测试或生产验收。
