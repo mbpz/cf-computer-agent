@@ -65,11 +65,12 @@ export async function routeProjectsApi(
     const projectId = decodePathId(goal[1]!);
     if (goal[2]) {
       if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
-      return jsonResponse(await services.projects.unlinkGoal(member.memberId, projectId, decodePathId(goal[2]!)), 200, context.requestId);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "PROJECT_INVALID");
+      return jsonResponse(await services.projects.unlinkGoal(member.memberId, projectId, decodePathId(goal[2]!), input.expectedUpdatedAt), 200, context.requestId);
     }
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goalId"], "PROJECT_INVALID");
-    return jsonResponse(await services.projects.linkGoal(member.memberId, projectId, input.goalId), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goalId", "expectedUpdatedAt"], "PROJECT_INVALID");
+    return jsonResponse(await services.projects.linkGoal(member.memberId, projectId, input.goalId, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const task = /^\/api\/projects\/([^/]+)\/tasks(?:\/([^/]+))?$/u.exec(url.pathname);
@@ -82,11 +83,12 @@ export async function routeProjectsApi(
     const projectId = decodePathId(task[1]!);
     if (task[2]) {
       if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
-      return jsonResponse(await services.projects.unlinkTask(member.memberId, projectId, decodePathId(task[2]!)), 200, context.requestId);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "PROJECT_INVALID");
+      return jsonResponse(await services.projects.unlinkTask(member.memberId, projectId, decodePathId(task[2]!), input.expectedUpdatedAt), 200, context.requestId);
     }
     if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["taskId"], "PROJECT_INVALID");
-    return jsonResponse(await services.projects.linkTask(member.memberId, projectId, input.taskId), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["taskId", "expectedUpdatedAt"], "PROJECT_INVALID");
+    return jsonResponse(await services.projects.linkTask(member.memberId, projectId, input.taskId, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const project = /^\/api\/projects\/([^/]+)$/u.exec(url.pathname);

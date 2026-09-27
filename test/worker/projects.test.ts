@@ -60,17 +60,17 @@ describe("private Projects migration contract", () => {
     await projects.create("member-a", { id: "project-a", clientKey: "p-a", title: "A", progress: 37 });
     await tasks.create("member-a", { id: "task-a", title: "A" });
     await tasks.create("member-a", { id: "task-b", title: "B" });
-    expect((await projects.linkTask("member-a", "project-a", "task-a")).linked).toBe(true);
-    expect((await projects.linkTask("member-a", "project-a", "task-a")).linked).toBe(false);
-    await projects.linkTask("member-a", "project-a", "task-b");
+    expect((await projects.linkTask("member-a", "project-a", "task-a", (await projects.get("member-a", "project-a")).updatedAt)).linked).toBe(true);
+    expect((await projects.linkTask("member-a", "project-a", "task-a", (await projects.get("member-a", "project-a")).updatedAt)).linked).toBe(false);
+    await projects.linkTask("member-a", "project-a", "task-b", (await projects.get("member-a", "project-a")).updatedAt);
     expect(await projects.summary("member-a", "project-a")).toMatchObject({ taskCount: 2, completedTaskCount: 0 });
     await tasks.setStatus("member-a", "task-a", "done");
     expect(await projects.summary("member-a", "project-a")).toMatchObject({ taskCount: 2, completedTaskCount: 1 });
     await tasks.setStatus("member-a", "task-a", "todo");
     await tasks.setStatus("member-a", "task-b", "canceled");
     expect(await projects.summary("member-a", "project-a")).toMatchObject({ taskCount: 2, completedTaskCount: 0 });
-    await projects.unlinkTask("member-a", "project-a", "task-a");
-    await projects.unlinkTask("member-a", "project-a", "task-a");
+    await projects.unlinkTask("member-a", "project-a", "task-a", (await projects.get("member-a", "project-a")).updatedAt);
+    await projects.unlinkTask("member-a", "project-a", "task-a", (await projects.get("member-a", "project-a")).updatedAt);
     expect(await projects.summary("member-a", "project-a")).toMatchObject({ taskCount: 1, completedTaskCount: 0 });
     await tasks.delete("member-a", "task-b");
     expect(await projects.summary("member-a", "project-a")).toMatchObject({ taskCount: 0, completedTaskCount: 0 });
@@ -85,19 +85,19 @@ describe("private Projects migration contract", () => {
     for (let index = 0; index < 12; index += 1) {
       const id = `goal-${index}`;
       await goals.create("member-a", { id, clientKey: id, title: id });
-      await projects.linkGoal("member-a", "project-a", id);
+      await projects.linkGoal("member-a", "project-a", id, (await projects.get("member-a", "project-a")).updatedAt);
     }
     const summary = await projects.summary("member-a", "project-a");
     expect(summary.goalCount).toBe(12); expect(summary.goals).toHaveLength(10);
     expect(new Set(summary.goals.map((goal) => goal.id)).size).toBe(10);
-    expect((await projects.linkGoal("member-a", "project-a", "goal-0")).linked).toBe(false);
+    expect((await projects.linkGoal("member-a", "project-a", "goal-0", (await projects.get("member-a", "project-a")).updatedAt)).linked).toBe(false);
     await goals.create("member-b", { id: "foreign-goal", clientKey: "foreign", title: "Secret" });
     await tasks.create("member-b", { id: "foreign-task", title: "Secret" });
-    await expect(projects.linkGoal("member-a", "project-a", "foreign-goal")).rejects.toMatchObject({ status: 404 });
-    await expect(projects.linkTask("member-a", "project-a", "foreign-task")).rejects.toMatchObject({ status: 404 });
+    await expect(projects.linkGoal("member-a", "project-a", "foreign-goal", (await projects.get("member-a", "project-a")).updatedAt)).rejects.toMatchObject({ status: 404 });
+    await expect(projects.linkTask("member-a", "project-a", "foreign-task", (await projects.get("member-a", "project-a")).updatedAt)).rejects.toMatchObject({ status: 404 });
     await expect(projects.summary("member-b", "project-a")).rejects.toMatchObject({ status: 404 });
     expect(await projects.summary("member-b", "project-b")).toEqual({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
-    await projects.unlinkGoal("member-a", "project-a", "goal-0");
+    await projects.unlinkGoal("member-a", "project-a", "goal-0", (await projects.get("member-a", "project-a")).updatedAt);
     expect((await projects.summary("member-a", "project-a")).goalCount).toBe(11);
   });
 

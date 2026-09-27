@@ -8,13 +8,14 @@ const project = (id: string) => ({ id, clientKey: id, title: `Project ${id}`, de
 describe("project relation editing and readback", () => {
   let app: MountedApp | undefined;
   let holdWrite: Promise<void> | undefined, holdRead: Promise<void> | undefined, malformed = false, deniedRead = 0, malformedReceipt = false;
+  let sentVersions: unknown[], revision: number;
   let goalLinks: Set<string>, taskLinks: Set<string>, writes: string[], reads: string[], failure: number, readFailure: boolean;
   afterEach(async () => { await app?.unmount(); app = undefined; });
   const main = () => app!.container.querySelector("main")!;
   const editor = () => main().querySelector("[data-project-relations-editor]")!;
   const button = (text: string, root: Element = main()) => [...root.querySelectorAll("button")].find(b => b.textContent === text)!;
   async function mount() {
-    goalLinks = new Set(); taskLinks = new Set(); writes = []; reads = []; failure = 0; readFailure = false; holdWrite = undefined; holdRead = undefined; malformed = false; deniedRead = 0; malformedReceipt = false;
+    sentVersions = []; revision = 0; goalLinks = new Set(); taskLinks = new Set(); writes = []; reads = []; failure = 0; readFailure = false; holdWrite = undefined; holdRead = undefined; malformed = false; deniedRead = 0; malformedReceipt = false;
     app = await mountAuthenticatedApp({ url: "https://app.test/projects", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
@@ -26,6 +27,10 @@ describe("project relation editing and readback", () => {
         writes.push(`${init.method} ${url.pathname}`); await holdWrite;
         const links = url.pathname.includes("/tasks") ? taskLinks : goalLinks;
         const body = init.body ? JSON.parse(String(init.body)) : {};
+        sentVersions.push(body.expectedUpdatedAt);
+        if ([400, 401, 403, 404].includes(failure)) return apiError(failure, "WRITE_FAILURE", false);
+        revision++;
+        if (failure === 409) return apiError(409, "PROJECT_VERSION_CONFLICT", false);
         const id = init.method === "POST" ? body.goalId ?? body.taskId : decodeURIComponent(url.pathname.split("/").at(-1)!);
         if (init.method === "POST") links.add(id); else links.delete(id);
         if (failure) return apiError(failure, "WRITE_FAILURE", failure !== 400);
@@ -38,7 +43,7 @@ describe("project relation editing and readback", () => {
       const page = Number(url.searchParams.get("page")); const pageSize = Number(url.searchParams.get("pageSize"));
       const kind = url.pathname.endsWith("/tasks") ? "tasks" : "goals";
       const items = Array.from({ length: 23 }, (_, i) => ({ id: `${kind === "goals" ? "goal" : "task"}-${i}`, title: `${kind === "goals" ? "Goal" : "Task"} ${i}`, linked: kind === "goals" ? goalLinks.has(`goal-${i}`) : taskLinks.has(`task-${i}`) })).slice((page - 1) * pageSize, page * pageSize);
-      return Response.json({ projectId: malformed ? "foreign" : "a", kind, items, pagination: { page, pageSize, total: 23, totalPages: Math.ceil(23 / pageSize) } });
+      return Response.json({ expectedUpdatedAt: new Date(Date.parse(project("a").updatedAt) + revision).toISOString(), projectId: malformed ? "foreign" : "a", kind, items, pagination: { page, pageSize, total: 23, totalPages: Math.ceil(23 / pageSize) } });
     } });
     await waitForApp(() => !!button("Manage links") && !button("Manage links").disabled);
     await act(async () => button("Manage links").click());
@@ -51,10 +56,12 @@ describe("project relation editing and readback", () => {
     await act(async () => { [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); });
     await waitForApp(() => writes.length === 1 && !!button("Unlink", editor()));
     expect(writes).toHaveLength(1);
+    expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z"]);
     expect(main().textContent).toContain("37%");
     expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("Goal 22");
     await act(async () => button("Unlink", editor()).click());
     await waitForApp(() => writes.length === 2 && !button("Unlink", editor()));
+    expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z", "2026-09-01T00:00:00.001Z"]);
     expect(reads.filter(p => p.includes("page=2"))).toHaveLength(3);
   });
   it("switches relation kind back to page one and disables unrelated project writes", async () => {
@@ -135,8 +142,8 @@ describe("project relation editing and readback", () => {
     await mount(); await next();
     if (typeof result === "number") failure = result; else malformedReceipt = true;
     await act(async () => button("Link", editor()).click());
-    await waitForApp(() => !!button("Unlink", editor()));
-    expect(editor().textContent).toContain("not confirmed"); expect(writes).toHaveLength(1);
+    await waitForApp(() => !!button(result === 409 ? "Link" : "Unlink", editor()) && !button(result === 409 ? "Link" : "Unlink", editor()).disabled);
+    expect(editor().textContent).toContain(result === 409 ? "record changed" : "not confirmed"); expect(writes).toHaveLength(1);
     expect(reads).toHaveLength(3);
   });
   it("keeps a definite validation rejection editable without automatic replay", async () => {
@@ -152,4 +159,17 @@ describe("project relation editing and readback", () => {
     await waitForApp(() => !main().textContent?.includes("Project a"));
     expect(editor()).toBeNull(); expect(writes).toHaveLength(1); expect(reads).toHaveLength(readsBefore);
   });
+  it("uses the conflict readback version only for a new explicit user action", async () => {
+    await mount(); failure = 409;
+    await act(async () => button("Link", editor()).click());
+    await waitForApp(() => !!button("Link", editor()) && !button("Link", editor()).disabled);
+    expect(editor().textContent).toContain("record changed");
+    expect(writes).toHaveLength(1); expect(button("Unlink", editor())).toBeUndefined();
+    failure = 0;
+    await act(async () => button("Link", editor()).click());
+    await waitForApp(() => !!button("Unlink", editor()));
+    expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z", "2026-09-01T00:00:00.001Z"]);
+    expect(writes).toHaveLength(2);
+  });
+
 });

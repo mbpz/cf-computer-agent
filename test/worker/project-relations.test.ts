@@ -9,6 +9,11 @@ import { TasksRepository } from "../../src/tasks/repository";
 import { routeProjectsApi } from "../../src/routes/projects";
 const service = () => new ProjectsService(new ProjectsRepository(env.DB), { goals: new GoalsRepository(env.DB), tasks: new TasksRepository(env.DB) });
 async function route(path: string, method = "GET", body?: unknown, memberId = "a") {
+  // Existing journey cases start a new intent from a freshly read project version.
+  if (method === "POST" || method === "DELETE") {
+    const owner = await service().get("a", path.split("/")[0]!);
+    body = { ...(body as object ?? {}), expectedUpdatedAt: owner.updatedAt };
+  }
   const request = new Request(`https://app.test/api/projects/${path}`, { method, ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
   return routeProjectsApi(request, new URL(request.url), { requestId: "relations" }, { kind: "member", memberId, identitySubject: memberId, email: `${memberId}@test.example`, role: "contributor" }, { projects: service() });
 }
@@ -48,7 +53,7 @@ describe("member-scoped project relation editor API", () => {
       expect(page.pagination).toEqual({ page: 1, pageSize, total: 23, totalPages: 1 });
     }
   });
-  it.each(["goals", "tasks"])("replays link/unlink %s safely, reads beyond the ten-goal preview, and rejects foreign targets", async kind => {
+  it.each(["goals", "tasks"])("repeats link/unlink %s with fresh versions safely, reads beyond the ten-goal preview, and rejects foreign targets", async kind => {
     const key = kind === "goals" ? "goalId" : "taskId";
     await route(`p-a/${kind}`, "POST", { [key]: "a-00" });
     expect(await (await route(`p-a/${kind}`, "POST", { [key]: "a-00" }))!.json()).toMatchObject({ linked: false });

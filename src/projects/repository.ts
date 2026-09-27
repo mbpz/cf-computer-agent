@@ -15,10 +15,7 @@ export interface ProjectsRepositoryPort {
   listNumbered(memberId: string, request: NumberedPageRequest & { status?: ProjectStatus }): Promise<NumberedPage<Project>>;
   update(memberId: string, id: string, input: ProjectUpdate, expectedUpdatedAt: number): Promise<Project | null>;
   updateStatus(memberId: string, id: string, status: ProjectStatus, updatedAt: number, expectedUpdatedAt: number): Promise<Project | null>;
-  linkGoal(memberId: string, projectId: string, goalId: string, createdAt: number): Promise<boolean>;
-  unlinkGoal(memberId: string, projectId: string, goalId: string): Promise<boolean>;
-  linkTask(memberId: string, projectId: string, taskId: string, createdAt: number): Promise<boolean>;
-  unlinkTask(memberId: string, projectId: string, taskId: string): Promise<boolean>;
+  changeRelation(memberId: string, projectId: string, kind: ProjectRelationKind, targetId: string, linked: boolean, updatedAt: number, expectedUpdatedAt: number): Promise<boolean | null>;
   summary(memberId: string, projectId: string): Promise<ProjectSummary>;
 }
 
@@ -117,28 +114,24 @@ export class ProjectsRepository implements ProjectsRepositoryPort {
     if (write.meta.changes !== 1) return null;
     return mapRow(read.results[0] ?? null);
   }
-  async linkGoal(memberId: string, projectId: string, goalId: string, createdAt: number): Promise<boolean> {
-    const result = await this.db.prepare("INSERT OR IGNORE INTO project_goals (project_id, member_id, goal_id, created_at) VALUES (?, ?, ?, ?)")
-      .bind(projectId, memberId, goalId, createdAt).run();
-    return result.meta.changes === 1;
-  }
-
-  async unlinkGoal(memberId: string, projectId: string, goalId: string): Promise<boolean> {
-    const result = await this.db.prepare("DELETE FROM project_goals WHERE project_id = ? AND member_id = ? AND goal_id = ?")
-      .bind(projectId, memberId, goalId).run();
-    return result.meta.changes === 1;
-  }
-
-  async linkTask(memberId: string, projectId: string, taskId: string, createdAt: number): Promise<boolean> {
-    const result = await this.db.prepare("INSERT OR IGNORE INTO project_tasks (project_id, member_id, task_id, created_at) VALUES (?, ?, ?, ?)")
-      .bind(projectId, memberId, taskId, createdAt).run();
-    return result.meta.changes === 1;
-  }
-
-  async unlinkTask(memberId: string, projectId: string, taskId: string): Promise<boolean> {
-    const result = await this.db.prepare("DELETE FROM project_tasks WHERE project_id = ? AND member_id = ? AND task_id = ?")
-      .bind(projectId, memberId, taskId).run();
-    return result.meta.changes === 1;
+  async changeRelation(memberId: string, projectId: string, kind: ProjectRelationKind, targetId: string, linked: boolean, updatedAt: number, expectedUpdatedAt: number): Promise<boolean | null> {
+    const table = kind === "goals" ? "project_goals" : kind === "tasks" ? "project_tasks" : null;
+    if (!table) throw new AppError("PROJECT_INVALID", "Invalid relation kind", 400);
+    const key = kind === "goals" ? "goal_id" : "task_id";
+    const guard = `EXISTS(SELECT 1 FROM projects WHERE member_id = ? AND id = ? AND updated_at = ?) AND EXISTS(SELECT 1 FROM ${kind} WHERE member_id = ? AND id = ?)`;
+    // Both statements run in one D1 transaction. Mutate the edge against the old
+    // version first, then consume that version even when the edge was a no-op.
+    const edge = linked
+      ? this.db.prepare(`INSERT OR IGNORE INTO ${table} (project_id, member_id, ${key}, created_at) SELECT ?, ?, ?, ? WHERE ${guard}`)
+        .bind(projectId, memberId, targetId, updatedAt, memberId, projectId, expectedUpdatedAt, memberId, targetId)
+      : this.db.prepare(`DELETE FROM ${table} WHERE project_id = ? AND member_id = ? AND ${key} = ? AND ${guard}`)
+        .bind(projectId, memberId, targetId, memberId, projectId, expectedUpdatedAt, memberId, targetId);
+    const [changed, consumed] = await this.db.batch([
+      edge,
+      this.db.prepare(`UPDATE projects SET updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? AND EXISTS(SELECT 1 FROM ${kind} WHERE member_id = ? AND id = ?)`)
+        .bind(updatedAt, memberId, projectId, expectedUpdatedAt, memberId, targetId),
+    ]);
+    return consumed.meta.changes === 1 ? changed.meta.changes === 1 : null;
   }
 
   async summary(memberId: string, projectId: string): Promise<ProjectSummary> {

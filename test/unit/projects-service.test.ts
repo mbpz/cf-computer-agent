@@ -26,11 +26,11 @@ describe("ProjectsService", () => {
       tasks: { findOwned: async (memberId, id) => memberId === "member-a" && id === "task-1" ? {} as never : null },
     });
     await service.create("member-a", { id: "project-1", clientKey: "project-1", title: "Launch" });
-    await expect(service.linkGoal("member-a", "project-1", "goal-other")).rejects.toMatchObject({ code: "PROJECT_GOAL_NOT_FOUND", status: 404 });
-    await expect(service.linkTask("member-a", "project-1", "task-other")).rejects.toMatchObject({ code: "PROJECT_TASK_NOT_FOUND", status: 404 });
-    await expect(service.linkGoal("member-a", "project-1", "goal-1")).resolves.toMatchObject({ linked: true });
-    await expect(service.linkGoal("member-a", "project-1", "goal-1")).resolves.toMatchObject({ linked: false });
-    await expect(service.linkTask("member-a", "project-1", "task-1")).resolves.toMatchObject({ linked: true });
+    await expect(service.linkGoal("member-a", "project-1", "goal-other", (await service.get("member-a", "project-1")).updatedAt)).rejects.toMatchObject({ code: "PROJECT_GOAL_NOT_FOUND", status: 404 });
+    await expect(service.linkTask("member-a", "project-1", "task-other", (await service.get("member-a", "project-1")).updatedAt)).rejects.toMatchObject({ code: "PROJECT_TASK_NOT_FOUND", status: 404 });
+    await expect(service.linkGoal("member-a", "project-1", "goal-1", (await service.get("member-a", "project-1")).updatedAt)).resolves.toMatchObject({ linked: true });
+    await expect(service.linkGoal("member-a", "project-1", "goal-1", (await service.get("member-a", "project-1")).updatedAt)).resolves.toMatchObject({ linked: false });
+    await expect(service.linkTask("member-a", "project-1", "task-1", (await service.get("member-a", "project-1")).updatedAt)).resolves.toMatchObject({ linked: true });
   });
 
   it("validates status, progress and owner before mutation", async () => {
@@ -61,9 +61,13 @@ class FakeProjectsRepository implements ProjectsRepositoryPort {
   async listOwned(memberId: string, _request: Parameters<ProjectsRepositoryPort["listOwned"]>[1]): Promise<ProjectPage> { return { items: this.projects.filter((project) => project.memberId === memberId) }; }
   async update(memberId: string, id: string, input: Parameters<ProjectsRepositoryPort["update"]>[2]) { const project = await this.findOwned(memberId, id); if (!project) return null; Object.assign(project, { title: input.title, description: input.description, progress: input.progress, targetAt: input.targetAt === null ? null : new Date(input.targetAt).toISOString(), updatedAt: new Date(input.updatedAt).toISOString() }); return project; }
   async updateStatus(memberId: string, id: string, status: Parameters<ProjectsRepositoryPort["updateStatus"]>[2], updatedAt: number) { const project = await this.findOwned(memberId, id); if (!project) return null; project.status = status; project.updatedAt = new Date(updatedAt).toISOString(); return project; }
-  async linkGoal(_memberId: string, _projectId: string, goalId: string, _createdAt: number) { if (this.goals.has(goalId)) return false; this.goals.add(goalId); return true; }
-  async unlinkGoal(_memberId: string, _projectId: string, goalId: string) { return this.goals.delete(goalId); }
-  async linkTask(_memberId: string, _projectId: string, taskId: string, _createdAt: number) { if (this.tasks.has(taskId)) return false; this.tasks.add(taskId); return true; }
-  async unlinkTask(_memberId: string, _projectId: string, taskId: string) { return this.tasks.delete(taskId); }
+  async changeRelation(memberId: string, projectId: string, kind: "goals" | "tasks", targetId: string, linked: boolean, updatedAt: number, expectedUpdatedAt: number) {
+    const project = await this.findOwned(memberId, projectId);
+    if (!project || Date.parse(project.updatedAt) !== expectedUpdatedAt) return null;
+    project.updatedAt = new Date(updatedAt).toISOString();
+    const edges = kind === "goals" ? this.goals : this.tasks;
+    if (!linked) return edges.delete(targetId);
+    const changed = !edges.has(targetId); edges.add(targetId); return changed;
+  }
   async summary(_memberId: string, _projectId: string) { return { ...summary, goalCount: this.goals.size, taskCount: this.tasks.size }; }
 }

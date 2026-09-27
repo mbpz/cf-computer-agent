@@ -57,16 +57,17 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
   }, [read]);
 
   const mutate = async (item: ProjectRelation) => {
-    if (busyRef.current) return;
+    if (busyRef.current || !data) return;
     busyRef.current = true; setBusy(true); setWriting(true); setNotice(undefined);
     const current = generation.current;
     let shouldRead = true;
-    try { await setProjectRelation(projectId, kind, item.id, !item.linked); }
+    try { await setProjectRelation(projectId, kind, item.id, !item.linked, data.expectedUpdatedAt); }
     catch (error) {
       if (generation.current !== current) return;
       if (denied(error)) { shouldRead = false; onDenied(error); return; }
       const uncertain = !(error instanceof ApiRequestError) || error.retryable || error.status === 408 || error.status >= 500 || error.status === 409;
-      if (uncertain) setNotice(frontendText(locale, "RELATIONS_UNKNOWN"));
+      if (error instanceof ApiRequestError && error.status === 409) setNotice(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
+      else if (uncertain) setNotice(frontendText(locale, "RELATIONS_UNKNOWN"));
       else { shouldRead = false; setNotice(frontendText(locale, "PROJECTS_ACTION_FAILED")); }
     } finally {
       if (generation.current === current) {

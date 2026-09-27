@@ -513,3 +513,31 @@ rtk proxy npm run audit:workbench-domain
 
 - 原 canonical **30 父项**，排除 D08 发布后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选 C03/EXT-PRJ-03 本地关联编辑子项，父项和完整旅程保持开放。
 - 下一环节仍为 C03：关联写入并发顺序与跨刷新/离开路由持久恢复，然后 timeline 数字分页及完整编辑；EXT-GL-02 的直接任务关联仍待核对模型与范围。真实身份及原生浏览器验收单独保留。无新增外部阻塞，允许继续本地实施，不得将本批提交称为全部完结。
+
+
+## C03 — 项目关联条件写入与混合并发顺序（本地子项完成）
+
+承接 `377bfd0`，本批仅对应 C03 / EXT-PRJ-03 已有并发子项，未扩大到发布或生产操作。
+
+### 实现与边界
+
+- 项目目标/任务 POST 与 DELETE 全部要求 JSON 中的规范 ISO `expectedUpdatedAt`；缺失/无效版本返回 400，额外字段及 query 注入被拒绝。原不带版本调用不再兼容，当前只在本地同时更新前后端，未部署。
+- 关联候选列表返回项目版本。服务先验证当前成员的项目和目标归属，再比较版本，跨成员仍返回 404。仓储在 D1 batch 内再次验证目标归属，避免仅依赖非复合外键。
+- 同一事务先按旧版本变更关系，再消耗项目版本；重复关联/解除的 no-op 也消耗版本。任务、目标、元数据和状态共用项目版本，同版本竞争只有一个成功；冻结/倒退时钟仍单调递增。更新版本失败时整批关系写入回滚。
+- 前端使用候选列表版本发起写入，409 显示冲突，未知结果保留未知提示；两者只进行 GET 回读，不自动重发写请求。显式下一次操作使用回读版本。
+- 候选列表版本和列表内容未声明为全局一致快照；并发变化会保守地产生 409。关系编辑后不把单独的新版本戳写入旧项目卡片元数据；后续卡片操作可能先冲突再刷新，避免覆盖其他标签页的元数据。
+- 四个关系 mutation gap 仍包含跨刷新/离开路由恢复等未完成条件，因此保留 source/owner、87 gap（47 P0 / 39 P1 / 1 P2）、R4 的 38 gap 与 124 实施原子，不把局部并发证据当成整条 gap 关闭。
+
+### TDD 与验证
+
+- RED：新增条件写入 Worker 首轮 14/14 失败；前端定向首轮 6 失败 / 22 通过，覆盖未传版本、未验证列表版本和错误的冲突提示。
+- 反证修正：初版认为跨成员外键会拒绝写入，真实本地 D1 反例否定该假设，改为事务 SQL 显式目标归属条件，并增加回滚 trigger、跨类型竞争和严格请求体验证。
+- GREEN：新增 Worker 18 项、关联 UI 19 项、数据层 10 项；定向 7 文件 85/85。联合目标/项目、分页、创建恢复、timeline、关联、权限及可访问性回归 28 文件 501/501（2026-09-27 本地）。
+- 命令：`rtk proxy npx vitest run`，参数为本批新增的 `test/worker/project-relation-conditional-writes.test.ts` 加上上一批 27 个目标/项目联合回归文件；另执行 `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui`、`rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n`，全部通过，i18n 13/13。UI build 保留 >500 kB chunk 警告；typecheck 不覆盖全部前端 TSX。
+- `rtk proxy npm run verify:workbench-maturity` 13/13、`rtk proxy npm run verify:delivery-status` 30/30；领域证据重新生成，`rtk proxy npm run audit:workbench-domain` 检查通过，`rtk git diff --check` 通过。
+- 本地 Workerd/D1 与 happy-dom/HTTP fixture 不代替真实身份、原生浏览器或生产验收。未执行全仓 npm test/check；未 push、merge、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；未调用 AI。
+
+### 总进度与下一环节
+
+- 原 canonical 30 父项，排除 D08 发布后仍为 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选 C03 / EXT-PRJ-03 本地关联并发子项，父项保持开放。
+- 下一环节允许继续 C03 的跨刷新/路由离开持久恢复；随后 timeline 数字分页及完整编辑、目标直接任务关联模型核对与旅程。无新增外部阻塞，不把本次本地提交称为全部完结。

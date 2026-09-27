@@ -68,43 +68,50 @@ export class ProjectsService {
     return updated;
   }
 
-  async linkGoal(memberId: string, projectId: string, goalId: unknown): Promise<{ linked: boolean; project: ProjectSummary }> {
+  async linkGoal(memberId: string, projectId: string, goalId: unknown, expectedUpdatedAt?: unknown): Promise<{ linked: boolean; project: ProjectSummary }> {
     const project = await this.get(memberId, projectId);
     if (typeof goalId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(goalId)) throw invalid("PROJECT_INVALID");
     if (!this.options.goals || !await this.options.goals.findOwned(memberId, goalId)) throw new AppError("PROJECT_GOAL_NOT_FOUND", "Goal is not visible", 404);
-    const linked = await this.repository.linkGoal(memberId, project.id, goalId, this.now().getTime());
+    const linked = await this.changeRelation(memberId, project, "goals", goalId, true, expectedUpdatedAt);
     return { linked, project: await this.repository.summary(memberId, project.id) };
   }
 
-  async unlinkGoal(memberId: string, projectId: string, goalId: string): Promise<ProjectSummary> {
+  async unlinkGoal(memberId: string, projectId: string, goalId: string, expectedUpdatedAt?: unknown): Promise<ProjectSummary> {
     const project = await this.get(memberId, projectId);
     requireId(goalId);
     if (!this.options.goals || !await this.options.goals.findOwned(memberId, goalId)) throw new AppError("PROJECT_GOAL_NOT_FOUND", "Goal is not visible", 404);
-    await this.repository.unlinkGoal(memberId, project.id, goalId);
+    await this.changeRelation(memberId, project, "goals", goalId, false, expectedUpdatedAt);
     return this.repository.summary(memberId, project.id);
   }
 
-  async linkTask(memberId: string, projectId: string, taskId: unknown): Promise<{ linked: boolean; project: ProjectSummary }> {
+  async linkTask(memberId: string, projectId: string, taskId: unknown, expectedUpdatedAt?: unknown): Promise<{ linked: boolean; project: ProjectSummary }> {
     const project = await this.get(memberId, projectId);
     if (typeof taskId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(taskId)) throw invalid("PROJECT_INVALID");
     if (!this.options.tasks || !await this.options.tasks.findOwned(memberId, taskId)) throw new AppError("PROJECT_TASK_NOT_FOUND", "Task is not visible", 404);
-    const linked = await this.repository.linkTask(memberId, project.id, taskId, this.now().getTime());
+    const linked = await this.changeRelation(memberId, project, "tasks", taskId, true, expectedUpdatedAt);
     return { linked, project: await this.repository.summary(memberId, project.id) };
   }
 
-  async unlinkTask(memberId: string, projectId: string, taskId: string): Promise<ProjectSummary> {
+  async unlinkTask(memberId: string, projectId: string, taskId: string, expectedUpdatedAt?: unknown): Promise<ProjectSummary> {
     const project = await this.get(memberId, projectId);
     requireId(taskId);
     if (!this.options.tasks || !await this.options.tasks.findOwned(memberId, taskId)) throw new AppError("PROJECT_TASK_NOT_FOUND", "Task is not visible", 404);
-    await this.repository.unlinkTask(memberId, project.id, taskId);
+    await this.changeRelation(memberId, project, "tasks", taskId, false, expectedUpdatedAt);
     return this.repository.summary(memberId, project.id);
+  }
+
+  private async changeRelation(memberId: string, project: Project, kind: ProjectRelationKind, targetId: string, linked: boolean, expectedUpdatedAt: unknown): Promise<boolean> {
+    const expected = requirePlanningVersion(expectedUpdatedAt, project.updatedAt, "PROJECT");
+    const result = await this.repository.changeRelation(memberId, project.id, kind, targetId, linked, nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (result === null) { await this.get(memberId, project.id); throw planningConflict("PROJECT"); }
+    return result;
   }
 
   async listRelations(memberId: string, projectId: string, kind: ProjectRelationKind, input: Partial<NumberedPageRequest> = {}) {
     const project = await this.get(memberId, projectId);
     if (kind !== "goals" && kind !== "tasks") throw invalid("PROJECT_INVALID");
     const page = normalizeNumberedPageRequest(input, "PROJECT_PAGE_INVALID");
-    return { projectId: project.id, kind, ...await this.repository.listRelations(memberId, project.id, kind, page) };
+    return { projectId: project.id, expectedUpdatedAt: project.updatedAt, kind, ...await this.repository.listRelations(memberId, project.id, kind, page) };
   }
 
   async summary(memberId: string, projectId: string): Promise<ProjectSummary> {

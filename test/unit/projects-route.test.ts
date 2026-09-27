@@ -32,20 +32,20 @@ describe("Projects API route", () => {
       summary: vi.fn(async () => ({ goalCount: 1, taskCount: 2, completedTaskCount: 1, goals: [] })),
     } as unknown as ProjectsService;
     const linkRequest = new Request("https://example.test/api/projects/project-1/goals", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goalId: "goal-1" }),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goalId: "goal-1", expectedUpdatedAt: "2026-09-27T00:00:00.000Z" }),
     });
     const linkResponse = await routeProjectsApi(linkRequest, new URL(linkRequest.url), context, principal, { projects });
     expect(linkResponse?.status).toBe(200);
-    expect(projects.linkGoal).toHaveBeenCalledWith("member-a", "project-1", "goal-1");
+    expect(projects.linkGoal).toHaveBeenCalledWith("member-a", "project-1", "goal-1", "2026-09-27T00:00:00.000Z");
 
     const summaryRequest = new Request("https://example.test/api/projects/project-1/summary");
     const summaryResponse = await routeProjectsApi(summaryRequest, new URL(summaryRequest.url), context, principal, { projects });
     expect(summaryResponse?.status).toBe(200);
     expect(projects.summary).toHaveBeenCalledWith("member-a", "project-1");
 
-    const unlinkRequest = new Request("https://example.test/api/projects/project-1/tasks/task-1", { method: "DELETE" });
+    const unlinkRequest = new Request("https://example.test/api/projects/project-1/tasks/task-1", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: "2026-09-27T00:00:00.000Z" }) });
     await routeProjectsApi(unlinkRequest, new URL(unlinkRequest.url), context, principal, { projects });
-    expect(projects.unlinkTask).toHaveBeenCalledWith("member-a", "project-1", "task-1");
+    expect(projects.unlinkTask).toHaveBeenCalledWith("member-a", "project-1", "task-1", "2026-09-27T00:00:00.000Z");
   });
 });
 
