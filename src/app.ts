@@ -1,3 +1,6 @@
+import { GoalTasksRepository } from "./goal-tasks/repository";
+import { GoalTasksService } from "./goal-tasks/service";
+import { routeGoalTasksApi } from "./routes/goal-tasks";
 import { AnswerService } from "./ai/answer-service";
 import { AssetsRepository } from "./assets/repository";
 import { WorkersAiMarkdownConverter } from "./assets/ai-markdown";
@@ -397,6 +400,7 @@ function createRequestServices(
       },
     }),
     goals: new GoalsService(goalRecords),
+    goalTasks: new GoalTasksService(new GoalTasksRepository(env.DB), new GoalsService(goalRecords)),
     projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
     calendar,
     focus,
@@ -457,6 +461,8 @@ async function dispatchApiRequest(
   if (graphSuggestions) return graphSuggestions;
   const inbox = await routeInboxApi(request, url, context, principal, { inbox: services.inbox });
   if (inbox) return inbox;
+  const goalTasks = await routeGoalTasksApi(request, url, context, principal, { goalTasks: services.goalTasks });
+  if (goalTasks) return goalTasks;
   const goals = await routeGoalsApi(request, url, context, principal, { goals: services.goals });
   if (goals) return goals;
   const projectTimeline = await routeProjectTimelineApi(request, url, context, principal, { projectTimeline: services.projectTimeline });

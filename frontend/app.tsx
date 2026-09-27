@@ -1,3 +1,4 @@
+import { GoalTasksEditor } from "./components/goal-tasks-editor";
 import { loadTimelineIntent, clearTimelineIntent } from "./lib/timeline-create-intent";
 import { canonicalPlanningVersion, type PlanningWriteRecord } from "./lib/planning-write-recovery";
 import { PlanningWriteRecovery, usePlanningWriteRecovery } from "./components/planning-write-recovery";
@@ -1067,6 +1068,15 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
     if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
   }, [search, requestedPage, pageSize]);
+  const [relationGoal, setRelationGoal] = useState<Goal | null>(null);
+  const relationGoalRef = useRef<Goal | null>(null);
+  const restoreGoalTaskFocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (!relationGoal && restoreGoalTaskFocus.current) {
+      document.getElementById(`manage-goal-tasks-${restoreGoalTaskFocus.current}`)?.focus();
+      restoreGoalTaskFocus.current = null;
+    }
+  }, [relationGoal]);
   const [state, setState] = useState<GoalsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -1086,6 +1096,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
       const stored = loadPlanningIntent(memberId, "GOALS");
       if (stored.kind === "ready") clearPlanningIntent(memberId, "GOALS", stored.intent);
     }
+    relationGoalRef.current = null; setRelationGoal(null);
     generationRef.current++; controllerRef.current?.abort();
     pendingRef.current = false; setPending(false); setActionError(undefined);
     createLockedRef.current = false; setCreateLocked(false);
@@ -1113,6 +1124,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
   useEffect(() => {
     activeRef.current = true;
+    relationGoalRef.current = null; setRelationGoal(null);
     createLockedRef.current = false; setCreateLocked(false);
     stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
     void refresh();
@@ -1120,7 +1132,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
   }, [refresh, retryVersion]);
 
   const mutate = async (item: Goal, operation: () => Promise<unknown>) => {
-    if (pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
+    if (relationGoalRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
     const record = writeRecovery.begin(item.id, item.updatedAt);
     if (!record) return;
     const generation = generationRef.current;
@@ -1149,21 +1161,36 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
   };
 
   const changePage = (page: number, size = pageSize) => {
-    if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    if (relationGoalRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
     pendingRef.current = true; setPending(true);
     writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
   };
 
-  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending} refresh={refresh} onDenied={clearDeniedGoals} /><GoalsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked} actionError={actionError} createLocked={createLocked}
+  const relationReadFailed = useCallback(() => {
+    const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+    stateRef.current = cleared; setState(cleared);
+  }, [locale]);
+  const closeRelations = async () => {
+    const goalId = relationGoalRef.current?.id;
+    const generation = generationRef.current + 1;
+    await refresh();
+    if (!activeRef.current || generationRef.current !== generation) return;
+    restoreGoalTaskFocus.current = goalId ?? null;
+    relationGoalRef.current = null; setRelationGoal(null);
+  };
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || !!relationGoal} refresh={refresh} onDenied={clearDeniedGoals} /><GoalsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked || !!relationGoal} actionError={actionError} createLocked={createLocked}
+    onManageTasks={(goal) => { if (pendingRef.current || createLockedRef.current || writeRecovery.locked || relationGoalRef.current) return; relationGoalRef.current = goal; setRelationGoal(goal); }}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={async (input) => {
-      if (pendingRef.current || writeRecovery.locked) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      if (relationGoalRef.current || pendingRef.current || writeRecovery.locked) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
       return createGoal(input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedGoals}
     onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(goal: Goal, status) => void mutate(goal, () => setGoalStatus(goal.id, status, goal.updatedAt))}
     onProgressChange={(goal: Goal, progress) => void mutate(goal, () => setGoalProgress(goal.id, progress, goal.updatedAt))}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />
+    {relationGoal && <GoalTasksEditor key={relationGoal.id} goalId={relationGoal.id} locale={locale} onDenied={clearDeniedGoals} onReadFailure={relationReadFailed} onClose={() => void closeRelations()} onBeginWrite={writeRecovery.begin} onFinishWrite={writeRecovery.finish} writeBlocked={writeRecovery.blocked} />}
+  </>;
 }
 
 export function ProjectsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

@@ -62,6 +62,16 @@ export interface WorkbenchSourceSideEffectBinding {
 
 export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-goals", operation: "POST /api/goals/:id/tasks", strategy: "conditional_write",
+    source: { path: "src/goal-tasks/repository.ts", symbol: "GoalTasksRepository.change", tokens: ["member_id = ? AND id = ? AND updated_at = ?", "consumed.meta.changes === 1", "this.db.batch"] },
+    tests: [{ path: "test/worker/goal-tasks.test.ts", tokens: ["consumes goal versions for no-ops and rejects mixed stale writes", "allows only one of concurrent different task writes to consume a version"] }],
+  },
+  {
+    capabilityId: "workbench-goals", operation: "DELETE /api/goals/:id/tasks/:id", strategy: "conditional_write",
+    source: { path: "src/goal-tasks/repository.ts", symbol: "GoalTasksRepository.change", tokens: ["member_id = ? AND id = ? AND updated_at = ?", "consumed.meta.changes === 1", "this.db.batch"] },
+    tests: [{ path: "test/worker/goal-tasks.test.ts", tokens: ["consumes goal versions for no-ops and rejects mixed stale writes", "allows only one of concurrent different task writes to consume a version"] }],
+  },
+  {
     capabilityId: "workbench-project-timeline", operation: "PATCH /api/projects/:id/timeline/:id", strategy: "conditional_write",
     source: { path: "src/project-timeline/repository.ts", symbol: "ProjectTimelineRepository.updateContent", tokens: ["AND updated_at = ?", "member_id = ? AND project_id = ? AND id = ?", "write.meta.changes !== 1"] },
     tests: [{ path: "test/worker/project-timeline-edit.test.ts", tokens: ["allows only one editor or status writer to consume a version", "enforces SQL ownership and expected version even when called directly"] }],
@@ -259,7 +269,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-goals", routeId: "goals", pathname: "/goals", requiredRole: "contributor",
     journey: "Create private goals and maintain their status and progress.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/app.tsx", "frontend/pages/goals-page.tsx", "frontend/lib/goals-data.ts", "frontend/components/planning-create-form.tsx", "frontend/lib/planning-create-intent.ts"], backendEvidence: ["src/planning-version.ts", "src/routes/goals.ts", "src/goals/service.ts", "src/goals/repository.ts"], testEvidence: ["test/unit/frontend-planning-conflicts.test.tsx", "test/worker/planning-conditional-writes.test.ts", "test/unit/frontend-planning-numbered-pages.test.tsx", "test/worker/planning-numbered-pages.test.ts", "test/unit/frontend-planning-create-recovery.test.tsx", "test/unit/frontend-planning-create-storage.test.ts", "test/unit/frontend-planning-create-reload.test.tsx", "test/unit/frontend-planning-write-storage.test.ts", "test/unit/frontend-planning-write-recovery.test.tsx", "test/unit/frontend-planning-write-receipts.test.ts", "test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/goals.test.ts"], ledgerIds: ["GL-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. Numbered pagination, editing and relationship journeys, stable create intent, conditional progress/status writes and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+    frontendEvidence: ["frontend/components/goal-tasks-editor.tsx", "frontend/lib/goal-tasks-data.ts", "frontend/app.tsx", "frontend/pages/goals-page.tsx", "frontend/lib/goals-data.ts", "frontend/components/planning-create-form.tsx", "frontend/lib/planning-create-intent.ts"], backendEvidence: ["src/routes/goal-tasks.ts", "src/goal-tasks/service.ts", "src/goal-tasks/repository.ts", "src/planning-version.ts", "src/routes/goals.ts", "src/goals/service.ts", "src/goals/repository.ts"], testEvidence: ["test/worker/goal-tasks.test.ts", "test/unit/frontend-goal-tasks.test.tsx", "test/unit/frontend-goal-tasks-data.test.ts", "test/unit/frontend-planning-conflicts.test.tsx", "test/worker/planning-conditional-writes.test.ts", "test/unit/frontend-planning-numbered-pages.test.tsx", "test/worker/planning-numbered-pages.test.ts", "test/unit/frontend-planning-create-recovery.test.tsx", "test/unit/frontend-planning-create-storage.test.ts", "test/unit/frontend-planning-create-reload.test.tsx", "test/unit/frontend-planning-write-storage.test.ts", "test/unit/frontend-planning-write-recovery.test.tsx", "test/unit/frontend-planning-write-receipts.test.ts", "test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/goals.test.ts"], ledgerIds: ["GL-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. Numbered pagination, editing and relationship journeys, stable create intent, conditional progress/status writes and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
   },
   {
     id: "workbench-projects", routeId: "projects", pathname: "/projects", requiredRole: "contributor",
@@ -431,10 +441,10 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     mutations: ["POST /api/inbox — gap: each frontend attempt generates a fresh client key", "PATCH /api/inbox/:id — gap: no expected status is supplied", "POST /api/inbox/:id/promote/task — gap: end-to-end concurrent promotion recovery is unproven"], mutationSafety: "mixed",
   },
   {
-    id: "workbench-goals", apiPaths: ["/api/goals", "/api/goals/:id/status", "/api/goals/:id/progress"],
-    persistencePaths: ["src/goals/repository.ts", "migrations/0039_workbench_goals.sql"],
+    id: "workbench-goals", apiPaths: ["/api/goals/:id/tasks", "/api/goals/:id/tasks/:id", "/api/goals", "/api/goals/:id/status", "/api/goals/:id/progress"],
+    persistencePaths: ["src/goal-tasks/repository.ts", "migrations/0053_goal_tasks.sql", "src/goals/repository.ts", "migrations/0039_workbench_goals.sql"],
     ownerPredicate: "routeGoalsApi passes authenticated member.memberId to GoalsService; GoalsRepository.listOwned binds member_id = ?.", pagination: "cursor",
-    mutations: ["POST /api/goals — gap: each frontend attempt generates a fresh client key", "POST /api/goals/:id/status — gap: no expected status is supplied", "POST /api/goals/:id/progress — gap: no expected version is supplied"], mutationSafety: "mixed",
+    mutations: ["POST /api/goals/:id/tasks — proven: owned edge and shared goal version change atomically; stale retries conflict", "DELETE /api/goals/:id/tasks/:id — proven: owned edge and shared goal version change atomically; stale retries conflict", "POST /api/goals — gap: each frontend attempt generates a fresh client key", "POST /api/goals/:id/status — gap: no expected status is supplied", "POST /api/goals/:id/progress — gap: no expected version is supplied"], mutationSafety: "mixed",
   },
   {
     id: "workbench-projects", apiPaths: ["/api/projects", "/api/projects/:id/summary", "/api/projects/:id/status", "/api/projects/:id/goals", "/api/projects/:id/goals/:id", "/api/projects/:id/tasks", "/api/projects/:id/tasks/:id"],
