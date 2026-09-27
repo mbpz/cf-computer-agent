@@ -44,6 +44,67 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   }
   afterEach(async () => { await app?.unmount(); app = undefined; });
 
+
+  async function leaveAndReturn() {
+    await act(async () => { app!.browser.history.pushState(null, "", "/not-a-route"); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { app!.browser.history.pushState(null, "", `/${kind}`); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await waitForApp(() => !!title());
+  }
+  it("restores an uncertain creation on route return without automatically writing", async () => {
+    await mount(); respond = () => apiError(503, "UNAVAILABLE", true);
+    await change("Durable original"); await click(create()); const original = bodies[0];
+    await leaveAndReturn();
+    expect(title().value).toBe("Durable original"); expect(title().disabled).toBe(true);
+    expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
+    respond = receipt; await click(button("[data-create-retry]"));
+    await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+  });
+  it("restores acknowledged creation as read-only after failed readback", async () => {
+    await mount(); readFailure = true;
+    await change("Already created"); await click(create());
+    expect(button("[data-create-read-retry]")).toBeTruthy();
+    readFailure = false; await leaveAndReturn();
+    expect(button("[data-create-read-retry]")).toBeTruthy(); expect(button("[data-create-retry]")).toBeNull();
+    await click(button("[data-create-read-retry]"));
+    await waitForApp(() => title().value === ""); expect(bodies).toHaveLength(1);
+  });
+  it("blocks writes when durable storage rejects the intent", async () => {
+    await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await change("Cannot persist"); await click(create());
+    expect(bodies).toHaveLength(0); expect(title().disabled).toBe(true); expect(button("[data-create-storage-retry]")).toBeTruthy();
+  });
+
+  it("keeps a pending intent through route exit and ignores its late acknowledgement", async () => {
+    await mount(); let release!: (response: Response) => void;
+    respond = () => new Promise(resolve => { release = resolve; });
+    await change("Pending across route exit"); await click(create()); const original = bodies[0]!;
+    await leaveAndReturn(); expect(button("[data-create-retry]")).toBeTruthy();
+    await act(async () => release(receipt(original)));
+    expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
+    respond = receipt; await click(button("[data-create-retry]"));
+    await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+  });
+  it("can recover temporary storage failure without sending a request until explicit submission", async () => {
+    await mount(); const save = vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await change("Preserve fields"); await click(create()); expect(bodies).toHaveLength(0);
+    save.mockRestore(); await click(button("[data-create-storage-retry]"));
+    expect(title().value).toBe("Preserve fields"); expect(title().disabled).toBe(false); expect(bodies).toHaveLength(0);
+    await click(create()); await waitForApp(() => title().value === ""); expect(bodies).toHaveLength(1);
+  });
+  it("blocks after acknowledgement persistence failure and keeps the same original key for recovery", async () => {
+    await mount(); const storage = app!.browser.sessionStorage;
+    const set = storage.setItem.bind(storage);
+    const save = vi.spyOn(storage, "setItem").mockImplementation((key, value) => {
+      if (key.includes("planning-create") && JSON.parse(value).acknowledged) throw new Error("ack write unavailable");
+      set(key, value);
+    });
+    await change("Ack cannot persist"); await click(create()); const original = bodies[0];
+    expect(button("[data-create-storage-retry]")).toBeTruthy(); expect(reads).toBe(1);
+    save.mockRestore(); await click(button("[data-create-storage-retry]"));
+    expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
+    await click(button("[data-create-retry]")); await waitForApp(() => title().value === ""); expect(bodies).toEqual([original, original]);
+  });
+
   it("keeps fields and retries exactly the original payload after an unknown result", async () => {
     await mount(); respond = () => apiError(503, "UNAVAILABLE", true);
     await change("Original title"); await click(create());
@@ -93,6 +154,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await change("Private draft"); await click(create());
     expect(main().textContent).not.toContain("Existing private row"); expect(title()).toBeNull();
     expect(main().textContent).not.toContain("Private draft");
+    expect(app!.browser.sessionStorage.getItem(`memory-garden:planning-create:v1:contributor-route-auditor:${kind.toUpperCase()}`)).toBeNull();
   });
   it.each(["wrong-id", "wrong-key", "missing-created", "empty-response"])('does not acknowledge malformed receipt %s', async (mode) => {
     await mount(); respond = (body) => mode === "empty-response" ? new Response(null, { status: 204 }) : Response.json({ [singular]: entity({ ...body, ...(mode === "wrong-id" ? { id: "other" } : mode === "wrong-key" ? { clientKey: "other" } : {}) }), ...(mode === "missing-created" ? {} : { created: true }) });
@@ -139,6 +201,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await waitForApp(() => title() === null);
     expect(main().textContent).not.toContain("Existing private row");
     expect(button("[data-create-read-retry]")).toBeNull(); expect(bodies).toHaveLength(1);
+    expect(app!.browser.sessionStorage.getItem(`memory-garden:planning-create:v1:contributor-route-auditor:${kind.toUpperCase()}`)).toBeNull();
   });
   it("matches the server's Unicode title limit without blocking long valid descriptions", async () => {
     await mount(); await change("🌱".repeat(201)); await click(create()); expect(bodies).toHaveLength(0);

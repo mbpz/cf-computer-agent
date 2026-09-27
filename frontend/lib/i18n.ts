@@ -11,7 +11,9 @@ export interface LocaleRuntime {
 
 const catalogs: Record<FrontendLocale, Record<string, string>> = {
   en: {
-    PLANNING_CREATE_UNKNOWN: "Creation is unconfirmed. Keep this page open and retry the original request; do not refresh or create the same item elsewhere.",
+    PLANNING_CREATE_UNKNOWN: "Creation is unconfirmed. Retry the original request only; do not create the same item elsewhere.",
+    PLANNING_CREATE_STORAGE_BLOCKED: "Creation recovery storage is unavailable or inconsistent. Further creation requests are blocked. Restore storage access and check again; do not clear it or create the same item elsewhere.",
+    PLANNING_CREATE_STORAGE_RETRY: "Check recovery storage",
     PLANNING_CREATE_RETRY: "Retry original creation",
     PLANNING_CREATE_READ_FAILED: "Creation was confirmed, but the list could not be read. Retry reading only; do not create again.",
     PLANNING_CREATE_READ_RETRY: "Retry list read",
@@ -1041,7 +1043,9 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "Submitter",
   },
   "zh-CN": {
-    PLANNING_CREATE_UNKNOWN: "创建结果未知。请保留此页面并重试原请求，勿刷新或在别处重复创建。",
+    PLANNING_CREATE_UNKNOWN: "创建结果未知。请仅重试原请求，勿在别处重复创建。",
+    PLANNING_CREATE_STORAGE_BLOCKED: "创建恢复存储不可用或内容异常。已阻止继续创建。请恢复存储访问后重查，勿清空存储或在别处重复创建。",
+    PLANNING_CREATE_STORAGE_RETRY: "重查恢复存储",
     PLANNING_CREATE_RETRY: "重试原创建",
     PLANNING_CREATE_READ_FAILED: "创建已确认，但列表读取失败。请仅重试读取，勿重复创建。",
     PLANNING_CREATE_READ_RETRY: "重试列表读取",

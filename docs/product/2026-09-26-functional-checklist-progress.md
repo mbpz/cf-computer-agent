@@ -541,3 +541,30 @@ rtk proxy npm run audit:workbench-domain
 
 - 原 canonical 30 父项，排除 D08 发布后仍为 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选 C03 / EXT-PRJ-03 本地关联并发子项，父项保持开放。
 - 下一环节允许继续 C03 的跨刷新/路由离开持久恢复；随后 timeline 数字分页及完整编辑、目标直接任务关联模型核对与旅程。无新增外部阻塞，不把本次本地提交称为全部完结。
+
+
+## C03 — 目标/项目创建会话级持久恢复（本地子项完成）
+
+承接 `ba214e8`，仅推进 C03 / EXT-GL-02 / EXT-PRJ-03 的目标与项目创建恢复，不扩大到生产操作。
+
+### 实现与边界
+
+- 真实 App 将当前登录成员传入创建表单，以成员和 GOALS/PROJECTS 模块隔离 sessionStorage；POST 前持久化不可变 id/clientKey/title/description 并读回验证。记录严格校验版本、作用域、字段、类型及长度；损坏、错误载荷、不可用、写入失败或清理失败均阻止新创建，不静默删除问题记录。
+- 刷新/路由返回不自动 POST。未知结果只允许用户显式重试原意图；已有合法成功回执的记录只允许 GET 回读。确认回读并成功清理后才解锁新创建；重复恢复不降级已确认状态。迟到旧挂载回执不能更新新挂载恢复记录。
+- 401/403 清除 UI 私有字段并尝试清理本成员有效记录；若浏览器拒绝存储访问，不能保证物理清理。其他成员不渲染、重放或删除该成员记录；项目 404 不删除创建恢复记录。独立预览/组件调用无成员参数时保持原内存行为，真实登录 App 始终传入成员。
+- 这是当前标签页会话恢复，不是长期备份：不承诺关闭标签、清除浏览器数据、跨设备或跨标签协调。未添加应用层加密，未修改后端或迁移；已输入私有草稿暂存在当前浏览器会话内，不由存储 helper 向外发送。未提交前未发送的普通编辑草稿不在恢复范围内。
+- 状态/进度/关联及 timeline 创建未知结果的持久恢复、timeline 数字分页/完整编辑、目标直接关联任务模型与旅程仍开放。历史 gap source/owner 不变，87 gap（47 P0 / 39 P1 / 1 P2）、R4 38 gap、124 实施原子不因该局部证据改为关闭。
+
+### TDD 与验证
+
+- RED：存储合同首轮 14/14 失败；App 恢复首轮 6 失败 / 44 通过。新增撤权清理反证后 4 失败 / 46 通过，定位并修复回读撤权只清界面未清恢复记录的问题。
+- GREEN：新增存储 14 项、新浏览器上下文恢复 10 项、既有创建恢复扩至 56 项；定向 3 文件 80/80。新上下文测试手动复制会话记录到 fresh happy-dom realm，不声称原生浏览器刷新验收。
+- 联合回归命令：`rtk proxy npx vitest run`，参数为上一批 28 个目标/项目联合回归文件，加 `test/unit/frontend-planning-create-storage.test.ts`、`test/unit/frontend-planning-create-reload.test.tsx`；30 文件 **537/537**（2026-09-27 本地）。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui`、`rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n` 均通过，i18n **13/13**；UI build 保留 >500 kB chunk 警告，typecheck 不覆盖全部前端 TSX。
+- 领域证据重新生成，`rtk proxy npm run audit:workbench-domain` 检查通过；`rtk proxy npm run verify:workbench-maturity` **13/13**、`rtk proxy npm run verify:delivery-status` **30/30**，`rtk git diff --check` 通过。
+- 本地 Workerd/D1、happy-dom/HTTP fixtures 不代替生产、真实双身份或原生浏览器验收。未运行全仓 npm test/check；未 push、merge、部署、远程迁移、备份、生产写入或手工读取/上传 Secret；未调用 AI。
+
+### 总进度与下一环节
+
+- 原 canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。只勾选创建会话恢复子项，C03/EXT-GL-02/EXT-PRJ-03 父项继续开放。
+- 下一环节允许继续 C03 状态/进度/关联未知写入的持久恢复，然后 timeline 数字分页和完整编辑；真实身份与原生浏览器验收仍独立保留。无新增本地外部阻塞，不将本地提交宣称为全部完结。

@@ -1,3 +1,4 @@
+import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-intent";
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
@@ -189,8 +190,8 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
-    case "goals": return <GoalsRoute key={session?.member.id} locale={locale} search={search} />;
-    case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} search={search} />;
+    case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
+    case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
@@ -1055,7 +1056,7 @@ export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
     onLoadMore={() => void refresh(true)} />;
 }
 
-export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1076,12 +1077,16 @@ export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; sea
   stateRef.current = state;
   const clearDeniedGoals = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    if (memberId && (error.status === 401 || error.status === 403)) {
+      const stored = loadPlanningIntent(memberId, "GOALS");
+      if (stored.kind === "ready") clearPlanningIntent(memberId, "GOALS", stored.intent);
+    }
     generationRef.current++; controllerRef.current?.abort();
     pendingRef.current = false; setPending(false); setActionError(undefined);
     createLockedRef.current = false; setCreateLocked(false);
     const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared); return true;
-  }, [locale]);
+  }, [locale, memberId]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     controllerRef.current?.abort();
@@ -1138,7 +1143,7 @@ export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; sea
     writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
   };
 
-  return <GoalsPage locale={locale} state={state} pending={pending} actionError={actionError} createLocked={createLocked}
+  return <GoalsPage createMemberId={memberId} locale={locale} state={state} pending={pending} actionError={actionError} createLocked={createLocked}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={async (input) => {
       if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
@@ -1150,7 +1155,7 @@ export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; sea
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
 }
 
-export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+export function ProjectsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1181,6 +1186,10 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
   }, []);
   const clearDeniedProjects = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403 && error.status !== 404)) return false;
+    if (memberId && (error.status === 401 || error.status === 403)) {
+      const stored = loadPlanningIntent(memberId, "PROJECTS");
+      if (stored.kind === "ready") clearPlanningIntent(memberId, "PROJECTS", stored.intent);
+    }
     relationProjectRef.current = undefined; setRelationProject(undefined);
     generationRef.current += 1; cancelReads();
     pendingRef.current = false; setPending(false); setSummaryPending([]); setActionError(undefined);
@@ -1188,7 +1197,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
     const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared);
     return true;
-  }, [cancelReads, locale]);
+  }, [cancelReads, locale, memberId]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     cancelReads();
@@ -1297,7 +1306,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
     queueMicrotask(() => document.getElementById(`manage-relations-${id}`)?.focus());
   };
 
-  return <ProjectsPage locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
+  return <ProjectsPage createMemberId={memberId} locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
     relationProjectId={relationProject?.id} onManageRelations={openRelations}
     relationEditor={relationProject && <ProjectRelationsEditor key={relationProject.id} projectId={relationProject.id} title={relationProject.title} locale={locale} onSummary={updateRelationSummary} onDenied={clearDeniedProjects} onClose={closeRelations} />}
     onRetry={() => setRetryVersion((value) => value + 1)}
