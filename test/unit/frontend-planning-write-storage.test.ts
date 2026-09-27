@@ -43,3 +43,16 @@ it("verifies writes and removals and blocks unavailable or denied storage", () =
   vi.stubGlobal("window", { get sessionStorage() { throw new Error("denied"); } });
   expect(loadPlanningWrite("alice", "GOALS").kind).toBe("blocked"); expect(beginPlanningWrite("alice", "GOALS", record)).toBe(false);
 });
+
+it("isolates timeline status by project and member without permitting arbitrary module keys", () => {
+  setup(); expect(beginPlanningWrite("alice", "TIMELINE:p", record)).toBe(true);
+  expect(loadPlanningWrite("alice", "TIMELINE:p")).toMatchObject({ kind: "ready", record });
+  expect(loadPlanningWrite("alice", "TIMELINE:q")).toEqual({ kind: "empty" });
+  expect(loadPlanningWrite("bob", "TIMELINE:p")).toEqual({ kind: "empty" });
+  expect(loadPlanningWrite("alice", "PROJECTS")).toEqual({ kind: "empty" });
+  for (const module of ["TIMELINE:", "TIMELINE:p:q", "TIMELINE:../p"] as const) {
+    expect(loadPlanningWrite("alice", module)).toEqual({ kind: "blocked" }); expect(beginPlanningWrite("alice", module, record)).toBe(false);
+  }
+  expect(clearPlanningWrite("alice", "TIMELINE:p", { ...record, token: "newer" })).toBe(false);
+  expect(clearPlanningWrite("alice", "TIMELINE:p", record)).toBe(true);
+});

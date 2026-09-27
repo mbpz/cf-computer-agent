@@ -7,28 +7,35 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { loadTimelineIntent, saveTimelineIntent, acknowledgeTimelineIntent, clearTimelineIntent } from "../lib/timeline-create-intent";
 export interface TimelineCreateCallbacks {
+  createMemberId?: string;
+  createProjectId?: string;
   onCreate?: (input: TimelineCreateIntent) => Promise<unknown>;
   onCreateReadback?: () => Promise<boolean>;
   onCreateDenied?: (error: unknown) => void;
   onCreateLock?: (locked: boolean) => void;
 }
-type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed";
+type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 // The keyed route owns this form; an unresolved intent never silently becomes a new request.
-export function TimelineCreateForm({ locale, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: TimelineCreateCallbacks & { locale: LocaleRuntime; pending?: boolean }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [kind, setKind] = useState<ProjectTimelineKind>("meeting");
-  const [startsAt, setStartsAt] = useState("");
-  const [dueAt, setDueAt] = useState("");
-  const [phase, setPhase] = useState<Phase>("editing");
+export function TimelineCreateForm({ locale, createMemberId, createProjectId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: TimelineCreateCallbacks & { locale: LocaleRuntime; pending?: boolean }) {
+  const [stored] = useState(() => createMemberId && createProjectId ? loadTimelineIntent(createMemberId, createProjectId) : { kind: "empty" as const });
+  const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
+  const [title, setTitle] = useState(stored.kind === "ready" ? stored.intent.title : "");
+  const [body, setBody] = useState(stored.kind === "ready" ? stored.intent.body : "");
+  const [kind, setKind] = useState<ProjectTimelineKind>(stored.kind === "ready" ? stored.intent.kind : "meeting");
+  const localTime = (v: string | null) => v ? new Date(Date.parse(v) - new Date(v).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+  const [startsAt, setStartsAt] = useState(stored.kind === "ready" ? localTime(stored.intent.startsAt) : "");
+  const [dueAt, setDueAt] = useState(stored.kind === "ready" ? localTime(stored.intent.dueAt) : "");
+  const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
-  const intentRef = useRef<TimelineCreateIntent | null>(null);
-  const phaseRef = useRef<Phase>("editing");
+  const intentRef = useRef<TimelineCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
+  const phaseRef = useRef<Phase>(initialPhase);
   const generation = useRef(0);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
+    onCreateLock?.(initialPhase !== "editing");
     return () => { active.current = false; generation.current++; };
   }, []);
   useEffect(() => {
@@ -39,8 +46,18 @@ export function TimelineCreateForm({ locale, pending = false, onCreate, onCreate
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
   const transition = (next: Phase) => { phaseRef.current = next; setPhase(next); onCreateLock?.(next !== "editing"); };
+  const clearStored = () => !createMemberId || !createProjectId || !intentRef.current || clearTimelineIntent(createMemberId, createProjectId, intentRef.current);
+  const reloadStored = () => {
+    if (!createMemberId || !createProjectId || phaseRef.current !== "storage-blocked") return;
+    const restored = loadTimelineIntent(createMemberId, createProjectId);
+    if (restored.kind === "blocked") return;
+    intentRef.current = restored.kind === "ready" ? restored.intent : null;
+    if (restored.kind === "ready") { setTitle(restored.intent.title); setBody(restored.intent.body); setKind(restored.intent.kind); setStartsAt(localTime(restored.intent.startsAt)); setDueAt(localTime(restored.intent.dueAt)); }
+    transition(restored.kind === "ready" ? restored.acknowledged ? "read-failed" : "unknown" : "editing");
+  };
   const denied = (cause: unknown) => {
     if (!(cause instanceof ApiRequestError) || ![401, 403, 404].includes(cause.status)) return false;
+    if (cause.status !== 404) clearStored();
     intentRef.current = null; setTitle(""); setBody(""); setStartsAt(""); setDueAt(""); onCreateDenied?.(cause); return true;
   };
   const readback = async () => {
@@ -50,6 +67,7 @@ export function TimelineCreateForm({ locale, pending = false, onCreate, onCreate
       const confirmed = await onCreateReadback?.();
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
+      if (!clearStored()) { transition("storage-blocked"); return; }
       intentRef.current = null; setTitle(""); setBody(""); setStartsAt(""); setDueAt(""); setError(false); transition("editing");
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
@@ -69,6 +87,7 @@ export function TimelineCreateForm({ locale, pending = false, onCreate, onCreate
     }
     const intent = intentRef.current;
     if (!intent) return;
+    if (createMemberId && createProjectId && !saveTimelineIntent(createMemberId, createProjectId, intent)) { transition("storage-blocked"); return; }
     const current = generation.current;
     transition("writing"); setError(false);
     try {
@@ -76,14 +95,18 @@ export function TimelineCreateForm({ locale, pending = false, onCreate, onCreate
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       const knownRejection = !retry && cause instanceof ApiRequestError && !cause.retryable && cause.status >= 400 && cause.status < 500 && cause.status !== 408;
-      if (knownRejection) { intentRef.current = null; setError(true); transition("editing"); }
+      if (knownRejection) { if (!clearStored()) { transition("storage-blocked"); return; } intentRef.current = null; setError(true); transition("editing"); }
       else transition("unknown");
       return;
     }
-    if (active.current && generation.current === current) await readback();
+    if (active.current && generation.current === current) {
+      if (createMemberId && createProjectId && !acknowledgeTimelineIntent(createMemberId, createProjectId, intent)) { transition("storage-blocked"); return; }
+      await readback();
+    }
   };
   const locked = pending || phase !== "editing";
   const recovery = <div aria-busy={phase === "writing" || phase === "reading"}>
+    {phase === "storage-blocked" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_STORAGE_BLOCKED")}</p><Button type="button" disabled={pending} onClick={reloadStored}>{frontendText(locale, "PLANNING_CREATE_STORAGE_RETRY")}</Button></>}
     {phase === "unknown" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_UNKNOWN")}</p><Button type="button" disabled={pending} onClick={() => void submit()}>{frontendText(locale, "PLANNING_CREATE_RETRY")}</Button></>}
     {phase === "read-failed" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_READ_FAILED")}</p><Button type="button" disabled={pending} onClick={() => { if (phaseRef.current === "read-failed") void readback(); }}>{frontendText(locale, "PLANNING_CREATE_READ_RETRY")}</Button></>}
     {error && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")}</p>}

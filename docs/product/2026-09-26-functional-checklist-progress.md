@@ -625,3 +625,30 @@ rtk proxy npm run audit:workbench-domain
 
 - 原 canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选关系会话恢复子项，C03 / EXT-PRJ-03 父项仍开放。
 - 下一环节允许继续 timeline 创建/状态的持久恢复，其后为 timeline 数字分页/完整编辑、目标直接关联任务与真实身份/原生浏览器验收。无新增本地外部阻塞；本次提交不代表全部完结。
+
+
+## C03 — 时间线创建/状态的会话级持久恢复（本地子项完成）
+
+承接 `59487f3`，严格推进 C03 / EXT-PRJ-03 已列出的 timeline 创建与状态跨刷新/路由离开恢复；不扩展后端业务、迁移或生产操作。
+
+### 实现与边界
+
+- 创建记录按当前登录成员与项目隔离，POST 前保存并读回验证 `id/clientKey/kind/title/body/startsAt/dueAt` 七字段不可变意图。严格校验作用域、结构、枚举、字段长度、规范 ISO 日期及起止顺序；不静默替换损坏记录或不同载荷。返回路由或新上下文不自动 POST；未知结果仅允许显式同意图重试，合法成功回执先持久化 acknowledged，之后只允许 GET 回读。
+- 状态操作复用只读恢复标记 `{token,id,expectedUpdatedAt}`，作用域为成员与 `TIMELINE:projectId`，不保存私有正文、目标状态或可执行请求；写前必须持久化并读回验证。正常回读包含原对象且版本不早于写前版本才释放；对象不在当前页或读回失败仍保留标记，显式恢复通过已有详情 GET 加项目/列表 GET 核对，不重放原写入。
+- 详情核对拒绝错项目、错 id、非法及回退版本；清理采用比较后删除，失败继续锁定。401/403 清空私有 UI 并尝试删除本成员有效记录；浏览器拒绝删除时不承诺物理清理。404 清屏但保留记录。成员/项目隔离、异步取消与代次守卫使迟到创建回执和只读结果不能解除新挂载的恢复锁。
+- 创建、状态与续页保持互斥；存储不可用、配额拒绝、静默丢弃或损坏均在发写请求前阻止操作。此功能仅当前标签页 sessionStorage，不提供关标签、清浏览器数据、跨标签协调或跨设备恢复；普通未发送编辑草稿不在恢复范围内。不新增应用层加密或备份。
+- 新增恢复 helper、已有详情 GET 的前端调用及测试进入 timeline 能力证据，重新生成当前领域快照；历史 gap source/owner、87 gap（47 P0 / 39 P1 / 1 P2）、R4 38 gap、124 实施原子不变，不提升 release/acceptance 维度。
+
+### TDD 与验证
+
+- RED：创建存储模块缺失；修正 App 测试按钮选择后，15 项恢复测试有 13 失败 / 2 通过，定位跨挂载记录、锁和恢复行为缺失。实现后首轮 2 项断言先于异步完成，改为等待真实读回 UI 完成再断言，未放宽业务断言。
+- GREEN：创建存储 19 项、新增真实 App / happy-dom 27 项、共享状态存储增 1 项（该文件共 9 项）；三文件定向 **55/55**。覆盖成员/项目隔离、完整载荷存储比较、acknowledged 单调、无自动重放、损坏/拒绝/丢弃存储、迟到回执、错误对象、版本回退、401/403/404/503 和清理失败。
+- 联合回归命令：`rtk proxy npx vitest run`，参数为上一批 34 个目标/项目/关联/时间线联合文件，加 `test/unit/frontend-timeline-create-storage.test.ts` 与 `test/unit/frontend-timeline-reload.test.tsx`；36 文件 **671/671**（2026-09-27 本地）。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui`、`rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n` 均通过，i18n **13/13**；保留 >500 kB chunk 警告，typecheck 不覆盖全部前端 TSX。
+- `rtk proxy npm run verify:workbench-maturity` **13/13**、`rtk proxy npm run verify:delivery-status` **30/30**、`rtk proxy npm run audit:workbench-domain` 与 `rtk git diff --check` 通过。
+- 新上下文恢复测试是将 sessionStorage 记录复制到 fresh happy-dom realm；不是原生浏览器刷新验收。本地 Workerd/D1、HTTP fixtures 不替代真实双身份或生产验收。未运行全仓 npm test/check；未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+### 总进度与下一环节
+
+- canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。本批只勾选时间线会话恢复子项，C03 与 EXT-PRJ-03 继续开放。
+- 下一环节允许继续 timeline 数字分页与完整编辑，之后目标直接关联任务旅程；真实身份/原生浏览器完整旅程独立保留。无新增本地外部阻塞，不将本地提交或 GET 核对声称为全部完结或未知原请求已成功。

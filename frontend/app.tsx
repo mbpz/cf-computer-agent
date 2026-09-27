@@ -1,3 +1,5 @@
+import { loadTimelineIntent, clearTimelineIntent } from "./lib/timeline-create-intent";
+import { canonicalPlanningVersion, type PlanningWriteRecord } from "./lib/planning-write-recovery";
 import { PlanningWriteRecovery, usePlanningWriteRecovery } from "./components/planning-write-recovery";
 import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-intent";
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
@@ -193,7 +195,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
-    case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} projectId={pathname.split("/")[2] || ""} />;
+    case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
@@ -1337,7 +1339,8 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
-export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRuntime; projectId: string }) {
+export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: LocaleRuntime; projectId: string; memberId?: string }) {
+  const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, projectId);
   const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -1354,15 +1357,22 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
   stateRef.current = state;
   const clearDenied = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
+    if (error.status !== 404) {
+      writeRecovery.deny();
+      if (memberId) {
+        const stored = loadTimelineIntent(memberId, projectId);
+        if (stored.kind === "ready") clearTimelineIntent(memberId, projectId, stored.intent);
+      }
+    }
     statusNoticeRef.current = undefined;
     generationRef.current++; controllerRef.current?.abort();
     pendingRef.current = false; setPending(false); setActionError(undefined);
     createLockedRef.current = false; setCreateLocked(false);
     const cleared: ProjectTimelinePageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared); return true;
-  }, [locale]);
+  }, [locale, memberId, projectId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (append = false, clearOnFailure = false): Promise<boolean> => {
+  const refresh = useCallback(async (append = false, clearOnFailure = false, record?: PlanningWriteRecord): Promise<boolean> => {
     const current = stateRef.current;
     const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
     if (append && !cursor) return false;
@@ -1376,6 +1386,10 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
         loadProjectTimeline(projectId, { limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal),
       ]);
       if (!activeRef.current || generationRef.current !== generation) return false;
+      if (record) {
+        const item = page.items.find(item => item.id === record.id);
+        if (!item || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(record.expectedUpdatedAt)) throw new Error("TIMELINE_RECOVERY_VERSION_INVALID");
+      }
       if (append && page.nextCursor && consumedCursors.current.has(page.nextCursor)) throw new Error("TIMELINE_CURSOR_LOOP");
       if (!append) consumedCursors.current.clear();
       if (cursor) consumedCursors.current.add(cursor);
@@ -1385,6 +1399,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
       const next: ProjectTimelinePageState = { kind: "ready", project, items, nextCursor: page.nextCursor };
       stateRef.current = next; setState(next);
       setActionError(statusNoticeRef.current ? frontendText(locale, statusNoticeRef.current) : undefined);
+      if (record) writeRecovery.finish(record);
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
@@ -1395,7 +1410,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
       stateRef.current = next; setState(next);
       setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, projectId, clearDenied]);
+  }, [locale, projectId, clearDenied, writeRecovery.finish]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -1404,8 +1419,10 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
     void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current || createLockedRef.current) return;
+  const mutate = async (item: ProjectTimelineItem, operation: () => Promise<unknown>) => {
+    if (pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
+    const record = writeRecovery.begin(item.id, item.updatedAt);
+    if (!record) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     statusNoticeRef.current = undefined;
@@ -1419,23 +1436,24 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
         } else if (!(error instanceof ApiRequestError) || error.retryable || error.status === 408 || error.status >= 500) {
           statusNoticeRef.current = "PROJECT_TIMELINE_STATUS_UNKNOWN";
         } else {
+          writeRecovery.finish(record);
           setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return;
         }
       }
       // A receipt or a new read cannot justify replaying an uncertain write.
-      if (activeRef.current && generationRef.current === generation) await refresh(false, true);
+      if (activeRef.current && generationRef.current === generation) await refresh(false, true, record);
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
-  return <ProjectTimelinePage locale={locale} state={state} pending={pending} createLocked={createLocked} actionError={actionError}
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || createLocked} refresh={() => refresh(false, true)} onDenied={clearDenied} /><ProjectTimelinePage createMemberId={memberId} createProjectId={projectId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} actionError={actionError}
     onRetry={() => setRetryVersion(value => value + 1)}
     onBack={() => writeWorkspaceHistory("push", "/projects")}
     onCreate={async input => {
-      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      if (pendingRef.current || writeRecovery.locked) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
       return createProjectTimeline(projectId, input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDenied}
     onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
-    onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(() => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
-    onLoadMore={() => { if (!pendingRef.current && !createLockedRef.current) void refresh(true); }} />;
+    onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(item, () => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
+    onLoadMore={() => { if (!pendingRef.current && !createLockedRef.current && !writeRecovery.locked) void refresh(true); }} /></>;
 }
 
 export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {

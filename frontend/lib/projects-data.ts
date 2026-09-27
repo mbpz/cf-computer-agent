@@ -73,6 +73,12 @@ export async function loadProjectTimeline(id: string, input: { limit?: number; c
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
 
+export async function loadProjectTimelineItem(projectId: string, id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectTimelineItem> {
+  const item = normalizeTimeline(await apiFetch<unknown>(`/api/projects/${encodeURIComponent(projectId)}/timeline/${encodeURIComponent(id)}`, { requester, signal }));
+  if (!item || item.projectId !== projectId || item.id !== id || !canonicalPlanningVersion(item.updatedAt)) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
+  return item;
+}
+
 export async function createProjectTimeline(id: string, input: TimelineCreateIntent, requester: Fetcher = fetch): Promise<{ item: ProjectTimelineItem; created: boolean }> {
   const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/timeline`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_TIMELINE_CREATE_INVALID");

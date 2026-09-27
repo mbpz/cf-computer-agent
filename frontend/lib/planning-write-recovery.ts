@@ -1,7 +1,8 @@
 import type { PlanningModule } from "./planning-create-intent";
+export type PlanningWriteModule = PlanningModule | `TIMELINE:${string}`;
 export interface PlanningWriteRecord { readonly token: string; readonly id: string; readonly expectedUpdatedAt: string; }
 export type PlanningWriteState = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; record: PlanningWriteRecord };
-const key = (memberId: string, module: PlanningModule) => `memory-garden:planning-write:v1:${encodeURIComponent(memberId)}:${module}`;
+const key = (memberId: string, module: PlanningWriteModule) => `memory-garden:planning-write:v1:${encodeURIComponent(memberId)}:${module}`;
 const same = (a: PlanningWriteRecord, b: PlanningWriteRecord) => a.token === b.token && a.id === b.id && a.expectedUpdatedAt === b.expectedUpdatedAt;
 export function canonicalPlanningVersion(value: unknown): value is string {
   if (typeof value !== "string") return false;
@@ -20,9 +21,9 @@ function storage(): Storage {
   return value;
 }
 // A read-only barrier, not a replay queue. No private title, desired value or executable request is stored.
-export function loadPlanningWrite(memberId: string, module: PlanningModule): PlanningWriteState {
+export function loadPlanningWrite(memberId: string, module: PlanningWriteModule): PlanningWriteState {
   try {
-    if (!memberId || !["GOALS", "PROJECTS"].includes(module)) return { kind: "blocked" };
+    if (!memberId || (!["GOALS", "PROJECTS"].includes(module) && !/^TIMELINE:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(module))) return { kind: "blocked" };
     const raw = storage().getItem(key(memberId, module));
     if (raw === null) return { kind: "empty" };
     if (raw.length > 4096) return { kind: "blocked" };
@@ -32,7 +33,7 @@ export function loadPlanningWrite(memberId: string, module: PlanningModule): Pla
     return { kind: "ready", record: Object.freeze(v.record) };
   } catch { return { kind: "blocked" }; }
 }
-export function beginPlanningWrite(memberId: string, module: PlanningModule, record: PlanningWriteRecord): boolean {
+export function beginPlanningWrite(memberId: string, module: PlanningWriteModule, record: PlanningWriteRecord): boolean {
   try {
     if (!valid(record) || loadPlanningWrite(memberId, module).kind !== "empty") return false;
     storage().setItem(key(memberId, module), JSON.stringify({ version: 1, memberId, module, record }));
@@ -40,7 +41,7 @@ export function beginPlanningWrite(memberId: string, module: PlanningModule, rec
     return saved.kind === "ready" && same(saved.record, record);
   } catch { return false; }
 }
-export function clearPlanningWrite(memberId: string, module: PlanningModule, record: PlanningWriteRecord): boolean {
+export function clearPlanningWrite(memberId: string, module: PlanningWriteModule, record: PlanningWriteRecord): boolean {
   try {
     const previous = loadPlanningWrite(memberId, module);
     if (previous.kind !== "ready" || !same(previous.record, record)) return false;

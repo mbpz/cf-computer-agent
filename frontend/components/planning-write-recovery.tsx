@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
-import type { PlanningModule } from "../lib/planning-create-intent";
-import { beginPlanningWrite, canonicalPlanningVersion, clearPlanningWrite, loadPlanningWrite, type PlanningWriteRecord, type PlanningWriteState } from "../lib/planning-write-recovery";
+import { beginPlanningWrite, canonicalPlanningVersion, clearPlanningWrite, loadPlanningWrite, type PlanningWriteRecord, type PlanningWriteState, type PlanningWriteModule } from "../lib/planning-write-recovery";
 import { loadGoal } from "../lib/goals-data";
-import { loadProject } from "../lib/projects-data";
+import { loadProject, loadProjectTimelineItem } from "../lib/projects-data";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { Button } from "./ui/button";
 
-export function usePlanningWriteRecovery(memberId: string | undefined, module: PlanningModule, locationKey: string) {
+export function usePlanningWriteRecovery(memberId: string | undefined, module: PlanningWriteModule, locationKey: string) {
   const [state, setState] = useState<PlanningWriteState>(() => memberId ? loadPlanningWrite(memberId, module) : { kind: "empty" });
   const current = useRef(state);
   const active = useRef(true);
@@ -51,7 +50,7 @@ export function usePlanningWriteRecovery(memberId: string | undefined, module: P
     const abort = new AbortController(); controller.current = abort;
     const live = () => active.current && generation.current === epoch && !abort.signal.aborted;
     try {
-      const item = module === "GOALS" ? await loadGoal(stored.record.id, fetch, abort.signal) : await loadProject(stored.record.id, fetch, abort.signal);
+      const item = module.startsWith("TIMELINE:") ? await loadProjectTimelineItem(module.slice(9), stored.record.id, fetch, abort.signal) : module === "GOALS" ? await loadGoal(stored.record.id, fetch, abort.signal) : await loadProject(stored.record.id, fetch, abort.signal);
       if (!live()) return;
       if (!canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(stored.record.expectedUpdatedAt)) throw new Error("PLANNING_RECOVERY_VERSION_INVALID");
       const read = await refresh();
