@@ -1,3 +1,4 @@
+import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
 import type { ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineListRequest, ProjectTimelinePage, ProjectTimelineStatus } from "./types";
 
@@ -6,7 +7,7 @@ export interface ProjectTimelineRepositoryPort {
   findOwned(memberId: string, projectId: string, id: string): Promise<ProjectTimelineItem | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<ProjectTimelineItem | null>;
   listOwned(memberId: string, request: ProjectTimelineListRequest): Promise<ProjectTimelinePage>;
-  updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number): Promise<ProjectTimelineItem | null>;
+  updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null>;
 }
 
 type TimelineRow = {
@@ -61,9 +62,16 @@ export class ProjectTimelineRepository implements ProjectTimelineRepositoryPort 
     };
   }
 
-  async updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number): Promise<ProjectTimelineItem | null> {
-    await this.db.prepare("UPDATE project_timeline_items SET status = ?, updated_at = ? WHERE member_id = ? AND project_id = ? AND id = ?").bind(status, updatedAt, memberId, projectId, id).run();
-    return this.findOwned(memberId, projectId, id);
+  async updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null> {
+    const [write, read] = await this.db.batch<TimelineRow>([
+      this.db.prepare("UPDATE project_timeline_items SET status = ?, updated_at = ? WHERE member_id = ? AND project_id = ? AND id = ? AND updated_at = ?")
+        .bind(status, updatedAt, memberId, projectId, id, expectedUpdatedAt),
+      this.db.prepare(`SELECT ${columns} FROM project_timeline_items WHERE member_id = ? AND project_id = ? AND id = ? LIMIT 1`)
+        .bind(memberId, projectId, id),
+    ]);
+    if (!write?.success || !read?.success) throw new AppError("PROJECT_TIMELINE_WRITE_FAILED", "Timeline status write failed", 500);
+    if (write.meta.changes !== 1) return null;
+    return mapRow(read.results[0] ?? null);
   }
 }
 

@@ -439,3 +439,40 @@ rtk proxy npx vitest run test/unit/frontend-project-timeline-recovery.test.tsx t
 
 - 重新按 canonical checklist 统计：原清单 **30 父项**，D08 发布排除后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。当前 C03，时间线本地子项勾选，EXT-PRJ-03 和 C03 保持开放；不得把本批提交当作全部 checklist 完结。
 - 下一环节继续 EXT-GL-02 / EXT-PRJ-03：完整目标/任务关联编辑与计数回读、时间线条件状态写及未知写恢复、跨刷新/路由离开恢复。真实身份及原生浏览器验收独立保留。当前无新增外部阻塞，允许继续本地功能实施。
+
+
+## C03 — 时间线条件状态写与冲突/未知结果回读（2026-09-27，本地子项）
+
+### 本批实现与边界
+
+- 从 `bb3d134` 继续 EXT-PRJ-03。状态 API 新增必填 `expectedUpdatedAt`，接受规范 ISO 版本；缺失/非规范版本 400，旧版本 409，成员/项目归属不符仍先返回 404。body 不允许声明成员、query 不允许传版本。
+- 复用 planning-version 校验并扩展 timeline 错误码。D1 batch 中 UPDATE 按 member_id/project_id/id/updated_at 比较，再读取该行；仅 changes=1 算成功，失败竞争不能返回胜者数据伪装本次成功。同值状态也消费版本；冻结时钟、倒退时钟、ABA 状态回转都严格递增。
+- 前端发送当前显示行版本，核对状态回执的项目/id/目标状态及递增规范时间。409 只回读并提示核对；网络拒绝、408、5xx、可重试错误和非法回执均视为结果不明，只 GET，不自动重发 POST，也不根据当前行反推本次请求已提交。
+- 核对期间同帧状态/创建/续页互斥。已确认写、冲突或未知结果的回读失败均清空私有旧行，恢复按钮只 GET；同挂载未知警告在普通读取失败后保留。401/403/404 清除私有状态，离开路由取消并忽略迟到回读。普通分页失败仍保留已有行，不混淆两类失败策略。
+- 无数据库迁移、新依赖或存储扩展。此为状态 API 契约收紧，旧调用方缺少版本将得到 400；本批只更新仓库内调用方并在本地验证，未发布。仍没有跨刷新/路由离开的持久意图，也没有 timeline 数字分页、完整编辑或目标/任务关联编辑 UI。
+
+### RED → GREEN 与验证
+
+- 新增本地 D1 16 项首先观察到 **12 failed / 4 passed**，覆盖丢失更新、同值版本消费、冻结/倒退时钟、直接 SQL 条件、缺失及非法版本、严格 API 与归属隔离。
+- 新增真实 App / happy-dom 17 项首先观察到 **16 failed / 1 passed**，覆盖 409、权限/普通回读失败、同刻互斥、卸载迟到结果、网络/超时/服务端未知结果、非法回执及已知 400 不自动回读。
+- 实现后定向 **5 文件 75/75**，最终联合 **24 文件 440/440** 通过；新用例共 **33/33**。执行命令：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-project-timeline-conflicts.test.tsx test/worker/project-timeline-conditional-writes.test.ts test/unit/frontend-project-timeline-recovery.test.tsx test/unit/frontend-project-timeline-page.test.tsx test/unit/project-timeline-service.test.ts test/worker/project-timeline.test.ts test/unit/frontend-planning-conflicts.test.tsx test/worker/planning-conditional-writes.test.ts test/unit/frontend-planning-numbered-pages.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/worker/planning-numbered-pages.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run test:i18n
+rtk proxy npm run verify:workbench-maturity
+rtk proxy npm run verify:delivery-status
+rtk proxy node scripts/workbench-domain-audit.mjs --write docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md
+rtk proxy npm run audit:workbench-domain
+```
+
+- 上述检查通过：i18n 13/13、maturity 13/13、delivery-status 30/30；领域证据已重新生成并校验。将新测试和共享版本 helper 挂入 timeline 能力证据，不改冻结历史 gap/ownership，不提升 release/acceptance。
+- 保留既有 >500 kB chunk 警告；typecheck 未覆盖全部前端 TSX。未执行全仓 npm test/check，happy-dom/HTTP fixture 不替代原生浏览器及真实身份旅程；D1 测试为本地 Workerd。未 push、merge、部署、远程迁移、备份或生产写入，未手工读取/上传 Secret，未调用 AI。
+
+### 总进度与下一环节
+
+- Canonical 原清单 **30 父项**；D08 发布排除后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。本批只勾选 C03/EXT-PRJ-03 的时间线条件状态子项，父项及完整旅程保持开放。
+- 下一环节仍属 C03/EXT-GL-02/EXT-PRJ-03：完整目标/任务关联编辑与计数回读、跨刷新/路由离开的持久恢复、timeline 数字分页及完整编辑；真实身份和原生浏览器验收独立保留。本地实施允许继续，无新增外部阻塞，不得把本次提交称为全部完结。

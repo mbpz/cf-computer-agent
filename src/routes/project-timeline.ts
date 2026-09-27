@@ -32,8 +32,8 @@ export async function routeProjectTimelineApi(request: Request, url: URL, contex
     if (url.pathname.endsWith("/status")) {
       if (request.method !== "POST") return methodNotAllowed("POST", context);
       requireNoQuery(url);
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status"], "PROJECT_TIMELINE_INVALID");
-      return jsonResponse(await services.projectTimeline.setStatus(member.memberId, projectId, itemId, input.status), 200, context.requestId);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedUpdatedAt"], "PROJECT_TIMELINE_INVALID");
+      return jsonResponse(await services.projectTimeline.setStatus(member.memberId, projectId, itemId, input.status, input.expectedUpdatedAt), 200, context.requestId);
     }
     if (request.method !== "GET") return methodNotAllowed("GET", context);
     requireNoQuery(url);

@@ -77,8 +77,14 @@ export async function createProjectTimeline(id: string, input: TimelineCreateInt
   return { item, created: record.created };
 }
 
-export async function setProjectTimelineStatus(projectId: string, id: string, status: ProjectTimelineStatus, requester: Fetcher = fetch): Promise<ProjectTimelineItem> {
-  return apiFetch<ProjectTimelineItem>(`/api/projects/${encodeURIComponent(projectId)}/timeline/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+export async function setProjectTimelineStatus(projectId: string, id: string, status: ProjectTimelineStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<ProjectTimelineItem> {
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(projectId)}/timeline/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
+  const item = normalizeTimeline(value);
+  const epoch = item ? Date.parse(item.updatedAt) : NaN;
+  if (!item || item.projectId !== projectId || item.id !== id || item.status !== status
+    || !Number.isSafeInteger(epoch) || new Date(epoch).toISOString() !== item.updatedAt
+    || !(epoch > Date.parse(expectedUpdatedAt))) throw new Error("PROJECT_TIMELINE_STATUS_RECEIPT_INVALID");
+  return item;
 }
 
 export async function createProject(input: PlanningCreateIntent, requester: Fetcher = fetch): Promise<{ project: Project; created: boolean }> {

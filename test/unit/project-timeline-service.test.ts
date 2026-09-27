@@ -26,9 +26,9 @@ describe("ProjectTimelineService", () => {
 
   it("supports completing and archiving an item", async () => {
     const row: any = { id: "timeline-a", memberId: "member-a", projectId: "project-a", clientKey: "x", kind: "action_item", title: "Ship", body: "", status: "open", startsAt: null, dueAt: null, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() };
-    const repo = { findOwned: async (_m: string, _p: string, id: string) => id === row.id ? row : null, findByClientKey: async () => null, insert: async () => true, listOwned: async () => ({ items: [row] }), updateStatus: async (_m: string, _p: string, _id: string, status: any) => Object.assign(row, { status }) } as never;
+    const repo = { findOwned: async (_m: string, _p: string, id: string) => id === row.id ? row : null, findByClientKey: async () => null, insert: async () => true, listOwned: async () => ({ items: [row] }), updateStatus: async (_m: string, _p: string, _id: string, status: any, updatedAt: number) => Object.assign(row, { status, updatedAt: new Date(updatedAt).toISOString() }) } as never;
     const service = new ProjectTimelineService(repo, { findOwned: async () => ({}) as never });
-    expect((await service.setStatus("member-a", "project-a", row.id, "done")).status).toBe("done");
-    expect((await service.setStatus("member-a", "project-a", row.id, "archived")).status).toBe("archived");
+    expect((await service.setStatus("member-a", "project-a", row.id, "done", row.updatedAt)).status).toBe("done");
+    expect((await service.setStatus("member-a", "project-a", row.id, "archived", row.updatedAt)).status).toBe("archived");
   });
 });

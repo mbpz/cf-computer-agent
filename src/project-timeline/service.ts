@@ -1,4 +1,5 @@
 import { AppError } from "../http";
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import type { ProjectsRepositoryPort } from "../projects/repository";
 import type { ProjectTimelineRepositoryPort } from "./repository";
 import type { ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineKind, ProjectTimelinePage, ProjectTimelineStatus } from "./types";
@@ -41,12 +42,12 @@ export class ProjectTimelineService {
     return this.repository.listOwned(memberId, { projectId, limit, ...(pagination.cursor ? { cursor: pagination.cursor } : {}) });
   }
 
-  async setStatus(memberId: string, projectId: string, id: string, status: unknown): Promise<ProjectTimelineItem> {
+  async setStatus(memberId: string, projectId: string, id: string, status: unknown, expectedUpdatedAt?: unknown): Promise<ProjectTimelineItem> {
     if (typeof status !== "string" || !["open", "done", "archived"].includes(status)) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline status is invalid", 400);
     const current = await this.get(memberId, projectId, id);
-    if (current.status === status) return current;
-    const updated = await this.repository.updateStatus(memberId, projectId, current.id, status as ProjectTimelineStatus, (this.options.now?.() ?? new Date()).getTime());
-    if (!updated) throw notFound();
+    const expected = requirePlanningVersion(expectedUpdatedAt, current.updatedAt, "PROJECT_TIMELINE");
+    const updated = await this.repository.updateStatus(memberId, projectId, current.id, status as ProjectTimelineStatus, nextPlanningVersion(expected, (this.options.now?.() ?? new Date()).getTime()), expected);
+    if (!updated) throw planningConflict("PROJECT_TIMELINE");
     return updated;
   }
 

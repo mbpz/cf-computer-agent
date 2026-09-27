@@ -26,7 +26,7 @@ describe("parameterized project timeline through real App", () => {
       const id = url.pathname.split("/")[3];
       if (init?.method === "POST") {
         const body = JSON.parse(String(init.body));
-        return url.pathname.endsWith("/status") ? Response.json({ ...item(id), status: body.status }) : Response.json({ item: { ...item(id), ...body }, created: true });
+        return url.pathname.endsWith("/status") ? Response.json({ ...item(id), status: body.status, updatedAt: new Date(Date.parse(body.expectedUpdatedAt as string) + 1).toISOString() }) : Response.json({ item: { ...item(id), ...body }, created: true });
       }
       if (url.pathname.endsWith("/timeline")) return Response.json({ items: [item(id, url.searchParams.has("cursor") ? "second" : "first")], ...(url.searchParams.has("cursor") ? {} : { nextCursor: "next" }) });
       return Response.json(project(id));

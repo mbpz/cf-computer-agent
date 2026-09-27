@@ -1299,6 +1299,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
   const pendingRef = useRef(false);
+  const statusNoticeRef = useRef<"PLANNING_VERSION_CONFLICT" | "PROJECT_TIMELINE_STATUS_UNKNOWN" | undefined>(undefined);
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const consumedCursors = useRef(new Set<string>());
@@ -1306,6 +1307,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
   stateRef.current = state;
   const clearDenied = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
+    statusNoticeRef.current = undefined;
     generationRef.current++; controllerRef.current?.abort();
     pendingRef.current = false; setPending(false); setActionError(undefined);
     createLockedRef.current = false; setCreateLocked(false);
@@ -1313,7 +1315,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale]);
 
-  const refresh = useCallback(async (append = false): Promise<boolean> => {
+  const refresh = useCallback(async (append = false, clearOnFailure = false): Promise<boolean> => {
     const current = stateRef.current;
     const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
     if (append && !cursor) return false;
@@ -1334,12 +1336,16 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
         ? [...new Map([...current.items, ...page.items].map(item => [item.id, item])).values()]
         : page.items;
       const next: ProjectTimelinePageState = { kind: "ready", project, items, nextCursor: page.nextCursor };
-      stateRef.current = next; setState(next); return true;
+      stateRef.current = next; setState(next);
+      setActionError(statusNoticeRef.current ? frontendText(locale, statusNoticeRef.current) : undefined);
+      return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
       controller.abort();
       if (clearDenied(error)) return false;
-      setState(previous => previous.kind === "ready" ? previous : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      const next: ProjectTimelinePageState = !clearOnFailure && stateRef.current.kind === "ready"
+        ? stateRef.current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+      stateRef.current = next; setState(next);
       setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   }, [locale, projectId, clearDenied]);
@@ -1355,10 +1361,22 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
     if (pendingRef.current || createLockedRef.current) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
-    try { await operation(); if (activeRef.current && generationRef.current === generation) await refresh(); }
-    catch (error: unknown) {
-      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
-      if (!clearDenied(error)) setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED"));
+    statusNoticeRef.current = undefined;
+    try {
+      try { await operation(); }
+      catch (error: unknown) {
+        if (!activeRef.current || generationRef.current !== generation) return;
+        if (clearDenied(error)) return;
+        if (error instanceof ApiRequestError && error.status === 409) {
+          statusNoticeRef.current = "PLANNING_VERSION_CONFLICT";
+        } else if (!(error instanceof ApiRequestError) || error.retryable || error.status === 408 || error.status >= 500) {
+          statusNoticeRef.current = "PROJECT_TIMELINE_STATUS_UNKNOWN";
+        } else {
+          setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return;
+        }
+      }
+      // A receipt or a new read cannot justify replaying an uncertain write.
+      if (activeRef.current && generationRef.current === generation) await refresh(false, true);
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
   return <ProjectTimelinePage locale={locale} state={state} pending={pending} createLocked={createLocked} actionError={actionError}
@@ -1369,7 +1387,7 @@ export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRunt
       return createProjectTimeline(projectId, input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDenied}
     onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
-    onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(() => setProjectTimelineStatus(projectId, item.id, status))}
+    onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(() => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
     onLoadMore={() => { if (!pendingRef.current && !createLockedRef.current) void refresh(true); }} />;
 }
 

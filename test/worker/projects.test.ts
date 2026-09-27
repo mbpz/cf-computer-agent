@@ -109,7 +109,7 @@ describe("private Projects migration contract", () => {
       await timeline.create("member-a", "project-a", { id: `item-${index}`, clientKey: `item-${index}`, kind: "action_item", title: `Action ${index}` });
     }
     expect((await timeline.create("member-a", "project-a", { id: "replayed", clientKey: "item-0", kind: "action_item", title: "Action 0" })).created).toBe(false);
-    await timeline.setStatus("member-a", "project-a", "item-0", "done");
+    await timeline.setStatus("member-a", "project-a", "item-0", "done", (await timeline.get("member-a", "project-a", "item-0")).updatedAt);
     const first = await timeline.list("member-a", "project-a", { limit: 2 });
     expect(first.items).toHaveLength(2); expect(first.nextCursor).toBeTruthy();
     const second = await timeline.list("member-a", "project-a", { limit: 2, cursor: first.nextCursor });
