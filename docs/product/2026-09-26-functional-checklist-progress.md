@@ -410,3 +410,32 @@ rtk proxy npx vitest run test/unit/frontend-planning-conflicts.test.tsx test/wor
 
 - 原清单 30 个父项，D08 发布排除后 **29 范围内父项 / 已关闭 1（B03）/ 未关闭 28**。当前 C03，两个条件写/冲突回读本地子项已完成；EXT-GL-02 / EXT-PRJ-03 与 C03 仍未整体完结。
 - 下一环节：完整目标/任务关联编辑及参数化时间线旅程、跨刷新/离开页面的持久恢复、未知写入结果恢复；真实身份/原生浏览器验收仍独立开放。本地功能可继续，无新增外部阻塞。不得以本批提交代替全部 checklist 完结。
+
+
+## C03 — 参数化项目时间线隔离与同挂载创建恢复（2026-09-27，本地子项）
+
+### 本批实现与边界
+
+- 继续 EXT-PRJ-03，不关闭 C03 或完整项目旅程。时间线路由按成员/项目路径键挂载；读取使用 AbortController 与代次校验，切换项目取消旧 GET、清空旧草稿并忽略迟到读写回执。App 目前只在首次挂载读取 session；本批没有新增会话刷新机制，不能据 key 声称动态账号切换或真实双身份完整验收。
+- 读取/状态写入/创建及写后回读遇 401/403/404，清除私有行与表单，恢复入口只重新 GET。普通续页失败保留已读行并允许原游标重试；校验行的 projectId、项目详情 id、页内重复、页大小和游标循环；跨页重叠按 id 合并。不把更新排序的 cursor 分页声称为快照或数字分页。
+- 新 TimelineCreateForm 保留同一挂载内不可变 id/clientKey/完整载荷，校验标题/正文及起止时间。写入未知结果保留并冻结字段，用户显式重试原键/原载荷；已确认创建但读取失败时只重试 GET。收到有效创建回执且列表回读成功才清空草稿。
+- 初次明确 4xx 拒绝（除 408 及权限/失效对象）保留可编辑草稿，下次提交才生成新意图；曾经未知的原请求即使重试返回 400，也不擅自放弃原意图。创建回执严格匹配项目/id/clientKey 和 created 类型；同帧创建/状态/续页互斥。
+- 只对未解决意图提供 beforeunload 提醒，**没有跨刷新/路由离开的持久恢复**。时间线状态仍为既有非条件写，未知状态结果、完整编辑和数字分页仍开放。本批无数据库/API schema 变更，不扩展关联编辑范围。
+
+### RED → GREEN 与验证
+
+- 首批 16 项真实 App / happy-dom 测试先观察到 **14 failed / 2 passed**，失败覆盖旧草稿泄漏、未取消读取、拒绝后旧行保留、错误归属/重复/循环响应、创建确认前丢草稿及同帧重复写入。
+- 实现后追加拒绝/重试等边界测试，观察到创建 404 未清屏的 **1 failed / 30 passed**（4 文件），修复后通过。最终新增文件 **33/33**，覆盖返回项目/重进时间线、日期校验、迟到创建/状态回执、普通失败重试、撤权/项目失效、固定意图与同帧互斥。HTTP fixture 不替代后端授权证据。
+- 最终联合 **22 文件，407/407 通过**，包含既有本地 D1 时间线重放与隔离、项目计数和目标/项目条件写回归：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-project-timeline-recovery.test.tsx test/unit/frontend-project-timeline-page.test.tsx test/unit/project-timeline-service.test.ts test/worker/project-timeline.test.ts test/unit/frontend-planning-conflicts.test.tsx test/worker/planning-conditional-writes.test.ts test/unit/frontend-planning-numbered-pages.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/worker/planning-numbered-pages.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+```
+
+- typecheck、build:ui、verify:i18n、test:i18n 13/13、verify:workbench-maturity 13/13、verify:delivery-status 30/30 通过；领域审计证据已重新生成，audit:workbench-domain 通过。新增表单及测试挂入 timeline 能力证据，不改冻结历史 gap 文案/ownership，不提升 release/acceptance 维度。
+- 既有 >500 kB chunk 警告仍在；仓库 typecheck 不覆盖全部前端 TSX。没有运行全仓 npm test/check，也不是原生浏览器/生产验收。未 push、merge、部署、远程迁移、备份、生产写入或手工读取/上传 Secret；未调用 AI。
+
+### 总进度和下一环节
+
+- 重新按 canonical checklist 统计：原清单 **30 父项**，D08 发布排除后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。当前 C03，时间线本地子项勾选，EXT-PRJ-03 和 C03 保持开放；不得把本批提交当作全部 checklist 完结。
+- 下一环节继续 EXT-GL-02 / EXT-PRJ-03：完整目标/任务关联编辑与计数回读、时间线条件状态写及未知写恢复、跨刷新/路由离开恢复。真实身份及原生浏览器验收独立保留。当前无新增外部阻塞，允许继续本地功能实施。

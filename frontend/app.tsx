@@ -190,7 +190,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} search={search} />;
-    case "project-timeline": return <ProjectTimelineRoute locale={locale} projectId={pathname.split("/")[2] || ""} />;
+    case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
@@ -1293,40 +1293,84 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
 export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRuntime; projectId: string }) {
   const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
+  const [createLocked, setCreateLocked] = useState(false);
+  const createLockedRef = useRef(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
+  const pendingRef = useRef(false);
+  const generationRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
+  const consumedCursors = useRef(new Set<string>());
   const stateRef = useRef<ProjectTimelinePageState>({ kind: "loading" });
   stateRef.current = state;
+  const clearDenied = useCallback((error: unknown) => {
+    if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
+    generationRef.current++; controllerRef.current?.abort();
+    pendingRef.current = false; setPending(false); setActionError(undefined);
+    createLockedRef.current = false; setCreateLocked(false);
+    const cleared: ProjectTimelinePageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+    stateRef.current = cleared; setState(cleared); return true;
+  }, [locale]);
 
-  const refresh = useCallback(async (append = false) => {
+  const refresh = useCallback(async (append = false): Promise<boolean> => {
     const current = stateRef.current;
     const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
-    setPending(true); setActionError(undefined);
+    if (append && !cursor) return false;
+    controllerRef.current?.abort();
+    const controller = new AbortController(); controllerRef.current = controller;
+    const generation = ++generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
-      const [project, page] = await Promise.all([loadProject(projectId), loadProjectTimeline(projectId, { limit: 20, ...(cursor ? { cursor } : {}) })]);
-      if (!activeRef.current) return;
-      setState((previous) => append && previous.kind === "ready" ? { kind: "ready", project, items: [...previous.items, ...page.items], nextCursor: page.nextCursor } : { kind: "ready", project, items: page.items, nextCursor: page.nextCursor });
+      const [project, page] = await Promise.all([
+        loadProject(projectId, fetch, controller.signal),
+        loadProjectTimeline(projectId, { limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal),
+      ]);
+      if (!activeRef.current || generationRef.current !== generation) return false;
+      if (append && page.nextCursor && consumedCursors.current.has(page.nextCursor)) throw new Error("TIMELINE_CURSOR_LOOP");
+      if (!append) consumedCursors.current.clear();
+      if (cursor) consumedCursors.current.add(cursor);
+      const items = append && current.kind === "ready"
+        ? [...new Map([...current.items, ...page.items].map(item => [item.id, item])).values()]
+        : page.items;
+      const next: ProjectTimelinePageState = { kind: "ready", project, items, nextCursor: page.nextCursor };
+      stateRef.current = next; setState(next); return true;
     } catch (error: unknown) {
-      if (!activeRef.current || isAbort(error)) return;
-      setState((currentState) => currentState.kind === "ready" ? currentState : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED"));
-    } finally { if (activeRef.current) setPending(false); }
-  }, [locale, projectId]);
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
+      controller.abort();
+      if (clearDenied(error)) return false;
+      setState(previous => previous.kind === "ready" ? previous : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
+  }, [locale, projectId, clearDenied]);
 
-  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
+  useEffect(() => {
+    activeRef.current = true;
+    stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
+    createLockedRef.current = false; setCreateLocked(false); consumedCursors.current.clear();
+    void refresh();
+    return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
+  }, [refresh, retryVersion]);
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (pending) return;
-    setPending(true); setActionError(undefined);
-    try { await operation(); await refresh(); }
-    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); setPending(false); }
+    if (pendingRef.current || createLockedRef.current) return;
+    const generation = generationRef.current;
+    pendingRef.current = true; setPending(true); setActionError(undefined);
+    try { await operation(); if (activeRef.current && generationRef.current === generation) await refresh(); }
+    catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
+      if (!clearDenied(error)) setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED"));
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
-  return <ProjectTimelinePage locale={locale} state={state} pending={pending} actionError={actionError}
-    onRetry={() => setRetryVersion((value) => value + 1)}
+  return <ProjectTimelinePage locale={locale} state={state} pending={pending} createLocked={createLocked} actionError={actionError}
+    onRetry={() => setRetryVersion(value => value + 1)}
     onBack={() => writeWorkspaceHistory("push", "/projects")}
-    onCreate={(input) => void mutate(() => createProjectTimeline(projectId, input))}
+    onCreate={async input => {
+      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      return createProjectTimeline(projectId, input);
+    }} onCreateReadback={() => refresh()} onCreateDenied={clearDenied}
+    onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(() => setProjectTimelineStatus(projectId, item.id, status))}
-    onLoadMore={() => void refresh(true)} />;
+    onLoadMore={() => { if (!pendingRef.current && !createLockedRef.current) void refresh(true); }} />;
 }
 
 export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {

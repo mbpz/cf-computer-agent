@@ -10,6 +10,7 @@ export interface ProjectPage { items: Project[]; nextCursor?: string; }
 export type ProjectTimelineKind = "meeting" | "decision" | "action_item" | "milestone";
 export type ProjectTimelineStatus = "open" | "done" | "archived";
 export interface ProjectTimelineItem { id: string; projectId: string; clientKey: string; kind: ProjectTimelineKind; title: string; body: string; status: ProjectTimelineStatus; startsAt: string | null; dueAt: string | null; createdAt: string; updatedAt: string; }
+export interface TimelineCreateIntent { readonly id: string; readonly clientKey: string; readonly kind: ProjectTimelineKind; readonly title: string; readonly body: string; readonly startsAt: string | null; readonly dueAt: string | null; }
 export interface ProjectTimelinePage { items: ProjectTimelineItem[]; nextCursor?: string; }
 
 export async function loadNumberedProjects(input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Project>> {
@@ -47,26 +48,33 @@ export async function loadProjectSummary(id: string, requester: Fetcher = fetch,
   return { goalCount: record.goalCount as number, taskCount: record.taskCount as number, completedTaskCount: record.completedTaskCount as number, goals };
 }
 
-export async function loadProject(id: string, requester: Fetcher = fetch): Promise<Project> {
-  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}`, { requester });
+export async function loadProject(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<Project> {
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}`, { requester, signal });
   const project = normalizeProject(value);
-  if (!project) throw new Error("PROJECT_RESPONSE_INVALID");
+  if (!project || project.id !== id) throw new Error("PROJECT_RESPONSE_INVALID");
   return project;
 }
 
-export async function loadProjectTimeline(id: string, input: { limit?: number; cursor?: string } = {}, requester: Fetcher = fetch): Promise<ProjectTimelinePage> {
+export async function loadProjectTimeline(id: string, input: { limit?: number; cursor?: string } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectTimelinePage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });
   if (input.cursor) params.set("cursor", input.cursor);
-  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/timeline?${params.toString()}`, { requester });
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/timeline?${params.toString()}`, { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
   const items = Array.isArray(record.items) ? record.items.map(normalizeTimeline).filter((item): item is ProjectTimelineItem => item !== null) : [];
-  if (!Array.isArray(record.items) || items.length !== record.items.length) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
+  if (!Array.isArray(record.items) || items.length !== record.items.length || items.length > (input.limit ?? 20)
+    || items.some(item => item.projectId !== id) || new Set(items.map(item => item.id)).size !== items.length
+    || (record.nextCursor !== undefined && (typeof record.nextCursor !== "string" || !record.nextCursor || record.nextCursor === input.cursor))) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
 
-export async function createProjectTimeline(id: string, input: { kind: ProjectTimelineKind; title: string; body?: string; startsAt?: string | null; dueAt?: string | null }, requester: Fetcher = fetch): Promise<{ item: ProjectTimelineItem; created: boolean }> {
-  return apiFetch<{ item: ProjectTimelineItem; created: boolean }>(`/api/projects/${encodeURIComponent(id)}/timeline`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input }) });
+export async function createProjectTimeline(id: string, input: TimelineCreateIntent, requester: Fetcher = fetch): Promise<{ item: ProjectTimelineItem; created: boolean }> {
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/timeline`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_TIMELINE_CREATE_INVALID");
+  const record = value as Record<string, unknown>;
+  const item = normalizeTimeline(record.item);
+  if (!item || item.projectId !== id || item.id !== input.id || item.clientKey !== input.clientKey || typeof record.created !== "boolean") throw new Error("PROJECT_TIMELINE_CREATE_INVALID");
+  return { item, created: record.created };
 }
 
 export async function setProjectTimelineStatus(projectId: string, id: string, status: ProjectTimelineStatus, requester: Fetcher = fetch): Promise<ProjectTimelineItem> {
