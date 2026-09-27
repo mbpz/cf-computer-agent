@@ -46,6 +46,10 @@
 | workbench-goals:query_or_idempotency:create-goal | domain:POST /api/goals | workbench-goals | 目标创建的前端逻辑意图缺少稳定客户端键与重复写入抑制证明。 | query_or_idempotency | R4-023 | R4-001 | frontend/lib/goals-data.ts<br>src/goals/service.ts<br>src/goals/repository.ts | test/worker/goals.test.ts | 连续点击与响应丢失后重试仅创建一个目标；复用键修改内容被明确拒绝且成员隔离。 | P0 |
 | workbench-goals:query_or_idempotency:transition-goal-status | domain:POST /api/goals/:id/status | workbench-goals | 目标状态变更缺少预期状态约束和并发重放收敛证明。 | query_or_idempotency | R4-024 | R4-001 | frontend/lib/goals-data.ts<br>src/goals/service.ts<br>src/goals/repository.ts | test/worker/goals.test.ts | 两个会话同时变更目标状态时只接受合法版本，冲突可恢复且重试不覆盖新状态。 | P0 |
 | workbench-goals:query_or_idempotency:update-goal-progress | domain:POST /api/goals/:id/progress | workbench-goals | 目标进度更新缺少版本条件和旧请求覆盖防护证明。 | query_or_idempotency | R4-025 | R4-001 | frontend/lib/goals-data.ts<br>src/goals/service.ts<br>src/goals/repository.ts | test/worker/goals.test.ts | 新旧进度请求逆序到达时旧版本不能覆盖新值；响应丢失后重试保持同一结果。 | P0 |
+| workbench-projects:query_or_idempotency:link-project-goal | domain:POST /api/projects/:id/goals | workbench-projects | 项目目标关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。 | query_or_idempotency | R4-015 | R4-001 | frontend/components/project-relations-editor.tsx<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/project-relations.test.ts | 关联与解除关联逆序到达时拒绝旧意图；响应丢失并刷新后可只读核对且不得重放覆盖新状态，跨成员仍为 404。 | P0 |
+| workbench-projects:query_or_idempotency:unlink-project-goal | domain:DELETE /api/projects/:id/goals/:id | workbench-projects | 项目目标解除关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。 | query_or_idempotency | R4-015 | R4-001 | frontend/components/project-relations-editor.tsx<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/project-relations.test.ts | 关联与解除关联逆序到达时拒绝旧意图；响应丢失并刷新后可只读核对且不得重放覆盖新状态，跨成员仍为 404。 | P0 |
+| workbench-projects:query_or_idempotency:link-project-task | domain:POST /api/projects/:id/tasks | workbench-projects | 项目任务关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。 | query_or_idempotency | R4-015 | R4-001 | frontend/components/project-relations-editor.tsx<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/project-relations.test.ts | 关联与解除关联逆序到达时拒绝旧意图；响应丢失并刷新后可只读核对且不得重放覆盖新状态，跨成员仍为 404。 | P0 |
+| workbench-projects:query_or_idempotency:unlink-project-task | domain:DELETE /api/projects/:id/tasks/:id | workbench-projects | 项目任务解除关联已有单次重复安全证据，但混合并发顺序与跨刷新未知结果恢复尚未证明。 | query_or_idempotency | R4-015 | R4-001 | frontend/components/project-relations-editor.tsx<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/project-relations.test.ts | 关联与解除关联逆序到达时拒绝旧意图；响应丢失并刷新后可只读核对且不得重放覆盖新状态，跨成员仍为 404。 | P0 |
 | workbench-projects:query_or_idempotency:create-project | domain:POST /api/projects | workbench-projects | 项目创建缺少前端稳定意图键和端到端重试去重证明。 | query_or_idempotency | R4-026 | R4-001 | frontend/lib/projects-data.ts<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/projects.test.ts | 重复创建及断线重试只有一个项目，键冲突可见且其他成员无法读取该项目。 | P0 |
 | workbench-projects:query_or_idempotency:transition-project-status | domain:POST /api/projects/:id/status | workbench-projects | 项目状态变更缺少条件更新和重试冲突恢复证明。 | query_or_idempotency | R4-027 | R4-001 | frontend/lib/projects-data.ts<br>src/projects/service.ts<br>src/projects/repository.ts | test/worker/projects.test.ts | 并发归档与激活出现明确冲突，刷新取得权威状态且重复请求不覆盖更新结果。 | P0 |
 | workbench-calendar:query_or_idempotency:create-calendar-event | domain:POST /api/calendar/events | workbench-calendar | 日历事件创建缺少前端稳定客户端键和断线重试去重证明。 | query_or_idempotency | R4-028 | R4-001 | frontend/lib/calendar-data.ts<br>src/calendar/service.ts<br>src/calendar/repository.ts | test/worker/calendar.test.ts | 重复点击与断线重试只生成一个相同时间事件，修改意图使用新键且跨成员隔离。 | P0 |
@@ -109,10 +113,12 @@
 | 维度 | 数量 |
 | --- | ---: |
 | manifest 聚合 gap | 32 |
-| domain mutation-safety gap | 51 |
-| 总计 | 83 |
-| P0 | 43 |
+| domain mutation-safety gap | 55 |
+| 总计 | 87 |
+| P0 | 47 |
 | P1 | 39 |
 | P2 | 1 |
 
 阶段主责计数由合同从 `Owner atom` 派生，并与 checklist、ROADMAP 的 R1–R8 映射逐项核对。矩阵只完成历史 R0-012 与本次 M02 的规划与验证，不提升任何 R1–R8 实现、发布或验收状态。
+
+2026-09-27 C03 增量：项目关联编辑新增四个前端可达写操作，均诚实记为 mutation-safety gap，统一归属已有 R4-015；当前 87 gap（47 P0 / 39 P1 / 1 P2），未增加实施原子或关闭既有项。历史 83 gap 快照不回填。

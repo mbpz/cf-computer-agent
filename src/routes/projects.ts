@@ -57,26 +57,34 @@ export async function routeProjectsApi(
 
   const goal = /^\/api\/projects\/([^/]+)\/goals(?:\/([^/]+))?$/u.exec(url.pathname);
   if (goal) {
+    if (!goal[2] && request.method === "GET") {
+      const page = parseNumberedPageRequest(url, [], "PROJECT_PAGE_INVALID");
+      return jsonResponse(await services.projects.listRelations(member.memberId, decodePathId(goal[1]!), "goals", page), 200, context.requestId);
+    }
     requireNoQuery(url);
     const projectId = decodePathId(goal[1]!);
     if (goal[2]) {
       if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
       return jsonResponse(await services.projects.unlinkGoal(member.memberId, projectId, decodePathId(goal[2]!)), 200, context.requestId);
     }
-    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["goalId"], "PROJECT_INVALID");
     return jsonResponse(await services.projects.linkGoal(member.memberId, projectId, input.goalId), 200, context.requestId);
   }
 
   const task = /^\/api\/projects\/([^/]+)\/tasks(?:\/([^/]+))?$/u.exec(url.pathname);
   if (task) {
+    if (!task[2] && request.method === "GET") {
+      const page = parseNumberedPageRequest(url, [], "PROJECT_PAGE_INVALID");
+      return jsonResponse(await services.projects.listRelations(member.memberId, decodePathId(task[1]!), "tasks", page), 200, context.requestId);
+    }
     requireNoQuery(url);
     const projectId = decodePathId(task[1]!);
     if (task[2]) {
       if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
       return jsonResponse(await services.projects.unlinkTask(member.memberId, projectId, decodePathId(task[2]!)), 200, context.requestId);
     }
-    if (request.method !== "POST") return methodNotAllowed("POST", context);
+    if (request.method !== "POST") return methodNotAllowed("GET, POST", context);
     const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["taskId"], "PROJECT_INVALID");
     return jsonResponse(await services.projects.linkTask(member.memberId, projectId, input.taskId), 200, context.requestId);
   }

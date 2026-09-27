@@ -476,3 +476,40 @@ rtk proxy npm run audit:workbench-domain
 
 - Canonical 原清单 **30 父项**；D08 发布排除后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。本批只勾选 C03/EXT-PRJ-03 的时间线条件状态子项，父项及完整旅程保持开放。
 - 下一环节仍属 C03/EXT-GL-02/EXT-PRJ-03：完整目标/任务关联编辑与计数回读、跨刷新/路由离开的持久恢复、timeline 数字分页及完整编辑；真实身份和原生浏览器验收独立保留。本地实施允许继续，无新增外部阻塞，不得把本次提交称为全部完结。
+
+
+## C03 — 项目目标/任务关联编辑与计数回读（2026-09-27，本地子项）
+
+### 本批实现与边界
+
+- 从 `1f0c731` 继续 EXT-PRJ-03，新增项目关联编辑入口及目标/任务切换。候选列表按当前认证成员取数，20/50/100 数字分页、稳定创建顺序、准确 total、10000 行查询窗口；不再依赖摘要中最多十条目标预览。
+- 新增 GET 项目 goals/tasks 列表，严格校验页参数；服务层先验证项目归属，候选与关联边均限定 member_id。关联/解除关联复用既有 POST/DELETE，解除关联补齐子对象归属检查，跨成员项目/目标/任务均 404。没有新迁移、新依赖或直接 goal-task 数据模型。
+- 编辑器同刻只允许一个写入，打开期间冻结父页创建/状态/翻页及摘要重试；写后分别 GET 候选与摘要，完成数、任务总数、目标总数按服务端回读，不改变手工 progress。两次 GET 不宣称并发时的全局原子快照。
+- 网络、408、5xx、409、非法回执仅显示核对提示并 GET，不自动重放。回读失败清除旧列表及该项目摘要，显式恢复只 GET 且保留同挂载未知警告。401/403/404 清空私有项目；已知 400 保留可编辑内容。关闭取消读取，代次隔离迟到响应，恢复触发按钮焦点。
+- 不宣称关联/解除关联混合并发的顺序保证；不宣称未知请求已成功；没有跨刷新/离开路由的持久意图。目标直接关联任务、timeline 数字分页及完整编辑仍留在后续清单。
+
+### RED → GREEN 与最终验证
+
+- 本地 D1 初始 RED 为 12 项中 5 failed / 7 passed（新增列表尚不存在）；最终扩展为 14/14。数据层先出现模块缺失 RED，最终 7/7；真实 App / happy-dom 首轮 6 项 UI RED，最终 18/18。权限失效后不得回读的反例还捕获并修复了 finally 中多发 GET 的问题。
+- 最终联合 **27 文件 479/479**；本批新增 **39/39**。实际执行：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-project-relations.test.tsx test/unit/frontend-project-relations-data.test.ts test/worker/project-relations.test.ts test/unit/frontend-project-timeline-conflicts.test.tsx test/worker/project-timeline-conditional-writes.test.ts test/unit/frontend-project-timeline-recovery.test.tsx test/unit/frontend-project-timeline-page.test.tsx test/unit/project-timeline-service.test.ts test/worker/project-timeline.test.ts test/unit/frontend-planning-conflicts.test.tsx test/worker/planning-conditional-writes.test.ts test/unit/frontend-planning-numbered-pages.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/worker/planning-numbered-pages.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run test:i18n
+rtk proxy npm run verify:workbench-maturity
+rtk proxy npm run verify:delivery-status
+rtk proxy node scripts/workbench-domain-audit.mjs --write docs/operations/evidence/2026-09-26-workbench-functional-domain-audit.md
+rtk proxy npm run audit:workbench-domain
+```
+
+- 领域审计保留 fail-closed：将请求代码改为 AST 可识别的显式 POST/DELETE，而非削弱检测。新增四个前端可达关联写操作按 gap 登记；成熟度合同先因缺少 owner 失败，随后为四个新增 source 增补固定政策与矩阵行，统一归属已有 R4-015。当前 87 gap（47 P0 / 39 P1 / 1 P2），R4 负责 38 gap；旧 source/owner 不改、124 个实施原子不变，历史 83 gap 快照不回填。Roadmap 增量说明置于概览，不污染退出条件结构。
+- 最终 maturity 13/13、delivery-status 30/30 通过，领域证据重新生成并检查通过。typecheck、UI build、i18n 检查及 13/13 i18n 合同通过；保留 >500 kB chunk 警告。typecheck 不覆盖全部前端 TSX。未执行全仓 npm test/check；本地 Workerd/D1 与 happy-dom/HTTP fixture 不代替生产、原生浏览器或真实双身份验收。
+- 未 push、merge、部署、远程迁移、备份或生产写入，未手工读取/上传 Secret，未调用 AI。
+
+### 总进度与下一环节
+
+- 原 canonical **30 父项**，排除 D08 发布后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选 C03/EXT-PRJ-03 本地关联编辑子项，父项和完整旅程保持开放。
+- 下一环节仍为 C03：关联写入并发顺序与跨刷新/离开路由持久恢复，然后 timeline 数字分页及完整编辑；EXT-GL-02 的直接任务关联仍待核对模型与范围。真实身份及原生浏览器验收单独保留。无新增外部阻塞，允许继续本地实施，不得将本批提交称为全部完结。

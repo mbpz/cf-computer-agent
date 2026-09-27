@@ -38,6 +38,10 @@ export async function loadProjects(input: { limit?: number; cursor?: string; sta
 
 export async function loadProjectSummary(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectSummary> {
   const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/summary`, { requester, signal });
+  return normalizeProjectSummary(value);
+}
+
+export function normalizeProjectSummary(value: unknown): ProjectSummary {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("PROJECT_SUMMARY_INVALID");
   const record = value as Record<string, unknown>;
   const goals = Array.isArray(record.goals) ? record.goals.map(normalizeGoal).filter((item): item is ProjectGoalSummary => item !== null) : [];

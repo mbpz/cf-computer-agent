@@ -4,7 +4,7 @@ import { AppError } from "../http";
 import type { GoalsRepositoryPort } from "../goals/repository";
 import type { TasksRepositoryPort } from "../tasks/repository";
 import type { ProjectsRepositoryPort } from "./repository";
-import { PROJECT_STATUSES, type Project, type ProjectListFilters, type ProjectPage, type ProjectStatus, type ProjectSummary } from "./types";
+import { PROJECT_STATUSES, type ProjectRelationKind, type Project, type ProjectListFilters, type ProjectPage, type ProjectStatus, type ProjectSummary } from "./types";
 
 export interface ProjectCreateInput { id?: unknown; clientKey?: unknown; title?: unknown; description?: unknown; progress?: unknown; targetAt?: unknown; }
 export interface ProjectUpdateInput { expectedUpdatedAt?: unknown; title?: unknown; description?: unknown; progress?: unknown; targetAt?: unknown; }
@@ -78,7 +78,9 @@ export class ProjectsService {
 
   async unlinkGoal(memberId: string, projectId: string, goalId: string): Promise<ProjectSummary> {
     const project = await this.get(memberId, projectId);
-    await this.repository.unlinkGoal(memberId, project.id, requireId(goalId));
+    requireId(goalId);
+    if (!this.options.goals || !await this.options.goals.findOwned(memberId, goalId)) throw new AppError("PROJECT_GOAL_NOT_FOUND", "Goal is not visible", 404);
+    await this.repository.unlinkGoal(memberId, project.id, goalId);
     return this.repository.summary(memberId, project.id);
   }
 
@@ -92,8 +94,17 @@ export class ProjectsService {
 
   async unlinkTask(memberId: string, projectId: string, taskId: string): Promise<ProjectSummary> {
     const project = await this.get(memberId, projectId);
-    await this.repository.unlinkTask(memberId, project.id, requireId(taskId));
+    requireId(taskId);
+    if (!this.options.tasks || !await this.options.tasks.findOwned(memberId, taskId)) throw new AppError("PROJECT_TASK_NOT_FOUND", "Task is not visible", 404);
+    await this.repository.unlinkTask(memberId, project.id, taskId);
     return this.repository.summary(memberId, project.id);
+  }
+
+  async listRelations(memberId: string, projectId: string, kind: ProjectRelationKind, input: Partial<NumberedPageRequest> = {}) {
+    const project = await this.get(memberId, projectId);
+    if (kind !== "goals" && kind !== "tasks") throw invalid("PROJECT_INVALID");
+    const page = normalizeNumberedPageRequest(input, "PROJECT_PAGE_INVALID");
+    return { projectId: project.id, kind, ...await this.repository.listRelations(memberId, project.id, kind, page) };
   }
 
   async summary(memberId: string, projectId: string): Promise<ProjectSummary> {

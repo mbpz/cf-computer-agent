@@ -42,3 +42,6 @@ export type ProjectPage = Page<Project>;
 
 export interface ProjectGoalSummary { id: string; title: string; }
 export interface ProjectSummary { goalCount: number; taskCount: number; completedTaskCount: number; goals: ProjectGoalSummary[]; }
+
+export type ProjectRelationKind = "goals" | "tasks";
+export interface ProjectRelation { id: string; title: string; linked: boolean; }

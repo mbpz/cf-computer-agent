@@ -1,3 +1,4 @@
+import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Button } from "./components/ui/button";
@@ -1157,6 +1158,8 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
     if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
   }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
+  const [relationProject, setRelationProject] = useState<Project>();
+  const relationProjectRef = useRef<string | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
   const createLockedRef = useRef(false);
@@ -1177,7 +1180,8 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
     rowControllersRef.current.clear();
   }, []);
   const clearDeniedProjects = useCallback((error: unknown) => {
-    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403 && error.status !== 404)) return false;
+    relationProjectRef.current = undefined; setRelationProject(undefined);
     generationRef.current += 1; cancelReads();
     pendingRef.current = false; setPending(false); setSummaryPending([]); setActionError(undefined);
     createLockedRef.current = false; setCreateLocked(false);
@@ -1215,6 +1219,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
 
   useEffect(() => {
     activeRef.current = true;
+    relationProjectRef.current = undefined; setRelationProject(undefined);
     createLockedRef.current = false; setCreateLocked(false);
     stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
     void refresh();
@@ -1223,7 +1228,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
 
   const retrySummary = async (project: Project) => {
     const current = stateRef.current;
-    if (pendingRef.current || createLockedRef.current || rowControllersRef.current.has(project.id) || current.kind !== "ready"
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || rowControllersRef.current.has(project.id) || current.kind !== "ready"
       || !current.items.some((item) => item.id === project.id) || Object.hasOwn(current.summaries, project.id)) return;
     const generation = generationRef.current;
     const controller = new AbortController(); rowControllersRef.current.set(project.id, controller);
@@ -1242,7 +1247,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
   };
 
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current || createLockedRef.current) return;
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
@@ -1269,16 +1274,36 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
   };
 
   const changePage = (page: number, size = pageSize) => {
-    if (pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
     pendingRef.current = true; setPending(true);
     writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
   };
 
+  const updateRelationSummary = useCallback((projectId: string, summary: ProjectSummary | undefined) => {
+    if (!activeRef.current || relationProjectRef.current !== projectId || stateRef.current.kind !== "ready") return;
+    const summaries = { ...stateRef.current.summaries };
+    if (summary) summaries[projectId] = summary; else delete summaries[projectId];
+    const next = { ...stateRef.current, summaries }; stateRef.current = next; setState(next);
+  }, []);
+  const openRelations = (project: Project) => {
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current) return;
+    generationRef.current++; cancelReads(); setSummaryPending([]);
+    relationProjectRef.current = project.id; setRelationProject(project);
+  };
+  const closeRelations = () => {
+    const id = relationProjectRef.current;
+    relationProjectRef.current = undefined; setRelationProject(undefined);
+    // The trigger is enabled after React commits the closed state.
+    queueMicrotask(() => document.getElementById(`manage-relations-${id}`)?.focus());
+  };
+
   return <ProjectsPage locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
+    relationProjectId={relationProject?.id} onManageRelations={openRelations}
+    relationEditor={relationProject && <ProjectRelationsEditor key={relationProject.id} projectId={relationProject.id} title={relationProject.title} locale={locale} onSummary={updateRelationSummary} onDenied={clearDeniedProjects} onClose={closeRelations} />}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRetrySummary={(project) => void retrySummary(project)}
     onCreate={async (input) => {
-      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      if (relationProjectRef.current || pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
       return createProject(input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedProjects}
     onCreateLock={(locked) => {

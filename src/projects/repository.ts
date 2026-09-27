@@ -2,11 +2,12 @@ import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type Numbe
 import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
-import type { Project, ProjectCreate, ProjectGoalSummary, ProjectPage, ProjectStatus, ProjectSummary, ProjectUpdate } from "./types";
+import type { ProjectRelation, ProjectRelationKind, Project, ProjectCreate, ProjectGoalSummary, ProjectPage, ProjectStatus, ProjectSummary, ProjectUpdate } from "./types";
 
 export interface ProjectsPageRepositoryRequest extends PageRequest { status?: ProjectStatus; }
 
 export interface ProjectsRepositoryPort {
+  listRelations(memberId: string, projectId: string, kind: ProjectRelationKind, request: NumberedPageRequest): Promise<NumberedPage<ProjectRelation>>;
   insert(input: ProjectCreate): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<Project | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<Project | null>;
@@ -32,6 +33,20 @@ const columns = "id, member_id, client_key, title, description, status, progress
 
 export class ProjectsRepository implements ProjectsRepositoryPort {
   constructor(private readonly db: D1Database) {}
+
+  async listRelations(memberId: string, projectId: string, kind: ProjectRelationKind, input: NumberedPageRequest): Promise<NumberedPage<ProjectRelation>> {
+    const request = normalizeNumberedPageRequest(input, "PROJECT_PAGE_INVALID");
+    const table = kind === "goals" ? "goals" : kind === "tasks" ? "tasks" : null;
+    if (!table) throw new AppError("PROJECT_INVALID", "Invalid relation kind", 400);
+    const edge = kind === "goals" ? "project_goals" : "project_tasks";
+    const key = kind === "goals" ? "goal_id" : "task_id";
+    return queryNumberedPage(this.db,
+      this.db.prepare(`SELECT count(*) AS total FROM ${table} WHERE member_id = ?`).bind(memberId),
+      this.db.prepare(`SELECT c.id, c.title, EXISTS(SELECT 1 FROM ${edge} e WHERE e.member_id = c.member_id AND e.project_id = ? AND e.${key} = c.id) AS linked
+        FROM ${table} c WHERE c.member_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`)
+        .bind(projectId, memberId, request.pageSize, pageOffset(request)), request,
+      (row) => ({ id: String(row.id), title: String(row.title), linked: row.linked === 1 }));
+  }
 
   async insert(input: ProjectCreate): Promise<boolean> {
     const result = await this.db.prepare(

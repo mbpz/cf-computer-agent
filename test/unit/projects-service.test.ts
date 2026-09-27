@@ -42,6 +42,7 @@ describe("ProjectsService", () => {
 });
 
 class FakeProjectsRepository implements ProjectsRepositoryPort {
+  async listRelations() { return { items: [], pagination: { page: 1, pageSize: 20 as const, total: 0, totalPages: 0 } }; }
   readonly projects: Project[] = [];
   readonly goals = new Set<string>();
   readonly tasks = new Set<string>();
