@@ -748,3 +748,19 @@ rtk proxy npm run audit:workbench-domain
 - `rtk proxy npm run typecheck` 通过；领域快照重新生成。仅新增后端分页测试证据，不修改历史 gap / owner，不将前端分页分类提升为 numbered。
 - canonical 仍 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。EXT-INB-01 及 C04 父项保持开放；下一环节是收集箱前端数字分页、URL/筛选恢复与迟到响应隔离，允许继续本地实施。
 - 本轮两批均未 push、merge、部署、远程迁移、生产写入或备份。C03 的迁移 0053 尚未发布；真实身份和原生浏览器验收未完成，不能宣称全部完结。
+
+
+## C04 — 收集箱数字分页前端（2026-09-27，本地子项完成）
+
+承接 `8962710`，继续 EXT-INB-01；不改归档/转任务后端语义，不将稳定创建意图或生产验收提前勾选。
+
+- InboxRoute 使用 page/pageSize/status 数字分页；20/50/100，筛选/页大小变更回到第一页，浏览器历史恢复当前查询；非法/重复分页及状态参数归一化并移除旧 cursor/limit。后端旧 cursor API 保留。
+- 共享 DataPagination 显示真实 total/totalPages、空越界页及可返回页；禁用超出 10000 行窗口的导航，不截断总数。不再追加旧页行。
+- 数字分页响应严格检查请求页/页大小、总数与行数、重复 ID、过滤状态及关键字段；将 AbortSignal 传到 fetch。读取失败/失权移除旧私有行；路由/查询变化取消并代次隔离迟到响应。路由按成员 key 重新挂载。
+- 导航开始同步锁写；写入去重并只回读仍有效的同一查询，迟到写入不刷新其他页面；本批不声称归档/转换已具备条件写、未知结果恢复或稳定创建意图。
+- 页错误重试改为通用文案，筛选双语。旧 InboxPage/extended fixture 适配数字分页；旧收集箱 cursor 页面测试由新数字分页旅程替代，日历 cursor 仍保留。
+- RED：新 App 分页旅程 15/15 失败（未发 page、无分页控件、旧响应未隔离等）。GREEN：新增 App 22 项 + 数据契约 13 项；其余新增边界作为回归补充，不宣称每项均经历 RED。
+- 联合回归命令：`rtk proxy npx vitest run test/unit/frontend-inbox-numbered-pages.test.tsx test/unit/frontend-inbox-numbered-data.test.ts test/unit/frontend-inbox-page.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-numbered-pages.test.tsx test/worker/inbox-numbered-pages.test.ts test/worker/inbox.test.ts test/unit/inbox-service.test.ts test/unit/inbox-route.test.ts`，**11 文件 276/276**。
+- `typecheck`、`build:ui`、`verify:i18n`、`test:i18n`（13/13）通过。构建保留 >500 kB chunk 提示；typecheck 不覆盖全部前端 TSX。没有运行全仓 npm test/check。
+- 成熟度仅追加测试证据，不重写历史 gap/owner/分类；本地实现以增量清单为准。canonical 仍 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。
+- 无新增迁移；未 push、merge、部署、生产写入、备份、AI 调用或手工读取/上传 Secret。真实身份/原生浏览器分页旅程仍待验收。下一步允许本地继续 EXT-INB-02 稳定创建意图及精确原请求重试。

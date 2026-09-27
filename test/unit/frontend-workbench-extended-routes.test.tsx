@@ -10,8 +10,8 @@ vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 // Characterization evidence for M01, not a replacement for the canonical maturity registry.
 const routes = ["inbox", "goals", "projects", "calendar", "today", "focus", "review"] as const;
 type Route = typeof routes[number];
-// Goals/projects numbered navigation is covered by frontend-planning-numbered-pages.test.tsx.
-const lists = ["inbox", "calendar"] as const;
+// Goals/projects and inbox numbered navigation have dedicated numbered-pages App suites.
+const lists = ["calendar"] as const;
 const endpoint: Record<Route, string> = {
   inbox: "/api/inbox", goals: "/api/goals", projects: "/api/projects", calendar: "/api/calendar/events",
   today: "/api/today", focus: "/api/focus/current", review: "/api/workbench/review",

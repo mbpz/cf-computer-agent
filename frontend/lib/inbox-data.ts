@@ -1,4 +1,5 @@
 import { apiFetch, type Fetcher } from "./api";
+import { normalizeNumberedPage, parsePageSearch, writePageSearch, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export type InboxKind = "text" | "link" | "file_ref";
 export type InboxStatus = "inbox" | "archived" | "promoted";
@@ -15,6 +16,43 @@ export async function loadInbox(input: { limit?: number; cursor?: string; status
   const items = Array.isArray(record.items) ? record.items.map(normalizeInbox).filter((item): item is InboxItem => item !== null) : [];
   if (!Array.isArray(record.items) || items.length !== record.items.length) throw new Error("INBOX_RESPONSE_INVALID");
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
+}
+
+export interface InboxPageRequest extends FrontendPageRequest { status?: InboxStatus; }
+
+export function parseInboxSearch(search: string): InboxPageRequest {
+  const statuses = new URLSearchParams(search).getAll("status");
+  const status = statuses.length === 1 && ["inbox", "archived", "promoted"].includes(statuses[0]!) ? statuses[0] as InboxStatus : undefined;
+  return { ...parsePageSearch(search), ...(status ? { status } : {}) };
+}
+
+export function writeInboxSearch(search: string, next: InboxPageRequest): string {
+  const params = new URLSearchParams(writePageSearch(search, next));
+  params.delete("status"); params.delete("cursor"); params.delete("limit");
+  if (next.status) params.set("status", next.status);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function loadInboxNumbered(input: InboxPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<InboxItem>> {
+  // Validate before issuing a request, including the shared bounded query window.
+  writePageSearch("", input);
+  if (input.status !== undefined && !["inbox", "archived", "promoted"].includes(input.status)) throw new Error("INBOX_PAGE_INVALID");
+  const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
+  if (input.status) params.set("status", input.status);
+  const value = await apiFetch<unknown>(`/api/inbox?${params}`, { requester, signal });
+  const page = normalizeNumberedPage(value, (raw) => {
+    const item = normalizeInbox(raw);
+    const record = raw as Record<string, unknown> | null;
+    if (!item || !item.id.trim() || !item.clientKey.trim() || !item.createdAt || !item.updatedAt
+      || !Number.isFinite(Date.parse(item.createdAt)) || !Number.isFinite(Date.parse(item.updatedAt))
+      || ["sourceUrl", "promotedTaskId", "promotedSubmissionId"].some(key => record?.[key] !== null && typeof record?.[key] !== "string")) throw new Error("INBOX_RESPONSE_INVALID");
+    return item;
+  });
+  if (page.pagination.page !== input.page || page.pagination.pageSize !== input.pageSize
+    || new Set(page.items.map(item => item.id)).size !== page.items.length
+    || (input.status && page.items.some(item => item.status !== input.status))) throw new Error("INBOX_RESPONSE_INVALID");
+  return page;
 }
 
 export async function createInbox(input: { kind: InboxKind; content: string; sourceUrl?: string | null }, requester: Fetcher = fetch): Promise<{ item: InboxItem; created: boolean }> {

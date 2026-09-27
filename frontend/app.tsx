@@ -59,7 +59,7 @@ import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, sa
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
-import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
+import { createInbox, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
@@ -193,7 +193,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
-    case "inbox": return <InboxRoute locale={locale} />;
+    case "inbox": return <InboxRoute key={session?.member.id} locale={locale} search={search} />;
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
@@ -1017,47 +1017,82 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   return <><div inert={editor ? true : undefined}><TasksPage onCreate={() => setEditor({ taskId: null })} onOpen={(taskId) => setEditor({ taskId })} locale={locale} state={ready} filters={draftFilters} pending={pending} localLoadError={localLoadError} actionError={actionError} actionPendingId={editor ? "editor" : actionPendingId} onRetry={() => setRetryVersion((value) => value + 1)} onFilterChange={(next) => navigate({ page: 1, pageSize, filters: next })} onTextFilterChange={changeTextFilters} onPageChange={(next) => navigate({ page: next, pageSize, filters })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, filters })} onStatusChange={(id, status: TaskStatus) => void mutate(id, () => setTaskStatus(id, status))} onDelete={(id) => void mutate(id, () => deleteTask(id))} /></div>{editor && <TaskEditor key={editor.taskId ?? "new"} taskId={editor.taskId} locale={locale} onClose={() => setEditor(null)} onChanged={() => setRetryVersion((value) => value + 1)} onDenied={clearDeniedTasks} />}</>;
 }
 
-export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
+export function InboxRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+  const { page, pageSize, status } = parseInboxSearch(search);
+  const query = { page, pageSize, status };
+  const queryRef = useRef<InboxPageRequest>(query);
+  queryRef.current = query;
   const [state, setState] = useState<InboxPageState>({ kind: "loading" });
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(true);
+  const [writing, setWriting] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
-  const stateRef = useRef<InboxPageState>({ kind: "loading" });
-  stateRef.current = state;
-
-  const refresh = useCallback(async (append = false) => {
-    const currentState = stateRef.current;
-    const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    setPending(true); setActionError(undefined);
+  const pendingRef = useRef(true);
+  const writingRef = useRef(false);
+  const generationRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
+  const invalidate = useCallback(() => {
+    generationRef.current++; controllerRef.current?.abort();
+    pendingRef.current = true; setPending(true); setState({ kind: "loading" }); setActionError(undefined);
+  }, []);
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    const next = parseInboxSearch(window.location.search);
+    const current = queryRef.current;
+    if (next.page !== current.page || next.pageSize !== current.pageSize || next.status !== current.status) {
+      queryRef.current = next; invalidate();
+    }
+  }), [invalidate]);
+  useEffect(() => {
+    const canonical = writeInboxSearch(search, { page, pageSize, status });
+    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+  }, [search, page, pageSize, status]);
+  const refresh = useCallback(async () => {
+    invalidate();
+    const generation = generationRef.current;
+    const controller = new AbortController(); controllerRef.current = controller;
     try {
-      const page = await loadInbox({ limit: 20, ...(cursor ? { cursor } : {}) });
-      if (!activeRef.current) return;
-      setState((current) => append && current.kind === "ready"
-        ? { kind: "ready", items: [...current.items, ...page.items], nextCursor: page.nextCursor }
-        : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+      const result = await loadInboxNumbered({ page, pageSize, status }, fetch, controller.signal);
+      if (!activeRef.current || generation !== generationRef.current) return;
+      setState({ kind: "ready", items: result.items, pagination: result.pagination });
     } catch (error: unknown) {
-      if (!activeRef.current || isAbort(error)) return;
-      setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      setActionError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
-    } finally { if (activeRef.current) setPending(false); }
-  }, [locale]);
-
-  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh, retryVersion]);
-
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pending) return;
-    setPending(true); setActionError(undefined);
-    try { await operation(); await refresh(); }
-    catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "INBOX_ACTION_FAILED")); setPending(false); }
+      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
+      setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    } finally {
+      if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); }
+    }
+  }, [page, pageSize, status, locale, invalidate]);
+  useEffect(() => {
+    activeRef.current = true; void refresh();
+    return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
+  }, [refresh, retryVersion]);
+  const navigate = (next: InboxPageRequest) => {
+    const nextSearch = writeInboxSearch(window.location.search, next);
+    if (nextSearch === window.location.search) return;
+    invalidate();
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
   };
-
-  return <InboxPage locale={locale} state={state} pending={pending} actionError={actionError}
-    onRetry={() => setRetryVersion((value) => value + 1)}
-    onCreate={(input) => void mutate(async () => { await createInbox(input); })}
-    onStatusChange={(item) => void mutate(() => updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived"))}
-    onPromoteTask={(item) => void mutate(() => promoteInboxTask(item.id))}
-    onLoadMore={() => void refresh(true)} />;
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pendingRef.current || writingRef.current) return;
+    writingRef.current = true; setWriting(true); setActionError(undefined);
+    const generation = generationRef.current;
+    try {
+      await operation();
+      if (activeRef.current && generation === generationRef.current) await refresh();
+    } catch (error: unknown) {
+      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
+      if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      else setActionError(frontendText(locale, "INBOX_ACTION_FAILED"));
+    } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
+  };
+  return <InboxPage locale={locale} state={state} pending={pending || writing} actionError={actionError} status={status}
+    onRetry={() => setRetryVersion(value => value + 1)}
+    onCreate={input => void mutate(() => createInbox(input))}
+    onStatusChange={item => void mutate(() => updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived"))}
+    onPromoteTask={item => void mutate(() => promoteInboxTask(item.id))}
+    onPageChange={next => navigate({ ...query, page: next })}
+    onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
+    onFilterChange={next => navigate({ ...query, page: 1, status: next })} />;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

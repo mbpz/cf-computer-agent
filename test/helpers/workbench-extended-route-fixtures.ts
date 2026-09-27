@@ -22,7 +22,7 @@ export function extendedPayload(route: ExtendedRoute, empty = false, suffix = "f
   const task: TaskItem = { id: `${route}-${suffix}`, title: marker, notes: "", status: route === "review" ? "done" : "todo", progress: 0, priority: "medium", dueAt: now, completedAt: route === "review" ? now : null, createdAt: now, updatedAt: now };
   const items = empty ? [] : [task];
   switch (route) {
-    case "inbox": return { items: empty ? [] : [inbox] };
+    case "inbox": return { items: empty ? [] : [inbox], pagination: { page: 1, pageSize: 20, total: empty ? 0 : 1, totalPages: empty ? 0 : 1 } };
     case "goals": return { items: empty ? [] : [goal], pagination: { page: 1, pageSize: 20, total: empty ? 0 : 1, totalPages: empty ? 0 : 1 } };
     case "projects": return { items: empty ? [] : [project], pagination: { page: 1, pageSize: 20, total: empty ? 0 : 1, totalPages: empty ? 0 : 1 } };
     case "calendar": return { items: empty ? [] : [event] };
