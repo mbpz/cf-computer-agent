@@ -60,7 +60,7 @@ import { createMySubmissionsRequestController, type MySubmissionItem } from "./l
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
-import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
+import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
@@ -195,7 +195,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "inbox": return <InboxRoute locale={locale} />;
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
-    case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} />;
+    case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
@@ -1339,8 +1339,13 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
-export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: LocaleRuntime; projectId: string; memberId?: string }) {
-  const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, projectId);
+export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" }: { locale: LocaleRuntime; projectId: string; memberId?: string; search?: string }) {
+  const { page: requestedPage, pageSize } = useMemo(() => parsePageSearch(search), [search]);
+  const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, `${projectId}:${requestedPage}:${pageSize}`);
+  useEffect(() => {
+    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
+    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+  }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -1352,7 +1357,6 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
   const statusNoticeRef = useRef<"PLANNING_VERSION_CONFLICT" | "PROJECT_TIMELINE_STATUS_UNKNOWN" | undefined>(undefined);
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
-  const consumedCursors = useRef(new Set<string>());
   const stateRef = useRef<ProjectTimelinePageState>({ kind: "loading" });
   stateRef.current = state;
   const clearDenied = useCallback((error: unknown) => {
@@ -1372,10 +1376,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale, memberId, projectId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (append = false, clearOnFailure = false, record?: PlanningWriteRecord): Promise<boolean> => {
-    const current = stateRef.current;
-    const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
-    if (append && !cursor) return false;
+  const refresh = useCallback(async (clearOnFailure = false, record?: PlanningWriteRecord): Promise<boolean> => {
     controllerRef.current?.abort();
     const controller = new AbortController(); controllerRef.current = controller;
     const generation = ++generationRef.current;
@@ -1383,20 +1384,14 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
     try {
       const [project, page] = await Promise.all([
         loadProject(projectId, fetch, controller.signal),
-        loadProjectTimeline(projectId, { limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal),
+        loadNumberedProjectTimeline(projectId, { page: requestedPage, pageSize }, fetch, controller.signal),
       ]);
       if (!activeRef.current || generationRef.current !== generation) return false;
       if (record) {
         const item = page.items.find(item => item.id === record.id);
         if (!item || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(record.expectedUpdatedAt)) throw new Error("TIMELINE_RECOVERY_VERSION_INVALID");
       }
-      if (append && page.nextCursor && consumedCursors.current.has(page.nextCursor)) throw new Error("TIMELINE_CURSOR_LOOP");
-      if (!append) consumedCursors.current.clear();
-      if (cursor) consumedCursors.current.add(cursor);
-      const items = append && current.kind === "ready"
-        ? [...new Map([...current.items, ...page.items].map(item => [item.id, item])).values()]
-        : page.items;
-      const next: ProjectTimelinePageState = { kind: "ready", project, items, nextCursor: page.nextCursor };
+      const next: ProjectTimelinePageState = { kind: "ready", project, items: page.items, pagination: page.pagination };
       stateRef.current = next; setState(next);
       setActionError(statusNoticeRef.current ? frontendText(locale, statusNoticeRef.current) : undefined);
       if (record) writeRecovery.finish(record);
@@ -1410,12 +1405,12 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
       stateRef.current = next; setState(next);
       setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, projectId, clearDenied, writeRecovery.finish]);
+  }, [locale, projectId, requestedPage, pageSize, clearDenied, writeRecovery.finish]);
 
   useEffect(() => {
     activeRef.current = true;
     stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
-    createLockedRef.current = false; setCreateLocked(false); consumedCursors.current.clear();
+    createLockedRef.current = false; setCreateLocked(false);
     void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
@@ -1441,10 +1436,15 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
         }
       }
       // A receipt or a new read cannot justify replaying an uncertain write.
-      if (activeRef.current && generationRef.current === generation) await refresh(false, true, record);
+      if (activeRef.current && generationRef.current === generation) await refresh(true, record);
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
-  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || createLocked} refresh={() => refresh(false, true)} onDenied={clearDenied} /><ProjectTimelinePage createMemberId={memberId} createProjectId={projectId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} actionError={actionError}
+  const changePage = (page: number, size = pageSize) => {
+    if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    pendingRef.current = true; setPending(true);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+  };
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || createLocked} refresh={() => refresh(true)} onDenied={clearDenied} /><ProjectTimelinePage createMemberId={memberId} createProjectId={projectId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} actionError={actionError}
     onRetry={() => setRetryVersion(value => value + 1)}
     onBack={() => writeWorkspaceHistory("push", "/projects")}
     onCreate={async input => {
@@ -1453,7 +1453,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId }: { locale: 
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDenied}
     onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(item, () => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
-    onLoadMore={() => { if (!pendingRef.current && !createLockedRef.current && !writeRecovery.locked) void refresh(true); }} /></>;
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
 export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {

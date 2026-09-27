@@ -37,7 +37,10 @@ describe("timeline persistent recovery through App", () => {
         return Response.json(url.pathname.endsWith("/status") ? { ...row(p), status: body.status } : { item: { ...row(p), ...body }, created: true });
       }
       if (readFail) return apiError(503, "UNAVAILABLE", true);
-      if (url.pathname.endsWith("/timeline")) return Response.json({ items: [row(p)] });
+      if (url.pathname.endsWith("/timeline")) {
+        const page = Number(url.searchParams.get("page") ?? 1), pageSize = Number(url.searchParams.get("pageSize") ?? 20);
+        return Response.json({ items: page === 1 ? [row(p)] : [], pagination: { page, pageSize, total: 1, totalPages: 1 } });
+      }
       if (url.pathname.endsWith("/row")) { await detailHold; return detailFailure ? apiError(detailFailure, "DETAIL_FAILED", detailFailure >= 500) : Response.json({ ...row(p), ...detailPatch }); }
       return Response.json({ id: p, clientKey: p, title: `Project ${p}`, description: null, status: "active", progress: 0, targetAt: null, createdAt: stamp, updatedAt: stamp });
     } }); await waitForApp(() => !!title());
@@ -62,6 +65,25 @@ describe("timeline persistent recovery through App", () => {
     await waitForApp(() => !!button("Retry list read")); const raw = stored(); expect(JSON.parse(raw!).acknowledged).toBe(true); readFail = false;
     await app!.unmount(); app = undefined; await mount(raw); await click(button("Retry list read"));
     await waitForApp(() => title().value === ""); expect(writes).toHaveLength(1); expect(stored()).toBeNull();
+  });
+  it("retains an unresolved creation across browser page navigation and ignores its late receipt", async () => {
+    await mount(); await fill("Page-private draft"); let release!: () => void;
+    hold = new Promise(r => { release = r; }); await click(button("Add to timeline")); const raw = stored();
+    await act(async () => { window.history.pushState({}, "", "/projects/p/timeline?page=2"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await waitForApp(() => !!button("Retry original creation"));
+    expect(title().value).toBe("Page-private draft"); expect(title().disabled).toBe(true);
+    await act(async () => release()); expect(stored()).toBe(raw); expect(writes).toHaveLength(1);
+    expect(main().textContent).not.toContain("Private row");
+    await navigate("p"); expect(title().value).toBe("Page-private draft"); expect(writes).toHaveLength(1);
+  });
+  it("cancels a late detail recovery on page navigation and permits explicit GET review off-page", async () => {
+    await mount(barrier(), "alice", statusKey); let release!: () => void; detailHold = new Promise(r => { release = r; });
+    await click(recovery());
+    await act(async () => { window.history.pushState({}, "", "/projects/p/timeline?page=2"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await waitForApp(() => !!title()); await act(async () => release());
+    expect(stored(statusKey)).toBe(barrier()); expect(title().disabled).toBe(true); expect(writes).toHaveLength(0);
+    detailHold = undefined; await click(recovery()); await waitForApp(() => !title().disabled);
+    expect(stored(statusKey)).toBeNull(); expect(main().textContent).not.toContain("Private row"); expect(writes).toHaveLength(0);
   });
   it.each(["throw", "drop"])("blocks create before network when storage %s", async mode => {
     await mount(); await fill("Draft"); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { if (mode === "throw") throw Error("quota"); });

@@ -1,5 +1,6 @@
+import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
-import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest } from "../pagination";
+import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import type { ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineListRequest, ProjectTimelinePage, ProjectTimelineStatus } from "./types";
 
 export interface ProjectTimelineRepositoryPort {
@@ -7,6 +8,7 @@ export interface ProjectTimelineRepositoryPort {
   findOwned(memberId: string, projectId: string, id: string): Promise<ProjectTimelineItem | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<ProjectTimelineItem | null>;
   listOwned(memberId: string, request: ProjectTimelineListRequest): Promise<ProjectTimelinePage>;
+  listNumbered(memberId: string, request: NumberedPageRequest & { projectId: string }): Promise<NumberedPage<ProjectTimelineItem>>;
   updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null>;
 }
 
@@ -62,6 +64,15 @@ export class ProjectTimelineRepository implements ProjectTimelineRepositoryPort 
     };
   }
 
+  async listNumbered(memberId: string, request: NumberedPageRequest & { projectId: string }): Promise<NumberedPage<ProjectTimelineItem>> {
+    return queryNumberedPage(this.db,
+      this.db.prepare("SELECT COUNT(*) AS total FROM project_timeline_items WHERE member_id = ? AND project_id = ?").bind(memberId, request.projectId),
+      this.db.prepare(`SELECT ${columns} FROM project_timeline_items WHERE member_id = ? AND project_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .bind(memberId, request.projectId, request.pageSize, pageOffset(request)),
+      { page: request.page, pageSize: request.pageSize }, row => mapRow(row as TimelineRow)!,
+    );
+  }
+
   async updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null> {
     const [write, read] = await this.db.batch<TimelineRow>([
       this.db.prepare("UPDATE project_timeline_items SET status = ?, updated_at = ? WHERE member_id = ? AND project_id = ? AND id = ? AND updated_at = ?")
@@ -95,6 +106,6 @@ function mapRow(row: TimelineRow | null): ProjectTimelineItem | null {
 
 function decodeCursor(cursor: string, memberId: string, projectId: string): { updatedAt: number; id: string } {
   const value = decodeOpaqueCursor(cursor) as Record<string, unknown>;
-  if (value.v !== 1 || value.memberId !== memberId || value.projectId !== projectId || typeof value.updatedAt !== "number" || !Number.isSafeInteger(value.updatedAt) || typeof value.id !== "string") throw new Error("INVALID_CURSOR");
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.v !== 1 || value.memberId !== memberId || value.projectId !== projectId || typeof value.updatedAt !== "number" || !Number.isSafeInteger(value.updatedAt) || typeof value.id !== "string") throw new AppError("PAGE_CURSOR_INVALID", "Page cursor is invalid", 400);
   return { updatedAt: value.updatedAt, id: value.id };
 }

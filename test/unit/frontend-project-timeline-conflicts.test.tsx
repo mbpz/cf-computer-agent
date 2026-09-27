@@ -24,7 +24,7 @@ describe("timeline status reconciliation through real App", () => {
       if (url.pathname.endsWith("/timeline")) {
         reads++; readSignal = init?.signal;
         if (reads > 1 && readFailure) return apiError(readFailure, "READ_FAILED", true);
-        const response = () => Response.json({ items: [row(reads > 1)] });
+        const response = () => Response.json({ items: [row(reads > 1)], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
         if (reads > 1 && delayed) return new Promise<Response>(done => { resolveRead = () => done(response()); });
         return response();
       }

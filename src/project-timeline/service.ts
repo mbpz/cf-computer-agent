@@ -1,3 +1,4 @@
+import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import type { ProjectsRepositoryPort } from "../projects/repository";
@@ -40,6 +41,12 @@ export class ProjectTimelineService {
     const limit = pagination.limit ?? 20;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 || (pagination.cursor !== undefined && typeof pagination.cursor !== "string")) throw new AppError("PROJECT_TIMELINE_PAGE_INVALID", "Timeline pagination is invalid", 400);
     return this.repository.listOwned(memberId, { projectId, limit, ...(pagination.cursor ? { cursor: pagination.cursor } : {}) });
+  }
+
+  async listNumbered(memberId: string, projectId: string, pagination: Partial<NumberedPageRequest> = {}): Promise<NumberedPage<ProjectTimelineItem>> {
+    const page = normalizeNumberedPageRequest(pagination, "PROJECT_TIMELINE_PAGE_INVALID");
+    await this.requireProject(memberId, projectId);
+    return this.repository.listNumbered(memberId, { ...page, projectId });
   }
 
   async setStatus(memberId: string, projectId: string, id: string, status: unknown, expectedUpdatedAt?: unknown): Promise<ProjectTimelineItem> {

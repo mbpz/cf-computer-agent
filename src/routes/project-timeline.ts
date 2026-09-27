@@ -1,3 +1,4 @@
+import { parseNumberedPageRequest } from "../pagination";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import { requireCapability } from "../authorization/policy";
@@ -15,6 +16,10 @@ export async function routeProjectTimelineApi(request: Request, url: URL, contex
   if (collection) {
     const projectId = decodePathId(collection[1]!);
     if (request.method === "GET") {
+      if (url.searchParams.has("page") || url.searchParams.has("pageSize")) {
+        const page = parseNumberedPageRequest(url, [], "PROJECT_TIMELINE_PAGE_INVALID");
+        return jsonResponse(await services.projectTimeline.listNumbered(member.memberId, projectId, page), 200, context.requestId);
+      }
       requireExactQuery(url, ["limit", "cursor"]);
       const limit = parseOptionalNumber(url.searchParams.get("limit"));
       return jsonResponse(await services.projectTimeline.list(member.memberId, projectId, { limit, cursor: url.searchParams.get("cursor") ?? undefined }), 200, context.requestId);

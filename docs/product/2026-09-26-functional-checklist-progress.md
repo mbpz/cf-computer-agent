@@ -652,3 +652,31 @@ rtk proxy npm run audit:workbench-domain
 
 - canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。本批只勾选时间线会话恢复子项，C03 与 EXT-PRJ-03 继续开放。
 - 下一环节允许继续 timeline 数字分页与完整编辑，之后目标直接关联任务旅程；真实身份/原生浏览器完整旅程独立保留。无新增本地外部阻塞，不将本地提交或 GET 核对声称为全部完结或未知原请求已成功。
+
+
+## C03 — 时间线数字分页与 URL 恢复（本地子项完成）
+
+承接 `705abdc`，推进 C03 / EXT-PRJ-03 中 timeline 数字分页；完整编辑与后续目标直接关联任务保持待办。本批不新增迁移或生产操作。
+
+### 实现与边界
+
+- 时间线 GET 增加 `page/pageSize`，支持 20/50/100；严格拒绝重复、非法、未知及与 cursor/limit 混合的参数，offset 必须小于 10000。会话成员与所属项目同时约束 rows/count，D1 同 batch 读取；缺失/其他成员项目为 404，未登录为 401，owned 空项目及超过末页返回准确 total 与空数组。
+- 编号分页按 `created_at DESC, id DESC` 排序，状态更新时间不会把已有行搬到另一页。并发新增/删除仍可能改变偏移页，不承诺跨请求固定快照。旧 cursor GET、排序和项目绑定保持兼容；测试发现旧跨项目游标抛普通 Error 导致 500，改为明确 400，且安全拒绝 null/非对象载荷。
+- App 采用编号分页替换旧续页追加：深链/历史页码恢复、非法 URL 归一化、页大小切换回到第一页、空页返回；请求页/页大小/总数/条数/重复 ID/项目归属严格验证。取消和代次守卫拒绝迟到响应；翻页失败清除旧行，重试只 GET 当前请求页。保留真实总数，但窗口之外的页面不可点击。
+- 翻页、创建及状态写同步互斥。浏览器 history 仍可改变位置，未决创建和状态标记不丢失；旧创建回执与旧详情核对不得释放新页面锁。显式只读恢复可核对不在当前页的原对象，不重放写入，不把 GET 成功当作未知写入成功证明。
+- 迁移原有 App timeline fixtures 到严格 numbered metadata；旧 cursor UI 测试按实际改动迁移为编号替换、失败清屏/原页重试、错页响应拒绝，未删除恢复/权限/并发断言。公共 page 展示组件保留无 pagination 的旧 preview 兼容，但真实 App 不回退到 cursor。
+- 更新能力证据和领域快照；历史 gap source/owner、87 gap（47 P0 / 39 P1 / 1 P2）、R4 38 gap、124 实施原子不变，不提升 release/acceptance 维度。
+
+### TDD 与验证
+
+- RED：新后端测试初始 6 失败 / 9 通过，证明合法编号请求和 service 缺失；实现后捕获 metadata 多余 projectId、旧越作用域游标 500，并修正。新 App 分页测试初始 11/11 失败，证明尚无页码请求/控件/查询生命周期。
+- GREEN：新增 Worker/D1 18 项、真实 App / happy-dom 分页 11 项、严格数据契约 11 项，以及原持久恢复文件新增 2 项跨页未知写入/迟到核对，共新增 42 项；联合回归沿用上一批 36 文件并追加三个 numbered 文件，**39 文件 713/713** 通过（2026-09-27 本地）。
+- 联合命令：`rtk proxy npx vitest run`，上一批 36 文件加 `test/worker/project-timeline-numbered-pages.test.ts`、`test/unit/frontend-timeline-numbered-pages.test.tsx`、`test/unit/frontend-timeline-numbered-data.test.ts`。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui` 通过；保留 >500 kB chunk 警告，typecheck 不覆盖全部前端 TSX。
+- `rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n` **13/13**、`rtk proxy npm run verify:workbench-maturity` **13/13**、`rtk proxy npm run verify:delivery-status` **30/30**、领域快照生成及 `rtk proxy npm run audit:workbench-domain` 通过。
+- 本地 Workerd/D1 与 happy-dom/HTTP fixtures 不替代真实双身份、原生浏览器及生产验收。未执行全仓 npm test/check；未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+### 总进度与下一环节
+
+- canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；本批仅勾选 timeline 数字分页子项，C03 / EXT-PRJ-03 父项保持开放。
+- 下一环节允许继续 timeline 完整编辑，然后目标直接关联任务旅程；真实身份/原生浏览器验收独立保留。无新增本地外部阻塞，不把本地提交宣称为全部完结。

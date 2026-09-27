@@ -156,7 +156,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       return null;
     case "project-timeline":
       if (pathname(path) === "/api/projects/project-route-audit") return Response.json({ id: "project-route-audit", clientKey: "project-route-audit", title: "Timeline project", description: null, status: "active", progress: 0, targetAt: null, createdAt: NOW, updatedAt: NOW });
-      if (pathname(path) === "/api/projects/project-route-audit/timeline") return probeResponse(state, { items: [] }, { items: [{ id: "timeline-route-audit", projectId: "project-route-audit", clientKey: "timeline-route-audit", kind: "decision", title: "READY::project-timeline", body: "Owned decision", status: "open", startsAt: null, dueAt: null, createdAt: NOW, updatedAt: NOW }] });
+      if (pathname(path) === "/api/projects/project-route-audit/timeline") return probeResponse(state, { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }, { items: [{ id: "timeline-route-audit", projectId: "project-route-audit", clientKey: "timeline-route-audit", kind: "decision", title: "READY::project-timeline", body: "Owned decision", status: "open", startsAt: null, dueAt: null, createdAt: NOW, updatedAt: NOW }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
       return null;
     case "inbox": case "goals": case "projects": case "calendar": case "today": case "focus": case "review": {
       const endpoints = { inbox: "/api/inbox", goals: "/api/goals", projects: "/api/projects", calendar: "/api/calendar/events", today: "/api/today", focus: "/api/focus/current", review: "/api/workbench/review" };

@@ -60,6 +60,17 @@ export async function loadProject(id: string, requester: Fetcher = fetch, signal
   return project;
 }
 
+export async function loadNumberedProjectTimeline(id: string, input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<ProjectTimelineItem>> {
+  const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
+  const result = normalizeNumberedPage(await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/timeline?${params}`, { requester, signal }), value => {
+    const item = normalizeTimeline(value);
+    if (!item || item.projectId !== id) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
+    return item;
+  });
+  if (result.pagination.page !== input.page || result.pagination.pageSize !== input.pageSize || new Set(result.items.map(item => item.id)).size !== result.items.length) throw new Error("PROJECT_TIMELINE_RESPONSE_INVALID");
+  return result;
+}
+
 export async function loadProjectTimeline(id: string, input: { limit?: number; cursor?: string } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectTimelinePage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });
   if (input.cursor) params.set("cursor", input.cursor);
