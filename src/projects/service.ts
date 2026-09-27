@@ -1,3 +1,4 @@
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import type { GoalsRepositoryPort } from "../goals/repository";
@@ -6,7 +7,7 @@ import type { ProjectsRepositoryPort } from "./repository";
 import { PROJECT_STATUSES, type Project, type ProjectListFilters, type ProjectPage, type ProjectStatus, type ProjectSummary } from "./types";
 
 export interface ProjectCreateInput { id?: unknown; clientKey?: unknown; title?: unknown; description?: unknown; progress?: unknown; targetAt?: unknown; }
-export interface ProjectUpdateInput { title?: unknown; description?: unknown; progress?: unknown; targetAt?: unknown; }
+export interface ProjectUpdateInput { expectedUpdatedAt?: unknown; title?: unknown; description?: unknown; progress?: unknown; targetAt?: unknown; }
 export interface ProjectsServiceOptions { id?: () => string; now?: () => Date; goals?: Pick<GoalsRepositoryPort, "findOwned">; tasks?: Pick<TasksRepositoryPort, "findOwned">; }
 
 export class ProjectsService {
@@ -51,19 +52,19 @@ export class ProjectsService {
 
   async update(memberId: string, id: string, input: ProjectUpdateInput): Promise<Project> {
     const current = await this.get(memberId, id);
+    const expected = requirePlanningVersion(input.expectedUpdatedAt, current.updatedAt, "PROJECT");
     const normalized = normalizeUpdate(input, current);
-    if (current.title === normalized.title && current.description === normalized.description && current.progress === normalized.progress && current.targetAt === normalized.targetAt) return current;
-    const updated = await this.repository.update(memberId, current.id, { ...normalized, updatedAt: this.now().getTime() });
-    if (!updated) throw notFound();
+    const updated = await this.repository.update(memberId, current.id, { ...normalized, updatedAt: nextPlanningVersion(expected, this.now().getTime()) }, expected);
+    if (!updated) { await this.get(memberId, id); throw planningConflict("PROJECT"); }
     return updated;
   }
 
-  async setStatus(memberId: string, id: string, status: unknown): Promise<Project> {
+  async setStatus(memberId: string, id: string, status: unknown, expectedUpdatedAt?: unknown): Promise<Project> {
     if (typeof status !== "string" || !PROJECT_STATUSES.includes(status as ProjectStatus)) throw invalid("PROJECT_INVALID");
     const current = await this.get(memberId, id);
-    if (current.status === status) return current;
-    const updated = await this.repository.updateStatus(memberId, current.id, status as ProjectStatus, this.now().getTime());
-    if (!updated) throw notFound();
+    const expected = requirePlanningVersion(expectedUpdatedAt, current.updatedAt, "PROJECT");
+    const updated = await this.repository.updateStatus(memberId, current.id, status as ProjectStatus, nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (!updated) { await this.get(memberId, id); throw planningConflict("PROJECT"); }
     return updated;
   }
 

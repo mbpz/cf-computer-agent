@@ -51,8 +51,8 @@ export async function routeProjectsApi(
   if (status) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status"], "PROJECT_INVALID");
-    return jsonResponse(await services.projects.setStatus(member.memberId, decodePathId(status[1]!), input.status), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedUpdatedAt"], "PROJECT_INVALID");
+    return jsonResponse(await services.projects.setStatus(member.memberId, decodePathId(status[1]!), input.status, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const goal = /^\/api\/projects\/([^/]+)\/goals(?:\/([^/]+))?$/u.exec(url.pathname);
@@ -87,10 +87,13 @@ export async function routeProjectsApi(
     const id = decodePathId(project[1]!);
     if (request.method === "GET") return jsonResponse(await services.projects.get(member.memberId, id), 200, context.requestId);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "description", "progress", "targetAt"], "PROJECT_INVALID");
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "description", "progress", "targetAt", "expectedUpdatedAt"], "PROJECT_INVALID");
       return jsonResponse(await services.projects.update(member.memberId, id, input), 200, context.requestId);
     }
-    if (request.method === "DELETE") return jsonResponse(await services.projects.setStatus(member.memberId, id, "archived"), 200, context.requestId);
+    if (request.method === "DELETE") {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "PROJECT_INVALID");
+      return jsonResponse(await services.projects.setStatus(member.memberId, id, "archived", input.expectedUpdatedAt), 200, context.requestId);
+    }
     return methodNotAllowed("GET, PATCH, DELETE", context);
   }
   throw new AppError("NOT_FOUND", "Not found", 404);

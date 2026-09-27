@@ -36,10 +36,10 @@ describe("GoalsService", () => {
     const repository = new FakeGoalsRepository();
     const service = new GoalsService(repository, { now: () => NOW, id: () => "goal-1" });
     await service.create("member-a", { id: "goal-1", clientKey: "goal-1", title: "Launch v2" });
-    await expect(service.setStatus("member-a", "goal-1", "paused")).resolves.toMatchObject({ status: "paused" });
-    await expect(service.setStatus("member-a", "goal-1", "active")).resolves.toMatchObject({ status: "active" });
-    await expect(service.setProgress("member-a", "goal-1", 100)).resolves.toMatchObject({ progress: 100 });
-    await expect(service.setStatus("member-a", "goal-1", "completed")).resolves.toMatchObject({ status: "completed" });
+    await expect(service.setStatus("member-a", "goal-1", "paused", (await service.get("member-a", "goal-1")).updatedAt)).resolves.toMatchObject({ status: "paused" });
+    await expect(service.setStatus("member-a", "goal-1", "active", (await service.get("member-a", "goal-1")).updatedAt)).resolves.toMatchObject({ status: "active" });
+    await expect(service.setProgress("member-a", "goal-1", 100, (await service.get("member-a", "goal-1")).updatedAt)).resolves.toMatchObject({ progress: 100 });
+    await expect(service.setStatus("member-a", "goal-1", "completed", (await service.get("member-a", "goal-1")).updatedAt)).resolves.toMatchObject({ status: "completed" });
     await expect(service.setStatus("member-b", "goal-1", "archived")).rejects.toMatchObject({ code: "GOAL_NOT_FOUND", status: 404 });
   });
 });
@@ -69,9 +69,9 @@ class FakeGoalsRepository implements GoalsRepositoryPort {
     this.listCalls.push({ memberId, request });
     return { items: this.goals.filter((goal) => goal.memberId === memberId), nextCursor: undefined };
   }
-  async update(memberId: string, id: string, input: Parameters<GoalsRepositoryPort["update"]>[2]) {
+  async update(memberId: string, id: string, input: Parameters<GoalsRepositoryPort["update"]>[2], expectedUpdatedAt: number) {
     const goal = await this.findOwned(memberId, id);
-    if (!goal) return null;
+    if (!goal || Date.parse(goal.updatedAt) !== expectedUpdatedAt) return null;
     Object.assign(goal, {
       title: input.title,
       description: input.description,
@@ -80,14 +80,14 @@ class FakeGoalsRepository implements GoalsRepositoryPort {
     });
     return goal;
   }
-  async updateStatus(memberId: string, id: string, status: Parameters<GoalsRepositoryPort["updateStatus"]>[2], updatedAt: number) {
+  async updateStatus(memberId: string, id: string, status: Parameters<GoalsRepositoryPort["updateStatus"]>[2], updatedAt: number, expectedUpdatedAt: number) {
     const goal = await this.findOwned(memberId, id);
-    if (!goal) return null;
+    if (!goal || Date.parse(goal.updatedAt) !== expectedUpdatedAt) return null;
     goal.status = status; goal.updatedAt = new Date(updatedAt).toISOString(); return goal;
   }
-  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number) {
+  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt: number) {
     const goal = await this.findOwned(memberId, id);
-    if (!goal) return null;
+    if (!goal || Date.parse(goal.updatedAt) !== expectedUpdatedAt) return null;
     goal.progress = progress; goal.updatedAt = new Date(updatedAt).toISOString(); return goal;
   }
 }

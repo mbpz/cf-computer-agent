@@ -44,16 +44,16 @@ export async function routeGoalsApi(
   if (status) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status"], "GOAL_INVALID");
-    return jsonResponse(await services.goals.setStatus(member.memberId, decodePathId(status[1]!), input.status), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedUpdatedAt"], "GOAL_INVALID");
+    return jsonResponse(await services.goals.setStatus(member.memberId, decodePathId(status[1]!), input.status, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const progress = /^\/api\/goals\/([^/]+)\/progress$/u.exec(url.pathname);
   if (progress) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["progress"], "GOAL_INVALID");
-    return jsonResponse(await services.goals.setProgress(member.memberId, decodePathId(progress[1]!), input.progress), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["progress", "expectedUpdatedAt"], "GOAL_INVALID");
+    return jsonResponse(await services.goals.setProgress(member.memberId, decodePathId(progress[1]!), input.progress, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const goal = /^\/api\/goals\/([^/]+)$/u.exec(url.pathname);
@@ -62,10 +62,13 @@ export async function routeGoalsApi(
     const id = decodePathId(goal[1]!);
     if (request.method === "GET") return jsonResponse(await services.goals.get(member.memberId, id), 200, context.requestId);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "description", "targetAt"], "GOAL_INVALID");
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "description", "targetAt", "expectedUpdatedAt"], "GOAL_INVALID");
       return jsonResponse(await services.goals.update(member.memberId, id, input), 200, context.requestId);
     }
-    if (request.method === "DELETE") return jsonResponse(await services.goals.setStatus(member.memberId, id, "archived"), 200, context.requestId);
+    if (request.method === "DELETE") {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "GOAL_INVALID");
+      return jsonResponse(await services.goals.setStatus(member.memberId, id, "archived", input.expectedUpdatedAt), 200, context.requestId);
+    }
     return methodNotAllowed("GET, PATCH, DELETE", context);
   }
   throw new AppError("NOT_FOUND", "Not found", 404);

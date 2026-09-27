@@ -14,7 +14,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   let readFailure = false;
   let readStatus = 503;
   const singular = kind === "goals" ? "goal" : "project";
-  const entity = (body: Record<string, unknown>) => ({ ...body, status: "active", progress: 0, targetAt: null, createdAt: "2026-09-26T00:00:00Z", updatedAt: "2026-09-26T00:00:00Z" });
+  const entity = (body: Record<string, unknown>) => ({ ...body, status: "active", progress: 0, targetAt: null, createdAt: "2026-09-26T00:00:00.000Z", updatedAt: "2026-09-26T00:00:00.000Z" });
   const receipt = (body: Record<string, unknown>) => Response.json({ [singular]: entity(body), created: true });
   const main = () => app!.container.querySelector("main")!;
   const title = () => main().querySelector("input") as HTMLInputElement;
@@ -158,7 +158,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     const complete = [...main().querySelectorAll("button")].find((node) => node.textContent === "Complete")!;
     const submit = create();
     await act(async () => { complete.click(); submit.click(); });
-    expect(bodies).toHaveLength(1); expect(bodies[0]).toEqual({ status: "completed" });
+    expect(bodies).toHaveLength(1); expect(bodies[0]).toEqual({ status: "completed", expectedUpdatedAt: "2026-09-26T00:00:00.000Z" });
     await act(async () => resolve(Response.json(entity({ id: "existing", clientKey: "existing", title: "Existing private row" }))));
     await waitForApp(() => !title().disabled);
     expect(title().value).toBe("Wait for status");

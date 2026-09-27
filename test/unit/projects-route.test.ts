@@ -58,7 +58,7 @@ describe("numbered planning list contract", () => {
     expect(response?.status).toBe(200);
     expect(service.listNumbered).toHaveBeenCalledWith("member-a", { status: "active" }, { page: 2, pageSize: 50 });
   });
-  it.each(["page=0", "page=1.5", "page=01", "page=501", "pageSize=21", "page=1&page=2", "page=1&limit=20", "page=1&cursor=x", "page=1&memberId=member-b"])("rejects invalid numbered query %s", async (query) => {
+  it.each(["page=0", "page=1.5", "page=01", "page=501", "pageSize=21", "page=1&page=2", "page=1&limit=20", "page=1&cursor=x", "page=1&memberId=member-b", "page=1&expectedUpdatedAt=2026-09-27T00:00:00.000Z"])("rejects invalid numbered query %s", async (query) => {
     const service = { listNumbered: vi.fn() };
     const request = new Request(`https://example.test/api/projects?${query}`);
     await expect(routeProjectsApi(request, new URL(request.url), context, principal, { projects: service as unknown as ProjectsService })).rejects.toMatchObject({ status: 400 });

@@ -82,8 +82,8 @@ export async function createProject(input: PlanningCreateIntent, requester: Fetc
   return { project, created: record.created };
 }
 
-export async function setProjectStatus(id: string, status: ProjectStatus, requester: Fetcher = fetch): Promise<Project> {
-  return apiFetch<Project>(`/api/projects/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+export async function setProjectStatus(id: string, status: ProjectStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Project> {
+  return apiFetch<Project>(`/api/projects/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
 }
 
 function normalizeProject(value: unknown): Project | null {

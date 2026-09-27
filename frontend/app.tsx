@@ -1115,7 +1115,19 @@ export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; sea
     try { await operation(); if (activeRef.current && generationRef.current === generation) await refresh(); }
     catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
-      if (!clearDeniedGoals(error)) setActionError(frontendText(locale, "GOALS_ACTION_FAILED"));
+      if (clearDeniedGoals(error)) return;
+      if (error instanceof ApiRequestError && error.status === 409 && error.code === "GOAL_VERSION_CONFLICT") {
+        const readGeneration = generationRef.current + 1;
+        const recovered = await refresh();
+        if (!activeRef.current || generationRef.current !== readGeneration) return;
+        if (recovered) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
+        else {
+          const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+          stateRef.current = cleared; setState(cleared); setActionError(undefined);
+        }
+        return;
+      }
+      setActionError(frontendText(locale, "GOALS_ACTION_FAILED"));
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
@@ -1132,8 +1144,8 @@ export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; sea
       return createGoal(input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedGoals}
     onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
-    onStatusChange={(goal: Goal, status) => void mutate(() => setGoalStatus(goal.id, status))}
-    onProgressChange={(goal: Goal, progress) => void mutate(() => setGoalProgress(goal.id, progress))}
+    onStatusChange={(goal: Goal, status) => void mutate(() => setGoalStatus(goal.id, status, goal.updatedAt))}
+    onProgressChange={(goal: Goal, progress) => void mutate(() => setGoalProgress(goal.id, progress, goal.updatedAt))}
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
 }
 
@@ -1239,6 +1251,17 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
       if (clearDeniedProjects(error)) return;
+      if (error instanceof ApiRequestError && error.status === 409 && error.code === "PROJECT_VERSION_CONFLICT") {
+        const readGeneration = generationRef.current + 1;
+        const recovered = await refresh();
+        if (!activeRef.current || generationRef.current !== readGeneration) return;
+        if (recovered) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
+        else {
+          const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+          stateRef.current = cleared; setState(cleared); setActionError(undefined);
+        }
+        return;
+      }
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED"));
     } finally {
       if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); }
@@ -1262,7 +1285,7 @@ export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; 
       if (locked && !createLockedRef.current && !pendingRef.current) { generationRef.current++; cancelReads(); setSummaryPending([]); }
       createLockedRef.current = locked; setCreateLocked(locked);
     }}
-    onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
+    onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status, project.updatedAt))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
 }

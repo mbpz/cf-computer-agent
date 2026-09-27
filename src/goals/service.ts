@@ -1,10 +1,11 @@
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import type { GoalsRepositoryPort } from "./repository";
 import { GOAL_STATUSES, type Goal, type GoalListFilters, type GoalPage, type GoalStatus } from "./types";
 
 export interface GoalCreateInput { id?: unknown; clientKey?: unknown; title?: unknown; description?: unknown; targetAt?: unknown; }
-export interface GoalUpdateInput { title?: unknown; description?: unknown; targetAt?: unknown; }
+export interface GoalUpdateInput { expectedUpdatedAt?: unknown; title?: unknown; description?: unknown; targetAt?: unknown; }
 
 export interface GoalsServiceOptions { id?: () => string; now?: () => Date; }
 
@@ -53,28 +54,28 @@ export class GoalsService {
 
   async update(memberId: string, id: string, input: GoalUpdateInput): Promise<Goal> {
     const current = await this.get(memberId, id);
+    const expected = requirePlanningVersion(input.expectedUpdatedAt, current.updatedAt, "GOAL");
     const normalized = normalizeUpdate(input, current);
-    if (current.title === normalized.title && current.description === normalized.description && current.targetAt === normalized.targetAt) return current;
-    const updated = await this.repository.update(memberId, current.id, { ...normalized, updatedAt: this.now().getTime() });
-    if (!updated) throw notFound();
+    const updated = await this.repository.update(memberId, current.id, { ...normalized, updatedAt: nextPlanningVersion(expected, this.now().getTime()) }, expected);
+    if (!updated) { await this.get(memberId, id); throw planningConflict("GOAL"); }
     return updated;
   }
 
-  async setStatus(memberId: string, id: string, status: unknown): Promise<Goal> {
+  async setStatus(memberId: string, id: string, status: unknown, expectedUpdatedAt?: unknown): Promise<Goal> {
     if (typeof status !== "string" || !GOAL_STATUSES.includes(status as GoalStatus)) throw invalid("GOAL_INVALID");
     const current = await this.get(memberId, id);
-    if (current.status === status) return current;
-    const updated = await this.repository.updateStatus(memberId, current.id, status as GoalStatus, this.now().getTime());
-    if (!updated) throw notFound();
+    const expected = requirePlanningVersion(expectedUpdatedAt, current.updatedAt, "GOAL");
+    const updated = await this.repository.updateStatus(memberId, current.id, status as GoalStatus, nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (!updated) { await this.get(memberId, id); throw planningConflict("GOAL"); }
     return updated;
   }
 
-  async setProgress(memberId: string, id: string, progress: unknown): Promise<Goal> {
+  async setProgress(memberId: string, id: string, progress: unknown, expectedUpdatedAt?: unknown): Promise<Goal> {
     if (!Number.isSafeInteger(progress) || (progress as number) < 0 || (progress as number) > 100) throw invalid("GOAL_INVALID");
     const current = await this.get(memberId, id);
-    if (current.progress === progress) return current;
-    const updated = await this.repository.updateProgress(memberId, current.id, progress as number, this.now().getTime());
-    if (!updated) throw notFound();
+    const expected = requirePlanningVersion(expectedUpdatedAt, current.updatedAt, "GOAL");
+    const updated = await this.repository.updateProgress(memberId, current.id, progress as number, nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (!updated) { await this.get(memberId, id); throw planningConflict("GOAL"); }
     return updated;
   }
 }

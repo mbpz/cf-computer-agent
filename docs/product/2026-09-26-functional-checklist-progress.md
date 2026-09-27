@@ -381,3 +381,32 @@ rtk proxy npx vitest run test/unit/frontend-planning-numbered-pages.test.tsx tes
 ### 下一环节与总进度
 
 原清单 **30 个父项**，排除 D08 发布后为 **29 个范围内父项 / 关闭 1（B03）/ 未关闭 28**。本批勾选 EXT-GL-01 / EXT-PRJ-01 两个本地子项，C03 仍开放。下一环节继续 EXT-GL-02 / EXT-PRJ-03 的条件写、任务/目标关联编辑及跨刷新恢复；真实身份/原生浏览器完整旅程单独验收。无新的外部阻塞，允许继续本地功能，不以局部通过声称所有 checklist 完结。
+
+
+## C03 — 目标/项目条件写与冲突回读（2026-09-27，本地子项）
+
+### 本批实现与 API 契约
+
+- 继续 EXT-GL-02 / EXT-PRJ-03，不关闭两个父子旅程或 C03 父项。目标与项目 PATCH、状态 POST、目标进度 POST 及归档 DELETE 必须在 JSON 中携带从 GET/列表读取的 `expectedUpdatedAt`（规范 ISO 毫秒字符串）。DELETE 现在也要求 application/json body；旧无版本写入不再兼容。创建与关联 API 不改变。
+- 服务层先查成员所有权，再检查版本；D1 用 member_id/id/updated_at 原子比较更新，写入和回执查询在同 batch 中完成。未匹配不拿别人的新结果冒充写成功；旧版本返回不可自动重试的 409，跨成员保持 404，缺失/非法版本 400。无需新增迁移。
+- `updatedAt` 同时作为单调版本，取 max(当前时钟, 原版本+1ms)。同毫秒、时钟倒退及状态改回原值都不复用旧版本；新的同值修改也推进版本。此机制不是持久幂等回执，不能把网络未知结果当成已失败或擅自重试。
+- 页面状态/进度请求带显示行版本；409 只重新 GET 当前页，成功后提示核对最新数据，用户再次操作才用新版本写入。回读中禁用写入，失败清除旧行并提供 GET 重试；401/403 清除私有内容，路由离开后忽略迟到回执。项目回读沿用局部摘要失败隔离。
+
+### RED → GREEN 与验证
+
+- 后端初始 RED 19 failed / 2 passed，实现后原 21 项通过；追加倒退时钟与 ABA 状态反例，最终新增 D1 **23/23**。
+- 前端初始冲突 RED **10 failed**，实现后通过；补进度携带版本和离开页面的迟到回读，最终新增真实 App / happy-dom **13/13**。
+- 现有成功状态写入与归档测试按强制版本前提更新；创建/状态同帧互斥断言继续保留，并断言完整版本载荷。另加 GET 列表不得接受写入版本参数的两项反例，保持原严格查询契约。
+- 最终联合 **18 文件，370/370 通过**：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-planning-conflicts.test.tsx test/worker/planning-conditional-writes.test.ts test/unit/frontend-planning-numbered-pages.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/worker/planning-numbered-pages.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+```
+
+- typecheck、build:ui、verify:i18n、test:i18n 13/13、verify:workbench-maturity 13/13、verify:delivery-status 30/30 通过。领域证据已重新生成并通过 audit:workbench-domain；冻结历史 gap 文案及 ownership 未改。既有 >500 kB chunk 警告保留；仓库 typecheck 不覆盖全部前端 TSX。
+- 未 push、merge、部署、远程迁移、生产写入、备份或手工读取/上传 Secret；不调用 AI。本批不是全仓、原生浏览器或生产验收。
+
+### 总进度和下一环节
+
+- 原清单 30 个父项，D08 发布排除后 **29 范围内父项 / 已关闭 1（B03）/ 未关闭 28**。当前 C03，两个条件写/冲突回读本地子项已完成；EXT-GL-02 / EXT-PRJ-03 与 C03 仍未整体完结。
+- 下一环节：完整目标/任务关联编辑及参数化时间线旅程、跨刷新/离开页面的持久恢复、未知写入结果恢复；真实身份/原生浏览器验收仍独立开放。本地功能可继续，无新增外部阻塞。不得以本批提交代替全部 checklist 完结。

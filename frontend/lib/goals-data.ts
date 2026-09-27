@@ -38,16 +38,16 @@ export async function createGoal(input: PlanningCreateIntent & { targetAt?: numb
   return { goal, created: record.created };
 }
 
-export async function updateGoal(id: string, input: { title: string; description?: string | null; targetAt?: number | null }, requester: Fetcher = fetch): Promise<Goal> {
+export async function updateGoal(id: string, input: { title: string; description?: string | null; targetAt?: number | null; expectedUpdatedAt: string }, requester: Fetcher = fetch): Promise<Goal> {
   return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
 }
 
-export async function setGoalStatus(id: string, status: GoalStatus, requester: Fetcher = fetch): Promise<Goal> {
-  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+export async function setGoalStatus(id: string, status: GoalStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Goal> {
+  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
 }
 
-export async function setGoalProgress(id: string, progress: number, requester: Fetcher = fetch): Promise<Goal> {
-  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress }) });
+export async function setGoalProgress(id: string, progress: number, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Goal> {
+  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress, expectedUpdatedAt }) });
 }
 
 function normalizeGoal(value: unknown): Goal | null {

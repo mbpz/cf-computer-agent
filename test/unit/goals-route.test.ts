@@ -27,10 +27,10 @@ describe("Goals API route", () => {
 
   it("maps delete to an owner-scoped archive and status mutation", async () => {
     const goals = { setStatus: vi.fn(async () => ({ id: "goal-1", status: "archived" })) } as unknown as GoalsService;
-    const request = new Request("https://example.test/api/goals/goal-1", { method: "DELETE" });
+    const request = new Request("https://example.test/api/goals/goal-1", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: "2026-09-27T00:00:00.000Z" }) });
     const response = await routeGoalsApi(request, new URL(request.url), context, principal, { goals });
     expect(response?.status).toBe(200);
-    expect(goals.setStatus).toHaveBeenCalledWith("member-a", "goal-1", "archived");
+    expect(goals.setStatus).toHaveBeenCalledWith("member-a", "goal-1", "archived", "2026-09-27T00:00:00.000Z");
   });
 });
 
@@ -43,7 +43,7 @@ describe("numbered planning list contract", () => {
     expect(response?.status).toBe(200);
     expect(service.listNumbered).toHaveBeenCalledWith("member-a", { status: "active" }, { page: 2, pageSize: 50 });
   });
-  it.each(["page=0", "page=1.5", "page=01", "page=501", "pageSize=21", "page=1&page=2", "page=1&limit=20", "page=1&cursor=x", "page=1&memberId=member-b"])("rejects invalid numbered query %s", async (query) => {
+  it.each(["page=0", "page=1.5", "page=01", "page=501", "pageSize=21", "page=1&page=2", "page=1&limit=20", "page=1&cursor=x", "page=1&memberId=member-b", "page=1&expectedUpdatedAt=2026-09-27T00:00:00.000Z"])("rejects invalid numbered query %s", async (query) => {
     const service = { listNumbered: vi.fn() };
     const request = new Request(`https://example.test/api/goals?${query}`);
     await expect(routeGoalsApi(request, new URL(request.url), context, principal, { goals: service as unknown as GoalsService })).rejects.toMatchObject({ status: 400 });

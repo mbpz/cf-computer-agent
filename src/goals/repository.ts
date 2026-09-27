@@ -12,9 +12,9 @@ export interface GoalsRepositoryPort {
   findByClientKey(memberId: string, clientKey: string): Promise<Goal | null>;
   listOwned(memberId: string, request: GoalsPageRepositoryRequest): Promise<GoalPage>;
   listNumbered(memberId: string, request: NumberedPageRequest & { status?: GoalStatus }): Promise<NumberedPage<Goal>>;
-  update(memberId: string, id: string, input: GoalUpdate): Promise<Goal | null>;
-  updateStatus(memberId: string, id: string, status: GoalStatus, updatedAt: number): Promise<Goal | null>;
-  updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Goal | null>;
+  update(memberId: string, id: string, input: GoalUpdate, expectedUpdatedAt: number): Promise<Goal | null>;
+  updateStatus(memberId: string, id: string, status: GoalStatus, updatedAt: number, expectedUpdatedAt: number): Promise<Goal | null>;
+  updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt: number): Promise<Goal | null>;
 }
 
 type GoalRow = {
@@ -77,23 +77,30 @@ export class GoalsRepository implements GoalsRepositoryPort {
     };
   }
 
-  async update(memberId: string, id: string, input: GoalUpdate): Promise<Goal | null> {
-    await this.db.prepare(
-      "UPDATE goals SET title = ?, description = ?, target_at = ?, updated_at = ? WHERE member_id = ? AND id = ?",
-    ).bind(input.title, input.description, input.targetAt, input.updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async update(memberId: string, id: string, input: GoalUpdate, expectedUpdatedAt: number): Promise<Goal | null> {
+    const statement = this.db.prepare(
+      "UPDATE goals SET title = ?, description = ?, target_at = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?",
+    ).bind(input.title, input.description, input.targetAt, input.updatedAt, memberId, id, expectedUpdatedAt);
+    return this.readConditionalResult(statement, memberId, id);
   }
 
-  async updateStatus(memberId: string, id: string, status: GoalStatus, updatedAt: number): Promise<Goal | null> {
-    await this.db.prepare("UPDATE goals SET status = ?, updated_at = ? WHERE member_id = ? AND id = ?")
-      .bind(status, updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async updateStatus(memberId: string, id: string, status: GoalStatus, updatedAt: number, expectedUpdatedAt: number): Promise<Goal | null> {
+    const statement = this.db.prepare("UPDATE goals SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?")
+      .bind(status, updatedAt, memberId, id, expectedUpdatedAt);
+    return this.readConditionalResult(statement, memberId, id);
   }
 
-  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Goal | null> {
-    await this.db.prepare("UPDATE goals SET progress = ?, updated_at = ? WHERE member_id = ? AND id = ?")
-      .bind(progress, updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt: number): Promise<Goal | null> {
+    const statement = this.db.prepare("UPDATE goals SET progress = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?")
+      .bind(progress, updatedAt, memberId, id, expectedUpdatedAt);
+    return this.readConditionalResult(statement, memberId, id);
+  }
+
+  private async readConditionalResult(statement: D1PreparedStatement, memberId: string, id: string): Promise<Goal | null> {
+    const [write, read] = await this.db.batch<GoalRow>([statement, this.db.prepare("SELECT * FROM goals WHERE member_id = ? AND id = ?").bind(memberId, id)]);
+    if (!write.success || !read.success) throw new AppError("GOAL_WRITE_FAILED", "Conditional write failed", 500);
+    if (write.meta.changes !== 1) return null;
+    return mapRow(read.results[0] ?? null);
   }
 }
 
