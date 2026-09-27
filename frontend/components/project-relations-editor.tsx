@@ -4,6 +4,7 @@ import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import type { FrontendPageRequest } from "../lib/numbered-page";
 import { loadProjectRelations, setProjectRelation, type ProjectRelation, type ProjectRelationKind, type ProjectRelationPage } from "../lib/project-relations-data";
 import { loadProjectSummary, type ProjectSummary } from "../lib/projects-data";
+import type { PlanningWriteRecord } from "../lib/planning-write-recovery";
 import { DataPagination } from "./data-pagination";
 import { Button } from "./ui/button";
 
@@ -12,9 +13,12 @@ interface Props {
   onSummary: (projectId: string, summary: ProjectSummary | undefined) => void;
   onDenied: (error: unknown) => boolean;
   onClose: () => void;
+  onBeginWrite: (id: string, version: string) => PlanningWriteRecord | null;
+  onFinishWrite: (record: PlanningWriteRecord) => boolean;
+  writeBlocked: boolean;
 }
 
-export function ProjectRelationsEditor({ projectId, title, locale, onSummary, onDenied, onClose }: Props) {
+export function ProjectRelationsEditor({ projectId, title, locale, onSummary, onDenied, onClose, onBeginWrite, onFinishWrite, writeBlocked }: Props) {
   const [kind, setKind] = useState<ProjectRelationKind>("goals");
   const [request, setRequest] = useState<FrontendPageRequest>({ page: 1, pageSize: 20 });
   const [data, setData] = useState<ProjectRelationPage>();
@@ -24,6 +28,7 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
   const [notice, setNotice] = useState<string>();
   const busyRef = useRef(true);
   const generation = useRef(0);
+  const pendingWrite = useRef<PlanningWriteRecord | null>(null);
   const controller = useRef<AbortController | null>(null);
   const panel = useRef<HTMLElement | null>(null);
   const text = (key: string) => frontendText(locale, key);
@@ -40,7 +45,11 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
         loadProjectSummary(projectId, fetch, abort.signal),
       ]);
       if (generation.current !== current || abort.signal.aborted) return;
+      const record = pendingWrite.current;
+      if (record && Date.parse(page.expectedUpdatedAt) < Date.parse(record.expectedUpdatedAt)) throw new Error("Regressed project relation version");
       setData(page); onSummary(projectId, summary);
+      // A fresh read releases the barrier, not proof that the original write succeeded.
+      if (record && onFinishWrite(record)) pendingWrite.current = null;
     } catch (error) {
       if (generation.current !== current || abort.signal.aborted) return;
       if (denied(error)) { onDenied(error); return; }
@@ -48,7 +57,7 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
     } finally {
       if (generation.current === current && !abort.signal.aborted) { busyRef.current = false; setBusy(false); }
     }
-  }, [projectId, kind, request, onSummary, onDenied]);
+  }, [projectId, kind, request, onSummary, onDenied, onFinishWrite]);
 
   useEffect(() => { panel.current?.focus(); }, []);
   useEffect(() => {
@@ -57,7 +66,10 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
   }, [read]);
 
   const mutate = async (item: ProjectRelation) => {
-    if (busyRef.current || !data) return;
+    if (busyRef.current || writeBlocked || pendingWrite.current || !data) return;
+    const record = onBeginWrite(projectId, data.expectedUpdatedAt);
+    if (!record) return;
+    pendingWrite.current = record;
     busyRef.current = true; setBusy(true); setWriting(true); setNotice(undefined);
     const current = generation.current;
     let shouldRead = true;
@@ -68,7 +80,11 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
       const uncertain = !(error instanceof ApiRequestError) || error.retryable || error.status === 408 || error.status >= 500 || error.status === 409;
       if (error instanceof ApiRequestError && error.status === 409) setNotice(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
       else if (uncertain) setNotice(frontendText(locale, "RELATIONS_UNKNOWN"));
-      else { shouldRead = false; setNotice(frontendText(locale, "PROJECTS_ACTION_FAILED")); }
+      else {
+        shouldRead = false;
+        if (onFinishWrite(record)) pendingWrite.current = null;
+        setNotice(frontendText(locale, "PROJECTS_ACTION_FAILED"));
+      }
     } finally {
       if (generation.current === current) {
         if (shouldRead) await read();
@@ -89,7 +105,7 @@ export function ProjectRelationsEditor({ projectId, title, locale, onSummary, on
     {notice && <p role="alert">{notice}</p>}
     {busy && <p role="status">{text("RELATIONS_LOADING")}</p>}
     {failed && <div role="alert"><p>{text("RELATIONS_FAILED")}</p><Button type="button" disabled={busy} onClick={() => { if (!busyRef.current) void read(); }}>{text("RELATIONS_RETRY")}</Button></div>}
-    {data && <><ul className="space-y-2">{data.items.map(item => <li key={item.id} className="flex items-center justify-between gap-3 rounded border p-3"><div className="min-w-0"><p className="break-words">{item.title}</p><p className="text-xs text-muted-foreground">{text(item.linked ? "RELATIONS_LINKED" : "RELATIONS_UNLINKED")}</p></div><Button type="button" variant="outline" disabled={busy} aria-label={`${text(item.linked ? "RELATIONS_UNLINK" : "RELATIONS_LINK")}: ${item.title}`} onClick={() => void mutate(item)}>{text(item.linked ? "RELATIONS_UNLINK" : "RELATIONS_LINK")}</Button></li>)}</ul>
+    {data && <><ul className="space-y-2">{data.items.map(item => <li key={item.id} className="flex items-center justify-between gap-3 rounded border p-3"><div className="min-w-0"><p className="break-words">{item.title}</p><p className="text-xs text-muted-foreground">{text(item.linked ? "RELATIONS_LINKED" : "RELATIONS_UNLINKED")}</p></div><Button type="button" variant="outline" disabled={busy || writeBlocked || !!pendingWrite.current} aria-label={`${text(item.linked ? "RELATIONS_UNLINK" : "RELATIONS_LINK")}: ${item.title}`} onClick={() => void mutate(item)}>{text(item.linked ? "RELATIONS_UNLINK" : "RELATIONS_LINK")}</Button></li>)}</ul>
       {!data.items.length && <p>{text("RELATIONS_EMPTY")}</p>}
       <DataPagination {...data.pagination} locale={locale} pending={busy} maxPage={Math.ceil(10_000 / request.pageSize)} onPageChange={page => change(kind, { ...request, page })} onPageSizeChange={pageSize => change(kind, { page: 1, pageSize })} />
     </>}

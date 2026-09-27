@@ -597,3 +597,31 @@ rtk proxy npm run audit:workbench-domain
 
 - 原 canonical 30 父项，排除 D08 后仍为 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。本批只勾选状态/进度会话恢复子项，C03 / EXT-GL-02 / EXT-PRJ-03 父项保持开放。
 - 下一环节为项目关联的跨刷新/离开路由持久恢复，随后是 timeline 创建/状态恢复、数字分页与完整编辑、目标直接关联任务及真实身份/原生浏览器验收。无新增外部阻塞，允许继续本地实施；本次提交不代表全部完结。
+
+
+## C03 — 项目关联会话级只读恢复（本地子项完成）
+
+承接 `e5f84e7`，只推进 C03 / EXT-PRJ-03 的四种项目关系写入恢复；不扩大到 timeline 或生产操作。
+
+### 实现与边界
+
+- 目标/任务的关联、解除关联共用既有 PROJECTS 条件写恢复标记。POST/DELETE 前保存并读回验证；标记仅含操作 token、项目 id 和旧版本，不含关系目标、标题、载荷或待重放指令。成员隔离及严格存储校验沿用已验证的条件写恢复模块。
+- 同挂载成功或不确定写入之后，只 GET 关联页和项目计数；两者成功且项目版本不倒退才释放标记。不确定提示保留，不把读回等同于原请求成功。已知非重试 400 拒绝可以释放；401/403 清除私有内容并尝试清理，404 清屏并保留标记。
+- 读回失败保留锁；显式 Retry links 只读取，不重复写入。存储不可用、丢弃写入、清理失败都不允许继续 mutation；关闭编辑器也不能绕过模块锁。编辑器打开时禁用父页面通用恢复，避免两个恢复流程互相抢先释放。
+- 路由退出后的迟到回执或读回不得清理恢复标记。返回/新上下文仅加载列表，不自动 POST/DELETE；显式恢复 GET 项目与当前列表后解除模块屏障，重新打开编辑器会再 GET 关系/计数，以读取的新版本发起新的用户操作。
+- 通用恢复未证明特定目标关系已改变，也不声称原请求已提交；它仅核对当前项目和列表。仅当前标签页 sessionStorage，fresh happy-dom realm 复制记录是模拟契约，不代替原生刷新、关闭标签/清存储、跨设备或真实双身份验收。
+- 未改 backend/schema、原 gap source/owner 或发布/验收维度；仍为 87 gap（47 P0 / 39 P1 / 1 P2）、R4 38 gap、124 实施原子。
+
+### TDD 与验证
+
+- RED：新增 `test/unit/frontend-project-relations-reload.test.tsx` 17 项中 15 失败 / 2 通过，缺口为写前无持久标记、存储失败仍写入、迟到结果和读回版本回退未锁定。
+- GREEN：新增 17 项与既有关系 UI 19 项合计 **36/36**，覆盖四种关系操作、成员隔离、新 realm、路由返回、只读重试、失败存储、401/403/404、已知 400、计数失败和迟到读写。
+- 联合回归 **34 文件 624/624**；命令为 `rtk proxy npx vitest run`，沿用上一批 33 个文件并加入 `test/unit/frontend-project-relations-reload.test.tsx`，覆盖目标/项目、关联、timeline、分页、创建/条件写恢复、权限与可访问性。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui`、`rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n` 通过（i18n **13/13**）。UI build 仍有 >500 kB chunk 警告；typecheck 不覆盖全部前端 TSX。
+- 项目 capability 追加专属测试证据并重新生成领域审计；maturity **13/13**、delivery status **30/30**、domain audit 检查通过。
+- 本地 Workerd/D1 与 happy-dom/HTTP fixtures 不代替生产或真实身份验收；未执行全仓 npm test/check，未 push、merge、部署、远程迁移、备份、生产写入、手工读取/上传 Secret 或 AI 调用。
+
+### 总进度与下一环节
+
+- 原 canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。仅勾选关系会话恢复子项，C03 / EXT-PRJ-03 父项仍开放。
+- 下一环节允许继续 timeline 创建/状态的持久恢复，其后为 timeline 数字分页/完整编辑、目标直接关联任务与真实身份/原生浏览器验收。无新增本地外部阻塞；本次提交不代表全部完结。

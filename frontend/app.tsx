@@ -1319,9 +1319,9 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     queueMicrotask(() => document.getElementById(`manage-relations-${id}`)?.focus());
   };
 
-  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending} refresh={refresh} onDenied={clearDeniedProjects} /><ProjectsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || !!relationProject} refresh={refresh} onDenied={clearDeniedProjects} /><ProjectsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
     relationProjectId={relationProject?.id} onManageRelations={openRelations}
-    relationEditor={relationProject && <ProjectRelationsEditor key={relationProject.id} projectId={relationProject.id} title={relationProject.title} locale={locale} onSummary={updateRelationSummary} onDenied={clearDeniedProjects} onClose={closeRelations} />}
+    relationEditor={relationProject && <ProjectRelationsEditor key={relationProject.id} projectId={relationProject.id} title={relationProject.title} locale={locale} onSummary={updateRelationSummary} onDenied={clearDeniedProjects} onClose={closeRelations} onBeginWrite={writeRecovery.begin} onFinishWrite={writeRecovery.finish} writeBlocked={writeRecovery.blocked} />}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRetrySummary={(project) => void retrySummary(project)}
     onCreate={async (input) => {
