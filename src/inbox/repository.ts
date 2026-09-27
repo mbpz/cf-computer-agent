@@ -1,3 +1,5 @@
+import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { InboxCreate, InboxItem, InboxKind, InboxPage, InboxStatus } from "./types";
@@ -5,6 +7,7 @@ import type { InboxCreate, InboxItem, InboxKind, InboxPage, InboxStatus } from "
 export interface InboxPageRepositoryRequest extends PageRequest { status?: InboxStatus; }
 
 export interface InboxRepositoryPort {
+  listNumbered(memberId: string, request: NumberedPageRequest & { status?: InboxStatus }): Promise<NumberedPage<InboxItem>>;
   insert(input: InboxCreate): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<InboxItem | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<InboxItem | null>;
@@ -39,6 +42,18 @@ export class InboxRepository implements InboxRepositoryPort {
 
   async findByClientKey(memberId: string, clientKey: string): Promise<InboxItem | null> {
     return mapRow(await this.db.prepare(`SELECT ${columns} FROM inbox_items WHERE member_id = ? AND client_key = ? LIMIT 1`).bind(memberId, clientKey).first<InboxRow>());
+  }
+
+  async listNumbered(memberId: string, request: NumberedPageRequest & { status?: InboxStatus }): Promise<NumberedPage<InboxItem>> {
+    const pagination = normalizeNumberedPageRequest(request, "INBOX_PAGE_INVALID");
+    const where = request.status ? "member_id = ? AND status = ?" : "member_id = ?";
+    const bindings = request.status ? [memberId, request.status] : [memberId];
+    return queryNumberedPage(this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM inbox_items WHERE ${where}`).bind(...bindings),
+      this.db.prepare(`SELECT ${columns} FROM inbox_items WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .bind(...bindings, pagination.pageSize, pageOffset(pagination, "INBOX_PAGE_INVALID")),
+      pagination, row => mapRow(row as InboxRow)!,
+    );
   }
 
   async listOwned(memberId: string, request: InboxPageRepositoryRequest): Promise<InboxPage> {

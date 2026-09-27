@@ -1,3 +1,4 @@
+import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import type { InboxRepositoryPort } from "./repository";
 import { INBOX_KINDS, INBOX_STATUSES, type InboxItem, type InboxKind, type InboxListFilters, type InboxPage, type InboxStatus } from "./types";
@@ -36,6 +37,12 @@ export class InboxService {
     const item = await this.repository.findOwned(memberId, requireId(id));
     if (!item) throw notFound();
     return item;
+  }
+
+  async listNumbered(memberId: string, filters: InboxListFilters = {}, pagination: Partial<NumberedPageRequest> = {}): Promise<NumberedPage<InboxItem>> {
+    const status = filters.status;
+    if (status !== undefined && !INBOX_STATUSES.includes(status)) throw invalid("INBOX_PAGE_INVALID");
+    return this.repository.listNumbered(memberId, { ...normalizeNumberedPageRequest(pagination, "INBOX_PAGE_INVALID"), ...(status ? { status } : {}) });
   }
 
   async list(memberId: string, filters: InboxListFilters = {}, pagination: { limit?: number; cursor?: string } = {}): Promise<InboxPage> {

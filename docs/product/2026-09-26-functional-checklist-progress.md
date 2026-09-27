@@ -735,3 +735,16 @@ rtk proxy npm run audit:workbench-domain
 
 - canonical 30 父项，排除 D08 后仍 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；本批只勾选 C03 / EXT-GL-02 的本地关联子项，不关闭父项。
 - 下一环节允许继续 C04 收集箱/今日/日历/专注/复盘既有实现核对；先定位 EXT-INB 原子待办，避免重复新建。C03 真实身份/原生浏览器验收仍独立待办；新增迁移部署尚未进行，不称为全部完结。
+
+
+## C04 — 收集箱数字分页后端（2026-09-27，本地子项完成）
+
+承接 `da3f2f5`，进入 C04 / EXT-INB-01。已核对既有 InboxRoute、InboxService、InboxRepository、前端 InboxRoute/loadInbox/InboxPage；原页面依旧 cursor/load more。本批只完成可独立验证的后端分页层，不重复新建收集箱模块，不改创建/归档/转任务语义。
+
+- GET `/api/inbox` 在出现 page 或 pageSize 时采用既有严格数字分页解析器；允许 status，拒绝混合 cursor/limit、重复参数、非法状态、非整数、非 20/50/100 页大小及 10000 行窗口外请求。
+- Repository 复用 queryNumberedPage，在同一 D1 batch 中对同一 member_id/status 谓词 COUNT + rows；created_at DESC/id DESC 稳定排序。请求越界页返回该页空结果和真实总数，不泄露其他成员计数。未带数字分页参数的旧 cursor 调用不变。
+- Service 单独校验直接调用的分页及状态，RepositoryPort/fake 同步更新；无新增表、迁移或远程操作。
+- RED：新测试 **6 失败 / 12 通过**（数字分页返回 400、缺少 listNumbered）。GREEN：`test/worker/inbox-numbered-pages.test.ts` **18/18**；与 `test/worker/inbox.test.ts`、`test/unit/inbox-service.test.ts`、`test/unit/inbox-route.test.ts`、`test/unit/frontend-workbench-extended-routes.test.tsx` 联合 **5 文件 58/58**。
+- `rtk proxy npm run typecheck` 通过；领域快照重新生成。仅新增后端分页测试证据，不修改历史 gap / owner，不将前端分页分类提升为 numbered。
+- canonical 仍 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。EXT-INB-01 及 C04 父项保持开放；下一环节是收集箱前端数字分页、URL/筛选恢复与迟到响应隔离，允许继续本地实施。
+- 本轮两批均未 push、merge、部署、远程迁移、生产写入或备份。C03 的迁移 0053 尚未发布；真实身份和原生浏览器验收未完成，不能宣称全部完结。

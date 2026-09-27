@@ -2,7 +2,7 @@ import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
-import { parsePageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import type { InboxService } from "../inbox/service";
 import type { InboxStatus } from "../inbox/types";
 import { strictRecord } from "./member";
@@ -22,6 +22,11 @@ export async function routeInboxApi(
 
   if (url.pathname === "/api/inbox") {
     if (request.method === "GET") {
+      if (url.searchParams.has("page") || url.searchParams.has("pageSize")) {
+        const page = parseNumberedPageRequest(url, ["status"], "INBOX_PAGE_INVALID");
+        const status = url.searchParams.get("status");
+        return jsonResponse(await services.inbox.listNumbered(member.memberId, status === null ? {} : { status: status as InboxStatus }, page), 200, context.requestId);
+      }
       requireExactQuery(url, ["limit", "cursor", "status"]);
       const status = url.searchParams.get("status");
       if (status !== null && status !== "inbox" && status !== "archived" && status !== "promoted") throw invalidPage();

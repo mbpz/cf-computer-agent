@@ -71,6 +71,11 @@ class FakeInboxRepository implements InboxRepositoryPort {
   }
   async findOwned(memberId: string, id: string) { return this.items.find((item) => item.memberId === memberId && item.id === id) ?? null; }
   async findByClientKey(memberId: string, clientKey: string) { return this.items.find((item) => item.memberId === memberId && item.clientKey === clientKey) ?? null; }
+  async listNumbered(memberId: string, request: Parameters<InboxRepositoryPort["listNumbered"]>[1]) {
+    this.listCalls.push({ memberId, request });
+    const rows = this.items.filter(item => item.memberId === memberId && (!request.status || item.status === request.status));
+    return { items: rows.slice((request.page - 1) * request.pageSize, request.page * request.pageSize), pagination: { ...request, total: rows.length, totalPages: Math.ceil(rows.length / request.pageSize) } };
+  }
   async listOwned(memberId: string, request: Parameters<InboxRepositoryPort["listOwned"]>[1]): Promise<InboxPage> {
     this.listCalls.push({ memberId, request });
     return { items: this.items.filter((item) => item.memberId === memberId), nextCursor: undefined };
