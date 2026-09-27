@@ -60,6 +60,11 @@ class FakeGoalsRepository implements GoalsRepositoryPort {
   }
   async findOwned(memberId: string, id: string) { return this.goals.find((goal) => goal.memberId === memberId && goal.id === id) ?? null; }
   async findByClientKey(memberId: string, clientKey: string) { return this.goals.find((goal) => goal.memberId === memberId && goal.clientKey === clientKey) ?? null; }
+  async listNumbered(memberId: string, request: Parameters<GoalsRepositoryPort["listNumbered"]>[1]) {
+    const rows = this.goals.filter(row => row.memberId === memberId && (!request.status || row.status === request.status));
+    const offset = (request.page - 1) * request.pageSize;
+    return { items: rows.slice(offset, offset + request.pageSize), pagination: { page: request.page, pageSize: request.pageSize, total: rows.length, totalPages: Math.ceil(rows.length / request.pageSize) } };
+  }
   async listOwned(memberId: string, request: Parameters<GoalsRepositoryPort["listOwned"]>[1]): Promise<GoalPage> {
     this.listCalls.push({ memberId, request });
     return { items: this.goals.filter((goal) => goal.memberId === memberId), nextCursor: undefined };

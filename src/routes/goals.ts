@@ -2,7 +2,7 @@ import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
-import { parsePageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import type { GoalsService } from "../goals/service";
 import type { GoalStatus } from "../goals/types";
 import { strictRecord } from "./member";
@@ -22,6 +22,11 @@ export async function routeGoalsApi(
 
   if (url.pathname === "/api/goals") {
     if (request.method === "GET") {
+      if (url.searchParams.has("page") || url.searchParams.has("pageSize")) {
+        const page = parseNumberedPageRequest(url, ["status"], "GOAL_PAGE_INVALID");
+        const status = url.searchParams.get("status");
+        return jsonResponse(await services.goals.listNumbered(member.memberId, status === null ? {} : { status: status as GoalStatus }, page), 200, context.requestId);
+      }
       requireExactQuery(url, ["limit", "cursor", "status"]);
       const status = url.searchParams.get("status");
       if (status !== null && !["active", "paused", "completed", "archived"].includes(status)) throw invalidPage();

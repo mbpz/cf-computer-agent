@@ -1,3 +1,4 @@
+import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import type { GoalsRepositoryPort } from "../goals/repository";
 import type { TasksRepositoryPort } from "../tasks/repository";
@@ -32,6 +33,12 @@ export class ProjectsService {
     const project = await this.repository.findOwned(memberId, requireId(id));
     if (!project) throw notFound();
     return project;
+  }
+
+  async listNumbered(memberId: string, filters: ProjectListFilters = {}, pagination: Partial<NumberedPageRequest> = {}): Promise<NumberedPage<Project>> {
+    const status = filters.status;
+    if (status !== undefined && !PROJECT_STATUSES.includes(status)) throw invalid("PROJECT_PAGE_INVALID");
+    return this.repository.listNumbered(memberId, { ...normalizeNumberedPageRequest(pagination, "PROJECT_PAGE_INVALID"), ...(status ? { status } : {}) });
   }
 
   async list(memberId: string, filters: ProjectListFilters = {}, pagination: { limit?: number; cursor?: string } = {}): Promise<ProjectPage> {

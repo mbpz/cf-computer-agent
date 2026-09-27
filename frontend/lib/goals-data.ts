@@ -1,9 +1,21 @@
+import { normalizeNumberedPage, type FrontendPageRequest, type FrontendNumberedPage } from "./numbered-page";
 import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
 
 export type GoalStatus = "active" | "paused" | "completed" | "archived";
 export interface Goal { id: string; clientKey: string; title: string; description: string | null; status: GoalStatus; progress: number; targetAt: string | null; createdAt: string; updatedAt: string; }
 export interface GoalPage { items: Goal[]; nextCursor?: string; }
+
+export async function loadNumberedGoals(input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Goal>> {
+  const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
+  const result = normalizeNumberedPage(await apiFetch<unknown>(`/api/goals?${params.toString()}`, { requester, signal }), value => {
+    const item = normalizeGoal(value);
+    if (!item) throw new Error("GOAL_RESPONSE_INVALID");
+    return item;
+  });
+  if (result.pagination.page !== input.page || result.pagination.pageSize !== input.pageSize || new Set(result.items.map(item => item.id)).size !== result.items.length) throw new Error("GOAL_RESPONSE_INVALID");
+  return result;
+}
 
 export async function loadGoals(input: { limit?: number; cursor?: string; status?: GoalStatus } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<GoalPage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });

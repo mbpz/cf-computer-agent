@@ -52,6 +52,11 @@ class FakeProjectsRepository implements ProjectsRepositoryPort {
   }
   async findOwned(memberId: string, id: string) { return this.projects.find((project) => project.memberId === memberId && project.id === id) ?? null; }
   async findByClientKey(memberId: string, key: string) { return this.projects.find((project) => project.memberId === memberId && project.clientKey === key) ?? null; }
+  async listNumbered(memberId: string, request: Parameters<ProjectsRepositoryPort["listNumbered"]>[1]) {
+    const rows = this.projects.filter(row => row.memberId === memberId && (!request.status || row.status === request.status));
+    const offset = (request.page - 1) * request.pageSize;
+    return { items: rows.slice(offset, offset + request.pageSize), pagination: { page: request.page, pageSize: request.pageSize, total: rows.length, totalPages: Math.ceil(rows.length / request.pageSize) } };
+  }
   async listOwned(memberId: string, _request: Parameters<ProjectsRepositoryPort["listOwned"]>[1]): Promise<ProjectPage> { return { items: this.projects.filter((project) => project.memberId === memberId) }; }
   async update(memberId: string, id: string, input: Parameters<ProjectsRepositoryPort["update"]>[2]) { const project = await this.findOwned(memberId, id); if (!project) return null; Object.assign(project, { title: input.title, description: input.description, progress: input.progress, targetAt: input.targetAt === null ? null : new Date(input.targetAt).toISOString(), updatedAt: new Date(input.updatedAt).toISOString() }); return project; }
   async updateStatus(memberId: string, id: string, status: Parameters<ProjectsRepositoryPort["updateStatus"]>[2], updatedAt: number) { const project = await this.findOwned(memberId, id); if (!project) return null; project.status = status; project.updatedAt = new Date(updatedAt).toISOString(); return project; }

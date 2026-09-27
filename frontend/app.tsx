@@ -54,8 +54,8 @@ import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSub
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
-import { createGoal, loadGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
-import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadProjectTimeline, loadProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
+import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
+import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
@@ -188,8 +188,8 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute locale={locale} />;
-    case "goals": return <GoalsRoute key={session?.member.id} locale={locale} />;
-    case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} />;
+    case "goals": return <GoalsRoute key={session?.member.id} locale={locale} search={search} />;
+    case "projects": return <ProjectsRoute key={session?.member.id} locale={locale} search={search} />;
     case "project-timeline": return <ProjectTimelineRoute locale={locale} projectId={pathname.split("/")[2] || ""} />;
     case "calendar": return <CalendarRoute locale={locale} />;
     case "today": return <TodayRoute locale={locale} />;
@@ -1054,7 +1054,13 @@ export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
     onLoadMore={() => void refresh(true)} />;
 }
 
-export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
+export function GoalsRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+  const query = parsePageSearch(search);
+  const { page: requestedPage, pageSize } = query;
+  useEffect(() => {
+    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
+    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+  }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<GoalsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -1076,20 +1082,15 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale]);
 
-  const refresh = useCallback(async (append = false): Promise<boolean> => {
-    const currentState = stateRef.current;
-    const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    if (append && (pendingRef.current || createLockedRef.current || !cursor)) return false;
+  const refresh = useCallback(async (): Promise<boolean> => {
     controllerRef.current?.abort();
     const controller = new AbortController(); controllerRef.current = controller;
     const generation = ++generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     try {
-      const page = await loadGoals({ limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal);
+      const page = await loadNumberedGoals({ page: requestedPage, pageSize }, fetch, controller.signal);
       if (!activeRef.current || generationRef.current !== generation) return false;
-      setState((current) => append && current.kind === "ready"
-        ? { kind: "ready", items: [...current.items, ...page.items], nextCursor: page.nextCursor }
-        : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+      setState({ kind: "ready", items: page.items, pagination: page.pagination });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
@@ -1097,10 +1098,13 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "GOALS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, clearDeniedGoals]);
+  }, [locale, clearDeniedGoals, requestedPage, pageSize]);
 
   useEffect(() => {
-    activeRef.current = true; void refresh();
+    activeRef.current = true;
+    createLockedRef.current = false; setCreateLocked(false);
+    stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
+    void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
 
@@ -1115,6 +1119,12 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
+  const changePage = (page: number, size = pageSize) => {
+    if (pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    pendingRef.current = true; setPending(true);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+  };
+
   return <GoalsPage locale={locale} state={state} pending={pending} actionError={actionError} createLocked={createLocked}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={async (input) => {
@@ -1124,10 +1134,16 @@ export function GoalsRoute({ locale }: { locale: LocaleRuntime }) {
     onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
     onStatusChange={(goal: Goal, status) => void mutate(() => setGoalStatus(goal.id, status))}
     onProgressChange={(goal: Goal, progress) => void mutate(() => setGoalProgress(goal.id, progress))}
-    onLoadMore={() => void refresh(true)} />;
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
 }
 
-export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
+export function ProjectsRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+  const query = parsePageSearch(search);
+  const { page: requestedPage, pageSize } = query;
+  useEffect(() => {
+    const canonical = writePageSearch(search, { page: requestedPage, pageSize });
+    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+  }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [createLocked, setCreateLocked] = useState(false);
@@ -1158,16 +1174,13 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     return true;
   }, [cancelReads, locale]);
 
-  const refresh = useCallback(async (append = false): Promise<boolean> => {
-    const currentState = stateRef.current;
-    const cursor = append && currentState.kind === "ready" ? currentState.nextCursor : undefined;
-    if (append && (pendingRef.current || createLockedRef.current || !cursor)) return false;
+  const refresh = useCallback(async (): Promise<boolean> => {
     cancelReads();
     const generation = ++generationRef.current;
     const controller = new AbortController(); listControllerRef.current = controller;
     pendingRef.current = true; setPending(true); setSummaryPending([]); setActionError(undefined);
     try {
-      const page = await loadProjects({ limit: 20, ...(cursor ? { cursor } : {}) }, fetch, controller.signal);
+      const page = await loadNumberedProjects({ page: requestedPage, pageSize }, fetch, controller.signal);
       if (!activeRef.current || generationRef.current !== generation) return false;
       const entries = await Promise.all(page.items.map(async (project) => {
         try { return [project.id, await loadProjectSummary(project.id, fetch, controller.signal)] as const; }
@@ -1178,9 +1191,7 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
       }));
       if (!activeRef.current || generationRef.current !== generation) return false;
       const summaries = Object.fromEntries(entries.filter((entry) => entry[1] !== undefined)) as Record<string, ProjectSummary>;
-      setState((current) => append && current.kind === "ready"
-        ? { kind: "ready", items: [...current.items, ...page.items], summaries: { ...current.summaries, ...summaries }, nextCursor: page.nextCursor }
-        : { kind: "ready", items: page.items, summaries, nextCursor: page.nextCursor });
+      setState({ kind: "ready", items: page.items, pagination: page.pagination, summaries });
       return true;
     } catch (error: unknown) {
       if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return false;
@@ -1188,10 +1199,13 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, cancelReads, clearDeniedProjects]);
+  }, [locale, cancelReads, clearDeniedProjects, requestedPage, pageSize]);
 
   useEffect(() => {
-    activeRef.current = true; void refresh();
+    activeRef.current = true;
+    createLockedRef.current = false; setCreateLocked(false);
+    stateRef.current = { kind: "loading" }; setState({ kind: "loading" });
+    void refresh();
     return () => { activeRef.current = false; generationRef.current += 1; cancelReads(); };
   }, [refresh, retryVersion, cancelReads]);
 
@@ -1231,6 +1245,12 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     }
   };
 
+  const changePage = (page: number, size = pageSize) => {
+    if (pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    pendingRef.current = true; setPending(true);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+  };
+
   return <ProjectsPage locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRetrySummary={(project) => void retrySummary(project)}
@@ -1244,7 +1264,7 @@ export function ProjectsRoute({ locale }: { locale: LocaleRuntime }) {
     }}
     onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
-    onLoadMore={() => void refresh(true)} />;
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
 }
 
 export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRuntime; projectId: string }) {

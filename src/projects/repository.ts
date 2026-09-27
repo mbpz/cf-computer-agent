@@ -1,3 +1,5 @@
+import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { Project, ProjectCreate, ProjectGoalSummary, ProjectPage, ProjectStatus, ProjectSummary, ProjectUpdate } from "./types";
@@ -9,6 +11,7 @@ export interface ProjectsRepositoryPort {
   findOwned(memberId: string, id: string): Promise<Project | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<Project | null>;
   listOwned(memberId: string, request: ProjectsPageRepositoryRequest): Promise<ProjectPage>;
+  listNumbered(memberId: string, request: NumberedPageRequest & { status?: ProjectStatus }): Promise<NumberedPage<Project>>;
   update(memberId: string, id: string, input: ProjectUpdate): Promise<Project | null>;
   updateStatus(memberId: string, id: string, status: ProjectStatus, updatedAt: number): Promise<Project | null>;
   linkGoal(memberId: string, projectId: string, goalId: string, createdAt: number): Promise<boolean>;
@@ -45,6 +48,18 @@ export class ProjectsRepository implements ProjectsRepositoryPort {
 
   async findByClientKey(memberId: string, clientKey: string): Promise<Project | null> {
     return mapRow(await this.db.prepare(`SELECT ${columns} FROM projects WHERE member_id = ? AND client_key = ? LIMIT 1`).bind(memberId, clientKey).first<ProjectRow>());
+  }
+
+  async listNumbered(memberId: string, request: NumberedPageRequest & { status?: ProjectStatus }): Promise<NumberedPage<Project>> {
+    const pagination = normalizeNumberedPageRequest(request, "PROJECT_PAGE_INVALID");
+    const where = request.status ? "member_id = ? AND status = ?" : "member_id = ?";
+    const bindings = request.status ? [memberId, request.status] : [memberId];
+    return queryNumberedPage(this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM projects WHERE ${where}`).bind(...bindings),
+      this.db.prepare(`SELECT ${columns} FROM projects WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .bind(...bindings, pagination.pageSize, pageOffset(pagination, "PROJECT_PAGE_INVALID")),
+      pagination, row => mapRow(row as ProjectRow)!,
+    );
   }
 
   async listOwned(memberId: string, request: ProjectsPageRepositoryRequest): Promise<ProjectPage> {

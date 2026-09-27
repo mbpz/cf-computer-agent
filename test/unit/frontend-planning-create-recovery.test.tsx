@@ -38,7 +38,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
       if (url.pathname.endsWith("/summary")) return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
       reads++;
       if (readFailure) return apiError(readStatus, "UNAVAILABLE", true);
-      return Response.json({ items: [entity({ id: "existing", clientKey: "existing", title: "Existing private row", description: null })] });
+      return Response.json({ items: [entity({ id: "existing", clientKey: "existing", title: "Existing private row", description: null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
     } });
     await waitForApp(() => !!title() && !title().disabled);
   }

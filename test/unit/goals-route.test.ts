@@ -33,3 +33,20 @@ describe("Goals API route", () => {
     expect(goals.setStatus).toHaveBeenCalledWith("member-a", "goal-1", "archived");
   });
 });
+
+
+describe("numbered planning list contract", () => {
+  it("passes session owner and numeric page with a status filter", async () => {
+    const service = { listNumbered: vi.fn(async () => ({ items: [], pagination: { page: 2, pageSize: 50, total: 0, totalPages: 0 } })) };
+    const request = new Request("https://example.test/api/goals?page=2&pageSize=50&status=active");
+    const response = await routeGoalsApi(request, new URL(request.url), context, principal, { goals: service as unknown as GoalsService });
+    expect(response?.status).toBe(200);
+    expect(service.listNumbered).toHaveBeenCalledWith("member-a", { status: "active" }, { page: 2, pageSize: 50 });
+  });
+  it.each(["page=0", "page=1.5", "page=01", "page=501", "pageSize=21", "page=1&page=2", "page=1&limit=20", "page=1&cursor=x", "page=1&memberId=member-b"])("rejects invalid numbered query %s", async (query) => {
+    const service = { listNumbered: vi.fn() };
+    const request = new Request(`https://example.test/api/goals?${query}`);
+    await expect(routeGoalsApi(request, new URL(request.url), context, principal, { goals: service as unknown as GoalsService })).rejects.toMatchObject({ status: 400 });
+    expect(service.listNumbered).not.toHaveBeenCalled();
+  });
+});

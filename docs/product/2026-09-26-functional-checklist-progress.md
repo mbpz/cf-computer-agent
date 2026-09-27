@@ -351,3 +351,33 @@ rtk proxy npx vitest run test/unit/frontend-planning-create-recovery.test.tsx te
 ### 下一环节与总进度
 
 原审计共 **30 个父项**；按用户功能范围排除 D08 发布环节后，仍为 **29 个范围内父项、关闭 1（B03）、未关闭 28**。C03 两个创建恢复子项可勾选，EXT-GL-02 / EXT-PRJ-03 与 C03 父项保持未完成。下一步允许继续 C03 编号分页/URL 状态及关系编辑核对；跨刷新恢复、条件写入、完整关系 UI 和真实浏览器验收仍待完成。没有新的外部阻塞，也不以“不需备份”代替功能完成证据。
+
+
+## C03 — 目标/项目编号分页与 URL 恢复（本地子项完成）
+
+承接创建意图恢复提交 `21337c0`，本批只对应 EXT-GL-01 / EXT-PRJ-01，不关闭 C03 父项。
+
+- GET 显式 `page/pageSize` 进入编号模式，支持 20/50/100；严格拒绝重复/混合 cursor/limit、未知字段、外部 memberId、非法数字及 offset >= 10000。未指定编号参数的旧游标 API 保持兼容。
+- D1 count 和 rows 同 batch、同 member_id/status 条件；编号排序使用 `created_at DESC, id DESC`，不因进度/状态修改的 updated_at 自动移动。total 不跨成员泄露。编号分页不是跨请求数据库快照；并发插入/删除仍可能改变后续页位置。
+- Goals/Projects 真正渲染编号控件；URL 深链与历史事件恢复、页大小切换归首页、非法参数规范化、空页返回可用页。严格校验页码/大小、总数/条数及重复实体 ID，翻页替换旧行而非追加。
+- 导航失败不遗留上一页私有行；取消并忽略迟到结果。项目摘要仅当前页读取，普通失败局部重试不重新拉整个列表。复用此前创建未知意图锁，翻页入口同步锁写，防同帧旧页状态写入。
+- total 保持真实值；10000 行查询窗口以外的页码及下一页按钮禁用，不再显示可点击却无响应的导航。大数据集窗口外仍不能访问，不虚报无限制分页。没有新增状态筛选 UI。
+
+### RED → GREEN 与验证
+
+- 后端初始反例 **8 failed / 24 passed**；实现后定向 3 文件 **32/32**（其中本地 D1 新增 6 项）。覆盖成员/状态计数、相同创建时间稳定 ID 边界、空页、非法参数及旧游标兼容。
+- 前端修正 happy-dom `PopStateEvent` harness 后，业务 RED **14 failed**；初步实现后通过。追加查询窗口反例 **2 failed / 33 passed**，补导航禁用后通过；同帧翻页/写入反例 **2 failed / 20 passed**，补同步锁后通过。最终新增分页 **22/22**。
+- 旧项目摘要“追加页”用例调整为“编号替换页 + 单行 GET 重试”，仍验证健康摘要可用；收集箱/日历原游标回归保留，不用删除旧失败断言冒充通过。
+- 最终联合 **16 文件，332/332**：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-planning-numbered-pages.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-create-recovery.test.tsx test/unit/frontend-project-summary-recovery.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-a11y.test.tsx test/unit/frontend-goals-page.test.tsx test/unit/frontend-projects-page.test.tsx test/worker/goals.test.ts test/worker/projects.test.ts test/worker/planning-numbered-pages.test.ts test/unit/goals-service.test.ts test/unit/projects-service.test.ts test/unit/goals-route.test.ts test/unit/projects-route.test.ts
+```
+
+- `typecheck`、`build:ui`、`verify:i18n`、`test:i18n`（13/13）、成熟度契约（13/13）、交付契约（30/30）通过；既有 >500 kB chunk 警告仍在。仓库 typecheck 不覆盖全部前端 TSX，不表述为全前端严格类型检查。
+- 领域审计证据已重新生成，新测试挂入能力证据清单；冻结历史 gap 文案/ownership 不改写，不提升发布或验收维度。
+- 全部证据来自本地选定测试/构建，不是全仓、原生浏览器或生产验收。未 push、部署、远程迁移、备份、生产写入或手工读取/上传 Secret。
+
+### 下一环节与总进度
+
+原清单 **30 个父项**，排除 D08 发布后为 **29 个范围内父项 / 关闭 1（B03）/ 未关闭 28**。本批勾选 EXT-GL-01 / EXT-PRJ-01 两个本地子项，C03 仍开放。下一环节继续 EXT-GL-02 / EXT-PRJ-03 的条件写、任务/目标关联编辑及跨刷新恢复；真实身份/原生浏览器完整旅程单独验收。无新的外部阻塞，允许继续本地功能，不以局部通过声称所有 checklist 完结。

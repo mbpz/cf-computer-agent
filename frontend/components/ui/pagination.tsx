@@ -29,6 +29,7 @@ export interface PaginationProps extends React.HTMLAttributes<HTMLElement> {
   onPageChange?: (page: number) => void;
   labels: PaginationLabels;
   disabled?: boolean;
+  maxPage?: number;
 }
 
 export const PaginationContent = React.forwardRef<HTMLOListElement, React.OlHTMLAttributes<HTMLOListElement>>(({ className, ...props }, ref) => <ol ref={ref} role="list" className={cn("flex items-center gap-1", className)} {...props} />);
@@ -49,17 +50,18 @@ PaginationPrevious.displayName = "PaginationPrevious";
 export const PaginationNext = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(({ children, ...props }, ref) => <PaginationLink ref={ref} {...props}>{children ?? <span aria-hidden="true">›</span>}</PaginationLink>);
 PaginationNext.displayName = "PaginationNext";
 
-export function Pagination({ className, currentPage, pageCount, onPageChange, labels, disabled = false, ...props }: PaginationProps) {
+export function Pagination({ className, currentPage, pageCount, onPageChange, labels, disabled = false, maxPage, ...props }: PaginationProps) {
   const safePageCount = Number.isSafeInteger(pageCount) && pageCount > 0 ? pageCount : 0;
   if (!safePageCount) return null;
   const safeCurrentPage = Number.isSafeInteger(currentPage) ? Math.max(currentPage, 1) : 1;
   const tokens = visiblePageTokens(safeCurrentPage, safePageCount);
-  const previousPage = safeCurrentPage > safePageCount ? safePageCount : safeCurrentPage - 1;
+  const lastAllowedPage = Number.isSafeInteger(maxPage) && maxPage! > 0 ? Math.min(safePageCount, maxPage!) : safePageCount;
+  const previousPage = Math.min(lastAllowedPage, safeCurrentPage - 1);
   return <nav aria-label={labels.navigationLabel} className={cn("flex items-center gap-1", className)} {...props}>
     <PaginationPrevious aria-label={labels.previousLabel} disabled={disabled || safeCurrentPage <= 1} onClick={() => onPageChange?.(previousPage)}><span aria-hidden="true">‹</span><span className="sr-only">{labels.previousLabel}</span></PaginationPrevious>
     <PaginationContent>{tokens.map((token, index) => token === "ellipsis"
       ? <PaginationItem key={`ellipsis-${index}`}><PaginationEllipsis /></PaginationItem>
-      : <PaginationItem key={token}><PaginationLink aria-label={labels.pageLabel(token)} isActive={safeCurrentPage <= safePageCount && token === safeCurrentPage} disabled={disabled} onClick={() => onPageChange?.(token)}>{token}</PaginationLink></PaginationItem>)}</PaginationContent>
-    <PaginationNext aria-label={labels.nextLabel} disabled={disabled || safeCurrentPage >= safePageCount} onClick={() => onPageChange?.(safeCurrentPage + 1)}><span aria-hidden="true">›</span><span className="sr-only">{labels.nextLabel}</span></PaginationNext>
+      : <PaginationItem key={token}><PaginationLink aria-label={labels.pageLabel(token)} isActive={safeCurrentPage <= safePageCount && token === safeCurrentPage} disabled={disabled || token > lastAllowedPage} onClick={() => onPageChange?.(token)}>{token}</PaginationLink></PaginationItem>)}</PaginationContent>
+    <PaginationNext aria-label={labels.nextLabel} disabled={disabled || safeCurrentPage >= lastAllowedPage} onClick={() => onPageChange?.(safeCurrentPage + 1)}><span aria-hidden="true">›</span><span className="sr-only">{labels.nextLabel}</span></PaginationNext>
   </nav>;
 }

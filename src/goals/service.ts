@@ -1,3 +1,4 @@
+import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
 import { AppError } from "../http";
 import type { GoalsRepositoryPort } from "./repository";
 import { GOAL_STATUSES, type Goal, type GoalListFilters, type GoalPage, type GoalStatus } from "./types";
@@ -32,6 +33,12 @@ export class GoalsService {
     const goal = await this.repository.findOwned(memberId, requireId(id));
     if (!goal) throw notFound();
     return goal;
+  }
+
+  async listNumbered(memberId: string, filters: GoalListFilters = {}, pagination: Partial<NumberedPageRequest> = {}): Promise<NumberedPage<Goal>> {
+    const status = filters.status;
+    if (status !== undefined && !GOAL_STATUSES.includes(status)) throw invalid("GOAL_PAGE_INVALID");
+    return this.repository.listNumbered(memberId, { ...normalizeNumberedPageRequest(pagination, "GOAL_PAGE_INVALID"), ...(status ? { status } : {}) });
   }
 
   async list(memberId: string, filters: GoalListFilters = {}, pagination: { limit?: number; cursor?: string } = {}): Promise<GoalPage> {

@@ -1,3 +1,5 @@
+import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { Goal, GoalCreate, GoalPage, GoalStatus, GoalUpdate } from "./types";
@@ -9,6 +11,7 @@ export interface GoalsRepositoryPort {
   findOwned(memberId: string, id: string): Promise<Goal | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<Goal | null>;
   listOwned(memberId: string, request: GoalsPageRepositoryRequest): Promise<GoalPage>;
+  listNumbered(memberId: string, request: NumberedPageRequest & { status?: GoalStatus }): Promise<NumberedPage<Goal>>;
   update(memberId: string, id: string, input: GoalUpdate): Promise<Goal | null>;
   updateStatus(memberId: string, id: string, status: GoalStatus, updatedAt: number): Promise<Goal | null>;
   updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Goal | null>;
@@ -39,6 +42,18 @@ export class GoalsRepository implements GoalsRepositoryPort {
 
   async findByClientKey(memberId: string, clientKey: string): Promise<Goal | null> {
     return mapRow(await this.db.prepare(`SELECT ${columns} FROM goals WHERE member_id = ? AND client_key = ? LIMIT 1`).bind(memberId, clientKey).first<GoalRow>());
+  }
+
+  async listNumbered(memberId: string, request: NumberedPageRequest & { status?: GoalStatus }): Promise<NumberedPage<Goal>> {
+    const pagination = normalizeNumberedPageRequest(request, "GOAL_PAGE_INVALID");
+    const where = request.status ? "member_id = ? AND status = ?" : "member_id = ?";
+    const bindings = request.status ? [memberId, request.status] : [memberId];
+    return queryNumberedPage(this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM goals WHERE ${where}`).bind(...bindings),
+      this.db.prepare(`SELECT ${columns} FROM goals WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+        .bind(...bindings, pagination.pageSize, pageOffset(pagination, "GOAL_PAGE_INVALID")),
+      pagination, row => mapRow(row as GoalRow)!,
+    );
   }
 
   async listOwned(memberId: string, request: GoalsPageRepositoryRequest): Promise<GoalPage> {

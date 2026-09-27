@@ -1,3 +1,4 @@
+import { normalizeNumberedPage, type FrontendPageRequest, type FrontendNumberedPage } from "./numbered-page";
 import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
 
@@ -10,6 +11,17 @@ export type ProjectTimelineKind = "meeting" | "decision" | "action_item" | "mile
 export type ProjectTimelineStatus = "open" | "done" | "archived";
 export interface ProjectTimelineItem { id: string; projectId: string; clientKey: string; kind: ProjectTimelineKind; title: string; body: string; status: ProjectTimelineStatus; startsAt: string | null; dueAt: string | null; createdAt: string; updatedAt: string; }
 export interface ProjectTimelinePage { items: ProjectTimelineItem[]; nextCursor?: string; }
+
+export async function loadNumberedProjects(input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Project>> {
+  const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
+  const result = normalizeNumberedPage(await apiFetch<unknown>(`/api/projects?${params.toString()}`, { requester, signal }), value => {
+    const item = normalizeProject(value);
+    if (!item) throw new Error("PROJECT_RESPONSE_INVALID");
+    return item;
+  });
+  if (result.pagination.page !== input.page || result.pagination.pageSize !== input.pageSize || new Set(result.items.map(item => item.id)).size !== result.items.length) throw new Error("PROJECT_RESPONSE_INVALID");
+  return result;
+}
 
 export async function loadProjects(input: { limit?: number; cursor?: string; status?: ProjectStatus } = {}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<ProjectPage> {
   const params = new URLSearchParams({ limit: String(input.limit ?? 20) });

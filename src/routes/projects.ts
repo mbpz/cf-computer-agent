@@ -2,7 +2,7 @@ import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
-import { parsePageRequest } from "../pagination";
+import { parseNumberedPageRequest, parsePageRequest } from "../pagination";
 import type { ProjectsService } from "../projects/service";
 import type { ProjectStatus } from "../projects/types";
 import { strictRecord } from "./member";
@@ -22,6 +22,11 @@ export async function routeProjectsApi(
 
   if (url.pathname === "/api/projects") {
     if (request.method === "GET") {
+      if (url.searchParams.has("page") || url.searchParams.has("pageSize")) {
+        const page = parseNumberedPageRequest(url, ["status"], "PROJECT_PAGE_INVALID");
+        const status = url.searchParams.get("status");
+        return jsonResponse(await services.projects.listNumbered(member.memberId, status === null ? {} : { status: status as ProjectStatus }, page), 200, context.requestId);
+      }
       requireExactQuery(url, ["limit", "cursor", "status"]);
       const status = url.searchParams.get("status");
       if (status !== null && !["planned", "active", "paused", "completed", "archived"].includes(status)) throw invalidPage();
