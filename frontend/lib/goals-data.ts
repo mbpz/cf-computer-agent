@@ -1,3 +1,4 @@
+import { canonicalPlanningVersion } from "./planning-write-recovery";
 import { normalizeNumberedPage, type FrontendPageRequest, type FrontendNumberedPage } from "./numbered-page";
 import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
@@ -29,6 +30,13 @@ export async function loadGoals(input: { limit?: number; cursor?: string; status
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
 
+export async function loadGoal(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<Goal> {
+  const value = await apiFetch<unknown>(`/api/goals/${encodeURIComponent(id)}`, { requester, signal });
+  const goal = normalizeGoal(value);
+  if (!goal || goal.id !== id) throw new Error("GOAL_RESPONSE_INVALID");
+  return goal;
+}
+
 export async function createGoal(input: PlanningCreateIntent & { targetAt?: number | null }, requester: Fetcher = fetch): Promise<{ goal: Goal; created: boolean }> {
   const value = await apiFetch<unknown>("/api/goals", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("GOAL_CREATE_INVALID");
@@ -43,11 +51,19 @@ export async function updateGoal(id: string, input: { title: string; description
 }
 
 export async function setGoalStatus(id: string, status: GoalStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Goal> {
-  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
+  const value = await apiFetch<unknown>(`/api/goals/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
+  const item = normalizeGoal(value);
+  if (!item || item.id !== id || item.status !== status || !canonicalPlanningVersion(item.updatedAt)
+    || !(Date.parse(item.updatedAt) > Date.parse(expectedUpdatedAt))) throw new Error("GOAL_WRITE_RECEIPT_INVALID");
+  return item;
 }
 
 export async function setGoalProgress(id: string, progress: number, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Goal> {
-  return apiFetch<Goal>(`/api/goals/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress, expectedUpdatedAt }) });
+  const value = await apiFetch<unknown>(`/api/goals/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress, expectedUpdatedAt }) });
+  const item = normalizeGoal(value);
+  if (!item || item.id !== id || item.progress !== progress || !canonicalPlanningVersion(item.updatedAt)
+    || !(Date.parse(item.updatedAt) > Date.parse(expectedUpdatedAt))) throw new Error("GOAL_WRITE_RECEIPT_INVALID");
+  return item;
 }
 
 function normalizeGoal(value: unknown): Goal | null {

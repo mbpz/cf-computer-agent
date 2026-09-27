@@ -1,3 +1,4 @@
+import { PlanningWriteRecovery, usePlanningWriteRecovery } from "./components/planning-write-recovery";
 import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-intent";
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
@@ -1057,6 +1058,7 @@ export function InboxRoute({ locale }: { locale: LocaleRuntime }) {
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
+  const writeRecovery = usePlanningWriteRecovery(memberId, "GOALS", search);
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1076,7 +1078,8 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
   const stateRef = useRef<GoalsPageState>({ kind: "loading" });
   stateRef.current = state;
   const clearDeniedGoals = useCallback((error: unknown) => {
-    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403 && error.status !== 404)) return false;
+    if (error.status === 401 || error.status === 403) writeRecovery.deny();
     if (memberId && (error.status === 401 || error.status === 403)) {
       const stored = loadPlanningIntent(memberId, "GOALS");
       if (stored.kind === "ready") clearPlanningIntent(memberId, "GOALS", stored.intent);
@@ -1086,7 +1089,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     createLockedRef.current = false; setCreateLocked(false);
     const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared); return true;
-  }, [locale, memberId]);
+  }, [locale, memberId, writeRecovery.deny]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     controllerRef.current?.abort();
@@ -1114,48 +1117,55 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
 
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current || createLockedRef.current) return;
+  const mutate = async (item: Goal, operation: () => Promise<unknown>) => {
+    if (pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
+    const record = writeRecovery.begin(item.id, item.updatedAt);
+    if (!record) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
-    try { await operation(); if (activeRef.current && generationRef.current === generation) await refresh(); }
-    catch (error: unknown) {
-      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
-      if (clearDeniedGoals(error)) return;
-      if (error instanceof ApiRequestError && error.status === 409 && error.code === "GOAL_VERSION_CONFLICT") {
-        const readGeneration = generationRef.current + 1;
-        const recovered = await refresh();
-        if (!activeRef.current || generationRef.current !== readGeneration) return;
-        if (recovered) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
-        else {
-          const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
-          stateRef.current = cleared; setState(cleared); setActionError(undefined);
-        }
-        return;
+    const reconcile = async (conflict = false) => {
+      const readGeneration = generationRef.current + 1;
+      const recovered = await refresh();
+      if (!activeRef.current || generationRef.current !== readGeneration) return;
+      if (recovered) {
+        writeRecovery.finish(record);
+        if (conflict) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
+      } else {
+        const cleared: GoalsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+        stateRef.current = cleared; setState(cleared); setActionError(undefined);
       }
+    };
+    try { await operation(); if (activeRef.current && generationRef.current === generation) await reconcile(); }
+    catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation) return;
+      if (clearDeniedGoals(error)) return;
+      if (error instanceof ApiRequestError && error.status === 409 && error.code === "GOAL_VERSION_CONFLICT") { await reconcile(true); return; }
+      const rejected = error instanceof ApiRequestError && !error.retryable && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 409;
+      if (rejected) writeRecovery.finish(record);
       setActionError(frontendText(locale, "GOALS_ACTION_FAILED"));
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
   const changePage = (page: number, size = pageSize) => {
-    if (pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
     pendingRef.current = true; setPending(true);
     writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
   };
 
-  return <GoalsPage createMemberId={memberId} locale={locale} state={state} pending={pending} actionError={actionError} createLocked={createLocked}
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending} refresh={refresh} onDenied={clearDeniedGoals} /><GoalsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked} actionError={actionError} createLocked={createLocked}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onCreate={async (input) => {
-      if (pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      if (pendingRef.current || writeRecovery.locked) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
       return createGoal(input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedGoals}
     onCreateLock={(locked) => { createLockedRef.current = locked; setCreateLocked(locked); }}
-    onStatusChange={(goal: Goal, status) => void mutate(() => setGoalStatus(goal.id, status, goal.updatedAt))}
-    onProgressChange={(goal: Goal, progress) => void mutate(() => setGoalProgress(goal.id, progress, goal.updatedAt))}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
+    onStatusChange={(goal: Goal, status) => void mutate(goal, () => setGoalStatus(goal.id, status, goal.updatedAt))}
+    onProgressChange={(goal: Goal, progress) => void mutate(goal, () => setGoalProgress(goal.id, progress, goal.updatedAt))}
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
 export function ProjectsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
+  const writeRecovery = usePlanningWriteRecovery(memberId, "PROJECTS", search);
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1186,6 +1196,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
   }, []);
   const clearDeniedProjects = useCallback((error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403 && error.status !== 404)) return false;
+    if (error.status === 401 || error.status === 403) writeRecovery.deny();
     if (memberId && (error.status === 401 || error.status === 403)) {
       const stored = loadPlanningIntent(memberId, "PROJECTS");
       if (stored.kind === "ready") clearPlanningIntent(memberId, "PROJECTS", stored.intent);
@@ -1197,7 +1208,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
     stateRef.current = cleared; setState(cleared);
     return true;
-  }, [cancelReads, locale, memberId]);
+  }, [cancelReads, locale, memberId, writeRecovery.deny]);
 
   const refresh = useCallback(async (): Promise<boolean> => {
     cancelReads();
@@ -1255,35 +1266,37 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     }
   };
 
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (relationProjectRef.current || pendingRef.current || createLockedRef.current) return;
+  const mutate = async (item: Project, operation: () => Promise<unknown>) => {
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
+    const record = writeRecovery.begin(item.id, item.updatedAt);
+    if (!record) return;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
-    try {
-      await operation();
-      if (activeRef.current && generationRef.current === generation) await refresh();
-    } catch (error: unknown) {
-      if (!activeRef.current || generationRef.current !== generation || isAbort(error)) return;
-      if (clearDeniedProjects(error)) return;
-      if (error instanceof ApiRequestError && error.status === 409 && error.code === "PROJECT_VERSION_CONFLICT") {
-        const readGeneration = generationRef.current + 1;
-        const recovered = await refresh();
-        if (!activeRef.current || generationRef.current !== readGeneration) return;
-        if (recovered) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
-        else {
-          const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
-          stateRef.current = cleared; setState(cleared); setActionError(undefined);
-        }
-        return;
+    const reconcile = async (conflict = false) => {
+      const readGeneration = generationRef.current + 1;
+      const recovered = await refresh();
+      if (!activeRef.current || generationRef.current !== readGeneration) return;
+      if (recovered) {
+        writeRecovery.finish(record);
+        if (conflict) setActionError(frontendText(locale, "PLANNING_VERSION_CONFLICT"));
+      } else {
+        const cleared: ProjectsPageState = { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") };
+        stateRef.current = cleared; setState(cleared); setActionError(undefined);
       }
+    };
+    try { await operation(); if (activeRef.current && generationRef.current === generation) await reconcile(); }
+    catch (error: unknown) {
+      if (!activeRef.current || generationRef.current !== generation) return;
+      if (clearDeniedProjects(error)) return;
+      if (error instanceof ApiRequestError && error.status === 409 && error.code === "PROJECT_VERSION_CONFLICT") { await reconcile(true); return; }
+      const rejected = error instanceof ApiRequestError && !error.retryable && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 409;
+      if (rejected) writeRecovery.finish(record);
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED"));
-    } finally {
-      if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); }
-    }
+    } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
 
   const changePage = (page: number, size = pageSize) => {
-    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
     pendingRef.current = true; setPending(true);
     writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
   };
@@ -1295,7 +1308,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     const next = { ...stateRef.current, summaries }; stateRef.current = next; setState(next);
   }, []);
   const openRelations = (project: Project) => {
-    if (relationProjectRef.current || pendingRef.current || createLockedRef.current) return;
+    if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
     generationRef.current++; cancelReads(); setSummaryPending([]);
     relationProjectRef.current = project.id; setRelationProject(project);
   };
@@ -1306,22 +1319,22 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     queueMicrotask(() => document.getElementById(`manage-relations-${id}`)?.focus());
   };
 
-  return <ProjectsPage createMemberId={memberId} locale={locale} state={state} pending={pending} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending} refresh={refresh} onDenied={clearDeniedProjects} /><ProjectsPage createMemberId={memberId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} summaryPending={summaryPending} actionError={actionError}
     relationProjectId={relationProject?.id} onManageRelations={openRelations}
     relationEditor={relationProject && <ProjectRelationsEditor key={relationProject.id} projectId={relationProject.id} title={relationProject.title} locale={locale} onSummary={updateRelationSummary} onDenied={clearDeniedProjects} onClose={closeRelations} />}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRetrySummary={(project) => void retrySummary(project)}
     onCreate={async (input) => {
-      if (relationProjectRef.current || pendingRef.current) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
+      if (relationProjectRef.current || pendingRef.current || writeRecovery.locked) throw new ApiRequestError("PLANNING_BUSY", "Another operation is pending", 409, false);
       return createProject(input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDeniedProjects}
     onCreateLock={(locked) => {
       if (locked && !createLockedRef.current && !pendingRef.current) { generationRef.current++; cancelReads(); setSummaryPending([]); }
       createLockedRef.current = locked; setCreateLocked(locked);
     }}
-    onStatusChange={(project: Project, status) => void mutate(() => setProjectStatus(project.id, status, project.updatedAt))}
+    onStatusChange={(project: Project, status) => void mutate(project, () => setProjectStatus(project.id, status, project.updatedAt))}
     onOpenTimeline={(project) => writeWorkspaceHistory("push", `/projects/${encodeURIComponent(project.id)}/timeline`)}
-    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />;
+    onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
 export function ProjectTimelineRoute({ locale, projectId }: { locale: LocaleRuntime; projectId: string }) {

@@ -1,3 +1,4 @@
+import { canonicalPlanningVersion } from "./planning-write-recovery";
 import { normalizeNumberedPage, type FrontendPageRequest, type FrontendNumberedPage } from "./numbered-page";
 import type { PlanningCreateIntent } from "./planning-create-intent";
 import { apiFetch, type Fetcher } from "./api";
@@ -101,7 +102,11 @@ export async function createProject(input: PlanningCreateIntent, requester: Fetc
 }
 
 export async function setProjectStatus(id: string, status: ProjectStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<Project> {
-  return apiFetch<Project>(`/api/projects/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) });
+  const item = normalizeProject(value);
+  if (!item || item.id !== id || item.status !== status || !canonicalPlanningVersion(item.updatedAt)
+    || !(Date.parse(item.updatedAt) > Date.parse(expectedUpdatedAt))) throw new Error("PROJECT_WRITE_RECEIPT_INVALID");
+  return item;
 }
 
 function normalizeProject(value: unknown): Project | null {

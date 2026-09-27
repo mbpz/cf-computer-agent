@@ -100,7 +100,7 @@ describe("project summary per-row recovery", () => {
     let reads = 0;
     let mutated = false;
     await mount((url, init) => {
-      if (init?.method === "POST") { mutated = true; return Response.json({ ...project("b"), status: "completed" }); }
+      if (init?.method === "POST") { mutated = true; return Response.json({ ...project("b"), status: "completed", updatedAt: "2026-09-01T00:00:00.001Z" }); }
       if (url.pathname === "/api/projects") return Response.json({ items: [project("a"), project("b")], pagination: { page: 1, pageSize: 20, total: [project("a"), project("b")].length, totalPages: 1 } });
       if (url.pathname !== "/api/projects/a/summary") return Response.json(validSummary);
       if (++reads === 1) return apiError(500, "UNAVAILABLE", true);

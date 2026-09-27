@@ -222,7 +222,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     const submit = create();
     await act(async () => { complete.click(); submit.click(); });
     expect(bodies).toHaveLength(1); expect(bodies[0]).toEqual({ status: "completed", expectedUpdatedAt: "2026-09-26T00:00:00.000Z" });
-    await act(async () => resolve(Response.json(entity({ id: "existing", clientKey: "existing", title: "Existing private row" }))));
+    await act(async () => resolve(Response.json({ ...entity({ id: "existing", clientKey: "existing", title: "Existing private row" }), status: "completed", updatedAt: "2026-09-26T00:00:00.001Z" })));
     await waitForApp(() => !title().disabled);
     expect(title().value).toBe("Wait for status");
   });

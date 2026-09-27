@@ -11,6 +11,11 @@ export interface LocaleRuntime {
 
 const catalogs: Record<FrontendLocale, Record<string, string>> = {
   en: {
+    PLANNING_WRITE_UNKNOWN: "A previous write needs review. New writes are blocked. Read current data only; the original request will not be resent.",
+    PLANNING_WRITE_STORAGE_BLOCKED: "Write recovery storage is unavailable or inconsistent. New writes are blocked. Restore storage access; do not clear it.",
+    PLANNING_WRITE_READ_FAILED: "Current data could not be verified. Recovery remains read-only; try reading again.",
+    PLANNING_WRITE_RECOVER: "Review current data (read only)",
+    PLANNING_WRITE_REVIEWED: "Current data was read. This does not prove the original request succeeded. Review the displayed state before a new action.",
     PLANNING_CREATE_UNKNOWN: "Creation is unconfirmed. Retry the original request only; do not create the same item elsewhere.",
     PLANNING_CREATE_STORAGE_BLOCKED: "Creation recovery storage is unavailable or inconsistent. Further creation requests are blocked. Restore storage access and check again; do not clear it or create the same item elsewhere.",
     PLANNING_CREATE_STORAGE_RETRY: "Check recovery storage",
@@ -1043,6 +1048,11 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "Submitter",
   },
   "zh-CN": {
+    PLANNING_WRITE_UNKNOWN: "上次写入需要核对，已阻止新写入。请仅读取当前数据，不会重新发送原请求。",
+    PLANNING_WRITE_STORAGE_BLOCKED: "写入恢复存储不可用或内容异常，已阻止新写入。请恢复存储访问，勿清空记录。",
+    PLANNING_WRITE_READ_FAILED: "未能核对当前数据。恢复仍为只读，请重试读取。",
+    PLANNING_WRITE_RECOVER: "核对当前数据（只读）",
+    PLANNING_WRITE_REVIEWED: "已读取当前数据，但这不能证明原请求成功。请核对页面现状后再发起新操作。",
     PLANNING_CREATE_UNKNOWN: "创建结果未知。请仅重试原请求，勿在别处重复创建。",
     PLANNING_CREATE_STORAGE_BLOCKED: "创建恢复存储不可用或内容异常。已阻止继续创建。请恢复存储访问后重查，勿清空存储或在别处重复创建。",
     PLANNING_CREATE_STORAGE_RETRY: "重查恢复存储",
