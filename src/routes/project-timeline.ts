@@ -40,7 +40,12 @@ export async function routeProjectTimelineApi(request: Request, url: URL, contex
       const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedUpdatedAt"], "PROJECT_TIMELINE_INVALID");
       return jsonResponse(await services.projectTimeline.setStatus(member.memberId, projectId, itemId, input.status, input.expectedUpdatedAt), 200, context.requestId);
     }
-    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    if (request.method === "PATCH") {
+      requireNoQuery(url);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["kind", "title", "body", "startsAt", "dueAt", "expectedUpdatedAt"], "PROJECT_TIMELINE_INVALID");
+      return jsonResponse(await services.projectTimeline.edit(member.memberId, projectId, itemId, input), 200, context.requestId);
+    }
+    if (request.method !== "GET") return methodNotAllowed("GET, PATCH", context);
     requireNoQuery(url);
     return jsonResponse(await services.projectTimeline.get(member.memberId, projectId, itemId), 200, context.requestId);
   }

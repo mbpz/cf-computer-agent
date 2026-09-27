@@ -1,7 +1,7 @@
 import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
-import type { ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineListRequest, ProjectTimelinePage, ProjectTimelineStatus } from "./types";
+import type { ProjectTimelineContent, ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineListRequest, ProjectTimelinePage, ProjectTimelineStatus } from "./types";
 
 export interface ProjectTimelineRepositoryPort {
   insert(input: ProjectTimelineCreate): Promise<boolean>;
@@ -9,6 +9,7 @@ export interface ProjectTimelineRepositoryPort {
   findByClientKey(memberId: string, clientKey: string): Promise<ProjectTimelineItem | null>;
   listOwned(memberId: string, request: ProjectTimelineListRequest): Promise<ProjectTimelinePage>;
   listNumbered(memberId: string, request: NumberedPageRequest & { projectId: string }): Promise<NumberedPage<ProjectTimelineItem>>;
+  updateContent(memberId: string, projectId: string, id: string, content: ProjectTimelineContent, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null>;
   updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null>;
 }
 
@@ -71,6 +72,17 @@ export class ProjectTimelineRepository implements ProjectTimelineRepositoryPort 
         .bind(memberId, request.projectId, request.pageSize, pageOffset(request)),
       { page: request.page, pageSize: request.pageSize }, row => mapRow(row as TimelineRow)!,
     );
+  }
+
+  async updateContent(memberId: string, projectId: string, id: string, content: ProjectTimelineContent, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null> {
+    const [write, read] = await this.db.batch<TimelineRow>([
+      this.db.prepare(`UPDATE project_timeline_items SET kind = ?, title = ?, body = ?, starts_at = ?, due_at = ?, updated_at = ? WHERE member_id = ? AND project_id = ? AND id = ? AND updated_at = ?`)
+        .bind(content.kind, content.title, content.body, content.startsAt, content.dueAt, updatedAt, memberId, projectId, id, expectedUpdatedAt),
+      this.db.prepare(`SELECT ${columns} FROM project_timeline_items WHERE member_id = ? AND project_id = ? AND id = ? LIMIT 1`).bind(memberId, projectId, id),
+    ]);
+    if (!write?.success || !read?.success) throw new AppError("PROJECT_TIMELINE_WRITE_FAILED", "Timeline edit failed", 500);
+    if (write.meta.changes !== 1) return null;
+    return mapRow(read.results[0] ?? null);
   }
 
   async updateStatus(memberId: string, projectId: string, id: string, status: ProjectTimelineStatus, updatedAt: number, expectedUpdatedAt: number): Promise<ProjectTimelineItem | null> {

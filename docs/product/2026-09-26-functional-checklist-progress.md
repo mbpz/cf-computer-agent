@@ -680,3 +680,30 @@ rtk proxy npm run audit:workbench-domain
 
 - canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；本批仅勾选 timeline 数字分页子项，C03 / EXT-PRJ-03 父项保持开放。
 - 下一环节允许继续 timeline 完整编辑，然后目标直接关联任务旅程；真实身份/原生浏览器验收独立保留。无新增本地外部阻塞，不把本地提交宣称为全部完结。
+
+
+## C03 — 时间线完整内容编辑（2026-09-27，本地子项完成）
+
+承接 `3ba5bd2`，完成 C03 / EXT-PRJ-03 的 timeline 完整编辑本地切片；不新增迁移或生产操作。
+
+### 实现边界
+
+- 新增 `PATCH /api/projects/:projectId/timeline/:id`，必须显式提供类型、标题、正文、开始/截止时间和规范 `expectedUpdatedAt`；拒绝额外字段/查询参数。会话推导 memberId，本人项目及条目检查；D1 batch 以 member/project/id/旧版本原子更新五字段并单调推进版本。状态写与内容写共用版本，旧版本 409、外部成员/项目 404；保留 id/clientKey/status/createdAt。
+- 页面内联编辑预填五字段，保留未改变日期的原始精度与时间点；校验标题/正文长度及日期先后，打开聚焦标题、取消返回编辑按钮。同刻编辑/状态写互斥，离开页面取消并忽略迟到响应。
+- 严格校验写回执对象、不可变字段、全部目标内容及推进版本；已确认写后的 GET 不允许回退至低于回执的版本。409 保留当前挂载草稿但禁止旧版本再次保存；未知结果只 GET 核对，不自动重放。读失败清空旧私有行，401/403/404 失权处理沿用既有边界；会话恢复仅保存对象/版本标记，不保存编辑正文，刷新后草稿不恢复。
+- 修复共用创建校验中合法 `__invalid__` 正文被误拒、超出 JavaScript Date 范围的安全整数导致异常，以及前端非法日期回执被规范化为空值后误接受的问题。
+- 历史 gap source/owner 不变，87 gaps（47 P0 / 39 P1 / 1 P2），R4 38 gaps / 124 实施原子；本地子项证据不提升 release/acceptance 状态。
+
+### TDD 与验证证据
+
+- RED：编辑接口初始返回 405/缺少方法；页面无编辑入口；随后新增超范围日期、合法正文、非法日期回执、旧版本写后 GET、编辑焦点测试均捕获预期失败，再实现修复。
+- GREEN：新增 `test/worker/project-timeline-edit.test.ts` 31 项，包含真实本地 D1 条件写、状态竞争、跨成员/项目及 HTTP 会话/自动化身份权限；`test/unit/frontend-timeline-edit-data.test.ts` 15 项；`test/unit/frontend-timeline-edit.test.tsx` 13 项。共新增 **59 项**。
+- 联合命令：`rtk proxy npx vitest run`，沿用前批 39 文件，追加上述三个文件；**42 文件 772/772 通过**（2026-09-27 本地）。覆盖编辑、冲突/未知结果恢复、分页、目标/项目/关联、持久恢复与无障碍回归。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui`、`rtk proxy npm run verify:i18n`、`rtk proxy npm run test:i18n` **13/13** 通过。构建仍有 >500 kB chunk 警告；typecheck 不覆盖全部前端 TSX。
+- 审计初次捕获新 PATCH 缺少 mutation 声明；已补充独立条件写绑定及源代码/测试证据，不改旧 gap 文案与 owner。重新生成领域快照，`verify:workbench-maturity` **13/13**、`verify:delivery-status` **30/30**、`audit:workbench-domain` 和 `git diff --check` 均通过。
+- 本地 Workerd/D1 与 happy-dom/HTTP fixtures 不替代真实双身份、原生浏览器及生产验收。未执行全仓 npm test/check；未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+### 总进度与下一环节
+
+- canonical 30 父项，排除 D08 后 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；本批只勾选 timeline 完整编辑子项，C03 / EXT-PRJ-03 父项保持开放。
+- 下一环节允许继续目标直接关联任务的模型核对与旅程；真实身份/原生浏览器验收独立保留。无新增本地外部阻塞，不把本地提交宣称为全部完结。

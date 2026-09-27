@@ -37,3 +37,5 @@ export interface ProjectTimelineListRequest extends PageRequest {
 }
 
 export type ProjectTimelinePage = Page<ProjectTimelineItem>;
+
+export type ProjectTimelineContent = Pick<ProjectTimelineCreate, "kind" | "title" | "body" | "startsAt" | "dueAt">;

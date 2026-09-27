@@ -12,6 +12,7 @@ export type ProjectTimelineKind = "meeting" | "decision" | "action_item" | "mile
 export type ProjectTimelineStatus = "open" | "done" | "archived";
 export interface ProjectTimelineItem { id: string; projectId: string; clientKey: string; kind: ProjectTimelineKind; title: string; body: string; status: ProjectTimelineStatus; startsAt: string | null; dueAt: string | null; createdAt: string; updatedAt: string; }
 export interface TimelineCreateIntent { readonly id: string; readonly clientKey: string; readonly kind: ProjectTimelineKind; readonly title: string; readonly body: string; readonly startsAt: string | null; readonly dueAt: string | null; }
+export type TimelineEditContent = Pick<ProjectTimelineItem, "kind" | "title" | "body" | "startsAt" | "dueAt">;
 export interface ProjectTimelinePage { items: ProjectTimelineItem[]; nextCursor?: string; }
 
 export async function loadNumberedProjects(input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Project>> {
@@ -97,6 +98,18 @@ export async function createProjectTimeline(id: string, input: TimelineCreateInt
   const item = normalizeTimeline(record.item);
   if (!item || item.projectId !== id || item.id !== input.id || item.clientKey !== input.clientKey || typeof record.created !== "boolean") throw new Error("PROJECT_TIMELINE_CREATE_INVALID");
   return { item, created: record.created };
+}
+
+export async function editProjectTimeline(projectId: string, original: ProjectTimelineItem, content: TimelineEditContent, requester: Fetcher = fetch): Promise<ProjectTimelineItem> {
+  const value = await apiFetch<unknown>(`/api/projects/${encodeURIComponent(projectId)}/timeline/${encodeURIComponent(original.id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...content, expectedUpdatedAt: original.updatedAt }) });
+  const item = normalizeTimeline(value);
+  const raw = value as Record<string, unknown> | null;
+  if (!item || !raw || raw.startsAt !== content.startsAt || raw.dueAt !== content.dueAt || item.projectId !== projectId || item.id !== original.id || item.clientKey !== original.clientKey
+    || item.status !== original.status || item.createdAt !== original.createdAt || !canonicalPlanningVersion(item.updatedAt)
+    || !(Date.parse(item.updatedAt) > Date.parse(original.updatedAt))
+    || item.kind !== content.kind || item.title !== content.title.trim() || item.body !== content.body
+    || item.startsAt !== content.startsAt || item.dueAt !== content.dueAt) throw new Error("PROJECT_TIMELINE_EDIT_RECEIPT_INVALID");
+  return item;
 }
 
 export async function setProjectTimelineStatus(projectId: string, id: string, status: ProjectTimelineStatus, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<ProjectTimelineItem> {

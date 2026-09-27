@@ -60,7 +60,7 @@ import { createMySubmissionsRequestController, type MySubmissionItem } from "./l
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, loadInbox, promoteInboxTask, updateInboxStatus, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
-import { createProject, createProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
+import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
@@ -1354,7 +1354,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
   const [retryVersion, setRetryVersion] = useState(0);
   const activeRef = useRef(true);
   const pendingRef = useRef(false);
-  const statusNoticeRef = useRef<"PLANNING_VERSION_CONFLICT" | "PROJECT_TIMELINE_STATUS_UNKNOWN" | undefined>(undefined);
+  const statusNoticeRef = useRef<"PLANNING_VERSION_CONFLICT" | "PROJECT_TIMELINE_STATUS_UNKNOWN" | "PROJECT_TIMELINE_EDIT_UNKNOWN" | undefined>(undefined);
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const stateRef = useRef<ProjectTimelinePageState>({ kind: "loading" });
@@ -1376,7 +1376,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     stateRef.current = cleared; setState(cleared); return true;
   }, [locale, memberId, projectId, writeRecovery.deny]);
 
-  const refresh = useCallback(async (clearOnFailure = false, record?: PlanningWriteRecord): Promise<boolean> => {
+  const refresh = useCallback(async (clearOnFailure = false, record?: PlanningWriteRecord, receiptVersion?: string): Promise<boolean> => {
     controllerRef.current?.abort();
     const controller = new AbortController(); controllerRef.current = controller;
     const generation = ++generationRef.current;
@@ -1389,7 +1389,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
       if (!activeRef.current || generationRef.current !== generation) return false;
       if (record) {
         const item = page.items.find(item => item.id === record.id);
-        if (!item || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(record.expectedUpdatedAt)) throw new Error("TIMELINE_RECOVERY_VERSION_INVALID");
+        if (!item || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Math.max(Date.parse(record.expectedUpdatedAt), Date.parse(receiptVersion ?? record.expectedUpdatedAt))) throw new Error("TIMELINE_RECOVERY_VERSION_INVALID");
       }
       const next: ProjectTimelinePageState = { kind: "ready", project, items: page.items, pagination: page.pagination };
       stateRef.current = next; setState(next);
@@ -1414,29 +1414,34 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
-  const mutate = async (item: ProjectTimelineItem, operation: () => Promise<unknown>) => {
-    if (pendingRef.current || createLockedRef.current || writeRecovery.locked) return;
+  const mutate = async (item: ProjectTimelineItem, operation: () => Promise<ProjectTimelineItem>, unknownNotice: "PROJECT_TIMELINE_STATUS_UNKNOWN" | "PROJECT_TIMELINE_EDIT_UNKNOWN" = "PROJECT_TIMELINE_STATUS_UNKNOWN"): Promise<boolean> => {
+    if (pendingRef.current || createLockedRef.current || writeRecovery.locked) return false;
     const record = writeRecovery.begin(item.id, item.updatedAt);
-    if (!record) return;
+    if (!record) return false;
     const generation = generationRef.current;
     pendingRef.current = true; setPending(true); setActionError(undefined);
     statusNoticeRef.current = undefined;
+    let receipt: ProjectTimelineItem | undefined;
     try {
-      try { await operation(); }
+      try { receipt = await operation(); }
       catch (error: unknown) {
-        if (!activeRef.current || generationRef.current !== generation) return;
-        if (clearDenied(error)) return;
+        if (!activeRef.current || generationRef.current !== generation) return false;
+        if (clearDenied(error)) return false;
         if (error instanceof ApiRequestError && error.status === 409) {
           statusNoticeRef.current = "PLANNING_VERSION_CONFLICT";
         } else if (!(error instanceof ApiRequestError) || error.retryable || error.status === 408 || error.status >= 500) {
-          statusNoticeRef.current = "PROJECT_TIMELINE_STATUS_UNKNOWN";
+          statusNoticeRef.current = unknownNotice;
         } else {
           writeRecovery.finish(record);
-          setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return;
+          setActionError(frontendText(locale, "PROJECT_TIMELINE_ACTION_FAILED")); return false;
         }
       }
       // A receipt or a new read cannot justify replaying an uncertain write.
-      if (activeRef.current && generationRef.current === generation) await refresh(true, record);
+      if (activeRef.current && generationRef.current === generation) {
+        const refreshed = await refresh(true, record, unknownNotice === "PROJECT_TIMELINE_EDIT_UNKNOWN" ? receipt?.updatedAt : undefined);
+        return refreshed && !statusNoticeRef.current;
+      }
+      return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
   };
   const changePage = (page: number, size = pageSize) => {
@@ -1452,6 +1457,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
       return createProjectTimeline(projectId, input);
     }} onCreateReadback={() => refresh()} onCreateDenied={clearDenied}
     onCreateLock={locked => { createLockedRef.current = locked; setCreateLocked(locked); }}
+    onEdit={(item, content) => mutate(item, () => editProjectTimeline(projectId, item, content), "PROJECT_TIMELINE_EDIT_UNKNOWN")}
     onStatusChange={(item: ProjectTimelineItem, status: ProjectTimelineStatus) => void mutate(item, () => setProjectTimelineStatus(projectId, item.id, status, item.updatedAt))}
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }

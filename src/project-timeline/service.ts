@@ -7,6 +7,8 @@ import type { ProjectTimelineCreate, ProjectTimelineItem, ProjectTimelineKind, P
 
 export interface ProjectTimelineCreateInput { id?: unknown; clientKey?: unknown; kind?: unknown; title?: unknown; body?: unknown; startsAt?: unknown; dueAt?: unknown; }
 
+export interface ProjectTimelineEditInput { kind?: unknown; title?: unknown; body?: unknown; startsAt?: unknown; dueAt?: unknown; expectedUpdatedAt?: unknown; }
+
 export class ProjectTimelineService {
   constructor(
     private readonly repository: ProjectTimelineRepositoryPort,
@@ -49,6 +51,16 @@ export class ProjectTimelineService {
     return this.repository.listNumbered(memberId, { ...page, projectId });
   }
 
+  async edit(memberId: string, projectId: string, id: string, input: ProjectTimelineEditInput): Promise<ProjectTimelineItem> {
+    const current = await this.get(memberId, projectId, id);
+    const expected = requirePlanningVersion(input.expectedUpdatedAt, current.updatedAt, "PROJECT_TIMELINE");
+    if ([input.kind, input.title, input.body, input.startsAt, input.dueAt].some(value => value === undefined) || typeof input.body !== "string") throw new AppError("PROJECT_TIMELINE_INVALID", "All editable fields are required", 400);
+    const content = normalizeCreate(input, projectId, current.id);
+    const updated = await this.repository.updateContent(memberId, projectId, current.id, content, nextPlanningVersion(expected, (this.options.now?.() ?? new Date()).getTime()), expected);
+    if (!updated) throw planningConflict("PROJECT_TIMELINE");
+    return updated;
+  }
+
   async setStatus(memberId: string, projectId: string, id: string, status: unknown, expectedUpdatedAt?: unknown): Promise<ProjectTimelineItem> {
     if (typeof status !== "string" || !["open", "done", "archived"].includes(status)) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline status is invalid", 400);
     const current = await this.get(memberId, projectId, id);
@@ -70,8 +82,8 @@ function normalizeCreate(input: ProjectTimelineCreateInput, projectId: string, f
   if (typeof kind !== "string" || !["meeting", "decision", "action_item", "milestone"].includes(kind)) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline kind is invalid", 400);
   const title = typeof input.title === "string" ? input.title.trim() : "";
   if (!title || title.length > 200) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline title is invalid", 400);
-  const body = input.body === undefined || input.body === null ? "" : typeof input.body === "string" ? input.body : "__invalid__";
-  if (body === "__invalid__" || body.length > 200000) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline body is invalid", 400);
+  const body = input.body === undefined || input.body === null ? "" : input.body;
+  if (typeof body !== "string" || body.length > 200000) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline body is invalid", 400);
   const startsAt = optionalTime(input.startsAt);
   const dueAt = optionalTime(input.dueAt);
   if (startsAt !== null && dueAt !== null && dueAt < startsAt) throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline due time must not precede start time", 400);
@@ -80,7 +92,7 @@ function normalizeCreate(input: ProjectTimelineCreateInput, projectId: string, f
 
 function optionalTime(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && Number.isFinite(new Date(value).getTime())) return value;
   if (typeof value === "string") { const parsed = Date.parse(value); if (Number.isSafeInteger(parsed)) return parsed; }
   throw new AppError("PROJECT_TIMELINE_INVALID", "Timeline time is invalid", 400);
 }
