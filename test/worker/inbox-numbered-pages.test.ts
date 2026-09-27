@@ -46,4 +46,19 @@ describe("inbox numbered pages through authenticated HTTP", () => {
     await expect(service.listNumbered("a", {}, { page: 0 })).rejects.toMatchObject({ status: 400 });
     await expect(service.listNumbered("a", { status: "invalid" as never }, {})).rejects.toMatchObject({ status: 400 });
   });
+  it("replays an exact stable creation once and isolates the receipt/readback by owner", async () => {
+    const intent = { id: "capture-one", clientKey: "capture-key", kind: "text", content: "Stable private capture", sourceUrl: null };
+    const first = await http("/api/inbox", "POST", intent);
+    expect(first.status).toBe(201);
+    const created = await first.json<any>(); expect(created.created).toBe(true);
+    const retry = await http("/api/inbox", "POST", intent);
+    expect(retry.status).toBe(200);
+    const replay = await retry.json<any>(); expect(replay).toEqual({ ...created, created: false });
+    expect(await (await http("/api/inbox/capture-one")).json()).toEqual(created.item);
+    expect((await http("/api/inbox/capture-one", "GET", undefined, "b")).status).toBe(404);
+    expect((await read("page=1&pageSize=100")).pagination.total).toBe(44);
+    const second = await http("/api/inbox", "POST", { ...intent, id: "capture-b" }, "b");
+    expect(second.status).toBe(201); expect((await second.json<any>()).item.id).toBe("capture-b");
+  });
+
 });

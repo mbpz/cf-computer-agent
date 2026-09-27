@@ -7,7 +7,7 @@ import { InboxPage } from "../../frontend/pages/inbox-page";
 
 const paging = { onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn() };
 describe("Inbox page", () => {
-  it("renders bilingual capture, archive and promotion affordances without undefined", () => {
+  it("renders bilingual recovery, archive and promotion affordances without undefined", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const html = renderToStaticMarkup(<InboxPage {...paging} locale={locale} state={{ kind: "ready", items: [{
       id: "inbox-1", clientKey: "capture-1", kind: "text", content: "整理首页信息架构", sourceUrl: null,
@@ -15,7 +15,9 @@ describe("Inbox page", () => {
       createdAt: "2026-09-09T00:00:00.000Z", updatedAt: "2026-09-09T00:00:00.000Z",
     }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} onCreate={vi.fn()} onStatusChange={vi.fn()} onPromoteTask={vi.fn()} />);
     expect(html).toContain(frontendText(locale, "INBOX_TITLE"));
-    expect(html).toContain(frontendText(locale, "INBOX_CAPTURE"));
+    expect(html).toContain(frontendText(locale, "INBOX_CAPTURE_TITLE"));
+    // SSR without a member/storage must not offer an unsafe fresh POST.
+    expect(html).toContain(frontendText(locale, "INBOX_CREATE_STORAGE_BLOCKED"));
     expect(html).toContain(frontendText(locale, "INBOX_PROMOTE_TASK"));
     expect(html).toContain(frontendText(locale, "INBOX_STATUS_FILTER"));
     expect(html).not.toContain("undefined");

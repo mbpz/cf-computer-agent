@@ -764,3 +764,19 @@ rtk proxy npm run audit:workbench-domain
 - `typecheck`、`build:ui`、`verify:i18n`、`test:i18n`（13/13）通过。构建保留 >500 kB chunk 提示；typecheck 不覆盖全部前端 TSX。没有运行全仓 npm test/check。
 - 成熟度仅追加测试证据，不重写历史 gap/owner/分类；本地实现以增量清单为准。canonical 仍 **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。
 - 无新增迁移；未 push、merge、部署、生产写入、备份、AI 调用或手工读取/上传 Secret。真实身份/原生浏览器分页旅程仍待验收。下一步允许本地继续 EXT-INB-02 稳定创建意图及精确原请求重试。
+
+
+## C04 — 收集箱创建稳定意图（2026-09-27，本地子项完成）
+
+承接 `1a8e20f`，按 EXT-INB-02 继续；仅修改收集箱创建与本地恢复，不改归档/转任务服务语义，不新增迁移。
+
+- 创建表单一次生成并冻结 id/clientKey/kind/content/sourceUrl，成员隔离 sessionStorage 在 POST 前落盘并读回核验。保存失败不得发送；重复点击通过同步状态锁合并，未决创建阻止同页其他写操作。
+- 未知结果保留草稿与原请求，必须显式重试；路由返回/新 browser realm 恢复不自动 POST。已确认回执持久标记后只 GET `/api/inbox/:id` 和当前数字分页列表，回读成功并清理恢复记录后才清空。普通首次 400/413/422 保留可编辑草稿；401/403 清屏并尝试清理本成员记录。
+- 对 id/clientKey/kind/content/sourceUrl、created 布尔值及关键行字段严格校验；错误回执保留未知状态。后端同成员 clientKey 精确重试返回同一项，跨成员 GET 为 404；后端未增加载荷冲突检测，不能据此前端闭环宣称所有调用者都具有严格幂等性。
+- 恢复存储损坏、权限/配额故障、读回不一致、不同未决记录均失败关闭。修复补测发现的记录替换问题：显式存储检查也不能用其他请求替代内存中未决载荷。acknowledged 单调，确认后落盘暂时失败也不能退回 POST 重试。仅当前标签页明文 sessionStorage，不保证关标签、清存储、跨设备恢复；不增加加密或备份。
+- 路由按成员重新挂载；离开页面/变更查询中止 GET、忽略旧读写结果。POST 不自动取消后重发。新 realm 重建已存请求和另一成员隔离有 App/happy-dom 测试，不等同原生浏览器验收。
+- RED：稳定创建初版 11/11 失败（丢草稿、每次新键、无恢复/写前存储保护）；后续存储冲突补测 1 失败 / 16 通过，修复后通过。其余新增契约边界作为补充回归，不宣称全部逐条 RED。
+- 联合命令：`rtk proxy npx vitest run test/unit/frontend-inbox-create.test.tsx test/unit/frontend-inbox-create-intent.test.ts test/unit/frontend-inbox-create-data.test.ts test/unit/frontend-inbox-numbered-pages.test.tsx test/unit/frontend-inbox-numbered-data.test.ts test/unit/frontend-inbox-page.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-numbered-pages.test.tsx test/worker/inbox-numbered-pages.test.ts test/worker/inbox.test.ts test/unit/inbox-service.test.ts test/unit/inbox-route.test.ts`：**14 文件 329/329**（较前批新增 53 项）。
+- `typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`verify:delivery-status` 30/30、领域快照校验、`git diff --check` 通过。typecheck 不覆盖全部前端 TSX；构建仍有 >500 kB chunk 提示；未执行全仓 npm test/check。
+- canonical **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；EXT-INB-02 和 C04 父项仍开放。下一项 EXT-INB-03 归档/转任务条件写、未知结果恢复与跳转旅程允许继续本地实施，真实身份/原生浏览器验收仍待补。
+- 本批未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。

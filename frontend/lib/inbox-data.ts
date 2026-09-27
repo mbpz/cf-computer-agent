@@ -1,4 +1,5 @@
 import { apiFetch, type Fetcher } from "./api";
+import { validInboxIntent, type InboxCreateIntent } from "./inbox-create-intent";
 import { normalizeNumberedPage, parsePageSearch, writePageSearch, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
 export type InboxKind = "text" | "link" | "file_ref";
@@ -41,25 +42,42 @@ export async function loadInboxNumbered(input: InboxPageRequest, requester: Fetc
   const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
   if (input.status) params.set("status", input.status);
   const value = await apiFetch<unknown>(`/api/inbox?${params}`, { requester, signal });
-  const page = normalizeNumberedPage(value, (raw) => {
-    const item = normalizeInbox(raw);
-    const record = raw as Record<string, unknown> | null;
-    if (!item || !item.id.trim() || !item.clientKey.trim() || !item.createdAt || !item.updatedAt
-      || !Number.isFinite(Date.parse(item.createdAt)) || !Number.isFinite(Date.parse(item.updatedAt))
-      || ["sourceUrl", "promotedTaskId", "promotedSubmissionId"].some(key => record?.[key] !== null && typeof record?.[key] !== "string")) throw new Error("INBOX_RESPONSE_INVALID");
-    return item;
-  });
+  const page = normalizeNumberedPage(value, strictInbox);
   if (page.pagination.page !== input.page || page.pagination.pageSize !== input.pageSize
     || new Set(page.items.map(item => item.id)).size !== page.items.length
     || (input.status && page.items.some(item => item.status !== input.status))) throw new Error("INBOX_RESPONSE_INVALID");
   return page;
 }
 
-export async function createInbox(input: { kind: InboxKind; content: string; sourceUrl?: string | null }, requester: Fetcher = fetch): Promise<{ item: InboxItem; created: boolean }> {
-  return apiFetch<{ item: InboxItem; created: boolean }>("/api/inbox", {
-    requester, method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input }),
+export async function createInbox(input: InboxCreateIntent, requester: Fetcher = fetch): Promise<{ item: InboxItem; created: boolean }> {
+  if (!validInboxIntent(input)) throw new Error("INBOX_CREATE_INVALID");
+  const value = await apiFetch<unknown>("/api/inbox", {
+    requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
   });
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INBOX_CREATE_RESPONSE_INVALID");
+  const record = value as Record<string, unknown>;
+  if (typeof record.created !== "boolean") throw new Error("INBOX_CREATE_RESPONSE_INVALID");
+  const item = matchCreatedInbox(record.item, input);
+  if (record.created && item.status !== "inbox") throw new Error("INBOX_CREATE_RESPONSE_INVALID");
+  return { item, created: record.created };
+}
+
+export async function readCreatedInbox(input: InboxCreateIntent, requester: Fetcher = fetch, signal?: AbortSignal): Promise<InboxItem> {
+  if (!validInboxIntent(input)) throw new Error("INBOX_CREATE_INVALID");
+  return matchCreatedInbox(await apiFetch<unknown>(`/api/inbox/${encodeURIComponent(input.id)}`, { requester, signal }), input);
+}
+function matchCreatedInbox(raw: unknown, input: InboxCreateIntent): InboxItem {
+  const item = strictInbox(raw);
+  if (item.id !== input.id || item.clientKey !== input.clientKey || item.kind !== input.kind || item.content !== input.content || item.sourceUrl !== input.sourceUrl) throw new Error("INBOX_CREATE_RESPONSE_INVALID");
+  return item;
+}
+function strictInbox(raw: unknown): InboxItem {
+  const item = normalizeInbox(raw);
+  const record = raw as Record<string, unknown> | null;
+  if (!item || !item.id.trim() || !item.clientKey.trim() || !item.createdAt || !item.updatedAt
+    || !Number.isFinite(Date.parse(item.createdAt)) || !Number.isFinite(Date.parse(item.updatedAt))
+    || ["sourceUrl", "promotedTaskId", "promotedSubmissionId"].some(key => record?.[key] !== null && typeof record?.[key] !== "string")) throw new Error("INBOX_RESPONSE_INVALID");
+  return item;
 }
 
 export async function updateInboxStatus(id: string, status: "inbox" | "archived", requester: Fetcher = fetch): Promise<InboxItem> {
