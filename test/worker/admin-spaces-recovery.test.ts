@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
-import { loadAdminSpaces } from "../../frontend/lib/admin-spaces-data";
+import { loadAdminSpaces, manageAdminSpace } from "../../frontend/lib/admin-spaces-data";
 import { SpacesRepository } from "../../src/spaces/repository";
 import { SpacesService } from "../../src/spaces/service";
 import { AuditRepository } from "../../src/audit/repository";
@@ -30,6 +30,71 @@ describe("admin spaces API recovery boundaries",()=>{
   });
 
 
+  it("replays concurrent collection creation with one immutable receipt and audit", async () => {
+    const created = await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "idempotent", name: "Idempotent", position: 0 }) });
+    const { space } = await created.json<{ space: { id: string } }>();
+    const body = { spaceId: space.id, name: "Only once", position: 0 };
+    const submit = (payload = body, token = admin) => api("/api/admin/collections", token, { method: "POST", headers: { "idempotency-key": "collection-request-1" }, body: JSON.stringify(payload) });
+    const responses = await Promise.all([submit(), submit(), submit()]); expect(responses.map(item => item.status)).toEqual([201, 201, 201]);
+    const receipts = await Promise.all(responses.map(item => item.json<{ collection: { id: string } }>()));
+    expect(receipts[1]).toEqual(receipts[0]); expect(receipts[2]).toEqual(receipts[0]);
+    expect((await env.DB.prepare("SELECT id FROM collections WHERE space_id=?").bind(space.id).all()).results).toHaveLength(1);
+    expect((await env.DB.prepare("SELECT id FROM audit_events WHERE action='collection.created'").all()).results).toHaveLength(1);
+    expect((await submit({ ...body, name: "Different" })).status).toBe(409);
+    await api(`/api/admin/collections/${receipts[0]!.collection.id}`, admin, { method: "PATCH", body: JSON.stringify({ name: "Edited later" }) });
+    expect(await (await submit()).json()).toEqual(receipts[0]);
+    expect((await submit(body, contributor)).status).toBe(403);
+  });
+  it("runs the frontend space and collection commands against real HTTP and D1", async () => {
+    await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "forms", name: "Forms", position: 0 }) });
+    const requester = (url: RequestInfo | URL, init?: RequestInit) => api(String(url), admin, init);
+    let current = (await loadAdminSpaces({ requester })).find(item => item.slug === "forms")!;
+    const fields = { name: "Edited", description: "Changed", position: 3, status: "active" as const };
+    await manageAdminSpace({ kind: "space", spaceId: current.id, input: { ...fields, slug: "edited", expectedUpdatedAt: current.updatedAt } }, current, requester);
+    current = (await loadAdminSpaces({ requester })).find(item => item.id === current.id)!; expect(current.name).toBe("Edited");
+    await manageAdminSpace({ kind: "create-collection", spaceId: current.id, requestKey: "forms-collection-1", input: { ...fields, parentId: null } }, current, requester);
+    current = (await loadAdminSpaces({ requester })).find(item => item.id === current.id)!;
+    await manageAdminSpace({ kind: "collection", spaceId: current.id, collectionId: current.collections[0]!.id, input: { ...fields, name: "Edited collection", parentId: null, status: "disabled", expectedUpdatedAt: current.collections[0]!.updatedAt } }, current, requester);
+    expect((await loadAdminSpaces({ requester })).find(item => item.id === current.id)!.collections[0]).toMatchObject({ name: "Edited collection", status: "disabled" });
+  });
+  it("rolls back the request claim, collection and audit together, then safely retries", async () => {
+    const created = await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "rollback-key", name: "Rollback", position: 0 }) }); const { space } = await created.json<{ space: { id: string } }>();
+    const submit = (key = "rollback-request", parentId: string | null = null) => api("/api/admin/collections", admin, { method: "POST", headers: { "idempotency-key": key }, body: JSON.stringify({ spaceId: space.id, name: "Retry", parentId, position: 0 }) });
+    await env.DB.exec("CREATE TRIGGER fail_collection_audit BEFORE INSERT ON audit_events WHEN NEW.action = 'collection.created' BEGIN SELECT RAISE(ABORT, 'forced audit failure'); END;");
+    expect((await submit()).status).toBe(500);
+    expect((await env.DB.prepare("SELECT * FROM admin_collection_creation_requests").all()).results).toEqual([]);
+    expect((await env.DB.prepare("SELECT * FROM collections WHERE space_id=?").bind(space.id).all()).results).toEqual([]);
+    await env.DB.exec("DROP TRIGGER fail_collection_audit;");
+    expect((await submit("bad-key")).status).toBe(400);
+    expect((await submit("rollback-request", "missing-parent")).status).toBe(400);
+    expect((await env.DB.prepare("SELECT * FROM admin_collection_creation_requests").all()).results).toEqual([]);
+    expect((await submit()).status).toBe(201);
+    expect((await env.DB.prepare("SELECT * FROM admin_collection_creation_requests").all()).results).toHaveLength(1);
+    await env.DB.prepare("UPDATE members SET status='disabled' WHERE id='space-admin'").run(); expect((await submit()).status).toBe(403);
+  });
+  it("scopes request keys to the current authenticated administrator", async () => {
+    const created = await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "actors", name: "Actors", position: 0 }) }); const { space } = await created.json<{ space: { id: string } }>();
+    const submit = (token: string) => api("/api/admin/collections", token, { method: "POST", headers: { "idempotency-key": "actor-scoped-key" }, body: JSON.stringify({ spaceId: space.id, name: "Each actor", position: 0 }) });
+    expect((await submit(admin)).status).toBe(201);
+    // The product permits one administrator: transfer authority, do not bypass its index.
+    await env.DB.prepare("UPDATE members SET role='contributor' WHERE id='space-admin'").run();
+    await env.DB.prepare("UPDATE members SET role='admin' WHERE id='space-contributor'").run();
+    expect((await submit(admin)).status).toBe(403);
+    expect((await submit(contributor)).status).toBe(201);
+    expect((await env.DB.prepare("SELECT actor_id FROM admin_collection_creation_requests").all()).results).toHaveLength(2);
+  });
+  it("rejects stale browser snapshots for space and collection edits without duplicate audits", async () => {
+    const result = await api("/api/admin/spaces", admin, { method: "POST", body: JSON.stringify({ slug: "browser-version", name: "Original", position: 0 }) });
+    const { space } = await result.json<{ space: { id: string; updatedAt: string } }>();
+    const patch = (path: string, body: object) => api(path, admin, { method: "PATCH", body: JSON.stringify(body) });
+    expect((await patch(`/api/admin/spaces/${space.id}`, { name: "Other tab", expectedUpdatedAt: space.updatedAt })).status).toBe(200);
+    expect((await patch(`/api/admin/spaces/${space.id}`, { name: "Stale draft", expectedUpdatedAt: space.updatedAt })).status).toBe(409);
+    const created = await api("/api/admin/collections", admin, { method: "POST", body: JSON.stringify({ spaceId: space.id, name: "Original collection", position: 0 }) });
+    const { collection } = await created.json<{ collection: { id: string; updatedAt: string } }>();
+    expect((await patch(`/api/admin/collections/${collection.id}`, { name: "Other tab", expectedUpdatedAt: collection.updatedAt })).status).toBe(200);
+    expect((await patch(`/api/admin/collections/${collection.id}`, { name: "Stale draft", expectedUpdatedAt: collection.updatedAt })).status).toBe(409);
+    expect((await env.DB.prepare("SELECT id FROM audit_events WHERE action IN ('space.updated', 'collection.updated')").all()).results).toHaveLength(2);
+  });
   it("feeds actual HTTP management records into the frontend loader",async()=>{
     const created=await api("/api/admin/spaces",admin,{method:"POST",body:JSON.stringify({slug:"managed",name:"Managed",position:0})});expect(created.status).toBe(201);const {space}=await created.json<{space:{id:string}}>();
     expect((await api("/api/admin/collections",admin,{method:"POST",body:JSON.stringify({spaceId:space.id,name:"Owned collection",position:0})})).status).toBe(201);

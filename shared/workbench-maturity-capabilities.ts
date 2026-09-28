@@ -384,7 +384,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-admin-spaces", routeId: "admin-spaces", pathname: "/admin/spaces", requiredRole: "admin",
     journey: "Create and govern knowledge spaces and collections.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/pages/admin/spaces-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/spaces/service.ts"], testEvidence: ["test/unit/spaces-service.test.ts", "test/worker/spaces.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-008"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned space marker are runtime-probed. Initial-load read recovery and duplicate-click suppression are locally tested; archive/content impact, release, and signed-browser acceptance remain incomplete."],
+    frontendEvidence: ["frontend/pages/admin/spaces-page.tsx", "frontend/app.tsx"], backendEvidence: ["src/spaces/service.ts"], testEvidence: ["test/unit/spaces-service.test.ts", "test/worker/spaces.test.ts", "test/unit/frontend-workbench-maturity-routes.test.tsx"], ledgerIds: ["ADM-008"], gaps: ["Current admin server-navigation entry plus loading, empty, retryable initial error, and response-owned space marker are runtime-probed. Cursor paging, write recovery, versioned space and collection editors, and actor-keyed collection creation receipts are locally tested. Keys and draft intent are not persisted across editor unmount; space creation still lacks a replay key. Archive/content impact, migration 0056 release, and signed-browser acceptance remain incomplete."],
   },
   {
     id: "workbench-admin-audit", routeId: "admin-audit", pathname: "/admin/audit", requiredRole: "admin",
@@ -626,11 +626,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-spaces",
-    apiPaths: ["/api/admin/spaces", "/api/admin/spaces/:id/collections"],
-    persistencePaths: ["src/spaces/repository.ts", "migrations/0001_phase1_control_plane.sql"],
+    apiPaths: ["/api/admin/spaces", "/api/admin/spaces/:id", "/api/admin/spaces/:id/collections", "/api/admin/collections", "/api/admin/collections/:id"],
+    persistencePaths: ["src/spaces/repository.ts", "migrations/0001_phase1_control_plane.sql", "migrations/0056_admin_collection_creation_requests.sql"],
     ownerPredicate: null,
     pagination: "cursor",
-    mutations: ["POST /api/admin/spaces — gap: the visible server-generated create has no client idempotency key"],
+    mutations: ["POST /api/admin/spaces — gap: the visible server-generated create has no client idempotency key", "PATCH /api/admin/spaces/:id — gap: browser snapshot version and SQL CAS are locally tested, but unknown intent is not persisted across unmount and legacy clients may omit the version", "POST /api/admin/collections — gap: mounted editor keys replay an immutable actor-scoped D1 receipt, but the key is not persisted across refresh or unmount and legacy clients may omit it", "PATCH /api/admin/collections/:id — gap: browser snapshot version and SQL CAS are locally tested, but unknown intent is not persisted across unmount and legacy clients may omit the version"],
     mutationSafety: "mixed",
   },
   {

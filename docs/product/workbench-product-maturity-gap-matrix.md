@@ -81,7 +81,7 @@
 | workbench-admin-assets:states:parse-progress-and-recovery | manifest:0@6434dc8da411 | workbench-admin-assets | 资产页初始读失败恢复已本地验证；解析进度与完整恢复旅程不完整。 | states | R6-004 | R2-005<br>R2-009 | frontend/pages/admin/asset-queue-page.tsx<br>src/assets/service.ts | test/unit/frontend-admin-assets-data.test.ts | 解析失败展示最近错误、进度和安全重试，成功后预览与队列状态同步。 | P1 |
 | workbench-admin-members:journey:member-status-and-audit-navigation | manifest:0@c8165462f20c | workbench-admin-members | 成员页初始读失败恢复已本地验证；禁用后的缓存失效与审计定位未闭环。 | journey | R6-005 | R2-005<br>R6-009 | frontend/pages/admin/members-page.tsx<br>src/members/service.ts | test/worker/members.test.ts | 管理员禁用成员后可进入对应审计事件，目标 session 与菜单立即失效。 | P1 |
 | workbench-admin-menus:journey:projection-invalidation | manifest:0@769a73a9c99c | workbench-admin-menus | 菜单页初始读失败恢复已本地验证；跨 session 投影失效尚未形成产品旅程。 | journey | R6-007 | R2-005<br>R6-011 | frontend/pages/admin/menus-page.tsx<br>src/authorization/menu-tree.ts | test/worker/admin-menus.test.ts | 管理员保存菜单后 contributor 无刷新也只看到新授权投影，失败可恢复。 | P1 |
-| workbench-admin-spaces:journey:archive-content-impact | manifest:0@a36aa12b7c30 | workbench-admin-spaces | Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。 | journey | R6-008 | R2-008<br>R3-012 | frontend/pages/admin/spaces-page.tsx<br>src/spaces/service.ts | test/worker/spaces.test.ts | 管理员归档前看到搜索、阅读、链接影响，确认后相关内容安全收缩。 | P1 |
+| workbench-admin-spaces:journey:archive-content-impact | manifest:0@67c4c4159e43 | workbench-admin-spaces | Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。 | journey | R6-008 | R2-008<br>R3-012 | frontend/pages/admin/spaces-page.tsx<br>src/spaces/service.ts | test/worker/spaces.test.ts | 管理员归档前看到搜索、阅读、链接影响，确认后相关内容安全收缩。 | P1 |
 | workbench-admin-audit:states:raw-page-shape-and-retry | manifest:0@bfef1ebcb5d4 | workbench-admin-audit | 审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。 | states | R6-009 | R2-005<br>R2-010 | frontend/pages/admin/audit-page.tsx<br>src/audit/repository.ts | test/worker/admin-audit.test.ts | 审计列表在 loading、empty、ready、error/retry 间可达，并能从事件打开相关实体。 | P1 |
 | workbench-admin-analytics:journey:date-range-and-pagination | manifest:0@fa4e6b219f73 | workbench-admin-analytics | 统计读取恢复、单事务快照和跨页写后对账已本地验证；发布与真实登录浏览器验收仍未闭环。 | journey | R6-002 | R2-004<br>R2-007 | frontend/pages/admin/analytics-page.tsx<br>src/analytics/repository.ts | test/worker/analytics.test.ts | 管理员切换日期范围、来源和页码后刷新，趋势与总数保持一致且错误可恢复。 | P1 |
 | workbench-admin-submission-detail:journey:decision-idempotency-and-discovery | manifest:0@ec730e821f69 | workbench-admin-submission-detail | 审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。 | journey | R6-003 | R2-005<br>R2-008 | frontend/pages/admin/review-detail-route.tsx<br>src/routes/admin-review.ts | test/unit/frontend-admin-review-data.test.ts | 从队列打开详情并完成发布、退回或拒绝；缺失预览和冲突都有明确恢复。 | P1 |
@@ -92,6 +92,9 @@
 | workbench-agent:query_or_idempotency:submit-chat-turn | domain:POST /api/knowledge/chat | workbench-agent | Agent 提问缺少端到端稳定请求键和重复副作用证明。 | query_or_idempotency | R3-016 | R3-015 | src/chat/repository.ts<br>src/agent/session-do.ts | test/worker/agent-session.test.ts | 网络重试同一问题只生成一个 turn 和一组引用，失败恢复不重复工具调用。 | P1 |
 | workbench-agent:query_or_idempotency:cancel-conversation | domain:POST /api/knowledge/chat/conversations/:id/cancel | workbench-agent | 取消 Agent 会话缺少重复请求与终态收敛证明。 | query_or_idempotency | R3-016 | R3-015 | src/chat/conversation-service.ts<br>src/agent/session-do.ts | test/worker/agent-session.test.ts | 重复取消始终返回同一终态，后续结果不能覆盖已确认取消。 | P1 |
 | workbench-admin-assets:query_or_idempotency:retry-asset | domain:POST /api/admin/assets/:id/retry | workbench-admin-assets | 资产解析重试缺少稳定幂等键与重复任务抑制证明。 | query_or_idempotency | R6-004 | R2-008 | src/assets/repository.ts<br>src/assets/service.ts | test/worker/m2-assets.test.ts | 连续点击或网络重试只排入一个解析任务，并展示同一进度与终态。 | P1 |
+| workbench-admin-spaces:query_or_idempotency:update-space | domain:PATCH /api/admin/spaces/:id | workbench-admin-spaces | Space 编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。 | query_or_idempotency | R6-008 | R2-006 | frontend/lib/admin-spaces-data.ts<br>src/spaces/repository.ts | test/worker/admin-spaces-recovery.test.ts | 刷新或重新进入后精确恢复未知写入，不重复新增、不以新快照覆盖其他管理员修改。 | P1 |
+| workbench-admin-spaces:query_or_idempotency:create-collection | domain:POST /api/admin/collections | workbench-admin-spaces | 集合创建已有同编辑器稳定键及持久化回执；刷新或卸载后的意图恢复及无键旧客户端策略仍缺。 | query_or_idempotency | R6-008 | R2-006 | frontend/lib/admin-spaces-data.ts<br>src/spaces/repository.ts | test/worker/admin-spaces-recovery.test.ts | 刷新或重新进入后精确恢复未知写入，不重复新增、不以新快照覆盖其他管理员修改。 | P1 |
+| workbench-admin-spaces:query_or_idempotency:update-collection | domain:PATCH /api/admin/collections/:id | workbench-admin-spaces | 集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。 | query_or_idempotency | R6-008 | R2-006 | frontend/lib/admin-spaces-data.ts<br>src/spaces/repository.ts | test/worker/admin-spaces-recovery.test.ts | 刷新或重新进入后精确恢复未知写入，不重复新增、不以新快照覆盖其他管理员修改。 | P1 |
 | workbench-admin-spaces:query_or_idempotency:create-space | domain:POST /api/admin/spaces | workbench-admin-spaces | 创建 Space 缺少稳定幂等键和重放策略。 | query_or_idempotency | R6-008 | R2-006 | src/spaces/repository.ts<br>src/spaces/service.ts | test/worker/spaces.test.ts | 创建响应丢失后同键重试只生成一个 Space，成员可见性保持正确。 | P1 |
 | workbench-knowledge-reader:query_or_idempotency:remove-favorite | domain:DELETE /api/knowledge/:id/favorite | workbench-knowledge-reader | 取消收藏缺少重复请求与响应丢失后的收敛证明。 | query_or_idempotency | R3-011 | R3-007 | src/favorites/repository.ts<br>src/favorites/service.ts | test/unit/frontend-knowledge-reader-data.test.ts | 重复取消收藏后列表与阅读器都显示未收藏，其他成员收藏不受影响。 | P1 |
 | workbench-admin-submission-detail:query_or_idempotency:add-review-comment | domain:POST /api/admin/submissions/:id/comments | workbench-admin-submission-detail | 审核评论缺少稳定客户端键与重复写入抑制证明。 | query_or_idempotency | R6-003 | R2-006 | src/review-comments/repository.ts<br>src/review-comments/service.ts | test/unit/frontend-admin-review-data.test.ts | 评论提交响应丢失后重试只生成一条评论，并保持作者和审核目标一致。 | P1 |
@@ -120,13 +123,15 @@
 
 | 维度 | 数量 |
 | --- | ---: |
-| manifest 聚合 gap | 32 |
-| domain mutation-safety gap | 55 |
-| 总计 | 87 |
-| P0 | 47 |
-| P1 | 39 |
+| manifest 聚合 gap | 33 |
+| domain mutation-safety gap | 67 |
+| 总计 | 100 |
+| P0 | 53 |
+| P1 | 46 |
 | P2 | 1 |
 
 阶段主责计数由合同从 `Owner atom` 派生，并与 checklist、ROADMAP 的 R1–R8 映射逐项核对。矩阵只完成历史 R0-012 与本次 M02 的规划与验证，不提升任何 R1–R8 实现、发布或验收状态。
 
 2026-09-27 C03 增量：项目关联编辑新增四个前端可达写操作，均诚实记为 mutation-safety gap，统一归属已有 R4-015；当前 87 gap（47 P0 / 39 P1 / 1 P2），未增加实施原子或关闭既有项。历史 83 gap 快照不回填。
+
+2026-09-28 UTC D02 增量：空间编辑、集合创建与集合编辑三个可达操作纳入 R6-008，局部重放/CAS 证据不冒称跨刷新意图恢复。当前实算 100 gap（53 P0 / 46 P1 / 1 P2），历史快照不回填，原有检查断言未放宽。

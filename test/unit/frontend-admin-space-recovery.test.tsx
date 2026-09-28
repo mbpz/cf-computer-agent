@@ -25,6 +25,101 @@ describe("space write recovery", () => {
   async function submit() {await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});await flush();}
   function reads(url:unknown){return String(url).includes("/collections")?json({items:[]}):json({items:[space()]});}
 
+  async function select(id: string, value: string) {
+    const el = container.querySelector(`#${id}`) as HTMLSelectElement;
+    await act(async () => { el.value = value; el.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+  }
+  function managementFetch(writes: { url: string; body: Record<string, unknown> }[], failure?: string) {
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (!init?.method) return String(url).includes("/collections") ? json({ items: [collection()] }) : json({ items: [space()] });
+      const body = JSON.parse(String(init.body)); writes.push({ url: String(url), body });
+      if (failure === "server") return new Response(null, { status: 503 });
+      if (failure === "denied") return new Response(null, { status: 403 });
+      const item = String(url).includes("collections") ? collection({ ...body, id: init.method === "POST" ? "new-collection" : "collection-1", updatedAt: "2026-09-29T00:00:00.000Z" }) : space({ ...body, updatedAt: "2026-09-29T00:00:00.000Z" });
+      if (failure === "wrong-id") item.id = "other";
+      if (failure === "wrong-name") item.name = "Not requested";
+      return json(String(url).includes("collections") ? { collection: item } : { space: item });
+    });
+  }
+  it("edits a space through its full management form and refreshes authoritative data", async () => {
+    const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
+    await render(); await click("Edit space: Private space");
+    await input("admin-record-name", "Renamed"); await input("admin-record-slug", "renamed");
+    await input("admin-record-description", "Description"); await input("admin-record-position", "8"); await select("admin-record-status", "disabled");
+    await submit(); expect(writes).toEqual([{ url: "/api/admin/spaces/space-1", body: { name: "Renamed", slug: "renamed", description: "Description", status: "disabled", position: 8, expectedUpdatedAt: "2026-09-28T00:00:00.000Z" } }]);
+    expect(container.querySelector("form")).toBeNull(); expect(container.textContent).toContain("Private space");
+  });
+  it("creates a collection with the selected space and parent, and edits it back to root", async () => {
+    const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Child"); await select("admin-record-parent", "collection-1"); await submit();
+    expect(writes[0]).toEqual({ url: "/api/admin/collections", body: { spaceId: "space-1", parentId: "collection-1", name: "Child", description: "", position: 0, status: "active" } });
+    await click("Edit collection: Private collection"); await input("admin-record-name", "Renamed collection"); await select("admin-record-parent", ""); await submit();
+    expect(writes[1]).toEqual({ url: "/api/admin/collections/collection-1", body: { parentId: null, name: "Renamed collection", description: "", position: 0, status: "active", expectedUpdatedAt: "2026-09-28T00:00:00.000Z" } }); expect(container.querySelector("form")).toBeNull();
+  });
+  it.each(["server", "wrong-id", "wrong-name"])("locks a %s edit until GET recovery without replay", async failure => {
+    const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes, failure);
+    await render(); await click("Edit space: Private space"); await input("admin-record-name", "My draft"); await submit();
+    expect(button("Save changes").disabled).toBe(true); expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("My draft");
+    await click("Try again"); expect(button("Save changes").disabled).toBe(false); expect(writes).toHaveLength(1);
+  });
+  it("discards protected edit state after denial", async () => {
+    const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes, "denied");
+    await render(); await click("Edit collection: Private collection"); await submit(); expect(container.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("Private collection");
+  });
+  it("prevents write controls on legacy readonly spaces", async () => {
+    vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [collection()] }) : json({ items: [space({ kind: "legacy", readOnly: true })] }));
+    await render(); expect(button("Edit space: Private space")?.disabled).toBe(true); expect(button("Create collection: Private space")?.disabled).toBe(true); expect(button("Edit collection: Private collection")?.disabled).toBe(true);
+  });
+  it("rejects invalid position before edit and cancel leaves no writes", async () => {
+    const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
+    await render(); await click("Edit space: Private space"); await input("admin-record-position", "1000001"); await submit(); expect(writes).toHaveLength(0);
+    await click("Cancel"); expect(container.querySelector("form")).toBeNull();
+  });
+  it("coalesces collection submits and reuses its request key after response loss", async () => {
+    const first = deferred<Response>(); const requests: { key: string | null; body: unknown }[] = [];
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (!init?.method) return reads(url);
+      requests.push({ key: new Headers(init.headers).get("idempotency-key"), body: JSON.parse(String(init.body)) });
+      if (requests.length === 1) return first.promise;
+      return json({ collection: collection({ ...requests[0]!.body as object, id: "created-once" }) });
+    });
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Once");
+    await act(async () => { const form = container.querySelector("form")!; form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    expect(requests).toHaveLength(1); expect(button("Cancel").disabled).toBe(true);
+    first.resolve(new Response(null, { status: 503 })); await flush(); await click("Try again"); expect(requests).toHaveLength(1);
+    await submit(); expect(requests).toHaveLength(2); expect(requests[1]).toEqual(requests[0]); expect(requests[0]!.key).toMatch(/^[a-f0-9-]{36}$/); expect(container.querySelector("form")).toBeNull();
+  });
+  it("closes an acknowledged collection draft even if its post-write GET fails", async () => {
+    let writes = 0;
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (!init?.method) return writes ? new Response(null, { status: 503 }) : reads(url);
+      writes++; return json({ collection: collection({ ...JSON.parse(String(init.body)), id: "created" }) });
+    });
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Saved"); await submit();
+    expect(container.querySelector("form")).toBeNull(); expect(button("Try again")).toBeTruthy(); expect(button("Create collection: Private space").disabled).toBe(true); expect(writes).toBe(1);
+  });
+  it.each(["spaceId", "parentId", "position", "status", "description"])("rejects mismatched collection %s receipts", async field => {
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => !init?.method ? reads(url) : json({ collection: collection({ ...JSON.parse(String(init.body)), [field]: field === "position" ? 10 : field === "status" ? "disabled" : "mismatch" }) }));
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Draft"); await submit(); expect(button("Save changes").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
+  });
+  it("excludes a collection and its descendants from its parent options", async () => {
+    vi.stubGlobal("fetch", async (url: unknown) => String(url).includes("/collections") ? json({ items: [collection(), collection({ id: "child", parentId: "collection-1", name: "Child" }), collection({ id: "root", name: "Other root" }), collection({ id: "disabled", name: "Disabled", status: "disabled" })] }) : json({ items: [space()] }));
+    await render(); await click("Edit collection: Private collection"); expect([...container.querySelectorAll("#admin-record-parent option")].map(item => (item as HTMLOptionElement).value)).toEqual(["", "root"]);
+  });
+  it("retains an unloaded existing parent without silently moving the collection", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      if (init?.method) { const body = JSON.parse(String(init.body)); bodies.push(body); return json({ collection: collection({ ...body, updatedAt: "2026-09-29T00:00:00.000Z" }) }); }
+      return String(url).includes("/collections") ? json({ items: [collection({ parentId: "unloaded-parent" })], nextCursor: "more" }) : json({ items: [space()] });
+    });
+    await render(); await click("Edit collection: Private collection"); expect((container.querySelector("#admin-record-parent") as HTMLSelectElement).value).toBe("unloaded-parent"); await submit(); expect(bodies[0]).toMatchObject({ parentId: "unloaded-parent" });
+  });
+  it("ignores an old collection write denial after changing scope", async () => {
+    const old = deferred<Response>(); let gets = 0;
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => init?.method ? old.promise : String(url).includes("/collections") ? json({ items: [] }) : json({ items: [space({ name: ++gets === 1 ? "Private space" : "New scope" })] }));
+    await render(); await click("Create collection: Private space"); await input("admin-record-name", "Old draft"); await submit(); await render(locale());
+    old.resolve(new Response(null, { status: 403 })); await flush(); expect(container.textContent).toContain("New scope"); expect(container.querySelector("form")).toBeNull();
+  });
   it("coalesces same-batch creates and reads authority rather than appending a receipt",async()=>{
     const pending=deferred<Response>();const calls:string[]=[];let created=false;
     vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");if(init?.method==="POST")return pending.promise;return String(url).includes("/collections")?json({items:[]}):json({items:[space({name:created?"Authority":"Private space"})]});});

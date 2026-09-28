@@ -314,6 +314,7 @@ export async function routeAdminApi(
     const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     return jsonResponse({ space: await services.spaces.updateSpace(decodePathId(space[1]!), {
+      ...(input.expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt: stringValue(input.expectedUpdatedAt) }),
       ...(input.slug === undefined ? {} : { slug: stringValue(input.slug) }),
       ...(input.name === undefined ? {} : { name: stringValue(input.name) }),
       ...(input.description === undefined ? {} : { description: stringValue(input.description) }),
@@ -335,6 +336,7 @@ export async function routeAdminApi(
     const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     const collection = await services.spaces.createCollection({
+      requestKey: request.headers.get("idempotency-key") ?? undefined,
       spaceId: stringValue(input.spaceId),
       parentId: optionalNullableString(input.parentId),
       name: stringValue(input.name),
@@ -352,6 +354,7 @@ export async function routeAdminApi(
     const actor = requireAdminMember(principal);
     const input = record(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes));
     return jsonResponse({ collection: await services.spaces.updateCollection(decodePathId(collection[1]!), {
+      ...(input.expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt: stringValue(input.expectedUpdatedAt) }),
       ...(input.parentId === undefined ? {} : { parentId: optionalNullableString(input.parentId) }),
       ...(input.name === undefined ? {} : { name: stringValue(input.name) }),
       ...(input.description === undefined ? {} : { description: stringValue(input.description) }),

@@ -3,11 +3,11 @@ import { AuditRepository } from "../audit/repository";
 import type { CreateAuditEvent } from "../audit/types";
 import type { Collection, CollectionPage, CreateCollection, CreateSpace, Space, SpacePage, UpdateCollection, UpdateSpace } from "./types";
 
-export type SpacesRepositoryConflictKind = "slug" | "space_read_only" | "invalid_parent" | "write_conflict";
+export type SpacesRepositoryConflictKind = "slug" | "space_read_only" | "invalid_parent" | "write_conflict" | "request_conflict";
 export class SpacesRepositoryConflictError extends Error { constructor(readonly kind: SpacesRepositoryConflictKind) { super(`Space conflict: ${kind}`); } }
 
 export interface SpacesRepositoryPort { findSpaceById(id: string): Promise<Space | null>; createSpace(input: CreateSpace): Promise<Space>; createSpaceWithAudit?(input: CreateSpace, audit: CreateAuditEvent): Promise<Space>; updateSpace(id: string, input: UpdateSpace): Promise<Space | null>; updateSpaceWithAudit?(id: string, input: UpdateSpace, audit: CreateAuditEvent): Promise<Space | null>; listSpaces(request: PageRequest): Promise<SpacePage>; }
-export interface CollectionsRepositoryPort { findCollectionById(id: string): Promise<Collection | null>; createCollection(input: CreateCollection): Promise<Collection>; createCollectionWithAudit?(input: CreateCollection, audit: CreateAuditEvent): Promise<Collection>; updateCollection(id: string, input: UpdateCollection): Promise<Collection | null>; updateCollectionWithAudit?(id: string, input: UpdateCollection, audit: CreateAuditEvent): Promise<Collection | null>; listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage>; }
+export interface CollectionsRepositoryPort { createCollectionIdempotent?(input: CreateCollection, audit: CreateAuditEvent, requestKey: string, payload: string): Promise<Collection>; findCollectionById(id: string): Promise<Collection | null>; createCollection(input: CreateCollection): Promise<Collection>; createCollectionWithAudit?(input: CreateCollection, audit: CreateAuditEvent): Promise<Collection>; updateCollection(id: string, input: UpdateCollection): Promise<Collection | null>; updateCollectionWithAudit?(id: string, input: UpdateCollection, audit: CreateAuditEvent): Promise<Collection | null>; listCollections(spaceId: string, request: PageRequest): Promise<CollectionPage>; }
 
 type SpaceRow = { id: string; slug: string; name: string; description: string; kind: Space["kind"]; status: Space["status"]; position: number; read_only: number; created_at: string; updated_at: string };
 type CollectionRow = { id: string; space_id: string; parent_id: string | null; name: string; description: string; status: Collection["status"]; position: number; created_at: string; updated_at: string };
@@ -96,6 +96,32 @@ export class SpacesRepository implements SpacesRepositoryPort, CollectionsReposi
     if (!results[0]?.meta.changes) throw await this.classifyBlockedCollectionWrite(input.spaceId, input.parentId);
     if (results[1]?.meta.changes !== 1) throw new Error("Collection audit write did not persist");
     return input;
+  }
+  async createCollectionIdempotent(input: CreateCollection, audit: CreateAuditEvent, requestKey: string, payload: string): Promise<Collection> {
+    if (!this.audit || !audit.actorId) throw new Error("Collection request requires an audited member write");
+    assertCollectionCreateAudit(input, audit);
+    const replay = async (): Promise<Collection | null> => {
+      const row = await this.db.prepare("SELECT payload_json, response_json FROM admin_collection_creation_requests WHERE actor_id = ? AND request_key = ?").bind(audit.actorId, requestKey).first<{ payload_json: string; response_json: string }>();
+      if (!row) return null;
+      if (row.payload_json !== payload) throw new SpacesRepositoryConflictError("request_conflict");
+      return JSON.parse(row.response_json) as Collection;
+    };
+    const existing = await replay(); if (existing) return existing;
+    try {
+      // The unique request claim is in the same transaction as the resource and audit.
+      // A racing claim, missing parent or failed audit rolls all three writes back.
+      await this.db.batch([
+        this.prepareCreateCollection(input),
+        this.audit.prepareResourceWriteAudit(audit, { table: "collections", id: input.id }),
+        this.collectionChangeGuard(),
+        this.db.prepare("INSERT INTO admin_collection_creation_requests (actor_id, request_key, payload_json, response_json, collection_id, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(audit.actorId, requestKey, payload, JSON.stringify(input), input.id, input.createdAt),
+      ]);
+      return input;
+    } catch (error) {
+      const winner = await replay(); if (winner) return winner;
+      if (isCollectionChangeGuardFailure(error)) throw await this.classifyBlockedCollectionWrite(input.spaceId, input.parentId);
+      throw error;
+    }
   }
   async updateCollection(id: string, input: UpdateCollection): Promise<Collection | null> {
     const current = await this.findCollectionById(id); if (!current) return null;

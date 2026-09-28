@@ -81,7 +81,7 @@ import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussi
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
-import { createAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace } from "./lib/admin-spaces-data";
+import { createAdminSpace, manageAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace, type AdminSpaceCommand } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
@@ -2976,7 +2976,25 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
       return false;
     } finally { if (write.current === token) write.current = null; }
   };
-  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} needsRead={needsRead} onCreate={create} />;
+  const manage = async (command: AdminSpaceCommand) => {
+    if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
+    const current = state.spaces.find(item => item.id === command.spaceId);
+    if (!current || current.readOnly || current.kind === "legacy") return false;
+    const token = {}; const epoch = scope.current; write.current = token; requireRead();
+    try {
+      await manageAdminSpace(command, current);
+      if (epoch !== scope.current) return false;
+      write.current = null;
+      await read();
+      // A validated receipt confirms this write even when the follow-up GET fails.
+      // Close the acknowledged draft; the route still requires GET-only recovery.
+      return epoch === scope.current;
+    } catch (error) {
+      if (epoch === scope.current) { requireRead(); deny(error); }
+      return false;
+    } finally { if (write.current === token) write.current = null; }
+  };
+  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} needsRead={needsRead} onCreate={create} onManage={manage} />;
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

@@ -27,6 +27,34 @@ export async function createAdminSpace(input: { slug: string; name: string }, re
   if (space.name !== input.name || space.slug !== input.slug || space.kind !== "shared" || space.readOnly || space.status !== "active" || space.position !== 0) invalid();
   return { ...space, collections: [] };
 }
+export interface AdminRecordFields { name: string; description: string; status: "active" | "disabled"; position: number; }
+export type AdminSpaceCommand =
+  | { kind: "space"; spaceId: string; input: AdminRecordFields & { slug: string; expectedUpdatedAt: string } }
+  | { kind: "create-collection"; spaceId: string; requestKey: string; input: AdminRecordFields & { parentId: string | null } }
+  | { kind: "collection"; spaceId: string; collectionId: string; input: AdminRecordFields & { parentId: string | null; expectedUpdatedAt: string } };
+export async function manageAdminSpace(command: AdminSpaceCommand, current: AdminSpace, requester: Fetcher = fetch): Promise<void> {
+  if (current.id !== command.spaceId || current.readOnly || current.kind === "legacy") invalid();
+  const collection = command.kind === "collection" ? current.collections.find(item => item.id === command.collectionId) : undefined;
+  if (command.kind === "collection" && !collection) invalid();
+  const creating = command.kind === "create-collection";
+  const body = creating ? { ...command.input, spaceId: current.id } : command.input;
+  let response: unknown;
+  if (command.kind === "space") {
+    response = await apiFetch<unknown>(`/api/admin/spaces/${encodeURIComponent(current.id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } else if (command.kind === "create-collection") {
+    response = await apiFetch<unknown>("/api/admin/collections", { requester, method: "POST", headers: { "content-type": "application/json", "idempotency-key": command.requestKey }, body: JSON.stringify(body) });
+  } else {
+    response = await apiFetch<unknown>(`/api/admin/collections/${encodeURIComponent(collection!.id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  }
+  const data = record(response);
+  const result = command.kind === "space" ? normalizeSpace(data.space) : normalizeCollection(data.collection, current.id);
+  for (const [key, value] of Object.entries(body)) if (key !== "expectedUpdatedAt" && (result as unknown as Record<string, unknown>)[key] !== value) invalid();
+  if (!creating) {
+    const previous = command.kind === "space" ? current : collection!;
+    if (result.id !== previous.id || result.createdAt !== previous.createdAt || Date.parse(result.updatedAt) <= Date.parse(previous.updatedAt)) invalid();
+  }
+  if (command.kind === "space" && ((result as Space).kind !== current.kind || (result as Space).readOnly !== current.readOnly)) invalid();
+}
 function pageUrl(path: string, cursor?: string) { const params = new URLSearchParams({ limit: "50" }); if (cursor) params.set("cursor", cursor); return `${path}?${params}`; }
 function invalid(): never { throw new Error("SPACE_RESPONSE_INVALID"); }
 function record(value: unknown): Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value)) return invalid(); return value as Record<string, unknown>; }

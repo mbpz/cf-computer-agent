@@ -124,7 +124,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-members": { source: "manifest:0@c8165462f20c", dimension: "journey", slug: "member-status-and-audit-navigation", symptom: "成员页初始读失败恢复已本地验证；禁用后的缓存失效与审计定位未闭环。", owner: "R6-005" },
   "workbench-admin-roles": { source: "manifest:0@0b7f871268aa", dimension: "isolation", slug: "role-projection-and-session-hardening", symptom: "角色页缺少畸形提权 session、后端角色投影与 signed-browser 的完整拒绝证据。", owner: "R6-006" },
   "workbench-admin-menus": { source: "manifest:0@769a73a9c99c", dimension: "journey", slug: "projection-invalidation", symptom: "菜单页初始读失败恢复已本地验证；跨 session 投影失效尚未形成产品旅程。", owner: "R6-007" },
-  "workbench-admin-spaces": { source: "manifest:0@a36aa12b7c30", dimension: "journey", slug: "archive-content-impact", symptom: "Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。", owner: "R6-008" },
+  "workbench-admin-spaces": { source: "manifest:0@67c4c4159e43", dimension: "journey", slug: "archive-content-impact", symptom: "Space 页初始读失败恢复已本地验证；归档与内容影响确认未闭环。", owner: "R6-008" },
   "workbench-admin-audit": { source: "manifest:0@bfef1ebcb5d4", dimension: "states", slug: "raw-page-shape-and-retry", symptom: "审计页 raw page 与 generation/page 解构不兼容，ready/empty 不可达且错误无重试。", owner: "R6-009" },
   "workbench-admin-analytics": { source: "manifest:0@fa4e6b219f73", dimension: "journey", slug: "date-range-and-pagination", symptom: "统计读取恢复、单事务快照和跨页写后对账已本地验证；发布与真实登录浏览器验收仍未闭环。", owner: "R6-002" },
   "workbench-notifications": { source: "manifest:0@a0f9955f2fa0", dimension: "isolation", slug: "revoked-target-navigation", symptom: "通知目标撤权后的跳转与顶部未读收敛尚未闭环。", owner: "R5-005" },
@@ -189,6 +189,9 @@ const DOMAIN_GAP_POLICIES = new Map(Object.entries({
   "workbench-agent|POST /api/knowledge/chat": { slug: "submit-chat-turn", symptom: "Agent 提问缺少端到端稳定请求键和重复副作用证明。", owner: "R3-016" },
   "workbench-agent|POST /api/knowledge/chat/conversations/:id/cancel": { slug: "cancel-conversation", symptom: "取消 Agent 会话缺少重复请求与终态收敛证明。", owner: "R3-016" },
   "workbench-admin-assets|POST /api/admin/assets/:id/retry": { slug: "retry-asset", symptom: "资产解析重试缺少稳定幂等键与重复任务抑制证明。", owner: "R6-004" },
+  "workbench-admin-spaces|PATCH /api/admin/spaces/:id": { slug: "update-space", symptom: "Space 编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
+  "workbench-admin-spaces|POST /api/admin/collections": { slug: "create-collection", symptom: "集合创建已有同编辑器稳定键及持久化回执；刷新或卸载后的意图恢复及无键旧客户端策略仍缺。", owner: "R6-008" },
+  "workbench-admin-spaces|PATCH /api/admin/collections/:id": { slug: "update-collection", symptom: "集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
   "workbench-admin-spaces|POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
   "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/comments": { slug: "add-review-comment", symptom: "审核评论缺少稳定客户端键与重复写入抑制证明。", owner: "R6-003" },
@@ -402,6 +405,25 @@ test("every manifest and domain gap has one stable future owner", () => {
   assertGapPolicyCoverage(expectedSources);
 
   for (const row of rows) assertGapRow(row, checklistAtoms, expectedSources);
+});
+
+test("gap summary counts are derived from the actual current matrix", () => {
+  const markdown = readFileSync(maturityGapMatrixPath, "utf8");
+  const rows = gapMatrixRows(markdown);
+  const summary = markdown.slice(markdown.indexOf("## 分派汇总"));
+  const expected = {
+    "manifest 聚合 gap": rows.filter(row => row.source.startsWith("manifest:")).length,
+    "domain mutation-safety gap": rows.filter(row => row.source.startsWith("domain:")).length,
+    "总计": rows.length,
+    "P0": rows.filter(row => row.priority === "P0").length,
+    "P1": rows.filter(row => row.priority === "P1").length,
+    "P2": rows.filter(row => row.priority === "P2").length,
+  };
+  for (const [label, count] of Object.entries(expected)) {
+    const line = summary.split("\n").find(line => line.startsWith(`| ${label} |`));
+    assert.ok(line, `${label} summary row is required`);
+    assert.equal(Number(line.split("|")[2].trim()), count, `${label} summary count drifted`);
+  }
 });
 
 test("canonical source policy rejects gap ID, symptom, and owner self-certification", () => {
