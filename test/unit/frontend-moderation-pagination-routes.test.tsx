@@ -392,6 +392,204 @@ describe("moderation numbered routes", () => {
     await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event("input", { bubbles: true })); });
   }
 
+  const assetRow = (id = "asset-1") => ({ asset: { id, originalName: `${id}.pdf` }, job: { status: "failed_retryable" } });
+  const assetPreview = (id = "asset-1") => json({ assetId: id, originalName: `${id}.pdf`, markdown: "Private asset contents", warnings: [], lineCount: 1, parserSchemaVersion: "v1" });
+  async function renderAssets() {
+    browser.history.replaceState({}, "", "/admin/assets?page=2&status=failed_retryable");
+    await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush();
+  }
+
+  it("synchronously blocks duplicate asset retry submissions", async () => {
+    const mutation = deferred<Response>(); let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return mutation.promise; }
+      return numbered([assetRow()], 2, 21);
+    });
+    await renderAssets();
+    const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
+    await act(async () => { retry.click(); retry.click(); });
+    expect(posts).toBe(1);
+    await act(async () => mutation.resolve(json({}))); await flush();
+  });
+
+  it.each([401, 403])("clears asset rows and preview on a %i list read", async (status) => {
+    let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/preview")) return assetPreview();
+      return ++gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status });
+    });
+    await renderAssets(); await clickButton("Preview"); await flush();
+    expect(container.querySelector("[data-asset-preview]")).toBeTruthy();
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(container.querySelector("[data-asset-preview]")).toBeNull();
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+  });
+
+  it.each([401, 403])("clears the asset queue on a %i preview denial", async (status) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/preview") ? new Response(null, { status }) : numbered([assetRow()], 2, 21));
+    await renderAssets(); await clickButton("Preview"); await flush();
+    expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+  });
+
+  it.each([401, 403])("ignores a late preview after an asset retry returns %i", async (status) => {
+    const preview = deferred<Response>(); let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Response(null, { status });
+      if (String(input).endsWith("/preview")) { signal = init?.signal as AbortSignal; return preview.promise; }
+      return numbered([assetRow()], 2, 21);
+    });
+    await renderAssets(); await clickButton("Preview"); await clickButton("Retry"); await flush();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => preview.resolve(assetPreview())); await flush();
+    expect(container.textContent).not.toContain("Private asset contents");
+    expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+  });
+
+  it("aborts and ignores old asset previews across page navigation", async () => {
+    const preview = deferred<Response>(); let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/preview")) { signal = init?.signal as AbortSignal; return preview.promise; }
+      return pageResponse(String(input), assetRow);
+    });
+    await renderAssets(); await clickButton("Preview");
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => preview.resolve(assetPreview("item-2-0"))); await flush();
+    expect(container.querySelector("[data-asset-preview]")).toBeNull();
+    expect(container.textContent).toContain("item-1-0.pdf");
+  });
+
+  it("rejects a mismatched asset preview instead of displaying another object's content", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/preview") ? assetPreview("different-asset") : numbered([assetRow()], 2, 21));
+    await renderAssets(); await clickButton("Preview"); await flush();
+    expect(container.querySelector("[data-asset-preview]")).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeTruthy();
+  });
+
+  it.each([401, 403])("does not resurrect asset data when a retry finishes after a %i read denial", async (status) => {
+    const mutation = deferred<Response>(); let gets = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return mutation.promise;
+      return ++gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status });
+    });
+    await renderAssets(); await clickButton("Retry");
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => mutation.resolve(json({}))); await flush();
+    expect(gets).toBe(2);
+    expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+  });
+
+  it("recovers a failed post-retry read using GET only and never repeats the acknowledged POST", async () => {
+    let posts = 0; let gets = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      gets++; return gets === 2 ? new Response(null, { status: 500 }) : numbered([assetRow()], 2, 21);
+    });
+    await renderAssets(); await clickButton("Retry"); await flush();
+    await clickButton("Try again"); await flush();
+    expect(posts).toBe(1); expect(gets).toBe(3);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("keeps an uncertain asset retry locked until an explicit successful GET, without automatic POST replay", async () => {
+    const recovery = deferred<Response>(); let posts = 0; let gets = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return new Response(null, { status: 503 }); }
+      gets++; return gets === 1 ? numbered([assetRow()], 2, 21) : recovery.promise;
+    });
+    await renderAssets(); await clickButton("Retry"); await flush();
+    const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
+    expect(retry.disabled).toBe(true); expect(gets).toBe(1); expect(posts).toBe(1);
+    const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+    await act(async () => { read.click(); read.click(); retry.click(); });
+    expect(gets).toBe(2); expect(posts).toBe(1);
+    await act(async () => recovery.resolve(numbered([assetRow()], 2, 21))); await flush();
+    expect((container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(posts).toBe(1); expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it.each([200, 403])("ignores an old asset mutation's %i response after leaving and returning to the same query", async (status) => {
+    const mutation = deferred<Response>(); let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return mutation.promise;
+      gets++; return pageResponse(String(input), assetRow);
+    });
+    await renderAssets(); await clickButton("Retry");
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets?page=2&status=failed_retryable"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(gets).toBe(3);
+    await act(async () => mutation.resolve(status === 200 ? json({}) : new Response(null, { status }))); await flush();
+    expect(gets).toBe(3); expect(container.textContent).toContain("item-2-0.pdf");
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
+    // The new query's GET preceded completion of the old POST; it cannot resolve that outcome.
+    expect((container.querySelector('button[aria-label="Retry item-2-0.pdf"]') as HTMLButtonElement).disabled).toBe(true);
+    await clickButton("Try again"); await flush(); expect(gets).toBe(4);
+    expect((container.querySelector('button[aria-label="Retry item-2-0.pdf"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("recovers a denied asset read once and ignores an older POST after recovery", async () => {
+    const mutation = deferred<Response>(); const recovery = deferred<Response>(); let gets = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return mutation.promise;
+      gets++; if (gets === 2) return new Response(null, { status: 403 });
+      return gets === 3 ? recovery.promise : pageResponse(String(input), assetRow);
+    });
+    await renderAssets(); await clickButton("Retry");
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+    await act(async () => { read.click(); read.click(); }); await flush(); expect(gets).toBe(3);
+    await act(async () => recovery.resolve(numbered([assetRow("recovered")], 1, 1))); await flush();
+    await act(async () => mutation.resolve(new Response(null, { status: 403 }))); await flush();
+    expect(container.textContent).toContain("recovered.pdf"); expect(gets).toBe(3);
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
+  });
+
+  it("keeps the asset retry locked when its follow-up GET fails and a subsequent read is denied", async () => {
+    let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      gets++; return gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status: gets === 2 ? 500 : 403 });
+    });
+    await renderAssets(); await clickButton("Retry"); await flush();
+    expect((container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement).disabled).toBe(true);
+    await clickButton("Try again"); await flush();
+    expect(posts).toBe(1); expect(gets).toBe(3);
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
+    expect(container.textContent).not.toContain("asset-1.pdf");
+  });
+
+  it("does not allow a stale asset row's actions when a different query fails", async () => {
+    let gets = 0; let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      return ++gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status: 500 });
+    });
+    await renderAssets();
+    await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(container.textContent).not.toContain("asset-1.pdf");
+    expect(container.querySelector('[data-page-state="error"]')).toBeTruthy(); expect(posts).toBe(0);
+  });
+
+  it("clamps the original asset filter after recovering an acknowledged retry's failed list read", async () => {
+    let gets = 0; let posts = 0; const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts++; return json({}); }
+      gets++; urls.push(String(input));
+      if (gets === 1) return numbered([assetRow()], 2, 21);
+      if (gets === 2) return new Response(null, { status: 500 });
+      return numbered([], Number(queryOf(String(input), "page")), 0);
+    });
+    await renderAssets(); await clickButton("Retry"); await flush(); await clickButton("Try again"); await flush();
+    expect(posts).toBe(1); expect(gets).toBe(4);
+    expect(urls.map((url) => queryOf(url, "page"))).toEqual(["2", "2", "2", "1"]);
+    expect(urls.every((url) => queryOf(url, "status") === "failed_retryable")).toBe(true);
+    expect(browser.location.search).not.toContain("page=2");
+  });
+
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }
   async function changeSelect(selector: string, value: string) { const select = container.querySelector(selector) as HTMLSelectElement; expect(select).toBeTruthy(); await act(async () => { select.value = value; select.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
   function buttonNames(): Array<string | null> { return [...container.querySelectorAll("button[aria-label]")].map((button) => button.getAttribute("aria-label")); }
