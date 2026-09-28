@@ -75,7 +75,8 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
       if (route === "today") expect(main().textContent).toContain("No tasks due today");
       else if (route === "review") expect(main().textContent).toContain("No completed work in this snapshot");
       else if (route === "focus") {
-        expect(main().querySelector('input[aria-label="Task ID"]')).not.toBeNull();
+        expect([...main().querySelectorAll("button")].find((button) => button.textContent === "Choose task")).toBeDefined();
+        expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull();
         expect([...main().querySelectorAll("button")].find((button) => button.textContent === "Start focus")?.disabled).toBe(true);
       } else expect(main().querySelector('[data-page-state="empty"]')).not.toBeNull();
     });

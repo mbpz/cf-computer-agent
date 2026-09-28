@@ -10,7 +10,7 @@ import { MIGRATIONS } from "../fixtures/d1";
 const NOW = new Date("2026-09-09T10:00:00.000Z");
 
 describe("focus workbench route", () => {
-  let sessionA = "";
+  let sessionA = "", sessionB = "";
 
   beforeEach(async () => {
     await reset();
@@ -21,9 +21,30 @@ describe("focus workbench route", () => {
     const members = new MembersRepository(env.DB);
     const sessions = new SessionService(env.DB, members, { waitUntil: () => undefined, now: () => NOW });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-focus-a"))!)).token;
+    sessionB = (await sessions.create((await members.findByIdentitySubject("subject-focus-b"))!)).token;
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it("lists/searches and resolves only owned picker targets for both members", async () => {
+    for (const [token, owned, foreign] of [[sessionA, "focus-task-a", "focus-task-b"], [sessionB, "focus-task-b", "focus-task-a"]]) {
+      const response = await api("/api/tasks?page=1&pageSize=20&q=task", token);
+      expect(response.status).toBe(200);
+      const payload = await response.json() as {items: {id: string}[]; pagination: {total: number}};
+      expect(payload.items.map(task => task.id)).toEqual([owned]); expect(payload.pagination.total).toBe(1);
+      expect((await api(`/api/tasks/${owned}`, token)).status).toBe(200);
+      expect((await api(`/api/tasks/${foreign}`, token)).status).toBe(404);
+      expect((await api("/api/focus", token, {method: "POST", body: JSON.stringify({clientKey: `foreign-${owned}`, taskId: foreign})})).status).toBe(404);
+    }
+  });
+
+  it("rejects a removed picker target without creating a session or calendar event", async () => {
+    expect((await api("/api/tasks/focus-task-a", sessionA)).status).toBe(200);
+    await env.DB.prepare("DELETE FROM tasks WHERE id = 'focus-task-a'").run();
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({clientKey: "removed", taskId: "focus-task-a"})})).status).toBe(404);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions").first("count")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(0);
+  });
 
   it("starts idempotently, restores current state, transitions, and rejects cross-member task", async () => {
     const start = await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "focus-1", clientKey: "focus-key-1", taskId: "focus-task-a", durationMinutes: 25 }) });

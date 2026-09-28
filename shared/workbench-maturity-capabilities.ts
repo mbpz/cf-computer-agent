@@ -289,7 +289,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-focus", routeId: "focus", pathname: "/focus", requiredRole: "contributor",
     journey: "Start focus on an owned task, pause, resume and finish or abandon the session.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/app.tsx", "frontend/pages/focus-page.tsx", "frontend/lib/focus-data.ts"], backendEvidence: ["src/routes/focus.ts", "src/focus/service.ts", "src/focus/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/focus.test.ts"], ledgerIds: ["FOC-001"], gaps: ["Private entry, read recovery and the null-session start form are locally tested. Task selection, stable start intent, transition concurrency, elapsed-time accuracy and stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
+    frontendEvidence: ["frontend/components/focus-task-picker.tsx", "frontend/app.tsx", "frontend/pages/focus-page.tsx", "frontend/lib/focus-data.ts"], backendEvidence: ["src/routes/focus.ts", "src/focus/service.ts", "src/focus/repository.ts", "src/routes/tasks.ts"], testEvidence: ["test/unit/frontend-focus-task-selection.test.tsx", "test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/focus.test.ts"], ledgerIds: ["FOC-001"], gaps: ["Private entry, read recovery, owned task search/pagination, picker cancellation and exact-target preflight with denial clearing are locally tested. Stable start intent, transition concurrency, elapsed-time accuracy and session stale-response protection remain incomplete; release and signed-browser acceptance are unproven."],
   },
   {
     id: "workbench-review", routeId: "review", pathname: "/review", requiredRole: "contributor",
@@ -464,7 +464,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     ownerPredicate: "routeTodayApi passes authenticated principal.memberId to TodayService.get; all four private aggregates receive the same memberId.", pagination: "not_applicable", mutations: [], mutationSafety: "not_applicable",
   },
   {
-    id: "workbench-focus", apiPaths: ["/api/focus", "/api/focus/current", "/api/focus/:id/pause", "/api/focus/:id/resume", "/api/focus/:id/complete", "/api/focus/:id/abandon"],
+    id: "workbench-focus", apiPaths: ["/api/tasks", "/api/tasks/:id", "/api/focus", "/api/focus/current", "/api/focus/:id/pause", "/api/focus/:id/resume", "/api/focus/:id/complete", "/api/focus/:id/abandon"],
     persistencePaths: ["src/focus/repository.ts", "migrations/0043_workbench_focus.sql"],
     ownerPredicate: "routeFocusApi passes authenticated principal.memberId to FocusService; FocusRepository.findOpen and update bind member_id = ?.", pagination: "not_applicable",
     mutations: ["POST /api/focus — gap: each frontend attempt generates a fresh client key", "POST /api/focus/:id/pause — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/resume — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/complete — gap: no expected status or concurrent elapsed-time proof", "POST /api/focus/:id/abandon — gap: no expected status or concurrent elapsed-time proof"], mutationSafety: "mixed",

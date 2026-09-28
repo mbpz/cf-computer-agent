@@ -1017,3 +1017,22 @@ rtk proxy npm run audit:workbench-domain
 rtk proxy npm run audit:functional-checklist
 rtk git diff --check
 ```
+
+
+## 2026-09-28：C04 / EXT-FOC-01 私有任务选择（本地）
+
+- 移除手工粘贴任务 ID；按需展开私有任务选择器，复用 Tasks 数字分页及 DataPagination。20/50/100、搜索重置页码、空态、严格元数据、重复 ID 检查及 GET 重试；不发送 memberId，身份由服务端会话确定。
+- 关闭选择器/改变查询会取消读取并忽略迟到响应。选择显示标题，启动前重新 GET 并核对目标 ID；404/错目标不发送 POST，POST 时目标已删除清选择；401/403 清私有页面。成员切换重新挂载 FocusRoute。
+- 先 RED 13/13（仍为旧 ID 输入）；实现后发现漏导入 loadTaskDetail，修复并加强断言要求实际发生预检请求。旧两份路由回归的空状态断言同步为“选择任务”；新增分页大小测试最初误取无关 select，改为按 Rows per page 标签派发原生 change。
+- 新增 15 App/happy-dom 和 2 Worker/D1 测试。4 文件回归最终拆次通过：选择器 15/15，Worker 3/3，扩展页面 28/28，成熟度页面 147/147（共 193 项）；最后一次联合运行曾有上述选择器定位测试失败，修正后该文件已单独全量重跑。合同 91/91，typecheck/build:ui/verify:i18n 通过。保留既有 chunk 警告；UI 构建不是全量 TSX 类型检查，happy-dom 不是原生浏览器。
+- 计数仍 29 范围内 / 3 关闭 / 26 未关闭。下一 EXT-FOC-02 会话异步生命周期允许推进；稳定意图、并发和耗时留 EXT-FOC-03，不以任务选择证明它们完成。
+- 仅本地，未 push/merge/部署/远程迁移/生产写入/备份/AI 调用/手工读取上传 Secret。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-focus-task-selection.test.tsx test/worker/focus.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy npx vitest run test/unit/frontend-focus-task-selection.test.tsx
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+```

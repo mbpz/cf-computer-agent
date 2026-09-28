@@ -60,7 +60,7 @@ import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submiss
 import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, saveSubmissionIntent, type SubmissionIntent } from "./lib/submission-intent";
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
-import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
+import { createTasksRequestController, deleteTask, loadTaskDetail, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
 import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
@@ -201,7 +201,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
     case "calendar": return <CalendarRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "today": return <TodayRoute key={session?.member.id} locale={locale} />;
-    case "focus": return <FocusRoute locale={locale} />;
+    case "focus": return <FocusRoute key={session?.member.id} locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
@@ -1705,13 +1705,16 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [selectionVersion, setSelectionVersion] = useState(0);
+  const clearDenied = useCallback(() => {setSelectionVersion(value => value + 1); setActionError(undefined); setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});}, [locale]);
   const refresh = useCallback(() => {
     setState((current) => current.kind === "ready" ? current : { kind: "loading" });
     return loadCurrentFocus().then((session) => setState({ kind: "ready", session })).catch((error: unknown) => { if (!isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
   }, [locale]);
   useEffect(() => { void refresh(); }, [refresh, retryVersion]);
-  const mutate = async (operation: () => Promise<unknown>) => { if (pending) return; setPending(true); setActionError(undefined); try { await operation(); await refresh(); } catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "FOCUS_ACTION_FAILED")); } finally { setPending(false); } };
-  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} onRetry={() => setRetryVersion((value) => value + 1)} onStart={(input) => void mutate(() => startFocus(input))} onTransition={(action) => { if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action)); }} />;
+  const mutate = async (operation: () => Promise<unknown>) => { if (pending) return; setPending(true); setActionError(undefined); try { await operation(); await refresh(); } catch (error: unknown) { if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
+      else if (!isAbort(error)) {setSelectionVersion(value => value + 1); setActionError(frontendText(locale, error instanceof ApiRequestError && error.status === 404 ? "FOCUS_TASK_UNAVAILABLE" : "FOCUS_ACTION_FAILED"));} } finally { setPending(false); } };
+  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion((value) => value + 1)} onStart={(input) => void mutate(async () => {await loadTaskDetail(input.taskId); return startFocus(input);})} onTransition={(action) => { if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action)); }} />;
 }
 
 export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {

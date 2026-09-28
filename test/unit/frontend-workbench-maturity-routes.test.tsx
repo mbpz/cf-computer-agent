@@ -343,7 +343,7 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
   }
   if (state === "empty") {
     if (routeId === "focus") {
-      await waitForApp(() => journey.container.querySelector('main input[aria-label="Task ID"]') !== null);
+      await waitForApp(() => [...journey.container.querySelectorAll("main button")].some(button => button.textContent === "Choose task"));
       expect([...journey.container.querySelectorAll("main button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
       expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
     } else if (routeId === "today" || routeId === "review") {
