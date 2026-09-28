@@ -28,6 +28,24 @@ describe("focus workbench route", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it("rejects missing, malformed and stale client versions before changing focus state", async () => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "versioned", clientKey: "versioned", taskId: "focus-task-a"})});
+    for (const body of [{}, {expectedUpdatedAt: "bad"}, {expectedUpdatedAt: 1}]) {
+      expect((await api("/api/focus/versioned/pause", sessionA, {method: "POST", body: JSON.stringify(body)})).status).toBe(400);
+    }
+    const original = await (await api("/api/focus/versioned", sessionA)).json() as {updatedAt: string};
+    const paused = await api("/api/focus/versioned/pause", sessionA, {method: "POST", body: JSON.stringify({expectedUpdatedAt: original.updatedAt})});
+    expect(paused.status).toBe(200);
+    const receipt = await paused.json() as {updatedAt: string};
+    expect(Date.parse(receipt.updatedAt)).toBeGreaterThan(Date.parse(original.updatedAt));
+    // Check the observed version before no-op handling as well as state changes.
+    for (const action of ["pause", "resume", "complete", "abandon"]) {
+      expect((await api(`/api/focus/versioned/${action}`, sessionA, {method: "POST", body: JSON.stringify({expectedUpdatedAt: original.updatedAt})})).status).toBe(409);
+    }
+    expect(await (await api("/api/focus/versioned", sessionA)).json()).toMatchObject({status: "paused", updatedAt: receipt.updatedAt});
+    expect((await api("/api/focus/versioned/complete", sessionB, {method: "POST", body: JSON.stringify({expectedUpdatedAt: receipt.updatedAt})})).status).toBe(404);
+  });
+
   it("does not report another concurrent start as this request's receipt", async () => {
     const repository = new FocusRepository(env.DB);
     const insert = repository.insert.bind(repository);
@@ -43,7 +61,7 @@ describe("focus workbench route", () => {
 
   it("reads an owned terminal receipt by ID without exposing another member", async () => {
     await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "receipt", clientKey: "receipt-key", taskId: "focus-task-a"})});
-    await api("/api/focus/receipt/complete", sessionA, {method: "POST"});
+    await transition("/api/focus/receipt/complete", sessionA);
     const read = await api("/api/focus/receipt", sessionA);
     expect(read.status).toBe(200); expect(await read.json()).toMatchObject({id: "receipt", status: "completed", clientKey: "receipt-key"});
     expect((await api("/api/focus/receipt", sessionB)).status).toBe(404);
@@ -85,8 +103,8 @@ describe("focus workbench route", () => {
     const repository = new FocusRepository(env.DB);
     const before = (await repository.findOwned("focus-a", "race"))!;
     const service = new FocusService(repository, {now: () => NOW});
-    const paused = await service.pause("focus-a", "race");
-    const resumed = await service.resume("focus-a", "race");
+    const paused = await service.pause("focus-a", "race", before.updatedAt);
+    const resumed = await service.resume("focus-a", "race", paused.updatedAt);
     expect(Date.parse(paused.updatedAt)).toBe(NOW.getTime() + 1);
     expect(Date.parse(resumed.updatedAt)).toBe(NOW.getTime() + 2);
     const stale = await repository.update("focus-a", "race", {status: "paused", startedAt: NOW.getTime(), pausedAt: NOW.getTime(), endedAt: null, elapsedMs: 123, updatedAt: NOW.getTime() + 3, expectedUpdatedAt: Date.parse(before.updatedAt)});
@@ -101,11 +119,11 @@ describe("focus workbench route", () => {
     // Interleave another real service transition after this service's read, before its write.
     repository.update = async (...args) => {
       repository.update = originalUpdate;
-      await new FocusService(repository, {now: () => NOW}).abandon("focus-a", "terminal");
+      await new FocusService(repository, {now: () => NOW}).abandon("focus-a", "terminal", (await repository.findOwned("focus-a", "terminal"))!.updatedAt);
       return originalUpdate(...args);
     };
     const calendar = {setStatus: vi.fn()} as any;
-    await expect(new FocusService(repository, {now: () => NOW, calendar}).complete("focus-a", "terminal")).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
+    await expect(new FocusService(repository, {now: () => NOW, calendar}).complete("focus-a", "terminal", (await repository.findOwned("focus-a", "terminal"))!.updatedAt)).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
     expect((await repository.findOwned("focus-a", "terminal"))?.status).toBe("abandoned");
     expect(calendar.setStatus).not.toHaveBeenCalled();
   });
@@ -113,16 +131,16 @@ describe("focus workbench route", () => {
   it("restores elapsed time through pause, resume, repeat and terminal current reads", async () => {
     await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "timer", clientKey: "timer", taskId: "focus-task-a"})});
     vi.setSystemTime(new Date(NOW.getTime() + 60_000));
-    expect(await (await api("/api/focus/timer/pause", sessionA, {method: "POST"})).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
+    expect(await (await transition("/api/focus/timer/pause", sessionA)).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
     vi.setSystemTime(new Date(NOW.getTime() + 300_000));
-    expect(await (await api("/api/focus/timer/pause", sessionA, {method: "POST"})).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
+    expect(await (await transition("/api/focus/timer/pause", sessionA)).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
     expect(await (await api("/api/focus/current", sessionA)).json()).toMatchObject({session: {status: "paused", elapsedMs: 60_000}});
-    await api("/api/focus/timer/resume", sessionA, {method: "POST"});
+    await transition("/api/focus/timer/resume", sessionA);
     vi.setSystemTime(new Date(NOW.getTime() + 330_000));
-    expect(await (await api("/api/focus/timer/complete", sessionA, {method: "POST"})).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
+    expect(await (await transition("/api/focus/timer/complete", sessionA)).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
     expect(await (await api("/api/focus/current", sessionA)).json()).toEqual({session: null});
-    expect(await (await api("/api/focus/timer/abandon", sessionA, {method: "POST"})).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
-    expect((await api("/api/focus/timer/pause", sessionB, {method: "POST"})).status).toBe(404);
+    expect(await (await transition("/api/focus/timer/abandon", sessionA)).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
+    expect((await transition("/api/focus/timer/pause", sessionB)).status).toBe(404);
   });
 
   it("starts idempotently, restores current state, transitions, and rejects cross-member task", async () => {
@@ -133,9 +151,9 @@ describe("focus workbench route", () => {
     expect(started.session.calendarEventId).toBeTruthy();
     expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "focus-1", clientKey: "focus-key-1", taskId: "focus-task-a" }) })).status).toBe(200);
     expect((await api("/api/focus/current", sessionA)).status).toBe(200);
-    expect((await api("/api/focus/focus-1/pause", sessionA, { method: "POST" })).status).toBe(200);
-    expect((await api("/api/focus/focus-1/resume", sessionA, { method: "POST" })).status).toBe(200);
-    expect((await api("/api/focus/focus-1/complete", sessionA, { method: "POST" })).status).toBe(200);
+    expect((await transition("/api/focus/focus-1/pause", sessionA)).status).toBe(200);
+    expect((await transition("/api/focus/focus-1/resume", sessionA)).status).toBe(200);
+    expect((await transition("/api/focus/focus-1/complete", sessionA)).status).toBe(200);
     expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ clientKey: "bad", taskId: "focus-task-b" }) })).status).toBe(404);
   });
 });
@@ -149,4 +167,11 @@ async function api(path: string, token: string, init: RequestInit = {}): Promise
   const response = await createApp().fetch!(new Request(`https://memory.crgmhrc.asia${path}`, { ...init, headers }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
   await waitOnExecutionContext(context);
   return response;
+}
+
+async function transition(path: string, token: string): Promise<Response> {
+  const target = path.slice(0, path.lastIndexOf("/"));
+  const read = await api(target, token);
+  const receipt = await read.json() as {updatedAt?: string};
+  return api(path, token, {method: "POST", body: JSON.stringify({expectedUpdatedAt: receipt.updatedAt ?? NOW.toISOString()})});
 }

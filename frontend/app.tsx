@@ -1783,6 +1783,10 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
         setSelectionVersion(value => value + 1);
         setState({kind: "error", message: frontendText(locale, "FOCUS_CONFLICT")});
       } else if (!isAbort(error)) {
+        if (state.kind === "ready" && state.session) {
+          setState({kind: "error", message: frontendText(locale, "FOCUS_ACTION_FAILED")});
+          return;
+        }
         if (intentRef.current) {
           if (clearFocusIntent(memberId, intentRef.current)) {intentRef.current = null; setRecovery({kind: "empty"});}
           else setRecovery({kind: "blocked"});
@@ -1819,7 +1823,7 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     {recovery.kind === "ready" && !recovery.acknowledged && <Button disabled={pending} onClick={() => void mutate(epoch => sendStart(epoch, recovery.intent, recovery.intent), true)}>{frontendText(locale, "FOCUS_RETRY_START")}</Button>}
   </section>;
   return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(epoch => sendStart(epoch, input))} onTransition={action => {
-    if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action));
+    if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action, state.session!.updatedAt));
   }} />;
 }
 

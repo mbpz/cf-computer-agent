@@ -1,3 +1,4 @@
+import { requirePlanningVersion, nextPlanningVersion } from "../planning-version";
 import { AppError } from "../http";
 import type { CalendarService } from "../calendar/service";
 import type { TasksRepositoryPort } from "../tasks/repository";
@@ -51,30 +52,33 @@ export class FocusService {
     return { session, created };
   }
 
-  async pause(memberId: string, id: string): Promise<FocusSession> {
+  async pause(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<FocusSession> {
     const session = await this.get(memberId, id);
+    requirePlanningVersion(expectedUpdatedAt, session.updatedAt, "FOCUS");
     if (session.status !== "active") return session;
     const now = this.now().getTime();
     return this.transition(memberId, session, "paused", Date.parse(session.startedAt), now, null, session.elapsedMs + Math.max(0, now - Date.parse(session.startedAt)));
   }
 
-  async resume(memberId: string, id: string): Promise<FocusSession> {
+  async resume(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<FocusSession> {
     const session = await this.get(memberId, id);
+    requirePlanningVersion(expectedUpdatedAt, session.updatedAt, "FOCUS");
     if (session.status !== "paused") return session;
     const now = this.now().getTime();
     return this.transition(memberId, session, "active", now, null, null, session.elapsedMs);
   }
 
-  async complete(memberId: string, id: string): Promise<FocusSession> {
-    return this.finish(memberId, id, "completed");
+  async complete(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<FocusSession> {
+    return this.finish(memberId, id, "completed", expectedUpdatedAt);
   }
 
-  async abandon(memberId: string, id: string): Promise<FocusSession> {
-    return this.finish(memberId, id, "abandoned");
+  async abandon(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<FocusSession> {
+    return this.finish(memberId, id, "abandoned", expectedUpdatedAt);
   }
 
-  private async finish(memberId: string, id: string, status: Extract<FocusStatus, "completed" | "abandoned">): Promise<FocusSession> {
+  private async finish(memberId: string, id: string, status: Extract<FocusStatus, "completed" | "abandoned">, expectedUpdatedAt: unknown): Promise<FocusSession> {
     const session = await this.get(memberId, id);
+    requirePlanningVersion(expectedUpdatedAt, session.updatedAt, "FOCUS");
     if (session.status === "completed" || session.status === "abandoned") return session;
     const now = this.now().getTime();
     const elapsed = session.status === "active" ? session.elapsedMs + Math.max(0, now - Date.parse(session.startedAt)) : session.elapsedMs;
@@ -86,7 +90,7 @@ export class FocusService {
   private async transition(memberId: string, session: FocusSession, status: FocusStatus, startedAt: number, pausedAt: number | null, endedAt: number | null, elapsedMs: number): Promise<FocusSession> {
     // updatedAt is also the optimistic revision; advance even within one clock tick.
     const expectedUpdatedAt = Date.parse(session.updatedAt);
-    const result = await this.repository.update(memberId, session.id, { status, startedAt, pausedAt, endedAt, elapsedMs, expectedUpdatedAt, updatedAt: Math.max(this.now().getTime(), expectedUpdatedAt + 1) });
+    const result = await this.repository.update(memberId, session.id, { status, startedAt, pausedAt, endedAt, elapsedMs, expectedUpdatedAt, updatedAt: nextPlanningVersion(expectedUpdatedAt, this.now().getTime()) });
     if (!result) {
       await this.get(memberId, session.id);
       throw new AppError("FOCUS_CONFLICT", "Focus session changed; reload before acting", 409);

@@ -28,13 +28,13 @@ describe("FocusService", () => {
     const repo = { findOpen: async () => row, findOwned: async () => row, update: async (_m: string, _id: string, input: any) => Object.assign(row, { ...input, startedAt: new Date(input.startedAt).toISOString(), pausedAt: input.pausedAt === null ? null : new Date(input.pausedAt).toISOString(), endedAt: input.endedAt === null ? null : new Date(input.endedAt).toISOString(), updatedAt: new Date(input.updatedAt).toISOString() }) } as never;
     const service = new FocusService(repo, { now: () => now });
     now = new Date("2026-09-09T10:25:00.000Z");
-    await service.pause("member-a", "focus-1");
+    await service.pause("member-a", "focus-1", row.updatedAt);
     expect(row.status).toBe("paused");
     expect(row.elapsedMs).toBe(1_500_000);
     now = new Date("2026-09-09T10:35:00.000Z");
-    await service.resume("member-a", "focus-1");
+    await service.resume("member-a", "focus-1", row.updatedAt);
     now = new Date("2026-09-09T10:45:00.000Z");
-    const completed = await service.complete("member-a", "focus-1");
+    const completed = await service.complete("member-a", "focus-1", row.updatedAt);
     expect(completed.status).toBe("completed");
     expect(completed.elapsedMs).toBe(2_100_000);
   });

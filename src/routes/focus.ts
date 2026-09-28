@@ -32,10 +32,11 @@ export async function routeFocusApi(request: Request, url: URL, context: Request
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
     const id = decodePathId(action[1]!);
-    const session = action[2] === "pause" ? await services.focus.pause(principal.memberId, id)
-      : action[2] === "resume" ? await services.focus.resume(principal.memberId, id)
-        : action[2] === "complete" ? await services.focus.complete(principal.memberId, id)
-          : await services.focus.abandon(principal.memberId, id);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "FOCUS_INVALID");
+    const session = action[2] === "pause" ? await services.focus.pause(principal.memberId, id, input.expectedUpdatedAt)
+      : action[2] === "resume" ? await services.focus.resume(principal.memberId, id, input.expectedUpdatedAt)
+        : action[2] === "complete" ? await services.focus.complete(principal.memberId, id, input.expectedUpdatedAt)
+          : await services.focus.abandon(principal.memberId, id, input.expectedUpdatedAt);
     return jsonResponse(session, 200, context.requestId);
   }
   throw new AppError("NOT_FOUND", "Not found", 404);

@@ -45,13 +45,13 @@ describe("Focus owned task selection through App", () => {
         if (transitionStatus) return apiError(transitionStatus, "FOCUS_CONFLICT");
         const action = url.pathname.split("/").pop()!;
         const status = {pause: "paused", resume: "active", complete: "completed", abandon: "abandoned"}[action];
-        const result = {...current, status}; current = status === "completed" || status === "abandoned" ? null : result;
+        const result = {...current, status, updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString()}; current = status === "completed" || status === "abandoned" ? null : result;
         return Response.json(result);
       }
       if (url.pathname === "/api/focus" && method === "POST") {
         if (delayedPost) return delayedPost();
         if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND");
-        const body = JSON.parse(String(init!.body)); current = {...body, status: "active", calendarEventId: null, startedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
+        const body = JSON.parse(String(init!.body)); current = {...body, status: "active", calendarEventId: null, startedAt: stamp, updatedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
         return Response.json({session: current, created: true});
       }
       throw new Error(`Unexpected ${method} ${url}`);
@@ -61,6 +61,14 @@ describe("Focus owned task selection through App", () => {
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
   afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  it("hides stale transition controls after an unknown result and recovers with GET only", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    transitionStatus = 500; await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    expect(button("Pause")).toBeUndefined(); expect(button("Complete")).toBeUndefined();
+    current = {...current, status: "paused"}; transitionStatus = 0;
+    await click(button("Try focus again")); await waitForApp(() => !!button("Resume"));
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+  });
   it("restores the complete unresolved payload after a fresh App mount without automatically posting", async () => {
     await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
@@ -86,7 +94,7 @@ describe("Focus owned task selection through App", () => {
     await mount(); await select();
     delayedPost = async () => {
       const body = calls.at(-1)!.body;
-      receipt = {...body, status: "active", startedAt: stamp, elapsedMs: 0}; current = receipt;
+      receipt = {...body, status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}; current = receipt;
       delayedCurrent = async () => {throw new Error("readback lost");};
       return Response.json({session: receipt});
     };
@@ -119,7 +127,7 @@ describe("Focus owned task selection through App", () => {
   });
   it("recovers a lost start receipt with GET alone, including an already ended session", async () => {
     await mount(); await select();
-    delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, status: "completed", startedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
+    delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, status: "completed", startedAt: stamp, updatedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
     await navigate("/settings"); await navigate("/focus");
     await waitForApp(() => !!button("Choose task"));
@@ -177,7 +185,7 @@ describe("Focus owned task selection through App", () => {
     await mount(false); await waitForApp(() => !!resolve); const request = calls.find(c => c.path === "/api/focus/current")!;
     await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
     delayedCurrent = undefined; await navigate("/focus"); await waitForApp(() => !!button("Start focus"));
-    await act(async () => resolve(Response.json({session: {...task(1), taskId: "late-private-task", clientKey: "late", status: "active", startedAt: stamp, elapsedMs: 0}})));
+    await act(async () => resolve(Response.json({session: {...task(1), taskId: "late-private-task", clientKey: "late", status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}})));
     expect(main().textContent).not.toContain("late-private-task"); expect(button("Start focus")).toBeDefined();
   });
   it("never starts after leaving while the target preflight is pending", async () => {
@@ -192,7 +200,7 @@ describe("Focus owned task selection through App", () => {
     let resolve!: (response: Response) => void; delayedPost = () => new Promise(done => {resolve = done;});
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve); await navigate("/settings");
     const reads = calls.filter(c => c.path === "/api/focus/current").length;
-    await act(async () => resolve(Response.json({session: {id: "late", clientKey: "late", taskId: "task-1", status: "active", startedAt: stamp, elapsedMs: 0}})));
+    await act(async () => resolve(Response.json({session: {id: "late", clientKey: "late", taskId: "task-1", status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}})));
     await act(async () => {await new Promise(done => setTimeout(done, 20));});
     expect(calls.filter(c => c.path === "/api/focus/current")).toHaveLength(reads);
     expect(main().textContent).not.toContain("Current session");
@@ -235,7 +243,7 @@ describe("Focus owned task selection through App", () => {
   it("renders restored active elapsed time from the clock rather than accumulating timer ticks", async () => {
     const now = Date.parse(stamp) + 10_000;
     const clock = vi.spyOn(Date, "now").mockReturnValue(now);
-    current = {id: "restored", clientKey: "restored", taskId: "task-1", calendarEventId: null, status: "active", startedAt: stamp, pausedAt: null, endedAt: null, elapsedMs: 5_000};
+    current = {id: "restored", clientKey: "restored", taskId: "task-1", calendarEventId: null, status: "active", startedAt: stamp, updatedAt: stamp, pausedAt: null, endedAt: null, elapsedMs: 5_000};
     await mount(false);
     await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:00:15");
     clock.mockReturnValue(now + 60_000);
@@ -247,7 +255,7 @@ describe("Focus owned task selection through App", () => {
   });
   it("restores paused elapsed without counting paused wall time", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse(stamp) + 600_000);
-    current = {id: "paused", clientKey: "paused", taskId: "task-1", calendarEventId: null, status: "paused", startedAt: stamp, pausedAt: stamp, endedAt: null, elapsedMs: 65_000};
+    current = {id: "paused", clientKey: "paused", taskId: "task-1", calendarEventId: null, status: "paused", startedAt: stamp, updatedAt: stamp, pausedAt: stamp, endedAt: null, elapsedMs: 65_000};
     await mount(false);
     await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:01:05");
     expect(button("Resume")).toBeDefined(); expect(button("Pause")).toBeUndefined();
