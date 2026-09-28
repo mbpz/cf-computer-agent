@@ -26,7 +26,10 @@ export class FocusService {
   async start(memberId: string, input: FocusStartInput): Promise<{ session: FocusSession; created: boolean }> {
     const normalized = normalizeStart(input, this.id());
     const replay = await this.repository.findByClientKey(memberId, normalized.clientKey);
-    if (replay) return { session: replay, created: false };
+    if (replay) {
+      if (replay.taskId !== normalized.taskId || (input.id !== undefined && replay.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start identity does not match", 409);
+      return { session: replay, created: false };
+    }
     const open = await this.repository.findOpen(memberId);
     if (open) throw new AppError("FOCUS_ALREADY_OPEN", "A focus session is already open", 409);
     if (this.options.tasks && !await this.options.tasks.findOwned(memberId, normalized.taskId)) throw new AppError("TASK_NOT_FOUND", "Task not found", 404);
@@ -43,8 +46,8 @@ export class FocusService {
       taskId: normalized.taskId,
     }) : null;
     const created = await this.repository.insert({ id: normalized.id, memberId, taskId: normalized.taskId, calendarEventId: calendar?.event.id ?? null, clientKey: normalized.clientKey, status: "active", startedAt: now, elapsedMs: 0, createdAt: now, updatedAt: now });
-    const session = await this.repository.findOwned(memberId, normalized.id) || (!created ? await this.repository.findByClientKey(memberId, normalized.clientKey) || await this.repository.findOpen(memberId) : null);
-    if (!session) throw new AppError("FOCUS_NOT_FOUND", "Focus session not found after create", 404, true);
+    const session = await this.repository.findOwned(memberId, normalized.id) || (!created ? await this.repository.findByClientKey(memberId, normalized.clientKey) : null);
+    if (!session || session.clientKey !== normalized.clientKey || session.taskId !== normalized.taskId || (input.id !== undefined && session.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start could not claim this identity", 409);
     return { session, created };
   }
 
@@ -91,7 +94,7 @@ export class FocusService {
     return result;
   }
 
-  private async get(memberId: string, id: string): Promise<FocusSession> {
+  async get(memberId: string, id: string): Promise<FocusSession> {
     const session = await this.repository.findOwned(memberId, id);
     if (!session) throw new AppError("FOCUS_NOT_FOUND", "Focus session not found", 404);
     return session;

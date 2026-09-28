@@ -1,3 +1,4 @@
+import { type FocusCreateIntent, validFocusIntent } from "./focus-create-intent";
 import { canonicalInstant } from "./calendar-query";
 import { apiFetch, type Fetcher } from "./api";
 
@@ -11,9 +12,18 @@ export async function loadCurrentFocus(requester: Fetcher = fetch, signal?: Abor
   return session === null ? null : normalizeSession(session);
 }
 
-export async function startFocus(input: { taskId: string; title?: string; durationMinutes?: number }, requester: Fetcher = fetch): Promise<FocusSession> {
-  const result = await apiFetch<{ session: unknown }>("/api/focus", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input }) });
-  return normalizeSession(result.session);
+export async function loadFocusReceipt(intent: FocusCreateIntent, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FocusSession> {
+  const session = normalizeSession(await apiFetch<unknown>(`/api/focus/${encodeURIComponent(intent.id)}`, {requester, signal}));
+  return matchFocusReceipt(session, intent);
+}
+export async function startFocus(input: FocusCreateIntent, requester: Fetcher = fetch): Promise<FocusSession> {
+  if (!validFocusIntent(input)) throw new Error("FOCUS_INTENT_INVALID");
+  const result = await apiFetch<{ session: unknown }>("/api/focus", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  return matchFocusReceipt(normalizeSession(result.session), input);
+}
+function matchFocusReceipt(session: FocusSession, intent: FocusCreateIntent): FocusSession {
+  if (session.id !== intent.id || session.clientKey !== intent.clientKey || session.taskId !== intent.taskId) throw new Error("FOCUS_RESPONSE_INVALID");
+  return session;
 }
 
 export async function transitionFocus(id: string, action: "pause" | "resume" | "complete" | "abandon", requester: Fetcher = fetch): Promise<FocusSession> {

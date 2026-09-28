@@ -28,6 +28,38 @@ describe("focus workbench route", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it("does not report another concurrent start as this request's receipt", async () => {
+    const repository = new FocusRepository(env.DB);
+    const insert = repository.insert.bind(repository);
+    repository.insert = async input => {
+      await insert({...input, id: "winner", clientKey: "winner-key"});
+      return insert(input);
+    };
+    const service = new FocusService(repository, {now: () => NOW});
+    await expect(service.start("focus-a", {id: "loser", clientKey: "loser-key", taskId: "focus-task-a"})).rejects.toMatchObject({status: 409});
+    expect(await repository.findOwned("focus-a", "loser")).toBeNull();
+    expect(await repository.findOpen("focus-a")).toMatchObject({id: "winner"});
+  });
+
+  it("reads an owned terminal receipt by ID without exposing another member", async () => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "receipt", clientKey: "receipt-key", taskId: "focus-task-a"})});
+    await api("/api/focus/receipt/complete", sessionA, {method: "POST"});
+    const read = await api("/api/focus/receipt", sessionA);
+    expect(read.status).toBe(200); expect(await read.json()).toMatchObject({id: "receipt", status: "completed", clientKey: "receipt-key"});
+    expect((await api("/api/focus/receipt", sessionB)).status).toBe(404);
+    expect((await api("/api/focus/missing", sessionA)).status).toBe(404);
+  });
+  it("rejects reuse of a start key for a different session or task", async () => {
+    const input = {id: "intent", clientKey: "stable", taskId: "focus-task-a"};
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(201);
+    for (const patch of [{id: "different"}, {taskId: "focus-task-b"}]) {
+      expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({...input, ...patch})})).status).toBe(409);
+    }
+    const replay = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)});
+    expect(replay.status).toBe(200); expect(await replay.json()).toMatchObject({created: false, session: {id: "intent"}});
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions").first("count")).toBe(1);
+  });
+
   it("lists/searches and resolves only owned picker targets for both members", async () => {
     for (const [token, owned, foreign] of [[sessionA, "focus-task-a", "focus-task-b"], [sessionB, "focus-task-b", "focus-task-a"]]) {
       const response = await api("/api/tasks?page=1&pageSize=20&q=task", token);
@@ -99,7 +131,7 @@ describe("focus workbench route", () => {
     const started = await start.json() as { session: { id: string; status: string; calendarEventId: string | null } };
     expect(started.session).toMatchObject({ id: "focus-1", status: "active" });
     expect(started.session.calendarEventId).toBeTruthy();
-    expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "other", clientKey: "focus-key-1", taskId: "focus-task-a" }) })).status).toBe(200);
+    expect((await api("/api/focus", sessionA, { method: "POST", body: JSON.stringify({ id: "focus-1", clientKey: "focus-key-1", taskId: "focus-task-a" }) })).status).toBe(200);
     expect((await api("/api/focus/current", sessionA)).status).toBe(200);
     expect((await api("/api/focus/focus-1/pause", sessionA, { method: "POST" })).status).toBe(200);
     expect((await api("/api/focus/focus-1/resume", sessionA, { method: "POST" })).status).toBe(200);

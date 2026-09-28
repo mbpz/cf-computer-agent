@@ -21,6 +21,12 @@ export async function routeFocusApi(request: Request, url: URL, context: Request
     const result = await services.focus.start(principal.memberId, input);
     return jsonResponse(result, result.created ? 201 : 200, context.requestId);
   }
+  const detail = /^\/api\/focus\/([^/]+)$/u.exec(url.pathname);
+  if (detail) {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse(await services.focus.get(principal.memberId, decodePathId(detail[1]!)), 200, context.requestId);
+  }
   const action = /^\/api\/focus\/([^/]+)\/(pause|resume|complete|abandon)$/u.exec(url.pathname);
   if (action) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);

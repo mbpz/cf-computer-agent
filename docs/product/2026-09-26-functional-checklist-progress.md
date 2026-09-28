@@ -1079,3 +1079,25 @@ rtk proxy npm run audit:workbench-domain
 rtk proxy npm run audit:functional-checklist
 rtk git diff --check
 ```
+
+
+## 2026-09-28：C04 / EXT-FOC-03 稳定启动与未知启动恢复（本地子切片）
+
+- 启动完整 id/clientKey/taskId/title/durationMinutes 在 POST 前写入成员隔离的标签页 sessionStorage 并回读校验；不存在身份、存储损坏/不可访问、配额失败或不同未决意图时，不静默替换或发送新启动。标签页关闭后的持久性不承诺。
+- 刷新/路由重入先 GET 精确会话回执，包含已结束会话，404 不是“之前一定没写入”。只有用户明确重试才在再次对账和任务预检后发出原始同键请求；已确认回执仅 GET 恢复；旧未知请求重试的任务预检 404 不能释放原意图锁。401/403 隐藏恢复操作且保留成员隔离记录，不清空其他身份的记录。
+- 新增成员隔离 GET /api/focus/:id；启动键重用若会话 ID 或任务不符则 409。输掉并发创建不再借用当前其他会话作成功回执。旧测试中“相同 key 但不同显式 id 仍成功”改为符合身份绑定的请求；无显式 id 的旧调用仍可按 key 重放。完整标题/时长重用冲突、日历先创建的跨资源一致性尚未解决。
+- TDD：新存储模块测试先缺模块失败；精确读取/键冲突和错误回执先 5 failed，页面未知启动/存储失败先 3 failed，并发启动错误回执单项 RED。重试预检测试补足异步等待后复现清锁错误，再修复。数据层原本可由调用者传入 id/key 覆盖随机值，稳定发送测试本身初跑已绿，不将其算作新增 RED 证明；真正的恢复缺口由 App 测试覆盖。
+- 新增 32 项（存储 17、数据 4、App 8、Worker 3），7 文件 **254/254**；合同回归 **91/91**。typecheck / build:ui / verify:i18n 通过；既有 chunk 大小警告保留。typecheck 未覆盖全部 TSX，happy-dom/本地 D1 不替代原生双身份验收。
+- 继续项：客户端所见转换版本、转换未知写入恢复、完整启动载荷冲突、日历一致性与原生完整旅程。EXT-FOC-03 / C04 仍未关闭；实算 **29 范围内 / 3 关闭 / 26 未关闭**，本地继续允许，无新增外部阻塞。
+- 本地实现、验证与提交；未 push/merge/部署/远程迁移/生产写入/备份/AI 调用/手工读取或上传 Secret。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-focus-task-selection.test.tsx test/unit/frontend-focus-data.test.ts test/unit/frontend-focus-create-intent.test.ts test/worker/focus.test.ts test/unit/focus-service.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```

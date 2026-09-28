@@ -1,3 +1,4 @@
+import { acknowledgeFocusIntent, clearFocusIntent, loadFocusIntent, saveFocusIntent, type FocusCreateIntent, type StoredFocusIntent } from "./lib/focus-create-intent";
 import { TodayTargetDetail, type TodayTarget } from "./components/today-target-detail";
 import { defaultCalendarRange, parseCalendarSearch, writeCalendarSearch, type CalendarQuery } from "./lib/calendar-query";
 import { GoalTasksEditor } from "./components/goal-tasks-editor";
@@ -66,7 +67,7 @@ import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goa
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
-import { type FocusSession, loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
+import { type FocusSession, loadCurrentFocus, loadFocusReceipt, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
@@ -201,7 +202,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
     case "calendar": return <CalendarRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "today": return <TodayRoute key={session?.member.id} locale={locale} />;
-    case "focus": return <FocusRoute key={session?.member.id} locale={locale} />;
+    case "focus": return <FocusRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
@@ -1700,7 +1701,9 @@ export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
   return <><div inert={target ? true : undefined}><TodayPage locale={locale} state={state} onOpen={setTarget} onRetry={() => setRetryVersion((value) => value + 1)} /></div>{target && <TodayTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
-export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
+export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; memberId?: string }) {
+  const [recovery, setRecovery] = useState<StoredFocusIntent>(() => loadFocusIntent(memberId));
+  const intentRef = useRef<FocusCreateIntent | null>(recovery.kind === "ready" ? recovery.intent : null);
   const [state, setState] = useState<FocusPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
   const [pending, setPending] = useState(false);
@@ -1715,6 +1718,7 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     readRef.current?.abort();
     busyRef.current = false;
     setPending(false); setSelectionVersion(value => value + 1); setActionError(undefined); setActionNotice(undefined);
+    setRecovery({kind: "empty"});
     setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
   }, [locale]);
   useEffect(() => {
@@ -1724,14 +1728,31 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     busyRef.current = false;
     setPending(false); setActionError(undefined); setActionNotice(undefined); setSelectionVersion(value => value + 1);
     setState({kind: "loading"});
-    void loadCurrentFocus(fetch, controller.signal).then(session => {
-      if (epoch === epochRef.current) setState({kind: "ready", session});
-    }).catch(error => {
+    void (async () => {
+      const stored = loadFocusIntent(memberId);
+      setRecovery(stored); intentRef.current = stored.kind === "ready" ? stored.intent : null;
+      let receipt: FocusSession | undefined;
+      if (stored.kind === "ready") {
+        try { receipt = await loadFocusReceipt(stored.intent, fetch, controller.signal); }
+        catch (error) { if (!(error instanceof ApiRequestError && error.status === 404)) throw error; }
+        if (epoch !== epochRef.current) return;
+        if (receipt && !acknowledgeFocusIntent(memberId, stored.intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+      }
+      const session = await loadCurrentFocus(fetch, controller.signal);
+      if (epoch !== epochRef.current) return;
+      if (receipt && stored.kind === "ready") {
+        if (!clearFocusIntent(memberId, stored.intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+        intentRef.current = null; setRecovery({kind: "empty"});
+        setActionNotice(frontendText(locale, `FOCUS_STATUS_${receipt.status.toUpperCase()}`));
+      }
+      setState({kind: "ready", session});
+    })().catch(error => {
+      if (epoch === epochRef.current && error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {clearDenied(); return;}
       if (epoch === epochRef.current && !isAbort(error)) setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
     });
     return () => {epochRef.current += 1; controller.abort(); readRef.current?.abort();};
-  }, [locale, retryVersion]);
-  const mutate = async (operation: (epoch: number) => Promise<FocusSession | undefined>) => {
+  }, [locale, memberId, retryVersion, clearDenied]);
+  const mutate = async (operation: (epoch: number) => Promise<FocusSession | undefined>, retrySaved = false) => {
     if (busyRef.current || state.kind !== "ready") return;
     busyRef.current = true;
     const epoch = epochRef.current;
@@ -1739,20 +1760,33 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     try {
       const receipt = await operation(epoch);
       if (epoch !== epochRef.current) return;
+      if (receipt && intentRef.current && !acknowledgeFocusIntent(memberId, intentRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
       const controller = new AbortController();
       readRef.current?.abort(); readRef.current = controller;
       const session = await loadCurrentFocus(fetch, controller.signal);
       if (epoch === epochRef.current) {
+        if (receipt && intentRef.current) {
+          if (!clearFocusIntent(memberId, intentRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+          intentRef.current = null; setRecovery({kind: "empty"});
+        }
         setState({kind: "ready", session});
         if (receipt) setActionNotice(frontendText(locale, `FOCUS_STATUS_${receipt.status.toUpperCase()}`));
       }
     } catch (error: unknown) {
       if (epoch !== epochRef.current) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
-      else if (error instanceof ApiRequestError && error.status === 409) {
+      else if (intentRef.current && (retrySaved || !(error instanceof ApiRequestError && error.status === 404 && error.code === "TASK_NOT_FOUND"))) {
+        const stored = loadFocusIntent(memberId);
+        setRecovery(stored.kind === "empty" ? {kind: "blocked"} : stored);
+        setActionError(frontendText(locale, "FOCUS_START_UNCERTAIN"));
+      } else if (error instanceof ApiRequestError && error.status === 409) {
         setSelectionVersion(value => value + 1);
         setState({kind: "error", message: frontendText(locale, "FOCUS_CONFLICT")});
       } else if (!isAbort(error)) {
+        if (intentRef.current) {
+          if (clearFocusIntent(memberId, intentRef.current)) {intentRef.current = null; setRecovery({kind: "empty"});}
+          else setRecovery({kind: "blocked"});
+        }
         setSelectionVersion(value => value + 1);
         setActionError(frontendText(locale, error instanceof ApiRequestError && error.status === 404 ? "FOCUS_TASK_UNAVAILABLE" : "FOCUS_ACTION_FAILED"));
       }
@@ -1760,14 +1794,31 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch === epochRef.current) {busyRef.current = false; setPending(false);}
     }
   };
-  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(async epoch => {
+  const sendStart = async (epoch: number, input: {taskId: string; title: string; durationMinutes: number}, saved?: FocusCreateIntent) => {
     const controller = new AbortController();
     readRef.current?.abort(); readRef.current = controller;
+    if (saved) {
+      try {return await loadFocusReceipt(saved, fetch, controller.signal);}
+      catch (error) {if (!(error instanceof ApiRequestError && error.status === 404)) throw error;}
+      if (epoch !== epochRef.current) return;
+      const stored = loadFocusIntent(memberId);
+      if (stored.kind !== "ready" || stored.acknowledged) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+    }
     await loadTaskDetail(input.taskId, fetch, controller.signal);
-    // Leaving the route during this read must never initiate a later write.
     if (epoch !== epochRef.current) return;
-    return startFocus(input);
-  })} onTransition={action => {
+    const intent = saved ?? Object.freeze({id: crypto.randomUUID(), clientKey: crypto.randomUUID(), ...input});
+    if (!saveFocusIntent(memberId, intent)) {setRecovery(loadFocusIntent(memberId)); throw new Error("FOCUS_STORAGE_UNAVAILABLE");}
+    intentRef.current = intent;
+    // Write only after the complete immutable payload was durably saved and read back.
+    return startFocus(intent);
+  };
+  if (recovery.kind !== "empty" && state.kind === "ready") return <section className="space-y-3">
+    <h1 className="text-2xl font-semibold">{frontendText(locale, "FOCUS_TITLE")}</h1>
+    <p role="alert">{frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN")}</p>
+    <Button disabled={pending} onClick={() => setRetryVersion(value => value + 1)}>{frontendText(locale, "FOCUS_RETRY")}</Button>
+    {recovery.kind === "ready" && !recovery.acknowledged && <Button disabled={pending} onClick={() => void mutate(epoch => sendStart(epoch, recovery.intent, recovery.intent), true)}>{frontendText(locale, "FOCUS_RETRY_START")}</Button>}
+  </section>;
+  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(epoch => sendStart(epoch, input))} onTransition={action => {
     if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action));
   }} />;
 }

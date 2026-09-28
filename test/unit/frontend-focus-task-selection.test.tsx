@@ -15,17 +15,22 @@ describe("Focus owned task selection through App", () => {
   let delayedCurrent: (() => Promise<Response>) | undefined, delayedDetail: (() => Promise<Response>) | undefined, delayedPost: (() => Promise<Response>) | undefined;
   let current: any = null;
   let transitionStatus = 0;
+  let receipt: any = null;
+  let receiptStatus = 0;
+  let seedStorage: [string, string][] = [];
+  const journalKey = "memory-garden:focus-create:v1:contributor-route-auditor";
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
   async function input(value: string) { await act(async () => { const node = main().querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange({currentTarget: {value}}); }); }
   async function mount(wait = true) {
-    app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => {for (const [key, value] of seedStorage) browser.sessionStorage.setItem(key, value);}, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), method = init?.method ?? "GET";
       calls.push({path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal});
       if (url.pathname === "/api/navigation") return Response.json({tree: currentNavigationFixture("contributor", "0x100000")});
       if (url.pathname === "/api/telemetry/pageview") return Response.json({});
       if (url.pathname === "/api/focus/current") return delayedCurrent ? delayedCurrent() : Response.json({session: current});
+      if (/^\/api\/focus\/[^/]+$/.test(url.pathname)) return receiptStatus ? apiError(receiptStatus, "DENIED") : receipt && receipt.id === url.pathname.split("/").pop() ? Response.json(receipt) : apiError(404, "FOCUS_NOT_FOUND");
       if (url.pathname === "/api/tasks") {
         if (delayed) return delayed();
         if (listStatus) return apiError(listStatus, "DENIED", "Denied");
@@ -33,7 +38,7 @@ describe("Focus owned task selection through App", () => {
       }
       if (url.pathname.startsWith("/api/tasks/")) {
         if (delayedDetail) return delayedDetail();
-        if (detailStatus) return apiError(detailStatus, "TASK_NOT_FOUND", "Unavailable");
+        if (detailStatus) return apiError(detailStatus, "TASK_NOT_FOUND");
         return Response.json({task: task(wrongTarget ? 99 : Number(url.pathname.split("-").pop())), tags: [], links: []});
       }
       if (/^\/api\/focus\/[^/]+\/(pause|resume|complete|abandon)$/.test(url.pathname)) {
@@ -45,7 +50,7 @@ describe("Focus owned task selection through App", () => {
       }
       if (url.pathname === "/api/focus" && method === "POST") {
         if (delayedPost) return delayedPost();
-        if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND", "Unavailable");
+        if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND");
         const body = JSON.parse(String(init!.body)); current = {...body, status: "active", calendarEventId: null, startedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
         return Response.json({session: current, created: true});
       }
@@ -55,7 +60,78 @@ describe("Focus owned task selection through App", () => {
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
-  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  it("restores the complete unresolved payload after a fresh App mount without automatically posting", async () => {
+    await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    const original = calls.find(c => c.path === "/api/focus")!.body;
+    seedStorage = [[journalKey, app!.browser.sessionStorage.getItem(journalKey)!]];
+    await app!.unmount(); app = undefined;
+    await mount(false); await waitForApp(() => !!button("Retry saved start"));
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+    delayedPost = undefined; await click(button("Retry saved start")); await waitForApp(() => !!button("Pause"));
+    expect(calls.filter(c => c.path === "/api/focus").map(c => c.body)).toEqual([original, original]);
+    expect(app!.browser.sessionStorage.getItem(journalKey)).toBeNull();
+  });
+  it.each([401, 403])("hides recovery actions after receipt read denies access with %i", async status => {
+    await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    receiptStatus = status; await navigate("/settings"); await navigate("/focus");
+    await waitForApp(() => main().textContent!.includes("Unable to load"));
+    expect(button("Retry saved start")).toBeUndefined(); expect(button("Choose task")).toBeUndefined();
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+    expect(app!.browser.sessionStorage.getItem(journalKey)).not.toBeNull();
+  });
+  it("retains acknowledged intent after current readback fails and retries with GET only", async () => {
+    await mount(); await select();
+    delayedPost = async () => {
+      const body = calls.at(-1)!.body;
+      receipt = {...body, status: "active", startedAt: stamp, elapsedMs: 0}; current = receipt;
+      delayedCurrent = async () => {throw new Error("readback lost");};
+      return Response.json({session: receipt});
+    };
+    await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
+    expect(button("Retry saved start")).toBeUndefined();
+    expect(JSON.parse(app!.browser.sessionStorage.getItem(journalKey)!).acknowledged).toBe(true);
+    delayedCurrent = undefined; await click(button("Try focus again")); await waitForApp(() => !!button("Pause"));
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+    expect(app!.browser.sessionStorage.getItem(journalKey)).toBeNull();
+  });
+  it("keeps an older uncertain request locked when its retry preflight finds a missing task", async () => {
+    await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    detailStatus = 404; await click(button("Retry saved start"));
+    await waitForApp(() => calls.filter(c => c.path === "/api/tasks/task-1").length === 2 && !button("Retry saved start")?.disabled);
+    expect(button("Choose task")).toBeUndefined(); expect(app!.browser.sessionStorage.getItem(journalKey)).not.toBeNull();
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+  });
+  it("keeps an uncertain start locked across route reentry and replays exactly one persisted intent", async () => {
+    await mount(); await select(); delayedPost = async () => { throw new Error("network lost"); };
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    const original = calls.find(c => c.path === "/api/focus")!.body;
+    expect(button("Choose task")).toBeUndefined();
+    await navigate("/settings"); await navigate("/focus");
+    await waitForApp(() => !!button("Retry saved start"));
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+    delayedPost = undefined; await click(button("Retry saved start"));
+    await waitForApp(() => !!button("Pause"));
+    expect(calls.filter(c => c.path === "/api/focus").map(c => c.body)).toEqual([original, original]);
+  });
+  it("recovers a lost start receipt with GET alone, including an already ended session", async () => {
+    await mount(); await select();
+    delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, status: "completed", startedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    await navigate("/settings"); await navigate("/focus");
+    await waitForApp(() => !!button("Choose task"));
+    expect(main().textContent).toContain("Completed");
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+  });
+  it("fails closed before POST when tab storage rejects the saved intent", async () => {
+    await mount(); await select();
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => {throw new Error("quota");});
+    await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
+  });
   it("replaces pasted IDs with owned selection and reauthorizes the exact task before starting", async () => {
     await mount(); expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull(); expect(button("Start focus").disabled).toBe(true);
     await select(); expect(button("Start focus").disabled).toBe(false); await click(button("Start focus")); await waitForApp(() => main().textContent!.includes("Current session"));
