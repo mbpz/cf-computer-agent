@@ -16,7 +16,7 @@ export async function loadCalendar(input: { from: Date; to: Date; limit?: number
   const value = await apiFetch<unknown>(`/api/calendar/events?${params.toString()}`, { requester });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("CALENDAR_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  const items = Array.isArray(record.items) ? record.items.map(normalizeEvent).filter((item): item is CalendarEvent => item !== null) : [];
+  const items = Array.isArray(record.items) ? record.items.map(normalizeCalendarEvent).filter((item): item is CalendarEvent => item !== null) : [];
   if (!Array.isArray(record.items) || items.length !== record.items.length) throw new Error("CALENDAR_RESPONSE_INVALID");
   return { items, ...(typeof record.nextCursor === "string" ? { nextCursor: record.nextCursor } : {}) };
 }
@@ -28,7 +28,7 @@ export async function loadCalendarNumbered(input: CalendarQuery, requester: Fetc
   if (input.status) params.set("status", input.status);
   const raw = await apiFetch<unknown>(`/api/calendar/events?${params}`, { requester, signal });
   const page = normalizeNumberedPage(raw, value => {
-    const item = normalizeEvent(value);
+    const item = normalizeCalendarEvent(value);
     if (!item || Date.parse(item.startsAt) >= Date.parse(input.to) || Date.parse(item.endsAt) <= Date.parse(input.from)
       || (input.status && item.status !== input.status)) throw new Error("CALENDAR_RESPONSE_INVALID");
     return item;
@@ -38,7 +38,7 @@ export async function loadCalendarNumbered(input: CalendarQuery, requester: Fetc
 }
 
 export async function loadCalendarEvent(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<CalendarEvent> {
-  const item = normalizeEvent(await apiFetch<unknown>(`/api/calendar/events/${encodeURIComponent(id)}`, { requester, signal }));
+  const item = normalizeCalendarEvent(await apiFetch<unknown>(`/api/calendar/events/${encodeURIComponent(id)}`, { requester, signal }));
   if (!item || item.id !== id) throw new Error("CALENDAR_RESPONSE_INVALID");
   return item;
 }
@@ -51,18 +51,18 @@ export async function createCalendarEvent(input: CalendarCreateIntent, requester
   if (!validCalendarIntent(input)) throw new Error("CALENDAR_INTENT_INVALID");
   const raw = await apiFetch<unknown>("/api/calendar/events", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
   const result = raw as { event?: unknown; created?: unknown } | null;
-  const event = normalizeEvent(result?.event);
+  const event = normalizeCalendarEvent(result?.event);
   if (!event || typeof result?.created !== "boolean" || event.id !== input.id || event.clientKey !== input.clientKey) throw new Error("CALENDAR_RECEIPT_MISMATCH");
   return { event, created: result.created };
 }
 export async function cancelCalendarEvent(id: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<CalendarEvent> {
   if (!canonicalInstant(expectedUpdatedAt)) throw new Error("CALENDAR_VERSION_INVALID");
-  const event = normalizeEvent(await apiFetch<unknown>(`/api/calendar/events/${encodeURIComponent(id)}`, { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) }));
+  const event = normalizeCalendarEvent(await apiFetch<unknown>(`/api/calendar/events/${encodeURIComponent(id)}`, { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) }));
   if (!event || event.id !== id || event.status !== "canceled" || Date.parse(event.updatedAt) <= Date.parse(expectedUpdatedAt)) throw new Error("CALENDAR_RESPONSE_INVALID");
   return event;
 }
 
-function normalizeEvent(value: unknown): CalendarEvent | null {
+export function normalizeCalendarEvent(value: unknown): CalendarEvent | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || typeof record.clientKey !== "string" || typeof record.title !== "string" || typeof record.startsAt !== "string" || typeof record.endsAt !== "string") return null;

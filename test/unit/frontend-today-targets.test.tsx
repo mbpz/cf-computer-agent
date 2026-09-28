@@ -12,6 +12,7 @@ describe("Today traceable targets through App", () => {
   let app: MountedApp | undefined;
   let calls: {path: string; method: string; signal?: AbortSignal | null}[] = [];
   let deny = 0, wrongId = false;
+  let damage: string | null = null;
   let detail: (() => Promise<Response>) | undefined;
   const main = () => app!.container.querySelector("main")!;
   const click = async (node: HTMLElement) => act(async () => node.click());
@@ -23,7 +24,15 @@ describe("Today traceable targets through App", () => {
       calls.push({path: url.pathname + url.search, method: init?.method ?? "GET", signal: init?.signal});
       if (url.pathname === "/api/navigation") return Response.json({tree: currentNavigationFixture("contributor", "0x100000")});
       if (url.pathname === "/api/telemetry/pageview") return Response.json({});
-      if (url.pathname === "/api/today") return Response.json({date: "2026-09-28", tasks: {items: Array.from({length: 15}, (_, i) => ({...task, id: `task-${i+1}`})), pagination: {page: 1, pageSize: 20, total: 15, totalPages: 1}}, taskSummary: summary, calendar: [event], inbox: [], projects: []});
+      if (url.pathname === "/api/today") {
+        const snapshot: any = {date: "2026-09-28", tasks: {items: Array.from({length: 15}, (_, i) => ({...task, id: `task-${i+1}`})), pagination: {page: 1, pageSize: 20, total: 15, totalPages: 1}}, taskSummary: summary, calendar: [event], inbox: [], projects: []};
+        if (damage === "tasks") snapshot.tasks.items[0].title = null;
+        if (damage === "calendar") snapshot.calendar = {};
+        if (damage === "inbox") snapshot.inbox = [null];
+        if (damage === "projects") snapshot.projects = [null];
+        if (damage === "summary") snapshot.taskSummary = {...summary, todo: "bad"};
+        return Response.json(snapshot);
+      }
       if (url.pathname === "/api/tasks") return Response.json({items: [task], pagination: {page: 1, pageSize: 20, total: 1, totalPages: 1}});
       if (url.pathname === "/api/tasks/summary") return Response.json(summary);
       if (url.pathname === "/api/calendar/events") return Response.json({items: [event], pagination: {page: 1, pageSize: 20, total: 1, totalPages: 1}});
@@ -34,9 +43,16 @@ describe("Today traceable targets through App", () => {
       }
       throw new Error(`Unexpected ${url.pathname}`);
     }});
-    await waitForApp(() => main().textContent!.includes("Snapshot task"));
+    await waitForApp(() => main().textContent!.includes("Snapshot task") || main().textContent!.includes("Unable to load"));
   }
-  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; deny = 0; wrongId = false; detail = undefined; vi.unstubAllGlobals(); });
+  afterEach(async () => { await app?.unmount(); app = undefined; calls = []; deny = 0; wrongId = false; damage = null; detail = undefined; vi.unstubAllGlobals(); });
+  it.each(["tasks", "calendar", "inbox", "projects", "summary"])("fails closed for malformed %s and restores via a read-only retry", async field => {
+    damage = field; await mount();
+    expect(main().textContent).toContain("Unable to load");
+    expect(main().textContent).not.toContain("Open tasks"); expect(main().textContent).not.toContain("Snapshot task");
+    damage = null; await click(button("Try today again")); await waitForApp(() => main().textContent!.includes("Snapshot task"));
+    expect(calls.filter(call => call.path === "/api/today").map(call => call.method)).toEqual(["GET", "GET"]);
+  });
   it("explains bounded counts and provides all-items links with exact snapshot UTC calendar range", async () => {
     await mount();
     expect(main().querySelectorAll('[data-today-target="task"]')).toHaveLength(10);

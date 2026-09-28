@@ -6,6 +6,7 @@ import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
 import { MIGRATIONS } from "../fixtures/d1";
+import { loadToday } from "../../frontend/lib/today-data";
 
 const NOW = new Date("2026-09-09T10:00:00.000Z");
 
@@ -46,6 +47,14 @@ describe("today workbench route", () => {
         expect((await api(`/api/${prefix}-${other}`, token!)).status).toBe(404);
       }
     }
+  });
+
+  it("round-trips the real D1 snapshot through the strict frontend contract", async () => {
+    const snapshot = await loadToday(input => api(String(input), sessionA));
+    expect(snapshot.tasks.items[0]?.id).toBe("today-task-a");
+    expect(snapshot.inbox[0]?.id).toBe("today-inbox-a");
+    expect(snapshot.projects[0]?.id).toBe("today-project-a");
+    expect(snapshot.calendar[0]?.id).toBe("today-event-a");
   });
 
   it("returns one bounded member-private snapshot", async () => {

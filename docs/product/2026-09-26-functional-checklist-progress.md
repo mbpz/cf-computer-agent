@@ -995,3 +995,25 @@ rtk proxy npm run audit:workbench-domain
 rtk proxy npm run audit:functional-checklist
 rtk git diff --check
 ```
+
+
+## 2026-09-28：C04 / EXT-TOD-02 严格快照与整份失败恢复（本地）
+
+- 移除嵌套快照类型断言：校验 UTC 日期、任务数字分页/当日范围/开放状态、全部摘要非负安全整数、日程重叠范围、收集箱/项目嵌套字段，以及重复 ID 和各集合上限。共享日历严格解析器；不静默丢弃坏行或把异常值替换为零。
+- 任一组成读取失败使 TodayService 整份失败；任一畸形组成使前端拒绝整份响应，页面不呈现成功指标。显式重试只发送 GET，恢复后再展示完整摘要；不是部分成功渲染，也不宣称多个服务读取具有数据库事务快照语义。
+- 新增 48 数据契约、5 App/happy-dom 坏组成与只读重试、5 service 组成失败、1 真实本地 D1 → 前端解析测试，共 59 项。最初 RED 38 failed / 8 passed；首次 GREEN 批次 1 failed / 250 passed 的唯一失败是测试误要求保留 CalendarEvent 未声明的 createdAt，修正测试期望为既有 DTO 投影后通过，并补数组伪枚举用例。
+- 联合回归 **8 文件 290/290**；随后增加真实 D1 往返用例，单独复跑 Worker **3/3**。`typecheck`、`build:ui`、`verify:i18n` 通过；保留既有 chunk 大小警告，Vite 构建不等于前端全量 TSX 类型检查。成熟度/域/清单等合同 **91/91** 通过，域证据生成校验及清单计数校验通过。
+- 父清单仍为 **29 范围内 / 3 关闭 / 26 未关闭**。EXT-TOD-02 本地子项完成；下一项 **EXT-FOC-01 专注任务选择**允许本地推进。完整跨日聚合与原生真实身份/键盘/触控验收仍开放，不把 happy-dom 当作原生验收，不关闭 C04。
+- 未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-today-data.test.ts test/unit/frontend-today-targets.test.tsx test/unit/today-service.test.ts test/worker/today.test.ts test/unit/frontend-calendar-write-data.test.ts test/unit/frontend-calendar-numbered-data.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy npx vitest run test/worker/today.test.ts
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```
