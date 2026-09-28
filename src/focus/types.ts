@@ -6,6 +6,8 @@ export interface FocusSession {
   taskId: string;
   calendarEventId: string | null;
   clientKey: string;
+  startTitle: string | null;
+  durationMinutes: number | null;
   status: FocusStatus;
   startedAt: string;
   pausedAt: string | null;

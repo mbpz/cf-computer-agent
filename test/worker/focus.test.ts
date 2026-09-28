@@ -28,6 +28,44 @@ describe("focus workbench route", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it.each([{title: "Changed title"}, {durationMinutes: 30}])("rejects changed start payload on key replay %j without changing the calendar", async patch => {
+    const input = {id: "payload", clientKey: "payload", taskId: "focus-task-a", title: "Original", durationMinutes: 25};
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(201);
+    const before = await env.DB.prepare("SELECT * FROM calendar_events").all();
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({...input, ...patch})})).status).toBe(409);
+    expect(await env.DB.prepare("SELECT * FROM calendar_events").all()).toMatchObject({results: before.results});
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(200);
+  });
+
+  it("rejects a concurrent winner with different start payload", async () => {
+    const repository = new FocusRepository(env.DB);
+    const insert = repository.insert.bind(repository);
+    repository.insert = async input => {
+      await insert({...input, startTitle: "Another title", durationMinutes: 40});
+      return insert(input);
+    };
+    await expect(new FocusService(repository, {now: () => NOW}).start("focus-a", {id: "payload-race", clientKey: "payload-race", taskId: "focus-task-a", title: "Original", durationMinutes: 25})).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
+  });
+
+  it("normalizes defaults and keeps original start payload after calendar edits and session completion", async () => {
+    const input = {id: "normalized", clientKey: "normalized", taskId: "focus-task-a"};
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(201);
+    await env.DB.prepare("UPDATE calendar_events SET title = 'Edited independently' WHERE member_id = 'focus-a'").run();
+    await transition("/api/focus/normalized/complete", sessionA);
+    const replay = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({...input, title: " Focus session ", durationMinutes: 25})});
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({created: false, session: {status: "completed", startTitle: "Focus session", durationMinutes: 25}});
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({...input, title: "Edited independently"})})).status).toBe(409);
+  });
+
+  it("does not invent an original payload for legacy sessions but permits owned reads and transitions", async () => {
+    await env.DB.prepare("INSERT INTO focus_sessions (id, member_id, task_id, client_key, status, started_at, elapsed_ms, created_at, updated_at) VALUES ('legacy', 'focus-a', 'focus-task-a', 'legacy', 'active', ?, 0, ?, ?)").bind(NOW.getTime(), NOW.getTime(), NOW.getTime()).run();
+    expect(await (await api("/api/focus/legacy", sessionA)).json()).toMatchObject({startTitle: null, durationMinutes: null});
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "legacy", clientKey: "legacy", taskId: "focus-task-a"})})).status).toBe(409);
+    expect((await transition("/api/focus/legacy/complete", sessionA)).status).toBe(200);
+    expect((await api("/api/focus/legacy", sessionB)).status).toBe(404);
+  });
+
   it("rejects missing, malformed and stale client versions before changing focus state", async () => {
     await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "versioned", clientKey: "versioned", taskId: "focus-task-a"})});
     for (const body of [{}, {expectedUpdatedAt: "bad"}, {expectedUpdatedAt: 1}]) {

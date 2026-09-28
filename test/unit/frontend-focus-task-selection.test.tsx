@@ -54,7 +54,7 @@ describe("Focus owned task selection through App", () => {
       if (url.pathname === "/api/focus" && method === "POST") {
         if (delayedPost) return delayedPost();
         if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND");
-        const body = JSON.parse(String(init!.body)); current = {...body, status: "active", calendarEventId: null, startedAt: stamp, updatedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
+        const body = JSON.parse(String(init!.body)); current = {...body, startTitle: body.title, status: "active", calendarEventId: null, startedAt: stamp, updatedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
         return Response.json({session: current, created: true});
       }
       throw new Error(`Unexpected ${method} ${url}`);
@@ -204,7 +204,7 @@ describe("Focus owned task selection through App", () => {
     await mount(); await select();
     delayedPost = async () => {
       const body = calls.at(-1)!.body;
-      receipt = {...body, status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}; current = receipt;
+      receipt = {...body, startTitle: body.title, status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}; current = receipt;
       delayedCurrent = async () => {throw new Error("readback lost");};
       return Response.json({session: receipt});
     };
@@ -235,9 +235,25 @@ describe("Focus owned task selection through App", () => {
     await waitForApp(() => !!button("Pause"));
     expect(calls.filter(c => c.path === "/api/focus").map(c => c.body)).toEqual([original, original]);
   });
+  it.each([{startTitle: "Different"}, {durationMinutes: 99}])("retains the start journal when an exact-ID GET has a conflicting payload %j", async patch => {
+    await mount(); await select();
+    delayedPost = async () => {
+      const body = calls.at(-1)!.body;
+      receipt = {...body, startTitle: body.title, status: "completed", startedAt: stamp, updatedAt: stamp, elapsedMs: 1000, endedAt: stamp, ...patch};
+      throw new Error("lost");
+    };
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    const saved = app!.browser.sessionStorage.getItem(journalKey);
+    await navigate("/settings"); await navigate("/focus");
+    await waitForApp(() => !!button("Try focus again"));
+    expect(button("Choose task")).toBeUndefined();
+    expect(app!.browser.sessionStorage.getItem(journalKey)).toBe(saved);
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+    expect(main().textContent).not.toContain("Completed");
+  });
   it("recovers a lost start receipt with GET alone, including an already ended session", async () => {
     await mount(); await select();
-    delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, status: "completed", startedAt: stamp, updatedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
+    delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, startTitle: body.title, status: "completed", startedAt: stamp, updatedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
     await navigate("/settings"); await navigate("/focus");
     await waitForApp(() => !!button("Choose task"));

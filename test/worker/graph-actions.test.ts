@@ -77,10 +77,16 @@ describe("graph action worker contract", () => {
 
     const replay = await api("/api/focus", sessionA, {
       method: "POST",
-      body: JSON.stringify({ id: "ignored-focus-id", clientKey: "graph-focus-key", taskId: "graph-source-task-a", title: "Ignored retry", durationMinutes: 25 }),
+      body: JSON.stringify({ id: "graph-focus-a", clientKey: "graph-focus-key", taskId: "graph-source-task-a", title: "Focus on Alpha", durationMinutes: 25 }),
     });
     expect(replay.status).toBe(200);
     expect((await replay.json() as { session: { id: string } }).session.id).toBe("graph-focus-a");
+    // A retry must preserve its original identity and payload, not silently adopt another request.
+    expect((await api("/api/focus", sessionA, {
+      method: "POST",
+      body: JSON.stringify({ id: "ignored-focus-id", clientKey: "graph-focus-key", taskId: "graph-source-task-a", title: "Ignored retry", durationMinutes: 25 }),
+    })).status).toBe(409);
+
 
     expect((await api("/api/focus", sessionB, {
       method: "POST",

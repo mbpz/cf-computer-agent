@@ -28,7 +28,7 @@ export class FocusService {
     const normalized = normalizeStart(input, this.id());
     const replay = await this.repository.findByClientKey(memberId, normalized.clientKey);
     if (replay) {
-      if (replay.taskId !== normalized.taskId || (input.id !== undefined && replay.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start identity does not match", 409);
+      if (replay.startTitle !== normalized.title || replay.durationMinutes !== normalized.durationMinutes || replay.taskId !== normalized.taskId || (input.id !== undefined && replay.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start identity does not match", 409);
       return { session: replay, created: false };
     }
     const open = await this.repository.findOpen(memberId);
@@ -46,9 +46,9 @@ export class FocusService {
       allDay: false,
       taskId: normalized.taskId,
     }) : null;
-    const created = await this.repository.insert({ id: normalized.id, memberId, taskId: normalized.taskId, calendarEventId: calendar?.event.id ?? null, clientKey: normalized.clientKey, status: "active", startedAt: now, elapsedMs: 0, createdAt: now, updatedAt: now });
+    const created = await this.repository.insert({ id: normalized.id, memberId, taskId: normalized.taskId, calendarEventId: calendar?.event.id ?? null, clientKey: normalized.clientKey, startTitle: normalized.title, durationMinutes: normalized.durationMinutes, status: "active", startedAt: now, elapsedMs: 0, createdAt: now, updatedAt: now });
     const session = await this.repository.findOwned(memberId, normalized.id) || (!created ? await this.repository.findByClientKey(memberId, normalized.clientKey) : null);
-    if (!session || session.clientKey !== normalized.clientKey || session.taskId !== normalized.taskId || (input.id !== undefined && session.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start could not claim this identity", 409);
+    if (!session || session.startTitle !== normalized.title || session.durationMinutes !== normalized.durationMinutes || session.clientKey !== normalized.clientKey || session.taskId !== normalized.taskId || (input.id !== undefined && session.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start could not claim this identity", 409);
     return { session, created };
   }
 
