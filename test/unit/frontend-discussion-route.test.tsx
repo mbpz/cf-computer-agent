@@ -385,6 +385,103 @@ describe("discussion routes", () => {
     resolveList(Response.json({ items: [], nextCursor: null }));
   });
 
+  it.each(["list", "thread"])("recovers the same %s cursor after a read failure and restores URL state on history events", async (kind) => {
+    const path = kind === "list" ? "/messages" : "/messages/thread-1";
+    browser.history.replaceState({}, "", `${path}?unknown=kept`);
+    let failPageTwo = true;
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const request = String(input); calls.push(request);
+      if (request === "/api/discussions/thread-1") return Response.json(thread());
+      const pageTwo = request.includes("cursor=cursor_2");
+      if (pageTwo && failPageTwo) return Response.json({ error: { code: "UNAVAILABLE", message: "Unavailable", retryable: true } }, { status: 503 });
+      return Response.json({ items: [kind === "list"
+        ? thread({ contextId: pageTwo ? "task-older" : "task-newer" })
+        : message({ body: pageTwo ? "Older page" : "Newer page" })], ...(!pageTwo ? { nextCursor: "cursor_2" } : {}) });
+    });
+    await act(async () => root.render(kind === "list"
+      ? <MessagesRoute locale={createLocaleRuntime()} search={browser.location.search} />
+      : <DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
+    await waitFor(() => container.querySelector("button[aria-label='Next page']") !== null);
+    await act(async () => { (container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).click(); });
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    expect(browser.location.search).toBe("?unknown=kept&page=2&cursor=cursor_2");
+    const beforeRetry = calls.length;
+    failPageTwo = false;
+    await act(async () => { container.querySelector("button")!.click(); });
+    await waitFor(() => container.textContent?.includes("Page 2") ?? false);
+    expect(calls.slice(beforeRetry).some((url) => url.endsWith("limit=20&cursor=cursor_2"))).toBe(true);
+    expect((container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).disabled).toBe(true);
+    // Model a browser back/forward location event without claiming native history coverage.
+    for (const [search, expected] of [["?unknown=kept", "Page 1"], ["?unknown=kept&page=2&cursor=cursor_2", "Page 2"]]) {
+      await act(async () => { browser.history.replaceState({}, "", `${path}${search}`); browser.dispatchEvent(new browser.Event("popstate")); });
+      await waitFor(() => (container.textContent?.includes(expected) ?? false) && container.querySelector("[aria-busy='true']") === null);
+    }
+    const select = container.querySelector("select") as HTMLSelectElement;
+    await act(async () => { select.value = "50"; select.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+    await waitFor(() => browser.location.search === "?unknown=kept&limit=50" && container.querySelector("[aria-busy='true']") === null);
+    expect(container.textContent).toContain("Page 1");
+    expect(calls.at(-1)).toMatch(/limit=50$/u);
+    expect((container.querySelector("button[aria-label='Previous page']") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each(["list", "thread"])("ignores a late %s cursor page after history restores page one", async (kind) => {
+    const path = kind === "list" ? "/messages" : "/messages/thread-1";
+    browser.history.replaceState({}, "", path);
+    let resolvePage!: (response: Response) => void;
+    const latePage = new Promise<Response>((resolve) => { resolvePage = resolve; });
+    let pageSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = String(input);
+      if (request === "/api/discussions/thread-1") return Response.json(thread());
+      if (request.includes("cursor=")) { pageSignal = init?.signal ?? undefined; return latePage; }
+      return Response.json({ items: [kind === "list" ? thread({ contextId: "task-current" }) : message({ body: "Current page" })], nextCursor: "cursor_2" });
+    });
+    await act(async () => root.render(kind === "list"
+      ? <MessagesRoute locale={createLocaleRuntime()} search="" />
+      : <DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("button[aria-label='Next page']") !== null);
+    await act(async () => { (container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).click(); });
+    await waitFor(() => pageSignal !== undefined);
+    expect((container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { browser.history.replaceState({}, "", path); browser.dispatchEvent(new browser.Event("popstate")); });
+    await waitFor(() => container.querySelector("[aria-busy='true']") === null);
+    expect(pageSignal?.aborted).toBe(true);
+    await act(async () => {
+      resolvePage(Response.json({ items: [kind === "list" ? thread({ contextId: "task-late" }) : message({ body: "Late page" })] }));
+      for (let i = 0; i < 30; i += 1) await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Page 1");
+    expect(container.textContent).not.toContain(kind === "list" ? "task-late" : "Late page");
+    expect(container.textContent).toContain(kind === "list" ? "task-current" : "Current page");
+  });
+
+  it("replaces an older cursor with the first page after send without losing page size or unrelated query parameters", async () => {
+    browser.history.replaceState({}, "", "/messages/thread-1?unknown=kept&page=2&limit=50&cursor=cursor_2");
+    const reads: string[] = [];
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        writes += 1;
+        const payload = JSON.parse(String(init.body));
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload.clientKey }), created: true });
+      }
+      reads.push(String(input));
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const historyLength = browser.history.length;
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "New reply");
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => browser.location.search === "?unknown=kept&limit=50" && container.querySelector("[aria-busy='true']") === null);
+    expect(reads).toContain("/api/discussions/thread-1/messages?limit=50");
+    expect(container.textContent).toContain("Page 1");
+    expect(browser.history.length).toBe(historyLength);
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+    expect(writes).toBe(1);
+  });
+
   it("rebinds the request controller when history selects another thread id", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
