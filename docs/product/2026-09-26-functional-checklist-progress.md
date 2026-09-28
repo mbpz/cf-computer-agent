@@ -1,6 +1,10 @@
 # 功能 checklist 续作 — 2026-09-26
 
-## 范围与状态
+## 当前状态（2026-09-28）
+
+A03/A04 的分类与原 R1 映射核对现已完成，canonical **29 范围内 / 3 关闭（A03、A04、B03）/ 26 未关闭**。运行 `npm run audit:functional-checklist` 实算；下面各日期段落的 1/28 是当时状态，不能再作为当前计数。详见[30 项关闭条件与 33 页面分类](./2026-09-28-functional-closure-reconciliation.md)。
+
+## 范围与状态（以下保留历史记录）
 
 延续 `codex/functional-checklist-completion`，上一批提交 `1ac279a`。原 30 个父项，排除 D08 生产部署后本轮 29 项；首批完成 A02/D02 的有界子项；本页追加 B03 批次后，本轮 29 项中已关闭 1 项（B03）、余 28 项。仅本地实现、验证、提交；没有 push、部署、迁移、生产写入、备份或 Secret 读取。
 
@@ -812,3 +816,41 @@ rtk proxy npx vitest run test/unit/frontend-inbox-status-recovery.test.tsx test/
 canonical **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。EXT-INB-03 与 C04 父项保持开放。下一步是转任务一致性和目标跳转/权限：现有实现先调用 TasksService 创建任务，再更新 Inbox；本批没有为该流程提供事务原子性、并发唯一性或碰撞保护证明，不能因归档条件写通过而宣称转任务已完成。该子项仍允许继续本地实施；真实身份/原生浏览器验收是后续验收缺口。
 
 本批未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret；无需新增迁移。
+
+
+## 2026-09-28：纠正父任务推进方式，关闭 A03/A04 核对任务
+
+用户追问为什么始终未关闭 28 项。本批在 `c6169e0` 后核对 canonical 父/子任务、既有原子证据、R1 与交付账本，确认此前连续补子项而未完成可独立关闭的核对任务，且进度汇报未区分代码缺口与功能验收。没有把“完成子项”当作父项完成，也不再把排除的 D08 发布验收作为功能任务的重复门禁。
+
+### 实际交付
+
+- 完成 A03：当前 33 个页面能力的五类子能力分类、限定本地实现、具体剩余工作及父任务归属；额外记录无正式路由的 VM 与会话管理。通过现有 domain audit loader 核对分类表与 manifest 的 33 路由精确相等，30 个父任务关闭条件一一对应；不宣称 A01 的全部按钮枚举或 A02 的逐 mutation 核对已完成。
+- 完成 A04：`937ea87` 账户/导航/品牌修复逐项映射 R1-005/006/007/009–014 和 WB-002/WB-SETTINGS；重跑当前 Shell/菜单/焦点/导航/退出/settings 回归。原 R1 父项和交付总账 release/acceptance 不提升。
+- 新增 `npm run audit:functional-checklist`，仅从 canonical 顶层 checkbox 实算 30 原始/29 范围内，拒绝缺失、重复、未知/畸形父项和父已勾但子未完；忽略子项计数与历史段落。脚本只读、不自动关闭任务，也不验证业务完成。
+- [完整分类、映射与关闭条件](./2026-09-28-functional-closure-reconciliation.md)已登记，canonical 和原 R1 清单同步。
+
+### 新鲜验证
+
+```sh
+rtk proxy node --test scripts/functional-checklist-audit.test.mjs
+rtk proxy npm run audit:functional-checklist
+rtk proxy npx vitest run test/unit/workspace-shell.test.tsx test/unit/frontend-menu-keyboard.test.tsx test/unit/frontend-shell.test.tsx test/unit/command-palette.test.ts test/unit/frontend-focus-scope.test.tsx test/unit/frontend-logout.test.ts test/unit/frontend-navigation-data.test.ts test/unit/frontend-responsive.test.tsx test/unit/frontend-a11y.test.tsx test/unit/ui-shell.test.ts test/unit/settings-page.test.tsx
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run test:i18n
+rtk proxy npm run verify:workbench-maturity
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run verify:delivery-status
+rtk git diff --check
+```
+
+- 计数器 RED：模块未实现时 import 失败；补测畸形重复父行出现 **1 失败 / 5 通过**，修复 fail-closed 校验后 **6/6**。CLI 实际输出 **3 完成 / 26 剩余**，完成 ID 为 A03/A04/B03。
+- Shell 联合 **11 文件 / 95 项通过**；首次 sandbox 的日志/监听 EPERM 不记为通过，授权后相同命令重跑 exit 0。测试 harness 的 AI binding 警告不是 AI 调用，本批未调用 AI。
+- `typecheck`、`build:ui`、`verify:i18n` 通过；`test:i18n` **13/13**；`verify:workbench-maturity` **13/13**；域快照 current；`verify:delivery-status` **30/30**；`git diff --check` 通过。构建保留既有 >500 kB chunk 警告，默认 typecheck 仍不覆盖全部前端 TSX；未执行全仓测试或带 Secret 同步的 build/check。
+
+### 当前与下一步
+
+**29 范围内 / 3 关闭 / 26 未关闭**。本批没有新增完成两个业务模块，完成的是清单本就要求的分类和映射交付物。九个父项 B01/B02/B04–B09/D01 主要剩余真实身份/原生功能验收，其他 17 个仍涉及实现、逐操作核对、身份/设备矩阵或最终门禁。具体剩余条件逐项列出，不把全部 26 项一概归咎于生产部署。
+
+下一业务切片 C04 / EXT-INB-03 的转任务一致性与目标跳转/权限仍允许本地推进；不以备份、加密或旧运维签认阻塞。原生功能验收尚未执行，本批未核查当前登录会话/第二成员可用性，不沿用旧锁屏状态作为当前 blocker。未 push、merge、部署、远程迁移、生产写入、备份或手工读取/上传 Secret。

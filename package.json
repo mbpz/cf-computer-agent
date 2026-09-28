@@ -53,7 +53,8 @@
     "build:ui": "vite build --config vite.config.ts",
     "build:secrets": "node scripts/build-secrets.mjs frontend/dist",
     "build:legacy-audit": "node scripts/frontend-legacy-audit.mjs",
-    "verify:wcag": "node scripts/wcag-contract.mjs"
+    "verify:wcag": "node scripts/wcag-contract.mjs",
+    "audit:functional-checklist": "node scripts/functional-checklist-audit.mjs"
   },
   "dependencies": {
     "@cloudflare/computer": "0.1.1",
