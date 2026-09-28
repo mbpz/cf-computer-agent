@@ -2173,7 +2173,18 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   };
   const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
     const sendingThreadId = threadId;
-    await sendDiscussionMessage(input);
+    try {
+      await sendDiscussionMessage(input);
+    } catch (error) {
+      if (activeRef.current && currentThreadIdRef.current === sendingThreadId
+        && error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+        // Revocation also invalidates concurrent reads; a late response must not
+        // restore the private transcript or the composer after access is denied.
+        controllerRef.current?.dispose(); controllerRef.current = null;
+        setState({ kind: "error" }); setPending(false);
+      }
+      throw error;
+    }
     if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId) return;
     if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
     else setRetryVersion((value) => value + 1);

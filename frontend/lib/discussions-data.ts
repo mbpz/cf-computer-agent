@@ -43,7 +43,7 @@ export async function loadDiscussionThreads(
   requester: Fetcher = fetch,
   signal?: AbortSignal,
 ): Promise<DiscussionCursorPage<DiscussionThread>> {
-  return normalizeCursorPage(await apiFetch<unknown>(cursorPath("/api/discussions", request), { requester, signal }), normalizeThread);
+  return normalizeCursorPage(await apiFetch<unknown>(cursorPath("/api/discussions", request), { requester, signal }), normalizeThread, request);
 }
 
 export async function loadDiscussionThread(
@@ -52,7 +52,9 @@ export async function loadDiscussionThread(
   signal?: AbortSignal,
 ): Promise<DiscussionThread> {
   assertId(threadId, "DISCUSSION_ID_INVALID");
-  return normalizeThread(await apiFetch<unknown>(`/api/discussions/${encodeURIComponent(threadId)}`, { requester, signal }));
+  const thread = normalizeThread(await apiFetch<unknown>(`/api/discussions/${encodeURIComponent(threadId)}`, { requester, signal }));
+  if (thread.id !== threadId) invalidResponse();
+  return thread;
 }
 
 export async function loadContextDiscussionThread(
@@ -62,7 +64,9 @@ export async function loadContextDiscussionThread(
 ): Promise<DiscussionThread> {
   assertContext(context);
   const params = new URLSearchParams({ kind: context.kind, id: context.id });
-  return normalizeThread(await apiFetch<unknown>(`/api/discussions/context?${params.toString()}`, { requester, signal }));
+  const thread = normalizeThread(await apiFetch<unknown>(`/api/discussions/context?${params.toString()}`, { requester, signal }));
+  assertThreadContext(thread, context);
+  return thread;
 }
 
 export async function ensureDiscussionThread(
@@ -70,12 +74,14 @@ export async function ensureDiscussionThread(
   requester: Fetcher = fetch,
 ): Promise<DiscussionThreadResult> {
   assertContext(context);
-  return normalizeThreadResult(await apiFetch<unknown>("/api/discussions/context", {
+  const result = normalizeThreadResult(await apiFetch<unknown>("/api/discussions/context", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(context),
   }));
+  assertThreadContext(result.thread, context);
+  return result;
 }
 
 export async function loadDiscussionMessages(
@@ -85,10 +91,14 @@ export async function loadDiscussionMessages(
   signal?: AbortSignal,
 ): Promise<DiscussionCursorPage<DiscussionMessage>> {
   assertId(threadId, "DISCUSSION_ID_INVALID");
-  return normalizeCursorPage(
+  const page = normalizeCursorPage(
     await apiFetch<unknown>(cursorPath(`/api/discussions/${encodeURIComponent(threadId)}/messages`, request), { requester, signal }),
     normalizeMessage,
+    request,
   );
+  if (page.items.some((message, index) => message.threadId !== threadId
+    || (index > 0 && message.sequence >= page.items[index - 1]!.sequence))) invalidResponse();
+  return page;
 }
 
 export async function sendDiscussionMessage(
@@ -107,12 +117,20 @@ export async function sendDiscussionMessage(
     ...(input.replyToMessageId !== undefined ? { replyToMessageId: input.replyToMessageId } : {}),
     ...(mentions !== undefined ? { mentionMemberIds: mentions } : {}),
   };
-  return normalizeSendResult(await apiFetch<unknown>("/api/discussions/messages", {
+  const result = normalizeSendResult(await apiFetch<unknown>("/api/discussions/messages", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   }));
+  assertThreadContext(result.thread, input.context);
+  if (result.message.clientKey !== input.clientKey.trim()) invalidResponse();
+  // Replays return the original first write. Only a newly created receipt must
+  // echo this payload; the server excludes the author from explicit mentions.
+  if (result.created && (result.message.body !== body
+    || result.message.replyToMessageId !== (input.replyToMessageId ?? null)
+    || JSON.stringify(result.message.mentionMemberIds) !== JSON.stringify((mentions ?? []).filter((id) => id !== result.message.authorMemberId)))) invalidResponse();
+  return result;
 }
 
 export function createDiscussionRequestController<TInput, TResult>(
@@ -143,12 +161,14 @@ function cursorPath(path: string, request: DiscussionCursorRequest): string {
   return `${path}?${params.toString()}`;
 }
 
-function normalizeCursorPage<T>(value: unknown, normalizeItem: (value: unknown) => T): DiscussionCursorPage<T> {
+function normalizeCursorPage<T extends { id: string }>(value: unknown, normalizeItem: (value: unknown) => T, request: DiscussionCursorRequest): DiscussionCursorPage<T> {
   if (!isRecord(value) || !Array.isArray(value.items)
     || Object.keys(value).some((key) => key !== "items" && key !== "nextCursor")
     || (value.nextCursor !== undefined && !isCursor(value.nextCursor))) invalidResponse();
   let items: T[];
   try { items = value.items.map(normalizeItem); } catch { invalidResponse(); }
+  if (items!.length > request.limit || new Set(items!.map((item) => item.id)).size !== items!.length
+    || (value.nextCursor !== undefined && (!items!.length || value.nextCursor === request.cursor))) invalidResponse();
   return { items: items!, ...(value.nextCursor !== undefined ? { nextCursor: value.nextCursor } : {}) };
 }
 
@@ -184,7 +204,7 @@ function normalizeSendResult(value: unknown): DiscussionSendResult {
   if (!isRecord(value) || Object.keys(value).sort().join("\0") !== "created\0message\0thread" || typeof value.created !== "boolean") invalidResponse();
   const thread = normalizeThread(value.thread);
   const message = normalizeMessage(value.message);
-  if (message.threadId !== thread.id) invalidResponse();
+  if (message.threadId !== thread.id || message.sequence > thread.lastSequence) invalidResponse();
   return { thread, message, created: value.created };
 }
 
@@ -193,6 +213,10 @@ function normalizeMentionIds(value: readonly string[]): string[] {
     throw new Error("DISCUSSION_MESSAGE_INVALID");
   }
   return [...value];
+}
+
+function assertThreadContext(thread: DiscussionThread, context: DiscussionContext): void {
+  if (thread.contextKind !== context.kind || thread.contextId !== context.id) invalidResponse();
 }
 
 function assertContext(value: DiscussionContext): void {

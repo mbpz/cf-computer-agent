@@ -49,7 +49,7 @@ describe("discussion client contract", () => {
     const requester = (async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ path: String(input), method: init?.method, body: String(init?.body ?? "") });
       if (String(input) === "/api/discussions/messages") {
-        return Response.json({ thread: thread(), message: message(), created: true }, { status: 201 });
+        return Response.json({ thread: thread(), message: message({ body: "Reply", replyToMessageId: "message-0" }), created: true }, { status: 201 });
       }
       return init?.method === "POST"
         ? Response.json({ thread: thread(), created: true }, { status: 201 })
@@ -64,12 +64,62 @@ describe("discussion client contract", () => {
       clientKey: "stable-client-key",
       replyToMessageId: "message-0",
       mentionMemberIds: ["member-2"],
-    }, requester)).resolves.toEqual({ thread: thread(), message: message(), created: true });
+    }, requester)).resolves.toEqual({ thread: thread(), message: message({ body: "Reply", replyToMessageId: "message-0" }), created: true });
     expect(calls).toEqual([
       { path: "/api/discussions/context?kind=task&id=task-1", method: undefined, body: "" },
       { path: "/api/discussions/context", method: "POST", body: JSON.stringify({ kind: "task", id: "task-1" }) },
       { path: "/api/discussions/messages", method: "POST", body: JSON.stringify({ context: { kind: "task", id: "task-1" }, body: "Reply", clientKey: "stable-client-key", replyToMessageId: "message-0", mentionMemberIds: ["member-2"] }) },
     ]);
+  });
+
+  it("rejects valid-shaped threads from another requested id or context", async () => {
+    await expect(loadDiscussionThread("thread-2", jsonRequester(thread()))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    for (const context of [{ kind: "task" as const, id: "task-2" }, { kind: "knowledge" as const, id: "task-1" }]) {
+      await expect(loadContextDiscussionThread(context, jsonRequester(thread()))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+      await expect(ensureDiscussionThread(context, jsonRequester({ thread: thread(), created: false }))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    }
+  });
+
+  it("rejects over-limit, duplicate and non-progressing cursor pages", async () => {
+    for (const page of [
+      { items: [thread(), thread()] },
+      { items: Array.from({ length: 21 }, (_, i) => thread({ id: `thread-${i}` })) },
+      { items: [], nextCursor: "cursor_2" },
+      { items: [thread()], nextCursor: "cursor_2" },
+    ]) {
+      await expect(loadDiscussionThreads({ limit: 20, cursor: "cursor_2" }, jsonRequester(page))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    }
+    for (const items of [
+      [message({ threadId: "thread-2" })],
+      [message(), message()],
+      [message(), message({ id: "message-2", sequence: 2 })],
+      [message(), message({ id: "message-2" })],
+      Array.from({ length: 21 }, (_, i) => message({ id: `message-${i}`, sequence: 21 - i })),
+    ]) {
+      await expect(loadDiscussionMessages("thread-1", { limit: 20 }, jsonRequester({ items }))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    }
+    await expect(loadDiscussionMessages("thread-1", { limit: 20 }, jsonRequester({ items: [message({ id: "message-2", sequence: 2 }), message()], nextCursor: "older" })))
+      .resolves.toMatchObject({ items: [{ sequence: 2 }, { sequence: 1 }], nextCursor: "older" });
+  });
+
+  it("binds send receipts to the context and normalized client key without mistaking a replay for a new write", async () => {
+    const input = { context: { kind: "task" as const, id: "task-1" }, body: " New message ", clientKey: " stable-client-key ", mentionMemberIds: ["member-1", "member-2"] };
+    const valid = { thread: thread(), message: message({ body: "New message" }), created: true };
+    await expect(sendDiscussionMessage(input, jsonRequester(valid))).resolves.toEqual(valid);
+    for (const receipt of [
+      { ...valid, thread: thread({ contextId: "task-2" }) },
+      { ...valid, thread: thread({ contextKind: "knowledge" }) },
+      { ...valid, message: message({ clientKey: "another-key" }) },
+      { ...valid, message: message({ body: "Other body" }) },
+      { ...valid, message: message({ body: "New message", replyToMessageId: "message-0" }) },
+      { ...valid, message: message({ body: "New message", mentionMemberIds: [] }) },
+      { ...valid, thread: thread({ lastSequence: 0 }) },
+    ]) await expect(sendDiscussionMessage(input, jsonRequester(receipt))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    // The backend's existing first-write-wins contract returns the original payload on replay.
+    await expect(sendDiscussionMessage(input, jsonRequester({ ...valid, message: message(), created: false })))
+      .resolves.toMatchObject({ created: false, message: { body: "Hello @member-2" } });
+    await expect(sendDiscussionMessage(input, jsonRequester({ ...valid, message: message({ clientKey: "another-key" }), created: false })))
+      .rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
   });
 
   it("aborts the superseded generation and never treats it as current", async () => {

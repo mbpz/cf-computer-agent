@@ -2,6 +2,7 @@
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
+import { ensureDiscussionThread, loadContextDiscussionThread, loadDiscussionThread, loadDiscussionThreads, loadDiscussionMessages, sendDiscussionMessage } from "../../frontend/lib/discussions-data";
 import { createApp } from "../../src/app";
 import {
   buildDiscussionThreadListQueries,
@@ -356,6 +357,41 @@ describe("discussion HTTP contract", () => {
     });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
+  });
+
+  it("consumes real HTTP receipts and opaque pages through the frontend client across replay, insertion and revocation", async () => {
+    const asA = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionA, init)) as typeof fetch;
+    const asB = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionB, init)) as typeof fetch;
+    const context = { kind: "knowledge" as const, id: "knowledge-a" };
+    const created = await ensureDiscussionThread(context, asA);
+    expect(created.created).toBe(true);
+    await expect(ensureDiscussionThread(context, asA)).resolves.toMatchObject({ created: false, thread: { id: created.thread.id } });
+    await expect(loadContextDiscussionThread(context, asB)).resolves.toMatchObject({ id: created.thread.id });
+    const first = await sendDiscussionMessage({ context, body: " Hello @member-a @member-b ", clientKey: " original-key ", mentionMemberIds: ["member-a", "member-b"] }, asA);
+    expect(first).toMatchObject({ created: true, message: { sequence: 1, body: "Hello @member-a @member-b", clientKey: "original-key", mentionMemberIds: ["member-b"] } });
+    const reply = await sendDiscussionMessage({ context, body: "Reply @member-a", clientKey: "reply-key", replyToMessageId: first.message.id, mentionMemberIds: ["member-a"] }, asB);
+    expect(reply).toMatchObject({ created: true, message: { sequence: 2, replyToMessageId: first.message.id, authorMemberId: "member-b" } });
+    for (let i = 3; i <= 21; i += 1) await sendDiscussionMessage({ context, body: `Message ${i}`, clientKey: `key-${i}` }, asA);
+    const page1 = await loadDiscussionMessages(created.thread.id, { limit: 20 }, asA);
+    expect(page1.items.map((item) => item.sequence)).toEqual([21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2]);
+    expect(page1.nextCursor).toBeTruthy();
+    await sendDiscussionMessage({ context, body: "Concurrent insertion", clientKey: "key-22" }, asA);
+    const page2 = await loadDiscussionMessages(created.thread.id, { limit: 20, cursor: page1.nextCursor }, asA);
+    expect(page2.items).toEqual([first.message]);
+    expect(page2.nextCursor).toBeUndefined();
+    // Existing author/key first-write-wins semantics are not a second message.
+    const replay = await sendDiscussionMessage({ context, body: "Changed retry body", clientKey: "original-key" }, asA);
+    expect(replay.created).toBe(false);
+    expect(replay.message).toEqual(first.message);
+    await expect(loadDiscussionThread(created.thread.id, asB)).resolves.toMatchObject({ lastSequence: 22 });
+    await expect(loadDiscussionThreads({ limit: 20 }, asB)).resolves.toMatchObject({ items: [{ id: created.thread.id }] });
+    const privateThread = await ensureDiscussionThread({ kind: "task", id: "task-a" }, asA);
+    await expect(loadDiscussionThread(privateThread.thread.id, asB)).rejects.toMatchObject({ status: 404 });
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'discussion-revision'").run();
+    await expect(loadDiscussionThreads({ limit: 20 }, asB)).resolves.toEqual({ items: [] });
+    await expect(loadDiscussionMessages(created.thread.id, { limit: 20 }, asB)).rejects.toMatchObject({ status: 404 });
+    await expect(sendDiscussionMessage({ context, body: "Reply @member-a", clientKey: "reply-key", replyToMessageId: first.message.id, mentionMemberIds: ["member-a"] }, asB)).rejects.toMatchObject({ status: 404 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM discussion_messages WHERE thread_id = ?").bind(created.thread.id).first("count")).toBe(22);
   });
 
   it("creates or gets a context thread and exposes stable member-authorized cursor pages", async () => {

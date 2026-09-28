@@ -1207,3 +1207,15 @@ rtk git diff --check
 - 通知 6 文件 **65/65**，扩展共享 App/Shell/成熟度/扩展路由及消息回归 **13 文件 292/292**；六组契约 **92/92**。typecheck、build:ui、verify:i18n（434 keys / 55 placeholders）通过；既有大 chunk 警告保留，typecheck 不代表全部前端 TSX 类型覆盖。没有声称列表与摘要两个 GET 是数据库原子快照，仅是重新取得当前值。
 - 下一允许本地 **C06**：当前 `frontend/lib/discussions-data.ts` 的线程/上下文读取、ensure 与发送回执仅规范化结构，需逐项核对请求关联、分页和未知发送恢复；先证明现状与 RED 再实现。C05 完整真实身份/原生键盘移动验收仍待，A06 顶部未读接线和 C07 保留删除策略独立。
 - 仅本地实现、验证、checklist 与提交；无 push/merge/部署、远程迁移、生产写入、备份或 AI 调用，未手工读取/上传 Secret，无新增迁移。没有已确认阻止下一本地步骤的 blocker。
+
+
+## 2026-09-28 UTC — C06 消息请求关联、发送回执及撤权收缩
+
+- 从 `3aca917` 继续；上一轮已实作提交，本轮为实际推进而非等待或重述。原始 30、D08 排除，范围 **29 / 已关闭 3 / 未关闭 26**。C06 下新增有证据的局部子项，不关闭整个 C06 或提升 MSG 发布/验收。
+- `loadDiscussionThread` 必须匹配请求 thread ID；上下文 GET/ensure POST 必须匹配 kind/id。分页结果有界、不含重复 ID，不接受空页继续游标或同游标循环；消息必须属于请求线程且 sequence 严格递减。仍使用不透明游标，不把并发 GET 误称为冻结快照。
+- 发送结果必须关联 context 和经服务端 trim 的 client key，message.threadId/sequence 与 thread 一致；`created:true` 的正文、回复目标和剔除自身后的 mentions 必须匹配。后端既有 author/key first-write-wins 重放返回原始内容，`created:false` 不错误要求其等于本次修改载荷；本轮未改为“不同载荷报冲突”的新服务契约。真实 UI 错误回执不清草稿、不成功回读，未编辑重试复用 key；此前成功路径测试中的不一致假回执已修正并补无错误/清稿断言，未放宽验证器。
+- 发送 401/403/404 清除旧私有消息及 composer，同时 dispose 并发读控制器；忽略 abort 的迟到读也不能恢复。旧线程的成功/拒绝回执不清新线程；错上下文不能导航、错详情/消息不能渲染，显式 GET 重试仍指向原线程。
+- 实际 RED：客户端新增三组用例 **3 failed / 4 passed**；UI 撤权三种状态均失败，另有一条测试使用不存在的 selector，核对 PageState 后修正为实际 `data-page-state`，不把 selector 错误算作产品缺陷。真实本地 D1→HTTP→前端覆盖创建/复用 context、回复/自身 mentions 归一化、21 条消息分页、并发插入后第二页无重复、首次 key 重放不新增、跨成员私有任务拒绝、知识撤权后的列表/读取/重放 404。
+- 最终消息/通知/共享 App/Shell 联合 **12 文件 293/293**，六组域/父项/成熟度/交付/i18n/日历契约 **92/92**。typecheck、build:ui、verify:i18n（434 keys / 55 placeholders）通过；既有 chunk >500 kB 警告保留，typecheck 不代表全量前端 TSX 类型检查，也不声称跑过全仓测试。
+- 下一允许继续 **C06 读取失败/回读与未决发送意图生命周期、完整分页/历史导航恢复**。当前 composer attempt 挂在组件 ref，错误页会卸载 composer，这一组合尚须用实际失败用例验证是否丢失安全重试状态。真实身份、键盘/移动交互与父项验收仍未完成；本轮未检查浏览器可用性，不沿用旧锁屏状态作 blocker。C07 保留/删除/清理另属后续范围，没有以备份或加密阻塞本地开发。
+- 仅本地实现、验证、checklist 更新与提交；无 push/merge/部署、远程迁移、生产写入、备份或 AI 调用，未手工读取/上传 Secret，无新增迁移。
