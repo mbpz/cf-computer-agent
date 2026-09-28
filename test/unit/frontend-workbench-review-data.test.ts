@@ -8,6 +8,12 @@ const load = (value: unknown) => loadWorkbenchReview("daily", async () => Respon
 describe("review fail-closed snapshot contract", () => {
   it("keeps a valid bounded receipt", async () => { expect((await load(receipt())).completed[0]?.id).toBe("review-first"); });
   it.each([
+    ["2026-W38", "2026-09-07T00:00:00.000Z", "2026-09-14T00:00:00.000Z"],
+    ["2026-W37", "2026-09-08T00:00:00.000Z", "2026-09-15T00:00:00.000Z"],
+  ])("rejects a weekly key or boundary mismatch %s %s", async (periodKey,from,to) => {
+    await expect(loadWorkbenchReview("weekly",async () => Response.json({...receipt(),period:"weekly",periodKey,from,to}))).rejects.toThrow("REVIEW_RESPONSE_INVALID");
+  });
+  it.each([
     ["missing row id", (r: any) => { delete r.completed[0].id; }],
     ["unsafe target id", (r: any) => { r.completed[0].id = "../other"; }],
     ["nested malformed task", (r: any) => { r.completed[0].progress = 101; }],

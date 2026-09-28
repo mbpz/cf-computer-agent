@@ -1,3 +1,4 @@
+import { reviewRange } from "../../shared/workbench-review-period";
 import { snapshotValidation } from "./snapshot-validation";
 import { apiFetch, type Fetcher } from "./api";
 import type { TaskSummary, TaskItem } from "./tasks-data";
@@ -13,6 +14,8 @@ export async function loadWorkbenchReview(period: "daily" | "weekly", requester:
   if (!from.endsWith("T00:00:00.000Z") || !to.endsWith("T00:00:00.000Z")
     || Date.parse(to) - Date.parse(from) !== (period === "daily" ? 1 : 7) * 86400000
     || (period === "daily" ? periodKey !== from.slice(0,10) : !/^\d{4}-W(?:0[1-9]|[1-4]\d|5[0-3])$/u.test(periodKey))) invalid();
+  const expected = reviewRange(period, new Date(from));
+  if (expected.periodKey !== periodKey || expected.from !== from || expected.to !== to) invalid();
   const summary = object(r.taskSummary);
   const taskSummary: TaskSummary = {todo: count(summary.todo), doing: count(summary.doing), blocked: count(summary.blocked), done: count(summary.done), canceled: count(summary.canceled), dueToday: count(summary.dueToday), overdue: count(summary.overdue)};
   count(taskSummary.todo + taskSummary.doing + taskSummary.blocked);

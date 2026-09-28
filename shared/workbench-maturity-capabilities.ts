@@ -62,6 +62,11 @@ export interface WorkbenchSourceSideEffectBinding {
 
 export const WORKBENCH_MUTATION_STRATEGY_BINDINGS = Object.freeze([
   {
+    capabilityId: "workbench-review", operation: "GET /api/workbench/review#persist-snapshot", strategy: "idempotency_key",
+    source: { path: "src/workbench-review/repository.ts", symbol: "WorkbenchReviewRepository.refresh", tokens: ["ON CONFLICT(member_id, period, period_key) DO UPDATE", "RETURNING id, period, period_key, payload_json, created_at, updated_at", "MAX(workbench_review_snapshots.updated_at + 1, excluded.updated_at)"] },
+    tests: [{ path: "test/worker/workbench-review.test.ts", tokens: ["keeps the old stored snapshot on write failure and repairs it only on an explicit retry", "does not let a delayed older observation overwrite a newer period projection", "rows.results[0].updated_at", "final.taskSummary.done"] }],
+  },
+  {
     capabilityId: "workbench-goals", operation: "POST /api/goals/:id/tasks", strategy: "conditional_write",
     source: { path: "src/goal-tasks/repository.ts", symbol: "GoalTasksRepository.change", tokens: ["member_id = ? AND id = ? AND updated_at = ?", "consumed.meta.changes === 1", "this.db.batch"] },
     tests: [{ path: "test/worker/goal-tasks.test.ts", tokens: ["consumes goal versions for no-ops and rejects mixed stale writes", "allows only one of concurrent different task writes to consume a version"] }],
@@ -171,7 +176,7 @@ export const WORKBENCH_SOURCE_SIDE_EFFECT_BINDINGS = Object.freeze([
     capabilityId: "workbench-review",
     operation: "GET /api/workbench/review#persist-snapshot",
     apiPath: "/api/workbench/review",
-    source: { path: "src/workbench-review/service.ts", symbol: "WorkbenchReviewService.get", tokens: ["this.repository.find(memberId, value, range.periodKey)", "this.repository.upsert(memberId"] },
+    source: { path: "src/workbench-review/service.ts", symbol: "WorkbenchReviewService.get", tokens: ["this.repository.refresh(memberId, period, range, now)"] },
     tests: [{ path: "test/worker/workbench-review.test.ts", tokens: ["round-trips real %s D1 snapshots without leaking either member", "SELECT member_id FROM workbench_review_snapshots", "rejects member overrides, unknown/duplicate period parameters and anonymous reads"] }],
   },
   {
@@ -294,7 +299,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-review", routeId: "review", pathname: "/review", requiredRole: "contributor",
     journey: "Inspect private daily or weekly review snapshots and continue from their source work.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/app.tsx", "frontend/pages/workbench-review-page.tsx", "frontend/lib/workbench-review-data.ts"], backendEvidence: ["src/routes/workbench-review.ts", "src/workbench-review/service.ts", "src/workbench-review/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/workbench-review.test.ts", "test/unit/frontend-review-period.test.tsx", "test/unit/frontend-workbench-review-data.test.ts", "test/unit/frontend-review-targets.test.tsx"], ledgerIds: ["REV-001"], gaps: ["Private entry, read recovery and local section empty states are tested. Period changes clear old snapshots immediately, keep selection available during pending/error states, abort obsolete reads, ignore late outcomes and reject wrong-period receipts. Local App tests cover pending, reorder, failure, explicit same-period retry and unmount. Bounded category counts disclose their limits and link to filtered current lists; task, inbox and project details reauthorize live targets with fail-closed receipts and explicit read recovery. Deep snapshot validation and two-member D1 isolation, foreign/deleted target 404s and sample caps are locally proven. Unfiltered period aggregation, snapshot refresh semantics and GET write concurrency remain incomplete; release and signed-browser acceptance are unproven."],
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/workbench-review-page.tsx", "frontend/lib/workbench-review-data.ts"], backendEvidence: ["src/routes/workbench-review.ts", "src/workbench-review/service.ts", "src/workbench-review/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/workbench-review.test.ts", "test/unit/frontend-review-period.test.tsx", "test/unit/frontend-workbench-review-data.test.ts", "test/unit/frontend-review-targets.test.tsx", "test/unit/workbench-review-service.test.ts", "tools/maintenance/parallel.test.ts"], ledgerIds: ["REV-001"], gaps: ["Private entry, period changes, explicit refresh, read recovery, deep receipts and reauthorized details have local App and two-member D1 evidence. UTC calendar days and Monday-start ISO weeks filter before sampling; task totals cover all qualifying current rows. Completion, update, due, capture and focus end timestamps define category membership. Focus attributes whole completed or abandoned sessions by end time, not prorated intervals. One SQL statement aggregates and upserts a member/period key on every read with a monotonic observation cutoff and revision, statement-owned receipts, concurrent identity convergence and rollback on failure. Samples are bounded to 20 and display 10; view-all links open current category lists, not period reports. These are current-state projections, not immutable historical audits. Maintenance tracking is locally tested; release and real-identity native-browser acceptance remain unproven."],
   },
   {
     id: "workbench-home", routeId: "home", pathname: "/", requiredRole: "contributor",
@@ -472,8 +477,8 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   {
     id: "workbench-review", apiPaths: ["/api/workbench/review"],
     persistencePaths: ["src/workbench-review/repository.ts", "migrations/0044_workbench_review.sql", "src/workbench-review/service.ts"],
-    ownerPredicate: "routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.find binds member_id = ? and every aggregate receives memberId.", pagination: "not_applicable",
-    mutations: ["GET /api/workbench/review#persist-snapshot — gap: read-before-upsert lacks concurrent snapshot and refresh semantics proof"], mutationSafety: "mixed",
+    ownerPredicate: "routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.refresh binds memberId into the member-scoped period key and every aggregate predicates member_id = b.member.", pagination: "not_applicable",
+    mutations: ["GET /api/workbench/review#persist-snapshot — proven: member/period/period_key idempotency_key deduplicates identity; one atomic aggregate/upsert refreshes current content with monotonic observation and revision, not immutable replay bytes"], mutationSafety: "idempotency_key",
   },
   {
     id: "workbench-home",

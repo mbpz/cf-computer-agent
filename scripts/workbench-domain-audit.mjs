@@ -41,7 +41,7 @@ const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
   ownerEvidence("routeCalendarApi passes authenticated member.memberId to CalendarService; CalendarRepository.listOwned and listNumbered bind member_id = ?.", symbolBinding("src/routes/calendar.ts", "routeCalendarApi", "member.memberId"), symbolBinding("src/calendar/repository.ts", "CalendarRepository.listOwned", "member_id = ?"), symbolBinding("src/calendar/repository.ts", "CalendarRepository.listNumbered", "member_id = ?")),
   ownerEvidence("routeTodayApi passes authenticated principal.memberId to TodayService.get; all four private aggregates receive the same memberId.", symbolBinding("src/routes/today.ts", "routeTodayApi", "principal.memberId"), symbolBinding("src/today/service.ts", "TodayService.get", "tasks.list(memberId", "tasks.summary(memberId", "inbox.list(memberId", "projects.list(memberId", "calendar.list(memberId")),
   ownerEvidence("routeFocusApi passes authenticated principal.memberId to FocusService; FocusRepository.findOpen and update bind member_id = ?.", symbolBinding("src/routes/focus.ts", "routeFocusApi", "principal.memberId"), symbolBinding("src/focus/repository.ts", "FocusRepository.findOpen", "member_id = ?"), symbolBinding("src/focus/repository.ts", "FocusRepository.update", "member_id = ?")),
-  ownerEvidence("routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.find binds member_id = ? and every aggregate receives memberId.", symbolBinding("src/routes/workbench-review.ts", "routeWorkbenchReviewApi", "principal.memberId"), symbolBinding("src/workbench-review/repository.ts", "WorkbenchReviewRepository.find", "member_id = ?"), symbolBinding("src/workbench-review/service.ts", "WorkbenchReviewService.get", "tasks.summary(memberId", "tasks.list(memberId", "inbox.list(memberId", "projects.list(memberId", "focus.current(memberId")),
+  ownerEvidence("routeWorkbenchReviewApi passes authenticated principal.memberId to WorkbenchReviewService.get; WorkbenchReviewRepository.refresh binds memberId into the member-scoped period key and every aggregate predicates member_id = b.member.", symbolBinding("src/routes/workbench-review.ts", "routeWorkbenchReviewApi", "principal.memberId"), symbolBinding("src/workbench-review/repository.ts", "WorkbenchReviewRepository.refresh", "member_id = b.member", "bind(memberId"), symbolBinding("src/workbench-review/service.ts", "WorkbenchReviewService.get", "this.repository.refresh(memberId, period, range, now)")),
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; RecentVisitsRepository predicates knowledge_visits.member_id = ? with scope.memberId.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/recent-visits/repository.ts", "RecentVisitsRepository.list", "v.member_id = ?", "scope.memberId")),
   ownerEvidence("routeMemberApi derives authenticated member.memberId for submissions and assets; SubmissionsRepository scopes replay by submitter_id; AssetsRepository scopes asset reads and upload-key recovery by owner_id.", symbolBinding("src/routes/member.ts", "routeMemberApi", "member.memberId"), symbolBinding("src/submissions/repository.ts", "SubmissionsRepository.findByIdempotencyKey", "submitterId", "idempotencyKey"), symbolBinding("src/assets/repository.ts", "AssetsRepository.findOwned", "a.owner_id = ?", "a.id = ?"), symbolBinding("src/assets/repository.ts", "AssetsRepository.findByIdempotency", "a.owner_id = ?", "a.idempotency_key = ?")),
   ownerEvidence("routeLibraryApi derives authenticated scope.memberId; LibraryRepository authorization binds scope.memberId before applying revision visibility predicates.", symbolBinding("src/routes/library.ts", "routeLibraryApi", "scope.memberId"), symbolBinding("src/library/repository.ts", "LibraryRepository.authorizeScope", "scope.memberId")),
@@ -133,11 +133,12 @@ function canonicalRuntimeEvidence(records, repositoryRoot) {
       const sideEffect = sourceSideEffects.get(ownerKey);
       if (sideEffect) {
         assert.equal(sideEffect.apiPath, parts.apiPath, `${record.id}: source side-effect API path contradicts operation ${operation}`);
-        assert.equal(declaration.status, "gap", `${record.id}: source side-effect declaration must remain a gap ${operation}`);
+        assert.equal(parts.method, "GET", `${record.id}: source side-effect evidence is reserved for GET ${operation}`);
       }
       if (declaration.status === "proven") {
         assert.ok(proven, `${record.id}: proven mutation declaration requires structured strategy binding ${operation}`);
-        assert.equal(sideEffect, undefined, `${record.id}: proven frontend mutation must not use a side-effect binding ${operation}`);
+        if (parts.method === "GET") assert.ok(sideEffect, `${record.id}: proven GET requires source side-effect evidence ${operation}`);
+        else assert.equal(sideEffect, undefined, `${record.id}: proven frontend mutation must not use a side-effect binding ${operation}`);
       } else {
         assert.equal(proven, undefined, `${record.id}: structured strategy binding requires a proven mutation declaration ${operation}`);
       }
@@ -148,8 +149,9 @@ function canonicalRuntimeEvidence(records, repositoryRoot) {
         apiPath: parts.apiPath,
         description: operation,
         strategy: proven?.strategy ?? "gap",
-        ...(proven ? { safety: proven.source, tests: proven.tests } : {}),
-        ...(sideEffect ? { source: sideEffect.source, tests: sideEffect.tests } : {}),
+        ...(proven ? { safety: proven.source } : {}),
+        ...(sideEffect ? { source: sideEffect.source } : {}),
+        tests: [...(proven?.tests ?? []), ...(sideEffect?.tests ?? [])],
       };
     }
   }
@@ -536,7 +538,8 @@ export function validateWorkbenchDomainAudit(records, { repositoryRoot = resolve
       if (fact.strategy !== "gap") {
         semanticBindings.push({ binding: fact.safety, context: `${record.id}: mutation strategy evidence ${mutationFactId}` });
         testBindings.push(...fact.tests.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: mutation regression evidence ${mutationFactId}` })));
-      } else if (fact.source) {
+      }
+      if (fact.source) {
         semanticBindings.push({ binding: fact.source, context: `${record.id}: source side-effect evidence ${mutationFactId}` });
         testBindings.push(...fact.tests.map((bindingValue) => ({ binding: bindingValue, context: `${record.id}: source side-effect regression ${mutationFactId}` })));
       }

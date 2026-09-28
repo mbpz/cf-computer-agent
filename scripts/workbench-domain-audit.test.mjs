@@ -89,14 +89,29 @@ test("every maturity capability has one conservative domain audit record", async
   }
 });
 
-test("focus union actions expand to four real routes and review GET persistence remains a safety gap", () => {
+test("focus union actions expand to four real routes and review persistence has period-key convergence", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
   assert.deepEqual(Object.keys(facts.mutations["workbench-focus"]).sort(), [
     "POST /api/focus", "POST /api/focus/:id/abandon", "POST /api/focus/:id/complete",
     "POST /api/focus/:id/pause", "POST /api/focus/:id/resume",
   ]);
   for (const fact of Object.values(facts.mutations["workbench-focus"])) assert.equal(fact.strategy, "gap");
-  assert.equal(facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"].strategy, "gap");
+  assert.equal(facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"].strategy, "idempotency_key");
+});
+
+test("proven review GET keeps both source-side-effect and strategy evidence", async () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  const fact = facts.mutations["workbench-review"]["GET /api/workbench/review#persist-snapshot"];
+  assert.equal(fact.source.symbol, "WorkbenchReviewService.get");
+  assert.equal(fact.safety.symbol, "WorkbenchReviewRepository.refresh");
+  assert.equal(fact.tests.length, 2);
+  const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
+  assert.ok(audit.find(record => record.id === "workbench-review"));
+  withRepositoryProbe("shared/workbench-maturity-capabilities.ts", source => source.replace(
+    'apiPath: "/api/workbench/review"', 'apiPath: "/api/today"',
+  ), probeRoot => {
+    assert.throws(() => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }), /source side-effect API path contradicts/u);
+  });
 });
 
 test("D02-R1 preserves D01-B2, D01-B1, D01-A, M02 and R0 snapshots without backdating recovery evidence", () => {

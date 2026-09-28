@@ -14,7 +14,8 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
   return <section className="space-y-5" aria-busy={state.kind === "loading"}>
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-2xl font-semibold">{frontendText(locale, "REVIEW_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "REVIEW_DESCRIPTION")}{s ? ` · ${s.periodKey}` : ""}</p></div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        {s && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_REFRESH")}</Button>}
         <Button aria-pressed={period === "daily"} variant={period === "daily" ? "default" : "outline"} onClick={() => onPeriodChange?.("daily")}>{frontendText(locale, "REVIEW_DAILY")}</Button>
         <Button aria-pressed={period === "weekly"} variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button>
       </div>
@@ -23,9 +24,9 @@ export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onR
     {state.kind === "error" && <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_RETRY")}</Button></PageState>}
     {s && <>
       <div className="grid gap-3 md:grid-cols-4">
-        <Metric icon={<CheckCircle size={18} />} label={frontendText(locale, "REVIEW_COMPLETED")} value={s.completed.length} />
-        <Metric icon={<Warning size={18} />} label={frontendText(locale, "REVIEW_OVERDUE")} value={s.overdue.length} />
-        <Metric icon={<ArrowsClockwise size={18} />} label={frontendText(locale, "REVIEW_BLOCKED")} value={s.blocked.length} />
+        <Metric icon={<CheckCircle size={18} />} label={frontendText(locale, "REVIEW_COMPLETED")} value={s.taskSummary.done} />
+        <Metric icon={<Warning size={18} />} label={frontendText(locale, "REVIEW_OVERDUE")} value={s.taskSummary.overdue} />
+        <Metric icon={<ArrowsClockwise size={18} />} label={frontendText(locale, "REVIEW_BLOCKED")} value={s.taskSummary.blocked} />
         <Metric icon={<Timer size={18} />} label={frontendText(locale, "REVIEW_FOCUS_TIME")} value={Math.round(s.focusElapsedMs / 60000)} />
       </div>
       <p className="text-sm text-muted-foreground">{frontendText(locale, "REVIEW_BOUNDED_HINT")}</p>

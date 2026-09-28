@@ -29,6 +29,18 @@ describe("review period request ownership", () => {
   }
   async function click(label: string) { await act(async () => button(label).click()); }
 
+  it("refreshes the selected ready period, clears stale data and can retry a failed refresh", async () => {
+    await mount(); await resolve(0,"initial"); await click("Weekly"); await resolve(1,"week-before-refresh");
+    await click("Refresh review");
+    await waitForApp(() => reads.length === 3);
+    expect(main().textContent).not.toContain("week-before-refresh");
+    expect(reads[2]?.period).toBe("weekly");
+    await act(async () => reads[2]!.resolve(apiError(500, "INTERNAL_ERROR", true)));
+    await waitForApp(() => main().querySelector('[role="alert"]') !== null);
+    await click("Try review again"); await waitForApp(() => reads.length === 4); await resolve(3,"week-after-refresh");
+    expect(main().textContent).toContain("week-after-refresh");
+  });
+
   it("hides the daily snapshot while weekly is pending and renders only the weekly receipt", async () => {
     await mount(); await resolve(0, "daily");
     await click("Weekly");

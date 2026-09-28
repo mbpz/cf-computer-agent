@@ -14,8 +14,6 @@ import { CalendarService } from '../../src/calendar/service';
 import { CalendarRepository } from '../../src/calendar/repository';
 import { WorkbenchReviewService } from '../../src/workbench-review/service';
 import { WorkbenchReviewRepository } from '../../src/workbench-review/repository';
-import { FocusService } from '../../src/focus/service';
-import { FocusRepository } from '../../src/focus/repository';
 import { parallelWork } from '../../src/maintenance/work';
 import { GraphProjectionService } from '../../src/graph/service';
 import { GraphProjectionRepository } from '../../src/graph/repository';
@@ -33,7 +31,7 @@ function deferred() {
 describe('complete parallel continuations', () => {
   beforeEach(async () => { await reset(); await applyD1Migrations(env.SYNTHETIC_DB, MIGRATIONS); });
 
-  it.each((['today', 'review'] as const).flatMap(service => [400, 403, 404, 500].map(status => ({ service, status }))))('keeps a delayed $service branch open after a sibling fails ($status)', async ({ service, status }) => {
+  it.each([400, 403, 404, 500])('keeps a delayed today branch open after a sibling fails (%s)', async status => {
     const g = env.MAINTENANCE.getByName(crypto.randomUUID());
     const background: Promise<Completion>[] = [];
     const started = deferred(); const resume = deferred(); const finished = deferred();
@@ -59,10 +57,7 @@ describe('complete parallel continuations', () => {
       };
       // Isolate branch lifetime from the caller's lifetime (the early-rejection case).
       const now = () => new Date('2026-09-21T00:00:00Z');
-      aggregate = (service === 'today' ? new TodayService(services, now, workScope).get('missing-member')
-        : new WorkbenchReviewService(new WorkbenchReviewRepository(env.SYNTHETIC_DB), {
-          ...services, focus: new FocusService(new FocusRepository(env.SYNTHETIC_DB)),
-        }, now, workScope).get('missing-member', 'daily')).catch(error => error);
+      aggregate = new TodayService(services, now, workScope).get('missing-member').catch(error => error);
       await started.promise;
       return new Response(null, { status: 204 });
     });
@@ -75,6 +70,31 @@ describe('complete parallel continuations', () => {
     expect(continuationError).toBeUndefined();
     expect(await aggregate).toBe(failure);
     expect(await g.status()).toMatchObject({ active: status === 500 ? 1 : 0 });
+  });
+
+  it('holds review refresh through the atomic write after the HTTP caller returns', async () => {
+    await env.SYNTHETIC_DB.prepare("INSERT INTO members (id,access_sub,email,role,status,created_at,updated_at) VALUES ('review-scope','review-scope','scope@example.test','contributor','active','2026-09-21T00:00:00Z','2026-09-21T00:00:00Z')").run();
+    const g = env.MAINTENANCE.getByName(crypto.randomUUID());
+    const background: Promise<Completion>[] = [];
+    const started = deferred(), resume = deferred();
+    let aggregate: Promise<unknown> = Promise.resolve();
+    const response = await guardFetch(g, task => background.push(task), async workScope => {
+      class DelayedReview extends WorkbenchReviewRepository {
+        override async refresh(...args: Parameters<WorkbenchReviewRepository['refresh']>) {
+          started.resolve(); await resume.promise;
+          return super.refresh(...args);
+        }
+      }
+      aggregate = new WorkbenchReviewService(new DelayedReview(createD1Facade(env.SYNTHETIC_DB, workScope)), () => new Date('2026-09-21T00:00:00Z'), workScope).get('review-scope','daily');
+      await started.promise;
+      return new Response(null, {status:204});
+    });
+    expect(response.status).toBe(204);
+    try { expect(await g.status()).toMatchObject({active:1}); }
+    finally { resume.resolve(); await aggregate; await Promise.all(background); }
+    expect(await aggregate).toMatchObject({periodKey:'2026-09-21',completed:[]});
+    expect(await env.SYNTHETIC_DB.prepare("SELECT COUNT(*) AS count FROM workbench_review_snapshots WHERE member_id='review-scope'").first()).toEqual({count:1});
+    expect(await g.status()).toMatchObject({active:0});
   });
 
   it('waits for siblings before finally disposes resources, preserving the first error', async () => {

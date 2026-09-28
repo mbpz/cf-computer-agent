@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { WorkbenchReviewService } from "../../src/workbench-review/service";
+import { WorkbenchReviewService, reviewRange } from "../../src/workbench-review/service";
 
-describe("WorkbenchReviewService", () => {
-  it("builds and reuses a deterministic private daily snapshot", async () => {
-    let saved: any;
-    const service = new WorkbenchReviewService({ find: async () => saved ?? null, upsert: async (_member: string, value: any) => { saved = value; return value; } } as never, {
-      tasks: { summary: async () => ({ todo: 1, doing: 0, blocked: 1, done: 2, canceled: 0, dueToday: 0, overdue: 1 }), list: async (_m: string, filters: { status?: string; due?: string }) => ({ items: [{ id: filters.status || filters.due || "item" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) } as never,
-      inbox: { list: async () => ({ items: [{ id: "inbox-1" }] }) } as never,
-      projects: { list: async () => ({ items: [{ id: "project-1" }] }) } as never,
-      focus: { current: async () => null } as never,
-    }, () => new Date("2026-09-09T10:00:00.000Z"));
-    const first = await service.get("member-a", "daily");
-    const second = await service.get("member-a", "daily");
-    expect(first.id).toBe("review:member-a:daily:2026-09-09");
-    expect(first.completed).toHaveLength(1);
-    expect(second).toBe(first);
+describe("WorkbenchReviewService UTC ranges", () => {
+  it.each([
+    ["2021-01-01T10:00:00.000Z", "2020-W53", "2020-12-28", "2021-01-04"],
+    ["2026-09-09T10:00:00.000Z", "2026-W37", "2026-09-07", "2026-09-14"],
+    ["2026-09-13T23:59:59.999Z", "2026-W37", "2026-09-07", "2026-09-14"],
+    ["2026-09-14T00:00:00.000Z", "2026-W38", "2026-09-14", "2026-09-21"],
+    ["2024-12-30T00:00:00.000Z", "2025-W01", "2024-12-30", "2025-01-06"],
+  ])("uses stable ISO weeks at %s", (now,periodKey,from,to) => {
+    expect(reviewRange("weekly",new Date(now))).toEqual({periodKey,from:`${from}T00:00:00.000Z`,to:`${to}T00:00:00.000Z`});
+  });
+  it("uses UTC rather than the local calendar day across leap day", () => {
+    expect(reviewRange("daily",new Date("2024-03-01T01:00:00+08:00"))).toEqual({periodKey:"2024-02-29",from:"2024-02-29T00:00:00.000Z",to:"2024-03-01T00:00:00.000Z"});
+  });
+  it.each([undefined, "monthly", "", 0])("rejects invalid period %s before touching storage", async period => {
+    const service = new WorkbenchReviewService({refresh: async () => { throw new Error("UNEXPECTED_STORAGE"); }});
+    await expect(service.get("member-a",period)).rejects.toMatchObject({code:"WORKBENCH_REVIEW_PERIOD_INVALID",status:400});
   });
 });

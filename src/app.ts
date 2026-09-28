@@ -274,12 +274,7 @@ function createRequestServices(
   const calendarRecords = new CalendarRepository(env.DB);
   const calendar = new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords });
   const focus = new FocusService(new FocusRepository(env.DB), { tasks: taskRecords });
-  const workbenchReview = new WorkbenchReviewService(new WorkbenchReviewRepository(env.DB), {
-    tasks: new TasksService(taskRecords, { audit }),
-    inbox: new InboxService(inboxRecords),
-    projects: new ProjectsService(projectRecords, { goals: goalRecords, tasks: taskRecords }),
-    focus,
-  }, undefined, dependencies.workScope);
+  const workbenchReview = new WorkbenchReviewService(new WorkbenchReviewRepository(env.DB), undefined, dependencies.workScope);
   const capture = new CaptureClassificationService(new CaptureRepository(env.DB), new InboxService(inboxRecords));
   const projectTimelineRecords = new ProjectTimelineRepository(env.DB);
   const projectTimeline = new ProjectTimelineService(projectTimelineRecords, projectRecords);

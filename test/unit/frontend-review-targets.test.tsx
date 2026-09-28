@@ -9,7 +9,7 @@ const base = extendedPayload("review") as any;
 const task = {...base.completed[0], id:"task-1", title:"Snapshot task"};
 const inbox = (extendedPayload("inbox") as any).items[0];
 const project = (extendedPayload("projects") as any).items[0];
-const snapshot = {...base, completed:Array.from({length:15}, (_,i) => ({...task,id:`task-${i+1}`})), inbox:[inbox], projects:[project]};
+const snapshot = {...base, taskSummary:{...base.taskSummary,done:26,overdue:31,blocked:24}, completed:Array.from({length:15}, (_,i) => ({...task,id:`task-${i+1}`})), inbox:[inbox], projects:[project]};
 describe("review traceable member-private targets through App", () => {
   let app: MountedApp | undefined;
   let deny = 0, wrongId = false;
@@ -44,7 +44,8 @@ describe("review traceable member-private targets through App", () => {
   afterEach(async () => {await app?.unmount(); app=undefined; calls=[]; deny=0; wrongId=false; detail=undefined;});
   it("labels sample counts, bounds lists and exposes every view-all filter", async () => {
     await mount();
-    expect(main().textContent).toContain("Snapshot counts are not totals");
+    expect(main().textContent).toContain("Task totals cover the period");
+    expect([...main().querySelectorAll(".tabular-nums")].slice(0,3).map(node => node.textContent)).toEqual(["26","31","24"]);
     expect(main().querySelectorAll('[data-review-target="task"]')).toHaveLength(10);
     for (const [kind,href] of Object.entries({completed:"/tasks?status=done&page=1&pageSize=20",overdue:"/tasks?due=overdue&page=1&pageSize=20",blocked:"/tasks?status=blocked&page=1&pageSize=20",inbox:"/inbox?status=inbox&page=1&pageSize=20",projects:"/projects?status=active&page=1&pageSize=20"})) {
       expect(main().querySelector(`a[data-review-all="${kind}"]`)?.getAttribute("href")).toBe(href);

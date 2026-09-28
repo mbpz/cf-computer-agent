@@ -140,7 +140,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 | R1 | 1 | R1 入口门槛：R0 缺口账、身份边界、当前 Shell 基线。 | R1 退出门槛：设置、全局 Shell、键盘、overlay、主题、窄屏验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r1-design-system.md |
 | R2 | 1 | R2 入口门槛：R1 overlay、焦点、token、响应式 Shell 合同。 | R2 退出门槛：共享 DataTable、分页、AsyncBoundary、表单、URL 恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r2-shared-patterns.md |
 | R3 | 14 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
-| R4 | 45 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务、看板、七个扩展工作区及项目时间线的分页旅程、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
+| R4 | 44 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务、看板、七个扩展工作区及项目时间线的分页旅程、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
 | R5 | 4 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
 | R6 | 27 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
 | R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
@@ -237,7 +237,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 - [ ] `R4-032` 专注恢复缺少条件状态迁移和并发重放证明。验收：重复恢复只设置一次开始时间，已完成会话不能重新启动且跨成员请求被拒绝。 补充前端到 Worker 的重试及双成员回归。
 - [ ] `R4-033` 专注完成缺少终态竞争约束和重复耗时统计抑制证明。验收：完成与暂停并发时仅一次合法终态写入，重复完成不累加耗时并保留准确结果。 补充前端到 Worker 的重试及双成员回归。
 - [ ] `R4-034` 专注放弃缺少与完成竞争的条件写入和重试终态收敛证明。验收：完成与放弃竞争时仅接受一次合法迁移，重试不改变终态且其他成员不可操作。 补充前端到 Worker 的重试及双成员回归。
-- [ ] `R4-035` 复盘 GET 会查询后写入快照，缺少并发刷新、重试和唯一周期结果证明。验收：同成员同周期并发读取及断线重试得到一致快照，刷新语义明确且不同成员快照隔离。 补充前端到 Worker 的重试及双成员回归。
+- [x] `R4-035` 复盘周期快照收敛（2026-09-28 UTC 本地）：同成员/周期唯一键，单 SQL 聚合与 UPSERT、单调观察时间及版本、每次 GET 刷新；并发只保留一行、失败整体回滚、显式重试与双成员隔离已验证。幂等指身份收敛而非冻结响应字节，源数据改变后重读得到新内容。App 刷新失败/重试及真实 Worker/D1 证据见 EXT-REV-03；真实身份原生与发布验收仍归独立旅程，不提升父项 C04。
 
 - [ ] `R4-036` 项目时间线缺少数字分页、跨项目旧响应保护及完整编辑旅程。验收：进入项目时间线后分页和编辑，切换项目时旧响应不覆盖新内容；失败可重试且撤权不泄露。
 - [ ] `R4-037` 时间线创建缺少前端稳定意图键和断线重试去重证明。验收：双击创建与断线重试只产生一个条目，跨项目复用键被拒绝且不同成员隔离。 补充前端到 Worker 的双成员与重试回归。
