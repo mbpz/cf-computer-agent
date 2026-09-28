@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadCurrentFocus, startFocus, transitionFocus } from "../../frontend/lib/focus-data";
+import { loadFocusTransitionReceipt, loadCurrentFocus, startFocus, transitionFocus } from "../../frontend/lib/focus-data";
 const session = {id: "focus-1", taskId: "task-1", clientKey: "key-1", calendarEventId: null, status: "active", startedAt: "2026-09-28T00:00:00.000Z", pausedAt: null, endedAt: null, elapsedMs: 5_000, updatedAt: "2026-09-28T00:00:00.000Z"};
 describe("focus timer read contract", () => {
   it.each([{status: ["active"]}, {elapsedMs: -1}, {elapsedMs: 0.5}, {elapsedMs: Infinity}, {elapsedMs: Number.MAX_SAFE_INTEGER + 1}, {startedAt: "yesterday"}, {startedAt: "2026-02-30T00:00:00.000Z"}, {pausedAt: "bad"}, {endedAt: 42}, {id: ""}, {taskId: ""}, {clientKey: ""}])("rejects malformed timing or identity %j", async patch => {
@@ -40,5 +40,18 @@ describe("client-observed focus version", () => {
   });
   it("rejects current state without a canonical revision", async () => {
     await expect(loadCurrentFocus(async () => Response.json({session: {...session, updatedAt: "bad"}}))).rejects.toThrow("FOCUS_RESPONSE_INVALID");
+  });
+});
+
+
+describe("persisted transition receipt", () => {
+  const intent = {id: "focus-1", clientKey: "key-1", taskId: "task-1", action: "complete" as const, expectedUpdatedAt: session.updatedAt};
+  it.each([{id: "other"}, {clientKey: "other"}, {taskId: "other"}, {updatedAt: "2026-09-27T00:00:00.000Z"}])("rejects another identity or regressed revision %j", async patch => {
+    await expect(loadFocusTransitionReceipt(intent, async () => Response.json({...session, ...patch}))).rejects.toThrow("FOCUS_RESPONSE_INVALID");
+  });
+  it("reads the exact owned target and preserves the observed competing outcome", async () => {
+    let requested: unknown;
+    const result = await loadFocusTransitionReceipt(intent, async input => {requested = input; return Response.json({...session, status: "abandoned", updatedAt: "2026-09-28T00:00:00.001Z"});});
+    expect(requested).toBe("/api/focus/focus-1"); expect(result.status).toBe("abandoned");
   });
 });

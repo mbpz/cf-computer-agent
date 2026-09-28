@@ -1,3 +1,4 @@
+import { acknowledgeFocusTransition, clearFocusTransition, loadFocusTransition, saveFocusTransition, type FocusTransitionIntent, type StoredFocusTransition } from "./lib/focus-transition-intent";
 import { acknowledgeFocusIntent, clearFocusIntent, loadFocusIntent, saveFocusIntent, type FocusCreateIntent, type StoredFocusIntent } from "./lib/focus-create-intent";
 import { TodayTargetDetail, type TodayTarget } from "./components/today-target-detail";
 import { defaultCalendarRange, parseCalendarSearch, writeCalendarSearch, type CalendarQuery } from "./lib/calendar-query";
@@ -67,7 +68,7 @@ import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goa
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
-import { type FocusSession, loadCurrentFocus, loadFocusReceipt, startFocus, transitionFocus } from "./lib/focus-data";
+import { type FocusSession, loadFocusTransitionReceipt, loadCurrentFocus, loadFocusReceipt, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
@@ -1704,6 +1705,8 @@ export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
 export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; memberId?: string }) {
   const [recovery, setRecovery] = useState<StoredFocusIntent>(() => loadFocusIntent(memberId));
   const intentRef = useRef<FocusCreateIntent | null>(recovery.kind === "ready" ? recovery.intent : null);
+  const [transitionRecovery, setTransitionRecovery] = useState<StoredFocusTransition>(() => loadFocusTransition(memberId));
+  const transitionRef = useRef<FocusTransitionIntent | null>(transitionRecovery.kind === "ready" ? transitionRecovery.intent : null);
   const [state, setState] = useState<FocusPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
   const [pending, setPending] = useState(false);
@@ -1731,6 +1734,21 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     void (async () => {
       const stored = loadFocusIntent(memberId);
       setRecovery(stored); intentRef.current = stored.kind === "ready" ? stored.intent : null;
+      const transitionStored = loadFocusTransition(memberId);
+      setTransitionRecovery(transitionStored); transitionRef.current = transitionStored.kind === "ready" ? transitionStored.intent : null;
+      // Two unresolved journals cannot safely be interpreted as one operation.
+      if (transitionStored.kind === "blocked" || (transitionStored.kind !== "empty" && stored.kind !== "empty")) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+      let transitionReceipt: FocusSession | undefined;
+      if (transitionStored.kind === "ready") {
+        transitionReceipt = await loadFocusTransitionReceipt(transitionStored.intent, fetch, controller.signal);
+        if (epoch !== epochRef.current) return;
+        if (transitionReceipt.updatedAt === transitionStored.intent.expectedUpdatedAt) {
+          if (transitionStored.acknowledged) throw new Error("FOCUS_RESPONSE_INVALID");
+          setState({kind: "ready", session: null});
+          return; // Still unresolved: never infer failure, clear the journal or auto-replay.
+        }
+        if (!acknowledgeFocusTransition(memberId, transitionStored.intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+      }
       let receipt: FocusSession | undefined;
       if (stored.kind === "ready") {
         try { receipt = await loadFocusReceipt(stored.intent, fetch, controller.signal); }
@@ -1744,6 +1762,11 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
         if (!clearFocusIntent(memberId, stored.intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
         intentRef.current = null; setRecovery({kind: "empty"});
         setActionNotice(frontendText(locale, `FOCUS_STATUS_${receipt.status.toUpperCase()}`));
+      }
+      if (transitionReceipt && transitionStored.kind === "ready") {
+        if (!clearFocusTransition(memberId, transitionStored.intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+        transitionRef.current = null; setTransitionRecovery({kind: "empty"});
+        setActionNotice(frontendText(locale, `FOCUS_STATUS_${transitionReceipt.status.toUpperCase()}`));
       }
       setState({kind: "ready", session});
     })().catch(error => {
@@ -1760,6 +1783,7 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     try {
       const receipt = await operation(epoch);
       if (epoch !== epochRef.current) return;
+      if (receipt && transitionRef.current && !acknowledgeFocusTransition(memberId, transitionRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
       if (receipt && intentRef.current && !acknowledgeFocusIntent(memberId, intentRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
       const controller = new AbortController();
       readRef.current?.abort(); readRef.current = controller;
@@ -1769,13 +1793,19 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
           if (!clearFocusIntent(memberId, intentRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
           intentRef.current = null; setRecovery({kind: "empty"});
         }
+        if (receipt && transitionRef.current) {
+          if (!clearFocusTransition(memberId, transitionRef.current)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+          transitionRef.current = null; setTransitionRecovery({kind: "empty"});
+        }
         setState({kind: "ready", session});
         if (receipt) setActionNotice(frontendText(locale, `FOCUS_STATUS_${receipt.status.toUpperCase()}`));
       }
     } catch (error: unknown) {
       if (epoch !== epochRef.current) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
-      else if (intentRef.current && (retrySaved || !(error instanceof ApiRequestError && error.status === 404 && error.code === "TASK_NOT_FOUND"))) {
+      else if (transitionRef.current) {
+        setState({kind: "error", message: frontendText(locale, error instanceof ApiRequestError && error.status === 409 ? "FOCUS_CONFLICT" : "FOCUS_TRANSITION_UNCERTAIN")});
+      } else if (intentRef.current && (retrySaved || !(error instanceof ApiRequestError && error.status === 404 && error.code === "TASK_NOT_FOUND"))) {
         const stored = loadFocusIntent(memberId);
         setRecovery(stored.kind === "empty" ? {kind: "blocked"} : stored);
         setActionError(frontendText(locale, "FOCUS_START_UNCERTAIN"));
@@ -1816,6 +1846,28 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     // Write only after the complete immutable payload was durably saved and read back.
     return startFocus(intent);
   };
+  const sendTransition = async (epoch: number, intent: FocusTransitionIntent, retry = false) => {
+    if (loadFocusIntent(memberId).kind !== "empty") throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+    if (retry) {
+      const controller = new AbortController(); readRef.current?.abort(); readRef.current = controller;
+      const receipt = await loadFocusTransitionReceipt(intent, fetch, controller.signal);
+      if (epoch !== epochRef.current) return;
+      if (receipt.updatedAt !== intent.expectedUpdatedAt) return receipt;
+      const stored = loadFocusTransition(memberId);
+      if (stored.kind !== "ready" || stored.acknowledged) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+    }
+    if (!saveFocusTransition(memberId, intent)) throw new Error("FOCUS_STORAGE_UNAVAILABLE");
+    transitionRef.current = intent;
+    const receipt = await transitionFocus(intent.id, intent.action, intent.expectedUpdatedAt);
+    if (receipt.taskId !== intent.taskId || receipt.clientKey !== intent.clientKey) throw new Error("FOCUS_RESPONSE_INVALID");
+    return receipt;
+  };
+  if (transitionRecovery.kind !== "empty" && state.kind === "ready") return <section className="space-y-3">
+    <h1 className="text-2xl font-semibold">{frontendText(locale, "FOCUS_TITLE")}</h1>
+    <p role="alert">{frontendText(locale, transitionRecovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_TRANSITION_UNCERTAIN")}</p>
+    <Button disabled={pending} onClick={() => setRetryVersion(value => value + 1)}>{frontendText(locale, "FOCUS_RETRY")}</Button>
+    {transitionRecovery.kind === "ready" && !transitionRecovery.acknowledged && <Button disabled={pending} onClick={() => void mutate(epoch => sendTransition(epoch, transitionRecovery.intent, true))}>{frontendText(locale, "FOCUS_RETRY_TRANSITION")}</Button>}
+  </section>;
   if (recovery.kind !== "empty" && state.kind === "ready") return <section className="space-y-3">
     <h1 className="text-2xl font-semibold">{frontendText(locale, "FOCUS_TITLE")}</h1>
     <p role="alert">{frontendText(locale, recovery.kind === "blocked" ? "FOCUS_STORAGE_BLOCKED" : "FOCUS_START_UNCERTAIN")}</p>
@@ -1823,7 +1875,7 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     {recovery.kind === "ready" && !recovery.acknowledged && <Button disabled={pending} onClick={() => void mutate(epoch => sendStart(epoch, recovery.intent, recovery.intent), true)}>{frontendText(locale, "FOCUS_RETRY_START")}</Button>}
   </section>;
   return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(epoch => sendStart(epoch, input))} onTransition={action => {
-    if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action, state.session!.updatedAt));
+    if (state.kind === "ready" && state.session) void mutate(epoch => sendTransition(epoch, Object.freeze({id: state.session!.id, taskId: state.session!.taskId, clientKey: state.session!.clientKey, action, expectedUpdatedAt: state.session!.updatedAt})));
   }} />;
 }
 

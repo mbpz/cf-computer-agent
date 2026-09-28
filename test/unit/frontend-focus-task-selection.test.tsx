@@ -15,9 +15,11 @@ describe("Focus owned task selection through App", () => {
   let delayedCurrent: (() => Promise<Response>) | undefined, delayedDetail: (() => Promise<Response>) | undefined, delayedPost: (() => Promise<Response>) | undefined;
   let current: any = null;
   let transitionStatus = 0;
+  let delayedTransition: (() => Promise<Response>) | undefined;
   let receipt: any = null;
   let receiptStatus = 0;
   let seedStorage: [string, string][] = [];
+  const transitionKey = "memory-garden:focus-transition:v1:contributor-route-auditor";
   const journalKey = "memory-garden:focus-create:v1:contributor-route-auditor";
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
@@ -42,10 +44,11 @@ describe("Focus owned task selection through App", () => {
         return Response.json({task: task(wrongTarget ? 99 : Number(url.pathname.split("-").pop())), tags: [], links: []});
       }
       if (/^\/api\/focus\/[^/]+\/(pause|resume|complete|abandon)$/.test(url.pathname)) {
+        if (delayedTransition) return delayedTransition();
         if (transitionStatus) return apiError(transitionStatus, "FOCUS_CONFLICT");
         const action = url.pathname.split("/").pop()!;
         const status = {pause: "paused", resume: "active", complete: "completed", abandon: "abandoned"}[action];
-        const result = {...current, status, updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString()}; current = status === "completed" || status === "abandoned" ? null : result;
+        const result = {...current, status, updatedAt: new Date(Date.parse(current.updatedAt) + 1).toISOString()}; receipt = result; current = status === "completed" || status === "abandoned" ? null : result;
         return Response.json(result);
       }
       if (url.pathname === "/api/focus" && method === "POST") {
@@ -60,12 +63,119 @@ describe("Focus owned task selection through App", () => {
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
-  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; delayedTransition = undefined; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  it("persists the exact transition before POST and retains it after an unknown result", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    const original = {...current};
+    delayedTransition = async () => {
+      expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({intent: {action: "pause", expectedUpdatedAt: stamp}});
+      return apiError(500, "UNKNOWN");
+    };
+    await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({intent: {id: original.id, taskId: original.taskId, clientKey: original.clientKey, action: "pause", expectedUpdatedAt: stamp}, acknowledged: false});
+    expect(button("Pause")).toBeUndefined();
+  });
+  it.each(["completed", "abandoned"])("recovers exact %s outcome after refresh instead of inferring success from empty current", async status => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    const original = {...current}; transitionStatus = 500;
+    await click(button("Complete")); await waitForApp(() => !!button("Try focus again"));
+    seedStorage = [[transitionKey, app!.browser.sessionStorage.getItem(transitionKey)!]];
+    receipt = {...original, status, endedAt: stamp, updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
+    await app!.unmount(); app = undefined; await mount(false);
+    await waitForApp(() => !!button("Choose task"));
+    expect(main().textContent).toContain(status === "completed" ? "Completed" : "Abandoned");
+    expect(calls.filter(c => c.path.endsWith("/complete"))).toHaveLength(1);
+    expect(calls.some(c => c.path === `/api/focus/${original.id}` && c.method === "GET")).toBe(true);
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).toBeNull();
+  });
+  it("keeps unchanged or missing transition targets locked across reload without automatic POST", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    receipt = {...current}; transitionStatus = 500;
+    await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    seedStorage = [[transitionKey, app!.browser.sessionStorage.getItem(transitionKey)!]];
+    await app!.unmount(); app = undefined; await mount(false);
+    await waitForApp(() => !!button("Try focus again"));
+    expect(button("Pause")).toBeUndefined(); expect(button("Choose task")).toBeUndefined();
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).not.toBeNull();
+    receipt = null; await click(button("Try focus again")); await waitForApp(() => !!button("Try focus again") && !button("Try focus again").disabled);
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).not.toBeNull();
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+  });
+  it("blocks transition POST when the journal write fails", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => {throw new Error("quota");});
+    await click(button("Pause")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(0);
+  });
+  it("retries only the explicitly saved transition with the original observed version", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    receipt = {...current}; transitionStatus = 500;
+    await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    await click(button("Try focus again")); await waitForApp(() => !!button("Retry saved transition"));
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+    transitionStatus = 0;
+    await click(button("Retry saved transition")); await waitForApp(() => !!button("Resume"));
+    expect(calls.filter(c => c.path.endsWith("/pause")).map(c => c.body)).toEqual([{expectedUpdatedAt: stamp}, {expectedUpdatedAt: stamp}]);
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).toBeNull();
+  });
+  it("retains acknowledged transitions after current read failure and never offers another POST", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    delayedCurrent = async () => apiError(500, "READ_FAILED");
+    await click(button("Complete")); await waitForApp(() => !!button("Try focus again"));
+    expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({acknowledged: true});
+    seedStorage = [[transitionKey, app!.browser.sessionStorage.getItem(transitionKey)!]];
+    await app!.unmount(); app = undefined; delayedCurrent = undefined; await mount(false);
+    await waitForApp(() => !!button("Choose task"));
+    expect(main().textContent).toContain("Completed");
+    expect(calls.filter(c => c.path.endsWith("/complete"))).toHaveLength(1);
+  });
+  it.each([401, 403, 404])("retains unresolved transition after receipt %i without allowing new writes", async status => {
+    const intent = {id: "saved", clientKey: "saved-key", taskId: "task-1", action: "complete", expectedUpdatedAt: stamp};
+    seedStorage = [[transitionKey, JSON.stringify({version: 1, memberId: "contributor-route-auditor", intent, acknowledged: false})]];
+    receiptStatus = status; await mount(false); await waitForApp(() => !!button("Try focus again"));
+    expect(button("Choose task")).toBeUndefined(); expect(button("Retry saved transition")).toBeUndefined();
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).not.toBeNull();
+    expect(calls.filter(c => c.method === "POST" && c.path.startsWith("/api/focus"))).toHaveLength(0);
+  });
+  it("refuses a successful transition receipt for a different task identity", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    delayedTransition = async () => Response.json({...current, status: "paused", taskId: "wrong-task", updatedAt: "2026-09-28T00:00:00.001Z"});
+    await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).not.toBeNull();
+    expect(button("Pause")).toBeUndefined();
+  });
+  it("blocks a new start for corrupted transition storage", async () => {
+    seedStorage = [[transitionKey, "broken"]]; await mount(false);
+    await waitForApp(() => !!button("Try focus again"));
+    expect(button("Choose task")).toBeUndefined();
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).toBe("broken");
+  });
+  it("rechecks a pending saved retry and accepts a competing newer result without POST", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    receipt = {...current}; transitionStatus = 500; await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    await click(button("Try focus again")); await waitForApp(() => !!button("Retry saved transition"));
+    receipt = {...current, status: "abandoned", updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
+    await click(button("Retry saved transition")); await waitForApp(() => !!button("Choose task"));
+    expect(main().textContent).toContain("Abandoned"); expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+  });
+  it("keeps the journal on route exit and ignores a late transition receipt until reentry GET", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    const original = {...current}; let resolve!: (response: Response) => void;
+    delayedTransition = () => new Promise(done => {resolve = done;});
+    await click(button("Complete")); await waitForApp(() => !!resolve); await navigate("/settings");
+    const reads = calls.filter(c => c.path === "/api/focus/current").length;
+    receipt = {...original, status: "completed", updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
+    await act(async () => resolve(Response.json(receipt)));
+    expect(calls.filter(c => c.path === "/api/focus/current")).toHaveLength(reads);
+    expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({acknowledged: false});
+    await navigate("/focus"); await waitForApp(() => !!button("Choose task"));
+    expect(main().textContent).toContain("Completed"); expect(calls.filter(c => c.path.endsWith("/complete"))).toHaveLength(1);
+  });
   it("hides stale transition controls after an unknown result and recovers with GET only", async () => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     transitionStatus = 500; await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
     expect(button("Pause")).toBeUndefined(); expect(button("Complete")).toBeUndefined();
-    current = {...current, status: "paused"}; transitionStatus = 0;
+    receipt = current = {...current, status: "paused", updatedAt: "2026-09-28T00:00:00.001Z"}; transitionStatus = 0;
     await click(button("Try focus again")); await waitForApp(() => !!button("Resume"));
     expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
   });
@@ -236,7 +346,7 @@ describe("Focus owned task selection through App", () => {
     await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
     expect(main().textContent).toContain("Focus changed. Reload its state before acting again.");
     expect(button("Pause")).toBeUndefined();
-    current = {...current, status: "paused", pausedAt: stamp};
+    receipt = current = {...current, status: "paused", pausedAt: stamp, updatedAt: "2026-09-28T00:00:00.001Z"};
     await click(button("Try focus again")); await waitForApp(() => !!button("Resume"));
     expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
   });

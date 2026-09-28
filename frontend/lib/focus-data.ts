@@ -1,3 +1,4 @@
+import { type FocusTransitionIntent } from "./focus-transition-intent";
 import { type FocusCreateIntent, validFocusIntent } from "./focus-create-intent";
 import { canonicalInstant } from "./calendar-query";
 import { apiFetch, type Fetcher } from "./api";
@@ -15,6 +16,11 @@ export async function loadCurrentFocus(requester: Fetcher = fetch, signal?: Abor
 export async function loadFocusReceipt(intent: FocusCreateIntent, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FocusSession> {
   const session = normalizeSession(await apiFetch<unknown>(`/api/focus/${encodeURIComponent(intent.id)}`, {requester, signal}));
   return matchFocusReceipt(session, intent);
+}
+export async function loadFocusTransitionReceipt(intent: FocusTransitionIntent, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FocusSession> {
+  const session = normalizeSession(await apiFetch<unknown>(`/api/focus/${encodeURIComponent(intent.id)}`, {requester, signal}));
+  if (session.id !== intent.id || session.taskId !== intent.taskId || session.clientKey !== intent.clientKey || Date.parse(session.updatedAt) < Date.parse(intent.expectedUpdatedAt)) throw new Error("FOCUS_RESPONSE_INVALID");
+  return session;
 }
 export async function startFocus(input: FocusCreateIntent, requester: Fetcher = fetch): Promise<FocusSession> {
   if (!validFocusIntent(input)) throw new Error("FOCUS_INTENT_INVALID");
