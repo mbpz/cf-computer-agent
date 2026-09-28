@@ -151,3 +151,16 @@ default-src 'none'; script-src 'self'; connect-src ws://127.0.0.1:*; base-uri 'n
 - 这是本轮成功状态与停止后离线状态的实测；未单独计时排除协议会话超时，也未在本轮点击「断开 / 取消」，因此不把观察扩大成所有断线原因或取消路径的验证。
 - 本轮未记录配对码、修改权限或浏览器安全配置、读取生产秘密、推送或部署。此前自动输入格式问题已由手动配对绕过，不再是当前握手阻塞。
 - LC-003 的自带浏览器连接路径获得新鲜成功证据；LC-004 获得组件停止后的离线观察。桌面 Chrome/Edge 完整版本及默认安全配置、权限允许/拒绝/撤回、有效码过期/重放与来源拒绝的原生矩阵仍未完成。G0/LC-002–005 总门槛不标记通过，D04 父项仍开放；没有 VM 出站转发或真实客体公网证据。
+
+
+## 2026-09-29 Asia/Shanghai：LC-002 官方正文核对完成
+
+本轮取得下列官方页面的正文，不再仅依赖搜索摘要：
+
+- Chrome 147 发布说明：`https://developer.chrome.com/release-notes/147`。页面记录稳定版发布日期 2026-04-07；“Local network access restrictions for WebSockets” 明确本地地址 WebSocket 受 LNA 权限提示约束，并继续适用 `LocalNetworkAccessAllowedForUrls`、`LocalNetworkAccessBlockedForUrls`、`LocalNetworkAccessRestrictionsTemporaryOptOut` 企业策略。该结论是版本 147 的文档事实，不是本机 Chrome 153 或内置 UA 154 的实测。
+- Edge 147 Web 平台说明：`https://learn.microsoft.com/en-us/microsoft-edge/web-platform/release-notes/147`。“Local Network Access restrictions for WebSockets” 同样明确本地地址 WebSocket 权限提示及上述三项企业策略适用。
+- 旧 Chrome LNA 博客：`https://developer.chrome.com/blog/local-network-access`。其中“WebSockets 尚未受 LNA 约束”属于 Chrome 138 的已知限制段落，不能覆盖上述版本 147 的明确发布说明。没有启用博客中的实验 flag。
+
+因此仅勾选连接器探针计划步骤 1 的“获得可核对正文、版本和权限行为”；先前正文获取失败的历史记录保留。LC-002 的运行实例完整版本/配置记录，以及 LC-003–005 的完整浏览器准入不因此通过。
+
+当前具体下一步是默认安全配置的目标浏览器权限矩阵，不是再次要求用户完成已经成功的自带浏览器配对。用户当前指定使用自带浏览器；本轮没有擅自切换桌面浏览器、撤销权限、改启动参数或降低原计划验收范围。若继续保持此工具限制，则需用户明确调整目标浏览器验收范围，不能由代理自行跳过 G0 进入正式 VM UI/联网。
