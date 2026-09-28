@@ -1,6 +1,10 @@
+import { AuditRepository } from "../audit/repository";
+import type { CreateAuditEvent } from "../audit/types";
 import { AppError } from "../http";
 import { parsePermissionMask, permissionMaskFor, serializePermissionMask } from "./permission-bitmap";
 import type { MemberRole } from "../members/types";
+
+type RoleMutationAudit<T = Extract<CreateAuditEvent, { resourceType: "role" }>> = T extends CreateAuditEvent ? Pick<T, "action" | "metadata"> : never;
 
 export interface RoleRecord {
   id: string;
@@ -44,30 +48,30 @@ export class RolesRepository {
     return { items: rows.results.map(mapRole) };
   }
 
-  async update(id: string, input: { name?: string; description?: string; allowBits: string }): Promise<RoleRecord> {
+  async update(id: string, input: { name?: string; description?: string; allowBits: string }, actorId: string): Promise<RoleRecord> {
     const current = await this.find(id);
     if (!current) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (current.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
     const mask = serializePermissionMask(parsePermissionMask(input.allowBits));
     const name = input.name === undefined ? current.name : boundedText(input.name, "ROLE_NAME_INVALID");
     const description = input.description === undefined ? current.description : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
-    const result = await this.db.prepare(
-      "UPDATE roles SET name = ?, description = ?, allow_bits = ?, updated_at = ? WHERE id = ? AND is_system = 0",
-    ).bind(name, description, mask, new Date().toISOString(), id).run();
+    const result = await this.writeWithAudit(this.db.prepare(
+      "UPDATE roles SET name = ?, description = ?, allow_bits = ?, updated_at = ? WHERE id = ? AND is_system = 0 AND allow_bits = ? AND name = ? AND description = ?",
+    ).bind(name, description, mask, new Date().toISOString(), id, current.allowBits, current.name, current.description), actorId, id, { action: "role.updated", metadata: { previousAllowBits: current.allowBits, allowBits: mask } });
     if (result.meta.changes !== 1) throw new AppError("ROLE_UPDATE_CONFLICT", "Role update conflict", 409);
     return (await this.find(id))!;
   }
 
-  async create(input: { key: string; name: string; description?: string; allowBits: string }): Promise<RoleRecord> {
+  async create(input: { key: string; name: string; description?: string; allowBits: string }, actorId: string): Promise<RoleRecord> {
     const key = boundedKey(input.key);
     const name = boundedText(input.name, "ROLE_NAME_INVALID");
     const description = input.description === undefined ? "" : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
     const allowBits = serializePermissionMask(parsePermissionMask(input.allowBits));
     const id = `role-${crypto.randomUUID()}`;
     try {
-      await this.db.prepare(
+      await this.writeWithAudit(this.db.prepare(
         "INSERT INTO roles (id, key, name, description, allow_bits, status, is_system, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', 0, ?, ?)",
-      ).bind(id, key, name, description, allowBits, new Date().toISOString(), new Date().toISOString()).run();
+      ).bind(id, key, name, description, allowBits, new Date().toISOString(), new Date().toISOString()), actorId, id, { action: "role.created", metadata: { allowBits } });
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: roles\.key/iu.test(error.message)) throw new AppError("ROLE_KEY_DUPLICATE", "Role key is already in use", 409);
       throw error;
@@ -75,12 +79,13 @@ export class RolesRepository {
     return (await this.find(id))!;
   }
 
-  async remove(id: string): Promise<RoleRecord> {
+  async remove(id: string, actorId: string): Promise<RoleRecord> {
     const current = await this.find(id);
     if (!current) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (current.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
     if (current.memberCount > 0) throw new AppError("ROLE_ASSIGNED", "Role is assigned to members", 409);
-    await this.db.prepare("DELETE FROM roles WHERE id = ? AND is_system = 0").bind(id).run();
+    const result = await this.writeWithAudit(this.db.prepare("DELETE FROM roles WHERE id = ? AND is_system = 0 AND NOT EXISTS (SELECT 1 FROM role_members WHERE role_id = roles.id)").bind(id), actorId, id, { action: "role.deleted", metadata: { key: current.key } });
+    if (result.meta.changes !== 1) throw new AppError("ROLE_DELETE_CONFLICT", "Role delete conflict", 409);
     return current;
   }
 
@@ -111,15 +116,15 @@ export class RolesRepository {
     );
   }
 
-  async assignMember(roleId: string, memberId: string): Promise<void> {
+  async assignMember(roleId: string, memberId: string, actorId: string): Promise<void> {
     const role = await this.find(roleId);
     if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (role.status !== "active") throw new AppError("ROLE_INACTIVE", "Inactive roles cannot be assigned", 409);
     const member = await this.db.prepare("SELECT status FROM members WHERE id = ?").bind(memberId).first<{ status: string }>();
     if (!member) throw new AppError("MEMBER_NOT_FOUND", "Member not found", 404);
     try {
-      await this.db.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES (?, ?, ?)")
-        .bind(roleId, memberId, new Date().toISOString()).run();
+      await this.writeWithAudit(this.db.prepare("INSERT INTO role_members (role_id, member_id, created_at) VALUES (?, ?, ?)")
+        .bind(roleId, memberId, new Date().toISOString()), actorId, roleId, { action: "role.member_assigned", metadata: { memberId } });
     } catch (error) {
       if (error instanceof Error && /UNIQUE constraint failed: role_members/iu.test(error.message)) {
         throw new AppError("ROLE_MEMBER_EXISTS", "Role is already assigned", 409);
@@ -128,14 +133,21 @@ export class RolesRepository {
     }
   }
 
-  async unassignMember(roleId: string, memberId: string): Promise<void> {
+  async unassignMember(roleId: string, memberId: string, actorId: string): Promise<void> {
     const role = await this.find(roleId);
     if (!role) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
     if (role.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System role assignments cannot be changed", 409);
-    const result = await this.db.prepare("DELETE FROM role_members WHERE role_id = ? AND member_id = ?")
-      .bind(roleId, memberId).run();
+    const result = await this.writeWithAudit(this.db.prepare("DELETE FROM role_members WHERE role_id = ? AND member_id = ?")
+      .bind(roleId, memberId), actorId, roleId, { action: "role.member_unassigned", metadata: { memberId } });
     if (result.meta.changes !== 1) throw new AppError("ROLE_MEMBER_NOT_FOUND", "Role assignment not found", 404);
   }
+
+  private async writeWithAudit(statement: D1PreparedStatement, actorId: string, resourceId: string, event: RoleMutationAudit) {
+    const audit = new AuditRepository(this.db).prepareChangedRowAudit({ id: crypto.randomUUID(), actorKind: "member", actorId, ...event, resourceType: "role", resourceId, createdAt: new Date().toISOString() });
+    const [result] = await this.db.batch([statement, audit]);
+    return result!;
+  }
+
 }
 
 function permissionMaskForRole(role: MemberRole): bigint {

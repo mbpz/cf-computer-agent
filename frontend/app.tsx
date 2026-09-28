@@ -356,66 +356,93 @@ function useInitialReadRetry(kind: string, start: () => void) {
   return { retryVersion: version, retryRead: retry };
 }
 
-function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; roles: AdminRole[] } | { kind: "error"; message: string }>({ kind: "loading" });
+export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; roles: AdminRole[] } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [saving, setSaving] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [needsRead, setNeedsRead] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const { retryVersion, retryRead } = useInitialReadRetry(state.kind, () => setState({ kind: "loading" }));
+  const epoch = useRef<object | null>(null);
+  const readRef = useRef<AbortController | null>(null);
+  const writeRef = useRef<object | null>(null);
+  const blockedRef = useRef(false);
+  const deny = (error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_ROLES_UNAVAILABLE") });
+    setSaveError(null);
+    return true;
+  };
+  const read = async () => {
+    if (!epoch.current || readRef.current) return false;
+    const scope = epoch.current;
+    const controller = new AbortController();
+    const activeWrite = writeRef.current;
+    readRef.current = controller;
+    setReading(true);
+    try {
+      const roles = await loadAdminRoles(fetch, controller.signal);
+      if (epoch.current !== scope || readRef.current !== controller) return false;
+      setState({ kind: "ready", roles });
+      if (!activeWrite && !writeRef.current) {
+        blockedRef.current = false;
+        setNeedsRead(false);
+        setSaveError(null);
+      }
+      return true;
+    } catch (error) {
+      if (epoch.current !== scope || readRef.current !== controller) return false;
+      if (!deny(error)) {
+        const message = frontendText(locale, "ADMIN_ROLES_UNAVAILABLE");
+        setState((previous) => previous.kind === "ready" ? previous : { kind: "error", message });
+        setSaveError(message);
+      }
+      return false;
+    } finally {
+      if (readRef.current === controller) { readRef.current = null; setReading(false); }
+    }
+  };
   useEffect(() => {
-    let active = true;
+    epoch.current = {};
     setState({ kind: "loading" });
-    void loadAdminRoles().then((roles) => { if (active) setState({ kind: "ready", roles }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "ADMIN_ROLES_UNAVAILABLE") }); });
-    return () => { active = false; };
-  }, [locale, retryVersion]);
-  const save = async (role: AdminRole, allowBits: string) => {
-    if (saving) return;
+    void read();
+    return () => { epoch.current = null; readRef.current?.abort(); readRef.current = null; };
+  }, [locale]);
+  const retryRead = () => {
+    if (readRef.current || writeRef.current) return;
+    if (state.kind !== "ready") setState({ kind: "loading" });
+    void read();
+  };
+  const mutate = async (operation: () => Promise<unknown>, errorKey: string) => {
+    if (!epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+    const scope = epoch.current;
+    const token = {};
+    writeRef.current = token;
+    blockedRef.current = true;
     setSaving(true);
+    setNeedsRead(true);
     setSaveError(null);
     try {
-      const updated = await updateAdminRole(role.id, { allowBits });
-      setState((previous) => previous.kind === "ready" ? { ...previous, roles: previous.roles.map((item) => item.id === updated.id ? updated : item) } : previous);
-    } catch {
-      setSaveError(frontendText(locale, "ADMIN_ROLES_SAVE_ERROR"));
-    } finally { setSaving(false); }
+      await operation();
+      if (epoch.current !== scope) return false;
+      // A receipt acknowledges the request, not the current member set. Always read it.
+      writeRef.current = null;
+      setSaving(false);
+      return await read();
+    } catch (error) {
+      if (epoch.current === scope && !deny(error)) setSaveError(frontendText(locale, errorKey));
+      return false;
+    } finally {
+      if (writeRef.current === token) {
+        writeRef.current = null;
+        if (epoch.current) setSaving(false);
+      }
+    }
   };
-  const create = async (input: { key: string; name: string; allowBits: string }) => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const created = await createAdminRole(input);
-      setState((previous) => previous.kind === "ready" ? { ...previous, roles: [...previous.roles, created] } : previous);
-    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_CREATE_ERROR")); } finally { setSaving(false); }
-  };
-  const assignMember = async (role: AdminRole, memberId: string) => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await assignAdminRoleMember(role.id, memberId);
-      setState((previous) => previous.kind === "ready" ? {
-        ...previous,
-        roles: previous.roles.map((item) => item.id === role.id && !item.assignedMemberIds.includes(memberId)
-          ? { ...item, assignedMemberIds: [...item.assignedMemberIds, memberId], memberCount: item.memberCount + 1 }
-          : item),
-      } : previous);
-    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")); } finally { setSaving(false); }
-  };
-  const unassignMember = async (role: AdminRole, memberId: string) => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await unassignAdminRoleMember(role.id, memberId);
-      setState((previous) => previous.kind === "ready" ? {
-        ...previous,
-        roles: previous.roles.map((item) => item.id === role.id
-          ? { ...item, assignedMemberIds: item.assignedMemberIds.filter((id) => id !== memberId), memberCount: Math.max(0, item.memberCount - 1) }
-          : item),
-      } : previous);
-    } catch { setSaveError(frontendText(locale, "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")); } finally { setSaving(false); }
-  };
-  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} saveError={saveError} onSave={(role, allowBits) => void save(role, allowBits)} onCreate={(input) => void create(input)} onAssignMember={(role, memberId) => void assignMember(role, memberId)} onUnassignMember={(role, memberId) => void unassignMember(role, memberId)} />;
+  return <AdminRolesPage onLoadRetry={retryRead} locale={locale} state={state} saving={saving} writeBlocked={reading || needsRead} readPending={reading || saving} readRequired={needsRead} saveError={saveError}
+    onSave={(role, allowBits) => mutate(() => updateAdminRole(role.id, { allowBits }), "ADMIN_ROLES_SAVE_ERROR")}
+    onCreate={(input) => mutate(() => createAdminRole(input), "ADMIN_ROLES_CREATE_ERROR")}
+    onAssignMember={(role, memberId) => mutate(() => assignAdminRoleMember(role.id, memberId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")}
+    onUnassignMember={(role, memberId) => mutate(() => unassignAdminRoleMember(role.id, memberId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")} />;
 }
 
 function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {

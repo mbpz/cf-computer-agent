@@ -77,6 +77,63 @@ describe("admin roles API", () => {
     });
     expect(removed.status).toBe(200);
   });
+  it.each(["create", "update", "delete", "assign", "unassign"] as const)("rolls back %s when its audit insert fails", async (operation) => {
+    if (operation === "unassign") await api("/api/admin/roles/role-editor/members", admin, {method:"POST",body:JSON.stringify({memberId:"role-contributor"})});
+    const beforeRoles = await env.DB.prepare("SELECT * FROM roles ORDER BY id").all();
+    const beforeMembers = await env.DB.prepare("SELECT * FROM role_members ORDER BY role_id, member_id").all();
+    const beforeAudit = await env.DB.prepare("SELECT * FROM audit_events WHERE resource_type = 'role' ORDER BY id").all();
+    await env.DB.prepare("CREATE TRIGGER fail_role_audit BEFORE INSERT ON audit_events WHEN NEW.resource_type = 'role' BEGIN SELECT RAISE(ABORT, 'role audit unavailable'); END").run();
+    const response = await api(operation === "create" ? "/api/admin/roles" : operation === "assign" || operation === "unassign" ? "/api/admin/roles/role-editor/members" : "/api/admin/roles/role-editor", admin, {
+      method: operation === "create" || operation === "assign" ? "POST" : operation === "update" ? "PATCH" : "DELETE",
+      ...(operation === "delete" ? {} : {body:JSON.stringify(operation === "create" ? {key:"rollback",name:"Rollback",allowBits:"0x1"} : operation === "update" ? {allowBits:"0x2"} : {memberId:"role-contributor"})}),
+    });
+    expect(response.status).toBe(500);
+    expect((await env.DB.prepare("SELECT * FROM roles ORDER BY id").all()).results).toEqual(beforeRoles.results);
+    expect((await env.DB.prepare("SELECT * FROM role_members ORDER BY role_id, member_id").all()).results).toEqual(beforeMembers.results);
+    expect((await env.DB.prepare("SELECT * FROM audit_events WHERE resource_type = 'role' ORDER BY id").all()).results).toEqual(beforeAudit.results);
+  });
+
+  it.each(["create","assign","unassign"] as const)("keeps concurrent %s outcomes and audit count consistent",async(operation)=>{
+    if(operation==="unassign")await api("/api/admin/roles/role-editor/members",admin,{method:"POST",body:JSON.stringify({memberId:"role-contributor"})});
+    const responses=await Promise.all(Array.from({length:3},()=>api(operation==="create"?"/api/admin/roles":"/api/admin/roles/role-editor/members",admin,{method:operation==="unassign"?"DELETE":"POST",body:JSON.stringify(operation==="create"?{key:"parallel",name:"Parallel",allowBits:"0x1"}:{memberId:"role-contributor"})})));
+    expect(responses.map(r=>r.status).sort()).toEqual(operation==="create"?[201,409,409]:operation==="assign"?[200,409,409]:[200,404,404]);
+    const action=operation==="create"?"role.created":operation==="assign"?"role.member_assigned":"role.member_unassigned";
+    expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM audit_events WHERE action = ?").bind(action).first()).toEqual({total:1});
+  });
+
+  it("reflects mask changes and unassignment in the existing member session",async()=>{
+    await api("/api/admin/roles/role-editor/members",admin,{method:"POST",body:JSON.stringify({memberId:"role-contributor"})});
+    expect((await (await api("/api/session",contributor)).json() as {permissionMask:string}).permissionMask).toBe("0x1640c3");
+    await api("/api/admin/roles/role-editor",admin,{method:"PATCH",body:JSON.stringify({allowBits:"0x200008"})});
+    expect((await (await api("/api/session",contributor)).json() as {permissionMask:string}).permissionMask).toBe("0x3600cb");
+    await api("/api/admin/roles/role-editor/members",admin,{method:"DELETE",body:JSON.stringify({memberId:"role-contributor"})});
+    expect((await (await api("/api/session",contributor)).json() as {permissionMask:string}).permissionMask).toBe("0x1600c3");
+  });
+
+  it("does not audit a stale previous mask when different updates race",async()=>{
+    const responses=await Promise.all(["0x2","0x4","0x8"].map(allowBits=>api("/api/admin/roles/role-editor",admin,{method:"PATCH",body:JSON.stringify({allowBits})})));
+    expect(responses.every(r=>r.status===200||r.status===409)).toBe(true);
+    const events=await env.DB.prepare("SELECT metadata FROM audit_events WHERE action = 'role.updated' ORDER BY rowid").all<{metadata:string}>();
+    expect(events.results.length).toBe(responses.filter(r=>r.status===200).length);
+    let previous="0x4003";
+    for(const event of events.results){const metadata=JSON.parse(event.metadata);expect(metadata.previousAllowBits).toBe(previous);previous=metadata.allowBits;}
+    expect(await env.DB.prepare("SELECT allow_bits FROM roles WHERE id='role-editor'").first()).toEqual({allow_bits:previous});
+  });
+
+  it("rejects writes by contributors, revoked admins, malformed and immutable role targets without audit",async()=>{
+    const operations=[{path:"/api/admin/roles",method:"POST",body:{key:"denied",name:"Denied",allowBits:"0x1"}},{path:"/api/admin/roles/role-editor",method:"PATCH",body:{allowBits:"0x1"}},{path:"/api/admin/roles/role-editor/members",method:"POST",body:{memberId:"role-contributor"}},{path:"/api/admin/roles/role-editor/members",method:"DELETE",body:{memberId:"role-contributor"}},{path:"/api/admin/roles/role-editor",method:"DELETE"}];
+    for(const operation of operations)expect((await api(operation.path,contributor,{method:operation.method,body:JSON.stringify(operation.body)})).status).toBe(403);
+    expect((await api("/api/admin/roles/role-admin",admin,{method:"PATCH",body:JSON.stringify({allowBits:"0x1"})})).status).toBe(409);
+    expect((await api("/api/admin/roles/role-editor",admin,{method:"PATCH",body:JSON.stringify({allowBits:"0x10000000000000000"})})).status).toBe(400);
+    expect((await api("/api/admin/roles/role-editor",admin,{method:"PATCH",body:JSON.stringify({allowBits:"0x1",isSystem:true})})).status).toBe(400);
+    expect((await api("/api/admin/roles/missing",admin,{method:"PATCH",body:JSON.stringify({allowBits:"0x1"})})).status).toBe(404);
+    await env.DB.prepare("UPDATE members SET status='disabled' WHERE id='role-admin'").run();
+    for(const operation of operations)expect((await api(operation.path,admin,{method:operation.method,body:JSON.stringify(operation.body)})).status).toBe(403);
+    expect((await api("/api/admin/roles",admin)).status).toBe(403);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM audit_events WHERE resource_type='role'").first()).toEqual({total:0});
+    expect(await env.DB.prepare("SELECT allow_bits FROM roles WHERE id='role-editor'").first()).toEqual({allow_bits:"0x4003"});
+  });
+
 });
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

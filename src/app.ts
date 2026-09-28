@@ -475,7 +475,7 @@ async function dispatchApiRequest(
   if (discussions) return discussions;
   const admin = await routeAdminApi(request, url, context, principal, services);
   if (admin) return admin;
-  const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles, audit: services.audit });
+  const adminRoles = await routeAdminRolesApi(request, url, context, principal, { roles: services.roles });
   if (adminRoles) return adminRoles;
   const adminMenus = await routeAdminMenusApi(request, url, context, principal, { menus: services.menus, audit: services.audit });
   if (adminMenus) return adminMenus;

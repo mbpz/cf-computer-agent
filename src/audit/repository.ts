@@ -25,6 +25,16 @@ export class AuditRepository {
       .bind(audit.id, JSON.stringify(audit.metadata), audit.createdAt, requireSubmissionId);
   }
 
+  // Must immediately follow the audited single-row mutation in the same D1 batch.
+  // A losing conditional write must not produce a success event.
+  prepareChangedRowAudit(input: CreateAuditEvent): D1PreparedStatement {
+    const audit = assertAuditEventInput(input);
+    return this.db.prepare(
+      `INSERT INTO audit_events (id, actor_kind, actor_id, action, resource_type, resource_id, metadata, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1`,
+    ).bind(audit.id, audit.actorKind, audit.actorId, audit.action, audit.resourceType, audit.resourceId, JSON.stringify(audit.metadata), audit.createdAt);
+  }
+
   prepareDraftAudit(input: CreateAuditEvent, submissionId: string): D1PreparedStatement {
     const audit = assertAuditEventInput(input);
     if (audit.action !== "submission.draft_saved" || audit.resourceType !== "submission" || audit.resourceId !== submissionId) {
