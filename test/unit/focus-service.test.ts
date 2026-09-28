@@ -13,8 +13,7 @@ describe("FocusService", () => {
       update: async (_member: string, id: string, input: any) => { const row = rows.get(id); if (!row) return null; const next = { ...row, ...input, updatedAt: new Date(input.updatedAt).toISOString() }; rows.set(id, next); return next; },
     } as never;
     const tasks = { findOwned: async (member: string, id: string) => member === "member-a" && id === "task-a" ? { id, title: "Write" } : null } as never;
-    const calendar = { create: async (_member: string, input: any) => ({ created: true, event: { id: "event-1", ...input } }) } as never;
-    const service = new FocusService(repo, { tasks, calendar, now: () => now, id: () => "focus-1" });
+    const service = new FocusService(repo, { tasks, now: () => now, id: () => "focus-1" });
     const first = await service.start("member-a", { taskId: "task-a", clientKey: "capture-1" });
     const replay = await service.start("member-a", { taskId: "task-a", clientKey: "capture-1" });
     expect(first.created).toBe(true);

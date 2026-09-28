@@ -106,7 +106,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-projects": {"source":"manifest:0@17cb110cdd89","dimension":"journey","slug":"project-relationship-and-summary-recovery","symptom":"项目缺少数字分页、关联编辑、独立摘要恢复和过期响应保护。","owner":"R4-015"},
   "workbench-calendar": {"source":"manifest:0@40587965b020","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历范围分页、稳定创建、版本条件取消与只读恢复已有本地证据；编辑 UI、跨模块写入与真实身份原生旅程仍未闭环。","owner":"R4-016"},
   "workbench-today": {"source":"manifest:0@82df5d7acce3","dimension":"journey","slug":"bounded-summary-drilldown","symptom":"今日摘要已有有界计数说明、继续入口、重新授权详情、深层契约校验与整份失败只读恢复；完整跨日聚合及原生旅程证明仍待完成。","owner":"R4-017"},
-  "workbench-focus": {"source":"manifest:0@60e2e3b10250","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注启动与转换的成员隔离标签页意图、完整原始载荷冲突与回执匹配、精确会话对账和原版本显式重试已有本地证据；日历一致性、关标签页恢复及原生验收仍待完成。","owner":"R4-018"},
+  "workbench-focus": {"source":"manifest:0@db3451dbe134","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注成员隔离意图、完整载荷对账、原版本重试及新写入与日历的原子提交已有本地证据；历史半写入修复、关标签页恢复及原生验收仍待完成。","owner":"R4-018"},
   "workbench-review": {"source":"manifest:0@0b51f9f36a6a","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘周期标签可能领先旧内容，聚合未按周期完整过滤且缺少刷新、深层校验和双成员证明。","owner":"R4-019"},
   "workbench-home": { source: "manifest:0@edfe01e1ad3d", dimension: "api", slug: "authoritative-summary-and-recent-recovery", symptom: "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", owner: "R7-010" },
   "workbench-submit": { source: "manifest:0@edeb39c3614b", dimension: "evidence", slug: "signed-submission-acceptance", symptom: "本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。", owner: "R8-009" },

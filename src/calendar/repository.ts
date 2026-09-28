@@ -67,12 +67,16 @@ export class CalendarRepository implements CalendarRepositoryPort {
   }
 
   async update(memberId: string, id: string, input: { title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; expectedUpdatedAt: number; updatedAt: number }): Promise<CalendarEvent | null> {
-    return mapRow(await this.db.prepare(`UPDATE calendar_events SET title = ?, description = ?, starts_at = ?, ends_at = ?, timezone = ?, all_day = ?, task_id = ?, project_id = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? RETURNING ${columns}`)
-      .bind(input.title, input.description, input.startsAt, input.endsAt, input.timezone, input.allDay ? 1 : 0, input.taskId, input.projectId, input.updatedAt, memberId, id, input.expectedUpdatedAt).first<CalendarRow>());
+    return mapRow(await this.db.prepare(`UPDATE calendar_events SET title = ?, description = ?, starts_at = ?, ends_at = ?, timezone = ?, all_day = ?, task_id = ?, project_id = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?
+      AND NOT EXISTS (SELECT 1 FROM focus_sessions f WHERE f.member_id = calendar_events.member_id AND f.calendar_event_id = calendar_events.id AND f.task_id IS NOT ?)
+      RETURNING ${columns}`)
+      .bind(input.title, input.description, input.startsAt, input.endsAt, input.timezone, input.allDay ? 1 : 0, input.taskId, input.projectId, input.updatedAt, memberId, id, input.expectedUpdatedAt, input.taskId).first<CalendarRow>());
   }
 
   async updateStatus(memberId: string, id: string, status: CalendarEventStatus, updatedAt: number, expectedUpdatedAt: number): Promise<CalendarEvent | null> {
-    return mapRow(await this.db.prepare(`UPDATE calendar_events SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? RETURNING ${columns}`).bind(status, updatedAt, memberId, id, expectedUpdatedAt).first<CalendarRow>());
+    return mapRow(await this.db.prepare(`UPDATE calendar_events SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ?
+      AND NOT EXISTS (SELECT 1 FROM focus_sessions f WHERE f.member_id = calendar_events.member_id AND f.calendar_event_id = calendar_events.id)
+      RETURNING ${columns}`).bind(status, updatedAt, memberId, id, expectedUpdatedAt).first<CalendarRow>());
   }
 }
 

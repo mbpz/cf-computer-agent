@@ -1,6 +1,5 @@
 import { requirePlanningVersion, nextPlanningVersion } from "../planning-version";
 import { AppError } from "../http";
-import type { CalendarService } from "../calendar/service";
 import type { TasksRepositoryPort } from "../tasks/repository";
 import type { FocusRepositoryPort } from "./repository";
 import type { FocusSession, FocusStartInput, FocusStatus } from "./types";
@@ -9,7 +8,6 @@ export interface FocusServiceOptions {
   id?: () => string;
   now?: () => Date;
   tasks?: Pick<TasksRepositoryPort, "findOwned">;
-  calendar?: Pick<CalendarService, "create" | "setStatus">;
 }
 
 export class FocusService {
@@ -35,18 +33,7 @@ export class FocusService {
     if (open) throw new AppError("FOCUS_ALREADY_OPEN", "A focus session is already open", 409);
     if (this.options.tasks && !await this.options.tasks.findOwned(memberId, normalized.taskId)) throw new AppError("TASK_NOT_FOUND", "Task not found", 404);
     const now = this.now().getTime();
-    const calendar = this.options.calendar ? await this.options.calendar.create(memberId, {
-      id: `focus-event-${normalized.id}`,
-      clientKey: `focus:${normalized.clientKey}`,
-      kind: "focus",
-      title: normalized.title,
-      startsAt: now,
-      endsAt: now + normalized.durationMinutes * 60_000,
-      timezone: "UTC",
-      allDay: false,
-      taskId: normalized.taskId,
-    }) : null;
-    const created = await this.repository.insert({ id: normalized.id, memberId, taskId: normalized.taskId, calendarEventId: calendar?.event.id ?? null, clientKey: normalized.clientKey, startTitle: normalized.title, durationMinutes: normalized.durationMinutes, status: "active", startedAt: now, elapsedMs: 0, createdAt: now, updatedAt: now });
+    const created = await this.repository.insert({ id: normalized.id, memberId, taskId: normalized.taskId, calendarEventId: crypto.randomUUID(), clientKey: normalized.clientKey, startTitle: normalized.title, durationMinutes: normalized.durationMinutes, status: "active", startedAt: now, elapsedMs: 0, createdAt: now, updatedAt: now });
     const session = await this.repository.findOwned(memberId, normalized.id) || (!created ? await this.repository.findByClientKey(memberId, normalized.clientKey) : null);
     if (!session || session.startTitle !== normalized.title || session.durationMinutes !== normalized.durationMinutes || session.clientKey !== normalized.clientKey || session.taskId !== normalized.taskId || (input.id !== undefined && session.id !== normalized.id)) throw new AppError("FOCUS_CONFLICT", "Focus start could not claim this identity", 409);
     return { session, created };
@@ -82,9 +69,7 @@ export class FocusService {
     if (session.status === "completed" || session.status === "abandoned") return session;
     const now = this.now().getTime();
     const elapsed = session.status === "active" ? session.elapsedMs + Math.max(0, now - Date.parse(session.startedAt)) : session.elapsedMs;
-    const result = await this.transition(memberId, session, status, session.startedAt ? Date.parse(session.startedAt) : now, session.pausedAt ? Date.parse(session.pausedAt) : null, now, elapsed);
-    if (result.calendarEventId && this.options.calendar) await this.options.calendar.setStatus(memberId, result.calendarEventId, status === "completed" ? "completed" : "canceled");
-    return result;
+    return this.transition(memberId, session, status, session.startedAt ? Date.parse(session.startedAt) : now, session.pausedAt ? Date.parse(session.pausedAt) : null, now, elapsed);
   }
 
   private async transition(memberId: string, session: FocusSession, status: FocusStatus, startedAt: number, pausedAt: number | null, endedAt: number | null, elapsedMs: number): Promise<FocusSession> {

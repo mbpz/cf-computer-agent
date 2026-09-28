@@ -28,6 +28,99 @@ describe("focus workbench route", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it("rolls back a calendar block when focus insertion fails", async () => {
+    await env.DB.exec("CREATE TRIGGER fail_focus_insert BEFORE INSERT ON focus_sessions BEGIN SELECT RAISE(ABORT, 'injected focus failure'); END");
+    const response = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "atomic-start", clientKey: "atomic-start", taskId: "focus-task-a"})});
+    expect(response.status).toBe(500);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions").first("count")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(0);
+  });
+
+  it.each(["complete", "abandon"])("rolls back focus %s when calendar status persistence fails", async action => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "atomic-end", clientKey: "atomic-end", taskId: "focus-task-a"})});
+    const before = await (await api("/api/focus/atomic-end", sessionA)).json();
+    await env.DB.exec("CREATE TRIGGER fail_calendar_update BEFORE UPDATE ON calendar_events BEGIN SELECT RAISE(ABORT, 'injected calendar failure'); END");
+    expect((await transition(`/api/focus/atomic-end/${action}`, sessionA)).status).toBe(500);
+    expect(await (await api("/api/focus/atomic-end", sessionA)).json()).toEqual(before);
+    expect(await env.DB.prepare("SELECT status FROM calendar_events WHERE member_id = 'focus-a'").first("status")).toBe("scheduled");
+    await env.DB.exec("DROP TRIGGER fail_calendar_update");
+    expect((await transition(`/api/focus/atomic-end/${action}`, sessionA)).status).toBe(200);
+    expect(await env.DB.prepare("SELECT status FROM calendar_events WHERE member_id = 'focus-a'").first("status")).toBe(action === "complete" ? "completed" : "canceled");
+  });
+
+  it("rolls back focus when calendar insertion fails, then permits the exact retry", async () => {
+    const input = {id: "calendar-failure", clientKey: "calendar-failure", taskId: "focus-task-a"};
+    await env.DB.exec("CREATE TRIGGER fail_calendar_insert BEFORE INSERT ON calendar_events BEGIN SELECT RAISE(ABORT, 'injected calendar failure'); END");
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(500);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions").first("count")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(0);
+    await env.DB.exec("DROP TRIGGER fail_calendar_insert");
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(201);
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(200);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(1);
+  });
+
+  it("supports maximum-length start identities without exceeding calendar identity limits", async () => {
+    const response = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "x".repeat(128), clientKey: "y".repeat(128), taskId: "focus-task-a"})});
+    expect(response.status).toBe(201);
+    const {session} = await response.json() as {session: {calendarEventId: string}};
+    expect(session.calendarEventId.length).toBeLessThanOrEqual(128);
+    const calendar = await api(`/api/calendar/events/${session.calendarEventId}`, sessionA);
+    expect(calendar.status).toBe(200);
+  });
+
+  it.each(["missing", "foreign", "different-task"])("rejects terminal writes with a %s calendar link without changing either resource", async corruption => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "broken-link", clientKey: "broken-link", taskId: "focus-task-a"})});
+    if (corruption === "missing") await env.DB.exec("UPDATE focus_sessions SET calendar_event_id = 'missing'");
+    if (corruption === "foreign") await env.DB.exec("UPDATE calendar_events SET member_id = 'focus-b', task_id = 'focus-task-b'");
+    if (corruption === "different-task") await env.DB.exec("UPDATE calendar_events SET task_id = NULL");
+    const before = await (await api("/api/focus/broken-link", sessionA)).json();
+    const events = (await env.DB.prepare("SELECT * FROM calendar_events").all()).results;
+    expect((await transition("/api/focus/broken-link/complete", sessionA)).status).toBe(409);
+    expect(await (await api("/api/focus/broken-link", sessionA)).json()).toEqual(before);
+    expect((await env.DB.prepare("SELECT * FROM calendar_events").all()).results).toEqual(events);
+  });
+
+  it("prevents calendar-side cancellation and task detachment of a managed focus block", async () => {
+    const start = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "managed", clientKey: "managed", taskId: "focus-task-a"})});
+    const {session} = await start.json() as {session: {calendarEventId: string}};
+    const path = `/api/calendar/events/${session.calendarEventId}`;
+    const before = await (await api(path, sessionA)).json() as {updatedAt: string};
+    expect((await api(path, sessionA, {method: "DELETE", body: JSON.stringify({expectedUpdatedAt: before.updatedAt})})).status).toBe(409);
+    expect((await api(path, sessionA, {method: "PATCH", body: JSON.stringify({taskId: null, expectedUpdatedAt: before.updatedAt})})).status).toBe(409);
+    expect(await (await api(path, sessionA)).json()).toEqual(before);
+    expect((await api(path, sessionB, {method: "DELETE", body: JSON.stringify({expectedUpdatedAt: before.updatedAt})})).status).toBe(404);
+    expect((await api(path, sessionA, {method: "PATCH", body: JSON.stringify({title: "Edited independently", expectedUpdatedAt: before.updatedAt})})).status).toBe(200);
+    expect((await transition("/api/focus/managed/complete", sessionA)).status).toBe(200);
+    expect(await (await api(path, sessionA)).json()).toMatchObject({title: "Edited independently", status: "completed", taskId: "focus-task-a"});
+  });
+
+  it("does not create another calendar block when the exact insert loses to a replay", async () => {
+    const repository = new FocusRepository(env.DB);
+    const insert = repository.insert.bind(repository);
+    repository.insert = async input => {
+      await insert(input);
+      return insert({...input, calendarEventId: "unused-loser-calendar"});
+    };
+    const result = await new FocusService(repository, {now: () => NOW}).start("focus-a", {id: "same-race", clientKey: "same-race", taskId: "focus-task-a"});
+    expect(result.created).toBe(false);
+    expect(result.session.calendarEventId).not.toBe("unused-loser-calendar");
+    expect((await env.DB.prepare("SELECT id FROM calendar_events").all()).results).toEqual([{id: result.session.calendarEventId}]);
+  });
+
+  it.each(["complete", "abandon"])("keeps calendar revisions monotonic for %s and does not rewrite on terminal replay", async action => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "future-calendar", clientKey: "future-calendar", taskId: "focus-task-a"})});
+    const future = NOW.getTime() + 60_000;
+    await env.DB.prepare("UPDATE calendar_events SET updated_at = ?").bind(future).run();
+    expect((await transition(`/api/focus/future-calendar/${action}`, sessionA)).status).toBe(200);
+    const calendar = await env.DB.prepare("SELECT * FROM calendar_events").first();
+    expect(calendar).toMatchObject({updated_at: future + 1, status: action === "complete" ? "completed" : "canceled"});
+    expect((await transition(`/api/focus/future-calendar/${action}`, sessionA)).status).toBe(200);
+    expect(await env.DB.prepare("SELECT * FROM calendar_events").first()).toEqual(calendar);
+    const path = `/api/calendar/events/${calendar!.id}`;
+    expect((await api(path, sessionA, {method: "DELETE", body: JSON.stringify({expectedUpdatedAt: new Date(future + 1).toISOString()})})).status).toBe(409);
+  });
+
   it.each([{title: "Changed title"}, {durationMinutes: 30}])("rejects changed start payload on key replay %j without changing the calendar", async patch => {
     const input = {id: "payload", clientKey: "payload", taskId: "focus-task-a", title: "Original", durationMinutes: 25};
     expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(201);
@@ -95,6 +188,7 @@ describe("focus workbench route", () => {
     await expect(service.start("focus-a", {id: "loser", clientKey: "loser-key", taskId: "focus-task-a"})).rejects.toMatchObject({status: 409});
     expect(await repository.findOwned("focus-a", "loser")).toBeNull();
     expect(await repository.findOpen("focus-a")).toMatchObject({id: "winner"});
+    expect((await env.DB.prepare("SELECT client_key FROM calendar_events WHERE member_id = 'focus-a'").all()).results).toEqual([{client_key: "focus:winner-key"}]);
   });
 
   it("reads an owned terminal receipt by ID without exposing another member", async () => {
@@ -160,10 +254,9 @@ describe("focus workbench route", () => {
       await new FocusService(repository, {now: () => NOW}).abandon("focus-a", "terminal", (await repository.findOwned("focus-a", "terminal"))!.updatedAt);
       return originalUpdate(...args);
     };
-    const calendar = {setStatus: vi.fn()} as any;
-    await expect(new FocusService(repository, {now: () => NOW, calendar}).complete("focus-a", "terminal", (await repository.findOwned("focus-a", "terminal"))!.updatedAt)).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
+    await expect(new FocusService(repository, {now: () => NOW}).complete("focus-a", "terminal", (await repository.findOwned("focus-a", "terminal"))!.updatedAt)).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
     expect((await repository.findOwned("focus-a", "terminal"))?.status).toBe("abandoned");
-    expect(calendar.setStatus).not.toHaveBeenCalled();
+    expect(await env.DB.prepare("SELECT status FROM calendar_events WHERE member_id = ?").bind("focus-a").first()).toEqual({status: "canceled"});
   });
 
   it("restores elapsed time through pause, resume, repeat and terminal current reads", async () => {

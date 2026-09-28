@@ -273,7 +273,7 @@ function createRequestServices(
   const projectRecords = new ProjectsRepository(env.DB);
   const calendarRecords = new CalendarRepository(env.DB);
   const calendar = new CalendarService(calendarRecords, { tasks: taskRecords, projects: projectRecords });
-  const focus = new FocusService(new FocusRepository(env.DB), { tasks: taskRecords, calendar });
+  const focus = new FocusService(new FocusRepository(env.DB), { tasks: taskRecords });
   const workbenchReview = new WorkbenchReviewService(new WorkbenchReviewRepository(env.DB), {
     tasks: new TasksService(taskRecords, { audit }),
     inbox: new InboxService(inboxRecords),

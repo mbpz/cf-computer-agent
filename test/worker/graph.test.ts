@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
@@ -19,6 +19,7 @@ describe("private work graph route", () => {
   beforeEach(async () => {
     await reset();
     await applyD1Migrations(env.DB, MIGRATIONS);
+    vi.useFakeTimers({ now: NOW });
     await env.DB.prepare(
       "INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES (?, ?, ?, 'contributor', 'active', ?, ?), (?, ?, ?, 'contributor', 'active', ?, ?)",
     ).bind(
@@ -44,6 +45,8 @@ describe("private work graph route", () => {
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
     app = createApp();
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it("requires authentication and returns request-correlated JSON errors", async () => {
     const response = await api(app, "/api/graph?scope=project&rootId=project-a", "");
