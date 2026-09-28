@@ -81,8 +81,13 @@ export class FocusService {
   }
 
   private async transition(memberId: string, session: FocusSession, status: FocusStatus, startedAt: number, pausedAt: number | null, endedAt: number | null, elapsedMs: number): Promise<FocusSession> {
-    const result = await this.repository.update(memberId, session.id, { status, startedAt, pausedAt, endedAt, elapsedMs, updatedAt: this.now().getTime() });
-    if (!result) throw new AppError("FOCUS_NOT_FOUND", "Focus session not found", 404);
+    // updatedAt is also the optimistic revision; advance even within one clock tick.
+    const expectedUpdatedAt = Date.parse(session.updatedAt);
+    const result = await this.repository.update(memberId, session.id, { status, startedAt, pausedAt, endedAt, elapsedMs, expectedUpdatedAt, updatedAt: Math.max(this.now().getTime(), expectedUpdatedAt + 1) });
+    if (!result) {
+      await this.get(memberId, session.id);
+      throw new AppError("FOCUS_CONFLICT", "Focus session changed; reload before acting", 409);
+    }
     return result;
   }
 

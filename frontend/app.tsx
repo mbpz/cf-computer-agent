@@ -66,7 +66,7 @@ import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goa
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
-import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
+import { type FocusSession, loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
 import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
@@ -1705,6 +1705,7 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
   const [retryVersion, setRetryVersion] = useState(0);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [actionNotice, setActionNotice] = useState<string>();
   const [selectionVersion, setSelectionVersion] = useState(0);
   const epochRef = useRef(0);
   const busyRef = useRef(false);
@@ -1713,7 +1714,7 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     epochRef.current += 1;
     readRef.current?.abort();
     busyRef.current = false;
-    setPending(false); setSelectionVersion(value => value + 1); setActionError(undefined);
+    setPending(false); setSelectionVersion(value => value + 1); setActionError(undefined); setActionNotice(undefined);
     setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
   }, [locale]);
   useEffect(() => {
@@ -1721,7 +1722,7 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     const controller = new AbortController();
     readRef.current = controller;
     busyRef.current = false;
-    setPending(false); setActionError(undefined); setSelectionVersion(value => value + 1);
+    setPending(false); setActionError(undefined); setActionNotice(undefined); setSelectionVersion(value => value + 1);
     setState({kind: "loading"});
     void loadCurrentFocus(fetch, controller.signal).then(session => {
       if (epoch === epochRef.current) setState({kind: "ready", session});
@@ -1730,22 +1731,28 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
     });
     return () => {epochRef.current += 1; controller.abort(); readRef.current?.abort();};
   }, [locale, retryVersion]);
-  const mutate = async (operation: (epoch: number) => Promise<unknown>) => {
+  const mutate = async (operation: (epoch: number) => Promise<FocusSession | undefined>) => {
     if (busyRef.current || state.kind !== "ready") return;
     busyRef.current = true;
     const epoch = epochRef.current;
-    setPending(true); setActionError(undefined);
+    setPending(true); setActionError(undefined); setActionNotice(undefined);
     try {
-      await operation(epoch);
+      const receipt = await operation(epoch);
       if (epoch !== epochRef.current) return;
       const controller = new AbortController();
       readRef.current?.abort(); readRef.current = controller;
       const session = await loadCurrentFocus(fetch, controller.signal);
-      if (epoch === epochRef.current) setState({kind: "ready", session});
+      if (epoch === epochRef.current) {
+        setState({kind: "ready", session});
+        if (receipt) setActionNotice(frontendText(locale, `FOCUS_STATUS_${receipt.status.toUpperCase()}`));
+      }
     } catch (error: unknown) {
       if (epoch !== epochRef.current) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
-      else if (!isAbort(error)) {
+      else if (error instanceof ApiRequestError && error.status === 409) {
+        setSelectionVersion(value => value + 1);
+        setState({kind: "error", message: frontendText(locale, "FOCUS_CONFLICT")});
+      } else if (!isAbort(error)) {
         setSelectionVersion(value => value + 1);
         setActionError(frontendText(locale, error instanceof ApiRequestError && error.status === 404 ? "FOCUS_TASK_UNAVAILABLE" : "FOCUS_ACTION_FAILED"));
       }
@@ -1753,7 +1760,7 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch === epochRef.current) {busyRef.current = false; setPending(false);}
     }
   };
-  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(async epoch => {
+  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(async epoch => {
     const controller = new AbortController();
     readRef.current?.abort(); readRef.current = controller;
     await loadTaskDetail(input.taskId, fetch, controller.signal);

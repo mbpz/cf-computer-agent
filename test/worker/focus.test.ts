@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { SessionService } from "../../src/identity/session";
 import { MembersRepository } from "../../src/members/repository";
+import { FocusRepository } from "../../src/focus/repository";
+import { FocusService } from "../../src/focus/service";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const NOW = new Date("2026-09-09T10:00:00.000Z");
@@ -44,6 +46,51 @@ describe("focus workbench route", () => {
     expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({clientKey: "removed", taskId: "focus-task-a"})})).status).toBe(404);
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM focus_sessions").first("count")).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(0);
+  });
+
+  it("rejects a stale transition even when pause and resume share a wall-clock millisecond", async () => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "race", clientKey: "race", taskId: "focus-task-a"})});
+    const repository = new FocusRepository(env.DB);
+    const before = (await repository.findOwned("focus-a", "race"))!;
+    const service = new FocusService(repository, {now: () => NOW});
+    const paused = await service.pause("focus-a", "race");
+    const resumed = await service.resume("focus-a", "race");
+    expect(Date.parse(paused.updatedAt)).toBe(NOW.getTime() + 1);
+    expect(Date.parse(resumed.updatedAt)).toBe(NOW.getTime() + 2);
+    const stale = await repository.update("focus-a", "race", {status: "paused", startedAt: NOW.getTime(), pausedAt: NOW.getTime(), endedAt: null, elapsedMs: 123, updatedAt: NOW.getTime() + 3, expectedUpdatedAt: Date.parse(before.updatedAt)});
+    expect(stale).toBeNull();
+    expect(await repository.findOwned("focus-a", "race")).toMatchObject({status: "active", elapsedMs: 0, updatedAt: resumed.updatedAt});
+  });
+
+  it("losing a terminal-state race returns conflict and cannot overwrite the winner or its calendar", async () => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "terminal", clientKey: "terminal", taskId: "focus-task-a"})});
+    const repository = new FocusRepository(env.DB);
+    const originalUpdate = repository.update.bind(repository);
+    // Interleave another real service transition after this service's read, before its write.
+    repository.update = async (...args) => {
+      repository.update = originalUpdate;
+      await new FocusService(repository, {now: () => NOW}).abandon("focus-a", "terminal");
+      return originalUpdate(...args);
+    };
+    const calendar = {setStatus: vi.fn()} as any;
+    await expect(new FocusService(repository, {now: () => NOW, calendar}).complete("focus-a", "terminal")).rejects.toMatchObject({status: 409, code: "FOCUS_CONFLICT"});
+    expect((await repository.findOwned("focus-a", "terminal"))?.status).toBe("abandoned");
+    expect(calendar.setStatus).not.toHaveBeenCalled();
+  });
+
+  it("restores elapsed time through pause, resume, repeat and terminal current reads", async () => {
+    await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "timer", clientKey: "timer", taskId: "focus-task-a"})});
+    vi.setSystemTime(new Date(NOW.getTime() + 60_000));
+    expect(await (await api("/api/focus/timer/pause", sessionA, {method: "POST"})).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
+    vi.setSystemTime(new Date(NOW.getTime() + 300_000));
+    expect(await (await api("/api/focus/timer/pause", sessionA, {method: "POST"})).json()).toMatchObject({status: "paused", elapsedMs: 60_000});
+    expect(await (await api("/api/focus/current", sessionA)).json()).toMatchObject({session: {status: "paused", elapsedMs: 60_000}});
+    await api("/api/focus/timer/resume", sessionA, {method: "POST"});
+    vi.setSystemTime(new Date(NOW.getTime() + 330_000));
+    expect(await (await api("/api/focus/timer/complete", sessionA, {method: "POST"})).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
+    expect(await (await api("/api/focus/current", sessionA)).json()).toEqual({session: null});
+    expect(await (await api("/api/focus/timer/abandon", sessionA, {method: "POST"})).json()).toMatchObject({status: "completed", elapsedMs: 90_000});
+    expect((await api("/api/focus/timer/pause", sessionB, {method: "POST"})).status).toBe(404);
   });
 
   it("starts idempotently, restores current state, transitions, and rejects cross-member task", async () => {

@@ -5,7 +5,7 @@ export interface FocusRepositoryPort {
   findOwned(memberId: string, id: string): Promise<FocusSession | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<FocusSession | null>;
   findOpen(memberId: string): Promise<FocusSession | null>;
-  update(memberId: string, id: string, input: { status: FocusStatus; startedAt: number; pausedAt: number | null; endedAt: number | null; elapsedMs: number; updatedAt: number }): Promise<FocusSession | null>;
+  update(memberId: string, id: string, input: { expectedUpdatedAt: number; status: FocusStatus; startedAt: number; pausedAt: number | null; endedAt: number | null; elapsedMs: number; updatedAt: number }): Promise<FocusSession | null>;
 }
 
 type FocusRow = { id: string; member_id: string; task_id: string; calendar_event_id: string | null; client_key: string; status: FocusStatus; started_at: number; paused_at: number | null; ended_at: number | null; elapsed_ms: number; created_at: number; updated_at: number };
@@ -32,10 +32,9 @@ export class FocusRepository implements FocusRepositoryPort {
     return mapRow(await this.db.prepare(`SELECT ${columns} FROM focus_sessions WHERE member_id = ? AND status IN ('active', 'paused') ORDER BY updated_at DESC, id DESC LIMIT 1`).bind(memberId).first<FocusRow>());
   }
 
-  async update(memberId: string, id: string, input: { status: FocusStatus; startedAt: number; pausedAt: number | null; endedAt: number | null; elapsedMs: number; updatedAt: number }): Promise<FocusSession | null> {
-    await this.db.prepare("UPDATE focus_sessions SET status = ?, started_at = ?, paused_at = ?, ended_at = ?, elapsed_ms = ?, updated_at = ? WHERE member_id = ? AND id = ?")
-      .bind(input.status, input.startedAt, input.pausedAt, input.endedAt, input.elapsedMs, input.updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async update(memberId: string, id: string, input: { expectedUpdatedAt: number; status: FocusStatus; startedAt: number; pausedAt: number | null; endedAt: number | null; elapsedMs: number; updatedAt: number }): Promise<FocusSession | null> {
+    return mapRow(await this.db.prepare(`UPDATE focus_sessions SET status = ?, started_at = ?, paused_at = ?, ended_at = ?, elapsed_ms = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? RETURNING ${columns}`)
+      .bind(input.status, input.startedAt, input.pausedAt, input.endedAt, input.elapsedMs, input.updatedAt, memberId, id, input.expectedUpdatedAt).first<FocusRow>());
   }
 }
 

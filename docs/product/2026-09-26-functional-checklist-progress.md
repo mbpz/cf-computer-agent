@@ -1056,3 +1056,26 @@ rtk proxy npm run audit:workbench-domain
 rtk proxy npm run audit:functional-checklist
 rtk git diff --check
 ```
+
+
+## 2026-09-28：C04 / EXT-FOC-03 转换与计时局部切片（本地，父项未关闭）
+
+- 服务端 `updated_at` 作为单调读取版本，条件 UPDATE RETURNING 在一条语句内核对并返回自己的写入；同一毫秒的暂停/恢复不会复用旧版本。失去竞争返回 409，不覆盖胜者终态，也不继续写日历。此处是服务端读取快照 CAS，**不是客户端所见版本约束**。
+- 页面暂停/恢复/完成/放弃在 current 回读成功后显示回执；409 清除旧操作界面，用户只能显式 GET 恢复，不自动重发 POST。转换回执必须匹配 session ID。
+- 校验身份、状态、规范日期及非负安全整数耗时。计时展示采用服务端累计耗时 + 当前活动段时间差，每秒重新求值而不是累加 tick；暂停不计等待时间，重入读取恢复，不发起写入。
+- TDD：真实本地 D1 同毫秒版本/终态竞争先 2 failed、4 passed；计时/契约先 12 failed、22 passed；终态反馈及错目标回执先失败。冲突测试首版错误使用了不存在的英文按钮文案，修正为实际文案后临时撤去冲突分支再次确认 RED，再恢复实现。最后补数组状态拒绝测试，先 RED 再 GREEN。
+- 新增 22 项测试（Worker/D1 3，数据契约 14，App/happy-dom 5）。最终六文件联合 **222/222**；合同回归 **91/91**。本地构建/类型检查/国际化及清单审计见下列命令；typecheck 不覆盖全部前端 TSX，UI 构建不是完整 TSX 类型检查；保留既有 chunk 大小警告，happy-dom 不等于原生验收。
+- **EXT-FOC-03 仍未勾选**：稳定启动意图及跨刷新未知写入恢复、客户端预期版本、启动/结束与日历的跨资源一致性仍缺失。日历失败后的恢复尚未修复；当前条件写不能替代该证明。当前会话恢复覆盖 GET/路由重入，不宣称未知写入跨刷新恢复。
+- 父清单仍 **29 范围内 / 3 关闭 / 26 未关闭**。下一步保持 EXT-FOC-03 稳定启动/未知写入恢复；本地推进允许，无新增外部阻塞。
+- 仅本地代码、测试和文档；未 push/merge/部署/远程迁移/生产写入/备份/AI 调用/手工读取上传 Secret。无需新增数据库迁移。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-focus-task-selection.test.tsx test/unit/frontend-focus-data.test.ts test/worker/focus.test.ts test/unit/focus-service.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```

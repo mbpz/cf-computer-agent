@@ -14,6 +14,7 @@ describe("Focus owned task selection through App", () => {
   let delayed: (() => Promise<Response>) | undefined;
   let delayedCurrent: (() => Promise<Response>) | undefined, delayedDetail: (() => Promise<Response>) | undefined, delayedPost: (() => Promise<Response>) | undefined;
   let current: any = null;
+  let transitionStatus = 0;
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
@@ -35,6 +36,13 @@ describe("Focus owned task selection through App", () => {
         if (detailStatus) return apiError(detailStatus, "TASK_NOT_FOUND", "Unavailable");
         return Response.json({task: task(wrongTarget ? 99 : Number(url.pathname.split("-").pop())), tags: [], links: []});
       }
+      if (/^\/api\/focus\/[^/]+\/(pause|resume|complete|abandon)$/.test(url.pathname)) {
+        if (transitionStatus) return apiError(transitionStatus, "FOCUS_CONFLICT");
+        const action = url.pathname.split("/").pop()!;
+        const status = {pause: "paused", resume: "active", complete: "completed", abandon: "abandoned"}[action];
+        const result = {...current, status}; current = status === "completed" || status === "abandoned" ? null : result;
+        return Response.json(result);
+      }
       if (url.pathname === "/api/focus" && method === "POST") {
         if (delayedPost) return delayedPost();
         if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND", "Unavailable");
@@ -47,7 +55,7 @@ describe("Focus owned task selection through App", () => {
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
-  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals();});
+  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
   it("replaces pasted IDs with owned selection and reauthorizes the exact task before starting", async () => {
     await mount(); expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull(); expect(button("Start focus").disabled).toBe(true);
     await select(); expect(button("Start focus").disabled).toBe(false); await click(button("Start focus")); await waitForApp(() => main().textContent!.includes("Current session"));
@@ -126,6 +134,47 @@ describe("Focus owned task selection through App", () => {
     await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({session: current})));
     expect(main().textContent).not.toContain("Current session");
+  });
+  it.each([["Complete", "Completed"], ["Abandon", "Abandoned"]])("shows pause/resume and %s receipt only after current readback", async (action, status) => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    await click(button("Pause")); await waitForApp(() => !!button("Resume"));
+    expect(main().textContent).toContain("Paused");
+    await click(button("Resume")); await waitForApp(() => !!button("Pause"));
+    await click(button(action)); await waitForApp(() => !!button("Start focus"));
+    expect(main().querySelector('[role="status"]')?.textContent).toContain(status);
+    const actions = calls.filter(c => /^\/api\/focus\/[^/]+\//.test(c.path));
+    expect(actions.map(c => c.path.split("/").pop())).toEqual(["pause", "resume", action.toLowerCase()]);
+    expect(calls.filter(c => c.path === "/api/focus/current")).toHaveLength(5);
+  });
+  it("requires GET recovery after a transition conflict and never automatically retries the write", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    transitionStatus = 409;
+    await click(button("Pause")); await waitForApp(() => !!button("Try focus again"));
+    expect(main().textContent).toContain("Focus changed. Reload its state before acting again.");
+    expect(button("Pause")).toBeUndefined();
+    current = {...current, status: "paused", pausedAt: stamp};
+    await click(button("Try focus again")); await waitForApp(() => !!button("Resume"));
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+  });
+  it("renders restored active elapsed time from the clock rather than accumulating timer ticks", async () => {
+    const now = Date.parse(stamp) + 10_000;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    current = {id: "restored", clientKey: "restored", taskId: "task-1", calendarEventId: null, status: "active", startedAt: stamp, pausedAt: null, endedAt: null, elapsedMs: 5_000};
+    await mount(false);
+    await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:00:15");
+    clock.mockReturnValue(now + 60_000);
+    await act(async () => {await new Promise(done => setTimeout(done, 1100));});
+    await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:01:15");
+    await navigate("/settings"); await navigate("/focus");
+    await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:01:15");
+    expect(calls.filter(c => c.method === "POST" && c.path.startsWith("/api/focus"))).toHaveLength(0);
+  });
+  it("restores paused elapsed without counting paused wall time", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(stamp) + 600_000);
+    current = {id: "paused", clientKey: "paused", taskId: "task-1", calendarEventId: null, status: "paused", startedAt: stamp, pausedAt: stamp, endedAt: null, elapsedMs: 65_000};
+    await mount(false);
+    await waitForApp(() => main().querySelector('[data-focus-elapsed]')?.textContent === "00:01:05");
+    expect(button("Resume")).toBeDefined(); expect(button("Pause")).toBeUndefined();
   });
   it("aborts a closed picker and ignores a late private list", async () => {
     let resolve!: (response: Response) => void; delayed = () => new Promise(done => {resolve = done;}); await mount(); await click(button("Choose task")); await waitForApp(() => !!resolve);

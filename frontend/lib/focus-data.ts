@@ -1,3 +1,4 @@
+import { canonicalInstant } from "./calendar-query";
 import { apiFetch, type Fetcher } from "./api";
 
 export type FocusStatus = "active" | "paused" | "completed" | "abandoned";
@@ -16,12 +17,16 @@ export async function startFocus(input: { taskId: string; title?: string; durati
 }
 
 export async function transitionFocus(id: string, action: "pause" | "resume" | "complete" | "abandon", requester: Fetcher = fetch): Promise<FocusSession> {
-  return normalizeSession(await apiFetch<unknown>(`/api/focus/${encodeURIComponent(id)}/${action}`, { requester, method: "POST" }));
+  const session = normalizeSession(await apiFetch<unknown>(`/api/focus/${encodeURIComponent(id)}/${action}`, { requester, method: "POST" }));
+  if (session.id !== id) throw new Error("FOCUS_RESPONSE_INVALID");
+  return session;
 }
 
 function normalizeSession(value: unknown): FocusSession {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("FOCUS_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || typeof record.taskId !== "string" || typeof record.clientKey !== "string" || !["active", "paused", "completed", "abandoned"].includes(String(record.status)) || typeof record.startedAt !== "string" || typeof record.elapsedMs !== "number") throw new Error("FOCUS_RESPONSE_INVALID");
+  if (!validId(record.id) || !validId(record.taskId) || !validId(record.clientKey) || typeof record.status !== "string" || !["active", "paused", "completed", "abandoned"].includes(record.status) || !canonicalInstant(record.startedAt) || typeof record.elapsedMs !== "number" || !Number.isSafeInteger(record.elapsedMs) || record.elapsedMs < 0 || (record.pausedAt != null && !canonicalInstant(record.pausedAt)) || (record.endedAt != null && !canonicalInstant(record.endedAt))) throw new Error("FOCUS_RESPONSE_INVALID");
   return { id: record.id, taskId: record.taskId, calendarEventId: typeof record.calendarEventId === "string" ? record.calendarEventId : null, clientKey: record.clientKey, status: record.status as FocusStatus, startedAt: record.startedAt, pausedAt: typeof record.pausedAt === "string" ? record.pausedAt : null, endedAt: typeof record.endedAt === "string" ? record.endedAt : null, elapsedMs: record.elapsedMs };
 }
+
+function validId(value: unknown): value is string { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value); }
