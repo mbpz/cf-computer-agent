@@ -99,6 +99,152 @@ describe("discussion routes", () => {
     expect(container.querySelector("[role='alert']")).toBeNull();
   });
 
+  it.each(["before", "after"])("preserves an uncertain attempt across a read failure occurring %s the send settles", async (settles) => {
+    let rejectSend!: (reason: Error) => void;
+    const uncertain = new Promise<Response>((_resolve, reject) => { rejectSend = reject; });
+    const sent: Array<{ body: string; clientKey: string; replyToMessageId?: string }> = [];
+    let failRead = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        const payload = JSON.parse(String(init.body)); sent.push(payload);
+        if (sent.length === 1) return uncertain;
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ id: "message-2", sequence: 2, body: payload.body, clientKey: payload.clientKey, replyToMessageId: payload.replyToMessageId }), created: false });
+      }
+      if (failRead) return Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 503 });
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Retry this reply");
+    await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
+    const submit = async () => act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await submit();
+    if (settles === "after") {
+      rejectSend(new Error("response lost"));
+      await waitFor(() => container.querySelector("[role='alert']") !== null);
+    }
+    failRead = true;
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    expect(container.querySelector("#discussion-composer")).toBeNull();
+    expect(container.textContent).not.toContain("Retry this reply");
+    failRead = false;
+    await act(async () => { container.querySelector("button")!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const recovered = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+    expect(recovered.value).toBe("Retry this reply");
+    expect(container.textContent).toContain("Replying to member-1");
+    expect(sent).toHaveLength(1); // GET recovery never replays the write.
+    if (settles === "before") {
+      expect(recovered.disabled).toBe(true);
+      await submit();
+      expect(sent).toHaveLength(1);
+      expect(recovered.disabled).toBe(true);
+      rejectSend(new Error("response lost"));
+      await waitFor(() => recovered.disabled === false);
+    }
+    await submit();
+    await waitFor(() => recovered.value === "");
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual(sent[0]);
+    expect(container.textContent).not.toContain("Replying to member-1");
+  });
+
+  it.each([401, 403, 404])("discards draft, reply and retry identity on a %s read denial", async (status) => {
+    let denied = false;
+    const keys: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { keys.push(JSON.parse(String(init.body)).clientKey); throw new Error("response lost"); }
+      if (denied) return Response.json({ error: { code: "DENIED", message: "Denied", retryable: false } }, { status });
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Secret draft");
+    await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => container.querySelector("[role='alert']") !== null);
+    denied = true;
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    expect(container.textContent).not.toContain("Secret draft");
+    denied = false;
+    await act(async () => { container.querySelector("button")!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+    expect(container.textContent).not.toContain("Replying to member-1");
+    expect(keys).toHaveLength(1);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Secret draft");
+    await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => keys.length === 2);
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
+  it.each([201, 401, 403, 404])("ignores a late %s send receipt after read revocation and explicit recovery", async (status) => {
+    let resolveSend!: (response: Response) => void;
+    const pendingSend = new Promise<Response>((resolve) => { resolveSend = resolve; });
+    let sent: { body: string; clientKey: string } | undefined;
+    let denied = false;
+    let reads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { sent = JSON.parse(String(init.body)); return pendingSend; }
+      reads += 1;
+      if (denied) return Response.json({ error: { code: "DENIED", message: "Denied", retryable: false } }, { status: 403 });
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Old attempt");
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    denied = true;
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
+    await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
+    denied = false;
+    await act(async () => { container.querySelector("button")!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const recovered = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+    expect(recovered.value).toBe("");
+    await changeReactTextarea(recovered, "New private draft");
+    const readsBeforeReceipt = reads;
+    await act(async () => {
+      resolveSend(status === 201
+        ? Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: sent!.body, clientKey: sent!.clientKey }), created: true }, { status })
+        : Response.json({ error: { code: "DENIED", message: "Denied", retryable: false } }, { status }));
+      for (let i = 0; i < 30; i += 1) await Promise.resolve();
+    });
+    expect(container.querySelector("#discussion-composer")).toBe(recovered);
+    expect(recovered.value).toBe("New private draft");
+    expect(recovered.disabled).toBe(false);
+    expect(container.querySelector("[data-page-state='error']")).toBeNull();
+    expect(reads).toBe(readsBeforeReceipt);
+  });
+
+  it("clears an acknowledged draft even when the subsequent readback fails", async () => {
+    let acknowledged = false;
+    let failRead = false;
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        writes += 1; acknowledged = true; failRead = true;
+        const payload = JSON.parse(String(init.body));
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload.clientKey }), created: true });
+      }
+      if (failRead) return Response.json({ error: { code: "UNAVAILABLE", message: "Unavailable", retryable: true } }, { status: 503 });
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Acknowledged");
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => acknowledged && container.querySelector("[data-page-state='error']") !== null);
+    failRead = false;
+    await act(async () => { container.querySelector("button")!.click(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+    expect(writes).toBe(1);
+  });
+
   it.each([401, 403, 404])("clears restricted thread content after a %s send response and cancels stale readback", async (status) => {
     let resolveRead!: (response: Response) => void;
     let readSignal: AbortSignal | undefined;

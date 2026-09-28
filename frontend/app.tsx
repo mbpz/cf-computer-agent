@@ -2125,11 +2125,18 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   const [state, setState] = useState<ThreadPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
+  // Ordinary read errors preserve an uncertain attempt; access denial remounts
+  // the entire draft owner and invalidates callbacks from the old access epoch.
+  const [draftEpoch, setDraftEpoch] = useState(0);
+  const accessEpochRef = useRef(0);
   const queryRef = useRef(query);
   queryRef.current = query;
   const activeRef = useRef(true);
   const currentThreadIdRef = useRef(threadId);
-  currentThreadIdRef.current = threadId;
+  if (currentThreadIdRef.current !== threadId) {
+    currentThreadIdRef.current = threadId;
+    accessEpochRef.current += 1;
+  }
   const controllerRef = useRef<ReturnType<typeof createDiscussionRequestController<DiscussionSearch, { thread: Awaited<ReturnType<typeof loadDiscussionThread>>; messages: Awaited<ReturnType<typeof loadDiscussionMessages>> }>> | null>(null);
 
   useEffect(() => {
@@ -2152,6 +2159,10 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
       setPending(false);
     }).catch((error: unknown) => {
       if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
+      if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+        accessEpochRef.current += 1;
+        setDraftEpoch((value) => value + 1);
+      }
       setState({ kind: "error" }); setPending(false);
     });
     return () => {
@@ -2173,24 +2184,27 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   };
   const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
     const sendingThreadId = threadId;
+    const sendingEpoch = accessEpochRef.current;
     try {
       await sendDiscussionMessage(input);
     } catch (error) {
-      if (activeRef.current && currentThreadIdRef.current === sendingThreadId
+      if (activeRef.current && currentThreadIdRef.current === sendingThreadId && accessEpochRef.current === sendingEpoch
         && error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
         // Revocation also invalidates concurrent reads; a late response must not
         // restore the private transcript or the composer after access is denied.
         controllerRef.current?.dispose(); controllerRef.current = null;
+        accessEpochRef.current += 1;
+        setDraftEpoch((value) => value + 1);
         setState({ kind: "error" }); setPending(false);
       }
       throw error;
     }
-    if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId) return;
+    if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId || accessEpochRef.current !== sendingEpoch) return;
     if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
     else setRetryVersion((value) => value + 1);
   };
   const visibleState: ThreadPageState = state.kind === "ready" && state.thread.id !== threadId ? { kind: "loading" } : state;
-  return <ThreadPage key={threadId} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
+  return <ThreadPage key={`${threadId}:${draftEpoch}`} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRefresh={() => setRetryVersion((value) => value + 1)}
     onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
