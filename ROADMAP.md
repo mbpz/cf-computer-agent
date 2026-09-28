@@ -4,6 +4,8 @@
 
 **合并状态（2026-09-23）：** 用户授权将恢复分支 `7f7d3c6` 合入本地 `main`（合并前 `426e313`）。main 历史清单为 **8/25 完成、17 项剩余**，恢复分支原口径为 4/25；两者不相加、不相互覆盖。当前先完成合并候选验证与提交，再回到 R09；旧 R08 回归不证明本次候选。恢复分支 R05.1/R05.2 已提交，独立 HTTP 协议等 R05.3–R05.5 仍未执行，不能因 main 既有管理员 API 而视为自动完成。未 push、未部署、未读取 secrets 或执行生产操作。
 
+2026-09-28 UTC 功能增量：D03 [知识版本/回收/导出恢复/研究产物专项对账](./docs/product/2026-09-28-knowledge-roadmap-reconciliation.md)已完成；原功能范围 **29 / 5 关闭 / 24 未关闭**，下一 D04。KB-011 依现有代码与新回归校正为 partial/partial，原 R3/R5/R6 未完成子项保留；本地 26 文件 361/361 不提升发布/验收。
+
 产品定位：面向 **5–20 名受邀成员**、运行在 **Cloudflare 免费层**、保留现有 **GitHub OAuth + D1 Session + HMAC Automation** 登录体系的私有 AI 知识操作系统。
 
 当前交付事实以 [交付状态总账](./docs/product/delivery-status-ledger.md) 为唯一权威来源；本 Roadmap 只安排可部署、可回滚的纵向用户旅程。历史计划和旧 gate 是执行档案，不能替代 current-main 的发布或验收证据。
@@ -40,7 +42,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-17 Personal Work Graph 后端合同闸门已本地完成：成员隔离、scope/root/depth/types/limit 解析、cursor 绑定、时间线投影、有界 loader 与 citation 授权均通过 focused unit/worker、TypeScript、smoke 和 delivery-status contract。`nextCursor` 延续字段与 malformed/cross-linked citation fixture 保留为 minor deferred；发布、生产与 signed browser acceptance 仍 pending，未执行远程迁移、部署或 push。
 
-总账成熟度：`atoms=95`; `implementation=done:75,partial:6,pending:14,n/a:0`; `verification=done:79,partial:1,pending:15,n/a:0`; `release=done:0,partial:28,pending:67,n/a:0`; `acceptance=done:0,partial:8,pending:87,n/a:0`
+总账成熟度：`atoms=95`; `implementation=done:75,partial:7,pending:13,n/a:0`; `verification=done:79,partial:2,pending:14,n/a:0`; `release=done:0,partial:28,pending:67,n/a:0`; `acceptance=done:0,partial:8,pending:87,n/a:0`
 
 **范围归属规则。** 每个非 legacy 总账原子恰好由一个 R 阶段的“范围”拥有；后续阶段只能在“前置依赖”和退出标准的 `consumed` 映射中消费更早阶段的原子，不重复拥有它们。`GATE-M0`、`GATE-M1`、`WS-001` 与 `WS-008` 是兼容历史 Roadmap/Checklist 的 legacy 映射，不纳入当前阶段。
 

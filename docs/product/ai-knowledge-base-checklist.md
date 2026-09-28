@@ -1,5 +1,7 @@
 # Memory Garden AI 知识库原子 Checklist
 
+
+2026-09-28 UTC 范围校正：旧 L/W 勾选只证明当时的限定本地/Worker 子能力，不等于完整产品入口或 current-schema 恢复。当前代码、React 入口、R3/R5/R6 owner 与剩余条件见 [D03 专项对账](./2026-09-28-knowledge-roadmap-reconciliation.md)；ART 后端、OPS 离线计划器与运维恢复执行器分别记账，不提升发布/验收。
 更新时间：2026-08-30
 
 权威规格：[AI 知识操作系统设计](../superpowers/specs/2026-08-21-ai-knowledge-system-design.md)
