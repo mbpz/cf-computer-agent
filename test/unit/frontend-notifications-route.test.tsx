@@ -61,6 +61,7 @@ describe("notification inbox route", () => {
   });
 
   it("posts one read and bounded visible unread IDs, then refreshes server totals", async () => {
+    browser.history.replaceState({}, "", "/notifications?page=2");
     const mutations: Array<{ path: string; body: string }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -92,7 +93,7 @@ describe("notification inbox route", () => {
       const read = new URL(path, "https://app.test").searchParams.get("read");
       const title = read === "true" ? (committed ? "Converged read page" : "Early read page") : "Unread page";
       pageTitles.push(title);
-      return Response.json({ items: [notification({ payload: { title } })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+      return Response.json({ items: [notification({ payload: { title }, readAt: read === "true" ? "2026-08-30T01:00:00.000Z" : null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
     });
     browser.history.replaceState({}, "", "/notifications");
     await renderRoute();
@@ -156,7 +157,7 @@ describe("notification inbox route", () => {
       const path = String(input);
       if (init?.method === "POST") {
         posts.push(path);
-        return Response.json(notification({ targetKind: authorized ? "submission" : null, targetId: authorized ? "submission-1" : null, eventType: "submission.rejected", payload: {} }));
+        return Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z", targetKind: authorized ? "submission" : null, targetId: authorized ? "submission-1" : null, eventType: "submission.rejected", payload: {} }));
       }
       return path.endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(path, "Initial");
     });
@@ -165,6 +166,26 @@ describe("notification inbox route", () => {
     expect(posts).toEqual(["/api/notifications/notification-1/read"]);
     expect(browser.location.pathname).toBe(authorized ? "/my-submissions" : "/notifications");
     if (!authorized) expect(container.textContent).toContain("This item is no longer available");
+  });
+
+  it.each([
+    { id: "another-notification", readAt: "2026-08-30T01:00:00.000Z" },
+    { id: "notification-1", readAt: null },
+  ])("does not navigate or refresh on a mismatched read receipt (%j)", async (receipt) => {
+    browser.history.replaceState({}, "", "/notifications");
+    let listRequests = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Response.json(notification({ ...receipt, targetKind: "submission", targetId: "submission-1" }));
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      listRequests += 1;
+      return pageResponse(String(input), "Current notification");
+    });
+    await renderRoute();
+    const before = listRequests;
+    await click("Open"); await flush();
+    expect(browser.location.pathname).toBe("/notifications");
+    expect(listRequests).toBe(before);
+    expect(container.textContent).toContain("Unable to update notifications");
   });
 
   it("does not navigate after an in-flight open leaves its location", async () => {
@@ -176,7 +197,7 @@ describe("notification inbox route", () => {
     });
     await renderRoute(); await click("Open");
     await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
-    await act(async () => resolveRead(Response.json(notification()))); await flush();
+    await act(async () => resolveRead(Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })))); await flush();
     expect(browser.location.pathname + browser.location.search).toBe("/notifications?read=read");
   });
 
@@ -238,7 +259,7 @@ function notification(overrides: Record<string, unknown> = {}) {
 function pageResponse(url: string, title: string): Response {
   const params = new URL(url, "https://app.test").searchParams; const page = Number(params.get("page") || "1"); const pageSize = Number(params.get("pageSize") || "20"); const total = page === 3 ? 41 : 21;
   const offset = (page - 1) * pageSize; const count = Math.max(0, Math.min(pageSize, total - offset));
-  const items = Array.from({ length: count }, (_unused, index) => notification({ id: `notification-${index + 1}`, payload: { title: index === 0 ? title : `${title} ${index + 1}` } }));
+  const items = Array.from({ length: count }, (_unused, index) => notification({ id: `notification-${index + 1}`, eventType: params.get("type") ?? "task.due", readAt: params.get("read") === "true" ? "2026-08-30T01:00:00.000Z" : null, payload: { title: index === 0 ? title : `${title} ${index + 1}` } }));
   return Response.json({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
 }
 async function change(control: HTMLSelectElement, value: string) { await act(async () => { control.value = value; control.dispatchEvent(new window.Event("change", { bubbles: true })); }); }

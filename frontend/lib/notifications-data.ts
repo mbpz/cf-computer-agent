@@ -45,10 +45,20 @@ export async function loadNotifications(
   requester: Fetcher = fetch,
   signal?: AbortSignal,
 ): Promise<NotificationPage> {
-  return normalizeNumberedPage(
+  const page = normalizeNumberedPage(
     await apiFetch(notificationQuery(filters, pagination), { requester, signal }),
     normalizeNotification,
   );
+  const ids = new Set<string>();
+  if (page.pagination.page !== pagination.page || page.pagination.pageSize !== pagination.pageSize
+    || page.items.some((item) => {
+      const duplicate = ids.has(item.id);
+      ids.add(item.id);
+      return duplicate || (filters.read === "unread" && item.readAt !== null)
+        || (filters.read === "read" && item.readAt === null)
+        || (filters.eventType !== undefined && item.eventType !== filters.eventType);
+    })) throw new Error("NUMBERED_PAGE_RESPONSE_INVALID");
+  return page;
 }
 
 export async function loadNotificationSummary(requester: Fetcher = fetch, signal?: AbortSignal): Promise<NotificationSummary> {
@@ -70,10 +80,12 @@ export function createNotificationsRequestController(requester: Fetcher = fetch)
 
 export async function markNotificationRead(id: string, requester: Fetcher = fetch): Promise<NotificationItem> {
   assertId(id, "NOTIFICATION_ID_INVALID");
-  return normalizeNotification(await apiFetch<unknown>(`/api/notifications/${encodeURIComponent(id)}/read`, {
+  const receipt = normalizeNotification(await apiFetch<unknown>(`/api/notifications/${encodeURIComponent(id)}/read`, {
     requester,
     method: "POST",
   }));
+  if (receipt.id !== id || receipt.readAt === null) throw new Error("NOTIFICATION_READ_RESPONSE_INVALID");
+  return receipt;
 }
 
 export async function markVisibleNotificationsRead(ids: readonly string[], requester: Fetcher = fetch): Promise<{ marked: number }> {

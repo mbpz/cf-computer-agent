@@ -50,6 +50,33 @@ describe("notifications data layer", () => {
     }
   });
 
+  it("rejects pages that do not match the requested pagination or filters", async () => {
+    const cases = [
+      { filters: {}, page: { items: [], pagination: { page: 2, pageSize: 20, total: 0, totalPages: 0 } } },
+      { filters: {}, page: { items: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } } },
+      { filters: { read: "unread" as const }, row: notification({ readAt: "2026-08-30T01:00:00.000Z" }) },
+      { filters: { read: "read" as const }, row: notification() },
+      { filters: { eventType: "discussion.reply" as const }, row: notification() },
+    ];
+    for (const test of cases) {
+      const page = test.page ?? { items: [test.row], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
+      await expect(loadNotifications(test.filters, { page: 1, pageSize: 20 }, jsonRequester(page)))
+        .rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
+    }
+    await expect(loadNotifications({}, { page: 1, pageSize: 20 }, jsonRequester({
+      items: [notification(), notification()], pagination: { page: 1, pageSize: 20, total: 2, totalPages: 1 },
+    }))).rejects.toThrow("NUMBERED_PAGE_RESPONSE_INVALID");
+  });
+
+  it("requires an exact, committed read receipt before using its target", async () => {
+    for (const receipt of [notification(), notification({ id: "another-notification", readAt: "2026-08-30T01:00:00.000Z" })]) {
+      await expect(markNotificationRead("notification-1", jsonRequester(receipt)))
+        .rejects.toThrow("NOTIFICATION_READ_RESPONSE_INVALID");
+    }
+    const receipt = notification({ readAt: "2026-08-30T01:00:00.000Z", targetKind: null, targetId: null });
+    await expect(markNotificationRead("notification-1", jsonRequester(receipt))).resolves.toEqual(receipt);
+  });
+
   it("accepts only the canonical null target pair for unavailable targets", async () => {
     const requester = jsonRequester({
       items: [notification({ targetKind: null, targetId: null })],

@@ -9,6 +9,8 @@ import { NotificationsRepository } from "../../src/notifications/repository";
 import { NotificationsService } from "../../src/notifications/service";
 import type { NotificationInsert } from "../../src/notifications/types";
 import { MIGRATIONS } from "../fixtures/d1";
+import { loadNotifications, loadNotificationSummary, markNotificationRead, markVisibleNotificationsRead } from "../../frontend/lib/notifications-data";
+import type { Fetcher } from "../../frontend/lib/api";
 
 const NOW = 1_777_777_000_000;
 
@@ -148,6 +150,32 @@ describe("notifications HTTP contract", () => {
     await repository.insert(notificationInsert({ id: "a-status", recipientMemberId: "member-a", deduplicationKey: "a-status", createdAt: NOW + 2 }));
     await repository.insert(notificationInsert({ id: "a-due", recipientMemberId: "member-a", eventType: "task.due", deduplicationKey: "a-due", createdAt: NOW + 1 }));
     await repository.insert(notificationInsert({ id: "b-private", recipientMemberId: "member-b", deduplicationKey: "b-private", createdAt: NOW + 3 }));
+  });
+
+  it("round-trips filtered pages and replay-safe read receipts through the frontend contract", async () => {
+    const requester: Fetcher = (input, init) => api(String(input), sessionA, init);
+    const other: Fetcher = (input, init) => api(String(input), sessionB, init);
+    const pagination = { page: 1, pageSize: 20 as const };
+    const repository = new NotificationsRepository(env.DB);
+    expect(await repository.insert(notificationInsert({ id: "replayed-due", eventType: "task.due", deduplicationKey: "a-due" }))).toBe(false);
+    const due = await loadNotifications({ read: "unread", eventType: "task.due" }, pagination, requester);
+    expect(due.items.map(({ id }) => id)).toEqual(["a-due"]);
+    expect(due.pagination.total).toBe(1);
+    const first = await markNotificationRead("a-due", requester);
+    expect(first.targetId).toBe("task-a");
+    expect(await markNotificationRead("a-due", requester)).toEqual(first);
+    expect((await loadNotifications({ read: "read", eventType: "task.due" }, pagination, requester)).items).toEqual([first]);
+    expect((await loadNotifications({ read: "unread", eventType: "task.due" }, pagination, requester)).items).toEqual([]);
+    await expect(markVisibleNotificationsRead(["a-status", "b-private", "missing"], requester)).resolves.toEqual({ marked: 1 });
+    await expect(markVisibleNotificationsRead(["a-status", "b-private", "missing"], requester)).resolves.toEqual({ marked: 0 });
+    await expect(loadNotificationSummary(requester)).resolves.toEqual({ unread: 0 });
+    await expect(loadNotificationSummary(other)).resolves.toEqual({ unread: 1 });
+    await expect(markNotificationRead("b-private", requester)).rejects.toMatchObject({ status: 404 });
+    await env.DB.prepare("DELETE FROM tasks WHERE id = 'task-a'").run();
+    await expect(markNotificationRead("a-due", requester)).resolves.toMatchObject({ id: "a-due", readAt: first.readAt, targetKind: null, targetId: null });
+    const history = await loadNotifications({ read: "read" }, pagination, requester);
+    expect(history.items).toHaveLength(2);
+    expect(history.items.every((item) => item.targetKind === null && item.targetId === null)).toBe(true);
   });
 
   it("returns canonical recipient-owned list and summary envelopes with strict filters", async () => {
