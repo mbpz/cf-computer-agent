@@ -229,7 +229,14 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (pathname(path) === "/api/admin/assets") return probeResponse(state, numbered([]), numbered([{ asset: { id: "ready-admin-assets", originalName: "READY::admin-assets" }, job: { status: "succeeded" } }]));
       return null;
     case "admin-members":
-      if (pathname(path) === "/api/admin/members") return probeResponse(state, numbered([]), numbered([{ id: "ready-admin-members", email: "ready-admin-members@app.test", role: "contributor", status: "active" }]));
+      if (pathname(path) === "/api/admin/members") {
+        const query = new URL(path, "https://app.test").searchParams;
+        const page = Number(query.get("page") || 1); const pageSize = Number(query.get("pageSize") || 20);
+        const total = (page - 1) * pageSize + 1;
+        return probeResponse(state,
+          { items: [], pagination: { page, pageSize, total: 0, totalPages: 0 } },
+          { items: [{ id: "ready-admin-members", email: "ready-admin-members@app.test", role: "contributor", status: query.get("status") || "active" }], pagination: { page, pageSize, total, totalPages: page } });
+      }
       return null;
     case "admin-roles":
       if (path === "/api/admin/roles") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-roles", key: "ready-role", name: "READY::admin-roles", description: "route fixture", allowBits: "0x0", memberCount: 0, assignedMemberIds: [], status: "active", isSystem: false }] });

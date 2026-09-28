@@ -220,6 +220,212 @@ describe("numbered admin routes", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Unable to load");
   });
 
+  // Network-boundary tests deliberately keep the route, API decoder and DOM real.
+  it("suppresses member status PATCH double clicks in the same React batch", async () => {
+    const requests = memberRequests();
+    await renderMember(requests);
+    const button = container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement;
+    await act(async () => { button.click(); button.click(); });
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH"]);
+    expect(requests[1]!.url).toBe("/api/admin/members/m1/status");
+    expect(JSON.parse(String(requests[1]!.body))).toEqual({ status: "active" });
+    expect(button.disabled).toBe(true);
+  });
+
+  it.each(["lost response", "wrong id", "wrong status"])("requires a fresh member read after %s without replaying PATCH", async (outcome) => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    if (outcome === "lost response") requests[1]!.pending.reject(new Error("offline"));
+    else requests[1]!.pending.resolve(Response.json({ member: member(outcome === "wrong id" ? "other" : "m1", outcome === "wrong status" ? "disabled" : "active") }));
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+    expect(requests).toHaveLength(2);
+    expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector('[role="alert"] button')).not.toBeNull();
+    const retry = container.querySelector('[role="alert"] button') as HTMLButtonElement;
+    await act(async () => { retry.click(); retry.click(); });
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET"]);
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
+    expect((container.querySelector('button[aria-label="Disable m1@example.test"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("recovers a failed member post-write read using GET only and replaces an empty filtered page", async () => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2");
+    const requests = memberRequests();
+    await renderMember(requests, memberPage(2, 20, 21, [member("m1", "disabled")]));
+    await click('button[aria-label="Enable m1@example.test"]');
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
+    await waitFor(() => requests.length === 3);
+    requests[2]!.pending.reject(new Error("offline"));
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+    expect(container.textContent).toContain("m1@example.test");
+    expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
+    const replace = vi.spyOn(browser.history, "replaceState");
+    expect(container.querySelector('[role="alert"] button')).not.toBeNull();
+    await click('[role="alert"] button');
+    requests[3]!.pending.resolve(Response.json(memberPage(2, 20, 20, [])));
+    await waitFor(() => requests.length === 5);
+    expect(requests[4]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=disabled");
+    requests[4]!.pending.resolve(response("member", 1, 20, 20));
+    await waitFor(() => container.textContent?.includes("1–20") === true);
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET", "GET", "GET"]);
+  });
+
+  it.each([401, 403])("clears private member rows after PATCH %s and recovers only with an explicit GET", async (status) => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    requests[1]!.pending.resolve(new Response(null, { status }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    expect(container.textContent).not.toContain("m1@example.test");
+    expect(container.querySelector('select[aria-label="Member status"]')).toBeNull();
+    await click('button');
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET"]);
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
+  });
+
+  it.each([401, 403])("clears member rows when the post-write read returns %s", async (status) => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
+    await waitFor(() => requests.length === 3);
+    requests[2]!.pending.resolve(new Response(null, { status }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    expect(container.textContent).not.toContain("m1@example.test");
+    expect(requests).toHaveLength(3);
+  });
+
+  it.each([200, 403])("ignores a late PATCH %s after leaving and returning to the same member query", async (status) => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    await locationChange("?status=active");
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m2", "active")])));
+    await waitFor(() => container.textContent?.includes("m2@example.test") === true);
+    await locationChange("");
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
+    requests[1]!.pending.resolve(status === 200 ? Response.json({ member: member("m1", "active") }) : new Response(null, { status }));
+    await waitFor(() => container.querySelector('[role="alert"] button') !== null);
+    expect(requests).toHaveLength(4);
+    expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
+    // The newer GET began before the old PATCH settled: it cannot release its read lock.
+    expect((container.querySelector('button[aria-label="Disable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(container.querySelector('[role="alert"] button')).not.toBeNull();
+  });
+
+  it("never leaves old member actions available after navigation read failure", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await locationChange("?status=active");
+    requests[1]!.pending.reject(new Error("offline"));
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+    expect(container.textContent).not.toContain("m1@example.test");
+    expect(container.querySelector('button[aria-label="Enable m1@example.test"]')).toBeNull();
+    await click('[role="alert"] button');
+    expect(requests[2]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=active");
+  });
+
+  it("does not offer contributor status mutations for administrators or unknown member states", async () => {
+    const requests = memberRequests();
+    await renderMember(requests, memberPage(1, 20, 3, [
+      { ...member("admin", "active"), role: "admin" },
+      { ...member("unknown", "active"), status: "unknown" },
+      { ...member("unscoped", "active"), role: undefined },
+    ]));
+    expect(container.textContent).toContain("admin@example.test");
+    expect(container.querySelector('button[aria-label^="Disable "]')).toBeNull();
+    expect(container.querySelector('button[aria-label^="Enable "]')).toBeNull();
+  });
+
+  it("does not release a member lock from a GET that started before an old PATCH settled", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    await locationChange("?status=disabled");
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
+    await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
+    expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
+    await click('[role="alert"] button');
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
+    await waitFor(() => container.querySelector('[role="alert"]') === null);
+    expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET", "GET"]);
+  });
+
+  it("a denied concurrent member PATCH invalidates an already running read and hides every row", async () => {
+    const requests = memberRequests();
+    await renderMember(requests, memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")]));
+    await click('button[aria-label="Enable m1@example.test"]');
+    await click('button[aria-label="Enable m2@example.test"]');
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
+    await waitFor(() => requests.length === 4);
+    requests[2]!.pending.resolve(new Response(null, { status: 403 }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    expect(requests[3]!.signal?.aborted).toBe(true);
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "active"), member("m2", "active")])));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(container.querySelector('[data-page-state="forbidden"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("@example.test");
+    expect(requests).toHaveLength(4);
+  });
+
+  it("does not treat absence from a filtered member page as proof that an uncertain PATCH succeeded", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    requests[1]!.pending.reject(new Error("offline"));
+    await waitFor(() => container.querySelector('[role="alert"] button') !== null);
+    await click('[role="alert"] button');
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
+    await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("no write will be resent");
+    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET"]);
+  });
+
+  it.each([401, 403])("clears an initially denied member list %s and allows one fresh GET", async (status) => {
+    const requests = memberRequests();
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search="" />));
+    requests[0]!.pending.resolve(new Response(null, { status }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    const retry = container.querySelector('button') as HTMLButtonElement;
+    await act(async () => { retry.click(); retry.click(); });
+    expect(requests.map((request) => request.method)).toEqual(["GET", "GET"]);
+    requests[1]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
+    await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
+  });
+
+  it("renders an unknown member status as unavailable rather than active", async () => {
+    const requests = memberRequests();
+    await renderMember(requests, memberPage(1, 20, 1, [{ ...member("m1", "active"), status: undefined }]));
+    expect(container.querySelector('section .space-y-3')?.textContent).toContain("Status unavailable");
+    expect(container.querySelector('button[aria-label^="Disable "]')).toBeNull();
+  });
+
+  it.each(["page", "size", "filter", "duplicate id"])("rejects a member list with mismatched %s before exposing status actions", async (mismatch) => {
+    browser.history.replaceState({}, "", "/admin/members?status=disabled");
+    const requests = memberRequests();
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />));
+    const data = mismatch === "page" ? memberPage(2, 20, 21, [member("m1", "disabled")])
+      : mismatch === "size" ? memberPage(1, 50, 1, [member("m1", "disabled")])
+      : mismatch === "filter" ? memberPage(1, 20, 1, [member("m1", "active")])
+      : memberPage(1, 20, 2, [member("m1", "disabled"), member("m1", "disabled")]);
+    requests[0]!.pending.resolve(Response.json(data));
+    await waitFor(() => container.querySelector('[data-page-state="error"]') !== null);
+    expect(container.textContent).not.toContain("m1@example.test");
+    expect(requests).toHaveLength(1);
+  });
+
+  async function renderMember(requests: ReturnType<typeof memberRequests>, data = memberPage(1, 20, 1, [member("m1", "disabled")])) {
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />));
+    requests[0]!.pending.resolve(Response.json(data));
+    await waitFor(() => container.querySelector('select[aria-label="Member status"]') !== null);
+  }
+  async function locationChange(search: string) {
+    await act(async () => { browser.history.pushState({}, "", `/admin/members${search}`); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
+    await flush();
+  }
+
   async function click(selector: string) { const element = container.querySelector(selector) as HTMLButtonElement; await act(async () => element.click()); }
   async function changeSelect(selector: string, value: string) { const element = container.querySelector(selector) as HTMLSelectElement; await act(async () => { element.value = value; element.dispatchEvent(new browser.Event("change", { bubbles: true })); }); await flush(); }
 });
@@ -245,4 +451,14 @@ async function waitFor(predicate: () => boolean) {
     if (predicate()) return;
   }
   expect(predicate(), "audit view did not reach the expected state").toBe(true);
+}
+
+function memberRequests() {
+  const requests: Array<{ url: string; method: string; body?: BodyInit | null; signal?: AbortSignal; pending: ReturnType<typeof deferred<Response>> }> = [];
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    const pending = deferred<Response>();
+    requests.push({ url: String(input), method: init?.method || "GET", body: init?.body, signal: init?.signal || undefined, pending });
+    return pending.promise;
+  });
+  return requests;
 }

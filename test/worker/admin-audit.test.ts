@@ -44,8 +44,64 @@ describe("numbered admin audit and members routes", () => {
     ]) expect((await api(path)).status).toBe(400);
   });
 
-  async function api(path: string): Promise<Response> {
-    const request = new Request(`https://memory.crgmhrc.asia${path}`, { headers: { cookie: `__Host-memory-session=${admin}`, origin: "https://memory.crgmhrc.asia" } });
+  it("updates a contributor through HTTP, returns its receipt and projects status-filtered reads", async () => {
+    await seedContributor();
+    const disabled = await api("/api/admin/members/contributor/status", { status: "disabled" });
+    expect(disabled.status).toBe(200);
+    expect(await disabled.json()).toMatchObject({ member: { id: "contributor", role: "contributor", status: "disabled" } });
+    expect(await (await api("/api/admin/members?status=disabled")).json()).toMatchObject({ items: [{ id: "contributor", status: "disabled" }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    const enabled = await api("/api/admin/members/contributor/status", { status: "active" });
+    expect(enabled.status).toBe(200);
+    expect(await enabled.json()).toMatchObject({ member: { id: "contributor", role: "contributor", status: "active" } });
+    expect(await (await api("/api/admin/members?status=disabled")).json()).toMatchObject({ items: [], pagination: { total: 0, totalPages: 0 } });
+    const events = await env.DB.prepare("SELECT actor_id, resource_id, metadata FROM audit_events WHERE action = 'member.status_updated' ORDER BY rowid").all();
+    expect(events.results).toEqual([
+      { actor_id: "admin", resource_id: "contributor", metadata: '{"previousStatus":"active","newStatus":"disabled"}' },
+      { actor_id: "admin", resource_id: "contributor", metadata: '{"previousStatus":"disabled","newStatus":"active"}' },
+    ]);
+  });
+
+  it("keeps repeated explicit status assignments state-idempotent without claiming an exactly-once audit", async () => {
+    await seedContributor();
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled" })).status).toBe(200);
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled" })).status).toBe(200);
+    expect(await new MembersRepository(env.DB).findById("contributor")).toMatchObject({ status: "disabled" });
+    const events = await env.DB.prepare("SELECT metadata FROM audit_events WHERE action = 'member.status_updated' ORDER BY rowid").all();
+    // Existing HTTP contract has no persisted request identity. Recovery must not
+    // silently replay PATCH and misrepresent these two audits as exactly once.
+    expect(events.results).toEqual([
+      { metadata: '{"previousStatus":"active","newStatus":"disabled"}' },
+      { metadata: '{"previousStatus":"disabled","newStatus":"disabled"}' },
+    ]);
+  });
+
+  it("protects administrator rows and rejects invalid status or missing targets without a write audit", async () => {
+    await seedContributor();
+    expect((await api("/api/admin/members/admin/status", { status: "disabled" })).status).toBe(403);
+    expect((await api("/api/admin/members/contributor/status", { status: "unknown" })).status).toBe(400);
+    expect((await api("/api/admin/members/missing/status", { status: "disabled" })).status).toBe(404);
+    expect(await new MembersRepository(env.DB).findById("admin")).toMatchObject({ status: "active" });
+    expect(await new MembersRepository(env.DB).findById("contributor")).toMatchObject({ status: "active" });
+    expect((await env.DB.prepare("SELECT id FROM audit_events WHERE action = 'member.status_updated'").all()).results).toEqual([]);
+  });
+
+  it.each(["contributor", "disabled admin"])("rejects member reads and status writes by a %s", async (actor) => {
+    await seedContributor();
+    const repository = new MembersRepository(env.DB);
+    if (actor === "contributor") admin = (await new SessionService(env.DB, repository, { waitUntil: () => undefined }).create((await repository.findById("contributor"))!)).token;
+    else await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'admin'").run();
+    expect((await api("/api/admin/members")).status).toBe(403);
+    expect((await api("/api/admin/members/contributor/status", { status: "disabled" })).status).toBe(403);
+    expect(await repository.findById("contributor")).toMatchObject({ status: "active" });
+    expect((await env.DB.prepare("SELECT id FROM audit_events WHERE action = 'member.status_updated'").all()).results).toEqual([]);
+  });
+
+  async function seedContributor() {
+    await env.DB.prepare("INSERT INTO members (id, access_sub, email, role, status, created_at, updated_at) VALUES ('contributor', 'contributor-sub', 'contributor@example.test', 'contributor', 'active', ?, ?)").bind("2026-08-28T00:00:00.000Z", "2026-08-28T00:00:00.000Z").run();
+  }
+
+  async function api(path: string, body?: { status: string }): Promise<Response> {
+    const request = new Request(`https://memory.crgmhrc.asia${path}`, { method: body ? "PATCH" : "GET", ...(body ? { body: JSON.stringify(body) } : {}), headers: { cookie: `__Host-memory-session=${admin}`, origin: "https://memory.crgmhrc.asia", "content-type": "application/json" } });
     const context = createExecutionContext(); const response = await createApp().fetch!(request as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context); await waitOnExecutionContext(context); return response;
   }
 });

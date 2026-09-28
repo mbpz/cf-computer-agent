@@ -8,12 +8,16 @@ export type AdminMembersPage = FrontendNumberedPage<AdminMember>;
 export async function loadAdminMembers({ page, pageSize, status, requester = fetch, signal }: LoadAdminMembersInput & { requester?: Fetcher }): Promise<AdminMembersPage> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set("status", status);
-  return normalizeNumberedPage(await apiFetch(`/api/admin/members?${params}`, { requester, signal }), normalizeMember);
+  const data = normalizeNumberedPage(await apiFetch(`/api/admin/members?${params}`, { requester, signal }), normalizeMember);
+  if (data.pagination.page !== page || data.pagination.pageSize !== pageSize || new Set(data.items.map((member) => member.id)).size !== data.items.length || (status && data.items.some((member) => member.status !== status))) throw new Error("MEMBER_RESPONSE_INVALID");
+  return data;
 }
 
 export async function updateMemberStatus(memberId: string, status: "active" | "disabled", requester: Fetcher = fetch): Promise<AdminMember> {
   const data = await apiFetch<{ member?: unknown }>(`/api/admin/members/${encodeURIComponent(memberId)}/status`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
-  return normalizeMember(data.member);
+  const member = normalizeMember(data?.member);
+  if (member.id !== memberId || member.status !== status || member.role !== "contributor") throw new Error("MEMBER_RESPONSE_INVALID");
+  return member;
 }
 
 function normalizeMember(value: unknown): AdminMember {
