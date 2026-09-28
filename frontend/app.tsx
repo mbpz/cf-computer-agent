@@ -1,3 +1,4 @@
+import { TodayTargetDetail, type TodayTarget } from "./components/today-target-detail";
 import { defaultCalendarRange, parseCalendarSearch, writeCalendarSearch, type CalendarQuery } from "./lib/calendar-query";
 import { GoalTasksEditor } from "./components/goal-tasks-editor";
 import { loadTimelineIntent, clearTimelineIntent } from "./lib/timeline-create-intent";
@@ -199,7 +200,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
     case "calendar": return <CalendarRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
-    case "today": return <TodayRoute locale={locale} />;
+    case "today": return <TodayRoute key={session?.member.id} locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
     case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
@@ -1685,13 +1686,18 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
 export function TodayRoute({ locale }: { locale: LocaleRuntime }) {
   const [state, setState] = useState<TodayPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
+  const [target, setTarget] = useState<TodayTarget | null>(null);
+  const clearDenied = useCallback(() => {
+    setTarget(null); setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
+  }, [locale]);
   useEffect(() => {
     let active = true;
-    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
-    void loadToday().then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
-    return () => { active = false; };
+    const controller = new AbortController();
+    setTarget(null); setState({kind: "loading"});
+    void loadToday(fetch, controller.signal).then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
+    return () => { active = false; controller.abort(); };
   }, [locale, retryVersion]);
-  return <TodayPage locale={locale} state={state} onRetry={() => setRetryVersion((value) => value + 1)} />;
+  return <><div inert={target ? true : undefined}><TodayPage locale={locale} state={state} onOpen={setTarget} onRetry={() => setRetryVersion((value) => value + 1)} /></div>{target && <TodayTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
 export function FocusRoute({ locale }: { locale: LocaleRuntime }) {

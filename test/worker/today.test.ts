@@ -11,6 +11,7 @@ const NOW = new Date("2026-09-09T10:00:00.000Z");
 
 describe("today workbench route", () => {
   let sessionA = "";
+  let sessionB = "";
 
   beforeEach(async () => {
     await reset();
@@ -20,6 +21,7 @@ describe("today workbench route", () => {
       .bind("today-a", "subject-today-a", "today-a@example.test", NOW.toISOString(), NOW.toISOString(), "today-b", "subject-today-b", "today-b@example.test", NOW.toISOString(), NOW.toISOString()).run();
     const sessions = new SessionService(env.DB, new MembersRepository(env.DB), { waitUntil: () => undefined, now: () => NOW });
     sessionA = (await sessions.create((await new MembersRepository(env.DB).findByIdentitySubject("subject-today-a"))!)).token;
+    sessionB = (await sessions.create((await new MembersRepository(env.DB).findByIdentitySubject("subject-today-b"))!)).token;
     await env.DB.prepare("INSERT INTO tasks (id, member_id, title, notes, status, progress, priority, due_at, created_at, updated_at) VALUES ('today-task-a', 'today-a', 'Today task', '', 'todo', 0, 'medium', ?, ?, ?), ('today-task-b', 'today-b', 'Other task', '', 'todo', 0, 'medium', ?, ?, ?)")
       .bind(NOW.getTime(), NOW.getTime(), NOW.getTime(), NOW.getTime(), NOW.getTime(), NOW.getTime()).run();
     await env.DB.prepare("INSERT INTO inbox_items (id, member_id, client_key, kind, content, status, created_at, updated_at) VALUES ('today-inbox-a', 'today-a', 'today-a', 'text', 'Capture', 'inbox', ?, ?), ('today-inbox-b', 'today-b', 'today-b', 'text', 'Private', 'inbox', ?, ?)")
@@ -32,6 +34,18 @@ describe("today workbench route", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("re-authorizes snapshot targets for both members and returns 404 across ownership", async () => {
+    for (const [token, own, other] of [[sessionA, "a", "b"], [sessionB, "b", "a"]]) {
+      const snapshot = await (await api("/api/today", token!)).json() as {tasks: {items: {id: string}[]}; calendar: {id: string}[]};
+      expect(snapshot.tasks.items.map(item => item.id)).toEqual([`today-task-${own}`]);
+      expect(snapshot.calendar.map(item => item.id)).toEqual([`today-event-${own}`]);
+      for (const prefix of ["tasks/today-task", "calendar/events/today-event"]) {
+        expect((await api(`/api/${prefix}-${own}`, token!)).status).toBe(200);
+        expect((await api(`/api/${prefix}-${other}`, token!)).status).toBe(404);
+      }
+    }
   });
 
   it("returns one bounded member-private snapshot", async () => {

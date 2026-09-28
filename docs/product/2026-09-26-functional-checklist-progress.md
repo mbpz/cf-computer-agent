@@ -975,3 +975,23 @@ rtk git diff --check
 ```
 
 下一业务切片为 **EXT-TOD-01：今日摘要权限校验目标入口/查看全部与有界快照说明**。本地继续允许，没有加密/备份/生产签认阻塞。本轮无迁移、push、merge、部署、生产写入、备份、AI 调用或手工读取/上传 Secret；未执行带 Secret 同步的 build/check。
+
+## 2026-09-28 — C04 / EXT-TOD-01 今日摘要可追溯入口
+
+- Calendar EXT-CAL-02 已先提交 `093a468`，本批严格进入下一子项 EXT-TOD-01。新增任务/日程只读详情：点击后重新请求既有成员鉴权 API，精确核对目标 ID，不把摘要内容当授权凭据；404/畸形回执仅显示错误并允许 GET 重试，401/403 清除摘要和详情。关闭/卸载 abort + active guard 隔离迟到读取；Today 按成员 key 重挂载。
+- 查看全部任务进入 `/tasks?due=today&page=1&pageSize=20`，按服务器当前日过滤；查看全部日程固定摘要日期的 UTC 半开范围，进入已有数字分页页。普通点击走现有 SPA history，保留修饰键/新标签页原生链接行为。
+- 显式说明未完成任务是全量未完成计数，其余是有界快照数量（日历上限 20、收件箱/项目上限 10），列表仅前 10 条；不能把截断数组长度称为总数。Today 日期计算显式 UTC，与 Tasks 的 UTC 日期过滤一致，不宣称浏览器本地日。
+- 新增 App 10 项先 RED 10/10，接通实现后全绿，补实际路由跳转 2 项；新增 Worker 双成员摘要/详情 1 项，交叉 ID 均 404。联合 Today/扩展/成熟度/Calendar 页面 **6 文件 201/201**。`typecheck`、`build:ui`、`verify:i18n` 通过，保留既有 chunk 警告；前端全量 TSX 类型检查并未覆盖，不冒充原生浏览器证据。
+- 父项仍 **29 范围内 / 3 关闭 / 26 未关闭**。EXT-TOD-01 仅本地子项完成；下一项 **EXT-TOD-02 深层快照校验与局部失败**允许继续。新增 13 项测试不是完整原生双身份验收。没有备份/加密/生产签认阻塞。
+- 未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-today-targets.test.tsx test/unit/today-service.test.ts test/worker/today.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-calendar-write-journeys.test.tsx
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```

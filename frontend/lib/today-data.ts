@@ -6,8 +6,8 @@ import type { TaskItem, TaskPage, TaskSummary } from "./tasks-data";
 
 export interface TodaySnapshot { date: string; tasks: TaskPage; taskSummary: TaskSummary; inbox: InboxItem[]; projects: Project[]; calendar: CalendarEvent[]; }
 
-export async function loadToday(requester: Fetcher = fetch): Promise<TodaySnapshot> {
-  const value = await apiFetch<unknown>("/api/today", { requester });
+export async function loadToday(requester: Fetcher = fetch, signal?: AbortSignal): Promise<TodaySnapshot> {
+  const value = await apiFetch<unknown>("/api/today", { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("TODAY_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
   if (typeof record.date !== "string" || !record.tasks || !record.taskSummary || !Array.isArray(record.inbox) || !Array.isArray(record.projects) || !record.calendar) throw new Error("TODAY_RESPONSE_INVALID");

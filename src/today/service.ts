@@ -22,8 +22,8 @@ export class TodayService {
 
   async get(memberId: string): Promise<TodaySnapshot> {
     const now = this.now();
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
+    const start = new Date(now); start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(start); end.setUTCDate(end.getUTCDate() + 1);
     const [tasks, taskSummary, inbox, projects, calendar] = await parallelWork(this.workScope, [
       () => this.services.tasks.list(memberId, { due: "today" }, { page: 1, pageSize: 20 }),
       () => this.services.tasks.summary(memberId),

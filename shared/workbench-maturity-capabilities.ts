@@ -284,7 +284,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-today", routeId: "today", pathname: "/today", requiredRole: "contributor",
     journey: "Review today's owned tasks, inbox, projects and events and continue working.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/app.tsx", "frontend/pages/today-page.tsx", "frontend/lib/today-data.ts"], backendEvidence: ["src/routes/today.ts", "src/today/service.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/today.test.ts"], ledgerIds: ["TOD-001"], gaps: ["Private entry, read recovery and local section empty states are tested. The bounded snapshot lacks continuation, actionable drill-down, deep payload validation and complete timezone/two-member aggregation proof; release and signed-browser acceptance are unproven."],
+    frontendEvidence: ["frontend/components/today-target-detail.tsx", "frontend/app.tsx", "frontend/pages/today-page.tsx", "frontend/lib/today-data.ts"], backendEvidence: ["src/routes/tasks.ts", "src/routes/calendar.ts", "src/routes/today.ts", "src/today/service.ts"], testEvidence: ["test/unit/frontend-today-targets.test.tsx", "test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/today.test.ts"], ledgerIds: ["TOD-001"], gaps: ["Private entry, bounded-count explanations, UTC calendar continuation, reauthorized task/event details and two-member target isolation are locally tested. Deep snapshot validation, partial-failure recovery and complete cross-day aggregation proof remain incomplete; release and signed-browser acceptance are unproven."],
   },
   {
     id: "workbench-focus", routeId: "focus", pathname: "/focus", requiredRole: "contributor",
@@ -459,7 +459,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     mutations: ["POST /api/calendar/events — gap: each frontend attempt generates a fresh client key", "DELETE /api/calendar/events/:id — gap: cancellation has no expected status or concurrent replay proof"], mutationSafety: "mixed",
   },
   {
-    id: "workbench-today", apiPaths: ["/api/today"],
+    id: "workbench-today", apiPaths: ["/api/today", "/api/tasks/:id", "/api/calendar/events/:id"],
     persistencePaths: ["src/today/service.ts", "src/tasks/repository.ts", "src/inbox/repository.ts", "src/projects/repository.ts", "src/calendar/repository.ts"],
     ownerPredicate: "routeTodayApi passes authenticated principal.memberId to TodayService.get; all four private aggregates receive the same memberId.", pagination: "not_applicable", mutations: [], mutationSafety: "not_applicable",
   },
