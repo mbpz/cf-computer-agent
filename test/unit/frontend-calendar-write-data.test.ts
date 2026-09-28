@@ -1,0 +1,13 @@
+import { describe, expect, it, vi } from "vitest";
+import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreatedCalendar } from "../../frontend/lib/calendar-data";
+const intent={id:"event",clientKey:"intent",title:"Event",startsAt:"2026-09-28T01:00:00.000Z",endsAt:"2026-09-28T02:00:00.000Z",timezone:"UTC"};
+const event={...intent,description:"",kind:"event",allDay:false,status:"scheduled",taskId:null,projectId:null,updatedAt:"2026-09-28T00:00:00.000Z"};
+describe("calendar write receipts",()=>{
+  it("sends the original stable intent unchanged",async()=>{const request=vi.fn(async(_input: unknown, _init?: RequestInit)=>Response.json({event,created:false}));expect(await createCalendarEvent(intent,request)).toEqual({event,created:false});expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toEqual(intent);});
+  it.each([{event:{...event,id:"other"},created:true},{event:{...event,clientKey:"other"},created:true},{event,created:"true"},{event:{...event,updatedAt:"bad"},created:true},null])("rejects mismatched or malformed create receipts %#",async response=>{await expect(createCalendarEvent(intent,async()=>Response.json(response))).rejects.toThrow();});
+  it.each([{...event,startsAt:"bad"},{...event,endsAt:event.startsAt},{...event,timezone:"Invalid/Zone"},{...event,description:5},{...event,allDay:"false"},{...event,projectId:3}])("rejects malformed detail %#",async response=>{await expect(loadCalendarEvent(intent.id,async()=>Response.json(response))).rejects.toThrow();});
+  it("requires matching identity when reading a created event",async()=>{await expect(readCreatedCalendar(intent,async()=>Response.json({...event,clientKey:"other"}))).rejects.toThrow("CALENDAR_RECEIPT_MISMATCH");});
+  it("sends canonical expected version with DELETE",async()=>{const request=vi.fn(async(_input: unknown, _init?: RequestInit)=>Response.json({...event,status:"canceled",updatedAt:intent.startsAt}));await cancelCalendarEvent(event.id,event.updatedAt,request);expect(request.mock.calls[0]![1]).toMatchObject({method:"DELETE",body:JSON.stringify({expectedUpdatedAt:event.updatedAt})});});
+  it.each([{...event,status:"canceled"},{...event,updatedAt:intent.startsAt},{...event,status:"canceled",id:"other",updatedAt:intent.startsAt}])("rejects wrong cancel identity, status or version %#",async response=>{await expect(cancelCalendarEvent(event.id,event.updatedAt,async()=>Response.json(response))).rejects.toThrow();});
+  it("does not send invalid intents or versions",async()=>{const request=vi.fn();await expect(createCalendarEvent({...intent,endsAt:intent.startsAt},request)).rejects.toThrow();await expect(cancelCalendarEvent(event.id,"bad",request)).rejects.toThrow();expect(request).not.toHaveBeenCalled();});
+});

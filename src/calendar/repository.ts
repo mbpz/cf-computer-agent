@@ -10,8 +10,8 @@ export interface CalendarRepositoryPort {
   findOwned(memberId: string, id: string): Promise<CalendarEvent | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<CalendarEvent | null>;
   listOwned(memberId: string, request: CalendarEventListRequest): Promise<CalendarEventPage>;
-  update(memberId: string, id: string, input: { title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; updatedAt: number }): Promise<CalendarEvent | null>;
-  updateStatus(memberId: string, id: string, status: CalendarEventStatus, updatedAt: number): Promise<CalendarEvent | null>;
+  update(memberId: string, id: string, input: { title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; expectedUpdatedAt: number; updatedAt: number }): Promise<CalendarEvent | null>;
+  updateStatus(memberId: string, id: string, status: CalendarEventStatus, updatedAt: number, expectedUpdatedAt: number): Promise<CalendarEvent | null>;
 }
 
 type CalendarRow = {
@@ -66,15 +66,13 @@ export class CalendarRepository implements CalendarRepositoryPort {
     return { items, ...(rows.results.length > parsed.limit && last ? { nextCursor: encodeOpaqueCursor({ v: 1, memberId, from: request.from, to: request.to, status: request.status ?? null, startsAt: Date.parse(last.startsAt), id: last.id }) } : {}) };
   }
 
-  async update(memberId: string, id: string, input: { title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; updatedAt: number }): Promise<CalendarEvent | null> {
-    await this.db.prepare("UPDATE calendar_events SET title = ?, description = ?, starts_at = ?, ends_at = ?, timezone = ?, all_day = ?, task_id = ?, project_id = ?, updated_at = ? WHERE member_id = ? AND id = ?")
-      .bind(input.title, input.description, input.startsAt, input.endsAt, input.timezone, input.allDay ? 1 : 0, input.taskId, input.projectId, input.updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async update(memberId: string, id: string, input: { title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; expectedUpdatedAt: number; updatedAt: number }): Promise<CalendarEvent | null> {
+    return mapRow(await this.db.prepare(`UPDATE calendar_events SET title = ?, description = ?, starts_at = ?, ends_at = ?, timezone = ?, all_day = ?, task_id = ?, project_id = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? RETURNING ${columns}`)
+      .bind(input.title, input.description, input.startsAt, input.endsAt, input.timezone, input.allDay ? 1 : 0, input.taskId, input.projectId, input.updatedAt, memberId, id, input.expectedUpdatedAt).first<CalendarRow>());
   }
 
-  async updateStatus(memberId: string, id: string, status: CalendarEventStatus, updatedAt: number): Promise<CalendarEvent | null> {
-    await this.db.prepare("UPDATE calendar_events SET status = ?, updated_at = ? WHERE member_id = ? AND id = ?").bind(status, updatedAt, memberId, id).run();
-    return this.findOwned(memberId, id);
+  async updateStatus(memberId: string, id: string, status: CalendarEventStatus, updatedAt: number, expectedUpdatedAt: number): Promise<CalendarEvent | null> {
+    return mapRow(await this.db.prepare(`UPDATE calendar_events SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? RETURNING ${columns}`).bind(status, updatedAt, memberId, id, expectedUpdatedAt).first<CalendarRow>());
   }
 }
 

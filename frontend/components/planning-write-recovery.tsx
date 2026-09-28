@@ -1,3 +1,4 @@
+import { loadCalendarEvent } from "../lib/calendar-data";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
 import { beginPlanningWrite, canonicalPlanningVersion, clearPlanningWrite, loadPlanningWrite, type PlanningWriteRecord, type PlanningWriteState, type PlanningWriteModule } from "../lib/planning-write-recovery";
@@ -51,7 +52,7 @@ export function usePlanningWriteRecovery(memberId: string | undefined, module: P
     const abort = new AbortController(); controller.current = abort;
     const live = () => active.current && generation.current === epoch && !abort.signal.aborted;
     try {
-      const item = module === "INBOX" ? await loadInboxItem(stored.record.id, fetch, abort.signal) : module.startsWith("TIMELINE:") ? await loadProjectTimelineItem(module.slice(9), stored.record.id, fetch, abort.signal) : module === "GOALS" ? await loadGoal(stored.record.id, fetch, abort.signal) : await loadProject(stored.record.id, fetch, abort.signal);
+      const item = module === "CALENDAR" ? await loadCalendarEvent(stored.record.id, fetch, abort.signal) : module === "INBOX" ? await loadInboxItem(stored.record.id, fetch, abort.signal) : module.startsWith("TIMELINE:") ? await loadProjectTimelineItem(module.slice(9), stored.record.id, fetch, abort.signal) : module === "GOALS" ? await loadGoal(stored.record.id, fetch, abort.signal) : await loadProject(stored.record.id, fetch, abort.signal);
       if (!live()) return;
       if (!canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(stored.record.expectedUpdatedAt)) throw new Error("PLANNING_RECOVERY_VERSION_INVALID");
       const read = await refresh();

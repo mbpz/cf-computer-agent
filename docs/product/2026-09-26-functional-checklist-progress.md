@@ -942,3 +942,36 @@ rtk git diff --check
 下一实现为 **EXT-CAL-02：稳定创建意图、时间校验、取消确认/并发、丢响应恢复与成员隔离的完整旅程**。允许本地继续，无备份/加密/生产维护签认阻塞。原生真实双身份/键盘/触控仍待验，不以 happy-dom 或历史浏览器状态代替。
 
 本轮无新迁移；未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。未运行带 Secret 同步的 build/check。
+
+## 2026-09-28 — C04 / EXT-CAL-02 稳定创建与条件取消恢复
+
+### 实现与关闭口径
+
+- EXT-CAL-02 本地子项完成；父项保持 **29 范围内 / 3 关闭 / 26 未关闭**，D08 排除。Calendar 编辑 UI、跨模块完整旅程以及 EXT-ACCEPT-02 原生真实身份验收没有完成，不因此关闭 C04。
+- 创建前将成员/标签页隔离的精确 id/clientKey/title/startsAt/endsAt/timezone 意图写入 sessionStorage 并回读确认；拒绝坏记录、存储不可用和替换未决请求。丢响应只允许显式重试相同载荷；确认回执后只读恢复详情与当前列表，重载不会自动 POST。此存储不加密，不承诺跨设备或关闭标签页后的恢复。
+- 创建服务按 member/clientKey 回读，修复并发同键不同 id 误 404；占用 id 不能返回无关记录。保留既有同键重放语义，不宣称服务端拒绝同键异载荷。
+- 时间顺序、规范时间、有效时区和 JS Date 上界均校验。编辑 API 和取消必须提供 expectedUpdatedAt；成员/id/版本 CAS + UPDATE RETURNING 原子回执，单调版本防止时钟倒退。跨成员访问 404，版本冲突 409。Focus 内部状态更新也使用 CAS，但不宣称跨模块完整生命周期已闭环。
+- 页面取消先显示目标标题/时间并确认；写前持久化只读恢复标记，失败/丢响应/409 不自动重试 DELETE，仅 GET 详情和当前列表后解除锁定。401/403 清除页面私有内容；404 对账失败保留锁定。非模态确认区的原生键盘/触控仍待验。
+
+### RED / GREEN 与本地验证
+
+- 新后端并发、条件写和时间校验初次 7 失败 / 1 通过；修复后 8/8。数据校验新增 6 个畸形详情用例先失败后通过。App 创建/取消初次 4 项失败，后扩至 11 项全绿；其中预装存储必须在 React 挂载前完成，修正 harness 后才计入恢复证据。
+- 新增 54 项：8 Worker/D1、17 意图存储、18 数据、11 App/happy-dom。Calendar/Today/Focus/扩展路由联合 **15 文件 305/305**；共享 Planning/Inbox/Timeline/Projects 写恢复 **6 文件 133/133**。这是本地定向回归，不是全仓或真实浏览器验收。
+- `typecheck`、`build:ui`、`verify:i18n` 通过；typecheck 不覆盖所有前端 TSX，Vite 与 App 测试不冒充完整前端类型检查。保留既有 >500 kB chunk 警告。
+- 更新 Calendar maturity 证据及原 R4-016 gap 指纹，保留 partial、编辑/跨模块/原生验收缺口；未删除历史 gap 或提升发布维度。
+
+### 可重跑命令
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-calendar-write-journeys.test.tsx test/unit/frontend-calendar-create-intent.test.ts test/unit/frontend-calendar-write-data.test.ts test/unit/frontend-calendar-numbered-pages.test.tsx test/unit/frontend-calendar-numbered-data.test.ts test/unit/frontend-calendar-page.test.tsx test/unit/calendar-service.test.ts test/worker/calendar-numbered-pages.test.ts test/worker/calendar-write-journeys.test.ts test/worker/calendar.test.ts test/worker/focus.test.ts test/unit/today-service.test.ts test/worker/today.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy npx vitest run test/unit/frontend-planning-write-storage.test.ts test/unit/frontend-planning-write-recovery.test.tsx test/unit/frontend-inbox-status-recovery.test.tsx test/unit/frontend-inbox-promotion-recovery.test.tsx test/unit/frontend-timeline-reload.test.tsx test/unit/frontend-project-relations-reload.test.tsx
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```
+
+下一业务切片为 **EXT-TOD-01：今日摘要权限校验目标入口/查看全部与有界快照说明**。本地继续允许，没有加密/备份/生产签认阻塞。本轮无迁移、push、merge、部署、生产写入、备份、AI 调用或手工读取/上传 Secret；未执行带 Secret 同步的 build/check。

@@ -36,6 +36,7 @@ export interface CalendarEventCreateInput {
 }
 
 export interface CalendarEventUpdateInput {
+  expectedUpdatedAt?: unknown;
   title?: unknown;
   description?: unknown;
   startsAt?: unknown;

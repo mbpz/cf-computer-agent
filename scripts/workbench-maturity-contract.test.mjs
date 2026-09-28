@@ -104,7 +104,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-inbox": {"source":"manifest:0@923f12551753","dimension":"journey","slug":"capture-to-task-journey","symptom":"收集箱缺少数字分页、完整归档转任务旅程和过期响应保护。","owner":"R4-013"},
   "workbench-goals": {"source":"manifest:0@c1a08c049848","dimension":"journey","slug":"goal-edit-and-progress-journey","symptom":"目标缺少数字分页、编辑关联和进度状态完整闭环。","owner":"R4-014"},
   "workbench-projects": {"source":"manifest:0@17cb110cdd89","dimension":"journey","slug":"project-relationship-and-summary-recovery","symptom":"项目缺少数字分页、关联编辑、独立摘要恢复和过期响应保护。","owner":"R4-015"},
-  "workbench-calendar": {"source":"manifest:0@1dd05becce5a","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历范围数字分页、URL 恢复与时区边界已有本地证据；编辑、跨模块写入与真实身份原生旅程仍未闭环。","owner":"R4-016"},
+  "workbench-calendar": {"source":"manifest:0@40587965b020","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历范围分页、稳定创建、版本条件取消与只读恢复已有本地证据；编辑 UI、跨模块写入与真实身份原生旅程仍未闭环。","owner":"R4-016"},
   "workbench-today": {"source":"manifest:0@972268dbab12","dimension":"journey","slug":"bounded-summary-drilldown","symptom":"今日摘要缺少截断后的继续入口、业务下钻、深层校验及时区和双成员聚合证明。","owner":"R4-017"},
   "workbench-focus": {"source":"manifest:0@9b6828f13430","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注缺少任务选择、可靠耗时展示和旧响应保护的完整会话旅程。","owner":"R4-018"},
   "workbench-review": {"source":"manifest:0@0b51f9f36a6a","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘周期标签可能领先旧内容，聚合未按周期完整过滤且缺少刷新、深层校验和双成员证明。","owner":"R4-019"},

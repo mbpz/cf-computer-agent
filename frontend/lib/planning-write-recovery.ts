@@ -1,5 +1,5 @@
 import type { PlanningModule } from "./planning-create-intent";
-export type PlanningWriteModule = PlanningModule | "INBOX" | `TIMELINE:${string}`;
+export type PlanningWriteModule = PlanningModule | "INBOX" | "CALENDAR" | `TIMELINE:${string}`;
 export interface PlanningWriteRecord { readonly token: string; readonly id: string; readonly expectedUpdatedAt: string; }
 export type PlanningWriteState = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; record: PlanningWriteRecord };
 const key = (memberId: string, module: PlanningWriteModule) => `memory-garden:planning-write:v1:${encodeURIComponent(memberId)}:${module}`;
@@ -23,7 +23,7 @@ function storage(): Storage {
 // A read-only barrier, not a replay queue. No private title, desired value or executable request is stored.
 export function loadPlanningWrite(memberId: string, module: PlanningWriteModule): PlanningWriteState {
   try {
-    if (!memberId || (!["GOALS", "PROJECTS", "INBOX"].includes(module) && !/^TIMELINE:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(module))) return { kind: "blocked" };
+    if (!memberId || (!["GOALS", "PROJECTS", "INBOX", "CALENDAR"].includes(module) && !/^TIMELINE:[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(module))) return { kind: "blocked" };
     const raw = storage().getItem(key(memberId, module));
     if (raw === null) return { kind: "empty" };
     if (raw.length > 4096) return { kind: "blocked" };

@@ -39,10 +39,13 @@ export async function routeCalendarApi(request: Request, url: URL, context: Requ
     const id = decodePathId(event[1]!);
     if (request.method === "GET") return jsonResponse(await services.calendar.get(member.memberId, id), 200, context.requestId);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["title", "description", "startsAt", "endsAt", "timezone", "allDay", "taskId", "projectId"], "CALENDAR_INVALID");
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt", "title", "description", "startsAt", "endsAt", "timezone", "allDay", "taskId", "projectId"], "CALENDAR_INVALID");
       return jsonResponse(await services.calendar.update(member.memberId, id, input), 200, context.requestId);
     }
-    if (request.method === "DELETE") return jsonResponse(await services.calendar.setStatus(member.memberId, id, "canceled"), 200, context.requestId);
+    if (request.method === "DELETE") {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "CALENDAR_INVALID");
+      return jsonResponse(await services.calendar.cancel(member.memberId, id, input.expectedUpdatedAt), 200, context.requestId);
+    }
     return methodNotAllowed("DELETE, GET, PATCH", context);
   }
   throw new AppError("NOT_FOUND", "Not found", 404);

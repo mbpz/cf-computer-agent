@@ -1,3 +1,4 @@
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import { AppError } from "../http";
 import { normalizeNumberedPageRequest, type NumberedPageRequest, type NumberedPage, parsePageRequest, type PageRequest } from "../pagination";
 import type { ProjectsRepositoryPort } from "../projects/repository";
@@ -22,8 +23,8 @@ export class CalendarService {
     await this.assertRelations(memberId, normalized.taskId, normalized.projectId);
     const now = this.now().getTime();
     const created = await this.repository.insert({ ...normalized, memberId, id: normalized.id, createdAt: now, updatedAt: now });
-    const event = await this.repository.findOwned(memberId, normalized.id);
-    if (!event) throw new AppError("CALENDAR_NOT_FOUND", "Calendar event not found", 404, true);
+    const event = await this.repository.findByClientKey(memberId, normalized.clientKey);
+    if (!event) throw new AppError("CALENDAR_ID_CONFLICT", "Calendar creation conflicts with an existing identifier", 409, false);
     return { event, created };
   }
 
@@ -47,18 +48,27 @@ export class CalendarService {
 
   async update(memberId: string, id: string, input: CalendarEventUpdateInput): Promise<CalendarEvent> {
     const existing = await this.get(memberId, id);
+    const expected = requirePlanningVersion(input.expectedUpdatedAt, existing.updatedAt, "CALENDAR");
     const normalized = normalizeUpdate(input, existing);
     await this.assertRelations(memberId, normalized.taskId, normalized.projectId);
-    const event = await this.repository.update(memberId, id, { ...normalized, updatedAt: this.now().getTime() });
-    if (!event) throw notFound();
+    const event = await this.repository.update(memberId, id, { ...normalized, expectedUpdatedAt: expected, updatedAt: nextPlanningVersion(expected, this.now().getTime()) });
+    if (!event) throw planningConflict("CALENDAR");
+    return event;
+  }
+
+  async cancel(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<CalendarEvent> {
+    const existing = await this.get(memberId, id);
+    const expected = requirePlanningVersion(expectedUpdatedAt, existing.updatedAt, "CALENDAR");
+    const event = await this.repository.updateStatus(memberId, id, "canceled", nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (!event) throw planningConflict("CALENDAR");
     return event;
   }
 
   async setStatus(memberId: string, id: string, status: unknown): Promise<CalendarEvent> {
-    await this.get(memberId, id);
+    const existing = await this.get(memberId, id);
     if (status !== "scheduled" && status !== "completed" && status !== "canceled") throw new AppError("CALENDAR_INVALID", "Calendar status is invalid", 400);
-    const event = await this.repository.updateStatus(memberId, id, status, this.now().getTime());
-    if (!event) throw notFound();
+    const event = await this.repository.updateStatus(memberId, id, status, nextPlanningVersion(Date.parse(existing.updatedAt), this.now().getTime()), Date.parse(existing.updatedAt));
+    if (!event) throw planningConflict("CALENDAR");
     return event;
   }
 
@@ -82,6 +92,7 @@ function normalizeCreate(input: CalendarEventCreateInput, generatedId: string): 
   const taskId = optionalId(record.taskId);
   const projectId = optionalId(record.projectId);
   if (!validId(id) || !validId(clientKey) || (kind !== "event" && kind !== "focus") || !title || title.length > 240 || typeof description !== "string" || description.length > 4000 || typeof timezone !== "string" || timezone.length > 64 || typeof allDay !== "boolean" || endsAt <= startsAt) throw invalid();
+  try { new Intl.DateTimeFormat("en", { timeZone: timezone }); } catch { throw invalid(); }
   return { id, clientKey, kind: kind as CalendarEvent["kind"], title, description, startsAt, endsAt, timezone, allDay, taskId, projectId };
 }
 
@@ -100,7 +111,7 @@ function normalizeUpdate(input: CalendarEventUpdateInput, existing: CalendarEven
     projectId: input.projectId === undefined ? existing.projectId : input.projectId,
   }, existing.id);
 }
-function parseDate(value: unknown): number { const ms = typeof value === "number" && Number.isSafeInteger(value) ? value : typeof value === "string" ? Date.parse(value) : NaN; if (!Number.isSafeInteger(ms) || ms <= 0) throw invalid(); return ms; }
+function parseDate(value: unknown): number { const ms = typeof value === "number" && Number.isSafeInteger(value) ? value : typeof value === "string" ? Date.parse(value) : NaN; if (!Number.isSafeInteger(ms) || ms <= 0 || !Number.isFinite(new Date(ms).getTime())) throw invalid(); return ms; }
 function optionalId(value: unknown): string | null { if (value === undefined || value === null || value === "") return null; if (!validId(value)) throw invalid(); return value; }
 function validId(value: unknown): value is string { return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value); }
 function invalid(): AppError { return new AppError("CALENDAR_INVALID", "Calendar event fields are invalid", 400); }

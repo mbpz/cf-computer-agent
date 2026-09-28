@@ -13,7 +13,7 @@ describe("calendar numbered range through App", () => {
   const button = (label: string) => main().querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
   const response = (url: URL) => {
     const page = Number(url.searchParams.get("page") ?? 1), pageSize = Number(url.searchParams.get("pageSize") ?? 20);
-    return Response.json({ items: Array.from({ length: Math.max(0,Math.min(pageSize, total-(page-1)*pageSize)) }, (_, i) => ({ id: `event-${(page-1)*pageSize+i}`, clientKey: `key-${i}`, kind: "event", title: `Private event ${(page-1)*pageSize+i}`, description: "", startsAt: url.searchParams.get("from"), endsAt: url.searchParams.get("to"), timezone: "UTC", allDay: false, status: url.searchParams.get("status") ?? "scheduled", taskId: null, projectId: null })), pagination: { page: malformed ? 99 : page, pageSize, total, totalPages: Math.ceil(total/pageSize) } });
+    return Response.json({ items: Array.from({ length: Math.max(0,Math.min(pageSize, total-(page-1)*pageSize)) }, (_, i) => ({ id: `event-${(page-1)*pageSize+i}`, updatedAt: "2026-09-28T00:00:00.000Z", clientKey: `key-${i}`, kind: "event", title: `Private event ${(page-1)*pageSize+i}`, description: "", startsAt: url.searchParams.get("from"), endsAt: url.searchParams.get("to"), timezone: "UTC", allDay: false, status: url.searchParams.get("status") ?? "scheduled", taskId: null, projectId: null })), pagination: { page: malformed ? 99 : page, pageSize, total, totalPages: Math.ceil(total/pageSize) } });
   };
   async function mount(search = `?${range}`, count=43) {
     requests=[]; fail=undefined; malformed=false; total=count; delay=false; resolveRead=undefined; signal=undefined;

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadCalendarNumbered } from "../../frontend/lib/calendar-data";
 import { parseCalendarSearch, writeCalendarSearch } from "../../frontend/lib/calendar-query";
 const from = "2026-09-28T00:00:00.000Z", to = "2026-09-29T00:00:00.000Z";
-const event = { id: "one", clientKey: "key", kind: "event", title: "Private", description: "", startsAt: from, endsAt: to, timezone: "UTC", allDay: false, status: "scheduled", taskId: null, projectId: null };
+const event = { id: "one", updatedAt: "2026-09-28T00:00:00.000Z", clientKey: "key", kind: "event", title: "Private", description: "", startsAt: from, endsAt: to, timezone: "UTC", allDay: false, status: "scheduled", taskId: null, projectId: null };
 const query = { page: 1, pageSize: 20 as const, from, to };
 const payload = () => ({ items: [event], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
 describe("calendar numbered data contract", () => {

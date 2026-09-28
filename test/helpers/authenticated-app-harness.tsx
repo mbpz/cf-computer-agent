@@ -43,6 +43,7 @@ export async function mountAuthenticatedApp(options: {
   url: string;
   role: "contributor" | "admin";
   permissionMask: string;
+  configureBrowser?: (browser: InstanceType<typeof Window>) => void;
   fetch: typeof globalThis.fetch;
 }): Promise<MountedApp> {
   const session = {
@@ -59,6 +60,7 @@ export async function mountAuthenticatedApp(options: {
   };
   return mountApp({
     url: options.url,
+    configureBrowser: options.configureBrowser,
     fetch: (input, init) => String(input) === "/api/session"
       ? Promise.resolve(Response.json(session))
       : options.fetch(input, init),
