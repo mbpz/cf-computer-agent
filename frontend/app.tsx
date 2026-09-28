@@ -445,45 +445,93 @@ export function AdminRolesRoute({ locale }: { locale: LocaleRuntime }) {
     onUnassignMember={(role, memberId) => mutate(() => unassignAdminRoleMember(role.id, memberId), "ADMIN_ROLES_MEMBER_ASSIGN_ERROR")} />;
 }
 
-function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; menus: AdminMenu[] } | { kind: "error"; message: string }>({ kind: "loading" });
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const { retryVersion, retryRead } = useInitialReadRetry(state.kind, () => setState({ kind: "loading" }));
+export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; menus: AdminMenu[] } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
+  const [saving, setSaving] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [needsRead, setNeedsRead] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const epoch = useRef<object | null>(null);
+  const readRef = useRef<AbortController | null>(null);
+  const writeRef = useRef<object | null>(null);
+  const blockedRef = useRef(false);
+  const deny = (error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_MENUS_UNAVAILABLE") });
+    setSaveError(null);
+    return true;
+  };
+  const read = async () => {
+    if (!epoch.current || readRef.current) return false;
+    const scope = epoch.current;
+    const controller = new AbortController();
+    const activeWrite = writeRef.current;
+    readRef.current = controller;
+    setReading(true);
+    try {
+      const menus = await loadAdminMenus(fetch, controller.signal);
+      if (epoch.current !== scope || readRef.current !== controller) return false;
+      setState({ kind: "ready", menus });
+      if (!activeWrite && !writeRef.current) {
+        blockedRef.current = false;
+        setNeedsRead(false);
+        setSaveError(null);
+      }
+      return true;
+    } catch (error) {
+      if (epoch.current !== scope || readRef.current !== controller) return false;
+      if (!deny(error)) {
+        const message = frontendText(locale, "ADMIN_MENUS_UNAVAILABLE");
+        setState((previous) => previous.kind === "ready" ? previous : { kind: "error", message });
+        setSaveError(message);
+      }
+      return false;
+    } finally {
+      if (readRef.current === controller) { readRef.current = null; setReading(false); }
+    }
+  };
   useEffect(() => {
-    let active = true;
+    epoch.current = {};
     setState({ kind: "loading" });
-    void loadAdminMenus().then((menus) => { if (active) setState({ kind: "ready", menus }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "ADMIN_MENUS_UNAVAILABLE") }); });
-    return () => { active = false; };
-  }, [locale, retryVersion]);
-  const update = async (menu: AdminMenu, input: { position?: number; status?: "active" | "disabled"; visible?: boolean }) => {
-    if (pendingId) return;
-    setPendingId(menu.id);
-    setError(null);
-    try {
-      const updated = await updateAdminMenu(menu.id, input);
-      setState((previous) => previous.kind === "ready" ? { ...previous, menus: replaceMenu(previous.menus, updated) } : previous);
-    } catch { setError(frontendText(locale, "ADMIN_MENUS_SAVE_ERROR")); } finally { setPendingId(null); }
+    void read();
+    return () => { epoch.current = null; readRef.current?.abort(); readRef.current = null; };
+  }, [locale]);
+  const retryRead = () => {
+    if (readRef.current || writeRef.current) return;
+    if (state.kind !== "ready") setState({ kind: "loading" });
+    void read();
   };
-  const remove = async (menu: AdminMenu) => {
-    if (pendingId) return;
-    setPendingId(menu.id);
-    setError(null);
+  const mutate = async (operation: () => Promise<unknown>, errorKey: string) => {
+    if (!epoch.current || state.kind !== "ready" || writeRef.current || readRef.current || blockedRef.current) return false;
+    const scope = epoch.current;
+    const token = {};
+    writeRef.current = token;
+    blockedRef.current = true;
+    setSaving(true);
+    setNeedsRead(true);
+    setSaveError(null);
     try {
-      await deleteAdminMenu(menu.id);
-      setState((previous) => previous.kind === "ready" ? { ...previous, menus: removeMenu(previous.menus, menu.id) } : previous);
-    } catch { setError(frontendText(locale, "ADMIN_MENUS_DELETE_ERROR")); } finally { setPendingId(null); }
+      await operation();
+      if (epoch.current !== scope) return false;
+      // A receipt acknowledges the request, not the current menu hierarchy. Always read it.
+      writeRef.current = null;
+      setSaving(false);
+      return await read();
+    } catch (error) {
+      if (epoch.current === scope && !deny(error)) setSaveError(frontendText(locale, errorKey));
+      return false;
+    } finally {
+      if (writeRef.current === token) {
+        writeRef.current = null;
+        if (epoch.current) setSaving(false);
+      }
+    }
   };
-  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} error={error} onUpdate={(menu, input) => void update(menu, input)} onDelete={(menu) => void remove(menu)} />;
+  return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={saveError}
+    onUpdate={(menu, input) => { void mutate(() => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR"); }}
+    onDelete={(menu) => { void mutate(() => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;
 }
 
-function replaceMenu(menus: readonly AdminMenu[], updated: AdminMenu): AdminMenu[] {
-  return menus.map((menu) => menu.id === updated.id ? { ...updated, children: menu.children } : { ...menu, children: replaceMenu(menu.children, updated) });
-}
-
-function removeMenu(menus: readonly AdminMenu[], id: string): AdminMenu[] {
-  return menus.filter((menu) => menu.id !== id).map((menu) => ({ ...menu, children: removeMenu(menu.children, id) }));
-}
 
 function decodeRouteId(pathname: string): string {
   const value = pathname.split("/").pop() || "";

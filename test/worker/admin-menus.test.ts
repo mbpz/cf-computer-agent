@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
+import { loadAdminMenus } from "../../frontend/lib/admin-menus-data";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("admin menus API", () => {
@@ -109,6 +110,59 @@ describe("admin menus API", () => {
     expect((await api(`/api/admin/menus/${menu.id}`, admin, { method: "DELETE" })).status).toBe(200);
     expect((await api("/api/admin/menus/menu-workspace", admin, { method: "DELETE" })).status).toBe(409);
   });
+  it("sends a usable management tree including disabled, hidden and empty nodes", async()=>{
+    await env.DB.prepare("UPDATE menus SET status='disabled',visible=0 WHERE id='menu-custom'").run();
+    const tree=await loadAdminMenus(async()=>api("/api/admin/menus",admin));
+    const custom=tree.find(item=>item.id==="menu-workspace")?.children.find(item=>item.id==="menu-custom");
+    expect(custom).toMatchObject({parentId:"menu-workspace",status:"disabled",visible:false,isSystem:false});
+    expect(tree.find(item=>item.id==="menu-admin")).toMatchObject({isSystem:true});
+    await env.DB.prepare("UPDATE menus SET path=NULL,parent_id=NULL WHERE id='menu-custom'").run();
+    expect((await loadAdminMenus(async()=>api("/api/admin/menus",admin))).find(item=>item.id==="menu-custom")).toMatchObject({path:null,children:[]});
+    const nav=JSON.stringify(await (await api("/api/navigation",contributor)).json());expect(nav).not.toContain("menu-custom");
+  });
+  it.each(["POST","PATCH","DELETE"])("rolls back %s when menu audit fails",async method=>{
+    const before=await env.DB.prepare("SELECT * FROM menus ORDER BY id").all();
+    await env.DB.exec("CREATE TRIGGER fail_menu_audit BEFORE INSERT ON audit_events WHEN NEW.resource_type='menu' BEGIN SELECT RAISE(ABORT,'menu audit unavailable'); END");
+    const response=await api(method==="POST"?"/api/admin/menus":"/api/admin/menus/menu-custom",admin,{method,...(method==="DELETE"?{}:{body:JSON.stringify(method==="PATCH"?{status:"disabled"}:{key:"new-menu",labelKey:"NAV_HOME",path:"/new-menu",groupName:"workspace",position:5,requiredBits:"0x0"})})});
+    expect(response.status).toBe(500);expect((await env.DB.prepare("SELECT * FROM menus ORDER BY id").all()).results).toEqual(before.results);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toEqual([]);
+  });
+  it("keeps concurrently reparented menus acyclic",async()=>{
+    await env.DB.prepare("UPDATE menus SET parent_id=NULL WHERE id='menu-custom'").run();
+    const created=await api("/api/admin/menus",admin,{method:"POST",body:JSON.stringify({key:"second",labelKey:"NAV_HOME",path:"/second",groupName:"workspace",position:50,requiredBits:"0x0"})});expect(created.status).toBe(201);const id=(await created.json() as {menu:{id:string}}).menu.id;
+    const responses=await Promise.all([api("/api/admin/menus/menu-custom",admin,{method:"PATCH",body:JSON.stringify({parentId:id})}),api(`/api/admin/menus/${id}`,admin,{method:"PATCH",body:JSON.stringify({parentId:"menu-custom"})})]);
+    expect(responses.filter(item=>item.status===200)).toHaveLength(1);expect(responses.every(item=>[200,400,409].includes(item.status))).toBe(true);expect((await api("/api/admin/menus",admin)).status).toBe(200);
+  });
+
+  it("keeps successful concurrent update receipts and audits consistent",async()=>{
+    const responses=await Promise.all(["/one","/two","/three"].map(path=>api("/api/admin/menus/menu-custom",admin,{method:"PATCH",body:JSON.stringify({path})})));
+    const paths=["/one","/two","/three"];for(let i=0;i<responses.length;i++){expect([200,409]).toContain(responses[i]!.status);if(responses[i]!.status===200)await expect(responses[i]!.json()).resolves.toMatchObject({menu:{path:paths[i]}});}
+    const audits=await env.DB.prepare("SELECT metadata FROM audit_events WHERE resource_type='menu' ORDER BY rowid").all<{metadata:string}>();expect(audits.results).toHaveLength(responses.filter(item=>item.status===200).length);expect(audits.results.length).toBeGreaterThan(0);let previous="/custom";for(const row of audits.results){const data=JSON.parse(row.metadata);expect(data.previousPath).toBe(previous);previous=data.path;}expect((await env.DB.prepare("SELECT path FROM menus WHERE id='menu-custom'").first<{path:string}>())?.path).toBe(previous);
+  });
+  it("emits one audit for racing deletes",async()=>{
+    const responses=await Promise.all([1,2,3].map(()=>api("/api/admin/menus/menu-custom",admin,{method:"DELETE"})));expect(responses.filter(item=>item.status===200)).toHaveLength(1);expect(responses.every(item=>[200,404,409].includes(item.status))).toBe(true);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toHaveLength(1);
+  });
+  it("does not orphan a child when parent deletion races child creation",async()=>{
+    const responses=await Promise.all([api("/api/admin/menus/menu-custom",admin,{method:"DELETE"}),api("/api/admin/menus",admin,{method:"POST",body:JSON.stringify({key:"child",labelKey:"NAV_HOME",path:"/child",parentId:"menu-custom",groupName:"workspace",position:1,requiredBits:"0x0"})})]);expect(responses.filter(item=>item.status===200||item.status===201)).toHaveLength(1);expect(responses.every(item=>[200,201,400,409].includes(item.status))).toBe(true);expect((await api("/api/admin/menus",admin)).status).toBe(200);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toHaveLength(1);
+  });
+  it("enforces contributor and disabled-admin write boundaries without audit side effects",async()=>{
+    const write=(token:string,method:string)=>api(method==="POST"?"/api/admin/menus":"/api/admin/menus/menu-custom",token,{method,...(method==="DELETE"?{}:{body:JSON.stringify(method==="POST"?{key:"denied",labelKey:"NAV_HOME",path:"/denied",groupName:"workspace",position:1,requiredBits:"0x0"}:{visible:false})})});for(const method of ["POST","PATCH","DELETE"])expect((await write(contributor,method)).status).toBe(403);await env.DB.prepare("UPDATE members SET status='disabled' WHERE id='menu-admin'").run();for(const method of ["POST","PATCH","DELETE"])expect((await write(admin,method)).status).toBe(403);expect((await env.DB.prepare("SELECT visible FROM menus WHERE id='menu-custom'").first<{visible:number}>())?.visible).toBe(1);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toEqual([]);
+  });
+  it("does not let navigation visibility grant API access",async()=>{
+    await env.DB.prepare("UPDATE menus SET required_bits='0x0' WHERE path='/admin/submissions'").run();expect((await api("/api/admin/menus",contributor)).status).toBe(403);expect((await api("/api/admin/submissions",contributor)).status).toBe(403);
+  });
+  it("rejects a duplicate create path as a conflict without an audit",async()=>{
+    const response=await api("/api/admin/menus",admin,{method:"POST",body:JSON.stringify({key:"duplicate-path",labelKey:"NAV_HOME",path:"/custom",groupName:"workspace",position:1,requiredBits:"0x0"})});
+    expect(response.status).toBe(409);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toEqual([]);
+  });
+  it("rejects excessive create depth as invalid input without an audit",async()=>{
+    await env.DB.exec("INSERT INTO menus(id,parent_id,key,label_key,path,group_name,position,required_bits,status,visible,is_system,created_at,updated_at) VALUES ('depth-three','menu-custom','depth-three','NAV_HOME','/depth-three','workspace',1,'0x0','active',1,0,'2026-09-28','2026-09-28'),('depth-four','depth-three','depth-four','NAV_HOME','/depth-four','workspace',1,'0x0','active',1,0,'2026-09-28','2026-09-28')");
+    const response=await api("/api/admin/menus",admin,{method:"POST",body:JSON.stringify({key:"depth-five",labelKey:"NAV_HOME",path:"/depth-five",parentId:"depth-four",groupName:"workspace",position:1,requiredBits:"0x0"})});
+    expect(response.status).toBe(400);expect((await env.DB.prepare("SELECT id FROM audit_events WHERE resource_type='menu'").all()).results).toEqual([]);
+  });
+  it("rejects overflow instead of silently returning a truncated configuration",async()=>{
+    await env.DB.exec("WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<201) INSERT INTO menus(id,key,label_key,path,group_name,position,required_bits,status,visible,is_system,created_at,updated_at) SELECT 'overflow-'||n,'overflow-'||n,'NAV_HOME','/overflow-'||n,'workspace',n,'0x0','active',1,0,'2026-09-28T00:00:00Z','2026-09-28T00:00:00Z' FROM seq");expect((await api("/api/admin/menus",admin)).status).toBe(409);
+  });
+
 });
 
 async function api(path: string, token: string, init: RequestInit = {}): Promise<Response> {

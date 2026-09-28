@@ -1,0 +1,91 @@
+// @vitest-environment node
+import React, { act } from "react";
+import type { Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AdminMenusRoute } from "../../frontend/app";
+import { createLocaleRuntime } from "../../frontend/lib/i18n";
+
+const vmContexts = new WeakSet<object>();
+class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
+vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
+const { Window } = await import("happy-dom");
+
+
+
+describe("menu write recovery", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+
+
+
+  async function render(runtime = locale()) { await act(async () => root.render(<AdminMenusRoute locale={runtime} />)); await flush(); }
+  function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
+  async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
+
+  it("admits only one same-batch write and reads the authoritative hierarchy", async () => {
+    const pending=deferred<Response>();const calls:string[]=[];let refreshed=false;
+    vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{const method=init?.method||"GET";calls.push(method);return method==="PATCH"?pending.promise:json({tree:[menu({labelKey:refreshed?"Fresh label":"NAV_HOME",status:refreshed?"disabled":"active"})]});});
+    await render();await act(async()=>{button("Disable").click();button("Disable").click();});expect(calls).toEqual(["GET","PATCH"]);
+    refreshed=true;pending.resolve(json({menu:menu({status:"disabled"})}));await flush();expect(calls).toEqual(["GET","PATCH","GET"]);expect(container.textContent).toContain("Fresh label");expect(button("Enable").disabled).toBe(false);
+  });
+  it.each([401,403])("clears the menu tree on write %s and recovers with GET only",async status=>{
+    const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?new Response(null,{status}):json({tree:[menu()]});});
+    await render();await click("Disable");expect(container.textContent).not.toContain("/private-menu");await click("Try again");expect(calls).toEqual(["GET","PATCH","GET"]);
+  });
+  it.each(["network","server","wrong-id","wrong-status","wrong-position"])("locks writes after %s until a read-only recovery",async failure=>{
+    const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{const method=init?.method||"GET";calls.push(method);if(method==="GET")return json({tree:[menu()]});if(failure==="network")throw new TypeError("lost");if(failure==="server")return new Response(null,{status:503});return json({menu:menu({id:failure==="wrong-id"?"other":"custom",status:failure==="wrong-status"?"active":"disabled",position:failure==="wrong-position"?99:1})});});
+    await render();if(failure==="wrong-position"){await position(4);await click("Save");}else await click("Disable");expect(button("Delete").disabled).toBe(true);expect(calls).toEqual(["GET","PATCH"]);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET"]);expect(button("Delete").disabled).toBe(false);
+  });
+  it.each([401,403,503])("does not unlock after acknowledged write then GET %s",async status=>{
+    const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{const method=init?.method||"GET";calls.push(method);return method==="PATCH"?json({menu:menu({status:"disabled"})}):calls.length>1?new Response(null,{status}):json({tree:[menu()]});});
+    await render();await click("Disable");expect(calls).toEqual(["GET","PATCH","GET"]);if(status===503)expect(button("Delete").disabled).toBe(true);else expect(container.textContent).not.toContain("/private-menu");
+  });
+  it.each([{}, {menu:{id:"other"}}, {menu:menu({id:"other"})}])("rejects a malformed or wrong-target DELETE receipt %j",async receipt=>{
+    const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return json(init?.method?receipt:{tree:[menu()]});});await render();await click("Delete");expect(container.textContent).toContain("/private-menu");expect(button("Disable").disabled).toBe(true);await click("Try again");expect(calls).toEqual(["GET","DELETE","GET"]);
+  });
+  it("reads after DELETE instead of pruning the local tree optimistically",async()=>{
+    let count=0;const pending=deferred<Response>();vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method==="DELETE"?json({menu:menu()}):++count===1?json({tree:[menu()]}):pending.promise);
+    await render();await click("Delete");expect(container.textContent).toContain("/private-menu");expect(button("Disable").disabled).toBe(true);pending.resolve(json({tree:[]}));await flush();expect(container.textContent).toContain("No menus configured.");
+  });
+  it.each([{},{tree:[menu({children:[{}]})]},{tree:[menu(),menu()]},{tree:[menu({parentId:"missing"})]},{tree:[menu({children:[menu({id:"child",key:"child",parentId:null})]})]}])("rejects malformed hierarchy rather than presenting partial success %j",async data=>{
+    vi.stubGlobal("fetch",async()=>json(data));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");expect(button("Try again")).toBeTruthy();
+  });
+  it("refreshes position input from authoritative read after an uncertain write",async()=>{
+    let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));await render();await position(4);await click("Save");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");await click("Try again");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("7");expect(button("Save").disabled).toBe(true);
+  });
+  it("does not let a late old-scope denial clear a freshly read tree",async()=>{
+    const pending=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:json({tree:[menu({labelKey:++gets===1?"Old":"New scope"})]});});await render();await click("Disable");await render(locale());pending.resolve(new Response(null,{status:403}));await flush();expect(container.textContent).toContain("New scope");expect(button("Disable").disabled).toBe(true);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET","GET"]);expect(button("Disable").disabled).toBe(false);
+  });
+  it("does not unlock when a scope read started before the old write finished",async()=>{
+    const write=deferred<Response>();const read=deferred<Response>();let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?write.promise:++gets===2?read.promise:json({tree:[menu()]}));await render();await click("Disable");await render(locale());write.resolve(json({menu:menu({status:"disabled"})}));await flush();read.resolve(json({tree:[menu()]}));await flush();expect(button("Disable").disabled).toBe(true);await click("Try again");expect(button("Disable").disabled).toBe(false);
+  });
+  it("retains read-only recovery when a new scope returns an empty hierarchy during an old write",async()=>{
+    const write=deferred<Response>();let gets=0;const calls:string[]=[];
+    vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?write.promise:json({tree:++gets===2?[]:[menu()]});});
+    await render();await click("Disable");await render(locale());write.resolve(new Response(null,{status:503}));await flush();
+    await click("Try again");expect(calls).toEqual(["GET","PATCH","GET","GET"]);expect(button("Disable").disabled).toBe(false);
+  });
+  it("can reveal a hidden menu without removing it from management",async()=>{
+    let visible=false;const bodies:unknown[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method){bodies.push(JSON.parse(String(init.body)));visible=true;return json({menu:menu({visible})});}return json({tree:[menu({visible})]});});await render();await click("Show");expect(bodies).toEqual([{visible:true}]);expect(button("Hide").disabled).toBe(false);expect(container.textContent).toContain("/private-menu");
+  });
+  it("rejects a visibility receipt that did not apply the intended value",async()=>{
+    const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return json(init?.method?{menu:menu()}:{tree:[menu()]});});await render();await click("Hide");expect(button("Disable").disabled).toBe(true);expect(calls).toEqual(["GET","PATCH"]);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET"]);
+  });
+  it("locks all rows for a pending write and coalesces recovery reads",async()=>{
+    const pending=deferred<Response>();const recovery=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:++gets===1?json({tree:[menu(),menu({id:"second",key:"second",path:"/second"})]}):recovery.promise;});await render();await click("Disable");expect([...container.querySelectorAll("button")].filter(item=>item.textContent==="Delete").every(item=>item.disabled)).toBe(true);pending.resolve(new Response(null,{status:503}));await flush();await act(async()=>{button("Try again").click();button("Try again").click();});expect(calls).toEqual(["GET","PATCH","GET"]);recovery.resolve(json({tree:[menu()]}));await flush();expect(button("Disable").disabled).toBe(false);
+  });
+  it.each([menu({requiredBits:"0x10000000000000000"}), menu({children:undefined}), menu({position:10001})])("rejects out-of-contract menu data %j",async node=>{
+    vi.stubGlobal("fetch",async()=>json({tree:[node]}));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");
+  });
+  it("rejects duplicate paths in an otherwise valid tree",async()=>{
+    vi.stubGlobal("fetch",async()=>json({tree:[menu(),menu({id:"other",key:"other"})]}));await render();expect(container.textContent).toContain("Menus are temporarily unavailable.");
+  });
+  async function position(value:number){const el=container.querySelector('input[type="number"]') as HTMLInputElement;await act(async()=>{const setter=Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!;setter.call(el,String(value));el.dispatchEvent(new browser.Event("input",{bubbles:true}));});}
+});
+function menu(overrides:Record<string,unknown>={}){return {id:"custom",parentId:null,key:"custom",labelKey:"NAV_HOME",path:"/private-menu",icon:null,groupName:"workspace",position:1,requiredBits:"0x0",status:"active",visible:true,isSystem:false,children:[],...overrides};}
+function json(value:unknown){return new Response(JSON.stringify(value),{headers:{"content-type":"application/json"}});}
+function locale(){return createLocaleRuntime({navigatorLanguage:"en"});}
+async function flush(){await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));for(let i=0;i<12;i++)await Promise.resolve();});}
+function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(yes=>{resolve=yes;});return {promise,resolve};}
