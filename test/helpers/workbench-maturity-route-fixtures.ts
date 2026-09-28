@@ -252,7 +252,7 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/admin/menus") return probeResponse(state, { tree: [] }, { tree: [{ id: "ready-admin-menus", parentId: null, key: "ready-admin-menus", labelKey: "READY_ADMIN_MENUS", path: "/fixture", icon: null, groupName: "admin", position: 1, requiredBits: "0x0", status: "active", visible: true, isSystem: false, children: [] }] });
       return null;
     case "admin-spaces":
-      if (path === "/api/admin/spaces?limit=50") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-spaces", name: "READY::admin-spaces", slug: "ready-space", status: "active" }] });
+      if (path === "/api/admin/spaces?limit=50") return probeResponse(state, { items: [] }, { items: [{ id: "ready-admin-spaces", name: "READY::admin-spaces", slug: "ready-space", status: "active", kind: "shared", readOnly: false, description: "", position: 0, createdAt: "2026-09-28T00:00:00.000Z", updatedAt: "2026-09-28T00:00:00.000Z" }] });
       if (path === "/api/admin/spaces/ready-admin-spaces/collections?limit=50") return Response.json({ items: [] });
       return null;
     case "admin-audit":

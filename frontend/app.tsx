@@ -81,7 +81,7 @@ import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussi
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
-import { createAdminSpace, loadAdminSpaces, type AdminSpace } from "./lib/admin-spaces-data";
+import { createAdminSpace, loadAdminSpacesPage, loadAdminCollections, type AdminSpace } from "./lib/admin-spaces-data";
 import { createAdminAuditRequestController, type AdminAuditEvent } from "./lib/admin-audit-data";
 import { loadWorkspaceActivity, type WorkspaceActivityItem } from "./lib/activity-data";
 import { loadKnowledgeReview, type ReviewPeriod, type ReviewResult } from "./lib/review-data";
@@ -2908,15 +2908,75 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
   return <MembersPage onLoadRetry={retryRead} locale={locale} status={status || ""} loading={state.kind === "loading"} forbidden={state.kind === "forbidden"} error={state.kind === "error" || state.kind === "forbidden" ? state.message : undefined} pageError={localError} members={state.kind === "ready" ? state.data.items : []} pagination={state.kind === "ready" ? state.data.pagination : undefined} pending={pending} pendingIds={pendingIds} readRequired={pendingIds.some((id) => needsReadRef.current.has(id) && !mutationsRef.current.has(id))} actionError={actionError} onStatusFilterChange={(next) => navigate({ page: 1, pageSize, status: next || undefined })} onPageChange={(next) => navigate({ page: next, pageSize, status })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next, status })} onStatusChange={changeStatus} />;
 }
 
-function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[] } | { kind: "error"; message: string }>({ kind: "loading" });
-  const { retryVersion, retryRead } = useInitialReadRetry(state.kind, () => setState({ kind: "loading" }));
-  useEffect(() => { let active = true; loadAdminSpaces().then((spaces) => { if (active) setState({ kind: "ready", spaces }); }).catch(() => { if (active) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale, retryVersion]);
-  const create = async (input: { slug: string; name: string }) => {
-    const space = await createAdminSpace(input);
-    setState((previous) => previous.kind === "ready" ? { ...previous, spaces: [...previous.spaces, space] } : { kind: "ready", spaces: [space] });
+export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; spaces: AdminSpace[]; nextCursor?: string } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [pending, setPending] = useState(false);
+  const [needsRead, setNeedsRead] = useState(false);
+  const scope = useRef(0);
+  const write = useRef<object | null>(null);
+  const blocked = useRef(false);
+  const readController = useRef<AbortController | null>(null);
+  const requireRead = () => { blocked.current = true; setNeedsRead(true); };
+  const deny = (error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    scope.current++; readController.current?.abort(); readController.current = null; setPending(false);
+    setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    return true;
   };
-  return <SpacesPage onLoadRetry={retryRead} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} onCreate={create} />;
+  const read = async (mode: "reset" | "spaces" | "collections" = "reset", spaceId?: string) => {
+    if (readController.current) return false;
+    const controller = new AbortController(); readController.current = controller;
+    const epoch = scope.current; const activeWrite = write.current;
+    setPending(true);
+    setState(previous => previous.kind === "ready" ? previous : { kind: "loading" });
+    try {
+      let spaces: AdminSpace[]; let nextCursor: string | undefined;
+      if (mode === "collections" && state.kind === "ready") {
+        const target = state.spaces.find(item => item.id === spaceId);
+        if (!target?.collectionsCursor) return false;
+        const data = await loadAdminCollections(target.id, { signal: controller.signal, cursor: target.collectionsCursor });
+        if (data.nextCursor === target.collectionsCursor || data.items.some(item => target.collections.some(old => old.id === item.id))) throw new Error("SPACE_PAGE_OVERLAP");
+        spaces = state.spaces.map(item => item.id === target.id ? { ...item, collections: [...item.collections, ...data.items], collectionsCursor: data.nextCursor } : item);
+        nextCursor = state.nextCursor;
+      } else {
+        const cursor = mode === "spaces" && state.kind === "ready" ? state.nextCursor : undefined;
+        const data = await loadAdminSpacesPage({ signal: controller.signal, cursor });
+        const previous = mode === "spaces" && state.kind === "ready" ? state.spaces : [];
+        if ((cursor && data.nextCursor === cursor) || data.items.some(item => previous.some(old => old.id === item.id))) throw new Error("SPACE_PAGE_OVERLAP");
+        spaces = [...previous, ...data.items]; nextCursor = data.nextCursor;
+      }
+      if (epoch !== scope.current || controller.signal.aborted) return false;
+      setState({ kind: "ready", spaces, nextCursor });
+      // A GET started before a write settled is not post-write evidence.
+      if (!activeWrite && !write.current) { blocked.current = false; setNeedsRead(false); }
+      return true;
+    } catch (error) {
+      if (epoch !== scope.current || controller.signal.aborted) return false;
+      requireRead();
+      if (!deny(error)) setState(previous => previous.kind === "ready" ? previous : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      return false;
+    } finally {
+      if (readController.current === controller) { readController.current = null; setPending(false); }
+    }
+  };
+  useEffect(() => {
+    scope.current++; setState({ kind: "loading" }); void read();
+    return () => { scope.current++; readController.current?.abort(); readController.current = null; };
+  }, [locale]);
+  const create = async (input: { slug: string; name: string }) => {
+    if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
+    const token = {}; const epoch = scope.current; write.current = token; requireRead();
+    try {
+      await createAdminSpace(input);
+      if (epoch !== scope.current) return false;
+      write.current = null;
+      return await read();
+    } catch (error) {
+      if (epoch === scope.current) { requireRead(); deny(error); }
+      return false;
+    } finally { if (write.current === token) write.current = null; }
+  };
+  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} needsRead={needsRead} onCreate={create} />;
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

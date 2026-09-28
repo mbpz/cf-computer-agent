@@ -40,6 +40,7 @@ export interface CreateSpace {
 }
 
 export interface UpdateSpace {
+  expectedUpdatedAt?: string;
   slug?: string;
   name?: string;
   description?: string;
@@ -61,6 +62,7 @@ export interface CreateCollection {
 }
 
 export interface UpdateCollection {
+  expectedUpdatedAt?: string;
   parentId?: string | null;
   name?: string;
   description?: string;
