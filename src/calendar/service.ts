@@ -1,5 +1,5 @@
 import { AppError } from "../http";
-import { parsePageRequest, type PageRequest } from "../pagination";
+import { normalizeNumberedPageRequest, type NumberedPageRequest, type NumberedPage, parsePageRequest, type PageRequest } from "../pagination";
 import type { ProjectsRepositoryPort } from "../projects/repository";
 import type { TasksRepositoryPort } from "../tasks/repository";
 import type { CalendarRepositoryPort } from "./repository";
@@ -31,6 +31,12 @@ export class CalendarService {
     const event = await this.repository.findOwned(memberId, id);
     if (!event) throw notFound();
     return event;
+  }
+
+  async listNumbered(memberId: string, from: number, to: number, request: Partial<NumberedPageRequest> = {}, status?: CalendarEventStatus): Promise<NumberedPage<CalendarEvent>> {
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to <= from || to - from > 31 * 86_400_000) throw new AppError("CALENDAR_RANGE_INVALID", "Calendar range is invalid", 400);
+    if (status !== undefined && !["scheduled", "completed", "canceled"].includes(status)) throw new AppError("CALENDAR_PAGE_INVALID", "Calendar status is invalid", 400);
+    return this.repository.listNumbered(memberId, { ...normalizeNumberedPageRequest(request, "CALENDAR_PAGE_INVALID"), from, to, ...(status ? { status } : {}) });
   }
 
   async list(memberId: string, from: number, to: number, request: Partial<PageRequest> = {}, status?: CalendarEventStatus): Promise<CalendarEventPage> {

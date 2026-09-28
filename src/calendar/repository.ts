@@ -1,8 +1,11 @@
+import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { queryNumberedPage } from "../pagination-d1";
 import { AppError } from "../http";
 import { decodeOpaqueCursor, encodeOpaqueCursor, parsePageRequest, type PageRequest } from "../pagination";
 import type { CalendarEvent, CalendarEventListRequest, CalendarEventPage, CalendarEventStatus } from "./types";
 
 export interface CalendarRepositoryPort {
+  listNumbered(memberId: string, request: NumberedPageRequest & { from: number; to: number; status?: CalendarEventStatus }): Promise<NumberedPage<CalendarEvent>>;
   insert(input: { id: string; memberId: string; clientKey: string; kind: CalendarEvent["kind"]; title: string; description: string; startsAt: number; endsAt: number; timezone: string; allDay: boolean; taskId: string | null; projectId: string | null; createdAt: number; updatedAt: number }): Promise<boolean>;
   findOwned(memberId: string, id: string): Promise<CalendarEvent | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<CalendarEvent | null>;
@@ -36,6 +39,18 @@ export class CalendarRepository implements CalendarRepositoryPort {
 
   async findByClientKey(memberId: string, clientKey: string): Promise<CalendarEvent | null> {
     return mapRow(await this.db.prepare(`SELECT ${columns} FROM calendar_events WHERE member_id = ? AND client_key = ? LIMIT 1`).bind(memberId, clientKey).first<CalendarRow>());
+  }
+
+  async listNumbered(memberId: string, request: NumberedPageRequest & { from: number; to: number; status?: CalendarEventStatus }): Promise<NumberedPage<CalendarEvent>> {
+    const pagination = normalizeNumberedPageRequest(request, "CALENDAR_PAGE_INVALID");
+    const where = "member_id = ? AND starts_at < ? AND ends_at > ?" + (request.status ? " AND status = ?" : "");
+    const values = request.status ? [memberId, request.to, request.from, request.status] : [memberId, request.to, request.from];
+    return queryNumberedPage(this.db,
+      this.db.prepare(`SELECT COUNT(*) AS total FROM calendar_events WHERE ${where}`).bind(...values),
+      this.db.prepare(`SELECT ${columns} FROM calendar_events WHERE ${where} ORDER BY starts_at ASC, id ASC LIMIT ? OFFSET ?`)
+        .bind(...values, pagination.pageSize, pageOffset(pagination, "CALENDAR_PAGE_INVALID")),
+      pagination, row => mapRow(row as CalendarRow)!,
+    );
   }
 
   async listOwned(memberId: string, request: CalendarEventListRequest): Promise<CalendarEventPage> {

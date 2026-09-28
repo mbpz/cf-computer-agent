@@ -1,3 +1,4 @@
+import { defaultCalendarRange, parseCalendarSearch, writeCalendarSearch, type CalendarQuery } from "./lib/calendar-query";
 import { GoalTasksEditor } from "./components/goal-tasks-editor";
 import { loadTimelineIntent, clearTimelineIntent } from "./lib/timeline-create-intent";
 import { canonicalPlanningVersion, type PlanningWriteRecord } from "./lib/planning-write-recovery";
@@ -62,7 +63,7 @@ import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatu
 import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
-import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
+import { cancelCalendarEvent, createCalendarEvent, loadCalendarNumbered, type CalendarEvent } from "./lib/calendar-data";
 import { loadToday } from "./lib/today-data";
 import { loadCurrentFocus, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
@@ -197,7 +198,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "projects": return <ProjectsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "project-timeline": return <ProjectTimelineRoute key={`${session?.member.id}:${pathname}`} locale={locale} memberId={session?.member.id} projectId={pathname.split("/")[2] || ""} search={search} />;
-    case "calendar": return <CalendarRoute locale={locale} />;
+    case "calendar": return <CalendarRoute key={session?.member.id} locale={locale} search={search} />;
     case "today": return <TodayRoute locale={locale} />;
     case "focus": return <FocusRoute locale={locale} />;
     case "review": return <WorkbenchReviewRoute locale={locale} />;
@@ -1579,44 +1580,71 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} /></>;
 }
 
-export function CalendarRoute({ locale }: { locale: LocaleRuntime }) {
+export function CalendarRoute({ locale, search = "" }: { locale: LocaleRuntime; search?: string }) {
+  const [defaultRange] = useState(defaultCalendarRange);
+  const { page, pageSize, from, to, status } = parseCalendarSearch(search, defaultRange);
+  const query = { page, pageSize, from, to, status };
+  const queryRef = useRef<CalendarQuery>(query); queryRef.current = query;
   const [state, setState] = useState<CalendarPageState>({ kind: "loading" });
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(true);
+  const [writing, setWriting] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [retryVersion, setRetryVersion] = useState(0);
-  const activeRef = useRef(true);
-  const stateRef = useRef<CalendarPageState>({ kind: "loading" });
-  stateRef.current = state;
-  const range = useMemo(() => {
-    const from = new Date(); from.setHours(0, 0, 0, 0);
-    const to = new Date(from); to.setDate(to.getDate() + 14);
-    return { from, to };
-  }, [retryVersion]);
-  const refresh = useCallback(async (append = false) => {
-    const current = stateRef.current;
-    const cursor = append && current.kind === "ready" ? current.nextCursor : undefined;
-    setPending(true); setActionError(undefined);
+  const activeRef = useRef(true), pendingRef = useRef(true), writingRef = useRef(false);
+  const generationRef = useRef(0), controllerRef = useRef<AbortController | null>(null);
+  const invalidate = useCallback(() => {
+    generationRef.current++; controllerRef.current?.abort(); pendingRef.current = true;
+    setPending(true); setState({ kind: "loading" }); setActionError(undefined);
+  }, []);
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    const next = parseCalendarSearch(window.location.search, defaultRange);
+    const current = queryRef.current;
+    if (next.page !== current.page || next.pageSize !== current.pageSize || next.from !== current.from || next.to !== current.to || next.status !== current.status) {
+      queryRef.current = next; invalidate();
+    }
+  }), [defaultRange, invalidate]);
+  useEffect(() => {
+    const canonical = writeCalendarSearch(search, { page, pageSize, from, to, status });
+    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+  }, [search, page, pageSize, from, to, status]);
+  const refresh = useCallback(async () => {
+    invalidate(); const generation = generationRef.current;
+    const controller = new AbortController(); controllerRef.current = controller;
     try {
-      const page = await loadCalendar({ ...range, limit: 50, ...(cursor ? { cursor } : {}) });
-      if (!activeRef.current) return;
-      setState((previous) => append && previous.kind === "ready" ? { kind: "ready", items: [...previous.items, ...page.items], nextCursor: page.nextCursor } : { kind: "ready", items: page.items, nextCursor: page.nextCursor });
+      const result = await loadCalendarNumbered({ page, pageSize, from, to, status }, fetch, controller.signal);
+      if (!activeRef.current || generation !== generationRef.current) return;
+      setState({ kind: "ready", items: result.items, pagination: result.pagination });
     } catch (error: unknown) {
-      if (!activeRef.current || isAbort(error)) return;
-      setState((currentState) => currentState.kind === "ready" ? currentState : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED"));
-    } finally { if (activeRef.current) setPending(false); }
-  }, [locale, range]);
-  useEffect(() => { activeRef.current = true; void refresh(); return () => { activeRef.current = false; }; }, [refresh]);
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pending) return;
-    setPending(true); setActionError(undefined);
-    try { await operation(); await refresh(); } catch (error: unknown) { if (!isAbort(error)) setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED")); setPending(false); }
+      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
+      setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    } finally { if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); } }
+  }, [locale, page, pageSize, from, to, status, invalidate]);
+  useEffect(() => {
+    activeRef.current = true; void refresh();
+    return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
+  }, [refresh, retryVersion]);
+  const navigate = (next: CalendarQuery) => {
+    if (pendingRef.current || writingRef.current) return;
+    const nextSearch = writeCalendarSearch(window.location.search, next);
+    if (nextSearch === window.location.search) return;
+    invalidate(); writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
   };
-  return <CalendarPage locale={locale} state={state} pending={pending} actionError={actionError}
-    onRetry={() => setRetryVersion((value) => value + 1)}
-    onCreate={(input) => void mutate(() => createCalendarEvent(input))}
-    onCancel={(event: CalendarEvent) => void mutate(() => cancelCalendarEvent(event.id))}
-    onLoadMore={() => void refresh(true)} />;
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (pendingRef.current || writingRef.current) return;
+    writingRef.current = true; setWriting(true); setActionError(undefined);
+    const generation = generationRef.current;
+    try { await operation(); if (activeRef.current && generation === generationRef.current) await refresh(); }
+    catch (error: unknown) {
+      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
+      if (error instanceof ApiRequestError && [401,403,404].includes(error.status)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      setActionError(frontendText(locale, "CALENDAR_ACTION_FAILED"));
+    } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
+  };
+  return <CalendarPage locale={locale} state={state} pending={pending || writing} actionError={actionError} range={{ from, to }}
+    onRangeChange={range => navigate({ ...query, ...range, page: 1 })}
+    onPageChange={next => navigate({ ...query, page: next })} onPageSizeChange={size => navigate({ ...query, page: 1, pageSize: size })}
+    onRetry={() => setRetryVersion(value => value + 1)}
+    onCreate={input => void mutate(() => createCalendarEvent(input))} onCancel={event => void mutate(() => cancelCalendarEvent(event.id))} />;
 }
 
 export function TodayRoute({ locale }: { locale: LocaleRuntime }) {

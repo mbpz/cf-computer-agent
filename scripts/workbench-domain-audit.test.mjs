@@ -126,7 +126,7 @@ test("D02-R1 preserves D01-B2, D01-B1, D01-A, M02 and R0 snapshots without backd
 test("extended list APIs preserve their current pagination shapes while bounded snapshots do not promise continuation", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
   for (const path of ["/api/inbox", "/api/goals", "/api/projects", "/api/projects/:id/timeline"]) assert.equal(facts.apis[path].pagination, "numbered", path);
-  assert.equal(facts.apis["/api/calendar/events"].pagination, "cursor");
+  assert.equal(facts.apis["/api/calendar/events"].pagination, "numbered");
   for (const path of ["/api/today", "/api/workbench/review", "/api/focus/current"]) assert.equal(facts.apis[path].pagination, "not_applicable", path);
 });
 

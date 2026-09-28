@@ -901,3 +901,44 @@ rtk git diff --check
 下一本地实现切片为 **C04 / EXT-CAL-01 日历数字分页、日期范围与 URL 恢复**，无需备份/加密/生产运维签认即可继续。Inbox 原生双身份、键盘/触控旅程仍待验；未检查当前登录身份是否可用，不以旧浏览器状态推断当前阻塞。
 
 本批未 push、merge、部署、远程迁移、生产写入、备份或 AI 调用，也未手工读取/上传 Secret。无新增迁移。所有完成声明只针对本地实现与上述定向验证，不提升生产/发布/acceptance。
+
+
+## 2026-09-28 — C04 / EXT-CAL-01 日历范围数字分页与 URL 恢复
+
+### 范围与实现
+
+- 本轮严格承接 EXT-CAL-01，完成其本地实现和定向验证；父级仍为 **29 范围内 / 3 关闭（A03、A04、B03）/ 26 未关闭**，D08 单独排除。不是把日历分页子项作为整个 C04 的验收。
+- Calendar API 新增显式 page/pageSize 分支，20/50/100，成员/状态/半开重叠范围一致的批量 count/rows，稳定 starts_at/id 顺序，10000 行查询窗口；拒绝混用 cursor/limit、重复/未知参数。旧 cursor 接口不变，保留 Today/Focus 等消费者边界。
+- 默认范围为浏览器时区当日零点起 14 个本地自然日；可修改本地时间起止，应用时回到第一页。查询范围上限沿用后端 31×24 小时，不宣称任意自然月；DST 秋季的 31 个本地日可能超过此上限。UTC 绝对起止写入 URL，恢复相同时间点；卡片按事件自身时区显示两端完整日期和时区名。
+- 请求页替换而不追加、页大小切换重置、空末页返回、窗口外禁用导航而保留真实 total。查询变化同步清空旧行并取消读取，代次隔离迟到响应，卸载取消；401/403/500 或畸形分页均清屏，在原查询重试。
+- 日期输入草稿仅 Apply 才发请求；错误/超限范围禁用。创建/取消沿用现有行为，不把本项描述为稳定意图、编辑、危险操作确认或未知写恢复已经完成；这些仍属于 EXT-CAL-02/后续完整旅程。
+
+### RED / GREEN 与复核
+
+- 首次 Worker 新测试 7 失败 / 16 通过；实现后发现 status 缺省 null 被误当非法值，修复路由转换后新后端 **23/23**。
+- 首次 App 分页新测试 13 失败；接入后修正测试误用页大小/重试标签和越界页按钮假设。日期输入通过实际 React onChange handler 驱动 happy-dom；这不是原生键盘/触控证据。
+- 时区测试不能在 Workerd 内通过修改 TZ 或启动 child_process 来模拟真实 Node 时区；保留原 DST/跨日断言，移至独立 `scripts/calendar-query.test.mjs`，并纳入 test:smoke。3 项在真实 Node 子进程中分别设置纽约/上海 TZ，全绿。
+- 新增 **65 项**：23 Worker/D1、24 数据/查询、15 App/happy-dom、3 Node TZ。日历新旧联合 **5 文件 66/66**；关联 Calendar/Today/Focus/扩展与成熟度路由 **6 文件 185/185**，合计 **11 文件 251/251**，另 TZ 3/3。没有运行全仓测试，亦无真实登录验收。
+- 本地构建 `build:ui`、`typecheck`、`verify:i18n` 通过。默认 typecheck 不覆盖全部 frontend TSX，Vite 构建与 App 测试补证，但不冒充完整 frontend 类型检查。构建保留既有 >500 kB chunk 警告。
+- 域审计最初因新增 owner 文案未登记失败；将 listOwned/listNumbered 两处绑定登记到同一成员证据后更新确定性快照。成熟度合同随后发现旧 gap fingerprint，同步剩余缺口描述/原 R4-016 owner 与矩阵，未删除 gap、未增加历史 atom、未提升 partial。
+- 域审计、父项计数器、成熟度、交付、国际化及 TZ 合同联合 **91/91**。旧段落所记 Calendar cursor 是当时事实，保留历史记录；当前断言改为源码证明的 numbered。
+
+### 可重跑命令
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-calendar-numbered-pages.test.tsx test/unit/frontend-calendar-numbered-data.test.ts test/unit/frontend-calendar-page.test.tsx test/unit/calendar-service.test.ts test/worker/calendar-numbered-pages.test.ts
+rtk proxy npx vitest run test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/worker/calendar.test.ts test/unit/today-service.test.ts test/worker/today.test.ts test/worker/focus.test.ts
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```
+
+### 下一动作与边界
+
+下一实现为 **EXT-CAL-02：稳定创建意图、时间校验、取消确认/并发、丢响应恢复与成员隔离的完整旅程**。允许本地继续，无备份/加密/生产维护签认阻塞。原生真实双身份/键盘/触控仍待验，不以 happy-dom 或历史浏览器状态代替。
+
+本轮无新迁移；未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。未运行带 Secret 同步的 build/check。

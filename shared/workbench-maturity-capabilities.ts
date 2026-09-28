@@ -279,7 +279,7 @@ export const WORKBENCH_MATURITY_CAPABILITIES = Object.freeze([
   {
     id: "workbench-calendar", routeId: "calendar", pathname: "/calendar", requiredRole: "contributor",
     journey: "Schedule private events and cancel them within the calendar window.", classification: "partial", dimensions: INITIAL_DIMENSIONS,
-    frontendEvidence: ["frontend/app.tsx", "frontend/pages/calendar-page.tsx", "frontend/lib/calendar-data.ts"], backendEvidence: ["src/routes/calendar.ts", "src/calendar/service.ts", "src/calendar/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/calendar.test.ts"], ledgerIds: ["CAL-001"], gaps: ["Private entry, read recovery, empty state and cursor continuation are locally tested. The fixed fourteen-day window lacks date navigation and numbered pagination; editing, stable create intent, cancel concurrency and timezone boundaries remain incomplete; release and signed-browser acceptance are unproven."],
+    frontendEvidence: ["frontend/app.tsx", "frontend/pages/calendar-page.tsx", "frontend/components/calendar-range-filter.tsx", "frontend/lib/calendar-data.ts", "frontend/lib/calendar-query.ts"], backendEvidence: ["src/routes/calendar.ts", "src/calendar/service.ts", "src/calendar/repository.ts"], testEvidence: ["test/unit/frontend-workbench-extended-routes.test.tsx", "test/unit/frontend-workbench-maturity-routes.test.tsx", "test/worker/calendar.test.ts", "test/worker/calendar-numbered-pages.test.ts", "test/unit/frontend-calendar-numbered-data.test.ts", "test/unit/frontend-calendar-numbered-pages.test.tsx", "scripts/calendar-query.test.mjs"], ledgerIds: ["CAL-001"], gaps: ["Private numbered range reads, URL recovery, stale-read cancellation and local-time/DST boundaries are locally tested. Editing, stable create intent, cancel concurrency and cross-module write journeys remain incomplete; release and signed-browser acceptance are unproven."],
   },
   {
     id: "workbench-today", routeId: "today", pathname: "/today", requiredRole: "contributor",
@@ -455,7 +455,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   {
     id: "workbench-calendar", apiPaths: ["/api/calendar/events", "/api/calendar/events/:id"],
     persistencePaths: ["src/calendar/repository.ts", "migrations/0042_workbench_calendar.sql"],
-    ownerPredicate: "routeCalendarApi passes authenticated member.memberId to CalendarService; CalendarRepository.listOwned binds member_id = ?.", pagination: "cursor",
+    ownerPredicate: "routeCalendarApi passes authenticated member.memberId to CalendarService; CalendarRepository.listOwned and listNumbered bind member_id = ?.", pagination: "numbered",
     mutations: ["POST /api/calendar/events — gap: each frontend attempt generates a fresh client key", "DELETE /api/calendar/events/:id — gap: cancellation has no expected status or concurrent replay proof"], mutationSafety: "mixed",
   },
   {

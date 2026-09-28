@@ -30,6 +30,7 @@ describe("CalendarService", () => {
 });
 
 class FakeCalendarRepository implements CalendarRepositoryPort {
+  async listNumbered(): Promise<never> { throw new Error("Numbered D1 queries are covered by calendar-numbered-pages worker tests"); }
   events = new Map<string, CalendarEvent>();
   async insert(input: Parameters<CalendarRepositoryPort["insert"]>[0]) { if (this.events.has(input.id) || [...this.events.values()].some((event) => event.memberId === input.memberId && event.clientKey === input.clientKey)) return false; this.events.set(input.id, map(input, "scheduled")); return true; }
   async findOwned(memberId: string, id: string) { const event = this.events.get(id); return event?.memberId === memberId ? event : null; }

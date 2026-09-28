@@ -160,7 +160,11 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       return null;
     case "inbox": case "goals": case "projects": case "calendar": case "today": case "focus": case "review": {
       const endpoints = { inbox: "/api/inbox", goals: "/api/goals", projects: "/api/projects", calendar: "/api/calendar/events", today: "/api/today", focus: "/api/focus/current", review: "/api/workbench/review" };
-      if (pathname(path) === endpoints[routeId]) return probeResponse(state, extendedPayload(routeId, true), extendedPayload(routeId));
+      if (pathname(path) === endpoints[routeId]) {
+        const params = new URL(path, "https://app.test").searchParams;
+        const range = routeId === "calendar" ? { from: params.get("from")!, to: params.get("to")! } : undefined;
+        return probeResponse(state, extendedPayload(routeId, true, "first", range), extendedPayload(routeId, false, "first", range));
+      }
       if (routeId === "projects" && path === "/api/projects/projects-first/summary") return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
       return null;
     }

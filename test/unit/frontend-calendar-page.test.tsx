@@ -8,11 +8,11 @@ import { CalendarPage } from "../../frontend/pages/calendar-page";
 describe("Calendar page", () => {
   it("renders events, controls and no undefined values", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
-    const html = renderToStaticMarkup(<CalendarPage locale={locale} state={{ kind: "ready", items: [{ id: "event-1", clientKey: "event-1", kind: "focus", title: "深度工作", description: "完成 C3", startsAt: "2026-09-09T09:00:00.000Z", endsAt: "2026-09-09T10:00:00.000Z", timezone: "UTC", allDay: false, status: "scheduled", taskId: null, projectId: null }], nextCursor: "cursor-2" }} onCreate={vi.fn()} onCancel={vi.fn()} onLoadMore={vi.fn()} />);
+    const html = renderToStaticMarkup(<CalendarPage locale={locale} state={{ kind: "ready", items: [{ id: "event-1", clientKey: "event-1", kind: "focus", title: "深度工作", description: "完成 C3", startsAt: "2026-09-09T09:00:00.000Z", endsAt: "2026-09-09T10:00:00.000Z", timezone: "UTC", allDay: false, status: "scheduled", taskId: null, projectId: null }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }} onCreate={vi.fn()} onCancel={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} />);
     expect(html).toContain(frontendText(locale, "CALENDAR_TITLE"));
     expect(html).toContain(frontendText(locale, "CALENDAR_CREATE"));
     expect(html).toContain(frontendText(locale, "CALENDAR_FOCUS"));
-    expect(html).toContain(frontendText(locale, "CALENDAR_LOAD_MORE"));
+    expect(html).toContain(frontendText(locale, "PAGINATION_ROWS_PER_PAGE"));
     expect(html).not.toContain("undefined");
   });
 

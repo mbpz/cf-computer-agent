@@ -10,8 +10,7 @@ vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 // Characterization evidence for M01, not a replacement for the canonical maturity registry.
 const routes = ["inbox", "goals", "projects", "calendar", "today", "focus", "review"] as const;
 type Route = typeof routes[number];
-// Goals/projects and inbox numbered navigation have dedicated numbered-pages App suites.
-const lists = ["calendar"] as const;
+// Numbered list navigation is covered by dedicated App suites, including calendar.
 const endpoint: Record<Route, string> = {
   inbox: "/api/inbox", goals: "/api/goals", projects: "/api/projects", calendar: "/api/calendar/events",
   today: "/api/today", focus: "/api/focus/current", review: "/api/workbench/review",
@@ -38,7 +37,7 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
   afterEach(async () => { await journey?.unmount(); journey = undefined; });
   const main = () => journey!.container.querySelector("main")!;
   const ready = (route: Route, suffix = "first") => main().textContent?.includes(`READY::${route}::${suffix}`) === true;
-  const loadMore = () => [...main().querySelectorAll("button")].find((button) => button.textContent === "Load more");
+
 
   for (const route of routes) {
     it(`${route}: pending read renders loading then server data`, async () => {
@@ -49,7 +48,7 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
       await waitForApp(() => requests.length > 0);
       expect(main().querySelector('[data-page-state="loading"]')).not.toBeNull();
       expect(ready(route)).toBe(false);
-      await act(async () => resolve(Response.json(payload(route))));
+      await act(async () => resolve(Response.json(payload(route, false, "first", route === "calendar" ? { from: requests[0]!.searchParams.get("from")!, to: requests[0]!.searchParams.get("to")! } : undefined))));
       await waitForApp(() => ready(route));
       expect(main().querySelector('[data-page-state="loading"]')).toBeNull();
     });
@@ -57,7 +56,7 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
     it(`${route}: failed read retries through the actual API and recovers`, async () => {
       const requests: URL[] = [];
       let attempts = 0;
-      journey = await mountAuthenticatedApp({ url: `https://app.test/${route}`, role: "contributor", permissionMask: "0x100000", fetch: routeFetch(route, requests, () => ++attempts === 1 ? apiError(503, "SERVICE_UNAVAILABLE", true) : Response.json(payload(route))) });
+      journey = await mountAuthenticatedApp({ url: `https://app.test/${route}`, role: "contributor", permissionMask: "0x100000", fetch: routeFetch(route, requests, () => ++attempts === 1 ? apiError(503, "SERVICE_UNAVAILABLE", true) : Response.json(payload(route, false, "first", route === "calendar" ? { from: requests[0]!.searchParams.get("from")!, to: requests[0]!.searchParams.get("to")! } : undefined))) });
       await waitForApp(() => main().querySelector('[role="alert"] button') !== null);
       expect(ready(route)).toBe(false);
       await act(async () => (main().querySelector('[role="alert"] button') as HTMLButtonElement).click());
@@ -83,7 +82,7 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
 
     it(`${route}: revoked workspace permission blocks direct access before data reads`, async () => {
       const requests: URL[] = [];
-      journey = await mountAuthenticatedApp({ url: `https://app.test/${route}`, role: "contributor", permissionMask: "0x0", fetch: routeFetch(route, requests, () => Response.json(payload(route)), false) });
+      journey = await mountAuthenticatedApp({ url: `https://app.test/${route}`, role: "contributor", permissionMask: "0x0", fetch: routeFetch(route, requests, () => Response.json(payload(route, false, "first", route === "calendar" ? { from: requests[0]!.searchParams.get("from")!, to: requests[0]!.searchParams.get("to")! } : undefined)), false) });
       await waitForApp(() => main().querySelector('[data-page-state="forbidden"]') !== null);
       expect(requests).toHaveLength(0);
       expect(journey.container.querySelector(`[data-route-id="${route}"]`)).toBeNull();
@@ -91,21 +90,4 @@ describe("seven extended workbench routes: M01 runtime evidence", () => {
     });
   }
 
-  for (const route of lists) {
-    it(`${route}: load more forwards opaque cursor, appends and stops at the end`, async () => {
-      const requests: URL[] = [];
-      const cursor = "opaque/+cursor=next";
-      journey = await mountAuthenticatedApp({ url: `https://app.test/${route}`, role: "contributor", permissionMask: "0x100000", fetch: routeFetch(route, requests, (url) => Response.json(url.searchParams.has("cursor") ? payload(route, false, "second") : { ...payload(route), nextCursor: cursor })) });
-      await waitForApp(() => ready(route));
-      expect(loadMore()).toBeDefined();
-      await act(async () => loadMore()!.click());
-      await waitForApp(() => ready(route, "second"));
-      expect(ready(route)).toBe(true);
-      expect(loadMore()).toBeUndefined();
-      const reads = requests.filter((url) => url.pathname === endpoint[route]);
-      expect(reads).toHaveLength(2);
-      expect(reads[1]!.searchParams.get("cursor")).toBe(cursor);
-      expect(reads[1]!.searchParams.get("limit")).toBe(route === "calendar" ? "50" : "20");
-    });
-  }
 });

@@ -1,3 +1,4 @@
+import { parseNumberedPageRequest } from "../pagination";
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
 import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
@@ -18,6 +19,10 @@ export async function routeCalendarApi(request: Request, url: URL, context: Requ
       const to = parseTime(url.searchParams.get("to"));
       const status = url.searchParams.get("status");
       if (status !== null && !["scheduled", "completed", "canceled"].includes(status)) throw new AppError("CALENDAR_INVALID", "Calendar status is invalid", 400);
+      if (url.searchParams.has("page") || url.searchParams.has("pageSize")) {
+        const page = parseNumberedPageRequest(url, ["from", "to", "status"], "CALENDAR_PAGE_INVALID");
+        return jsonResponse(await services.calendar.listNumbered(member.memberId, from, to, page, (status ?? undefined) as CalendarEventStatus | undefined), 200, context.requestId);
+      }
       const pageKeys = ["from", "to", "status", "limit", "cursor"];
       requireExactQuery(url, pageKeys);
       return jsonResponse(await services.calendar.list(member.memberId, from, to, { limit: parseOptionalNumber(url.searchParams.get("limit")), cursor: url.searchParams.get("cursor") ?? undefined }, status as CalendarEventStatus | undefined), 200, context.requestId);
