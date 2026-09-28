@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
-import { loadAdminMenus } from "../../frontend/lib/admin-menus-data";
+import { createAdminMenu, updateAdminMenu, loadAdminMenus } from "../../frontend/lib/admin-menus-data";
 import { MIGRATIONS } from "../fixtures/d1";
 
 describe("admin menus API", () => {
@@ -25,6 +25,26 @@ describe("admin menus API", () => {
     admin = (await sessions.create((await members.findById("menu-admin"))!)).token;
     contributor = (await sessions.create((await members.findById("menu-contributor"))!)).token;
     await env.DB.prepare("INSERT INTO menus (id, parent_id, key, label_key, path, icon, group_name, position, required_bits, status, visible, is_system, created_at, updated_at) VALUES ('menu-custom', 'menu-workspace', 'custom', 'NAV_HOME', '/custom', 'House', 'workspace', 99, '0x0', 'active', 1, 0, '2026-08-26T00:00:00.000Z', '2026-08-26T00:00:00.000Z')").run();
+  });
+
+  it("rejects stale browser snapshots without overwriting the winner", async () => {
+    const expected = { parentId: "menu-workspace", labelKey: "NAV_HOME", path: "/custom", position: 99, requiredBits: "0x0", status: "active", visible: true };
+    const write = (body: unknown) => api("/api/admin/menus/menu-custom", admin, { method: "PATCH", body: JSON.stringify(body) });
+    expect((await write({ expected, path: "/winner" })).status).toBe(200);
+    expect((await write({ expected, path: "/loser" })).status).toBe(409);
+    expect(await env.DB.prepare("SELECT path FROM menus WHERE id = 'menu-custom'").first()).toEqual({ path: "/winner" });
+    expect((await write({ expected: {}, path: "/invalid" })).status).toBe(400);
+  });
+
+  it("round-trips form helpers through authorized HTTP and rejects duplicate creation", async () => {
+    const requester = (input: RequestInfo | URL, init?: RequestInit) => api(String(input), admin, init);
+    const input = { key: "form-menu", labelKey: "NAV_SEARCH", path: "/form-menu", parentId: "menu-workspace", icon: null, groupName: "workspace" as const, position: 100, requiredBits: "0x0" };
+    const created = await createAdminMenu(input, requester);
+    expect(created).toMatchObject({ key: "form-menu", parentId: "menu-workspace", isSystem: false });
+    const expected = { parentId: "menu-workspace", labelKey: "NAV_SEARCH", path: "/form-menu", position: 100, requiredBits: "0x0", status: "active" as const, visible: true };
+    expect(await updateAdminMenu(created.id, { expected, parentId: null, path: "/form-moved" }, requester)).toMatchObject({ parentId: null, path: "/form-moved" });
+    await expect(createAdminMenu(input, requester)).rejects.toMatchObject({ status: 409 });
+    expect(await env.DB.prepare("SELECT count(*) AS count FROM menus WHERE key = 'form-menu'").first()).toEqual({ count: 1 });
   });
 
   it("lists the tree for administrators and rejects contributors", async () => {

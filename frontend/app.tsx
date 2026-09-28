@@ -89,7 +89,7 @@ import { loadAdminAnalytics, type AdminAnalyticsOverview, type LoadAdminAnalytic
 import { ApiRequestError } from "./lib/api";
 import { createNumberedRequestController, parsePageSearch, writePageSearch, type SupportedPageSize } from "./lib/numbered-page";
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
-import { deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
+import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
 import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
@@ -516,7 +516,8 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
       // A receipt acknowledges the request, not the current menu hierarchy. Always read it.
       writeRef.current = null;
       setSaving(false);
-      return await read();
+      await read();
+      return epoch.current === scope;
     } catch (error) {
       if (epoch.current === scope && !deny(error)) setSaveError(frontendText(locale, errorKey));
       return false;
@@ -528,7 +529,8 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
     }
   };
   return <AdminMenusPage onLoadRetry={retryRead} locale={locale} state={state} writeBlocked={saving || reading || needsRead} readPending={reading || saving} readRequired={needsRead} error={saveError}
-    onUpdate={(menu, input) => { void mutate(() => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR"); }}
+    onCreate={(input) => mutate(() => createAdminMenu(input), "ADMIN_MENUS_SAVE_ERROR")}
+    onUpdate={(menu, input) => mutate(() => updateAdminMenu(menu.id, input), "ADMIN_MENUS_SAVE_ERROR")}
     onDelete={(menu) => { void mutate(() => deleteAdminMenu(menu.id), "ADMIN_MENUS_DELETE_ERROR"); }} />;
 }
 

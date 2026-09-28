@@ -28,6 +28,8 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 
 2026-09-28 UTC D02 空间表单增量：三个新增可达写接口已登记；同编辑器键重放和编辑版本冲突有本地证据，但刷新/卸载意图恢复与旧客户端兼容边界仍列 gap。当前矩阵实算 100 项（53 P0 / 46 P1 / 1 P2），R6 负责 30 gap，统一沿用 R6-008；父项和实施原子数不因此增加，发布/原生验收不变。
 
+2026-09-28 UTC D02 菜单创建与层级编辑已补齐本地入口及条件写回归；新增创建 gap 归 R6-007，当前矩阵 101 项（54 P0 / 46 P1 / 1 P2），R6 负责 31 gap。保留跨刷新重放、真实身份投影及原生验收边界，不新增父任务。
+
 2026-09-14 D01-A 管理概览已接真实授权分页总数，三卡独立加载/零值/错误重试/权限状态，支持刷新、重复点击拦截与过期响应保护。见[原子计划](./docs/superpowers/plans/2026-09-14-admin-dashboard-authoritative-counts.md)、[本地证据](./docs/product/2026-09-14-admin-dashboard-authoritative-counts-evidence.md)和[当前域审计](./docs/operations/evidence/2026-09-14-workbench-d01a-domain-audit.md)。历史 M02 快照保留，D01/R6-001 父项仍未完成；下一环节为 D01-B 站点统计日期范围、分页、初始失败恢复及跨页对账，不新增 Cloudflare 服务。
 
 2026-09-15 D01-B1 本地完成站点统计读取恢复：初始/翻页错误原查询重试、重复刷新拦截、切换日期清除旧结果、401/403 清除访客、UTC 范围展示及严格响应校验；D1 覆盖 7/14/30 天、跨页 total 和跨日 UV 去重。见[原子计划](./docs/superpowers/plans/2026-09-15-admin-analytics-recovery.md)、[本地证据](./docs/product/2026-09-15-admin-analytics-recovery-evidence.md)、[当前域审计](./docs/operations/evidence/2026-09-15-workbench-d01b1-domain-audit.md)。D01-A/M02 历史不改写；下一环节 D01-B2 为服务端多查询快照一致性和跨页写后对账，D01/R6-001/R6-002 保持未完成，发布与真实浏览器验收未提升。
@@ -62,7 +64,7 @@ D02 已本地提交 `5ebdaa0`，M01 已提交 `e246fca`，M02 已提交 `6c1a1b9
 | R3 | 14 | R3 入口门槛：R2 数据、表单、确认、异步模式。 | R3 退出门槛：提交、知识、搜索、阅读器、Agent 域内验收。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r3-knowledge-loop.md |
 | R4 | 44 | R4 入口门槛：R3 知识目标授权、共享实体模式。 | R4 退出门槛：任务、看板、七个扩展工作区及项目时间线的分页旅程、关联、并发、重放、撤权、恢复。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r4-tasks-boards.md |
 | R5 | 4 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
-| R6 | 30 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
+| R6 | 31 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
 | R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
 | R8 | 5 | R8 入口门槛：R1–R7 本地实现、完整 gate、精确候选树。 | R8 退出门槛：发布、迁移、免费层、smoke、signed acceptance、账本证据。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r8-delivery-acceptance.md |
 <!-- maturity-stage-map:end -->

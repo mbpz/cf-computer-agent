@@ -1,3 +1,4 @@
+import { MENU_LABEL_KEYS, menuSnapshot, type MenuSnapshot } from "../../shared/admin-menu-fields";
 import { AuditRepository } from "../audit/repository";
 import { AppError } from "../http";
 import { buildMenuTree, type MenuNode, type MenuRow } from "./menu-tree";
@@ -25,6 +26,7 @@ type MenuDbRow = {
 };
 
 export interface MenuUpdateInput {
+  expected?: MenuSnapshot;
   parentId?: string | null;
   labelKey?: string;
   path?: string | null;
@@ -35,10 +37,7 @@ export interface MenuUpdateInput {
 }
 export interface MenuCreateInput { key: string; labelKey: string; path?: string | null; parentId?: string | null; icon?: string | null; groupName: "workspace" | "admin"; position: number; requiredBits: string; }
 
-const LABEL_KEYS = new Set([
-  "SHELL_GROUP_WORKSPACE", "SHELL_GROUP_ADMIN", "SHELL_GROUP_GOVERNANCE", "NAV_HOME", "NAV_SUBMIT", "NAV_KNOWLEDGE_BASE", "NAV_KNOWLEDGE_SEARCH", "NAV_KNOWLEDGE_AGENT", "NAV_SEARCH", "NAV_AGENT", "NAV_MY_SUBMISSIONS", "NAV_GRAPH",
-  "NAV_ADMINISTRATION", "NAV_REVIEW_QUEUE", "NAV_DUPLICATES", "NAV_ASSET_QUEUE", "NAV_MEMBERS", "NAV_ROLES", "NAV_MENUS", "NAV_SPACES", "NAV_SITE_ANALYTICS", "NAV_AUDIT",
-]);
+const LABEL_KEYS = new Set<string>(MENU_LABEL_KEYS);
 
 // Compare the entire validated, bounded configuration in the mutation statement.
 // Per-row guards alone allow concurrent reparenting to create a cycle.
@@ -97,6 +96,7 @@ export class MenusRepository {
     const current = items.find(item => item.id === id);
     if (!current) throw new AppError("MENU_NOT_FOUND", "Menu not found", 404);
     if (current.isSystem) throw new AppError("MENU_SYSTEM_IMMUTABLE", "System menus cannot be changed", 409);
+    if (input.expected && JSON.stringify(menuSnapshot(current)) !== JSON.stringify(menuSnapshot(input.expected))) throw new AppError("MENU_WRITE_CONFLICT", "Menu changed since the editor was opened", 409);
     const next: MenuRecord = {
       ...current,
       parentId: input.parentId === undefined ? current.parentId : input.parentId,

@@ -621,7 +621,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     persistencePaths: ["src/authorization/menus-repository.ts", "migrations/0029_workspace_rbac.sql", "migrations/0031_workspace_menu_hierarchy.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["PATCH /api/admin/menus/:id — gap: no expected version protects concurrent menu edits", "DELETE /api/admin/menus/:id — gap: repeated deletion returns not-found rather than converging"],
+    mutations: ["POST /api/admin/menus — gap: unique keys prevent duplicate rows but creation has no stable replay receipt across refresh", "PATCH /api/admin/menus/:id — gap: browser snapshots and tree CAS are locally tested, but legacy clients may omit snapshots and cross-session projection remains unverified", "DELETE /api/admin/menus/:id — gap: repeated deletion returns not-found rather than converging"],
     mutationSafety: "mixed",
   },
   {

@@ -1,3 +1,4 @@
+import type { MenuSnapshot } from "../../shared/admin-menu-fields";
 import { requireCapability } from "../authorization/policy";
 import { MenusRepository } from "../authorization/menus-repository";
 import { APP_CONFIG } from "../config";
@@ -27,7 +28,7 @@ export async function routeAdminMenusApi(request: Request, url: URL, context: Re
     const removed = await services.menus.remove(decodePathId(match[1]!), principal.memberId);
     return jsonResponse({ menu: removed }, 200, context.requestId);
   }
-  const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["parentId", "labelKey", "path", "position", "requiredBits", "status", "visible"], "MENU_REQUEST_INVALID");
+  const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["parentId", "labelKey", "path", "position", "requiredBits", "status", "visible", "expected"], "MENU_REQUEST_INVALID");
   if (input.parentId !== undefined && input.parentId !== null && typeof input.parentId !== "string") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
   if (input.labelKey !== undefined && typeof input.labelKey !== "string") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
   if (input.path !== undefined && input.path !== null && typeof input.path !== "string") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
@@ -35,7 +36,14 @@ export async function routeAdminMenusApi(request: Request, url: URL, context: Re
   if (input.requiredBits !== undefined && typeof input.requiredBits !== "string") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
   if (input.status !== undefined && input.status !== "active" && input.status !== "disabled") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
   if (input.visible !== undefined && typeof input.visible !== "boolean") throw new AppError("MENU_REQUEST_INVALID", "Menu request is invalid", 400);
+  let expected: MenuSnapshot | undefined;
+  if (input.expected !== undefined) {
+    const row = strictRecord(input.expected, ["parentId", "labelKey", "path", "position", "requiredBits", "status", "visible"], "MENU_REQUEST_INVALID");
+    if ((row.parentId !== null && typeof row.parentId !== "string") || typeof row.labelKey !== "string" || (row.path !== null && typeof row.path !== "string") || typeof row.position !== "number" || !Number.isSafeInteger(row.position) || row.position < 0 || row.position > 10000 || typeof row.requiredBits !== "string" || !/^0x[0-9a-f]{1,16}$/iu.test(row.requiredBits) || (row.status !== "active" && row.status !== "disabled") || typeof row.visible !== "boolean") throw new AppError("MENU_REQUEST_INVALID", "Menu snapshot is invalid", 400);
+    expected = row as unknown as MenuSnapshot;
+  }
   const updateInput = {
+    ...(expected ? { expected } : {}),
     ...(input.parentId === undefined ? {} : { parentId: input.parentId as string | null }),
     ...(input.labelKey === undefined ? {} : { labelKey: input.labelKey as string }),
     ...(input.path === undefined ? {} : { path: input.path as string | null }),

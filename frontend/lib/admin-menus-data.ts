@@ -1,3 +1,4 @@
+import type { MenuSnapshot } from "../../shared/admin-menu-fields";
 import { apiFetch, type Fetcher } from "./api";
 
 export interface AdminMenu {
@@ -51,10 +52,13 @@ export async function loadAdminMenus(requester: Fetcher = fetch, signal?: AbortS
   return parse(data.tree, null, 1);
 }
 
-export async function updateAdminMenu(id: string, input: { position?: number; status?: "active" | "disabled"; visible?: boolean }, requester: Fetcher = fetch): Promise<AdminMenu> {
+export type AdminMenuUpdate = Partial<MenuSnapshot> & { expected?: MenuSnapshot };
+export type AdminMenuCreate = Pick<AdminMenu, "key" | "labelKey" | "path" | "parentId" | "icon" | "position" | "requiredBits"> & { groupName: "workspace" | "admin" };
+
+export async function updateAdminMenu(id: string, input: AdminMenuUpdate, requester: Fetcher = fetch): Promise<AdminMenu> {
   const data = await apiFetch<{ menu?: unknown }>(`/api/admin/menus/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
   const menu = normalizeAdminMenu(data.menu);
-  if (!menu || menu.id !== id || (input.position !== undefined && menu.position !== input.position) || (input.status !== undefined && menu.status !== input.status) || (input.visible !== undefined && menu.visible !== input.visible)) throw new Error("MENU_RESPONSE_INVALID");
+  if (!menu || menu.id !== id || !matchesMenu(menu, input)) throw new Error("MENU_RESPONSE_INVALID");
   return menu;
 }
 
@@ -62,4 +66,14 @@ export async function deleteAdminMenu(id: string, requester: Fetcher = fetch): P
   const data = await apiFetch<{ menu?: unknown }>(`/api/admin/menus/${encodeURIComponent(id)}`, { requester, method: "DELETE" });
   const menu = normalizeAdminMenu(data.menu);
   if (!menu || menu.id !== id) throw new Error("MENU_RESPONSE_INVALID");
+}
+
+function matchesMenu(menu: AdminMenu, input: AdminMenuUpdate | AdminMenuCreate): boolean {
+  return Object.entries(input).every(([key, value]) => key === "expected" || (key === "requiredBits" ? BigInt(menu.requiredBits) === BigInt(value as string) : menu[key as keyof AdminMenu] === value));
+}
+export async function createAdminMenu(input: AdminMenuCreate, requester: Fetcher = fetch): Promise<AdminMenu> {
+  const data = await apiFetch<{ menu?: unknown }>("/api/admin/menus", { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+  const menu = normalizeAdminMenu(data.menu);
+  if (!menu || menu.isSystem || menu.status !== "active" || !menu.visible || !matchesMenu(menu, input)) throw new Error("MENU_RESPONSE_INVALID");
+  return menu;
 }

@@ -36,7 +36,8 @@
 | workbench-admin-roles:query_or_idempotency:create-role | domain:POST /api/admin/roles | workbench-admin-roles | 创建角色缺少稳定幂等键与 uncertain-outcome 重放策略。 | query_or_idempotency | R6-006 | R6-011 | src/authorization/roles-repository.ts<br>src/routes/admin-roles.ts | test/worker/admin-roles.test.ts | 创建响应丢失后使用同一键重试只生成一个角色和一条审计记录。 | P0 |
 | workbench-admin-roles:query_or_idempotency:assign-role-member | domain:POST /api/admin/roles/:id/members | workbench-admin-roles | 重复分配角色成员返回 409，尚未定义授权写入收敛语义。 | query_or_idempotency | R6-006 | R6-011 | src/authorization/roles-repository.ts<br>src/routes/admin-roles.ts | test/worker/admin-roles.test.ts | 重复分配同一成员后授权集合稳定，缓存失效且审计不重复。 | P0 |
 | workbench-admin-menus:query_or_idempotency:delete-menu | domain:DELETE /api/admin/menus/:id | workbench-admin-menus | 菜单删除缺少重放、层级影响与跨 session 投影收敛证明。 | query_or_idempotency | R6-007 | R6-011 | src/authorization/menus-repository.ts<br>src/routes/admin-menus.ts | test/worker/admin-menus.test.ts | 删除父菜单前展示影响，确认后所有会话投影同步且重复请求不产生额外结果。 | P0 |
-| workbench-admin-menus:query_or_idempotency:update-menu | domain:PATCH /api/admin/menus/:id | workbench-admin-menus | 菜单编辑缺少原子排序、并发冲突与投影失效证明。 | query_or_idempotency | R6-007 | R6-011 | src/authorization/menus-repository.ts<br>src/routes/admin-menus.ts | test/worker/admin-menus.test.ts | 两位管理员并发排序时只有一个版本生效，成员菜单立即反映权威结果。 | P0 |
+| workbench-admin-menus:query_or_idempotency:create-menu | domain:POST /api/admin/menus | workbench-admin-menus | 菜单创建唯一键防重复，但缺少稳定重放回执及跨刷新意图恢复。 | query_or_idempotency | R6-007 | R6-011 | src/authorization/menus-repository.ts<br>src/routes/admin-menus.ts | test/worker/admin-menus.test.ts | 同一创建请求跨刷新可读取原回执，并且只新增一条菜单和一次审计。 | P0 |
+| workbench-admin-menus:query_or_idempotency:update-menu | domain:PATCH /api/admin/menus/:id | workbench-admin-menus | 菜单编辑已有浏览器快照和树 CAS 本地证据；旧客户端快照必填及跨会话投影仍未闭环。 | query_or_idempotency | R6-007 | R6-011 | src/authorization/menus-repository.ts<br>src/routes/admin-menus.ts | test/worker/admin-menus.test.ts | 两位管理员并发排序时只有一个版本生效，成员菜单立即反映权威结果。 | P0 |
 | workbench-messages:query_or_idempotency:create-context-thread | domain:POST /api/discussions/context | workbench-messages | 创建上下文 thread 缺少重放收敛和当前目标再授权证明。 | query_or_idempotency | R5-006 | R3-007<br>R4-003 | src/discussions/service.ts<br>src/discussions/authorization.ts | test/worker/discussions.test.ts | 对同一可见目标重复建 thread 只返回一个上下文，撤权目标始终拒绝。 | P0 |
 | workbench-knowledge-reader:query_or_idempotency:remove-note-share | domain:DELETE /api/knowledge/:id/note/shares/:recipientId | workbench-knowledge-reader | 移除私有笔记分享缺少重放收敛与接收者访问即时收缩证明。 | query_or_idempotency | R3-011 | R3-007 | src/private-notes/repository.ts<br>src/private-notes/service.ts | test/unit/frontend-knowledge-reader-data.test.ts | 重复撤销分享后接收者立即无法读取，所有重试只产生一个授权结果。 | P0 |
 | workbench-knowledge-reader:query_or_idempotency:record-reader-visit | domain:GET /api/knowledge/:id#record-visit | workbench-knowledge-reader | 阅读器成功 GET 会增加 visit_count，但缺少重试去重或明确的一次访问语义。 | query_or_idempotency | R3-011 | R3-007 | src/routes/library.ts<br>src/recent-visits/repository.ts | test/worker/recent-visits.test.ts | 响应丢失后重试同一次阅读不会重复增加访问次数，刷新后访问统计保持可解释且成员隔离。 | P0 |
@@ -124,9 +125,9 @@
 | 维度 | 数量 |
 | --- | ---: |
 | manifest 聚合 gap | 33 |
-| domain mutation-safety gap | 67 |
-| 总计 | 100 |
-| P0 | 53 |
+| domain mutation-safety gap | 68 |
+| 总计 | 101 |
+| P0 | 54 |
 | P1 | 46 |
 | P2 | 1 |
 
@@ -135,3 +136,5 @@
 2026-09-27 C03 增量：项目关联编辑新增四个前端可达写操作，均诚实记为 mutation-safety gap，统一归属已有 R4-015；当前 87 gap（47 P0 / 39 P1 / 1 P2），未增加实施原子或关闭既有项。历史 83 gap 快照不回填。
 
 2026-09-28 UTC D02 增量：空间编辑、集合创建与集合编辑三个可达操作纳入 R6-008，局部重放/CAS 证据不冒称跨刷新意图恢复。当前实算 100 gap（53 P0 / 46 P1 / 1 P2），历史快照不回填，原有检查断言未放宽。
+
+2026-09-28 UTC D02 菜单表单增量：新增创建操作归 R6-007；当前实算 **101 gap（54 P0 / 46 P1 / 1 P2）**。字段快照与树 CAS 的本地证明不等于跨会话投影或完整重放；功能父项仍 29/4/25。

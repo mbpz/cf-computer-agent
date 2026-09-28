@@ -24,6 +24,67 @@ describe("menu write recovery", () => {
   function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
 
+  async function field(name: string, value: string) {
+    const input = container.querySelector(`[name="${name}"]`) as HTMLInputElement;
+    expect(input).toBeTruthy();
+    await act(async () => { const proto = input.tagName === "SELECT" ? browser.HTMLSelectElement.prototype : browser.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true }) as unknown as Event); });
+  }
+  it("creates from an empty tree and closes the acknowledged draft even if refresh fails", async () => {
+    const calls: string[] = []; let body: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { const method = init?.method || "GET"; calls.push(method); if (method === "POST") { body = JSON.parse(init!.body as string); return json({ menu: menu({ ...body, id: "created" }) }); } return calls.length === 1 ? json({ tree: [] }) : new Response(null, { status: 503 }); });
+    await render(); await click("Create menu"); await field("key", "new-menu"); await field("path", "/new-menu"); await click("Create");
+    expect(body).toMatchObject({ key: "new-menu", path: "/new-menu", parentId: null, labelKey: "NAV_HOME", groupName: "workspace", requiredBits: "0x0" });
+    expect(calls).toEqual(["GET", "POST", "GET"]); expect(container.querySelector("form")).toBeNull(); expect(button("Create menu").disabled).toBe(true);
+  });
+  it("edits hierarchy with the opened snapshot and excludes self and descendants", async () => {
+    const original = menu({ children: [menu({ id: "child", key: "child", path: "/child", parentId: "custom" })] }); let body: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { if (init?.method) { body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, children: [] }) }); } return json({ tree: [original, menu({ id: "other", key: "other", path: "/other" })] }); });
+    await render(); await click("Edit menu");
+    const options = [...container.querySelectorAll<HTMLSelectElement>('[name="parentId"] option')].map(option => option.value);
+    expect(options).toEqual(["", "other"]);
+    await field("parentId", "other"); await field("labelKey", "NAV_SEARCH"); await field("path", "/moved"); await field("requiredBits", "0xA"); await click("Save menu");
+    expect(body).toMatchObject({ parentId: "other", labelKey: "NAV_SEARCH", path: "/moved", requiredBits: "0xa", expected: { parentId: null, path: "/private-menu", position: 1 } });
+    expect(container.querySelector("form")).toBeNull();
+  });
+  it.each(["network", "receipt", "conflict"])("retains draft and does not auto-replay an uncertain create: %s", async failure => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { const method = init?.method || "GET"; calls.push(method); if (method === "GET") return json({ tree: [] }); if (failure === "network") throw new TypeError("lost"); if (failure === "conflict") return new Response(null, { status: 409 }); return json({ menu: menu({ key: "wrong" }) }); });
+    await render(); await click("Create menu"); await field("key", "new-menu"); await click("Create"); expect(button("Create").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
+    await click("Try again"); expect(calls).toEqual(["GET", "POST", "GET"]); expect((container.querySelector('[name="key"]') as HTMLInputElement).value).toBe("new-menu");
+  });
+  it("keeps a stale editor snapshot across recovery reads", async () => {
+    let reads = 0; const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { if (init?.method) { bodies.push(JSON.parse(init.body as string)); return new Response(null, { status: 409 }); } return json({ tree: [menu({ path: ++reads === 1 ? "/private-menu" : "/winner" })] }); });
+    await render(); await click("Edit menu"); await field("path", "/loser"); await click("Save menu"); await click("Try again"); await click("Save menu");
+    expect(bodies).toHaveLength(2); expect(bodies[1]).toMatchObject({ path: "/loser", expected: { path: "/private-menu" } });
+  });
+  it.each([401,403])("clears the creation draft on denial %s", async status => {
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => init?.method ? new Response(null, { status }) : json({ tree: [] }));
+    await render(); await click("Create menu"); await field("key", "private-draft"); await click("Create"); expect(container.querySelector("form")).toBeNull(); await click("Try again"); await click("Create menu"); expect((container.querySelector('[name="key"]') as HTMLInputElement).value).toBe("");
+  });
+  it.each([["key", "a"], ["key", "Bad key"], ["path", "https://evil.test"], ["position", ""], ["position", "-1"], ["position", "10001"], ["position", "1.5"], ["requiredBits", "0x10000000000000000"], ["requiredBits", "not-hex"]])("rejects invalid form %s=%s before sending", async (name, value) => {
+    const calls: string[] = []; vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return json({ tree: [] }); });
+    await render(); await click("Create menu"); await field("key", "valid-key"); await field(name, value); await click("Create");
+    expect(calls).toEqual(["GET"]); expect(container.querySelector('[role="alert"]')?.textContent).toContain("Check the key");
+  });
+  it("serializes double submissions and disables row actions while editing", async () => {
+    const pending = deferred<Response>(); const calls: string[] = [];
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); return init?.method ? pending.promise : json({ tree: [menu()] }); });
+    await render(); await click("Create menu"); await field("key", "new-key"); expect(button("Disable").disabled).toBe(true); expect(button("Delete").disabled).toBe(true);
+    await act(async () => { button("Create").click(); button("Create").click(); }); expect(calls).toEqual(["GET", "POST"]);
+    pending.resolve(new Response(null, { status: 409 })); await flush(); await click("Cancel"); expect(button("Disable").disabled).toBe(true); await click("Try again"); expect(button("Disable").disabled).toBe(false);
+  });
+  it("excludes parents that would exceed the four-level limit", async () => {
+    const fourth = menu({ id: "four", key: "four", path: "/four", parentId: "three" });
+    const third = menu({ id: "three", key: "three", path: "/three", parentId: "two", children: [fourth] });
+    const second = menu({ id: "two", key: "two", path: "/two", parentId: "custom", children: [third] });
+    vi.stubGlobal("fetch", async () => json({ tree: [menu({ children: [second] })] }));
+    await render(); await click("Create menu"); expect([...container.querySelectorAll<HTMLOptionElement>('[name="parentId"] option')].map(option => option.value)).toEqual(["", "custom", "two", "three"]);
+  });
+  it.each(["parentId", "path", "labelKey", "requiredBits"])("does not accept a wrong %s editing receipt", async key => {
+    const calls: string[] = []; vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => { calls.push(init?.method || "GET"); if (init?.method) { const body = JSON.parse(init.body as string); return json({ menu: menu({ ...body, [key]: key === "parentId" ? "wrong-parent" : key === "requiredBits" ? "0x2" : "wrong" }) }); } return json({ tree: [menu()] }); });
+    await render(); await click("Edit menu"); await click("Save menu"); expect(calls).toEqual(["GET", "PATCH"]); expect(button("Save menu").disabled).toBe(true); expect(container.querySelector("form")).not.toBeNull();
+  });
   it("admits only one same-batch write and reads the authoritative hierarchy", async () => {
     const pending=deferred<Response>();const calls:string[]=[];let refreshed=false;
     vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{const method=init?.method||"GET";calls.push(method);return method==="PATCH"?pending.promise:json({tree:[menu({labelKey:refreshed?"Fresh label":"NAV_HOME",status:refreshed?"disabled":"active"})]});});
@@ -68,7 +129,7 @@ describe("menu write recovery", () => {
     await click("Try again");expect(calls).toEqual(["GET","PATCH","GET","GET"]);expect(button("Disable").disabled).toBe(false);
   });
   it("can reveal a hidden menu without removing it from management",async()=>{
-    let visible=false;const bodies:unknown[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method){bodies.push(JSON.parse(String(init.body)));visible=true;return json({menu:menu({visible})});}return json({tree:[menu({visible})]});});await render();await click("Show");expect(bodies).toEqual([{visible:true}]);expect(button("Hide").disabled).toBe(false);expect(container.textContent).toContain("/private-menu");
+    let visible=false;const bodies:unknown[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method){bodies.push(JSON.parse(String(init.body)));visible=true;return json({menu:menu({visible})});}return json({tree:[menu({visible})]});});await render();await click("Show");expect(bodies).toEqual([{visible:true,expected:{parentId:null,labelKey:"NAV_HOME",path:"/private-menu",position:1,requiredBits:"0x0",status:"active",visible:false}}]);expect(button("Hide").disabled).toBe(false);expect(container.textContent).toContain("/private-menu");
   });
   it("rejects a visibility receipt that did not apply the intended value",async()=>{
     const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return json(init?.method?{menu:menu()}:{tree:[menu()]});});await render();await click("Hide");expect(button("Disable").disabled).toBe(true);expect(calls).toEqual(["GET","PATCH"]);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET"]);
