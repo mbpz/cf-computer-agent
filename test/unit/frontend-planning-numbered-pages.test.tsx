@@ -35,6 +35,18 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} numbered pa
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(search: string) { await act(async () => { window.history.pushState({}, "", `/${kind}${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
+  if (kind === "projects") it("preserves review's active filter across pagination and retry", async () => {
+    await mount("?status=active");
+    expect(requests[0]?.searchParams.get("status")).toBe("active");
+    fail = 503;
+    await click(button("Page 2")); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    expect(window.location.search).toContain("status=active");
+    fail = undefined;
+    await click([...main().querySelectorAll("button")].find(node => node.textContent === "Try projects again")!);
+    await waitForApp(() => main().textContent!.includes("Private row 20"));
+    expect(requests.at(-1)?.searchParams.get("page")).toBe("2");
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("active");
+  });
   it("restores a numbered deep link and replaces rather than appends rows", async () => {
     await mount("?page=2");
     expect(requests[0]?.searchParams.get("page")).toBe("2");

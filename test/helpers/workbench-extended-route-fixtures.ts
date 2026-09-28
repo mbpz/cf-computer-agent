@@ -28,6 +28,6 @@ export function extendedPayload(route: ExtendedRoute, empty = false, suffix = "f
     case "calendar": return { items: empty ? [] : [event], pagination: { page: 1, pageSize: 20, total: empty ? 0 : 1, totalPages: empty ? 0 : 1 } };
     case "today": return { date: "2026-09-13", tasks: { items, pagination: { page: 1, pageSize: 20, total: items.length, totalPages: items.length ? 1 : 0 } }, taskSummary: { ...zero, todo: items.length }, inbox: [], projects: [], calendar: [] } satisfies TodaySnapshot;
     case "focus": return { session: empty ? null : { ...common, startTitle: null, durationMinutes: null, taskId: marker, calendarEventId: null, status: "active", startedAt: now, pausedAt: null, endedAt: null, elapsedMs: 0 } satisfies FocusSession };
-    case "review": return { id: "review-snapshot", period: "daily", periodKey: "2026-09-13", from: now, to: now, taskSummary: { ...zero, done: items.length }, completed: items, overdue: [], blocked: [], inbox: [], projects: [], focusElapsedMs: 0 } satisfies WorkbenchReviewSnapshot;
+    case "review": return { id: "review-snapshot", period: "daily", periodKey: "2026-09-13", from: "2026-09-13T00:00:00.000Z", to: "2026-09-14T00:00:00.000Z", taskSummary: { ...zero, done: items.length }, completed: items, overdue: [], blocked: [], inbox: [], projects: [], focusElapsedMs: 0 } satisfies WorkbenchReviewSnapshot;
   }
 }

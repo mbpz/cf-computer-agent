@@ -1,3 +1,5 @@
+import { SnapshotTargetDetail } from "./components/snapshot-target-detail";
+import type { ReviewTarget } from "./pages/workbench-review-page";
 import { acknowledgeFocusTransition, clearFocusTransition, loadFocusTransition, saveFocusTransition, type FocusTransitionIntent, type StoredFocusTransition } from "./lib/focus-transition-intent";
 import { acknowledgeFocusIntent, clearFocusIntent, loadFocusIntent, saveFocusIntent, type FocusCreateIntent, type StoredFocusIntent } from "./lib/focus-create-intent";
 import { TodayTargetDetail, type TodayTarget } from "./components/today-target-detail";
@@ -1289,6 +1291,8 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
 export function ProjectsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "PROJECTS", search);
+  const statuses = new URLSearchParams(search).getAll("status");
+  const status = statuses.length === 0 ? undefined : statuses.length === 1 ? statuses[0] : "invalid";
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1339,7 +1343,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
     const controller = new AbortController(); listControllerRef.current = controller;
     pendingRef.current = true; setPending(true); setSummaryPending([]); setActionError(undefined);
     try {
-      const page = await loadNumberedProjects({ page: requestedPage, pageSize }, fetch, controller.signal);
+      const page = await loadNumberedProjects({ page: requestedPage, pageSize, status }, fetch, controller.signal);
       if (!activeRef.current || generationRef.current !== generation) return false;
       const entries = await Promise.all(page.items.map(async (project) => {
         try { return [project.id, await loadProjectSummary(project.id, fetch, controller.signal)] as const; }
@@ -1358,7 +1362,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
       setState((current) => current.kind === "ready" ? current : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
       setActionError(frontendText(locale, "PROJECTS_ACTION_FAILED")); return false;
     } finally { if (activeRef.current && generationRef.current === generation) { pendingRef.current = false; setPending(false); } }
-  }, [locale, cancelReads, clearDeniedProjects, requestedPage, pageSize]);
+  }, [locale, cancelReads, clearDeniedProjects, requestedPage, pageSize, status]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -1883,9 +1887,15 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
   const [period, setPeriod] = useState<"daily" | "weekly">("daily");
   const [state, setState] = useState<WorkbenchReviewPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
+  const [target, setTarget] = useState<ReviewTarget | null>(null);
+  const clearDenied = useCallback(() => {
+    setTarget(null);
+    setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
+  }, [locale]);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
+    setTarget(null);
     setState({ kind: "loading" });
     void loadWorkbenchReview(period, fetch, controller.signal).then((snapshot) => {
       if (active) setState({ kind: "ready", snapshot });
@@ -1897,10 +1907,11 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
   const changePeriod = (next: "daily" | "weekly") => {
     if (next === period) return;
     // Clear the old snapshot in the same render as the selected period.
+    setTarget(null);
     setState({ kind: "loading" });
     setPeriod(next);
   };
-  return <WorkbenchReviewPage locale={locale} period={period} state={state} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} />;
+  return <><div inert={target ? true : undefined}><WorkbenchReviewPage locale={locale} period={period} state={state} onOpen={setTarget} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} /></div>{target && <SnapshotTargetDetail key={`${target.kind}:${target.id}`} target={target} locale={locale} title={frontendText(locale, "REVIEW_DETAIL_TITLE")} onClose={() => setTarget(null)} onDenied={clearDenied} />}</>;
 }
 
 export function NotificationsRoute({ locale, search, isAdmin = false }: { locale: LocaleRuntime; search: string; isAdmin?: boolean }) {

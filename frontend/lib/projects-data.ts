@@ -15,11 +15,15 @@ export interface TimelineCreateIntent { readonly id: string; readonly clientKey:
 export type TimelineEditContent = Pick<ProjectTimelineItem, "kind" | "title" | "body" | "startsAt" | "dueAt">;
 export interface ProjectTimelinePage { items: ProjectTimelineItem[]; nextCursor?: string; }
 
-export async function loadNumberedProjects(input: FrontendPageRequest, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Project>> {
+export async function loadNumberedProjects(input: FrontendPageRequest & {status?: string}, requester: Fetcher = fetch, signal?: AbortSignal): Promise<FrontendNumberedPage<Project>> {
   const params = new URLSearchParams({ page: String(input.page), pageSize: String(input.pageSize) });
+  if (input.status !== undefined) {
+    if (!["planned", "active", "paused", "completed", "archived"].includes(input.status)) throw new Error("PROJECT_STATUS_INVALID");
+    params.set("status", input.status);
+  }
   const result = normalizeNumberedPage(await apiFetch<unknown>(`/api/projects?${params.toString()}`, { requester, signal }), value => {
     const item = normalizeProject(value);
-    if (!item) throw new Error("PROJECT_RESPONSE_INVALID");
+    if (!item || (input.status !== undefined && item.status !== input.status)) throw new Error("PROJECT_RESPONSE_INVALID");
     return item;
   });
   if (result.pagination.page !== input.page || result.pagination.pageSize !== input.pageSize || new Set(result.items.map(item => item.id)).size !== result.items.length) throw new Error("PROJECT_RESPONSE_INVALID");

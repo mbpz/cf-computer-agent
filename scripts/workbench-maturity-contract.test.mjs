@@ -107,7 +107,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-calendar": {"source":"manifest:0@40587965b020","dimension":"journey","slug":"date-navigation-and-timezone-journey","symptom":"日历范围分页、稳定创建、版本条件取消与只读恢复已有本地证据；编辑 UI、跨模块写入与真实身份原生旅程仍未闭环。","owner":"R4-016"},
   "workbench-today": {"source":"manifest:0@82df5d7acce3","dimension":"journey","slug":"bounded-summary-drilldown","symptom":"今日摘要已有有界计数说明、继续入口、重新授权详情、深层契约校验与整份失败只读恢复；完整跨日聚合及原生旅程证明仍待完成。","owner":"R4-017"},
   "workbench-focus": {"source":"manifest:0@490b8bb2f9ca","dimension":"journey","slug":"session-selection-and-elapsed-time","symptom":"专注原子写、唯一所属终态历史修复及孤立键重试已有本地证据；歧义历史不自动改写，标签页关闭丢失日志的边界明确，原生验收仍开放。","owner":"R4-018"},
-  "workbench-review": {"source":"manifest:0@252882fbfd4c","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘周期切换清屏、取消迟到读取及周期回执匹配已有本地证据；聚合未按周期完整过滤，刷新、深层校验和双成员证明仍待补齐。","owner":"R4-019"},
+  "workbench-review": {"source":"manifest:0@0b9b72de3f7b","dimension":"journey","slug":"period-filter-and-refresh-semantics","symptom":"复盘周期切换、有界入口、重新授权详情、深层契约及双成员隔离已有本地证据；周期聚合、快照刷新和 GET 写入并发仍待补齐。","owner":"R4-019"},
   "workbench-home": { source: "manifest:0@edfe01e1ad3d", dimension: "api", slug: "authoritative-summary-and-recent-recovery", symptom: "首页硬编码零指标，recent pending/error 被伪装为 ready/empty，且游标列表无继续入口。", owner: "R7-010" },
   "workbench-submit": { source: "manifest:0@edeb39c3614b", dimension: "evidence", slug: "signed-submission-acceptance", symptom: "本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。", owner: "R8-009" },
   "workbench-knowledge": { source: "manifest:0@edac5a3b202d", dimension: "states", slug: "auxiliary-data-recovery", symptom: "知识页辅助 recent、favorite、note、activity、review 请求失败仍被折叠或彼此割裂。", owner: "R2-010" },

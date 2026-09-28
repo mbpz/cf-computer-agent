@@ -24,7 +24,7 @@ describe("review period request ownership", () => {
     await waitForApp(() => reads.length === 1);
   }
   async function resolve(index: number, marker: string, period = reads[index]!.period) {
-    await act(async () => reads[index]!.resolve(Response.json({...extendedPayload("review", false, marker), period})));
+    await act(async () => reads[index]!.resolve(Response.json({...extendedPayload("review", false, marker), period, ...(period === "weekly" ? {periodKey: "2026-W37", from: "2026-09-07T00:00:00.000Z"} : {})})));
     if (index === reads.length - 1) await waitForApp(() => main().textContent?.includes(`READY::review::${marker}`) === true || main().querySelector('[role="alert"]') !== null);
   }
   async function click(label: string) { await act(async () => button(label).click()); }
