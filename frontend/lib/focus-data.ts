@@ -3,8 +3,8 @@ import { apiFetch, type Fetcher } from "./api";
 export type FocusStatus = "active" | "paused" | "completed" | "abandoned";
 export interface FocusSession { id: string; taskId: string; calendarEventId: string | null; clientKey: string; status: FocusStatus; startedAt: string; pausedAt: string | null; endedAt: string | null; elapsedMs: number; }
 
-export async function loadCurrentFocus(requester: Fetcher = fetch): Promise<FocusSession | null> {
-  const value = await apiFetch<unknown>("/api/focus/current", { requester });
+export async function loadCurrentFocus(requester: Fetcher = fetch, signal?: AbortSignal): Promise<FocusSession | null> {
+  const value = await apiFetch<unknown>("/api/focus/current", { requester, signal });
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("FOCUS_RESPONSE_INVALID");
   const session = (value as Record<string, unknown>).session;
   return session === null ? null : normalizeSession(session);

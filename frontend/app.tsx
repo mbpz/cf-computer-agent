@@ -1706,15 +1706,63 @@ export function FocusRoute({ locale }: { locale: LocaleRuntime }) {
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [selectionVersion, setSelectionVersion] = useState(0);
-  const clearDenied = useCallback(() => {setSelectionVersion(value => value + 1); setActionError(undefined); setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});}, [locale]);
-  const refresh = useCallback(() => {
-    setState((current) => current.kind === "ready" ? current : { kind: "loading" });
-    return loadCurrentFocus().then((session) => setState({ kind: "ready", session })).catch((error: unknown) => { if (!isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); });
+  const epochRef = useRef(0);
+  const busyRef = useRef(false);
+  const readRef = useRef<AbortController | null>(null);
+  const clearDenied = useCallback(() => {
+    epochRef.current += 1;
+    readRef.current?.abort();
+    busyRef.current = false;
+    setPending(false); setSelectionVersion(value => value + 1); setActionError(undefined);
+    setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
   }, [locale]);
-  useEffect(() => { void refresh(); }, [refresh, retryVersion]);
-  const mutate = async (operation: () => Promise<unknown>) => { if (pending) return; setPending(true); setActionError(undefined); try { await operation(); await refresh(); } catch (error: unknown) { if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
-      else if (!isAbort(error)) {setSelectionVersion(value => value + 1); setActionError(frontendText(locale, error instanceof ApiRequestError && error.status === 404 ? "FOCUS_TASK_UNAVAILABLE" : "FOCUS_ACTION_FAILED"));} } finally { setPending(false); } };
-  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion((value) => value + 1)} onStart={(input) => void mutate(async () => {await loadTaskDetail(input.taskId); return startFocus(input);})} onTransition={(action) => { if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action)); }} />;
+  useEffect(() => {
+    const epoch = ++epochRef.current;
+    const controller = new AbortController();
+    readRef.current = controller;
+    busyRef.current = false;
+    setPending(false); setActionError(undefined); setSelectionVersion(value => value + 1);
+    setState({kind: "loading"});
+    void loadCurrentFocus(fetch, controller.signal).then(session => {
+      if (epoch === epochRef.current) setState({kind: "ready", session});
+    }).catch(error => {
+      if (epoch === epochRef.current && !isAbort(error)) setState({kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD")});
+    });
+    return () => {epochRef.current += 1; controller.abort(); readRef.current?.abort();};
+  }, [locale, retryVersion]);
+  const mutate = async (operation: (epoch: number) => Promise<unknown>) => {
+    if (busyRef.current || state.kind !== "ready") return;
+    busyRef.current = true;
+    const epoch = epochRef.current;
+    setPending(true); setActionError(undefined);
+    try {
+      await operation(epoch);
+      if (epoch !== epochRef.current) return;
+      const controller = new AbortController();
+      readRef.current?.abort(); readRef.current = controller;
+      const session = await loadCurrentFocus(fetch, controller.signal);
+      if (epoch === epochRef.current) setState({kind: "ready", session});
+    } catch (error: unknown) {
+      if (epoch !== epochRef.current) return;
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearDenied();
+      else if (!isAbort(error)) {
+        setSelectionVersion(value => value + 1);
+        setActionError(frontendText(locale, error instanceof ApiRequestError && error.status === 404 ? "FOCUS_TASK_UNAVAILABLE" : "FOCUS_ACTION_FAILED"));
+      }
+    } finally {
+      if (epoch === epochRef.current) {busyRef.current = false; setPending(false);}
+    }
+  };
+  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(async epoch => {
+    const controller = new AbortController();
+    readRef.current?.abort(); readRef.current = controller;
+    await loadTaskDetail(input.taskId, fetch, controller.signal);
+    // Leaving the route during this read must never initiate a later write.
+    if (epoch !== epochRef.current) return;
+    return startFocus(input);
+  })} onTransition={action => {
+    if (state.kind === "ready" && state.session) void mutate(() => transitionFocus(state.session!.id, action));
+  }} />;
 }
 
 export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {

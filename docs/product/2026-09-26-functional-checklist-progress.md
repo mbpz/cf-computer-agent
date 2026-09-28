@@ -1036,3 +1036,23 @@ rtk proxy npm run build:ui
 rtk proxy npm run verify:i18n
 rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
 ```
+
+
+## 2026-09-28：C04 / EXT-FOC-02 会话异步生命周期（本地）
+
+- 先复现再实现：新增初读退出/重入、预检时退出、迟到写回执、同事件轮次双启动、写后回读退出 5 项 App/happy-dom 测试。最初 4 failed / 16 passed；迟到写回执的首版断言早于异步 body 解析，补等待实际响应处理后该项也 RED（观察到多余 current GET），避免假绿。
+- 初次 current GET、任务 GET 预检与写后 current GET 使用 AbortSignal；effect cleanup 和权限拒绝递增 epoch，迟到成功/失败不改变状态。预检读返回后先校验 epoch，已离开路由不再启动 POST；已发送写入的迟到回执不再发起新读取。同步 busy ref 阻止同一事件轮次双击，不能把 React pending 当作同步锁。
+- 4 文件联合回归 **198/198**（选择/生命周期 20、Worker 3、扩展 28、成熟度 147）。合同回归 **91/91**，domain evidence 与生成器一致，functional checklist 审计及 diff --check 通过。typecheck/build:ui/verify:i18n 通过；chunk 大小仍有既有警告。读取取消不是服务端写入撤销，未知写入与稳定启动恢复仍留 EXT-FOC-03；没有声称原生浏览器或跨标签并发已验收。
+- 父清单仍 **29 范围内 / 3 关闭 / 26 未关闭**。EXT-FOC-02 本地完成，下一 **EXT-FOC-03 专注启动/转换与刷新恢复**允许继续；无备份/加密/生产签认阻塞本地开发。
+- 仅本地，未 push/merge/部署/远程迁移/生产写入/备份/AI 调用/手工读取上传 Secret。
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-focus-task-selection.test.tsx test/worker/focus.test.ts test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs scripts/workbench-maturity-contract.test.mjs scripts/delivery-status-contract.test.mjs scripts/i18n-contract.test.mjs scripts/calendar-query.test.mjs
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```

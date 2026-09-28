@@ -12,39 +12,42 @@ describe("Focus owned task selection through App", () => {
   let calls: {path: string; method: string; body?: any; signal?: AbortSignal | null}[] = [];
   let listStatus = 0, detailStatus = 0, postStatus = 0, wrongPage = false, wrongTarget = false, empty = false;
   let delayed: (() => Promise<Response>) | undefined;
+  let delayedCurrent: (() => Promise<Response>) | undefined, delayedDetail: (() => Promise<Response>) | undefined, delayedPost: (() => Promise<Response>) | undefined;
   let current: any = null;
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
   async function input(value: string) { await act(async () => { const node = main().querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange({currentTarget: {value}}); }); }
-  async function mount() {
+  async function mount(wait = true) {
     app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), method = init?.method ?? "GET";
       calls.push({path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal});
       if (url.pathname === "/api/navigation") return Response.json({tree: currentNavigationFixture("contributor", "0x100000")});
       if (url.pathname === "/api/telemetry/pageview") return Response.json({});
-      if (url.pathname === "/api/focus/current") return Response.json({session: current});
+      if (url.pathname === "/api/focus/current") return delayedCurrent ? delayedCurrent() : Response.json({session: current});
       if (url.pathname === "/api/tasks") {
         if (delayed) return delayed();
         if (listStatus) return apiError(listStatus, "DENIED", "Denied");
         return Response.json(page(wrongPage ? 2 : Number(url.searchParams.get("page")), Number(url.searchParams.get("pageSize")), empty ? 0 : 21));
       }
       if (url.pathname.startsWith("/api/tasks/")) {
+        if (delayedDetail) return delayedDetail();
         if (detailStatus) return apiError(detailStatus, "TASK_NOT_FOUND", "Unavailable");
         return Response.json({task: task(wrongTarget ? 99 : Number(url.pathname.split("-").pop())), tags: [], links: []});
       }
       if (url.pathname === "/api/focus" && method === "POST") {
+        if (delayedPost) return delayedPost();
         if (postStatus) return apiError(postStatus, "TASK_NOT_FOUND", "Unavailable");
         const body = JSON.parse(String(init!.body)); current = {...body, status: "active", calendarEventId: null, startedAt: stamp, elapsedMs: 0, pausedAt: null, endedAt: null};
         return Response.json({session: current, created: true});
       }
       throw new Error(`Unexpected ${method} ${url}`);
     }});
-    await waitForApp(() => !!button("Start focus"));
+    if (wait) await waitForApp(() => !!button("Start focus"));
   }
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
-  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = undefined; vi.unstubAllGlobals();});
+  afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals();});
   it("replaces pasted IDs with owned selection and reauthorizes the exact task before starting", async () => {
     await mount(); expect(main().querySelector('input[aria-label="Task ID"]')).toBeNull(); expect(button("Start focus").disabled).toBe(true);
     await select(); expect(button("Start focus").disabled).toBe(false); await click(button("Start focus")); await waitForApp(() => main().textContent!.includes("Current session"));
@@ -81,6 +84,48 @@ describe("Focus owned task selection through App", () => {
     await waitForApp(() => main().textContent!.includes("No matching tasks")); expect(old.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json(page())));
     expect(button("Owned task 1")).toBeUndefined(); expect(main().textContent).toContain("No matching tasks");
+  });
+  async function navigate(path: string) {
+    await act(async () => {app!.browser.history.pushState({}, "", path); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate"));});
+  }
+  it("aborts an initial session read on route exit and ignores its late result after reentry", async () => {
+    let resolve!: (response: Response) => void; delayedCurrent = () => new Promise(done => {resolve = done;});
+    await mount(false); await waitForApp(() => !!resolve); const request = calls.find(c => c.path === "/api/focus/current")!;
+    await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
+    delayedCurrent = undefined; await navigate("/focus"); await waitForApp(() => !!button("Start focus"));
+    await act(async () => resolve(Response.json({session: {...task(1), taskId: "late-private-task", clientKey: "late", status: "active", startedAt: stamp, elapsedMs: 0}})));
+    expect(main().textContent).not.toContain("late-private-task"); expect(button("Start focus")).toBeDefined();
+  });
+  it("never starts after leaving while the target preflight is pending", async () => {
+    let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve);
+    const request = calls.find(c => c.path === "/api/tasks/task-1")!; await navigate("/settings");
+    expect(request.signal?.aborted).toBe(true);
+    await act(async () => resolve(Response.json({task: task(1), tags: [], links: []})));
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
+  });
+  it("ignores a late write receipt without starting a new read after route exit", async () => {
+    let resolve!: (response: Response) => void; delayedPost = () => new Promise(done => {resolve = done;});
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve); await navigate("/settings");
+    const reads = calls.filter(c => c.path === "/api/focus/current").length;
+    await act(async () => resolve(Response.json({session: {id: "late", clientKey: "late", taskId: "task-1", status: "active", startedAt: stamp, elapsedMs: 0}})));
+    await act(async () => {await new Promise(done => setTimeout(done, 20));});
+    expect(calls.filter(c => c.path === "/api/focus/current")).toHaveLength(reads);
+    expect(main().textContent).not.toContain("Current session");
+  });
+  it("uses a synchronous action guard for two starts in one event turn", async () => {
+    let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
+    await mount(); await select(); await act(async () => {button("Start focus").click(); button("Start focus").click();});
+    await waitForApp(() => !!resolve); expect(calls.filter(c => c.path === "/api/tasks/task-1")).toHaveLength(1);
+    await act(async () => resolve(Response.json({task: task(1), tags: [], links: []})));
+    await waitForApp(() => main().textContent!.includes("Current session")); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+  });
+  it("aborts the post-write reconciliation read on exit", async () => {
+    let resolve!: (response: Response) => void; await mount(); await select(); delayedCurrent = () => new Promise(done => {resolve = done;});
+    await click(button("Start focus")); await waitForApp(() => !!resolve); const request = calls.filter(c => c.path === "/api/focus/current").at(-1)!;
+    await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
+    await act(async () => resolve(Response.json({session: current})));
+    expect(main().textContent).not.toContain("Current session");
   });
   it("aborts a closed picker and ignores a late private list", async () => {
     let resolve!: (response: Response) => void; delayed = () => new Promise(done => {resolve = done;}); await mount(); await click(button("Choose task")); await waitForApp(() => !!resolve);
