@@ -58,8 +58,8 @@ export async function routeInboxApi(
     const id = decodePathId(item[1]!);
     if (request.method === "GET") return jsonResponse(await services.inbox.get(member.memberId, id), 200, context.requestId);
     if (request.method === "PATCH") {
-      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status"], "INBOX_INVALID");
-      return jsonResponse(await services.inbox.updateStatus(member.memberId, id, input.status), 200, context.requestId);
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["status", "expectedUpdatedAt"], "INBOX_INVALID");
+      return jsonResponse(await services.inbox.updateStatus(member.memberId, id, input.status, input.expectedUpdatedAt), 200, context.requestId);
     }
     return methodNotAllowed("GET, PATCH", context);
   }

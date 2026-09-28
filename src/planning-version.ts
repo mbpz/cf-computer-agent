@@ -1,6 +1,6 @@
 import { AppError } from "./http";
 
-type PlanningKind = "GOAL" | "PROJECT" | "PROJECT_TIMELINE";
+type PlanningKind = "GOAL" | "PROJECT" | "PROJECT_TIMELINE" | "INBOX";
 
 export function requirePlanningVersion(value: unknown, current: string, kind: PlanningKind): number {
   const epoch = typeof value === "string" ? Date.parse(value) : NaN;

@@ -12,7 +12,7 @@ describe("inbox numbered pages through App", () => {
   let methods: string[]; let delayPageTwo = false; let resolvePageTwo: (() => void) | undefined; let delayedSignal: AbortSignal | null | undefined;
   const main = () => app!.container.querySelector("main")!;
   const button = (label: string) => main().querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
-  const entity = (id: number) => ({ id: `row-${id}`, clientKey: `key-${id}`, content: `Private row ${id}`, kind: "text", status: "inbox", sourceUrl: null, promotedTaskId: null, promotedSubmissionId: null, createdAt: "2026-09-26", updatedAt: "2026-09-26" });
+  const entity = (id: number) => ({ id: `row-${id}`, clientKey: `key-${id}`, content: `Private row ${id}`, kind: "text", status: "inbox", sourceUrl: null, promotedTaskId: null, promotedSubmissionId: null, createdAt: "2026-09-26T00:00:00.000Z", updatedAt: "2026-09-26T00:00:00.000Z" });
   const pageResponse = (url: URL) => {
     const page = Number(url.searchParams.get("page") ?? 1); const pageSize = Number(url.searchParams.get("pageSize") ?? 20);
     return Response.json({ items: Array.from({ length: Math.max(0, Math.min(pageSize, total - (page - 1) * pageSize)) }, (_, i) => ({ ...entity((page - 1) * pageSize + i), status: url.searchParams.get("status") ?? "inbox" })), pagination: { page: malformed ? 1 : page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
@@ -26,10 +26,12 @@ describe("inbox numbered pages through App", () => {
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
       requests.push(url); methods.push(init?.method ?? "GET");
       if (init?.method === "PATCH") {
-        if (delayWrite) return new Promise<Response>(resolve => { resolveWrite = () => resolve(Response.json({ ...entity(20), status: "archived" })); });
+        const id = Number(url.pathname.split("row-")[1]);
+        if (delayWrite) return new Promise<Response>(resolve => { resolveWrite = () => resolve(Response.json({ ...entity(id), status: "archived", updatedAt: "2026-09-26T00:00:00.001Z" })); });
         if (failReadAfterWrite) fail = 403;
-        return Response.json({ ...entity(20), status: "archived" });
+        return Response.json({ ...entity(id), status: "archived", updatedAt: "2026-09-26T00:00:00.001Z" });
       }
+      if (url.pathname.startsWith("/api/inbox/row-")) return fail ? apiError(fail, "UNAVAILABLE", true) : Response.json({ ...entity(Number(url.pathname.split("row-")[1])), status: "archived", updatedAt: "2026-09-26T00:00:00.001Z" });
       if (delayPageTwo && url.searchParams.get("page") === "2") {
         delayedSignal = init?.signal;
         return new Promise<Response>(resolve => { resolvePageTwo = () => resolve(pageResponse(url)); });
@@ -153,9 +155,9 @@ describe("inbox numbered pages through App", () => {
   it("refreshes the exact numbered filter after archive, never appending", async () => {
     await mount("?page=2&status=inbox");
     await click([...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!);
-    await waitForApp(() => methods.length === 3 && main().textContent!.includes("Private row 20"));
-    expect(methods).toEqual(["GET", "PATCH", "GET"]);
-    expect(requests[2]!.search).toBe(requests[0]!.search);
+    await waitForApp(() => methods.length === 4 && main().textContent!.includes("Private row 20"));
+    expect(methods).toEqual(["GET", "PATCH", "GET", "GET"]);
+    expect(requests[3]!.search).toBe(requests[0]!.search);
     expect(main().querySelectorAll("time")).toHaveLength(20);
   });
   it("denied readback removes private rows after a successful write", async () => {

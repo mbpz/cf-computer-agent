@@ -59,7 +59,7 @@ import { clearSubmissionIntent, createSubmissionIntent, loadSubmissionIntent, sa
 import { clearOfflineSubmissionDraft, loadOfflineSubmissionDraft, saveOfflineSubmissionDraft } from "./lib/offline-submission-draft";
 import { createMySubmissionsRequestController, type MySubmissionItem } from "./lib/my-submissions-data";
 import { createTasksRequestController, deleteTask, loadTaskSummary, setTaskStatus, type TaskFilters, type TaskItem, type TaskPage } from "./lib/tasks-data";
-import { createInbox, readCreatedInbox, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
+import { createInbox, readCreatedInbox, loadInboxItem, loadInboxNumbered, parseInboxSearch, writeInboxSearch, promoteInboxTask, updateInboxStatus, type InboxPageRequest, type InboxItem } from "./lib/inbox-data";
 import { createGoal, loadNumberedGoals, setGoalProgress, setGoalStatus, type Goal } from "./lib/goals-data";
 import { createProject, createProjectTimeline, editProjectTimeline, loadProject, loadProjectSummary, loadNumberedProjectTimeline, loadNumberedProjects, setProjectStatus, setProjectTimelineStatus, type Project, type ProjectSummary, type ProjectTimelineItem, type ProjectTimelineKind, type ProjectTimelineStatus } from "./lib/projects-data";
 import { cancelCalendarEvent, createCalendarEvent, loadCalendar, type CalendarEvent } from "./lib/calendar-data";
@@ -1018,6 +1018,7 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
 }
 
 export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
+  const writeRecovery = usePlanningWriteRecovery(memberId, "INBOX", search);
   const { page, pageSize, status } = parseInboxSearch(search);
   const query = { page, pageSize, status };
   const queryRef = useRef<InboxPageRequest>(query);
@@ -1049,33 +1050,44 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     const canonical = writeInboxSearch(search, { page, pageSize, status });
     if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
   }, [search, page, pageSize, status]);
-  const refresh = useCallback(async () => {
+  const clearReadFailure = useCallback(() => {
+    setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+  }, [locale]);
+  const clearDenied = useCallback((error: unknown) => {
+    if (!(error instanceof ApiRequestError) || ![401, 403, 404].includes(error.status)) return false;
+    if (error.status === 401 || error.status === 403) writeRecovery.deny();
+    clearReadFailure(); return true;
+  }, [clearReadFailure, writeRecovery.deny]);
+  const refresh = useCallback(async (): Promise<boolean> => {
     invalidate();
     const generation = generationRef.current;
     const controller = new AbortController(); controllerRef.current = controller;
     try {
       const result = await loadInboxNumbered({ page, pageSize, status }, fetch, controller.signal);
-      if (!activeRef.current || generation !== generationRef.current) return;
+      if (!activeRef.current || generation !== generationRef.current) return false;
       setState({ kind: "ready", items: result.items, pagination: result.pagination });
+      return true;
     } catch (error: unknown) {
-      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
-      setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return false;
+      if (!clearDenied(error)) clearReadFailure();
+      return false;
     } finally {
       if (activeRef.current && generation === generationRef.current) { pendingRef.current = false; setPending(false); }
     }
-  }, [page, pageSize, status, locale, invalidate]);
+  }, [page, pageSize, status, invalidate, clearDenied, clearReadFailure]);
   useEffect(() => {
     activeRef.current = true; void refresh();
     return () => { activeRef.current = false; generationRef.current++; controllerRef.current?.abort(); };
   }, [refresh, retryVersion]);
   const navigate = (next: InboxPageRequest) => {
+    if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
     const nextSearch = writeInboxSearch(window.location.search, next);
     if (nextSearch === window.location.search) return;
     invalidate();
     writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
   };
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current || writingRef.current || captureLockedRef.current) return;
+    if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
     writingRef.current = true; setWriting(true); setActionError(undefined);
     const generation = generationRef.current;
     try {
@@ -1087,16 +1099,48 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       else setActionError(frontendText(locale, "INBOX_ACTION_FAILED"));
     } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
   };
-  return <InboxPage locale={locale} state={state} pending={pending || writing || captureLocked} capturePending={pending || writing} actionError={actionError} status={status}
+  const changeStatus = async (item: InboxItem) => {
+    if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
+    const record = writeRecovery.begin(item.id, item.updatedAt);
+    if (!record) return;
+    writingRef.current = true; setWriting(true); setActionError(undefined);
+    const generation = generationRef.current;
+    let reading = false;
+    try {
+      const receipt = await updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived", item.updatedAt);
+      if (!activeRef.current || generation !== generationRef.current) return;
+      reading = true;
+      const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
+      const current = await loadInboxItem(item.id, fetch, controller.signal);
+      if (!activeRef.current || generation !== generationRef.current) return;
+      if (Date.parse(current.updatedAt) < Date.parse(receipt.updatedAt)) throw new Error("INBOX_READBACK_STALE");
+      const refreshed = await refresh();
+      if (!activeRef.current || generationRef.current !== generation + 1) return;
+      if (refreshed) writeRecovery.finish(record);
+    } catch (error) {
+      if (!activeRef.current || generation !== generationRef.current) return;
+      if (clearDenied(error)) return;
+      if (reading) clearReadFailure();
+      else {
+        const rejected = error instanceof ApiRequestError && !error.retryable && error.status >= 400 && error.status < 500 && ![408, 409].includes(error.status);
+        if (rejected) writeRecovery.finish(record);
+        setActionError(frontendText(locale, "INBOX_ACTION_FAILED"));
+      }
+    } finally {
+      writingRef.current = false;
+      if (activeRef.current) setWriting(false);
+    }
+  };
+  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><InboxPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} capturePending={pending || writing || writeRecovery.locked} actionError={actionError} status={status}
     onRetry={() => setRetryVersion(value => value + 1)}
     createMemberId={memberId}
     onCreateLock={locked => { captureLockedRef.current = locked; setCaptureLocked(locked); }}
     onCreate={input => {
-      if (!activeRef.current || pendingRef.current || writingRef.current) throw new Error("INBOX_CREATE_BUSY");
+      if (!activeRef.current || pendingRef.current || writingRef.current || writeRecovery.locked) throw new Error("INBOX_CREATE_BUSY");
       return createInbox(input);
     }}
     onCreateReadback={async intent => {
-      if (!activeRef.current || pendingRef.current || writingRef.current) return false;
+      if (!activeRef.current || pendingRef.current || writingRef.current || writeRecovery.locked) return false;
       const generation = generationRef.current;
       const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
       await readCreatedInbox(intent, fetch, controller.signal);
@@ -1107,11 +1151,11 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       return true;
     }}
     onCreateDenied={() => { generationRef.current++; controllerRef.current?.abort(); setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }}
-    onStatusChange={item => void mutate(() => updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived"))}
+    onStatusChange={item => void changeStatus(item)}
     onPromoteTask={item => void mutate(() => promoteInboxTask(item.id))}
     onPageChange={next => navigate({ ...query, page: next })}
     onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
-    onFilterChange={next => navigate({ ...query, page: 1, status: next })} />;
+    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></>;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

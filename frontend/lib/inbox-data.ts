@@ -1,3 +1,4 @@
+import { canonicalPlanningVersion } from "./planning-write-recovery";
 import { apiFetch, type Fetcher } from "./api";
 import { validInboxIntent, type InboxCreateIntent } from "./inbox-create-intent";
 import { normalizeNumberedPage, parsePageSearch, writePageSearch, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
@@ -80,8 +81,21 @@ function strictInbox(raw: unknown): InboxItem {
   return item;
 }
 
-export async function updateInboxStatus(id: string, status: "inbox" | "archived", requester: Fetcher = fetch): Promise<InboxItem> {
-  return apiFetch<InboxItem>(`/api/inbox/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+function requireInboxId(id: string): void {
+  if (typeof id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)) throw new Error("INBOX_INVALID");
+}
+export async function loadInboxItem(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<InboxItem> {
+  requireInboxId(id);
+  const item = strictInbox(await apiFetch<unknown>(`/api/inbox/${encodeURIComponent(id)}`, { requester, signal }));
+  if (item.id !== id || !canonicalPlanningVersion(item.updatedAt)) throw new Error("INBOX_RESPONSE_INVALID");
+  return item;
+}
+export async function updateInboxStatus(id: string, status: "inbox" | "archived", expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<InboxItem> {
+  requireInboxId(id);
+  if (!canonicalPlanningVersion(expectedUpdatedAt) || !["inbox", "archived"].includes(status)) throw new Error("INBOX_INVALID");
+  const item = strictInbox(await apiFetch<unknown>(`/api/inbox/${encodeURIComponent(id)}`, { requester, method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, expectedUpdatedAt }) }));
+  if (item.id !== id || item.status !== status || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) <= Date.parse(expectedUpdatedAt)) throw new Error("INBOX_RESPONSE_INVALID");
+  return item;
 }
 
 export async function promoteInboxTask(id: string, requester: Fetcher = fetch): Promise<{ item: InboxItem; promoted: boolean; taskId: string }> {

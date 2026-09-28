@@ -780,3 +780,35 @@ rtk proxy npm run audit:workbench-domain
 - `typecheck`、`build:ui`、`verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`verify:delivery-status` 30/30、领域快照校验、`git diff --check` 通过。typecheck 不覆盖全部前端 TSX；构建仍有 >500 kB chunk 提示；未执行全仓 npm test/check。
 - canonical **29 范围内 / 已关闭 1（B03）/ 未关闭 28**；EXT-INB-02 和 C04 父项仍开放。下一项 EXT-INB-03 归档/转任务条件写、未知结果恢复与跳转旅程允许继续本地实施，真实身份/原生浏览器验收仍待补。
 - 本批未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret。
+
+
+## 2026-09-28：EXT-INB-03 归档/恢复条件写与只读恢复
+
+延续 `95a3a51`，仍在 `codex/functional-checklist-completion`。本批仅关闭 EXT-INB-03 的归档/恢复本地子项，不把转任务或 C04 父项标为完成。
+
+### 实际实现
+
+- PATCH `/api/inbox/:id` 增加必需的 canonical `expectedUpdatedAt`；先验证 owned 对象，再按成员/id/旧版本和未 promoted 状态进行 D1 CAS。旧版本 409、外部成员/不存在 404；`meta.changes` 无命中不伪造成功；版本取旧版本 +1 与当前时钟的较大值，同状态请求也推进版本。
+- 前端发送精确版本，严格校验回执身份/状态/推进版本；确认后 GET owned 原对象（版本不得早于回执），再读取精确当前页、页大小和状态筛选，不追加旧行。
+- 写前使用成员隔离 INBOX sessionStorage 只读标记（仅 token/id/expectedUpdatedAt，不保存私密正文或可执行写入载荷）。未知结果、409、错误回执与失败回读保持写锁；离开再返回可显式 GET 原对象与列表核对，不自动重发 PATCH。存储损坏/写失败阻止写入；401/403 清屏并尝试清标记，404/读失败清屏但保留标记；重复点击及迟到写回执有本地回归。
+- 复用现有 Planning 只读恢复机制，增加 INBOX 作用域和可选读取失败清屏回调；已有目标/项目/时间线恢复回归同时验证。旧分页测试使用真实 canonical 时间戳和新增 owned GET 的响应契约。
+
+### RED → GREEN 与验证
+
+- Worker/D1 条件写初始 10 failed / 1 passed：旧路由拒绝版本字段、缺版本仍写入、没有 CAS，回退时钟会触发 updated_at 约束；实现后 11/11。
+- 前端状态契约初始 5 failed / 6 passed（旧签名/缺少 owned loader），最终 11/11；App 初始 15 failed / 1 passed，补充失权恢复与确定拒绝覆盖后 23/23。新增测试合计 **45**。
+- 联合本地回归 **22 文件 492/492**：Inbox 创建/分页/页面/路由/服务及新状态流程、工作台扩展/成熟度路由、共享数字分页、Planning 写恢复/存储、时间线恢复，以及 Planning/时间线条件写。
+- `verify:i18n`、`test:i18n` 13/13、`verify:workbench-maturity` 13/13、`verify:delivery-status` 30/30、领域审计快照校验、`git diff --check` 通过。
+- `rtk proxy npm run typecheck`、`rtk proxy npm run build:ui` 通过；typecheck 不覆盖全部前端 TSX，构建仍有 >500 kB chunk 提示。未运行全仓 npm test/check，避免扩大任务范围与触发 Secret 同步钩子。
+
+联合测试可复现命令：
+
+```sh
+rtk proxy npx vitest run test/unit/frontend-inbox-status-recovery.test.tsx test/unit/frontend-inbox-status-data.test.ts test/worker/inbox-conditional-writes.test.ts test/unit/frontend-inbox-create.test.tsx test/unit/frontend-inbox-create-intent.test.ts test/unit/frontend-inbox-create-data.test.ts test/unit/frontend-inbox-numbered-pages.test.tsx test/unit/frontend-inbox-numbered-data.test.ts test/unit/frontend-inbox-page.test.tsx test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx test/unit/frontend-pagination.test.tsx test/unit/frontend-planning-numbered-pages.test.tsx test/worker/inbox-numbered-pages.test.ts test/worker/inbox.test.ts test/unit/inbox-service.test.ts test/unit/inbox-route.test.ts test/unit/frontend-planning-write-recovery.test.tsx test/unit/frontend-planning-write-storage.test.ts test/unit/frontend-project-timeline-recovery.test.tsx test/worker/planning-conditional-writes.test.ts test/worker/project-timeline-conditional-writes.test.ts
+```
+
+### 剩余范围与下一步
+
+canonical **29 范围内 / 已关闭 1（B03）/ 未关闭 28**。EXT-INB-03 与 C04 父项保持开放。下一步是转任务一致性和目标跳转/权限：现有实现先调用 TasksService 创建任务，再更新 Inbox；本批没有为该流程提供事务原子性、并发唯一性或碰撞保护证明，不能因归档条件写通过而宣称转任务已完成。该子项仍允许继续本地实施；真实身份/原生浏览器验收是后续验收缺口。
+
+本批未 push、merge、部署、远程迁移、生产写入、备份、AI 调用或手工读取/上传 Secret；无需新增迁移。

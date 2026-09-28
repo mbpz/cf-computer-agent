@@ -12,7 +12,7 @@ export interface InboxRepositoryPort {
   findOwned(memberId: string, id: string): Promise<InboxItem | null>;
   findByClientKey(memberId: string, clientKey: string): Promise<InboxItem | null>;
   listOwned(memberId: string, request: InboxPageRepositoryRequest): Promise<InboxPage>;
-  updateStatus(memberId: string, id: string, status: Exclude<InboxStatus, "promoted">, updatedAt: number): Promise<InboxItem | null>;
+  updateStatus(memberId: string, id: string, status: Exclude<InboxStatus, "promoted">, updatedAt: number, expectedUpdatedAt: number): Promise<InboxItem | null>;
   promote(memberId: string, id: string, promotion: { taskId?: string; submissionId?: string; updatedAt: number }): Promise<InboxItem | null>;
 }
 
@@ -77,9 +77,10 @@ export class InboxRepository implements InboxRepositoryPort {
     };
   }
 
-  async updateStatus(memberId: string, id: string, status: Exclude<InboxStatus, "promoted">, updatedAt: number): Promise<InboxItem | null> {
-    await this.db.prepare("UPDATE inbox_items SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND status IN ('inbox', 'archived')")
-      .bind(status, updatedAt, memberId, id).run();
+  async updateStatus(memberId: string, id: string, status: Exclude<InboxStatus, "promoted">, updatedAt: number, expectedUpdatedAt: number): Promise<InboxItem | null> {
+    const result = await this.db.prepare("UPDATE inbox_items SET status = ?, updated_at = ? WHERE member_id = ? AND id = ? AND updated_at = ? AND status IN ('inbox', 'archived')")
+      .bind(status, updatedAt, memberId, id, expectedUpdatedAt).run();
+    if (result.meta.changes !== 1) return null;
     return this.findOwned(memberId, id);
   }
 

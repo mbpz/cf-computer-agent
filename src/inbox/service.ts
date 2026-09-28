@@ -1,4 +1,5 @@
 import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageRequest } from "../pagination";
+import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import { AppError } from "../http";
 import type { InboxRepositoryPort } from "./repository";
 import { INBOX_KINDS, INBOX_STATUSES, type InboxItem, type InboxKind, type InboxListFilters, type InboxPage, type InboxStatus } from "./types";
@@ -52,13 +53,16 @@ export class InboxService {
     return this.repository.listOwned(memberId, { ...request, ...(status ? { status } : {}) });
   }
 
-  async updateStatus(memberId: string, id: string, status: unknown): Promise<InboxItem> {
+  async updateStatus(memberId: string, id: string, status: unknown, expectedUpdatedAt: unknown): Promise<InboxItem> {
     const item = await this.get(memberId, id);
     if (typeof status !== "string" || (status !== "inbox" && status !== "archived")) throw invalid("INBOX_INVALID");
     if (item.status === "promoted") throw transitionInvalid();
-    if (item.status === status) return item;
-    const updated = await this.repository.updateStatus(memberId, item.id, status, this.now().getTime());
-    if (!updated) throw notFound();
+    const expected = requirePlanningVersion(expectedUpdatedAt, item.updatedAt, "INBOX");
+    const updated = await this.repository.updateStatus(memberId, item.id, status, nextPlanningVersion(expected, this.now().getTime()), expected);
+    if (!updated) {
+      await this.get(memberId, id);
+      throw planningConflict("INBOX");
+    }
     return updated;
   }
 

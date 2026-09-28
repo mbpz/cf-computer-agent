@@ -34,10 +34,10 @@ describe("InboxService", () => {
     const repository = new FakeInboxRepository();
     const service = new InboxService(repository, { promoteTask: async () => ({ taskId: "task-1" }) });
     await service.create("member-a", { id: "inbox-1", clientKey: "capture-1", kind: "text", content: "Alpha" });
-    await expect(service.updateStatus("member-a", "inbox-1", "archived")).resolves.toMatchObject({ status: "archived" });
-    await expect(service.updateStatus("member-a", "inbox-1", "inbox")).resolves.toMatchObject({ status: "inbox" });
+    await expect(service.updateStatus("member-a", "inbox-1", "archived", (await service.get("member-a", "inbox-1")).updatedAt)).resolves.toMatchObject({ status: "archived" });
+    await expect(service.updateStatus("member-a", "inbox-1", "inbox", (await service.get("member-a", "inbox-1")).updatedAt)).resolves.toMatchObject({ status: "inbox" });
     await service.promoteTask("member-a", "inbox-1");
-    await expect(service.updateStatus("member-a", "inbox-1", "archived")).rejects.toMatchObject({ code: "INBOX_TRANSITION_INVALID", status: 422 });
+    await expect(service.updateStatus("member-a", "inbox-1", "archived", (await service.get("member-a", "inbox-1")).updatedAt)).rejects.toMatchObject({ code: "INBOX_TRANSITION_INVALID", status: 422 });
   });
 
   it("makes task promotion retry safe", async () => {
@@ -80,9 +80,9 @@ class FakeInboxRepository implements InboxRepositoryPort {
     this.listCalls.push({ memberId, request });
     return { items: this.items.filter((item) => item.memberId === memberId), nextCursor: undefined };
   }
-  async updateStatus(memberId: string, id: string, status: "inbox" | "archived", updatedAt: number) {
+  async updateStatus(memberId: string, id: string, status: "inbox" | "archived", updatedAt: number, expectedUpdatedAt: number) {
     const item = await this.findOwned(memberId, id);
-    if (!item) return null;
+    if (!item || Date.parse(item.updatedAt) !== expectedUpdatedAt || item.status === "promoted") return null;
     item.status = status; item.updatedAt = new Date(updatedAt).toISOString();
     return item;
   }
