@@ -1164,6 +1164,40 @@ describe("M1 trusted knowledge HTTP journey", () => {
     }
   });
 
+  it.each(["associate", "keep_separate", "reject"] as const)("replays concurrent duplicate %s HTTP decisions with one durable receipt and audit", async (decision) => {
+    const id = await createDuplicateForDecision();
+    const path = `/api/admin/duplicates/${id}/decision`;
+    const responses = await Promise.all(Array.from({length: 3}, () => memberApi("admin", path, {method: "POST", body: JSON.stringify({decision})})));
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    const receipts = await Promise.all(responses.map((response) => response.json()));
+    expect(receipts[1]).toEqual(receipts[0]); expect(receipts[2]).toEqual(receipts[0]);
+    await expectApiError(memberApi("admin", path, {method: "POST", body: JSON.stringify({decision: decision === "reject" ? "associate" : "reject"})}), 409, "DUPLICATE_DECISION_CONFLICT");
+    await expect(env.DB.prepare("SELECT count(*) AS n FROM audit_events WHERE action = 'submission.duplicate_decided' AND resource_id = ?").bind(id).first()).resolves.toEqual({n: 1});
+    await expect(memberApi("admin", "/api/admin/duplicates").then((response) => response.json())).resolves.toMatchObject({items: [], pagination: {total: 0}});
+  });
+
+  it("denies unauthorized and malformed duplicate decisions without changing data", async () => {
+    const id = await createDuplicateForDecision(); const path = `/api/admin/duplicates/${id}/decision`;
+    const body = JSON.stringify({decision: "associate"});
+    await expectApiError(memberApi("contributor", path, {method: "POST", body}), 403, "FORBIDDEN");
+    expect((await memberApi("disabled", path, {method: "POST", body})).status).toBe(403);
+    expect((await memberApi("unknown", path, {method: "POST", body})).status).toBe(401);
+    await expectApiError(memberApi("admin", path, {method: "POST", body: JSON.stringify({decision: "pending"})}), 400, "DUPLICATE_DECISION_INVALID");
+    await expectApiError(memberApi("admin", path, {method: "POST", body: JSON.stringify({decision: "associate", decidedBy: "member-other"})}), 400, "DUPLICATE_REQUEST_INVALID");
+    await expectApiError(memberApi("admin", "/api/admin/duplicates/missing/decision", {method: "POST", body}), 404, "DUPLICATE_NOT_FOUND");
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-admin'").run();
+    expect((await memberApi("admin", path, {method: "POST", body})).status).toBe(403);
+    expect((await memberApi("admin", "/api/admin/duplicates")).status).toBe(403);
+    await expect(env.DB.prepare("SELECT decision, decided_by FROM duplicate_candidates WHERE submission_id = ?").bind(id).first()).resolves.toEqual({decision: "pending", decided_by: null});
+    await expect(env.DB.prepare("SELECT count(*) AS n FROM audit_events WHERE action = 'submission.duplicate_decided'").first()).resolves.toEqual({n: 0});
+  });
+
+  async function createDuplicateForDecision(): Promise<string> {
+    await createSubmission("contributor", {requestedSpaceId: "default", kind: "markdown", title: "Canonical", content: "# API duplicate decision\n"}, "api-decision-canonical");
+    const duplicate = await createSubmission("contributor", {requestedSpaceId: "default", kind: "markdown", title: "Duplicate", content: "# API duplicate decision\n"}, "api-decision-duplicate");
+    return duplicate.body.submission.id;
+  }
+
   it("publishes an explicit update as a new immutable Revision on the existing Knowledge Item", async () => {
     const first = await publishSubmission(
       "contributor", "Version one", "Version one body", "shared", "revision-api-first",

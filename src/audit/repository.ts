@@ -67,7 +67,7 @@ export class AuditRepository {
 
   prepareResourceWriteAudit(
     input: CreateAuditEvent,
-    resource: { table: "members" | "spaces" | "collections"; id: string },
+    resource: { table: "members" | "spaces" | "collections" | "submissions"; id: string },
   ): D1PreparedStatement {
     const audit = assertAuditEventInput(input);
     if (audit.resourceId !== resource.id) throw new TypeError("Audit resource binding is invalid");

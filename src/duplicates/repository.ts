@@ -85,7 +85,10 @@ export class DuplicateCandidatesRepository {
          SET decision = ?, decided_by = ?, decided_at = ?
          WHERE submission_id = ? AND decision = 'pending'`,
       ).bind(decision, reviewerId, now, submissionId),
-      this.audit.prepareWriteAudit(audit),
+      // Only the winning pending-to-terminal UPDATE may insert its audit.
+      // A concurrent loser reads the durable receipt below instead of colliding
+      // on the deterministic audit ID. A real audit failure still rolls back.
+      this.audit.prepareResourceWriteAudit(audit, { table: "submissions", id: submissionId }),
     ]);
     if (writes[0]?.meta.changes !== 1 || writes[1]?.meta.changes !== 1) {
       const concurrent = await this.find(submissionId);

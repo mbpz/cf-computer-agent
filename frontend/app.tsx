@@ -2623,28 +2623,106 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
 }
 
 export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
-  const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminDuplicatePageResult } | { kind: "error"; message: string }>({ kind: "loading" });
+  const initial = parsePageSearch(search);
+  const [page, setPage] = useState(initial.page);
+  const [pageSize, setPageSize] = useState(initial.pageSize);
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: AdminDuplicatePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
+  const [lockedIds, setLockedIds] = useState<string[]>([]);
+  const [pending, setPending] = useState(false);
+  const [localError, setLocalError] = useState<string>();
+  const [readVersion, setReadVersion] = useState(0);
   const controllerRef = useRef<ReturnType<typeof createAdminDuplicateRequestController> | null>(null);
-  const queryRef = useRef({ page, pageSize }); const sameQuery = (value: { page: number; pageSize: SupportedPageSize }) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
-  const { retryVersion, retryRead } = useInitialReadRetry(state.kind, () => setState({ kind: "loading" }));
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
-  useEffect(() => { const controller = createAdminDuplicateRequestController(); controllerRef.current = controller; const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined); const request = controller.request(snapshot); void request.promise.then((data) => { if (controller.isCurrent(request.generation) && sameQuery(snapshot)) { setState({ kind: "ready", data }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && sameQuery(snapshot) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); } }); return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; }; }, [locale, page, pageSize, retryVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { queryRef.current = next; const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url); setPage(next.page); setPageSize(next.pageSize); };
-  const decide = async (id: string, decision: DuplicateDecision) => {
-    if (pendingId) return;
-    const actionQuery = { ...queryRef.current };
-    setPendingId(id);
-    try {
-      await decideAdminDuplicate(id, decision);
-      if (!sameQuery(actionQuery)) return; const snapshot = actionQuery; const controller = controllerRef.current; if (!controller) return; setPending(true); const request = controller.request(snapshot); const refreshed = await request.promise; if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return; if (refreshed.items.length === 0 && snapshot.page > 1) navigate({ page: snapshot.page - 1, pageSize: snapshot.pageSize }, true); else { setState({ kind: "ready", data: refreshed }); setPending(false); }
-    } catch {
-      if (sameQuery(actionQuery)) { setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD")); setPending(false); }
-    } finally { setPendingId(null); }
+  const queryRef = useRef({ page, pageSize });
+  const scopeRef = useRef({});
+  const readRef = useRef<object | null>(null);
+  const mutationRef = useRef<{ id: string } | null>(null);
+  // These locks are local to this mounted route. Missing from a pending page is
+  // not proof of a particular decision, and an acknowledged terminal receipt
+  // must never be unlocked by stale pending data.
+  const needsReadRef = useRef(new Set<string>());
+  const acknowledgedRef = useRef(new Set<string>());
+  const needsClampRef = useRef(false);
+  const syncLocks = () => setLockedIds([...needsReadRef.current]);
+  const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
+  const invalidateQuery = () => {
+    scopeRef.current = {}; needsClampRef.current = false;
+    controllerRef.current?.dispose(); controllerRef.current = null; readRef.current = null;
+    setState({ kind: "loading" }); setPending(false); setLocalError(undefined);
   };
-  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending} localError={localError} onDecision={(id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
+  const deny = (error: unknown) => {
+    if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
+    invalidateQuery(); mutationRef.current = null; setPendingId(null);
+    needsReadRef.current.clear(); acknowledgedRef.current.clear(); syncLocks();
+    setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    return true;
+  };
+  const navigate = (next: typeof queryRef.current, replace = false) => {
+    invalidateQuery(); queryRef.current = next;
+    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`);
+    setPage(next.page); setPageSize(next.pageSize);
+  };
+  const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
+    if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
+    const token = {}; readRef.current = token;
+    const activeAtStart = mutationRef.current?.id;
+    setPending(true); setLocalError(undefined);
+    const request = controller.request(snapshot);
+    try {
+      const data = await request.promise;
+      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      for (const row of data.items) {
+        if (row.submissionId !== activeAtStart && row.submissionId !== mutationRef.current?.id && !acknowledgedRef.current.has(row.submissionId)) needsReadRef.current.delete(row.submissionId);
+      }
+      syncLocks();
+      if ((afterWrite || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
+      else { setState({ kind: "ready", data }); needsClampRef.current = false; }
+    } catch (error: unknown) {
+      if (!controller.isCurrent(request.generation) || !sameQuery(snapshot) || isAbort(error)) return;
+      if (!deny(error)) {
+        setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+        setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+      }
+    } finally {
+      if (readRef.current === token) { readRef.current = null; setPending(false); }
+    }
+  };
+  const retryRead = () => {
+    if (readRef.current || mutationRef.current) return;
+    setState((old) => old.kind === "ready" ? old : { kind: "loading" });
+    if (controllerRef.current) void read(controllerRef.current, { ...queryRef.current });
+    else { readRef.current = {}; setReadVersion((version) => version + 1); }
+  };
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    const next = parsePageSearch(window.location.search);
+    if (sameQuery(next)) return;
+    invalidateQuery(); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize);
+  }), []);
+  useEffect(() => {
+    const controller = createAdminDuplicateRequestController(); controllerRef.current = controller; readRef.current = null;
+    const snapshot = { page, pageSize }; queryRef.current = snapshot;
+    void read(controller, snapshot);
+    return () => { invalidateQuery(); };
+  }, [locale, page, pageSize, readVersion]);
+  const decide = async (id: string, decision: DuplicateDecision) => {
+    if (!controllerRef.current || readRef.current || mutationRef.current || needsReadRef.current.has(id)) return;
+    const candidate = state.kind === "ready" ? state.data.items.find((item) => item.submissionId === id) : undefined;
+    if (!candidate || candidate.decision !== "pending") return;
+    const token = { id }; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
+    mutationRef.current = token; needsReadRef.current.add(id); syncLocks(); setPendingId(id); setLocalError(undefined);
+    try {
+      const receipt = await decideAdminDuplicate(id, decision);
+      if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
+      if (receipt.canonicalSubmissionId !== candidate.canonicalSubmissionId || receipt.canonicalSourceId !== candidate.canonicalSourceId || receipt.canonicalSourceVersionId !== candidate.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
+      acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null); needsClampRef.current = true;
+      if (controllerRef.current) await read(controllerRef.current, actionQuery, true);
+    } catch (error: unknown) {
+      if (scopeRef.current === scope && sameQuery(actionQuery) && !deny(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));
+    } finally {
+      if (mutationRef.current === token) { mutationRef.current = null; setPendingId(null); }
+    }
+  };
+  return <DuplicateQueuePage onLoadRetry={retryRead} locale={locale} state={state} pendingId={pendingId} pending={pending} lockedIds={lockedIds} readRequired={!pendingId && lockedIds.some((id) => !acknowledgedRef.current.has(id) || (state.kind === "ready" && state.data.items.some((item) => item.submissionId === id)))} localError={localError} onDecision={(id, decision) => void decide(id, decision)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
 export function AdminMembersRoute({ locale, search, load = loadAdminMembers, update = updateMemberStatus }: { locale: LocaleRuntime; search: string; load?: typeof loadAdminMembers; update?: typeof updateMemberStatus }) {

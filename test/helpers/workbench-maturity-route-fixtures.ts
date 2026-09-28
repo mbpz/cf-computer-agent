@@ -223,7 +223,14 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (path === "/api/admin/submissions/submission-route-audit") return probeResponse(state, {}, reviewDetail());
       return null;
     case "admin-duplicates":
-      if (pathname(path) === "/api/admin/duplicates") return probeResponse(state, numbered([]), numbered([{ submissionId: "ready-admin-duplicates", canonicalSubmissionId: "canonical-submission", canonicalSourceId: "canonical-source", canonicalSourceVersionId: "canonical-version", submissionTitle: "READY::admin-duplicates", canonicalTitle: "Canonical", decision: "pending" }]));
+      if (pathname(path) === "/api/admin/duplicates") {
+        const query = new URL(path, "https://app.test").searchParams;
+        const page = Number(query.get("page") || 1); const pageSize = Number(query.get("pageSize") || 20);
+        const total = (page - 1) * pageSize + 1;
+        return probeResponse(state,
+          { items: [], pagination: { page, pageSize, total: 0, totalPages: 0 } },
+          { items: [{ submissionId: "ready-admin-duplicates", canonicalSubmissionId: "canonical-submission", canonicalSourceId: "canonical-source", canonicalSourceVersionId: "canonical-version", submissionTitle: "READY::admin-duplicates", canonicalTitle: "Canonical", decision: "pending" }], pagination: { page, pageSize, total, totalPages: page } });
+      }
       return null;
     case "admin-assets":
       if (pathname(path) === "/api/admin/assets") return probeResponse(state, numbered([]), numbered([{ asset: { id: "ready-admin-assets", originalName: "READY::admin-assets" }, job: { status: "succeeded" } }]));

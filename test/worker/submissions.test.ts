@@ -318,6 +318,49 @@ describe("submissions D1 control plane", () => {
     });
   });
 
+  it.each(["associate", "keep_separate", "reject"] as const)("replays concurrent %s decisions across independent repositories with one audit", async (decision) => {
+    const id = await seedDuplicateDecision();
+    const services = Array.from({ length: 4 }, () => new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, new AuditRepository(env.DB))));
+    const results = await Promise.allSettled(services.map((service) => service.decide("member-a", id, decision)));
+    expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+    const receipts = results.map((result) => result.status === "fulfilled" ? result.value : null);
+    expect(receipts.every((receipt) => JSON.stringify(receipt) === JSON.stringify(receipts[0]))).toBe(true);
+    await expect(env.DB.prepare("SELECT count(*) AS n FROM audit_events WHERE action = 'submission.duplicate_decided' AND resource_id = ?").bind(id).first()).resolves.toEqual({ n: 1 });
+  });
+
+  it.each(["decision", "reviewer"])("returns a domain conflict for a concurrent different %s without changing the winning receipt", async (different) => {
+    const id = await seedDuplicateDecision();
+    const services = Array.from({length: 2}, () => new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, new AuditRepository(env.DB))));
+    const results = await Promise.allSettled([
+      services[0].decide("member-a", id, "associate"),
+      services[1].decide(different === "reviewer" ? "member-b" : "member-a", id, different === "decision" ? "reject" : "associate"),
+    ]);
+    const fulfilled = results.filter((result) => result.status === "fulfilled");
+    const rejected = results.filter((result) => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1); expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({reason: {status: 409, code: "DUPLICATE_DECISION_CONFLICT"}});
+    const winner = (fulfilled[0] as PromiseFulfilledResult<Awaited<ReturnType<DuplicateCandidatesService["decide"]>>>).value;
+    await expect(env.DB.prepare("SELECT decision, decided_by FROM duplicate_candidates WHERE submission_id = ?").bind(id).first()).resolves.toEqual({ decision: winner.decision, decided_by: winner.decidedBy });
+    await expect(env.DB.prepare("SELECT actor_id, metadata FROM audit_events WHERE action = 'submission.duplicate_decided' AND resource_id = ?").bind(id).all()).resolves.toMatchObject({results: [{actor_id: winner.decidedBy, metadata: JSON.stringify({decision: winner.decision})}]});
+  });
+
+  it("rolls back a duplicate decision when its deterministic audit ID collides", async () => {
+    const id = await seedDuplicateDecision();
+    const audit = new AuditRepository(env.DB);
+    await audit.writeAudit(auditInput(`duplicate-decision-${id}`));
+    const service = new DuplicateCandidatesService(new DuplicateCandidatesRepository(env.DB, audit));
+    await expect(service.decide("member-a", id, "associate")).rejects.toThrow();
+    await expect(env.DB.prepare("SELECT decision, decided_by, decided_at FROM duplicate_candidates WHERE submission_id = ?").bind(id).first()).resolves.toEqual({decision: "pending", decided_by: null, decided_at: null});
+    await expect(env.DB.prepare("SELECT action, resource_id FROM audit_events WHERE id = ?").bind(`duplicate-decision-${id}`).first()).resolves.toEqual({action: "submission.created", resource_id: "submission-1"});
+  });
+
+  async function seedDuplicateDecision() {
+    const submissions = createService();
+    await submissions.createWithSourceVersion("member-a", { requestedSpaceId: "default", kind: "markdown", title: "Canonical", content: "# Concurrent duplicate\n", idempotencyKey: "concurrent-duplicate-01" });
+    const duplicate = await submissions.createWithSourceVersion("member-a", { requestedSpaceId: "default", kind: "markdown", title: "Duplicate", content: "# Concurrent duplicate\n", idempotencyKey: "concurrent-duplicate-02" });
+    return duplicate.submission!.id;
+  }
+
   it("returns bounded same-owner same-space similar candidates as advice without merging", async () => {
     const service = createService();
     const first = await service.createWithSourceVersion("member-a", {
