@@ -19,7 +19,7 @@
 
 ## 当前计数与关闭条件（2026-09-28）
 
-[关闭条件对账](./2026-09-28-functional-closure-reconciliation.md)逐项解释 30 个父任务的剩余工作，并完成 A03/A04 核对交付物。当前为 **29 范围内 / 4 已关闭 / 25 未关闭**；运行 `npm run audit:functional-checklist` 从下面 canonical 顶层 checkbox 实算，历史进度数字不作为当前计数。真实功能验收仍保留；条目内历史发布后验收均归独立 D08，不再作为本轮功能关闭的重复条件。
+[关闭条件对账](./2026-09-28-functional-closure-reconciliation.md)逐项解释 30 个父任务的剩余工作，并完成 A03/A04 核对交付物。当前为 **29 范围内 / 5 已关闭 / 24 未关闭**；运行 `npm run audit:functional-checklist` 从下面 canonical 顶层 checkbox 实算，历史进度数字不作为当前计数。真实功能验收仍保留；条目内历史发布后验收均归独立 D08，不再作为本轮功能关闭的重复条件。
 
 ## 已确认的缺口（历史摘要，当前分类以上述对账为准）
 

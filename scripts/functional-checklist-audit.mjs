@@ -12,6 +12,7 @@ export function auditFunctionalChecklist(markdown) {
   const parents = new Map();
   let parent = null;
   let fence = null;
+  const prose = [];
   for (const line of markdown.split(/\r?\n/)) {
     const marker = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (marker) {
@@ -20,6 +21,7 @@ export function auditFunctionalChecklist(markdown) {
       continue;
     }
     if (fence) continue;
+    prose.push(line);
     const row = /^- \[([ x])\] ([A-D]\d{2})\s+(.+)$/.exec(line);
     if (/^- \[[^\]]*\] [A-D]\d{2}\b/.test(line)) assert(row, `Malformed parent row: ${line}`);
     if (row) {
@@ -39,6 +41,19 @@ export function auditFunctionalChecklist(markdown) {
   const scoped = [...parents.values()].filter(parent => !excludedIds.includes(parent.id));
   const completedIds = scoped.filter(parent => parent.done).map(parent => parent.id);
   const remainingIds = scoped.filter(parent => !parent.done).map(parent => parent.id);
+  // Only the explicitly current summary is an invariant. Historical batch
+  // snapshots and fenced examples must retain their original counts.
+  const currentSections = [...prose.join("\n").matchAll(
+    /^## 当前计数与关闭条件[^\n]*\n([\s\S]*?)(?=^#{1,2} |$(?![\s\S]))/gm,
+  )];
+  if (currentSections.length) {
+    assert.equal(currentSections.length, 1, "Current summary must have exactly one section");
+    const counts = [...currentSections[0][1].matchAll(/(\d+) 范围内 \/ (\d+) 已关闭 \/ (\d+) 未关闭/g)];
+    assert.equal(counts.length, 1, "Current summary must contain exactly one count tuple");
+    assert.deepEqual(counts[0].slice(1).map(Number),
+      [scoped.length, completedIds.length, remainingIds.length],
+      "Current summary counts must match canonical parent checkboxes");
+  }
   return { originalTotal: parents.size, inScope: scoped.length, completed: completedIds.length,
     remaining: remainingIds.length, completedIds, remainingIds, excludedIds };
 }
