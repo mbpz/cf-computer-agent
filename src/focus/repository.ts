@@ -17,6 +17,7 @@ export class FocusRepository implements FocusRepositoryPort {
   async insert(input: { id: string; memberId: string; taskId: string; calendarEventId: string | null; clientKey: string; startTitle: string; durationMinutes: number; status: FocusStatus; startedAt: number; elapsedMs: number; createdAt: number; updatedAt: number }): Promise<boolean> {
     const insert = this.db.prepare(`INSERT OR IGNORE INTO focus_sessions (id, member_id, task_id, calendar_event_id, client_key, start_title, duration_minutes, status, started_at, elapsed_ms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(input.id, input.memberId, input.taskId, input.calendarEventId, input.clientKey, input.startTitle, input.durationMinutes, input.status, input.startedAt, input.elapsedMs, input.createdAt, input.updatedAt);
+    // The calendar key uses its own identity, so historical orphan start keys cannot block retries.
     // Only the winning insert creates a block. D1 batch rolls back both writes on failure.
     if (!input.calendarEventId) return (await insert.run()).meta.changes === 1;
     const [result] = await this.db.batch([
@@ -24,7 +25,7 @@ export class FocusRepository implements FocusRepositoryPort {
       this.db.prepare(`INSERT INTO calendar_events (id, member_id, client_key, kind, title, starts_at, ends_at, timezone, all_day, status, task_id, created_at, updated_at)
         SELECT calendar_event_id, member_id, ?, 'focus', start_title, started_at, started_at + duration_minutes * 60000, 'UTC', 0, 'scheduled', task_id, created_at, updated_at
         FROM focus_sessions WHERE member_id = ? AND id = ? AND changes() = 1`)
-        .bind(`focus:${input.clientKey}`, input.memberId, input.id),
+        .bind(`focus:${input.calendarEventId}`, input.memberId, input.id),
     ]);
     return result.meta.changes === 1;
   }

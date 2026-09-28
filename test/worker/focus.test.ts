@@ -60,6 +60,20 @@ describe("focus workbench route", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(1);
   });
 
+  it("starts and replays despite a historical orphan using the old calendar key", async () => {
+    await env.DB.prepare("INSERT INTO calendar_events (id, member_id, client_key, kind, title, starts_at, ends_at, timezone, all_day, status, task_id, created_at, updated_at) VALUES ('old-orphan', 'focus-a', 'focus:orphan-retry', 'focus', 'Historical', 1000, 2000, 'UTC', 0, 'scheduled', 'focus-task-a', 1000, 1000)").run();
+    const before = await env.DB.prepare("SELECT * FROM calendar_events WHERE id = 'old-orphan'").first();
+    const input = {id: "orphan-retry", clientKey: "orphan-retry", taskId: "focus-task-a"};
+    const start = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)});
+    expect(start.status).toBe(201);
+    const {session: receipt} = await start.json() as {session: {calendarEventId: string}};
+    expect(receipt.calendarEventId).not.toBe("old-orphan");
+    expect((await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify(input)})).status).toBe(200);
+    expect(await env.DB.prepare("SELECT * FROM calendar_events WHERE id = 'old-orphan'").first()).toEqual(before);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM calendar_events").first("count")).toBe(2);
+    expect(await env.DB.prepare("SELECT calendar_event_id FROM focus_sessions WHERE id = 'orphan-retry'").first("calendar_event_id")).toBe(receipt.calendarEventId);
+  });
+
   it("supports maximum-length start identities without exceeding calendar identity limits", async () => {
     const response = await api("/api/focus", sessionA, {method: "POST", body: JSON.stringify({id: "x".repeat(128), clientKey: "y".repeat(128), taskId: "focus-task-a"})});
     expect(response.status).toBe(201);
@@ -188,7 +202,8 @@ describe("focus workbench route", () => {
     await expect(service.start("focus-a", {id: "loser", clientKey: "loser-key", taskId: "focus-task-a"})).rejects.toMatchObject({status: 409});
     expect(await repository.findOwned("focus-a", "loser")).toBeNull();
     expect(await repository.findOpen("focus-a")).toMatchObject({id: "winner"});
-    expect((await env.DB.prepare("SELECT client_key FROM calendar_events WHERE member_id = 'focus-a'").all()).results).toEqual([{client_key: "focus:winner-key"}]);
+    const winner = await repository.findOpen("focus-a");
+    expect((await env.DB.prepare("SELECT id, client_key FROM calendar_events WHERE member_id = 'focus-a'").all()).results).toEqual([{id: winner!.calendarEventId, client_key: `focus:${winner!.calendarEventId}`}]);
   });
 
   it("reads an owned terminal receipt by ID without exposing another member", async () => {

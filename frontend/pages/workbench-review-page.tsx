@@ -8,10 +8,31 @@ import { PageState } from "../components/ui/page-state";
 
 export type WorkbenchReviewPageState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: WorkbenchReviewSnapshot };
 export function WorkbenchReviewPage({ locale, period, state, onPeriodChange, onRetry }: { locale: LocaleRuntime; period: "daily" | "weekly"; state: WorkbenchReviewPageState; onPeriodChange?: (period: "daily" | "weekly") => void; onRetry?: () => void }) {
-  if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "REVIEW_LOADING")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_RETRY")}</Button></PageState>;
-  const s = state.snapshot;
-  return <section className="space-y-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">{frontendText(locale, "REVIEW_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "REVIEW_DESCRIPTION")} · {s.periodKey}</p></div><div className="flex gap-2"><Button variant={period === "daily" ? "default" : "outline"} onClick={() => onPeriodChange?.("daily")}>{frontendText(locale, "REVIEW_DAILY")}</Button><Button variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button></div></div><div className="grid gap-3 md:grid-cols-4"><Metric icon={<CheckCircle size={18} />} label={frontendText(locale, "REVIEW_COMPLETED")} value={s.completed.length} /><Metric icon={<Warning size={18} />} label={frontendText(locale, "REVIEW_OVERDUE")} value={s.overdue.length} /><Metric icon={<ArrowsClockwise size={18} />} label={frontendText(locale, "REVIEW_BLOCKED")} value={s.blocked.length} /><Metric icon={<Timer size={18} />} label={frontendText(locale, "REVIEW_FOCUS_TIME")} value={Math.round(s.focusElapsedMs / 60000)} /></div><div className="grid gap-4 lg:grid-cols-2"><ListCard title={frontendText(locale, "REVIEW_COMPLETED_LIST")} items={s.completed.map((item) => item.title)} empty={frontendText(locale, "REVIEW_EMPTY_COMPLETED")} /><ListCard title={frontendText(locale, "REVIEW_NEXT_LIST")} items={[...s.overdue, ...s.blocked, ...s.inbox].slice(0, 10).map((item) => "title" in item ? item.title : item.content)} empty={frontendText(locale, "REVIEW_EMPTY_NEXT")} /></div></section>;
+  const s = state.kind === "ready" ? state.snapshot : null;
+  return <section className="space-y-5" aria-busy={state.kind === "loading"}>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div><h1 className="text-2xl font-semibold">{frontendText(locale, "REVIEW_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "REVIEW_DESCRIPTION")}{s ? ` · ${s.periodKey}` : ""}</p></div>
+      <div className="flex gap-2">
+        <Button aria-pressed={period === "daily"} variant={period === "daily" ? "default" : "outline"} onClick={() => onPeriodChange?.("daily")}>{frontendText(locale, "REVIEW_DAILY")}</Button>
+        <Button aria-pressed={period === "weekly"} variant={period === "weekly" ? "default" : "outline"} onClick={() => onPeriodChange?.("weekly")}>{frontendText(locale, "REVIEW_WEEKLY")}</Button>
+      </div>
+    </div>
+    {state.kind === "loading" && <PageState kind="loading" title={frontendText(locale, "REVIEW_LOADING")} />}
+    {state.kind === "error" && <PageState kind="error" title={state.message}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "REVIEW_RETRY")}</Button></PageState>}
+    {s && <>
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric icon={<CheckCircle size={18} />} label={frontendText(locale, "REVIEW_COMPLETED")} value={s.completed.length} />
+        <Metric icon={<Warning size={18} />} label={frontendText(locale, "REVIEW_OVERDUE")} value={s.overdue.length} />
+        <Metric icon={<ArrowsClockwise size={18} />} label={frontendText(locale, "REVIEW_BLOCKED")} value={s.blocked.length} />
+        <Metric icon={<Timer size={18} />} label={frontendText(locale, "REVIEW_FOCUS_TIME")} value={Math.round(s.focusElapsedMs / 60000)} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ListCard title={frontendText(locale, "REVIEW_COMPLETED_LIST")} items={s.completed.map((item) => item.title)} empty={frontendText(locale, "REVIEW_EMPTY_COMPLETED")} />
+        <ListCard title={frontendText(locale, "REVIEW_NEXT_LIST")} items={[...s.overdue, ...s.blocked, ...s.inbox].slice(0, 10).map((item) => "title" in item ? item.title : item.content)} empty={frontendText(locale, "REVIEW_EMPTY_NEXT")} />
+      </div>
+    </>}
+  </section>;
 }
+
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) { return <Card><CardContent className="flex items-center gap-3 p-4"><span className="text-primary">{icon}</span><div><p className="text-2xl font-semibold tabular-nums">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></CardContent></Card>; }
 function ListCard({ title, items, empty }: { title: string; items: string[]; empty: string }) { return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent>{items.length ? <ul className="space-y-2">{items.map((item, index) => <li key={`${item}-${index}`} className="rounded-md border p-3 text-sm">{item}</li>)}</ul> : <p className="text-sm text-muted-foreground">{empty}</p>}</CardContent></Card>; }

@@ -1883,8 +1883,24 @@ export function WorkbenchReviewRoute({ locale }: { locale: LocaleRuntime }) {
   const [period, setPeriod] = useState<"daily" | "weekly">("daily");
   const [state, setState] = useState<WorkbenchReviewPageState>({ kind: "loading" });
   const [retryVersion, setRetryVersion] = useState(0);
-  useEffect(() => { let active = true; setState((current) => current.kind === "ready" ? current : { kind: "loading" }); void loadWorkbenchReview(period).then((snapshot) => { if (active) setState({ kind: "ready", snapshot }); }).catch((error: unknown) => { if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }); return () => { active = false; }; }, [locale, period, retryVersion]);
-  return <WorkbenchReviewPage locale={locale} period={period} state={state} onPeriodChange={setPeriod} onRetry={() => setRetryVersion((value) => value + 1)} />;
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    setState({ kind: "loading" });
+    void loadWorkbenchReview(period, fetch, controller.signal).then((snapshot) => {
+      if (active) setState({ kind: "ready", snapshot });
+    }).catch((error: unknown) => {
+      if (active && !isAbort(error)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
+    });
+    return () => { active = false; controller.abort(); };
+  }, [locale, period, retryVersion]);
+  const changePeriod = (next: "daily" | "weekly") => {
+    if (next === period) return;
+    // Clear the old snapshot in the same render as the selected period.
+    setState({ kind: "loading" });
+    setPeriod(next);
+  };
+  return <WorkbenchReviewPage locale={locale} period={period} state={state} onPeriodChange={changePeriod} onRetry={() => { setState({ kind: "loading" }); setRetryVersion((value) => value + 1); }} />;
 }
 
 export function NotificationsRoute({ locale, search, isAdmin = false }: { locale: LocaleRuntime; search: string; isAdmin?: boolean }) {
