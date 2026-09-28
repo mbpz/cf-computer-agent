@@ -43,3 +43,5 @@ export interface InboxListFilters {
 export interface InboxListRequest extends PageRequest { filters: InboxListFilters; }
 
 export type InboxPage = Page<InboxItem>;
+
+export interface InboxTaskPromotionResult { item: InboxItem; promoted: boolean; taskId: string; }

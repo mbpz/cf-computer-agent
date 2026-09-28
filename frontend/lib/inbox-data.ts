@@ -98,8 +98,19 @@ export async function updateInboxStatus(id: string, status: "inbox" | "archived"
   return item;
 }
 
-export async function promoteInboxTask(id: string, requester: Fetcher = fetch): Promise<{ item: InboxItem; promoted: boolean; taskId: string }> {
-  return apiFetch(`/api/inbox/${encodeURIComponent(id)}/promote/task`, { requester, method: "POST" });
+export async function promoteInboxTask(id: string, expectedUpdatedAt: string, requester: Fetcher = fetch): Promise<{ item: InboxItem; promoted: boolean; taskId: string }> {
+  requireInboxId(id);
+  if (!canonicalPlanningVersion(expectedUpdatedAt)) throw new Error("INBOX_INVALID");
+  const raw = await apiFetch<unknown>(`/api/inbox/${encodeURIComponent(id)}/promote/task`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) });
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("INBOX_RESPONSE_INVALID");
+  const record = raw as Record<string, unknown>;
+  const item = strictInbox(record.item);
+  if (typeof record.promoted !== "boolean" || typeof record.taskId !== "string"
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(record.taskId)
+    || item.id !== id || item.status !== "promoted" || item.promotedTaskId !== record.taskId || item.promotedSubmissionId !== null
+    || !canonicalPlanningVersion(item.updatedAt) || Date.parse(item.updatedAt) < Date.parse(expectedUpdatedAt)
+    || (record.promoted && item.updatedAt === expectedUpdatedAt)) throw new Error("INBOX_RESPONSE_INVALID");
+  return { item, promoted: record.promoted, taskId: record.taskId };
 }
 
 function normalizeInbox(value: unknown): InboxItem | null {

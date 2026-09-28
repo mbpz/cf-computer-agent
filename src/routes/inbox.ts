@@ -44,7 +44,8 @@ export async function routeInboxApi(
   if (promoteTask) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    return jsonResponse(await services.inbox.promoteTask(member.memberId, decodePathId(promoteTask[1]!)), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["expectedUpdatedAt"], "INBOX_INVALID");
+    return jsonResponse(await services.inbox.promoteTask(member.memberId, decodePathId(promoteTask[1]!), input.expectedUpdatedAt), 200, context.requestId);
   }
   const promoteKnowledge = /^\/api\/inbox\/([^/]+)\/promote\/knowledge$/u.exec(url.pathname);
   if (promoteKnowledge) {

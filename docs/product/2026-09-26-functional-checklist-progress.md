@@ -854,3 +854,50 @@ rtk git diff --check
 **29 范围内 / 3 关闭 / 26 未关闭**。本批没有新增完成两个业务模块，完成的是清单本就要求的分类和映射交付物。九个父项 B01/B02/B04–B09/D01 主要剩余真实身份/原生功能验收，其他 17 个仍涉及实现、逐操作核对、身份/设备矩阵或最终门禁。具体剩余条件逐项列出，不把全部 26 项一概归咎于生产部署。
 
 下一业务切片 C04 / EXT-INB-03 的转任务一致性与目标跳转/权限仍允许本地推进；不以备份、加密或旧运维签认阻塞。原生功能验收尚未执行，本批未核查当前登录会话/第二成员可用性，不沿用旧锁屏状态作为当前 blocker。未 push、merge、部署、远程迁移、生产写入、备份或手工读取/上传 Secret。
+
+
+## 2026-09-28：C04 / EXT-INB-03 转任务原子性、恢复及目标入口
+
+承接 `1abe99e`，本批完成实际业务切片，不仅更新计数。canonical 仍为 **29 范围内 / 3 关闭 / 26 未关闭**；EXT-INB-03 本地两个操作子项已完成，真实身份/原生浏览器验收子项未完成，C04 还包含其他模块，不能整项关闭。
+
+### 实际实现
+
+- 新增 `src/inbox/task-promotion.ts`：任务、task.created 审计和 Inbox promoted 收据同一个本地 D1 batch。INSERT/UPDATE 共同约束 session 成员、记录 ID、当前版本及可转换状态；中间写入失败整批回滚；并发请求只产生一个任务/审计，另一个返回同一目标。随机任务 ID 防止误认历史可预测 ID 的不相关任务；未清理历史孤立数据。
+- HTTP 转任务必须带 canonical `expectedUpdatedAt`。旧版本转换 409，成员越权 404，已转换重放检查当前目标归属和存在性；已删除目标不重新创建。复用 Tasks 的输入校验及单调版本，保留长度限制，不默默截断 notes。
+- 原子 INSERT 同时校验成员任务配额（500）：达到上限拒绝且 Inbox 不变，不同 Inbox 并发争夺最后一个名额只允许一项成功；已成功收据的重放不被配额阻断，其他成员任务不计入当前成员配额。该保证限于本批 Inbox 转任务路径，不宣称修复所有任务创建入口的并发配额。
+- Inbox 转任务共用已有写前成员隔离恢复标记：严格验证回执对象、版本和目标，然后 GET 原对象及精确当前页。丢响应、409、畸形回执、读失败保持锁；离开路由/重新挂载后仅 GET 核对，不自动重发 POST。失权清屏、存储不可用阻止提交。
+- promoted 卡片增加双语“打开任务”，复用已有 TaskEditor 和同成员详情 API；目标 403/404 不显示内容。这里是已有详情编辑器，不是新增任务深链接 URL。任务编辑器其他写操作的未知结果恢复仍归既有 C01/R4 任务，不宣称本批全部修复。
+- 源码域审计检测到复用 TaskEditor 扩展了 Inbox 的静态可达操作面：补充 7 条操作及 API 归属、缺口 owner，并更新确定性域快照。新增的是入口证据映射，不是 7 个新父任务；均分派现有 R4-002/003/004/005，历史 atom 不增加。创建分支仅为保守静态登记，当前入口只传已有 taskId。
+
+### RED / GREEN 与验证边界
+
+- 后端先跑出 8 失败 / 2 通过，暴露创建任务后 Inbox 写入失败留下孤立任务、缺少版本及重复动作边界；实现后通过。前端请求/恢复测试在接口签名对齐后观察到 22 失败 / 1 通过，再补实现。
+- 自查发现绕过 TasksService 后可能遗漏配额；新增 3 项真实 D1 测试，先观察 2 失败 / 16 通过，再将配额检查纳入条件 INSERT，联合回归通过。
+- 新增共 **46 项**：18 Worker/D1 HTTP、10 前端数据契约、18 App/happy-dom。覆盖原子失败回滚、并发转换/归档、目标删除/跨成员、旧版本/倒退时钟、重复点击、迟到回执、失权和只读恢复。
+- 扩展权限测试最初错误假设清零系统角色掩码会撤销 contributor 的内置能力，出现 1 失败 / 42 通过。检查现有策略确认角色掩码为叠加授权，不能借该 fixture 宣称可撤权。本批不改全局 RBAC；改为真实受支持的成员 disabled 边界，验证 403 且无任务写入。不声称实现系统角色能力撤销。
+- 新测试首次 3 文件 **43/43**，补充 3 项配额测试后，Inbox/Tasks/恢复联合 **22 文件 319/319**；扩展/成熟度页面另 **2 文件 176/176**，共 24 文件 495 项定向回归。不是全仓测试或真实登录验收。
+- `typecheck`、`build:ui`、`verify:i18n` 通过，`test:i18n` 13/13。默认 typecheck 未覆盖全部 frontend TSX；构建保留既有 >500 kB chunk 提示。未运行带 Secret 同步的 build/check。
+- 域审计先因新增 TaskEditor 可达写操作缺少清单/API 归属而失败，补真实登记而非放松断言；成熟度合同再暴露缺少 owner，补既有 owner 映射后 13/13；delivery 合同 30/30。域测试还发现历史断言仍把已完成数字分页的 Inbox/Goals/Projects/Timeline 写为 cursor，改为实际 numbered，Calendar 保持 cursor；域审计与 checklist 计数器测试联合 32/32，不修改历史执行记录。
+
+### 可重跑命令
+
+```sh
+rtk proxy npx vitest run test/worker/inbox-task-promotion.test.ts test/worker/inbox-conditional-writes.test.ts test/worker/inbox-numbered-pages.test.ts test/worker/inbox.test.ts test/worker/tasks.test.ts test/unit/inbox-service.test.ts test/unit/inbox-route.test.ts test/unit/tasks-service.test.ts test/unit/frontend-inbox-promotion-data.test.ts test/unit/frontend-inbox-promotion-recovery.test.tsx test/unit/frontend-inbox-status-data.test.ts test/unit/frontend-inbox-status-recovery.test.tsx test/unit/frontend-inbox-create.test.tsx test/unit/frontend-inbox-numbered-pages.test.tsx test/unit/frontend-inbox-numbered-data.test.ts test/unit/frontend-inbox-create-intent.test.ts test/unit/frontend-inbox-page.test.tsx test/unit/frontend-inbox-create-data.test.ts test/unit/frontend-task-editor-route.test.tsx test/unit/frontend-tasks-data.test.ts test/unit/frontend-planning-write-recovery.test.tsx test/unit/frontend-planning-write-storage.test.ts
+rtk proxy npx vitest run test/unit/frontend-workbench-extended-routes.test.tsx test/unit/frontend-workbench-maturity-routes.test.tsx
+rtk proxy npm run typecheck
+rtk proxy npm run build:ui
+rtk proxy npm run verify:i18n
+rtk proxy npm run test:i18n
+rtk proxy npm run audit:workbench-domain
+rtk proxy npm run verify:workbench-maturity
+rtk proxy npm run verify:delivery-status
+rtk proxy node --test scripts/workbench-domain-audit.test.mjs scripts/functional-checklist-audit.test.mjs
+rtk proxy npm run audit:functional-checklist
+rtk git diff --check
+```
+
+### 当前与下一步
+
+下一本地实现切片为 **C04 / EXT-CAL-01 日历数字分页、日期范围与 URL 恢复**，无需备份/加密/生产运维签认即可继续。Inbox 原生双身份、键盘/触控旅程仍待验；未检查当前登录身份是否可用，不以旧浏览器状态推断当前阻塞。
+
+本批未 push、merge、部署、远程迁移、生产写入、备份或 AI 调用，也未手工读取/上传 Secret。无新增迁移。所有完成声明只针对本地实现与上述定向验证，不提升生产/发布/acceptance。

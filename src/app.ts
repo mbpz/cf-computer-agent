@@ -1,3 +1,4 @@
+import { InboxTaskPromotion } from "./inbox/task-promotion";
 import { GoalTasksRepository } from "./goal-tasks/repository";
 import { GoalTasksService } from "./goal-tasks/service";
 import { routeGoalTasksApi } from "./routes/goal-tasks";
@@ -389,15 +390,7 @@ function createRequestServices(
     discussions: new DiscussionsService(discussionRecords, discussionAuthorization, { notifications }),
     tasks: new TasksService(taskRecords, { audit, notifications }),
     inbox: new InboxService(inboxRecords, {
-      promoteTask: async (memberId, item) => {
-        const result = await new TasksService(taskRecords, { audit, notifications }).create(memberId, {
-          id: `inbox-${item.id}`,
-          title: item.kind === "link" ? item.sourceUrl || item.content : item.content.slice(0, 200),
-          notes: item.content,
-          priority: "medium",
-        });
-        return { taskId: result.task.id };
-      },
+      promoteTask: (memberId, item, updatedAt) => new InboxTaskPromotion(env.DB).promote(memberId, item, updatedAt),
     }),
     goals: new GoalsService(goalRecords),
     goalTasks: new GoalTasksService(new GoalTasksRepository(env.DB), new GoalsService(goalRecords)),

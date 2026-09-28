@@ -39,7 +39,7 @@ export class TasksService {
   }
 
   async create(memberId: string, input: TaskCreateInput): Promise<{ task: Task; created: boolean; link?: TaskLink }> {
-    const normalized = normalizeCreate(input);
+    const normalized = normalizeTaskCreate(input);
     const existing = await this.repository.findOwned(memberId, normalized.id);
     if (existing) return { task: existing, created: false };
     if (await this.repository.countByMember(memberId) >= APP_CONFIG.maxTasksPerMember) {
@@ -278,7 +278,7 @@ export class TasksService {
   }
 }
 
-function normalizeCreate(input: TaskCreateInput): {
+export function normalizeTaskCreate(input: TaskCreateInput): {
   id: string; title: string; notes: string; priority: Task["priority"]; dueAt: number | null; knowledgeItemId: string | null;
 } {
   if (!input || typeof input !== "object") throw invalid("TASK_INVALID", "Task fields are invalid");

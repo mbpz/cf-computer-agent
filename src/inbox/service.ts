@@ -2,14 +2,14 @@ import { normalizeNumberedPageRequest, type NumberedPage, type NumberedPageReque
 import { nextPlanningVersion, planningConflict, requirePlanningVersion } from "../planning-version";
 import { AppError } from "../http";
 import type { InboxRepositoryPort } from "./repository";
-import { INBOX_KINDS, INBOX_STATUSES, type InboxItem, type InboxKind, type InboxListFilters, type InboxPage, type InboxStatus } from "./types";
+import { INBOX_KINDS, INBOX_STATUSES, type InboxTaskPromotionResult, type InboxItem, type InboxKind, type InboxListFilters, type InboxPage, type InboxStatus } from "./types";
 
 export interface InboxCreateInput { id?: unknown; clientKey?: unknown; kind?: unknown; content?: unknown; sourceUrl?: unknown; }
 
 export interface InboxServiceOptions {
   id?: () => string;
   now?: () => Date;
-  promoteTask?: (memberId: string, item: InboxItem) => Promise<{ taskId: string }>;
+  promoteTask?: (memberId: string, item: InboxItem, updatedAt: number) => Promise<InboxTaskPromotionResult>;
   promoteKnowledge?: (memberId: string, item: InboxItem) => Promise<{ submissionId: string }>;
 }
 
@@ -66,15 +66,13 @@ export class InboxService {
     return updated;
   }
 
-  async promoteTask(memberId: string, id: string): Promise<{ item: InboxItem; promoted: boolean; taskId: string }> {
+  async promoteTask(memberId: string, id: string, expectedUpdatedAt: unknown): Promise<InboxTaskPromotionResult> {
     const item = await this.get(memberId, id);
-    if (item.promotedTaskId) return { item, promoted: false, taskId: item.promotedTaskId };
-    if (item.promotedSubmissionId || item.status === "promoted") throw transitionInvalid();
+    const expected = requirePlanningVersion(expectedUpdatedAt, typeof expectedUpdatedAt === "string" ? expectedUpdatedAt : "", "INBOX");
+    if (item.promotedSubmissionId || (item.status === "promoted" && !item.promotedTaskId)) throw transitionInvalid();
+    if (item.promotedTaskId ? expected > Date.parse(item.updatedAt) : expectedUpdatedAt !== item.updatedAt) throw planningConflict("INBOX");
     if (!this.options.promoteTask) throw new AppError("INBOX_PROMOTION_UNAVAILABLE", "Task promotion is not configured", 503, true);
-    const result = await this.options.promoteTask(memberId, item);
-    const updated = await this.repository.promote(memberId, item.id, { taskId: result.taskId, updatedAt: this.now().getTime() });
-    if (!updated) throw notFound();
-    return { item: updated, promoted: true, taskId: result.taskId };
+    return this.options.promoteTask(memberId, item, nextPlanningVersion(Date.parse(item.updatedAt), this.now().getTime()));
   }
 
   async promoteKnowledge(memberId: string, id: string): Promise<{ item: InboxItem; promoted: boolean; submissionId: string }> {

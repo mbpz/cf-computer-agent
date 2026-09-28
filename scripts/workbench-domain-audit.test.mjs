@@ -123,9 +123,10 @@ test("D02-R1 preserves D01-B2, D01-B1, D01-A, M02 and R0 snapshots without backd
   assert.match(b1, /Server multi-query snapshot consistency, cross-page write reconciliation/u);
 });
 
-test("extended list APIs expose cursor pagination while bounded snapshots do not promise continuation", () => {
+test("extended list APIs preserve their current pagination shapes while bounded snapshots do not promise continuation", () => {
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
-  for (const path of ["/api/inbox", "/api/goals", "/api/projects", "/api/calendar/events", "/api/projects/:id/timeline"]) assert.equal(facts.apis[path].pagination, "cursor", path);
+  for (const path of ["/api/inbox", "/api/goals", "/api/projects", "/api/projects/:id/timeline"]) assert.equal(facts.apis[path].pagination, "numbered", path);
+  assert.equal(facts.apis["/api/calendar/events"].pagination, "cursor");
   for (const path of ["/api/today", "/api/workbench/review", "/api/focus/current"]) assert.equal(facts.apis[path].pagination, "not_applicable", path);
 });
 
@@ -274,6 +275,7 @@ test("validation rejects collection methods borrowed by the role detail branch",
 test("current frontend ownership discovers the required visible mutation minimum", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
   const expected = {
+    "workbench-inbox": ["DELETE /api/tasks/:id/links/:id", "PATCH /api/inbox/:id", "PATCH /api/tasks/:id", "POST /api/inbox", "POST /api/inbox/:id/promote/task", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
     "workbench-agent": ["PATCH /api/knowledge/chat/conversations/:id/scope", "POST /api/knowledge/chat", "POST /api/knowledge/chat/conversations/:id/cancel", "POST /api/knowledge/chat/conversations/:id/feedback"],
     "workbench-tasks": ["DELETE /api/tasks/:id", "DELETE /api/tasks/:id/links/:linkId", "PATCH /api/tasks/:id", "POST /api/tasks", "POST /api/tasks/:id/links", "POST /api/tasks/:id/progress", "POST /api/tasks/:id/status", "PUT /api/tasks/:id/tags"],
     "workbench-admin-duplicates": ["POST /api/admin/duplicates/:submissionId/decision"],

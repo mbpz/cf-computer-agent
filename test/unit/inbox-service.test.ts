@@ -32,11 +32,11 @@ describe("InboxService", () => {
 
   it("allows archive to be reversed before promotion and rejects changing a promoted item", async () => {
     const repository = new FakeInboxRepository();
-    const service = new InboxService(repository, { promoteTask: async () => ({ taskId: "task-1" }) });
+    const service = new InboxService(repository, { promoteTask: async (memberId, item, updatedAt) => ({ item: (await repository.promote(memberId, item.id, { taskId: "task-1", updatedAt }))!, taskId: "task-1", promoted: true }) });
     await service.create("member-a", { id: "inbox-1", clientKey: "capture-1", kind: "text", content: "Alpha" });
     await expect(service.updateStatus("member-a", "inbox-1", "archived", (await service.get("member-a", "inbox-1")).updatedAt)).resolves.toMatchObject({ status: "archived" });
     await expect(service.updateStatus("member-a", "inbox-1", "inbox", (await service.get("member-a", "inbox-1")).updatedAt)).resolves.toMatchObject({ status: "inbox" });
-    await service.promoteTask("member-a", "inbox-1");
+    await service.promoteTask("member-a", "inbox-1", (await service.get("member-a", "inbox-1")).updatedAt);
     await expect(service.updateStatus("member-a", "inbox-1", "archived", (await service.get("member-a", "inbox-1")).updatedAt)).rejects.toMatchObject({ code: "INBOX_TRANSITION_INVALID", status: 422 });
   });
 
@@ -44,11 +44,14 @@ describe("InboxService", () => {
     const repository = new FakeInboxRepository();
     let calls = 0;
     const service = new InboxService(repository, {
-      promoteTask: async () => { calls += 1; return { taskId: "task-1" }; },
+      promoteTask: async (memberId, item, updatedAt) => {
+        if (item.promotedTaskId) return { item, taskId: item.promotedTaskId, promoted: false };
+        calls += 1; return { item: (await repository.promote(memberId, item.id, { taskId: "task-1", updatedAt }))!, taskId: "task-1", promoted: true };
+      },
     });
     await service.create("member-a", { id: "inbox-1", clientKey: "capture-1", kind: "text", content: "Alpha" });
-    const first = await service.promoteTask("member-a", "inbox-1");
-    const replay = await service.promoteTask("member-a", "inbox-1");
+    const first = await service.promoteTask("member-a", "inbox-1", (await service.get("member-a", "inbox-1")).updatedAt);
+    const replay = await service.promoteTask("member-a", "inbox-1", (await service.get("member-a", "inbox-1")).updatedAt);
     expect(first).toMatchObject({ promoted: true, taskId: "task-1" });
     expect(replay).toMatchObject({ promoted: false, taskId: "task-1" });
     expect(calls).toBe(1);

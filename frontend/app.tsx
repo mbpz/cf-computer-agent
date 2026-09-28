@@ -1023,6 +1023,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   const query = { page, pageSize, status };
   const queryRef = useRef<InboxPageRequest>(query);
   queryRef.current = query;
+  const [taskTarget, setTaskTarget] = useState<string | null>(null);
   const [state, setState] = useState<InboxPageState>({ kind: "loading" });
   const [pending, setPending] = useState(true);
   const [captureLocked, setCaptureLocked] = useState(false);
@@ -1086,20 +1087,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     invalidate();
     writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
   };
-  const mutate = async (operation: () => Promise<unknown>) => {
-    if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
-    writingRef.current = true; setWriting(true); setActionError(undefined);
-    const generation = generationRef.current;
-    try {
-      await operation();
-      if (activeRef.current && generation === generationRef.current) await refresh();
-    } catch (error: unknown) {
-      if (!activeRef.current || generation !== generationRef.current || isAbort(error)) return;
-      if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
-      else setActionError(frontendText(locale, "INBOX_ACTION_FAILED"));
-    } finally { writingRef.current = false; if (activeRef.current) setWriting(false); }
-  };
-  const changeStatus = async (item: InboxItem) => {
+  const changeItem = async (item: InboxItem, operation: "status" | "task") => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
     const record = writeRecovery.begin(item.id, item.updatedAt);
     if (!record) return;
@@ -1107,13 +1095,16 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     const generation = generationRef.current;
     let reading = false;
     try {
-      const receipt = await updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived", item.updatedAt);
+      const receipt = operation === "task"
+        ? (await promoteInboxTask(item.id, item.updatedAt)).item
+        : await updateInboxStatus(item.id, item.status === "archived" ? "inbox" : "archived", item.updatedAt);
       if (!activeRef.current || generation !== generationRef.current) return;
       reading = true;
       const controller = new AbortController(); controllerRef.current?.abort(); controllerRef.current = controller;
       const current = await loadInboxItem(item.id, fetch, controller.signal);
       if (!activeRef.current || generation !== generationRef.current) return;
       if (Date.parse(current.updatedAt) < Date.parse(receipt.updatedAt)) throw new Error("INBOX_READBACK_STALE");
+      if (operation === "task" && (current.status !== "promoted" || current.promotedTaskId !== receipt.promotedTaskId)) throw new Error("INBOX_READBACK_TARGET_CHANGED");
       const refreshed = await refresh();
       if (!activeRef.current || generationRef.current !== generation + 1) return;
       if (refreshed) writeRecovery.finish(record);
@@ -1131,7 +1122,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       if (activeRef.current) setWriting(false);
     }
   };
-  return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><InboxPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} capturePending={pending || writing || writeRecovery.locked} actionError={actionError} status={status}
+  return <><div inert={taskTarget ? true : undefined}><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || writing || captureLocked} refresh={refresh} onDenied={clearDenied} onReadFailure={clearReadFailure} /><InboxPage locale={locale} state={state} pending={pending || writing || captureLocked || writeRecovery.locked} capturePending={pending || writing || writeRecovery.locked} actionError={actionError} status={status}
     onRetry={() => setRetryVersion(value => value + 1)}
     createMemberId={memberId}
     onCreateLock={locked => { captureLockedRef.current = locked; setCaptureLocked(locked); }}
@@ -1151,11 +1142,12 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
       return true;
     }}
     onCreateDenied={() => { generationRef.current++; controllerRef.current?.abort(); setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }); }}
-    onStatusChange={item => void changeStatus(item)}
-    onPromoteTask={item => void mutate(() => promoteInboxTask(item.id))}
+    onStatusChange={item => void changeItem(item, "status")}
+    onPromoteTask={item => void changeItem(item, "task")}
+    onOpenTask={item => { if (!pendingRef.current && !writingRef.current && !captureLockedRef.current && !writeRecovery.locked && item.promotedTaskId) setTaskTarget(item.promotedTaskId); }}
     onPageChange={next => navigate({ ...query, page: next })}
     onPageSizeChange={next => navigate({ ...query, page: 1, pageSize: next })}
-    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></>;
+    onFilterChange={next => navigate({ ...query, page: 1, status: next })} /></div>{taskTarget && <TaskEditor key={`${memberId}:${taskTarget}`} taskId={taskTarget} locale={locale} onClose={() => setTaskTarget(null)} onChanged={() => setRetryVersion(value => value + 1)} onDenied={error => { if (clearDenied(error)) setTaskTarget(null); }} />}</>;
 }
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
