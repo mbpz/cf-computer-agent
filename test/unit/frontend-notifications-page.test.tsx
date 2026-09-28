@@ -94,6 +94,17 @@ describe("notification inbox page", () => {
     }
   });
 
+  it("explains read-only recovery in both locales without exposing stale summaries or actions", () => {
+    for (const language of ["en", "zh-CN"] as const) {
+      const locale = createLocaleRuntime({ navigatorLanguage: language });
+      const html = renderToStaticMarkup(<NotificationsPage locale={locale} state={{ kind: "recovery" }} summary={{ unread: 9 }} filters={{}} onRetry={vi.fn()} onFilterChange={vi.fn()} onPageChange={vi.fn()} onPageSizeChange={vi.fn()} onMarkRead={vi.fn()} onMarkVisibleRead={vi.fn()} onOpen={vi.fn()} />);
+      expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION"));
+      expect(html).toContain(frontendText(locale, "NOTIFICATIONS_RETRY"));
+      expect(html).not.toContain(frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ"));
+      expect(html).not.toContain(`${frontendText(locale, "NOTIFICATIONS_UNREAD_COUNT")} 9`);
+    }
+  });
+
   it("renders localized loading, error, and empty recovery states", () => {
     const locale = createLocaleRuntime({ navigatorLanguage: "zh-CN" });
     const base = { locale, summary: null, filters: {}, onRetry: vi.fn(), onFilterChange: vi.fn(), onPageChange: vi.fn(), onPageSizeChange: vi.fn(), onMarkRead: vi.fn(), onMarkVisibleRead: vi.fn(), onOpen: vi.fn() };

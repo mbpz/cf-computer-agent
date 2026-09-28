@@ -73,7 +73,7 @@ describe("notification inbox route", () => {
       return Response.json({ items: [notification(), notification({ id: "already-read", readAt: "2026-08-30T01:00:00.000Z" })], pagination: { page: 2, pageSize: 20, total: 22, totalPages: 2 } });
     });
     await renderRoute();
-    await click("Mark as read"); await flush();
+    await click("Mark as read"); await waitForText("Mark visible as read");
     await click("Mark visible as read"); await flush();
     expect(mutations).toEqual([
       { path: "/api/notifications/notification-1/read", body: "" },
@@ -165,7 +165,7 @@ describe("notification inbox route", () => {
     await click("Open"); await flush();
     expect(posts).toEqual(["/api/notifications/notification-1/read"]);
     expect(browser.location.pathname).toBe(authorized ? "/my-submissions" : "/notifications");
-    if (!authorized) expect(container.textContent).toContain("This item is no longer available");
+    if (!authorized) { await waitForText("This item is no longer available"); expect(container.textContent).toContain("This item is no longer available"); }
   });
 
   it.each([
@@ -225,7 +225,7 @@ describe("notification inbox route", () => {
     expect(container.querySelector("[data-notification-id]")).toBeNull();
   });
 
-  it("ignores late ordinary open failures in a different notification view", async () => {
+  it("requires read-only recovery when a late open failure may have changed a different notification view", async () => {
     browser.history.replaceState({}, "", "/notifications");
     let resolveRead!: (response: Response) => void;
     let listRequests = 0;
@@ -238,9 +238,156 @@ describe("notification inbox route", () => {
     await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     const before = listRequests;
     await act(async () => resolveRead(Response.json({ error: { code: "API_ERROR", message: "Failed", retryable: true } }, { status: 500 }))); await flush();
-    expect(container.textContent).not.toContain("Unable to update notifications");
-    expect(container.textContent).toContain("Current view");
+    expect(container.textContent).toContain("Check the current notification state");
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
     expect(listRequests).toBe(before);
+    await click("Try notifications again"); await waitForText("Current view");
+    expect(container.textContent).toContain("Current view");
+    expect(browser.location.search).toBe("?read=read");
+    expect(listRequests).toBe(before + 1);
+  });
+
+  it.each(["Mark as read", "Mark visible as read", "Open"])("recovers an unknown %s result using only GET and hides stale writes", async (action) => {
+    browser.history.replaceState({}, "", "/notifications?read=unread&type=task.due");
+    let posts = 0;
+    let failRead = false;
+    let committed = false;
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input); requests.push(path);
+      if (init?.method === "POST") { posts += 1; committed = true; throw new TypeError("lost response"); }
+      if (failRead) throw new TypeError("read unavailable");
+      if (path.endsWith("/summary")) return Response.json({ unread: committed ? 0 : 1 });
+      return Response.json({ items: committed ? [] : [notification()], pagination: { page: 1, pageSize: 20, total: committed ? 0 : 1, totalPages: committed ? 0 : 1 } });
+    });
+    await renderRoute(); await click(action); await flush();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.textContent).not.toContain("Unread 1");
+    expect(container.textContent).toContain("Check the current notification state");
+    expect(browser.location.pathname).toBe("/notifications");
+    failRead = true;
+    await click("Try notifications again"); await flush();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.querySelector("[data-page-state='error']")).not.toBeNull();
+    failRead = false;
+    await click("Try notifications again"); await flush();
+    expect(container.textContent).toContain("Unread 0");
+    expect(container.querySelector("[data-page-state='empty']")).not.toBeNull();
+    expect(posts).toBe(1);
+    expect(requests.filter((path) => path.includes("?"))).toEqual(Array(3).fill("/api/notifications?page=1&pageSize=20&read=false&type=task.due"));
+  });
+
+  it("keeps writes hidden until both post-write list and summary reconcile", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    let posts = 0;
+    let releaseSummary!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })); }
+      if (String(input).endsWith("/summary")) return posts === 0 ? Response.json({ unread: 1 }) : new Promise<Response>((resolve) => { releaseSummary = resolve; });
+      return Response.json({ items: [notification({ readAt: posts ? "2026-08-30T01:00:00.000Z" : null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    });
+    await renderRoute(); await click("Mark as read"); await flush();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.querySelector("[data-page-state='loading']")).not.toBeNull();
+    await act(async () => releaseSummary(Response.json({ unread: 0 }))); await flush();
+    expect(container.querySelector("[data-read='true']")).not.toBeNull();
+    expect(container.textContent).toContain("Unread 0");
+    expect(posts).toBe(1);
+  });
+
+  it("disables visible bulk writes while a different filtered page is loading", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { posts += 1; return Response.json({ marked: 1 }); }
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      if (String(input).includes("read=true")) return new Promise<Response>(() => {});
+      return pageResponse(String(input), "Original page");
+    });
+    await renderRoute();
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    const bulk = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark visible as read") as HTMLButtonElement | undefined;
+    expect(!bulk || bulk.disabled).toBe(true);
+    if (bulk) await act(async () => bulk.click());
+    expect(posts).toBe(0);
+  });
+
+  it.each(["list", "summary"])("recovers a confirmed write when its %s readback fails without another POST", async (failure) => {
+    browser.history.replaceState({}, "", "/notifications");
+    let posts = 0;
+    let fail = true;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const summary = String(input).endsWith("/summary");
+      if (init?.method === "POST") { posts += 1; return Response.json({ marked: 1 }); }
+      if (posts && fail && (summary ? failure === "summary" : failure === "list")) return Response.json({ error: { code: "READ_FAILED", message: "Failed", retryable: true } }, { status: 500 });
+      if (summary) return Response.json({ unread: posts ? 0 : 1 });
+      return Response.json({ items: [notification({ readAt: posts ? "2026-08-30T01:00:00.000Z" : null })], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+    });
+    await renderRoute(); await click("Mark visible as read"); await waitForText("Unable to load notifications");
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.textContent).not.toContain("Unread 1");
+    fail = false;
+    await click("Try notifications again"); await waitForText("Unread 0");
+    expect(container.querySelector("[data-read='true']")).not.toBeNull();
+    expect(posts).toBe(1);
+  });
+
+  it("invalidates a pending filtered read when a write response is lost", async () => {
+    browser.history.replaceState({}, "", "/notifications");
+    let rejectWrite!: (error: Error) => void;
+    let releaseList!: (response: Response) => void;
+    let staleSignal: AbortSignal | null | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((_resolve, reject) => { rejectWrite = reject; });
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      if (String(input).includes("read=true")) { staleSignal = init?.signal; return new Promise<Response>((resolve) => { releaseList = resolve; }); }
+      return pageResponse(String(input), "Initial");
+    });
+    await renderRoute(); await click("Mark as read");
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
+    await act(async () => rejectWrite(new TypeError("lost response"))); await flush();
+    expect(staleSignal?.aborted).toBe(true);
+    await act(async () => releaseList(pageResponse("/api/notifications?page=1&read=true", "Stale writable page"))); await flush();
+    expect(container.textContent).toContain("Check the current notification state");
+    expect(container.textContent).not.toContain("Stale writable page");
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+  });
+
+  it.each([401, 403])("clears both snapshots when recovery loses authorization (%s)", async (status) => {
+    browser.history.replaceState({}, "", "/notifications");
+    let wrote = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { wrote = true; throw new TypeError("lost response"); }
+      if (wrote) return Response.json({ error: { code: "FORBIDDEN", message: "Denied", retryable: false } }, { status });
+      return String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Protected");
+    });
+    await renderRoute(); await click("Mark as read"); await flush();
+    await click("Try notifications again"); await flush();
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(container.querySelector("[data-notification-id]")).toBeNull();
+    expect(container.textContent).not.toContain("Unread 1");
+  });
+
+  it("bounds repeated clicks and corrects an emptied unread last page after bulk read", async () => {
+    browser.history.replaceState({}, "", "/notifications?page=2&read=unread");
+    let posts = 0;
+    let release!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (init?.method === "POST") { posts += 1; expect(JSON.parse(String(init.body))).toEqual({ ids: ["notification-last"] }); return new Promise<Response>((resolve) => { release = resolve; }); }
+      if (path.endsWith("/summary")) return Response.json({ unread: posts ? 20 : 21 });
+      const page = Number(new URL(path, "https://app.test").searchParams.get("page"));
+      return Response.json({ items: page === 2 ? (posts ? [] : [notification({ id: "notification-last" })]) : Array.from({ length: 20 }, (_, index) => notification({ id: `notification-${index}` })), pagination: { page, pageSize: 20, total: posts ? 20 : 21, totalPages: posts ? 1 : 2 } });
+    });
+    await renderRoute();
+    const bulk = [...container.querySelectorAll("button")].find((button) => button.textContent === "Mark visible as read") as HTMLButtonElement;
+    await act(async () => { bulk.click(); bulk.click(); });
+    expect(posts).toBe(1);
+    await act(async () => release(Response.json({ marked: 1 }))); await waitForText("Unread 20");
+    expect(browser.location.search).toBe("?read=unread");
+    expect(container.querySelectorAll("[data-notification-id]")).toHaveLength(20);
+    expect(container.querySelector('[data-notification-id="notification-last"]')).toBeNull();
+    expect(posts).toBe(1);
   });
 
   async function renderRoute() {

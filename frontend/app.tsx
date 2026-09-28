@@ -1928,20 +1928,27 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   const controllerRef = useRef<ReturnType<typeof createNotificationsRequestController> | null>(null);
   const actionPendingRef = useRef(false);
   const activeRef = useRef(true);
+  const readyRef = useRef(false);
   const locationEpochRef = useRef(0);
 
-  const clearRestrictedState = () => {
+  const invalidateSnapshot = (next: NotificationsPageState) => {
+    readyRef.current = false;
     controllerRef.current?.dispose();
     controllerRef.current = null;
     setSummary(null);
     setPending(false);
+    setState(next);
+  };
+
+  const clearRestrictedState = () => {
     setActionError(undefined);
-    setState({ kind: "forbidden" });
+    invalidateSnapshot({ kind: "forbidden" });
   };
 
   useEffect(() => {
     const controller = controllerRef.current ?? createNotificationsRequestController();
     controllerRef.current = controller;
+    readyRef.current = false;
     setPending(true);
     setState((current) => current.kind === "ready" ? current : { kind: "loading" });
     const snapshot = query;
@@ -1955,6 +1962,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
         queryRef.current = next; setQuery(next);
         return;
       }
+      readyRef.current = true;
       setState({ kind: "ready", items: page.items, pagination: page.pagination });
       setSummary(nextSummary);
       setPending(false);
@@ -1963,6 +1971,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         clearRestrictedState(); return;
       }
+      setSummary(null);
       setState({ kind: "error" }); setPending(false);
     });
   }, [query, retryVersion]);
@@ -1970,6 +1979,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   useEffect(() => {
     const onPopState = () => {
       locationEpochRef.current += 1;
+      readyRef.current = false;
       const next = parseNotificationSearch(window.location.search);
       setActionError(undefined);
       queryRef.current = next; setQuery(next);
@@ -1981,6 +1991,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     activeRef.current = true;
     return () => {
       activeRef.current = false;
+      readyRef.current = false;
       locationEpochRef.current += 1;
       actionPendingRef.current = false;
       controllerRef.current?.dispose();
@@ -1989,23 +2000,29 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   }, []);
 
   const navigate = (next: NotificationQuery, replace = false) => {
+    readyRef.current = false;
     setActionError(undefined);
     writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`);
     queryRef.current = next; setQuery(next);
   };
 
-  const mutate = async (operation: () => Promise<unknown>, openEpoch?: number) => {
-    if (actionPendingRef.current) return;
-    const actionEpoch = locationEpochRef.current;
+  const mutate = async (operation: () => Promise<unknown>) => {
+    if (actionPendingRef.current || !readyRef.current) return;
     actionPendingRef.current = true;
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
-      if (activeRef.current && (openEpoch === undefined || openEpoch === locationEpochRef.current)) setRetryVersion((value) => value + 1);
+      if (activeRef.current && window.location.pathname === "/notifications") {
+        invalidateSnapshot({ kind: "loading" });
+        setRetryVersion((value) => value + 1);
+      }
     } catch (error: unknown) {
-      if (activeRef.current && !isAbort(error)) {
+      if (activeRef.current) {
         if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearRestrictedState();
-        else if (actionEpoch === locationEpochRef.current) setActionError(frontendText(locale, "NOTIFICATIONS_ACTION_FAILED"));
+        else if (window.location.pathname === "/notifications") {
+          setActionError(undefined);
+          invalidateSnapshot({ kind: "recovery" });
+        }
       }
     } finally {
       actionPendingRef.current = false;
@@ -2021,7 +2038,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     pending={pending}
     actionPending={actionPending}
     actionError={actionError}
-    onRetry={() => setRetryVersion((value) => value + 1)}
+    onRetry={() => { invalidateSnapshot({ kind: "loading" }); setRetryVersion((value) => value + 1); }}
     onFilterChange={(filters: NotificationFilters) => navigate({ page: 1, pageSize: query.pageSize, filters })}
     onPageChange={(page) => navigate({ ...query, page })}
     onPageSizeChange={(pageSize) => navigate({ page: 1, pageSize, filters: query.filters })}
@@ -2035,7 +2052,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
         const href = notificationTargetHref(current, isAdmin);
         if (href) writeWorkspaceHistory("push", href);
         else setActionError(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
-      }, epoch);
+      });
     }}
   />;
 }

@@ -14,6 +14,7 @@ type Pagination = { page: number; pageSize: SupportedPageSize; total: number; to
 export type NotificationsPageState =
   | { kind: "loading" }
   | { kind: "error" }
+  | { kind: "recovery" }
   | { kind: "forbidden" }
   | { kind: "ready"; items: readonly NotificationItem[]; pagination: Pagination };
 
@@ -34,6 +35,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
   onOpen: (id: string) => void;
 }) {
   if (state.kind === "loading") return <div><span className="sr-only">{frontendText(locale, "NOTIFICATIONS_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "NOTIFICATIONS_LOADING")} /></div>;
+  if (state.kind === "recovery") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ACTION_FAILED")} description={frontendText(locale, "NOTIFICATIONS_RECOVERY_DESCRIPTION")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   if (state.kind === "error") return <PageState kind="error" title={frontendText(locale, "NOTIFICATIONS_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   if (state.kind === "forbidden") return <PageState kind="forbidden" title={frontendText(locale, "NOTIFICATIONS_FORBIDDEN")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "NOTIFICATIONS_RETRY")}</Button></PageState>;
   const visibleUnreadIds = state.items.filter((item) => item.readAt === null).map((item) => item.id).slice(0, 100);
@@ -52,7 +54,7 @@ export function NotificationsPage({ locale, state, summary, filters, pending = f
         <SelectOption value="">{frontendText(locale, "NOTIFICATIONS_FILTER_ALL")}</SelectOption>
         {NOTIFICATION_EVENT_TYPES.map((eventType) => <SelectOption key={eventType} value={eventType}>{frontendText(locale, notificationEventKey(eventType))}</SelectOption>)}
       </Select>
-      <Button variant="outline" disabled={actionPending || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>
+      <Button variant="outline" disabled={pending || actionPending || visibleUnreadIds.length === 0} onClick={() => onMarkVisibleRead(visibleUnreadIds)}>{frontendText(locale, "NOTIFICATIONS_MARK_VISIBLE_READ")}</Button>
     </div>
     {actionError && <Alert variant="destructive"><AlertTitle>{actionError}</AlertTitle></Alert>}
     {state.items.length === 0 ? <PageState kind="empty" title={frontendText(locale, "NOTIFICATIONS_EMPTY")} /> : <div className="space-y-3" aria-busy={pending || actionPending || undefined}>
