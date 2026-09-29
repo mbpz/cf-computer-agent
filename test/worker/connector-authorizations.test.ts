@@ -5,6 +5,8 @@ import { createApp, type AppDependencies } from "../../src/app";
 import { MembersRepository } from "../../src/members/repository";
 import { SessionService } from "../../src/identity/session";
 import { createConnectorAuthorizationVerifier, type ConnectorAuthorizationBinding } from "../../shared/connector-authorization";
+import { createConnectorDevice, type ConnectorClock } from "../../tools/browser-vm/connector/authority";
+import { createConnectorConsumeClient } from "../../tools/browser-vm/connector/consume-client";
 import { MIGRATIONS } from "../fixtures/d1";
 
 const ORIGIN = "https://memory.crgmhrc.asia";
@@ -462,4 +464,86 @@ describe("connector authority: real session → HTTP → D1 → signed ticket", 
     expect(await count("connector_leases")).toBe(0);
   });
 
+});
+
+
+describe("device authority → fixed consume client → real Worker/D1", () => {
+  function deviceFixture(dropResponse = false) {
+    let mono = 0, next = 0, requests = 0, released = 0, renewalDue = 0;
+    const timers = new Map<number, { callback: () => void; at: number }>();
+    const clock: ConnectorClock = {
+      wallNow: () => now, monotonicNow: () => mono,
+      setTimer(callback, delay) { const n = ++next; timers.set(n, { callback, at: mono + delay }); return n; },
+      clearTimer(handle) { timers.delete(handle as number); },
+    };
+    const consume = createConnectorConsumeClient({ issuerOrigin: ORIGIN, fetch: (async (input: RequestInfo | URL) => {
+      requests++;
+      const context = createExecutionContext();
+      const response = await createApp(dependencies).fetch!(new Request(input) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, context);
+      await waitOnExecutionContext(context);
+      if (dropResponse) { await response.body?.cancel(); throw new Error("Response lost after server commit"); }
+      return response;
+    }) as typeof fetch });
+    const device = createConnectorDevice({ allowedOrigin: ORIGIN, policyVersion: "policy-1",
+      verificationKeys: [{ keyId: "test-key", publicKey: pair.publicKey }], consume, clock });
+    const open = () => device.open(ORIGIN, { release: () => { released++; }, renewalDue: () => { renewalDue++; } });
+    return { device, open,
+      advance(ms: number) { now += ms; mono += ms; for (const [n, t] of [...timers]) if (t.at <= mono) { timers.delete(n); t.callback(); } },
+      get requests() { return requests; }, get released() { return released; }, get due() { return renewalDue; },
+    };
+  }
+  async function prepared(f: ReturnType<typeof deviceFixture>) {
+    const response = await reserve({ connectorId: f.device.connectorId }); expect(response.status).toBe(201);
+    const { authority } = await response.json() as { authority: Authority };
+    const ticketResponse = await issue(authority); expect(ticketResponse.status).toBe(201);
+    const { ticket } = await ticketResponse.json() as Ticket;
+    const { pairingCode } = await f.device.issuePairing();
+    return { authority, ticket, pairingCode };
+  }
+  async function renewal(authority: Authority, leaseId: string) {
+    const response = await api(base + "/connector-renewals", a, { operationId: "device-renew", runtimeId: authority.runtimeId, generation: authority.generation, leaseId });
+    expect(response.status).toBe(201); return (await response.json() as Ticket).ticket;
+  }
+
+  it("pairs and consumes real signed issuance, renews revision, then actually releases resources at hard expiry", async () => {
+    const f = deviceFixture(); const preparedAuth = await prepared(f); const channel = f.open(); let resourceReleased = 0;
+    try {
+      expect(await channel.connect({ pairingCode: preparedAuth.pairingCode, ticket: preparedAuth.ticket })).toBe(true);
+      channel.track(() => { resourceReleased++; });
+      expect(await count("connector_ticket_consumptions")).toBe(1);
+      f.advance(30_000); expect(f.due).toBe(1);
+      expect(await channel.renew(await renewal(preparedAuth.authority, channel.getLease()!.leaseId))).toBe(true);
+      expect(await env.DB.prepare("SELECT revision FROM connector_leases WHERE environment_id='env-a'").first("revision")).toBe(2);
+      f.advance(30_000); expect(channel.isActive()).toBe(true); expect(resourceReleased).toBe(0);
+      f.advance(30_000); expect(channel.isActive()).toBe(false); expect(resourceReleased).toBe(1); expect(f.released).toBe(1);
+      expect(f.requests).toBe(2);
+    } finally { f.device.close(); }
+  });
+
+  it.each(["role", "session", "revoke", "generation"])("live %s change rejects signed renewal and closes device resources", async (change) => {
+    const f = deviceFixture(); const p = await prepared(f); const channel = f.open(); let resourceReleased = 0;
+    try {
+      expect(await channel.connect({ pairingCode: p.pairingCode, ticket: p.ticket })).toBe(true);
+      channel.track(() => { resourceReleased++; }); f.advance(30_000);
+      const ticket = await renewal(p.authority, channel.getLease()!.leaseId);
+      if (change === "role") await env.DB.prepare("DELETE FROM role_members WHERE member_id='member-a'").run();
+      if (change === "session") await env.DB.prepare("DELETE FROM auth_sessions WHERE member_id='member-a'").run();
+      if (change === "revoke") expect((await revoke(p.authority)).status).toBe(200);
+      if (change === "generation") expect((await reserve({ operationId: "new-generation", expectedGeneration: 1, connectorId: f.device.connectorId })).status).toBe(201);
+      expect(await channel.renew(ticket)).toBe(false);
+      expect(channel.isActive()).toBe(false); expect(resourceReleased).toBe(1); expect(f.released).toBe(1);
+      expect(await count("connector_ticket_consumptions")).toBe(1);
+    } finally { f.device.close(); }
+  });
+
+  it("lost server consumption response leaves device offline and cannot be retried with another local pairing", async () => {
+    const f = deviceFixture(true); const p = await prepared(f);
+    try {
+      const channel = f.open(); expect(await channel.connect({ pairingCode: p.pairingCode, ticket: p.ticket })).toBe(false);
+      expect(channel.isActive()).toBe(false); expect(await count("connector_ticket_consumptions")).toBe(1);
+      const { pairingCode } = await f.device.issuePairing();
+      expect(await f.open().connect({ pairingCode, ticket: p.ticket })).toBe(false);
+      expect(f.requests).toBe(1); expect(await count("connector_ticket_consumptions")).toBe(1);
+    } finally { f.device.close(); }
+  });
 });

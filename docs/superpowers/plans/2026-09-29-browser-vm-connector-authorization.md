@@ -40,6 +40,7 @@
 ## LC-006.3 原子消费、租期与撤销
 
 - [x] 服务端消费/续租子切片：0058、本地 HTTP/D1 实时校验与消费 CAS、原连接租约绑定、未知结果不重试。不是设备侧完整验收，下面三项仍开放。
+- [x] 设备授权核心子切片：内存配对/固定公钥双校验、有界缓存、租约硬定时器、固定服务端消费客户端；真实 Worker/D1 本地集成通过。正式回环 WebSocket 接线和实际流释放仍待验收，不提前关闭完整设备链。
 
 - [ ] RED/GREEN：设备侧一次性配对与签名授权双校验、并发单次消费、连接器重启旧票据失效、有界 replay 缓存。
 - [ ] RED/GREEN：30 秒续租、60 秒硬上限；续租重新验证权威状态，失联/撤权/代次变化/错误 leaseId 不能延长旧会话；显式撤销释放流。
@@ -120,3 +121,16 @@
 - 三次临时突变分别去掉消费唯一性、允许过期租约消费续租、允许跨连接续租，均出现预期断言失败，随后源码全部恢复。
 - 最终命令：`rtk proxy ./node_modules/.bin/vitest run test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts`；6套 **211/211**。`rtk proxy npm run test:browser-vm` **146/146**；完整 TypeScript、diff 检查通过。
 - 不新增公网拨号、远程迁移/部署/推送；0058仅应用于本地测试库。配置仍默认关闭。下一步设备侧配对/固定服务端消费客户端/有界缓存/定时断流，再做真实协议集成；不得据此勾选完整 LC-006.3 或父项。
+
+
+## LC-006.3 设备授权核心与固定消费客户端（本地运行记录2026-09-30）
+
+- 新增 `tools/browser-vm/connector/authority.ts`、`consume-client.ts`，不修改 `connector-probe`、不启动常驻进程或外网转发。设备启动随机 connectorId，channel 自生 consumerId；只接受配对码及签名票据，不接受浏览器 member/runtime 声明。成员/运行代次来自已验证的签名，origin/connectorId/policyVersion 则来自本机固定配置。
+- 本机配对凭据256位、30秒、最多5次尝试，旋转即撤销，异步摘要后同步竞争消费，只有一个赢家；仅保留摘要。已验签 ticketId 消费前进入有界缓存，即使请求超时/响应丢失也不移除，缓存满拒绝新票据而不淘汰未过期项。
+- 固定 HTTPS 消费端点无 cookie/Origin/Authorization，禁止自动跟随重定向（manual + 仅接受201）、不重试；响应最多4096字节/4096个分块，5秒超时/取消。空分块洪泛先RED再补有界读取，避免仅字节上限被空块绕过。固定公钥验证仍复用严格 canonical JWS。默认没有安装真实 issuer/key 配置，不宣称已上线。
+- 租约按服务端ACK及签名截止时间取界，30秒通知续租、独立到期定时器，续租过程中保留旧期限。最多4通道、每通道8个受管资源；关闭逐个释放，某个释放回调抛错不妨碍其他资源。时钟回拨不会延长租期；延迟执行的定时器也不能让 `isActive()` 放行。晚到 ACK/错误lease或revision/撤销/超时不能复活。
+- RED：新模块缺失先失败；补充同步 transport throw 测试后发现未处理 canceled Promise，修正为先注册 race 再调用 transport，随后通过。真实 Worker 桥接发现 Workerd 不支持 Request.redirect=error，改用同样不跟随跳转的manual并拒绝所有非201；不改变失败关闭语义。新增测试的错误 sessions 表名修为真实 auth_sessions，完整重跑后才记通过。
+- 设备25项 + 客户端5项 = **30/30**；含默认真实定时器短租约自动关闭测试。新增6项真实 Worker/D1→设备核心测试，授权合计 **55/55**，六套回归 **217/217**。客户端通过只读有效租约收据取得续租leaseId，集成不靠直接查D1绕过真实客户端协议。集成的 fetch 是本地 createApp 桥接，不是实际HTTPS网络或WebSocket，不以此替代协议准入。
+- 临时去掉配对单次消费、缓存防重放/容量限制、硬到期定时器，各自均触发断言失败，源码均恢复。配对并发测试使用不同有效签名票据，防止被 ticket 防重放意外遮蔽。
+- VM 本地全套 **176/176**；完整 TypeScript 检查通过。tsconfig 仅为 noEmit 项目增加 allowImportingTsExtensions，让 Node24 原生TS模块及 Worker 集成统一检查；没有引入依赖或构建副作用。
+- 下一步：正式仅回环 Host/Origin/有界帧 WebSocket adapter、本机控制协议、真实 socket 关闭/续租消息及 Worker授权链集成；这之前 LC-006.3/LC-006/G0/D04 仍开放。主清单范围29/完成5/剩余24。没有push、生产部署、远程迁移、实际公网拨号或读取生产签名密钥。

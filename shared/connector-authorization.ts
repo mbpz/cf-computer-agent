@@ -169,3 +169,30 @@ function decodeAuthorizationPart(value: string): Uint8Array<ArrayBuffer> | undef
   const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
   return encodeConnectorAuthorizationPart(bytes) === value ? bytes : undefined;
 }
+
+/** Device bootstrap: only the issuer signature can supply member/runtime identity.
+ * The three local constraints come from operator configuration and this process,
+ * never from a browser message. Decoding here does NOT authenticate the payload;
+ * nothing is returned until the complete canonical signature check has passed.
+ * Renewals must instead use the full binding retained from the accepted lease.
+ */
+export function createConnectorDeviceVerifier(
+  keys: readonly ConnectorVerificationKey[] | undefined,
+  local: Pick<ConnectorAuthorizationBinding, "origin" | "connectorId" | "policyVersion">,
+) {
+  const scope = { origin: local.origin, connectorId: local.connectorId, policyVersion: local.policyVersion };
+  const verify = createConnectorAuthorizationVerifier(keys);
+  return async (token: unknown, now: () => number): Promise<Readonly<ConnectorAuthorizationClaims> | undefined> => {
+    try {
+      if (typeof token !== "string" || token.length > 8192) return undefined;
+      const parts = token.split(".");
+      if (parts.length !== 3) return undefined;
+      const bytes = decodeAuthorizationPart(parts[1]);
+      if (!bytes) return undefined;
+      const candidate = ownJsonFields(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)), claimKeys);
+      if (!candidate) return undefined;
+      const binding = Object.fromEntries(bindingKeys.map(key => [key, candidate[key]]));
+      return await verify(token, { ...binding, ...scope, purpose: "connect", leaseId: null } as ConnectorAuthorizationBinding, now);
+    } catch { return undefined; }
+  };
+}
