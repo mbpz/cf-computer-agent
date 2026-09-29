@@ -1,4 +1,4 @@
-import { readConnectorAuthorizationClaims, type ConnectorAuthorizationBinding } from "../../shared/connector-authorization";
+import { createConnectorAuthorizationVerifier, readConnectorAuthorizationClaims, type ConnectorVerificationKey, type ConnectorAuthorizationBinding } from "../../shared/connector-authorization";
 import { AppError } from "../http";
 import type { SessionService } from "../identity/session";
 import { ConnectorAuthorityRepository, connectorAuthorizationConflict as conflict,
@@ -9,6 +9,7 @@ export interface ConnectorAuthorizationConfig {
   origin: string;
   policyVersion: string;
   signingKey: ConnectorSigningKey;
+  verificationKeys?: readonly ConnectorVerificationKey[];
   now?: () => number;
 }
 const identifier = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
@@ -77,6 +78,52 @@ export class ConnectorAuthorizationsService {
     return { ticket };
   }
 
+  async renew(request: Request, memberId: string, environmentId: string, value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw invalidRequest();
+    const { leaseId, ...rest } = value as Record<string, unknown>;
+    if (typeof leaseId !== "string" || !identifier.test(leaseId)) throw invalidRequest();
+    const body: Record<string, unknown> = { ...parse(rest, false), leaseId };
+    const config = this.configured(), a = await this.access(request, memberId, environmentId);
+    const runtimeId = body.runtimeId as string, generation = body.generation as number;
+    const saved = await this.repository.renewal(a, await this.intent(a, "renew", body), runtimeId, generation, leaseId, config.signingKey.keyId);
+    const expected: ConnectorAuthorizationBinding = { purpose: "renew", memberId, environmentId, runtimeId, generation,
+      connectorId: saved.authority.connectorId, origin: saved.authority.origin, policyVersion: saved.authority.policyVersion, leaseId };
+    if (!readConnectorAuthorizationClaims(saved.claims, expected, this.now())) throw conflict();
+    const ticket = await createConnectorAuthorizationSigner(config.signingKey)(saved.claims, expected, this.now);
+    if (!ticket) throw unavailable();
+    await this.repository.assertCurrent({ ...a, nowMs: this.now() }, runtimeId, generation);
+    if (!readConnectorAuthorizationClaims(saved.claims, expected, this.now())) throw conflict();
+    return { ticket };
+  }
+
+  /** Bearer capability authentication, never ambient browser authentication.
+   * The native connector must still pair locally and bind this result to its
+   * own live channel. A browser-supplied acknowledgement grants nothing.
+   */
+  async consume(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw invalidRequest();
+    const body = value as Record<string, unknown>;
+    if (Object.keys(body).sort().join(",") !== "consumerId,ticket,ticketId"
+      || typeof body.ticket !== "string" || body.ticket.length > 8192
+      || typeof body.ticketId !== "string" || !identifier.test(body.ticketId)
+      || typeof body.consumerId !== "string" || !identifier.test(body.consumerId)) throw invalidRequest();
+    const config = this.configured();
+    if (!config.verificationKeys?.length || config.verificationKeys.length > 2) throw unavailable();
+    const saved = await this.repository.ticket(body.ticketId);
+    const denied = () => new AppError("CONNECTOR_TICKET_INVALID", "Invalid connector ticket", 403);
+    if (!saved || saved.claims.origin !== config.origin || saved.claims.policyVersion !== config.policyVersion) throw denied();
+    const { version: _version, ticketId: _id, issuedAtMs: _issued, expiresAtMs: _expires, ...binding } = saved.claims;
+    const claims = await createConnectorAuthorizationVerifier(config.verificationKeys.filter((k) => k.keyId === saved.keyId))
+      (body.ticket, binding, this.now);
+    const expected = readConnectorAuthorizationClaims(saved.claims, binding, this.now());
+    if (!claims || !expected || JSON.stringify(claims) !== JSON.stringify(expected)) throw denied();
+    const access = await this.repository.accessForTicket(claims, this.now());
+    const lease = await this.repository.consume(access, claims, body.consumerId);
+    await this.repository.assertCurrent({ ...access, nowMs: this.now() }, claims.runtimeId, claims.generation);
+    if (this.now() >= lease.expiresAtMs) throw conflict();
+    return { lease };
+  }
+
   async revoke(request: Request, memberId: string, environmentId: string, value: unknown) {
     const body = parse(value, false);
     // Revocation remains available after permission/policy/signing-key removal.
@@ -103,3 +150,5 @@ function parse(value: unknown, reserve: boolean): Record<string, unknown> {
   }
   return result;
 }
+
+function invalidRequest() { return new AppError("CONNECTOR_AUTHORIZATION_INVALID", "Invalid connector authorization request", 400); }

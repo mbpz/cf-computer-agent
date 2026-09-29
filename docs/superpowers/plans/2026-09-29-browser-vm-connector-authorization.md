@@ -39,6 +39,8 @@
 
 ## LC-006.3 原子消费、租期与撤销
 
+- [x] 服务端消费/续租子切片：0058、本地 HTTP/D1 实时校验与消费 CAS、原连接租约绑定、未知结果不重试。不是设备侧完整验收，下面三项仍开放。
+
 - [ ] RED/GREEN：设备侧一次性配对与签名授权双校验、并发单次消费、连接器重启旧票据失效、有界 replay 缓存。
 - [ ] RED/GREEN：30 秒续租、60 秒硬上限；续租重新验证权威状态，失联/撤权/代次变化/错误 leaseId 不能延长旧会话；显式撤销释放流。
 - [ ] 使用真实 Worker/D1 和连接器协议完成完整授权链验证后才勾选 LC-006，随后进入 LC-007；不以纯共享契约测试替代。
@@ -99,3 +101,22 @@
 - 修正这两处断言，仅接受两个已知双列等值索引计划；仍不接受单列前缀或全表扫描，未更改业务查询或既有索引。
 - `rtk proxy ./node_modules/.bin/vitest run test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts`：**6 套、189/189，0 skipped**，退出 0。
 - `rtk proxy ./node_modules/.bin/tsc --noEmit`、`rtk proxy git diff --check` 退出 0；checklist 测试 9/9、审计仍为原始30/范围29/完成5/剩余24。
+
+
+## LC-006.3 服务端消费/租期切片（本地运行记录 2026-09-30，本切片完成）
+
+- 连接器将已固定公钥验证的票据发送到固定工作台 HTTPS `/api/connector/consume`；该路由只接受 POST JSON 中的 ticketId/ticket/consumerId，不使用浏览器 cookie，不接受 Origin/Cookie，不从请求选择信任密钥或回调 URL。服务端再次使用配置公钥验签，并从 D1 的原始签发收据派生全部绑定，重新检查实时会话、角色、环境和策略。
+- 消费为 D1 原子单次操作，重复请求（即使同 consumerId）409；未知消费结果必须关闭连接，不自动重试。消费收据没有原始票据，跨连接器重启仍防重放。consumerId 是未来连接器产生、保存在内存的每连接随机身份，不来自网页身份声明。
+- 初始 leaseId 服务端生成；租约到期不晚于签名票据/会话截止时间。每租约 revision 仅一张续租票据；30 秒后才能请求续租，续租必须仍有活动租约/原会话/当前代次。消费续租时 CAS 原 revision，绝不到期复活或用晚到票据覆盖新租约。
+- 新增本地迁移0058。成员续租路由保持真实 session、vm:use、same-origin、严格字段和幂等要求；统一 operationId 不与预留/签发/撤销发生语义碰撞。配置缺公钥时消费关闭，不把签名私钥导出成公钥。
+- 本切片先用真实 Worker HTTP/D1/签名完成服务端链验证。设备本地配对、回环协议/定时断流、真实连接器集成仍是后续本项工作；不会仅凭服务端用例关闭 LC-006.3/LC-006 或声称真实联网。
+
+
+### LC-006.3 服务端消费/续租验证证据
+
+- RED：新增测试先运行，缺消费路由/租约表导致15失败，原有27通过。未把 AUTH_REQUIRED/缺表当成功。
+- GREEN：新增22项含参数化测试，授权共 **49/49**；真实临时 Ed25519 密钥与真实 createApp/D1，不用 mock 代替签名或事务。验证初始/续租并发一次消费、同原连接绑定、短会话更新、撤销/角色/会话/策略/删除/代次变化、错误签名、无公钥配置、精确签发收据匹配、原子回滚和丢失响应拒绝重试。
+- 续租签发重试仍返回同一未消费收据；每个 revision 仅一张续租票据，和0057操作共用成员级 operationId 命名空间。消费重复为409而不是返回旧许可；未知消费结果必须关闭并经显式新代次授权恢复。不会自动重放客体命令。
+- 三次临时突变分别去掉消费唯一性、允许过期租约消费续租、允许跨连接续租，均出现预期断言失败，随后源码全部恢复。
+- 最终命令：`rtk proxy ./node_modules/.bin/vitest run test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts`；6套 **211/211**。`rtk proxy npm run test:browser-vm` **146/146**；完整 TypeScript、diff 检查通过。
+- 不新增公网拨号、远程迁移/部署/推送；0058仅应用于本地测试库。配置仍默认关闭。下一步设备侧配对/固定服务端消费客户端/有界缓存/定时断流，再做真实协议集成；不得据此勾选完整 LC-006.3 或父项。

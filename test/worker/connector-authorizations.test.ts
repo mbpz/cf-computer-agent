@@ -56,7 +56,7 @@ beforeEach(async () => {
   b = (await sessions.create((await new MembersRepository(env.DB).findById("member-b"))!)).token;
   denied = (await sessions.create((await new MembersRepository(env.DB).findById("member-denied"))!)).token;
   pair = await crypto.subtle.generateKey("Ed25519", false, ["sign", "verify"]) as CryptoKeyPair;
-  dependencies = { connectorAuthorization: { origin: ORIGIN, policyVersion: "policy-1", signingKey: { keyId: "test-key", privateKey: pair.privateKey }, now: () => now } };
+  dependencies = { connectorAuthorization: { origin: ORIGIN, policyVersion: "policy-1", signingKey: { keyId: "test-key", privateKey: pair.privateKey }, verificationKeys: [{ keyId: "test-key", publicKey: pair.publicKey }], now: () => now } };
   await env.DB.prepare("INSERT INTO connector_authorization_policy (singleton, origin, policy_version, enabled) VALUES (1, ?, 'policy-1', 1)").bind(ORIGIN).run();
 });
 
@@ -291,6 +291,175 @@ describe("connector authority: real session → HTTP → D1 → signed ticket", 
     }
     expect((await api(base + "/connector-authority?unexpected=1")).status).toBe(400);
     expect(await count("connector_authority_heads")).toBe(0);
+  });
+
+  async function issued(authority: Authority) {
+    const response = await issue(authority); expect(response.status).toBe(201);
+    const { ticket } = await response.json() as Ticket;
+    const payload = JSON.parse(atob(ticket.split(".")[1]!.replace(/-/gu, "+").replace(/_/gu, "/")));
+    return { ticket, ticketId: payload.ticketId as string };
+  }
+  async function consume(credential: { ticket: string; ticketId: string }, consumerId = "channel-1", extraHeaders = {}, options = dependencies) {
+    const ctx = createExecutionContext();
+    const response = await createApp(options).fetch!(new Request(ORIGIN + "/api/connector/consume", {
+      method: "POST", headers: { "content-type": "application/json", ...extraHeaders },
+      body: JSON.stringify({ ...credential, consumerId }),
+    }) as Request<unknown, IncomingRequestCfProperties<unknown>>, env, ctx);
+    await waitOnExecutionContext(ctx); return response;
+  }
+  async function connected() {
+    const authority = await active(), credential = await issued(authority);
+    const response = await consume(credential); expect(response.status).toBe(201);
+    const { lease } = await response.json() as { lease: { leaseId: string; expiresAtMs: number; renewAfterMs: number; revision: number } };
+    return { authority, credential, lease };
+  }
+  const renew = (authority: Authority, leaseId: string, operationId = "renew-1", token = a) => api(base + "/connector-renewals", token,
+    { operationId, runtimeId: authority.runtimeId, generation: authority.generation, leaseId });
+  async function renewalTicket(authority: Authority, leaseId: string, operationId = "renew-1") {
+    const response = await renew(authority, leaseId, operationId); expect(response.status).toBe(201);
+    const { ticket } = await response.json() as Ticket;
+    return { ticket, ticketId: JSON.parse(atob(ticket.split(".")[1]!.replace(/-/gu, "+").replace(/_/gu, "/"))).ticketId as string };
+  }
+
+  it("atomically consumes a real ticket once across concurrent consumers without cookie authentication", async () => {
+    const authority = await active(), credential = await issued(authority);
+    const responses = await Promise.all([consume(credential), consume(credential, "channel-2"), consume(credential)]);
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409, 409]);
+    const success = responses.find((r) => r.status === 201)!;
+    expect(await success.json()).toMatchObject({ lease: { revision: 1, expiresAtMs: now + 60_000, renewAfterMs: now + 30_000 } });
+    expect(await count("connector_ticket_consumptions")).toBe(1);
+    expect(await count("connector_leases")).toBe(1);
+    const stored = await env.DB.prepare("SELECT * FROM connector_ticket_consumptions").all();
+    expect(JSON.stringify(stored.results)).not.toContain(credential.ticket);
+    expect((await consume(credential, "restarted-channel")).status).toBe(409);
+  });
+
+  it("verifies the signature and fixed public key before consuming a saved receipt", async () => {
+    const credential = await issued(await active());
+    expect((await consume({ ...credential, ticket: credential.ticket.slice(0, -8) + "AAAAAAAA" })).status).toBe(403);
+    expect((await consume({ ...credential, ticketId: "missing-ticket" })).status).toBe(403);
+    const config = dependencies.connectorAuthorization!;
+    expect((await consume(credential, "channel-1", {}, { connectorAuthorization: { ...config, verificationKeys: [] } })).status).toBe(503);
+    expect(await count("connector_ticket_consumptions")).toBe(0);
+    expect((await consume(credential)).status).toBe(201);
+  });
+
+  it("does not use ambient Origin or cookies as connector consumer authentication", async () => {
+    const credential = await issued(await active());
+    expect((await consume(credential, "channel-1", { origin: ORIGIN })).status).toBe(403);
+    expect((await consume(credential, "channel-1", { cookie: `__Host-memory-session=${a}` })).status).toBe(403);
+    expect(await count("connector_ticket_consumptions")).toBe(0);
+  });
+
+  it.each(["role", "session", "member", "policy", "environment", "revoke", "generation"])("rejects a valid signed ticket after live %s changes", async (change) => {
+    const authority = await active(), credential = await issued(authority);
+    if (change === "role") await env.DB.prepare("DELETE FROM role_members WHERE member_id = 'member-a'").run();
+    if (change === "session") await env.DB.prepare("DELETE FROM auth_sessions WHERE member_id = 'member-a'").run();
+    if (change === "member") await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-a'").run();
+    if (change === "policy") await env.DB.prepare("UPDATE connector_authorization_policy SET enabled = 0").run();
+    if (change === "environment") await env.DB.prepare("DELETE FROM browser_environments WHERE id = 'env-a'").run();
+    if (change === "revoke") expect((await revoke(authority)).status).toBe(200);
+    if (change === "generation") expect((await reserve({ operationId: "next", expectedGeneration: 1 })).status).toBe(201);
+    expect((await consume(credential)).status).toBeGreaterThanOrEqual(400);
+    expect(await count("connector_ticket_consumptions")).toBe(0);
+  });
+
+  it("renews after 30 seconds with the same live session, and consumes each revision just once", async () => {
+    const { authority, lease } = await connected();
+    expect((await renew(authority, lease.leaseId)).status).toBe(409);
+    now += 30_000;
+    const ticket = await renewalTicket(authority, lease.leaseId);
+    expect(await renewalTicket(authority, lease.leaseId)).toEqual(ticket);
+    expect((await renew(authority, lease.leaseId, "another-renew")).status).toBe(409);
+    const responses = await Promise.all([consume(ticket), consume(ticket)]);
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await responses.find((r) => r.status === 201)!.json()).toMatchObject({ lease: {
+      leaseId: lease.leaseId, revision: 2, expiresAtMs: now + 60_000, renewAfterMs: now + 30_000,
+    } });
+    now += 30_000;
+    expect((await consume(await renewalTicket(authority, lease.leaseId, "renew-2"))).status).toBe(201);
+    expect((await consume(ticket)).status).toBe(409);
+  });
+
+  it("refuses to consume a renewal on another channel or a wrong lease", async () => {
+    const { authority, lease } = await connected(); now += 30_000;
+    expect((await renew(authority, "wrong-lease")).status).toBe(409);
+    expect((await renew(authority, lease.leaseId, "renew-1", b)).status).toBe(404);
+    const ticket = await renewalTicket(authority, lease.leaseId);
+    expect((await consume(ticket, "channel-2")).status).toBe(409);
+    expect((await consume(ticket)).status).toBe(201);
+  });
+
+  it("never revives an expired lease using an unexpired renewal ticket", async () => {
+    const { authority, lease } = await connected(); now += 30_000;
+    const ticket = await renewalTicket(authority, lease.leaseId);
+    now = lease.expiresAtMs;
+    expect((await consume(ticket)).status).toBe(409);
+    expect((await renew(authority, lease.leaseId, "renew-new")).status).toBe(409);
+    expect((await env.DB.prepare("SELECT revision FROM connector_leases").first())?.revision).toBe(1);
+  });
+
+  it("unknown consumption response is not retried into another grant, and explicit new generation replaces it", async () => {
+    const authority = await active(), credential = await issued(authority);
+    const lost = await consume(credential); expect(lost.status).toBe(201); await lost.body?.cancel();
+    expect((await consume(credential)).status).toBe(409);
+    const replacement = await reserve({ operationId: "next-reservation", expectedGeneration: 1 });
+    const next = (await replacement.json() as { authority: Authority }).authority;
+    const nextTicketResponse = await issue(next, { operationId: "next-ticket" });
+    const { ticket } = await nextTicketResponse.json() as Ticket;
+    const ticketId = JSON.parse(atob(ticket.split(".")[1]!.replace(/-/gu, "+").replace(/_/gu, "/"))).ticketId;
+    expect((await consume({ ticket, ticketId }, "new-channel")).status).toBe(201);
+    expect(await count("connector_leases")).toBe(1);
+  });
+
+  it("consumption and lease creation roll back together on failure", async () => {
+    const credential = await issued(await active());
+    await env.DB.exec("CREATE TRIGGER fail_lease BEFORE INSERT ON connector_leases BEGIN SELECT RAISE(ABORT, 'test'); END;");
+    expect((await consume(credential)).status).toBe(500);
+    expect(await count("connector_ticket_consumptions")).toBe(0);
+    await env.DB.exec("DROP TRIGGER fail_lease;");
+    expect((await consume(credential)).status).toBe(201);
+  });
+
+  it.each(["revoke", "session", "policy", "generation"])("does not consume a renewal after %s invalidates live authority", async (change) => {
+    const { authority, lease } = await connected(); now += 30_000;
+    const ticket = await renewalTicket(authority, lease.leaseId);
+    if (change === "revoke") expect((await revoke(authority)).status).toBe(200);
+    if (change === "session") await env.DB.prepare("DELETE FROM auth_sessions WHERE member_id = 'member-a'").run();
+    if (change === "policy") await env.DB.prepare("UPDATE connector_authorization_policy SET enabled = 0").run();
+    if (change === "generation") expect((await reserve({ operationId: "next", expectedGeneration: 1 })).status).toBe(201);
+    expect((await consume(ticket)).status).toBeGreaterThanOrEqual(400);
+    expect(await count("connector_ticket_consumptions")).toBe(1);
+    expect((await env.DB.prepare("SELECT revision FROM connector_leases").first())?.revision).toBe(1);
+  });
+
+  it("keeps renewal operations in the same member namespace as reserve/issue/revoke", async () => {
+    const { authority, lease } = await connected(); now += 30_000;
+    for (const op of ["reserve-1", "ticket-1"]) expect((await renew(authority, lease.leaseId, op)).status).toBe(409);
+    await renewalTicket(authority, lease.leaseId, "renew-unique");
+    expect((await revoke(authority, { operationId: "renew-unique" })).status).toBe(409);
+    expect((await reserve({ operationId: "renew-unique", expectedGeneration: 1 })).status).toBe(409);
+    expect((await issue(authority, { operationId: "renew-unique" })).status).toBe(409);
+  });
+
+  it("rejects a valid signature when the signed ticket is not the exact saved issuance receipt", async () => {
+    const credential = await issued(await active());
+    const [header, payload] = credential.ticket.split(".");
+    const claims = JSON.parse(atob(payload!.replace(/-/gu, "+").replace(/_/gu, "/")));
+    claims.ticketId = "different-signed-id";
+    const input = header + "." + btoa(JSON.stringify(claims)).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/u, "");
+    const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(input)));
+    const ticket = input + "." + btoa(String.fromCharCode(...signature)).replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/u, "");
+    expect((await consume({ ticket, ticketId: credential.ticketId })).status).toBe(403);
+    expect(await count("connector_ticket_consumptions")).toBe(0);
+  });
+
+  it("uses current session expiry on consumption, not just the earlier signed deadline", async () => {
+    const credential = await issued(await active());
+    await env.DB.prepare("UPDATE auth_sessions SET expires_at = ? WHERE member_id = 'member-a'")
+      .bind(new Date(now + 20_000).toISOString()).run();
+    expect((await consume(credential)).status).toBe(409);
+    expect(await count("connector_leases")).toBe(0);
   });
 
 });

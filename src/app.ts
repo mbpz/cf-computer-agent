@@ -1,6 +1,6 @@
 import { ConnectorAuthorizationsService, type ConnectorAuthorizationConfig } from "./environments/connector-authorizations";
 import { ConnectorAuthorityRepository } from "./environments/connector-authority-repository";
-import { routeConnectorAuthorizationsApi } from "./routes/connector-authorizations";
+import { routeConnectorAuthorizationsApi, routeConnectorConsumption } from "./routes/connector-authorizations";
 import { InboxTaskPromotion } from "./inbox/task-promotion";
 import { GoalTasksRepository } from "./goal-tasks/repository";
 import { GoalTasksService } from "./goal-tasks/service";
@@ -193,6 +193,8 @@ export function createApp(dependencies: AppDependencies = {}): ExportedHandler<E
             });
             if (telemetry) return telemetry;
           }
+          const connectorConsumption = await routeConnectorConsumption(request, url, context, services);
+          if (connectorConsumption) return connectorConsumption;
           const resolved = await resolvePrincipal(request, {
             sessions: services.sessions,
             automation: services.automation,

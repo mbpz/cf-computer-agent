@@ -1,3 +1,4 @@
+import type { ConnectorAuthorizationClaims } from "../../shared/connector-authorization";
 import { hasPermission, parsePermissionMask, PERMISSION_BITS } from "../authorization/permission-bitmap";
 import { AppError } from "../http";
 
@@ -116,6 +117,95 @@ export class ConnectorAuthorityRepository {
     if (!h || h.state !== "active" || h.runtime_id !== runtimeId || h.generation !== generation
       || h.session_hash !== a.sessionHash || h.origin !== a.origin || h.policy_version !== a.policyVersion) throw conflict();
     return authority(h);
+  }
+
+  /** Unsigned, server-persisted receipt only. A lookup never grants authority. */
+  async ticket(ticketId: string): Promise<{ claims: ConnectorAuthorizationClaims; keyId: string } | undefined> {
+    const row = await this.db.prepare(`SELECT response_json, key_id FROM connector_authorization_receipts
+      WHERE kind = 'connect' AND json_extract(response_json, '$.ticketId') = ?
+      UNION ALL SELECT response_json, key_id FROM connector_lease_tickets WHERE ticket_id = ? LIMIT 1`)
+      .bind(ticketId, ticketId).first<{ response_json: string; key_id: string }>();
+    return row ? { claims: JSON.parse(row.response_json), keyId: row.key_id } : undefined;
+  }
+
+  async accessForTicket(c: ConnectorAuthorizationClaims, nowMs: number): Promise<ConnectorAuthorityAccess> {
+    const row = await this.db.prepare(`SELECT session_hash FROM connector_authority_heads
+      WHERE environment_id = ? AND member_id = ? AND runtime_id = ? AND generation = ? AND connector_id = ?
+        AND origin = ? AND policy_version = ? AND state = 'active'`)
+      .bind(c.environmentId, c.memberId, c.runtimeId, c.generation, c.connectorId, c.origin, c.policyVersion)
+      .first<{ session_hash: string }>();
+    if (!row) throw conflict();
+    return { memberId: c.memberId, environmentId: c.environmentId, sessionHash: row.session_hash,
+      origin: c.origin, policyVersion: c.policyVersion, nowMs };
+  }
+
+  async consume(a: ConnectorAuthorityAccess, c: ConnectorAuthorizationClaims, consumerId: string) {
+    const grant = await this.access(a, true), guard = this.eligible(a, grant);
+    const claimId = crypto.randomUUID(), leaseId = c.leaseId ?? crypto.randomUUID();
+    const renewal = c.purpose === "renew";
+    const revision = renewal ? "l.revision + 1" : "1";
+    // All authority predicates are repeated in the INSERT, not just checked
+    // before an await. The batch links mutation to THIS newly inserted claim.
+    await this.db.batch([
+      this.db.prepare(`${guard.sql} INSERT INTO connector_ticket_consumptions
+        (ticket_id, claim_id, lease_id, consumer_id, ack_json, consumed_at)
+        SELECT ?, ?, ?, ?, json_object('leaseId', ?, 'revision', ${revision},
+          'expiresAtMs', ?, 'renewAfterMs', ?), ?
+        FROM eligible e JOIN connector_authority_heads h ON h.environment_id = e.id AND h.member_id = e.member_id
+        ${renewal ? `JOIN connector_leases l ON l.environment_id = e.id
+          JOIN connector_lease_tickets t ON t.ticket_id = ? AND t.lease_id = l.lease_id AND t.expected_revision = l.revision` : ""}
+        WHERE h.state = 'active' AND h.runtime_id = ? AND h.generation = ? AND h.session_hash = ?
+          AND h.connector_id = ? AND h.origin = ? AND h.policy_version = ?
+          AND ? > ? AND ? <= CAST(strftime('%s', e.expires_at) AS INTEGER) * 1000
+        ${renewal ? `AND l.lease_id = ? AND l.consumer_id = ? AND l.runtime_id = h.runtime_id
+          AND l.generation = h.generation AND l.expires_at > ? AND l.revision < 9007199254740990` : ""}
+        ON CONFLICT DO NOTHING`).bind(...guard.values, c.ticketId, claimId, leaseId, consumerId, leaseId,
+        c.expiresAtMs, a.nowMs + 30_000, a.nowMs, ...(renewal ? [c.ticketId] : []), c.runtimeId, c.generation,
+        a.sessionHash, c.connectorId, c.origin, c.policyVersion, c.expiresAtMs, a.nowMs, c.expiresAtMs,
+        ...(renewal ? [leaseId, consumerId, a.nowMs] : [])),
+      this.db.prepare(`INSERT INTO connector_leases
+        (lease_id, environment_id, member_id, runtime_id, generation, consumer_id, revision, expires_at, renew_after)
+        SELECT lease_id, ?, ?, ?, ?, consumer_id, json_extract(ack_json, '$.revision'),
+          json_extract(ack_json, '$.expiresAtMs'), json_extract(ack_json, '$.renewAfterMs')
+        FROM connector_ticket_consumptions WHERE claim_id = ?
+        ON CONFLICT(environment_id) DO UPDATE SET lease_id = excluded.lease_id, member_id = excluded.member_id,
+          runtime_id = excluded.runtime_id, generation = excluded.generation, consumer_id = excluded.consumer_id,
+          revision = excluded.revision, expires_at = excluded.expires_at, renew_after = excluded.renew_after`)
+        .bind(a.environmentId, a.memberId, c.runtimeId, c.generation, claimId),
+    ]);
+    const row = await this.db.prepare("SELECT ack_json FROM connector_ticket_consumptions WHERE claim_id = ?")
+      .bind(claimId).first<{ ack_json: string }>();
+    if (!row) throw conflict(); // Never replay an acknowledgement into a new connection.
+    await this.assertCurrent(a, c.runtimeId, c.generation);
+    return JSON.parse(row.ack_json) as { leaseId: string; revision: number; expiresAtMs: number; renewAfterMs: number };
+  }
+
+  async renewal(a: ConnectorAuthorityAccess, intent: Intent, runtimeId: string, generation: number, leaseId: string, keyId: string) {
+    const current = await this.assertCurrent(a, runtimeId, generation);
+    const ticketId = crypto.randomUUID();
+    const grant = await this.access(a, true), guard = this.eligible(a, grant);
+    await this.db.prepare(`${guard.sql} INSERT INTO connector_lease_tickets
+      (ticket_id, member_id, operation_id, request_hash, lease_id, expected_revision, key_id, response_json)
+      SELECT ?, e.member_id, ?, ?, l.lease_id, l.revision, ?,
+        json_object('purpose', 'renew', 'origin', h.origin, 'connectorId', h.connector_id,
+          'memberId', e.member_id, 'environmentId', e.id, 'runtimeId', h.runtime_id, 'generation', h.generation,
+          'policyVersion', h.policy_version, 'leaseId', l.lease_id, 'version', 1, 'ticketId', ?,
+          'issuedAtMs', ?, 'expiresAtMs', MIN(? + 60000, CAST(strftime('%s', e.expires_at) AS INTEGER) * 1000))
+      FROM eligible e JOIN connector_authority_heads h ON h.environment_id = e.id AND h.member_id = e.member_id
+        JOIN connector_leases l ON l.environment_id = e.id AND l.member_id = e.member_id
+      WHERE h.runtime_id = ? AND h.generation = ? AND h.state = 'active' AND h.session_hash = ?
+        AND h.origin = ? AND h.policy_version = ? AND l.runtime_id = h.runtime_id AND l.generation = h.generation
+        AND l.lease_id = ? AND l.expires_at > ? AND l.renew_after <= ? AND l.revision < 9007199254740990
+      ON CONFLICT DO NOTHING`).bind(...guard.values,
+        ticketId, intent.operationId, intent.requestHash, keyId, ticketId,
+        a.nowMs, a.nowMs, runtimeId, generation, a.sessionHash, a.origin, a.policyVersion, leaseId, a.nowMs, a.nowMs).run();
+    const row = await this.db.prepare(`SELECT t.request_hash, t.key_id, t.response_json FROM connector_lease_tickets t
+      JOIN connector_leases l ON l.lease_id = t.lease_id AND l.revision = t.expected_revision
+      WHERE t.member_id = ? AND t.operation_id = ? AND l.expires_at > ? AND l.runtime_id = ? AND l.generation = ?`)
+      .bind(a.memberId, intent.operationId, a.nowMs, runtimeId, generation)
+      .first<{ request_hash: string; key_id: string; response_json: string }>();
+    if (!row || row.request_hash !== intent.requestHash || row.key_id !== keyId) throw conflict();
+    return { authority: current, claims: JSON.parse(row.response_json) as unknown };
   }
 
   private async receipt(a: ConnectorAuthorityAccess, intent: Intent): Promise<Receipt> {
