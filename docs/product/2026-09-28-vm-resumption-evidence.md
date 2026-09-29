@@ -50,3 +50,10 @@ rtk proxy npx vitest run test/worker/environments.test.ts test/unit/environment-
 重要实测限制：撤回浏览器权限后既有连接不会立即断开；浏览器提示重载，重载后新连接被阻止。正式授权需独立撤销与有界租期，不把该行为写成即时撤权通过。
 
 本轮新鲜回环连接器 18/18、checklist 审计测试 9/9；父项计数仍为 **29 范围内 / 5 已关闭 / 24 未关闭**。同日补齐 LC-005：原 HTTPS 测试页、虚构码、不匹配精确允许来源，Chrome 控制台 HTTP 403，Edge 通用错误与同次服务端 upgrade/403 诊断对应；missing/null Origin 仍只保留协议层证据。第一连接准入门完成，下一步允许 LC-006 本地正式授权契约。G0/D04 继续开放，正式 VM UI/联网尚未完成。仅文档更新和临时探针验收，无 push/部署/迁移。
+
+
+## 2026-09-29 LC-006.1 本地授权字段契约
+
+第一连接准入门完成后，按新细化计划顺序实现 `shared/connector-authorization.ts`：精确 HTTPS 来源、成员/环境/连接器/runtime/代次/策略绑定，connect/renew 用途隔离与 leaseId，60 秒最大票据时间窗、无过期宽限，拒绝字段注入/类型强转并返回不可变独立快照。它只校验字段，**不会认证主体、验证签名或授予网络能力**。
+
+TDD 缺失模块 RED 后实现，独立 14/14；VM 本地全套 134/134、定向 TypeScript 检查通过。临时副本的五种关键突变均使断言失败，发现并补强了 connect/lease 的同值畸形测试。计划与确切命令见 `../superpowers/plans/2026-09-29-browser-vm-connector-authorization.md`。下一步 LC-006.2 权威签发/签名，LC-006.3 消费/续租/撤销仍未实现，不勾选 LC-006 或 G0/D04。父项 29/5/24；无 push、部署、迁移、生产密钥或外网转发。
