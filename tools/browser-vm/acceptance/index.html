@@ -1,0 +1,7 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>真实 VM 正式连接器验收</title>
+<body><h1>真实 Alpine / 正式连接器验收</h1><p>仅开发验收：测试成员与数据库在本机；公网 TCP 使用正式连接器。不会使用生产会话、保存能力值或自动重连。关闭或取消将销毁 VM。</p>
+<p>需独立 HTTPS 页面、默认浏览器安全配置及手动启动本机验收服务。镜像只从已配对本机加载并校验，不上传镜像。</p>
+<label>本机验收地址 <input id="endpoint" placeholder="http://127.0.0.1:端口" autocomplete="off"></label>
+<label>临时能力值 <input id="capability" type="password" autocomplete="off"></label>
+<button id="start">启动并验收 apk 安装</button><button id="git" disabled>同一 VM 验收 Git / API</button><button id="stop" disabled>取消并销毁 VM</button>
+<pre id="status" role="status">尚未启动</pre><pre id="results"></pre><script type="module" src="./browser.js"></script></body></html>

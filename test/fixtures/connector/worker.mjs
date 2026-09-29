@@ -12,7 +12,7 @@ let pair;
 export default {
   async fetch(request, env, ctx) {
     pair ??= await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']);
-    const now = await env.DB.prepare('SELECT now FROM connector_test_clock').first('now');
+    const now = env.TEST_REAL_CLOCK === true ? Date.now() : await env.DB.prepare('SELECT now FROM connector_test_clock').first('now');
     if (new URL(request.url).pathname === '/__test/session') {
       if (request.headers.get('x-test-secret') !== env.TEST_SECRET) return new Response(null, { status: 403 });
       const members = new MembersRepository(env.DB);

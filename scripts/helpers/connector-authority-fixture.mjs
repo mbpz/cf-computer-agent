@@ -13,9 +13,10 @@ const bundled = await build({ entryPoints: ['test/fixtures/connector/worker.mjs'
   write: false, format: 'esm', platform: 'neutral', conditions: ['workerd', 'worker', 'browser'],
   external: ['cloudflare:*', 'node:*'], logLevel: 'silent' });
 const migrations = await readD1Migrations(new URL('../../migrations/', import.meta.url).pathname);
-export async function fixture(t, egressTransport) {
+export async function fixture(t, egressTransport, { allowedOrigin = origin, realtime = false } = {}) {
   let now = Date.now(), next = 0; const timers = new Map();
-  const clock = { wallNow: () => now, monotonicNow: () => now,
+  const clock = realtime ? { wallNow: () => Date.now(), monotonicNow: () => performance.now(),
+    setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: id => clearTimeout(id) } : { wallNow: () => now, monotonicNow: () => now,
     setTimer(fn, ms) { const id = ++next; timers.set(id, { fn, at: now + ms }); return id; },
     clearTimer(id) { timers.delete(id); } };
   const secret = crypto.randomUUID();
@@ -24,7 +25,7 @@ export async function fixture(t, egressTransport) {
     compatibilityFlags: ['nodejs_compat'], script: bundled.outputFiles[0].text,
     d1Databases: { DB: 'connector-integration' },
     durableObjects: { KNOWLEDGE: 'UnusedKnowledge' }, log: new Log(LogLevel.ERROR),
-    bindings: { TEST_SECRET: secret, TEST_ORIGIN: origin },
+    bindings: { TEST_SECRET: secret, TEST_ORIGIN: allowedOrigin, TEST_REAL_CLOCK: realtime },
     outboundService: () => { throw new Error('Unexpected outbound request in local integration'); } });
   t.after(async () => { try { await server?.close(); } finally { await mf.dispose(); } });
   const db = await mf.getD1Database('DB');
@@ -37,17 +38,17 @@ export async function fixture(t, egressTransport) {
     db.prepare("INSERT INTO roles(id,key,name,allow_bits,status,is_system,created_at,updated_at) VALUES('test-vm','test-vm','VM','0x200000','active',0,?,?)").bind(timestamp,timestamp),
     db.prepare("INSERT INTO role_members(role_id,member_id,created_at) VALUES('test-vm','member-a',?)").bind(timestamp),
     db.prepare("INSERT INTO browser_environments(id,member_id,name,type,version,created_at,updated_at) VALUES('env-a','member-a','A','personal',1,?,?)").bind(now,now),
-    db.prepare("INSERT INTO connector_authorization_policy(singleton,origin,policy_version,enabled) VALUES(1,?,'policy-1',1)").bind(origin),
+    db.prepare("INSERT INTO connector_authorization_policy(singleton,origin,policy_version,enabled) VALUES(1,?,'policy-1',1)").bind(allowedOrigin),
   ]);
   const boot = await mf.dispatchFetch(origin + '/__test/session', { headers: { 'x-test-secret': secret } });
   assert.equal(boot.status, 200);
   const { token, publicKey } = await boot.json();
   const key = await crypto.subtle.importKey('jwk', publicKey, 'Ed25519', false, ['verify']);
   let dropResponse = false; const consumptionStatuses = [];
-  const serverOptions = { allowedOrigin: origin, policyVersion: 'policy-1', ...(egressTransport ? { egressTransport } : {}),
+  const serverOptions = { allowedOrigin, policyVersion: 'policy-1', ...(egressTransport ? { egressTransport } : {}),
     verificationKeys: [{ keyId: 'integration-test', publicKey: key }], clock,
     fetch: async req => {
-      assert.equal(req.url, origin + '/api/connector/consume');
+      assert.equal(req.url, allowedOrigin + '/api/connector/consume');
       const response = await mf.dispatchFetch(req.url, { method: req.method, headers: req.headers,
         body: await req.text(), redirect: 'manual' });
       consumptionStatuses.push(response.status);
