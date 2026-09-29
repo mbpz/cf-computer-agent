@@ -1,0 +1,934 @@
+{
+  "schemaVersion": 1,
+  "scope": "LC-008 host direct public resource downloads only; not VM or production acceptance",
+  "observedLocalDate": "2026-09-30 Asia/Shanghai",
+  "curlVersion": "8.7.1 SecureTransport LibreSSL/3.3.6",
+  "security": {
+    "credentials": false,
+    "proxy": false,
+    "redirectFollowing": false,
+    "certificateVerification": "default enabled",
+    "configurationChanges": false
+  },
+  "curlArguments": [
+    "--disable",
+    "[--ipv4 for IPv4 round]",
+    "--noproxy",
+    "*",
+    "--proto",
+    "=https",
+    "--connect-timeout",
+    "10",
+    "--max-time",
+    "30",
+    "--max-filesize",
+    "TARGET_LIMIT",
+    "--silent",
+    "--show-error",
+    "--user-agent",
+    "memory-garden-lc008-public-acceptance",
+    "--output",
+    "TEMP_BODY",
+    "--write-out",
+    "%{json}",
+    "TARGET_URL"
+  ],
+  "records": [
+    {
+      "round": 1,
+      "targetId": "alpine-main",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:11:26.902Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 525960,
+      "downloadBytes": 525960,
+      "sha256": "05a56e41a58afa63c120dce3c0c9e47bde46cf56df3e8a0e90a5e33eb4e13a1e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.007128,
+        "connect": 0.067743,
+        "tls": 0.131629,
+        "total": 0.646572
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-community",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:11:27.576Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 2310520,
+      "downloadBytes": 2310520,
+      "sha256": "4fb883e1c40b74218c84e900c02d0e04ea1dafe05ae5b6641b91d52c7d41e14e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.003237,
+        "connect": 0.075797,
+        "tls": 0.154038,
+        "total": 0.886675
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-rootfs",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86/alpine-minirootfs-3.24.1-x86.tar.gz",
+      "start": "2026-09-29T20:11:28.490Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3538048,
+      "downloadBytes": 3538048,
+      "sha256": "634355e2245c9d56186d1b86fb6e034453eb303aea15b573ca250b343376fffd",
+      "identity": "pinned-sha256-verified",
+      "timing": {
+        "dns": 0.003482,
+        "connect": 0.069523,
+        "tls": 0.137744,
+        "total": 0.861547
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 1,
+      "targetId": "github-api",
+      "url": "https://api.github.com/repos/octocat/Hello-World",
+      "start": "2026-09-29T20:11:29.395Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.168"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.168",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 5107,
+      "downloadBytes": 5107,
+      "sha256": "5241ab1f08aa19f78168d3bfb35cabb2865694ed477d287de138f98276c9151e",
+      "identity": "repository-verified",
+      "timing": {
+        "dns": 0.013333,
+        "connect": 0.114729,
+        "tls": 0.221419,
+        "total": 0.609275
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 1,
+      "targetId": "github-git",
+      "url": "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+      "start": "2026-09-29T20:11:30.036Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.166"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.166",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 242386,
+      "downloadBytes": 242386,
+      "sha256": "4ddf8c1bb460ca8bca5b4b2c64f6f397dbe8326ed6c6b264935b385115291af2",
+      "identity": "git-service-verified",
+      "timing": {
+        "dns": 0.014742,
+        "connect": 0.141384,
+        "tls": 0.276967,
+        "total": 2.148105
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-main",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:11:32.213Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 525960,
+      "downloadBytes": 525960,
+      "sha256": "05a56e41a58afa63c120dce3c0c9e47bde46cf56df3e8a0e90a5e33eb4e13a1e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.003305,
+        "connect": 0.074152,
+        "tls": 0.150331,
+        "total": 0.471506
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-community",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:11:32.709Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 2310520,
+      "downloadBytes": 2310520,
+      "sha256": "4fb883e1c40b74218c84e900c02d0e04ea1dafe05ae5b6641b91d52c7d41e14e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.003386,
+        "connect": 0.067218,
+        "tls": 0.134847,
+        "total": 0.55881
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-rootfs",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86/alpine-minirootfs-3.24.1-x86.tar.gz",
+      "start": "2026-09-29T20:11:33.294Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "2a04:4e42:68::644",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3538048,
+      "downloadBytes": 3538048,
+      "sha256": "634355e2245c9d56186d1b86fb6e034453eb303aea15b573ca250b343376fffd",
+      "identity": "pinned-sha256-verified",
+      "timing": {
+        "dns": 0.003102,
+        "connect": 0.051736,
+        "tls": 0.104629,
+        "total": 0.456042
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 2,
+      "targetId": "github-api",
+      "url": "https://api.github.com/repos/octocat/Hello-World",
+      "start": "2026-09-29T20:11:33.788Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.168"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.168",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 5107,
+      "downloadBytes": 5107,
+      "sha256": "5241ab1f08aa19f78168d3bfb35cabb2865694ed477d287de138f98276c9151e",
+      "identity": "repository-verified",
+      "timing": {
+        "dns": 0.002794,
+        "connect": 0.126444,
+        "tls": 0.256772,
+        "total": 0.384303
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 2,
+      "targetId": "github-git",
+      "url": "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+      "start": "2026-09-29T20:11:34.204Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.166"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.166",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 242386,
+      "downloadBytes": 242386,
+      "sha256": "4ddf8c1bb460ca8bca5b4b2c64f6f397dbe8326ed6c6b264935b385115291af2",
+      "identity": "git-service-verified",
+      "timing": {
+        "dns": 0.002793,
+        "connect": 0.108898,
+        "tls": 0.221861,
+        "total": 0.98234
+      },
+      "addressMode": "system-preferred"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-main",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:12:46.276Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 525960,
+      "downloadBytes": 525960,
+      "sha256": "05a56e41a58afa63c120dce3c0c9e47bde46cf56df3e8a0e90a5e33eb4e13a1e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.001473,
+        "connect": 0.322907,
+        "tls": 0.6355,
+        "total": 2.026515
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-community",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:12:48.323Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 2310520,
+      "downloadBytes": 2310520,
+      "sha256": "4fb883e1c40b74218c84e900c02d0e04ea1dafe05ae5b6641b91d52c7d41e14e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.002943,
+        "connect": 0.261891,
+        "tls": 0.527087,
+        "total": 2.515473
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-rootfs",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86/alpine-minirootfs-3.24.1-x86.tar.gz",
+      "start": "2026-09-29T20:12:50.866Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3538048,
+      "downloadBytes": 3538048,
+      "sha256": "634355e2245c9d56186d1b86fb6e034453eb303aea15b573ca250b343376fffd",
+      "identity": "pinned-sha256-verified",
+      "timing": {
+        "dns": 0.002732,
+        "connect": 0.259807,
+        "tls": 0.522025,
+        "total": 2.396757
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "github-api",
+      "url": "https://api.github.com/repos/octocat/Hello-World",
+      "start": "2026-09-29T20:12:53.304Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.168"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.168",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 5107,
+      "downloadBytes": 5107,
+      "sha256": "5241ab1f08aa19f78168d3bfb35cabb2865694ed477d287de138f98276c9151e",
+      "identity": "repository-verified",
+      "timing": {
+        "dns": 0.002394,
+        "connect": 0.10142,
+        "tls": 0.207767,
+        "total": 0.583964
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "github-git",
+      "url": "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+      "start": "2026-09-29T20:12:53.918Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.166"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.166",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 242386,
+      "downloadBytes": 242386,
+      "sha256": "4ddf8c1bb460ca8bca5b4b2c64f6f397dbe8326ed6c6b264935b385115291af2",
+      "identity": "git-service-verified",
+      "timing": {
+        "dns": 0.002202,
+        "connect": 0.128702,
+        "tls": 0.264319,
+        "total": 1.121569
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-git-package",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/git-2.54.0-r0.apk",
+      "start": "2026-09-29T20:12:55.064Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3568880,
+      "downloadBytes": 3568880,
+      "sha256": "ea4728fd0c3598905aee5bb654e81122830f17a5e0c80a8b5abc18738b4ce062",
+      "identity": "index-declared-size-matched-not-signature-verified",
+      "timing": {
+        "dns": 0.002993,
+        "connect": 0.274016,
+        "tls": 0.549192,
+        "total": 2.555126
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 1,
+      "targetId": "alpine-curl-package",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/curl-8.22.0-r0.apk",
+      "start": "2026-09-29T20:12:57.653Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 184281,
+      "downloadBytes": 184281,
+      "sha256": "99e070d85a7cd7e3c23f6cdc09e94ca7305024ca7348b82ed04d6635decb085d",
+      "identity": "index-declared-size-matched-not-signature-verified",
+      "timing": {
+        "dns": 0.002807,
+        "connect": 0.272275,
+        "tls": 0.548485,
+        "total": 1.649117
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-main",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:12:59.326Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 525960,
+      "downloadBytes": 525960,
+      "sha256": "05a56e41a58afa63c120dce3c0c9e47bde46cf56df3e8a0e90a5e33eb4e13a1e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.003185,
+        "connect": 0.277963,
+        "tls": 0.555598,
+        "total": 2.047823
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-community",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86/APKINDEX.tar.gz",
+      "start": "2026-09-29T20:13:01.403Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 2310520,
+      "downloadBytes": 2310520,
+      "sha256": "4fb883e1c40b74218c84e900c02d0e04ea1dafe05ae5b6641b91d52c7d41e14e",
+      "identity": "index-body-downloaded-not-signature-verified",
+      "timing": {
+        "dns": 0.002891,
+        "connect": 0.251475,
+        "tls": 0.549619,
+        "total": 2.426232
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-rootfs",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86/alpine-minirootfs-3.24.1-x86.tar.gz",
+      "start": "2026-09-29T20:13:03.859Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3538048,
+      "downloadBytes": 3538048,
+      "sha256": "634355e2245c9d56186d1b86fb6e034453eb303aea15b573ca250b343376fffd",
+      "identity": "pinned-sha256-verified",
+      "timing": {
+        "dns": 0.002974,
+        "connect": 0.254721,
+        "tls": 0.511738,
+        "total": 2.371146
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "github-api",
+      "url": "https://api.github.com/repos/octocat/Hello-World",
+      "start": "2026-09-29T20:13:06.272Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.168"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.168",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 5107,
+      "downloadBytes": 5107,
+      "sha256": "5241ab1f08aa19f78168d3bfb35cabb2865694ed477d287de138f98276c9151e",
+      "identity": "repository-verified",
+      "timing": {
+        "dns": 0.002362,
+        "connect": 0.10235,
+        "tls": 0.210182,
+        "total": 0.313642
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "github-git",
+      "url": "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+      "start": "2026-09-29T20:13:06.614Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "20.205.243.166"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "error": "ENODATA"
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "20.205.243.166",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 242386,
+      "downloadBytes": 242386,
+      "sha256": "4ddf8c1bb460ca8bca5b4b2c64f6f397dbe8326ed6c6b264935b385115291af2",
+      "identity": "git-service-verified",
+      "timing": {
+        "dns": 0.002762,
+        "connect": 0.105945,
+        "tls": 0.217003,
+        "total": 1.149633
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-git-package",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/git-2.54.0-r0.apk",
+      "start": "2026-09-29T20:13:07.792Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 3568880,
+      "downloadBytes": 3568880,
+      "sha256": "ea4728fd0c3598905aee5bb654e81122830f17a5e0c80a8b5abc18738b4ce062",
+      "identity": "index-declared-size-matched-not-signature-verified",
+      "timing": {
+        "dns": 0.003192,
+        "connect": 0.276955,
+        "tls": 0.556254,
+        "total": 2.555854
+      },
+      "addressMode": "ipv4"
+    },
+    {
+      "round": 2,
+      "targetId": "alpine-curl-package",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/curl-8.22.0-r0.apk",
+      "start": "2026-09-29T20:13:10.379Z",
+      "dns": [
+        {
+          "method": "resolve4",
+          "answers": [
+            "146.75.114.132"
+          ]
+        },
+        {
+          "method": "resolve6",
+          "answers": [
+            "2a04:4e42:68::644"
+          ]
+        }
+      ],
+      "exitCode": 0,
+      "error": "",
+      "httpStatus": 200,
+      "remoteIp": "146.75.114.132",
+      "tlsVerifyResult": 0,
+      "proxyUsed": 0,
+      "redirects": 0,
+      "bytes": 184281,
+      "downloadBytes": 184281,
+      "sha256": "99e070d85a7cd7e3c23f6cdc09e94ca7305024ca7348b82ed04d6635decb085d",
+      "identity": "index-declared-size-matched-not-signature-verified",
+      "timing": {
+        "dns": 0.002909,
+        "connect": 0.250903,
+        "tls": 0.501658,
+        "total": 1.316299
+      },
+      "addressMode": "ipv4"
+    }
+  ]
+}
