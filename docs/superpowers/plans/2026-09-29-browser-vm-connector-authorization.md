@@ -44,9 +44,9 @@
 
 - [x] 正式回环传输子切片：固定 Host/Origin、本机控制端点及有界 WebSocket；实际 socket 配对/续租/取消/到期关闭与控制页验证完成。消费响应仍为该套测试的受控 fixture，完整 Worker/D1→WebSocket 授权链继续待验收。
 
-- [ ] RED/GREEN：设备侧一次性配对与签名授权双校验、并发单次消费、连接器重启旧票据失效、有界 replay 缓存。
-- [ ] RED/GREEN：30 秒续租、60 秒硬上限；续租重新验证权威状态，失联/撤权/代次变化/错误 leaseId 不能延长旧会话；显式撤销释放流。
-- [ ] 使用真实 Worker/D1 和连接器协议完成完整授权链验证后才勾选 LC-006，随后进入 LC-007；不以纯共享契约测试替代。
+- [x] RED/GREEN：设备侧一次性配对与签名授权双校验、并发单次消费、连接器重启旧票据失效、有界 replay 缓存。
+- [x] RED/GREEN：30 秒续租、60 秒硬上限；续租重新验证权威状态，失联/撤权/代次变化/错误 leaseId 不能延长旧会话；显式撤销释放流。
+- [x] 使用真实 Worker/D1 和连接器协议完成完整授权链验证后才勾选 LC-006，随后进入 LC-007；不以纯共享契约测试替代。
 
 ## LC-006.1 实测证据（2026-09-29）
 
@@ -148,3 +148,13 @@
 - 自带浏览器实测本机控制页：初次指针操作未对应目标，不记停止成功；该临时实例到期退出。另启临时固定拒绝消费实例，使用明确按钮键盘操作，页面显示“已停止连接器”，配对/停止按钮禁用且配对码为空，进程退出0；测试标签已关闭。没有修改安全设置或访问生产。无凭据的停止截图存于临时验收文件，不提交配对码/截图中的测试凭据。此项不代替正式HTTPS浏览器网络验收。
 - 新鲜最终回归：`rtk proxy npm run test:browser-vm` **201/201**；`rtk proxy ./node_modules/.bin/vitest run test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts` **217/217、6套、0 skipped**。既有日志损坏负例仍输出其预期journal异常，运行器AI绑定警告不表示这些测试调用AI。完整TypeScript及diff检查通过；checklist测试9/9、审计30/29/5/24。
 - **证明边界**：本轮实际HTTP/WebSocket对接真实设备核心/固定消费客户端，但消费响应是fixture；既有Worker/D1桥接没有经过本轮真实socket。不可把两套分开的测试当作完整端到端授权链。下一步在真实Worker/D1与正式WebSocket之间完成签发→配对→消费→续租/撤权/未知结果全链验证，之后才评估LC-006.3/LC-006关闭和LC-007。D04/G0继续开放，主清单完成5/范围29/剩余24，没有push、部署、远程迁移、公网拨号或生产密钥读取。
+
+
+## LC-006.3 完整 Worker/D1 → 正式 WebSocket 验收（本地 2026-09-30）
+
+- 新增 `scripts/browser-vm-connector-integration.test.mjs` 及独立测试 Worker 入口 `test/fixtures/connector/worker.mjs`。内存打包实际 createApp/SessionService/签名与仓储，应用全部现有迁移到一次性本地 D1，再经正式回环服务/设备核心/固定消费客户端完成同一条链；消费结果不再使用模拟成功 ACK。
+- 测试 Worker 自行产生不可导出 Ed25519 私钥，仅返回公钥和临时测试会话；测试控制入口由随机测试秘密保护，不进入生产入口或 Wrangler 配置。无关 Knowledge 绑定只提供失败关闭的本地 DO；所有外网请求由 outboundService 拒绝。createApp 固定 canonical origin 仍使用原字符串，但 dispatchFetch 仅路由到本地 Workerd，绝不访问该线上域名。
+- **17/17**：首次配对与真实签发/消费；30 秒续租及递增 lease revision；续租硬到期关闭 socket；角色/会话/成员/环境/策略/撤销/代次在签发后变化均拒绝消费；真正 D1 提交后丢失 connect/renew ACK 不发送成功、不重试；并发两个 socket 单次消费；篡改签名/错误配对/重启拒绝；主动 disconnect/stop 关闭；没有续租请求的远端撤销最多保留原60秒租期，不声称离线瞬时推送撤销。
+- 搭建时修正测试绑定缺失和临时私钥可导出配置（服务端正确拒绝），策略关闭的实际契约是503而非403，断言按现有服务契约精确校验；这些是测试装配修正，不宣称修复生产缺陷。移除设备 replay 检查的临时突变产生第二次真实消费409，被 `[201]` 调用序列断言检出，原文件已还原。
+- 还原后新鲜回归：VM **218/218**，相关六套 Worker **217/217**，完整 TypeScript noEmit 与两个新增脚本语法检查通过。Worker 负例中的 invalid journal 日志不等于套件失败。
+- **关闭 LC-006.3 和 LC-006 的本地授权契约验收，下一步 LC-007。** 这不是实际 HTTPS 消费连接/证书、TCP数据流、真实VM联网、产品账户生命周期或安装验收；租期集成用受控时钟，真实默认定时器另由已通过的核心/真实socket测试覆盖。LC-007～015、D04/G0保留开放，父项仍范围29/完成5/剩余24。无 push、部署、远程迁移、备份/加密扩展、生产密钥读取或主机安全配置修改。

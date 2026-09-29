@@ -117,13 +117,22 @@ contracts and real loopback HTTP/WebSocket transport tests. Real default timers
 also expire an actual socket without virtual time advancement. Control page
 state tests use a small DOM harness, not a full browser.
 
-The socket suite uses a controlled issuer response fixture; the existing
-`test/worker/connector-authorizations.test.ts` separately bridges the actual
-consumption client to real `createApp` Request/Response and local D1. Combining
-these two separate suites does **not** establish the still-required real
-Worker/D1-to-WebSocket full authorization chain. LC-006.3 stays open until that
-integration is proved. Neither suite proves production policy/key installation,
-real HTTPS consumption transport, TCP forwarding, VM networking or product UI.
+The focused socket suite still uses controlled issuer responses. The additional
+`scripts/browser-vm-connector-integration.test.mjs` runs the actual application,
+session service, signer and D1 in local Workerd, connected to this real WebSocket
+server through the fixed consume client. Its 17 cases verify issuance, pairing,
+one-time consumption, renewal, live authority changes, lost committed responses,
+concurrency, restart and actual socket closure without fake successful ACKs.
+The test-only Worker entry is never included by the production entry or Wrangler.
+Keys and sessions are ephemeral; all outbound network requests are rejected.
+The canonical hostname is routed locally using Miniflare dispatchFetch, **not**
+accessed over the internet. These integration lease tests use a controlled clock;
+separate core/socket cases exercise default real timers.
+
+LC-006's local authorization-contract acceptance is complete. This does not prove
+production policy/key installation, real HTTPS consumption transport/certificates,
+TCP forwarding, VM networking or product UI/account lifecycle. LC-007 is next;
+LC-007–015 and D04/G0 remain open.
 
 The built-in browser locally loaded this operator page and confirmed the stop
 status, disabled controls and empty code display; the temporary component exited.
