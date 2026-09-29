@@ -157,6 +157,42 @@ The installed v86 WISP adapter sends IP literals and schedules reconnects; it is
 reuse the development probe's synthetic IP table or ticket as production authority.
 A formal guest DNS/client adapter and lifecycle acceptance are still required.
 
+## Browser authorization transport (not yet a guest network adapter)
+
+`egress-client.mjs` is browser-compatible and has no Node imports. Call
+`createConnectorEgressClient({ url, pairingCode, ticket, renewTicket, onReady,
+onFrame, onClose })` for one explicit connection to
+`ws://127.0.0.1:<port>/connector`. The returned `send(binary)`, `close()` and
+`readyState` (0 connecting, 1 ready, 3 closed) never reconnect or queue data.
+Constructing a new instance requires explicit product lifecycle authorization;
+reusing a consumed ticket does not grant a new connection.
+
+- Initial credentials travel in one JSON message, never the URL. `onFrame`
+  receives copied ArrayBuffers containing only validated WISP; authorization
+  JSON is consumed internally. `onReady(frozenLease)` fires once, after both the
+  egress ACK and the initial 16-credit frame have arrived. Neither callback is a
+  claim that a guest VM has been wired. Callbacks are synchronous; throws close.
+- `renewTicket(frozenLease, AbortSignal)` is a trusted product API integration
+  port, not a webpage-configured issuer or replacement ACK. It must request one
+  fresh member-authorized ticket without retrying ambiguous issuance. The client
+  calls it once per revision, aborts on ACK/close, and imposes a 5-second combined
+  issuance-and-ACK deadline. The old hard lease remains in force until a valid
+  ACK. Host clock rollback, including after a forward jump, cannot extend it.
+- Only the three exact lower-case domains and ports 80/443 are permitted in TCP
+  CONNECT frames. IP literals, UDP, extra streams, stale IDs, over-credit DATA
+  and malformed responses close. Each stream has 16 credits, at most eight are
+  open, and each DATA is at most 16KiB. `bufferedAmount` has a hard aggregate
+  ceiling; there is no client application queue. Server-side policy is still
+  independently authoritative.
+- A conservative 64MiB/100000 **message-layer** cap includes control and ignored
+  replies for retired streams. Browsers do not expose raw WebSocket fragments;
+  this is not a substitute for the server's actual wire meter.
+- Close, timeout and protocol failure are terminal; late ticket promises cannot
+  send or reopen. `onClose()` fires once and receives no credential/error text.
+  Guest DNS and the v86 adapter must still be implemented, including disabling
+  its native reconnect and unbounded congestion queue. Do not install this client
+  as a transparent WebSocket substitute and assume v86's IP CONNECTs will work.
+
 ## Verification boundary
 
 `npm run test:browser-vm:connector-authorization` includes real Ed25519 signatures,
@@ -190,3 +226,11 @@ LC-007–015 and D04/G0 remain open until their remaining acceptance work is don
 The built-in browser locally loaded this operator page and confirmed the stop
 status, disabled controls and empty code display; the temporary component exited.
 This is not a new remote HTTPS/Chrome/Edge admission or VM-network acceptance.
+
+The formal browser transport has 24 deterministic protocol/lifetime/budget tests.
+Three additional real Worker/D1 integration tests use this exact client with a
+Node WebSocket implementing the browser EventTarget interface: live renewal on
+one TCP connection, canceled pending DNS, and policy-disabled renewal releasing
+TCP. Origin injection supplies only what a browser supplies automatically. These
+are not in-app-browser or guest-VM acceptance results. Browser-platform ESM
+bundling verifies module compatibility, not a deployed browser session.

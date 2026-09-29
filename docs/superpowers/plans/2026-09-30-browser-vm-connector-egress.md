@@ -51,6 +51,10 @@ Files: `tools/browser-vm/connector/server.mjs`、正式客户端适配及相应�
 - [x] 把已验证域名目的地接到streams；仍维持精确Host/Origin、有界socket和控制页。只在数据平面真正可用时报告forwarding能力；关闭/硬到期释放所有实际TCP资源。
 - [x] 真实Worker/D1→WebSocket→DNS政策→TCP fixture的全链正常/恶意/背压/取消测试；不得用两套局部测试合并宣称全链。服务端全链子项通过，不代替下项正式VM客户端。
 - [ ] 正式VM客户端适配：锁定v86原生WISP会发送IP目的地址且自动重连，必须适配域名策略、授权JSON/二进制分流、租约和显式重建；不能借用探针合成IP表/开发ticket。真实客体链验收后再评估LC-007关闭及进入LC-008。
+  - [x] 独立浏览器兼容正式授权传输：一次配对/成员ticket、明确start-egress及初始窗口后可用、JSON/二进制分流、一次可取消续租、硬截止与有界流/帧/消息预算；真实Worker/D1→该客户端→TCP fixture正常、续租拒绝、取消全链。
+  - [ ] 客体DNS/域名适配与v86接线：不得直接把原生IP CONNECT送到连接器，不复制探针IP表，不启用原生自动重连/无界congested_buffer。
+  - [ ] 真实客体→正式客户端→正式连接器全链、关闭/重建/恢复验收；未完成前父项继续开放。
+
 
 第3节服务端验收（2026-09-30本地）：授权ready仍为forwarding:false；显式start-egress/wisp-v1成功后才发送egress-ready和初始16帧窗口，续租报告同一通道状态。TCP connect不额外重置credit。默认解析/拨号维持目的地址政策，不接受浏览器配置或探针IP。
 
@@ -63,3 +67,8 @@ Files: `tools/browser-vm/connector/server.mjs`、正式客户端适配及相应�
 本轮通过IANA官方IPv4/IPv6 Special-Purpose Registries CSV核对特殊段（包括192.31.196/24、192.52.193/24、192.175.48/24、2620:4f:8000::/48、3fff::/20），未依赖网页更新时间声明。Node v24.14.1的Resolver行为以真实回环UDP验收为准：A+AAAA/ENODATA解析成功；主动取消时两个真实c-ares请求均ECANCELLED。未发出公网DNS/业务流量；net socket背压验收留待第2节。
 
 第1节结果：16项目的地址/DNS测试，三项临时变异（放行特殊IPv6段、只检查首答案、取消独立截止检查）均被检出，文件已还原。该模块尚未接入正式WebSocket，不报告forwarding，也不关闭LC-007。
+
+
+第3节客户端授权传输验收（2026-09-30本地）：新增浏览器兼容`connector/egress-client.mjs`，不是对原生v86网络适配器的接线声明。只打开指定127.0.0.1端口/connector，一次连接，凭据仅首个JSON；ready与egress-ready不单独宣称数据可用，必须等初始stream-0信用窗口。授权JSON不进入onFrame。独立维护最多8流/16帧窗口、单帧16KiB、单调ID、原生bufferedAmount及完整消息层64MiB/100000上限，无应用排队或自动重连；浏览器无法观察原始WS分片，服务端wire meter仍为实际线协议预算。
+
+续租由产品层传入的`renewTicket(lease, signal)`一次获取新成员ticket；传输层不处理cookie或固定API以外的身份替代。5秒覆盖取票与ACK，任何不确定结果关闭且取消，不重试，旧硬租约不提前延长。冻结lease快照，验证leaseId/逐次revision/有效期/forwarding；系统时钟前跳后回拨仍按每次观测重锚单调时间，防止延后此前接受的新lease。关闭忽略晚到取票或网络事件。新测试24项及真实链3项；fresh完整VM311/311、Worker217/217、checklist9/9、tsc/语法/browser平台ESM打包/diff通过。六项变异（去掉到期、abort、目的域限制、credit扣减、单调推进、消息预算）均被检出还原。仅关闭本段子项，不关闭LC-007/D04/G0，无push或公网/真实VM联网声明。

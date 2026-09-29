@@ -8,6 +8,7 @@ import { Miniflare, Log, LogLevel } from 'miniflare';
 import { readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { WebSocket } from 'ws';
 import { startConnectorServer } from '../tools/browser-vm/connector/server.mjs';
+import { createConnectorEgressClient } from '../tools/browser-vm/connector/egress-client.mjs';
 
 // Actual Workerd/D1, production routes/services/crypto, device core and loopback
 // WebSocket. Only clock and issuer transport routing are harness ports; no fake ACK.
@@ -72,7 +73,7 @@ async function fixture(t, egressTransport) {
   const issued = await api('connector-tickets', { ...binding, operationId: 'ticket-1' });
   assert.equal(issued.status, 201);
   const { ticket } = await issued.json();
-  return { db, get server() { return server; }, api, binding, ticket, consumptionStatuses,
+  return { db, clock, get server() { return server; }, api, binding, ticket, consumptionStatuses,
     async restart() { await server.close(); server = await startConnectorServer(serverOptions); },
     count() { return db.prepare("SELECT count(*) AS n FROM connector_ticket_consumptions").first("n"); },
     loseResponse() { dropResponse = true; },
@@ -379,4 +380,55 @@ test('malformed binary frame closes synchronously before a coalesced valid CONNE
   const f=await tcpFixture(t),c=await connect(t,f); await enableEgress(c);
   c.batchBinary([Buffer.from('030100000010000000','hex'),tcpConnect]);
   assert.equal(await c.closed,1008); assert.equal(f.dns,0); assert.equal(f.dials,0);
+});
+
+// The browser transport is real production code. Node's Origin injection only
+// supplies the header that a native browser derives from its page context.
+async function formalClient(t,f,options={}) {
+  let resolveReady,rejectReady,resolveClose,readyLease;
+  const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
+  const closed=new Promise(resolve=>{resolveClose=resolve;});
+  const received=[],waiting=[];
+  let ended=false,renewals=0,renewalStops=0;
+  const client=createConnectorEgressClient({url:f.server.url.replace('http:','ws:')+'/connector',
+    pairingCode:await pair(f),ticket:f.ticket,clock:f.clock,
+    NativeWebSocket:class extends WebSocket {constructor(url){super(url,{headers:{origin}});}},
+    renewTicket:(lease,signal)=>{assert.equal(signal.aborted,false);renewals++;signal.addEventListener('abort',()=>{renewalStops++;},{once:true});return f.renewal(lease.leaseId);},
+    onReady:lease=>{readyLease=lease;resolveReady();},
+    onFrame:frame=>{const next=waiting.shift();if(next)next.resolve(Buffer.from(frame));else received.push(Buffer.from(frame));},
+    onClose:()=>{ended=true;rejectReady(new Error('Formal client closed before ready'));for(const next of waiting.splice(0))next.reject(new Error('Formal client closed'));resolveClose();},
+    ...options});
+  t.after(()=>client.close());await ready;
+  return {client,closed,get lease(){return readyLease;},get renewals(){return renewals;},get renewalStops(){return renewalStops;},
+    next:()=>received.length?Promise.resolve(received.shift()):ended?Promise.reject(new Error('Formal client closed')):new Promise((resolve,reject)=>waiting.push({resolve,reject}))};
+}
+test('formal browser client demuxes real Worker/D1 auth and renewals while the same real TCP stream stays live',limit,async t=>{
+  const f=await tcpFixture(t),c=await formalClient(t,f);
+  assert.equal((await c.next()).toString('hex'),'030000000010000000');assert.equal(f.dns,0);
+  assert.equal(c.client.send(tcpConnect),true);
+  const payload=Buffer.from('0201000000666f726d616c','hex');
+  for(let elapsed=0;elapsed<30_000;elapsed+=10_000){assert.equal(c.client.send(payload),true);assert.deepEqual(await c.next(),payload);await f.advance(10_000);}
+  c.client.send(payload);assert.deepEqual(await c.next(),payload);
+  const deadline=Date.now()+3000;
+  while(await f.count()<2||c.renewalStops<1){assert.equal(c.client.readyState,1);assert.ok(Date.now()<deadline,'Renewal ACK did not complete');await new Promise(resolve=>setTimeout(resolve,10));}
+  // The ACK must reach the client: advancing beyond its pending-operation 5s
+  // deadline would close if JSON renewal was not consumed by this exact client.
+  await f.advance(6000);
+  assert.equal(c.client.readyState,1);assert.equal(c.client.send(payload),true);assert.deepEqual(await c.next(),payload);
+  assert.equal(c.renewals,1);assert.equal(f.dials,1);assert.equal(f.dns,1);
+  const peerClosed=once(f.peer,'close');c.client.close();await c.closed;await peerClosed;
+});
+test('formal client cancellation aborts real pending DNS and late completion cannot dial',limit,async t=>{
+  const f=await tcpFixture(t,{pendingDns:true}),c=await formalClient(t,f);await c.next();
+  assert.equal(c.client.send(tcpConnect),true);await f.dnsStarted;c.client.close();await c.closed;
+  await new Promise(resolve=>setTimeout(resolve,20));f.releaseDns();await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(f.dials,0);assert.ok(f.cancellations>0);assert.equal(c.client.readyState,3);
+});
+test('real Worker rejects disabled policy renewal and formal client closes its TCP peer without reconnect',limit,async t=>{
+  const f=await tcpFixture(t),c=await formalClient(t,f);await c.next();c.client.send(tcpConnect);
+  const payload=Buffer.from('020100000064656e79','hex');
+  for(let i=0;i<2;i++){c.client.send(payload);assert.deepEqual(await c.next(),payload);await f.advance(10_000);}
+  await f.db.prepare('UPDATE connector_authorization_policy SET enabled=0').run();
+  const peerClosed=once(f.peer,'close');await f.advance(10_000);await c.closed;await peerClosed;
+  assert.equal(c.client.readyState,3);assert.equal(c.renewals,1);assert.equal(f.dials,1);
 });

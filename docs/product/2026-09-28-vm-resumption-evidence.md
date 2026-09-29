@@ -136,3 +136,16 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 五项临时变异：去掉原始meter、去掉同步decode拒绝、去掉字节预算、不等待下行发送、升级时不暂停，全部检出并逐项恢复。修订测试等待逻辑后，不等待发送变异明确报Connector closed before binary reply，漏meter明确报Raw fragment budget did not close the socket，而不是用全套测试的超时作为通过依据。
 - fresh `npm run test:browser-vm` **284/284**，0失败/取消/跳过；新增6项wire、2项原始传输、13项完整授权数据链。六套Worker **217/217**；`tsc --noEmit`、两生产模块`node --check`、`git diff --check`通过；checklist审计测试9/9。日志 `/private/tmp/connector-wire-vm-regression.log`、`/private/tmp/connector-wire-worker-regression.log`；变异日志 `/private/tmp/connector-wire-mutation-{raw-meter,sync-close,wire-bytes,backpressure,upgrade-head}.log`。
 - 总清单仍原始30 / 范围29 / 完成5 / 剩余24（D08排除）。本次只关闭LC-007服务端接线/同链子项；LC-007、D04/G0及LC-008～015继续开放。下一步正式VM客户端与真实客体链验收；无外部阻塞，允许继续，不新增加密/备份门槛。仅本地提交，不push/部署/迁移，不改浏览器/证书/代理/自启动。
+
+
+## LC-007 正式客户端授权传输子项（2026-09-30 本地）
+
+- 承接服务端提交`25073cf`，新增`tools/browser-vm/connector/egress-client.mjs`。采用现有正式配对/成员ticket/真实consume协议；不使用探针ticket、合成IP表、浏览器安全配置变化或全局WebSocket替换。
+- 精确指定本机端口，只创建一次socket；首个JSON发送凭据后清空模块保存引用。ready→显式start-egress→egress-ready→stream-0信用窗口齐备后才触发onReady；全部授权/续租JSON在客户端消费，onFrame只收到验证过的二进制副本。
+- 一次可取消renewTicket回调，取票与ACK合计5秒；保持旧硬到期直至验证相同leaseId/递增revision/期限/forwarding的新ACK。迟到取票、暂停定时器、时钟回拨、未知结果、错误方向/帧、重复授权、无信用/第9流/原生发送缓冲越界均关闭；不自动重连、重放凭据或无限排队。
+- 新RED回归揭示：只保留创建时的wall/monotonic锚，时钟前跳后接受的新lease会被后续回拨延迟。改为每次观测重锚并继续单调推进，真实失败断言true!=false已转绿。另修复集成测试自身的时间安排：续租前后保持TCP活动，避免16秒空闲触发已有15秒idle门槛遮蔽续租验收。
+- 客户端限制三精确域名/80或443、8流/16信用窗口/16KiB DATA/单调流ID，控制消息不超过10KiB。64MiB/100000为完整消息层保守上限，包含已关闭流的晚到消息；原始WebSocket分片预算仍由server wire meter负责，不夸大浏览器可见性。
+- 新增24项传输单测及3项真实链：实际Worker/D1签发/consume→正式客户端→正式连接器→受控公共DNS政策→回环TCP fixture；同一流正常续租、取消DNS晚到不拨号、禁用policy续租关闭真实peer。该链为Node ws提供浏览器EventTarget接口，**不是自带浏览器或真实客体验收**；没有真实公网目标拨号。
+- 六项临时变异（硬到期、abort、目标限制、credit扣减、单调时间推进、消息预算）全部被检出并逐字恢复；日志`/private/tmp/connector-client-mutation-*.log`。新增模块已做browser平台ESM打包，无Node依赖、无新增npm依赖。
+- fresh完整VM **311/311**（0失败/取消/跳过，约34秒），六套Worker **217/217**（约7.5秒），checklist审计测试 **9/9**；tsc --noEmit、node --check、browser ESM bundle、git diff --check通过。日志`/private/tmp/connector-client-vm-regression.log`与`/private/tmp/connector-client-worker-regression.log`。预期负向日志CONNECTOR_AUTHORIZATION_UNAVAILABLE及既有Invalid pending note journal不是测试失败。
+- 清单原始30 / 范围29 / 已完成5 / 剩余24，D08排除；仅关闭细化计划中的客户端授权传输子项，LC-007/D04/G0未关闭。下一步客体DNS/域名映射、v86流量适配/明确重建，再做真实客体链验收。无外部阻塞，允许继续。仅本地修改和提交，无push/部署/迁移/生产数据操作；未新增加密或备份任务。
