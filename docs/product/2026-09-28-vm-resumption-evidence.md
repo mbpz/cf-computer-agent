@@ -109,3 +109,16 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 2026-09-30 01:56 CST新鲜完整VM回归234/234（含上一轮真实Worker/D1→WebSocket链17项）、tsc --noEmit及两个新文件语法检查通过。日志：`/private/tmp/connector-destination-vm-regression.log`；突变日志：`/private/tmp/connector-destination-mutation-{special-prefix,mixed-answers,deadline}.log`。本轮未单独重跑全部Worker217项，不把旧结果写作新鲜验证。
 
 只关闭[LC-007细化计划](../superpowers/plans/2026-09-30-browser-vm-connector-egress.md)第1节，不关闭LC-007父项。正式WebSocket仍forwarding:false；下一步第2节授权绑定TCP流资源管理，再第3节同链接线。D04/G0继续开放：原始30、范围29、已关闭5、未关闭24。无push/部署/远程迁移/生产写入/系统代理或信任根更改；当前无新增阻塞，允许继续既定本地实现。
+
+
+## LC-007 授权绑定TCP资源管理子项（2026-09-30 本地）
+
+新增正式streams模块：现有authority.isActive/track/close作为唯一授权来源，同步占位和注册后才解析DNS，最多8流含等待；只拨已核验字面地址，禁用二次lookup/自动地址族回退，无代理或备用地址重试。5秒连接与15秒空闲均有独立定时器和完成时截止检查。关闭先撤销authority，资源释放幂等；取消、晚到DNS/connect/write/send回执不能恢复旧流，旧流迟到发送失败也不会杀死后来的健康流。
+
+上行16帧/16KiB窗口，在DNS/连接/drain/write回执期间总计最多256KiB，write(false)停止继续写socket，只有全部窗口写完且drain后才补充。onReady只报告剩余额度，不重复赠送等待期间已经消耗的窗口。下行保持paused/readable模式，每次主动读取至多16KiB，onData发送完成才读下一块；实际256KiB TCP发送证明不能把highWaterMark当作native chunk上限，最初直接处理data事件的实现被真实测试检出并修正。双向载荷累计64MiB、逻辑帧100000硬上限跨流保持，未知close和失败连接的close通知均计数；完整WebSocket线协议/授权控制帧预算属于下一步。
+
+新增29/29，覆盖受控慢DNS/socket/write(false)/迟到回执、双向和小帧预算、真实本机TCP字节/256KiB分块，以及真实签名设备核心→TCP的硬租约到期、续租拒绝和停止断流。该设备组明确使用本地受控消费ACK与时钟；不能替代Worker/D1或HTTPS全链，不宣称公网或VM联网。临时移除资源注册、drain门槛、下行单次读取门槛、固定IP拨号和下载计量，五项突变均被断言检出并逐字还原。
+
+2026-09-30 02:17 CST新鲜VM263/263、六套Worker217/217、tsc --noEmit、两个新文件语法检查通过。Worker负向日志中的Invalid pending note journal来自原有拒绝测试，不是新增失败。日志`/private/tmp/connector-streams-vm-regression.log`、`/private/tmp/connector-streams-worker-regression.log`及`/private/tmp/connector-streams-mutation-*.log`。真实TCP监听/连接由测试清理，进程正常退出。
+
+关闭LC-007细化计划第2节；第3节正式WebSocket接线与真实Worker/D1→WebSocket→DNS→TCP同链仍待完成。server.mjs未改变，forwarding:false保持，D04/G0/LC-007继续开放。原始30/范围29/已关闭5/未关闭24；当前无新阻塞，允许继续第3节。本轮仅本地代码、测试、证据和提交，无push/部署/远程迁移/生产写入/主机网络安全配置修改。

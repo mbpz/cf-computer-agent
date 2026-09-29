@@ -35,9 +35,13 @@ Files: `tools/browser-vm/connector/streams.mjs`, `scripts/browser-vm-connector-s
 
 Interface: `createConnectorStreams({authority,resolveDestination?,dial?,clock?,onReady,onData,onCredit,onClose})` 返回 `open(id,target)`, `write(id,bytes)`, `closeStream(id)`, `close()`。authority只消费现有`isActive/track/close`接口，不接受浏览器成员ID。回调均不含凭据；onData的Promise表示下游发送完成。
 
-- [ ] RED：未授权不DNS；取消等待后不拨号；只拨已验证字面地址；第9流拒绝；租约释放/连接失败/5秒连接超时/15秒空闲销毁；16帧窗口和write(false)/drain不无限积压；下游完成前pause；close后的异步回执无复活；调用异常失败关闭。
-- [ ] GREEN：同步占位和authority.track，再执行DNS；为每流安装独立abort、connect/idle timer及socket释放。固定地址dial且禁止lookup；资源关闭幂等。流ID递增不复用，预算在异步前检查。
-- [ ] 真实本地TCP字节/释放验收（仅测试transport将已核验公共目标替换成本机fixture，不声称真实公网拨号）；完整既有授权/VM回归。
+- [x] RED：未授权不DNS；取消等待后不拨号；只拨已验证字面地址；第9流拒绝；租约释放/连接失败/5秒连接超时/15秒空闲销毁；16帧窗口和write(false)/drain不无限积压；下游完成前pause；close后的异步回执无复活；调用异常失败关闭。
+- [x] GREEN：同步占位和authority.track，再执行DNS；为每流安装独立abort、connect/idle timer及socket释放。固定地址dial且禁止lookup；资源关闭幂等。流ID递增不复用，预算在异步前检查。
+- [x] 真实本地TCP字节/释放验收（仅测试transport将已核验公共目标替换成本机fixture，不声称真实公网拨号）；完整既有授权/VM回归。
+
+第2节验收（2026-09-30本地）：新增29项，完整VM263/263、六套Worker217/217、类型/语法检查通过。流数含DNS等待；16帧窗口包含未拨号/未drain/未完成write回调的全部上行数据。onReady报告**剩余**额度，不重新赠送已消耗的16帧。下行采用paused/readable模式，每次主动read至多16KiB，前次onData完成后才继续；实际Node TCP合并读取可能超过highWaterMark，不能把该阈值当作协议帧上限，256KiB回环测试已证明修复。流管理层64MiB为双向TCP载荷累计，100000帧包含逻辑open/ready/data/credit/close通知与未知close请求；第3节还须在WebSocket入口/出口统计完整控制与线协议帧，不能用模块预算代替传输层检查。
+
+本机TCP接到真实设备签名/硬租约核心，硬到期、续租拒绝、设备停止均导致真实peer close；该组消费ACK为明确受控fixture，不等于真实Worker/D1→TCP全链。五项临时变异（不注册资源、忽略drain、下行提前读取、拨主机名、漏计下载流量）均被检出并还原。未接server.mjs/VM数据面，forwarding:false保持，LC-007父项继续开放。
 
 ## 3. 正式WebSocket接线与全链
 
