@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连接器本机控制</title><script src="/control.js" defer></script></head>
+<body><main><h1>连接器本机控制</h1><p>当前仅验证正式授权协议，不提供 VM 联网或外网转发。</p>
+<dl><dt>允许的页面来源</dt><dd id="origin">加载中</dd><dt>本机连接器标识</dt><dd id="identity">加载中</dd><dt>固定策略</dt><dd id="policy">加载中</dd></dl>
+<p>仅在信任此来源时手动生成配对码。配对码 30 秒有效、只能使用一次；生成新码使旧码失效。不要保存、分享或写入网址。</p>
+<button id="pair" type="button" disabled>生成一次性配对码</button><p><output id="code" aria-label="一次性配对码"></output></p>
+<button id="stop" type="button">停止连接器并断开全部连接</button><p id="status" role="status" aria-live="polite"></p>
+<p>有效租约需经服务端实时消费确认。停止组件立即关闭本机通道；远程权限变更在下一次消费/续租时检查，租约到期硬关闭，不宣称离线即时撤权。</p>
+</main></body></html>

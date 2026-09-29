@@ -42,6 +42,8 @@
 - [x] 服务端消费/续租子切片：0058、本地 HTTP/D1 实时校验与消费 CAS、原连接租约绑定、未知结果不重试。不是设备侧完整验收，下面三项仍开放。
 - [x] 设备授权核心子切片：内存配对/固定公钥双校验、有界缓存、租约硬定时器、固定服务端消费客户端；真实 Worker/D1 本地集成通过。正式回环 WebSocket 接线和实际流释放仍待验收，不提前关闭完整设备链。
 
+- [x] 正式回环传输子切片：固定 Host/Origin、本机控制端点及有界 WebSocket；实际 socket 配对/续租/取消/到期关闭与控制页验证完成。消费响应仍为该套测试的受控 fixture，完整 Worker/D1→WebSocket 授权链继续待验收。
+
 - [ ] RED/GREEN：设备侧一次性配对与签名授权双校验、并发单次消费、连接器重启旧票据失效、有界 replay 缓存。
 - [ ] RED/GREEN：30 秒续租、60 秒硬上限；续租重新验证权威状态，失联/撤权/代次变化/错误 leaseId 不能延长旧会话；显式撤销释放流。
 - [ ] 使用真实 Worker/D1 和连接器协议完成完整授权链验证后才勾选 LC-006，随后进入 LC-007；不以纯共享契约测试替代。
@@ -134,3 +136,15 @@
 - 临时去掉配对单次消费、缓存防重放/容量限制、硬到期定时器，各自均触发断言失败，源码均恢复。配对并发测试使用不同有效签名票据，防止被 ticket 防重放意外遮蔽。
 - VM 本地全套 **176/176**；完整 TypeScript 检查通过。tsconfig 仅为 noEmit 项目增加 allowImportingTsExtensions，让 Node24 原生TS模块及 Worker 集成统一检查；没有引入依赖或构建副作用。
 - 下一步：正式仅回环 Host/Origin/有界帧 WebSocket adapter、本机控制协议、真实 socket 关闭/续租消息及 Worker授权链集成；这之前 LC-006.3/LC-006/G0/D04 仍开放。主清单范围29/完成5/剩余24。没有push、生产部署、远程迁移、实际公网拨号或读取生产签名密钥。
+
+
+## LC-006.3 正式回环传输与本机控制（本地运行记录2026-09-30）
+
+- 新增 `tools/browser-vm/connector/server.mjs` 及独立本机控制页，不改 `connector-probe`。程序化可信装配固定 issuer客户端/公钥/策略，绑定127.0.0.1；没有生产配置加载器、常驻安装、端口扫描或转发。`/identity`仅公开设备标识，`/pair`及`/stop`只允许精确本机Origin、JSON、零请求体。Host/Origin重复、额外请求体、凭据URL、未知文件/路径、升级Cookie/Authorization/subprotocol均拒绝。
+- `/connector`版本1消息为authenticate/renew/disconnect及ready/renewal-needed/renewed；只有签名和实时消费都成功才返回lease收据，始终forwarding:false，不回显票据/配对码。pending同步占位，重入拒绝，取消可中断消费，晚到ACK不产生ready。旧租期在续租期间保持硬关闭；退出及不回应close的socket有界清理。
+- 限制16条TCP、4条升级通道、10KiB消息、32个有内容的缓冲分片、64接收块、4KiB发送队列；禁用压缩及自动pong。本版本不提供ping/pong或二进制/拨号协议，收到就关闭，避免误认成网络数据面。
+- TDD：先写socket测试，缺模块ERR_MODULE_NOT_FOUND为RED；首次监听EPERM属沙箱权限而非实现失败，获准重跑。补充控制页pagehide后恢复测试先RED，再修正pageshow重启显式配对按钮；停止/导航期间晚到配对码不回显，失败不自动重试。最终socket **21/21**、页面状态 **4/4**。
+- 三次临时突变：移除升级Origin检查使非法升级成功；取消分片限制使有效分片授权意外ready；打开自动pong导致未授权回应。均触发具体断言失败并恢复。分片用例使用完整有效授权JSON，防止畸形JSON拒绝遮蔽限制缺失。
+- 自带浏览器实测本机控制页：初次指针操作未对应目标，不记停止成功；该临时实例到期退出。另启临时固定拒绝消费实例，使用明确按钮键盘操作，页面显示“已停止连接器”，配对/停止按钮禁用且配对码为空，进程退出0；测试标签已关闭。没有修改安全设置或访问生产。无凭据的停止截图存于临时验收文件，不提交配对码/截图中的测试凭据。此项不代替正式HTTPS浏览器网络验收。
+- 新鲜最终回归：`rtk proxy npm run test:browser-vm` **201/201**；`rtk proxy ./node_modules/.bin/vitest run test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts` **217/217、6套、0 skipped**。既有日志损坏负例仍输出其预期journal异常，运行器AI绑定警告不表示这些测试调用AI。完整TypeScript及diff检查通过；checklist测试9/9、审计30/29/5/24。
+- **证明边界**：本轮实际HTTP/WebSocket对接真实设备核心/固定消费客户端，但消费响应是fixture；既有Worker/D1桥接没有经过本轮真实socket。不可把两套分开的测试当作完整端到端授权链。下一步在真实Worker/D1与正式WebSocket之间完成签发→配对→消费→续租/撤权/未知结果全链验证，之后才评估LC-006.3/LC-006关闭和LC-007。D04/G0继续开放，主清单完成5/范围29/剩余24，没有push、部署、远程迁移、公网拨号或生产密钥读取。
