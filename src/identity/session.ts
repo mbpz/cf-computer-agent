@@ -93,7 +93,7 @@ export class SessionService {
     await this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(tokenHash).run();
   }
 
-  private async resolvePrincipal(request: Request): Promise<SessionPrincipalRecord> {
+  async resolvePrincipal(request: Request): Promise<SessionPrincipalRecord> {
     const token = readSessionToken(request);
     if (!token) throw authenticationRequired();
     const tokenHash = await sha256Hex(token);

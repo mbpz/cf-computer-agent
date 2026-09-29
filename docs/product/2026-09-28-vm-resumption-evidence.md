@@ -57,3 +57,12 @@ rtk proxy npx vitest run test/worker/environments.test.ts test/unit/environment-
 第一连接准入门完成后，按新细化计划顺序实现 `shared/connector-authorization.ts`：精确 HTTPS 来源、成员/环境/连接器/runtime/代次/策略绑定，connect/renew 用途隔离与 leaseId，60 秒最大票据时间窗、无过期宽限，拒绝字段注入/类型强转并返回不可变独立快照。它只校验字段，**不会认证主体、验证签名或授予网络能力**。
 
 TDD 缺失模块 RED 后实现，独立 14/14；VM 本地全套 134/134、定向 TypeScript 检查通过。临时副本的五种关键突变均使断言失败，发现并补强了 connect/lease 的同值畸形测试。计划与确切命令见 `../superpowers/plans/2026-09-29-browser-vm-connector-authorization.md`。下一步 LC-006.2 权威签发/签名，LC-006.3 消费/续租/撤销仍未实现，不勾选 LC-006 或 G0/D04。父项 29/5/24；无 push、部署、迁移、生产密钥或外网转发。
+
+
+## 2026-09-29 LC-006.2 权威签发 HTTP 本地接线
+
+新增 `0057_connector_authorizations.sql`、服务端授权仓库/服务/路由：认证会话派生成员及 session hash；服务端分配 runtimeId/代次；SQL 在写入时核对当前环境归属、角色位、会话和策略。浏览器运行报告不创建授权。预留/签发/撤销使用同一 operationId 命名空间的原子幂等收据；同代最多一张 connect 票据，丢失响应恢复不会延长时间。收据只存未签名 claims，不持久化票据或原始 cookie。签发后再次核验权威状态。
+
+新增真实 Worker/D1→HTTP→签名验证集成 **27/27**，与既有环境/签名合计 **123/123**；VM 本地回归 **146/146**，完整 TypeScript 检查通过。缺表和缺路由的 RED 已观察，再实现 GREEN。确切命令和边界见 LC-006 授权计划。
+
+LC-006.2 本地子步骤完成，下一步允许 LC-006.3：设备配对双校验、原子消费、租期/续租与撤销释放。当前签名不等于连接许可，服务端状态撤销不等于连接器流已关闭。默认生产无签名/策略配置，不开放签发；没有 push、生产部署或远程迁移。**父项 29 / 完成 5 / 剩余 24**，LC-006、G0、D04 仍开放。

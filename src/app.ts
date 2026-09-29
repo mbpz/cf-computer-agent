@@ -1,3 +1,6 @@
+import { ConnectorAuthorizationsService, type ConnectorAuthorizationConfig } from "./environments/connector-authorizations";
+import { ConnectorAuthorityRepository } from "./environments/connector-authority-repository";
+import { routeConnectorAuthorizationsApi } from "./routes/connector-authorizations";
 import { InboxTaskPromotion } from "./inbox/task-promotion";
 import { GoalTasksRepository } from "./goal-tasks/repository";
 import { GoalTasksService } from "./goal-tasks/service";
@@ -131,6 +134,8 @@ import type { UncertaintyReason, WorkScope } from "./maintenance/lifecycle";
 
 
 export interface AppDependencies {
+  /** Trusted server configuration; absent means connector issuance is disabled. */
+  connectorAuthorization?: ConnectorAuthorizationConfig;
   /** Request-local only; supplied by the guarded entry after admission. */
   workScope?: WorkScope;
   ai?: Ai;
@@ -324,6 +329,7 @@ function createRequestServices(
     },
   );
   const waitUntil = (promise: Promise<unknown>) => ctx.waitUntil(promise);
+  const sessions = new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil, workScope: dependencies.workScope });
   return {
     answers: new AnswerService(ai),
     ai,
@@ -374,7 +380,8 @@ function createRequestServices(
       appId: env.WECHAT_APP_ID || "",
       appSecret: env.WECHAT_APP_SECRET || "",
     }),
-    sessions: new SessionService(dependencies.sessionDatabase || env.DB, memberRecords, { waitUntil, workScope: dependencies.workScope }),
+    sessions,
+    connectorAuthorizations: new ConnectorAuthorizationsService(new ConnectorAuthorityRepository(env.DB), sessions, dependencies.connectorAuthorization),
     spaces: new SpacesService(spaceRecords, spaceRecords),
     submissions,
     duplicates,
@@ -467,6 +474,8 @@ async function dispatchApiRequest(
   if (capture) return capture;
   const today = await routeTodayApi(request, url, context, principal, { today: services.today });
   if (today) return today;
+  const connectorAuthorizations = await routeConnectorAuthorizationsApi(request, url, context, principal, services);
+  if (connectorAuthorizations) return connectorAuthorizations;
   const environments = await routeEnvironmentsApi(request, url, context, principal, { environments: services.environments });
   if (environments) return environments;
   const notifications = await routeNotificationsApi(request, url, context, principal, { notifications: services.notifications });

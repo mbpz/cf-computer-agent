@@ -33,9 +33,9 @@
 
 目标文件在实施前对齐现有 `src/environments/{service,repository,lifecycle-repository}.ts`、身份/权限及路由模式；服务端签名选择及 key-id/轮换信任契约在此步细化。不得复用开发探针票据作正式授权。
 
-- [ ] RED/GREEN：认证主体派生身份、环境归属不存在/跨成员为 404、权限撤销/环境删除/代次或策略变化拒绝签发；请求字段不得覆盖权威绑定。
+- [x] RED/GREEN：认证主体派生身份、环境归属不存在/跨成员为 404、权限撤销/环境删除/代次或策略变化拒绝签发；请求字段不得覆盖权威绑定。
 - [x] RED/GREEN：固定允许算法和信任 key-id，篡改/未知密钥/错误用途/超时拒绝；本地临时测试密钥，未配置时失败关闭。2026-09-29 完成低层签名器与验签器，不代表权威签发路由已接通。
-- [ ] Workers/D1→路由→真实验证器集成测试；路由幂等与未知结果不得静默重复产生有效票据。
+- [x] Workers/D1→路由→真实验证器集成测试；路由幂等与未知结果不得静默重复产生有效票据。
 
 ## LC-006.3 原子消费、租期与撤销
 
@@ -69,3 +69,33 @@
 - 完整 `tsc --noEmit` 退出 0。临时副本分别绕过签名结果、放开算法、未知 kid 回落到任意已知 key、跳过异步后的过期校验，4 个突变均被拒绝测试检出；未改正式源码执行突变。
 - VM 全回归首次沙箱监听 EPERM 后获准原命令重跑通过。Workers 使用既有测试配置，运行器提示 AI binding warning；签名测试只调用本机 WebCrypto，环境回归仅本地 D1，不调用 AI、远程迁移或部署。
 - 本次只关闭 LC-006.2 的签名子项；权威状态/签发路由/幂等及 LC-006.3 仍开放。功能父项仍 29/5/24，LC-006、D04、VM-006/G0 均未关闭。
+
+
+## LC-006.2 权威状态/HTTP 接线切片（2026-09-29，本地完成）
+
+服务端分配 `runtimeId` 与单调 `generation` 的**联网授权保留位**，不声称 Linux 已启动。前端后续必须使用该运行身份；已有客户端生命周期水位不创建、更新或恢复此授权。一个环境只保留一个当前授权代次，替换必须携带当前代次做 CAS；未知响应只能用同 operationId 读取原收据，不创建新代次。
+
+- 本地新迁移：独立 policy singleton（默认无行即关闭）、authority heads、统一 reserve/connect/revoke 收据；不应用到远端。
+- 真实已登录主体派生成员和会话散列，拥有环境才可见；签发时 D1 重新检查当前成员、会话、显式 VM 角色授权和受信策略。角色快照需在写入 SQL 中比对，不能只靠请求开始时权限位。
+- reserve 的 connectorId 是待配对对象选择，不代表已配对；origin/policy 来自受信配置与 D1 策略，runtimeId/generation 来自服务端。POST 只允许明确字段；connect 请求仅接受操作键和预期运行身份，不能指定 claims、成员、策略、有效期或签名键。
+- 每个代次最多一张 connect 收据；只存规范 claims 和 key-id，不存签名票据或原始会话凭据。重复请求返回同签名；到期、替代、撤销、策略/会话变化或签名 key-id 变化不重新签出新票据。重新联网需要显式 reserve 新代次。
+- GET/POST `/api/environments/:id/connector-authority`、POST `.../connector-tickets`、POST `.../connector-authority/revoke`；撤销不要求仍有 VM 权限，以便所有者停用。默认无受信签名配置时签发失败关闭；本轮由真实应用构造依赖在本地测试供给临时密钥，不启用生产密钥配置。
+- 本切片覆盖权威状态与首次 connect 签发；连接器消费、联网租约/续期以及前端使用服务端运行身份仍归 LC-006.3/后续接线。已有票据的离线验签不会自动获知撤销，不能据此宣称即时断流已实现。
+
+
+### LC-006.2 权威 HTTP 本地验证证据（2026-09-29）
+
+- TDD RED：先建立真实 session→`createApp.fetch`→D1→验签集成测试。缺表时 23 项失败；添加 `0057` 后 22 失败/1 通过，失败点为尚不存在的 HTTP 路由。随后才实现仓库、服务和路由。
+- 新增授权测试最终 **27/27**；加既有环境 89 项、低层 Worker 签名 7 项，共 **123/123**。包含并发同意图幂等、不同意图 CAS、跨请求种类的 operationId 冲突、丢失响应恢复且不延长 TTL、同代仅一个 connect 票据、撤销/替代代次、删除/策略/成员/角色/会话变更、严格字段边界、签名配置缺失/无效、短会话到期上限、事务回滚。
+- `rtk proxy ./node_modules/.bin/vitest run test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts`：123/123，0 skipped。
+- `rtk proxy npm run test:browser-vm`：146/146，0 skipped；`rtk proxy ./node_modules/.bin/tsc --noEmit` 退出 0。
+- 只在本地测试数据库应用 `0057`。生产默认不配置 signer、不种入策略，签发保持关闭；没有 push、远程迁移、部署、读取/上传生产签名密钥。运行器已有 AI binding 警告，但本切片测试没有调用 AI。
+- LC-006.2 子步骤本地实现/集成验证完成；**LC-006 父项仍未完成**。下一步 LC-006.3 为实际设备配对双校验、原子消费/有界防重放、续租与撤销释放；当前撤销仅更新服务端授权状态，不代表已释放尚未实现的连接器流。离线验签不能自行获知最新撤销，后续消费/续租必须查实时权威状态。
+
+
+### 2026-09-30 本地扩展回归与提交前检查
+
+- 跨过午夜后的首次 session/app/migrations 回归为 64 通过、2 失败。两项迁移查询计划测试硬编码 `idx_tasks_id_member`，而现有 `0053` 已提供等价的 `idx_tasks_member_id_unique(member_id,id)`。临时基线测试排除 `0057` 后，两项仍以相同原因失败（仅选择这两项执行，另 26 项跳过）；证明不是新授权表造成，临时文件已删除。
+- 修正这两处断言，仅接受两个已知双列等值索引计划；仍不接受单列前缀或全表扫描，未更改业务查询或既有索引。
+- `rtk proxy ./node_modules/.bin/vitest run test/worker/session.test.ts test/worker/app.test.ts test/worker/migrations.test.ts test/worker/connector-authorizations.test.ts test/worker/connector-signing.test.ts test/worker/environments.test.ts`：**6 套、189/189，0 skipped**，退出 0。
+- `rtk proxy ./node_modules/.bin/tsc --noEmit`、`rtk proxy git diff --check` 退出 0；checklist 测试 9/9、审计仍为原始30/范围29/完成5/剩余24。

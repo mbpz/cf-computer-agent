@@ -10,6 +10,14 @@ export interface ConnectorSigningKey {
   privateKey: CryptoKey;
 }
 
+export function isConnectorSigningKey(config: ConnectorSigningKey | undefined): config is ConnectorSigningKey {
+  const keyId = config?.keyId;
+  const key = config?.privateKey;
+  return typeof keyId === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(keyId)
+    && key?.type === "private" && key.algorithm.name === "Ed25519" && !key.extractable
+    && key.usages.length === 1 && key.usages[0] === "sign";
+}
+
 /** Low-level server-only signing, NOT an issuance/authority service.
  * Callers must derive claims from current authenticated authority and persist an
  * idempotent issuance receipt before calling this function. Never pass browser
@@ -20,9 +28,7 @@ export interface ConnectorSigningKey {
 export function createConnectorAuthorizationSigner(config?: ConnectorSigningKey) {
   const keyId = config?.keyId;
   const key = config?.privateKey;
-  const configured = typeof keyId === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(keyId)
-    && key?.type === "private" && key.algorithm.name === "Ed25519" && !key.extractable
-    && key.usages.length === 1 && key.usages[0] === "sign";
+  const configured = isConnectorSigningKey(config);
   return async (
     value: unknown, expected: ConnectorAuthorizationBinding, now: () => number,
   ): Promise<string | undefined> => {

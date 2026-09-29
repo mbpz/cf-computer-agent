@@ -1637,7 +1637,9 @@ describe("Phase 1 control-plane migrations", () => {
     expect(unreadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
     expect(markReadPlan).toContain("SEARCH notifications USING INDEX sqlite_autoindex_notifications_1 (id=?)");
     expect(markManyReadPlan).toContain("SEARCH notifications USING INDEX idx_notifications_recipient_unread_created (recipient_member_id=?)");
-    expect(casPlan).toContain("SEARCH tasks USING INDEX idx_tasks_id_member (id=? AND member_id=?)");
+    // 0053 also supplies the reversed unique member/id index. Either plan must
+    // constrain BOTH equalities; do not accept a prefix lookup or a table scan.
+    expect(casPlan).toMatch(/SEARCH tasks USING INDEX (?:idx_tasks_id_member \(id=\? AND member_id=\?\)|idx_tasks_member_id_unique \(member_id=\? AND id=\?\))/u);
     expect(pendingIntentPlan).toContain("SEARCH task_status_notification_intents USING INDEX idx_task_status_notification_intents_recipient_pending (recipient_member_id=? AND task_id=?)");
     expect(markIntentDeliveredPlan).toContain("SEARCH task_status_notification_intents USING INDEX sqlite_autoindex_task_status_notification_intents_1 (id=?)");
     expect(lazyDuePlan).toContain("SEARCH t USING INDEX idx_tasks_member_status_due (member_id=? AND status=? AND due_at>? AND due_at<?)");
@@ -1762,7 +1764,7 @@ describe("Phase 1 control-plane migrations", () => {
     expect(participantPlan).toContain("SEARCH discussion_participants USING COVERING INDEX idx_discussion_participants_member_thread (member_id=?)");
     expect(historyPlan).toContain("SEARCH discussion_messages USING COVERING INDEX idx_discussion_messages_thread_sequence (thread_id=?)");
     expect(replayPlan).toContain("SEARCH discussion_messages USING INDEX sqlite_autoindex_discussion_messages_4 (author_member_id=? AND client_key=?)");
-    expect(taskAuthorizationPlan).toContain("SEARCH t USING COVERING INDEX idx_tasks_id_member (id=? AND member_id=?)");
+    expect(taskAuthorizationPlan).toMatch(/SEARCH t USING COVERING INDEX (?:idx_tasks_id_member \(id=\? AND member_id=\?\)|idx_tasks_member_id_unique \(member_id=\? AND id=\?\))/u);
     expect(taskAuthorizationPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH m USING INDEX sqlite_autoindex_members_1 (id=?)");
     expect(eligibleMembersPlan).toContain("SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)");
