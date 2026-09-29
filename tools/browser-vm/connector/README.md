@@ -5,7 +5,9 @@ This directory is separate from the handshake-only `connector-probe`. The truste
 exposes the formal authorization protocol plus explicitly negotiated, bounded TCP
 egress. It does not configure host networking, read credential files, terminate
 guest TLS or install a background service. There is no production key loader,
-product launcher or booted-guest acceptance yet; LC-007 remains open.
+product launcher yet. LC-007 local transport acceptance is complete, including
+a booted Alpine controlled-target test; public resources and product acceptance
+remain LC-008–015.
 
 ## Trusted assembly
 
@@ -155,7 +157,8 @@ They supplement the TCP manager's payload/logical-message budget.
 The installed v86 WISP adapter sends IP literals and schedules reconnects; it is
 **not yet compatible** with this domain-only, explicit-authority contract. Do not
 reuse the development probe's synthetic IP table or ticket as production authority.
-A formal guest DNS/client adapter and lifecycle acceptance are still required.
+The separate formal guest adapter below implements that contract; product
+lifecycle acceptance remains required.
 
 ## Browser authorization transport (not yet a guest network adapter)
 
@@ -245,7 +248,7 @@ bytes, renewal, expiry/stop/denial destruction, pending DNS cancellation, window
 exhaustion, 256KiB framing and paused-browser 16MiB backpressure. Test DNS returns
 a fixed public answer and the already-validated dial is intentionally routed to
 a loopback fixture. This proves local TCP behavior, not public-target connectivity.
-LC-007–015 and D04/G0 remain open until their remaining acceptance work is done.
+LC-007 local transport acceptance is complete. LC-008–015 and D04/G0 remain open.
 
 The built-in browser locally loaded this operator page and confirmed the stop
 status, disabled controls and empty code display; the temporary component exited.
@@ -276,7 +279,7 @@ route the formal client's `onFrame` to the returned `receive`, and `onClose` to
 `close`. Do not start the CPU before attachment. Destroy the adapter/client on
 logout, account/runtime change, restore or explicit cancellation; a closed
 instance is terminal, and new authority requires explicit new construction.
-This module is not yet wired to product UI or a booted Linux runtime.
+This module has booted Linux harness acceptance below, but is not yet wired to product UI.
 
 The adapter removes only its own native HTTP callback, disables native
 fetch/connect/probe entry points, and never installs v86's auto-reconnecting
@@ -305,3 +308,30 @@ One additional same-chain test injects actual v86 Ethernet through the formal
 client, real Worker/D1 lease and connector into real loopback TCP. The CPU is
 paused and DNS/dial endpoints are controlled: neither suite boots Linux,
 accesses public business targets, proves browser admission or closes LC-007.
+
+
+## Booted Alpine formal-chain acceptance (LC-007)
+
+Run the explicit opt-in test after obtaining the exact pinned assets described in
+`../README.md` (missing assets fail rather than count as skipped acceptance):
+
+```sh
+BROWSER_VM_PROBE_ASSETS=/absolute/path/to/boot \
+BROWSER_VM_PROBE_ISO_ASSETS=/absolute/path/to/iso \
+  npm run test:browser-vm:connector-linux
+```
+
+The test verifies all pinned image bytes, boots real Alpine CPU/userspace and uses
+its DHCP/DNS/wget through the formal client, real Worker/D1 authorization and
+connector. Trusted test DNS returns a public address; the dial fixture asserts
+that exact validated destination before routing to a loopback HTTP server. It
+performs no public TCP or host DNS and does not exercise public TLS.
+
+It checks successful POST, rejected private IP/unknown DNS/port 8080, actual
+in-flight peer closure, real memory checkpoint restoration **offline**, explicit
+new runtime generation/ticket and fresh connection, no replay of the old POST
+or interrupted download, and guest failure after hard lease expiry. The passing
+run records two authorized WebSockets, three HTTP requests, one original POST,
+and nonzero exit of the interrupted guest request. This is Node-hosted real v86,
+not in-app browser admission, software installation, product lifecycle/UI or
+production acceptance. Those remain later checklist items.

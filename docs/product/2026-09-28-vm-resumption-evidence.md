@@ -171,3 +171,15 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 五项最终变异（关联期限、idle、native HTTP回调、双层下载容量防线、跨流credit误归属）均检出并恢复。单独移除显式容量检查仍由native ring上限拦截，不误称该单层变异检出；移除两层后测试确实失败。
 - 变异恢复后fresh VM **344/344**，0失败/取消/跳过，42.1秒；checklist测试 **9/9**，审计29范围/5完成/24剩余；tsc --noEmit、node --check、browser ESM bundle（12.5KiB）、git diff --check通过。日志`/private/tmp/connector-guest-vm-regression.log`、`/private/tmp/connector-guest-unit.log`、`/private/tmp/connector-guest-mutation-*.log`。未重跑独立六套Worker217项，不使用旧结果替代本轮验证。
 - 仅关闭细化计划的报文适配子项；LC-007/D04/G0仍开放，LC-008至015尚未越级。下一步真实Linux客体同链及关闭/重建/恢复，产品生命周期接线仍未完成。仅本地代码/提交，无push、部署、远程迁移或生产凭据操作；无新增加密/备份范围。
+
+
+## 2026-09-30 04:07：LC-007 真实Alpine正式链/恢复验收关闭
+
+- 新增独立 `npm run test:browser-vm:connector-linux`；固定镜像资产缺失会失败，不以skip计为成功。共享真实Worker/D1授权夹具提取到 `scripts/helpers/connector-authority-fixture.mjs`，既有集成用例行为不变。
+- 资产来自Alpine官方CDN ISO与v86官方copy.sh BIOS；ISO内提取kernel/initrd，全部六项大小/SHA-256通过仓库固定清单校验。资产只在 `/private/tmp/memory-garden-formal-guest/{boot,iso}`，无新增依赖或宿主安装。GitHub raw BIOS下载连接失败后使用v86官方源；未更改代理、证书根或安全设置。
+- Node运行真实v86/Alpine CPU与用户态，客体DHCP/DNS/wget经过正式客户端、实际Worker/D1签发和消费、正式连接器及实际本机HTTP socket。DNS返回固定公网地址，dial先断言已固定目的/端口/族/禁用自动选族，再映射本机服务；不是公网TLS或自带浏览器验收。
+- 成功POST；客体私网IP、8080端口、未知域名拒绝且无新增拨号。下载进行中真实保存checkpoint并关闭旧peer；恢复到无网络machine后wget失败、无自动WebSocket；显式取得新runtime generation和ticket后恢复请求成功。旧下载退出码1，原POST只出现一次，请求严格为POST /once、GET /hold、GET /after；两条授权WebSocket、三次TCP、D1消费两次。虚拟时钟推进硬租约后channel关闭，客体新请求失败，无额外拨号。
+- 调试初期失败均保留边界：客体未启用eth0导致udhcpc失败，修复测试初始化；resolver注入参数误写导致系统DNS被调用，但固定地址断言在任何外部TCP前拒绝。改为正确createResolver后最终验收使用受控DNS、无宿主DNS/公网TCP。不把失败尝试描述成成功，也不声称所有尝试均无系统DNS。
+- fresh增强真实Linux **1/1**，0失败/取消/跳过，38.3秒；完整快速VM **344/344**，0失败/取消/跳过，41.9秒；checklist **9/9**、实际审计29范围/5完成/24剩余、tsc --noEmit、两新增模块node --check、git diff --check通过。日志 `/private/tmp/connector-linux-recovery.log`、`/private/tmp/connector-linux-vm-regression.log`。未重新执行独立Worker217项，不把旧证据算成本轮新结果。
+- 按原始范围关闭LC-007（DNS/目标/固定地址/背压与资源回收正常恶意验收）；保留慢客体超256KiB失败关闭而非读取驱动背压的限制。LC-011仅获得部分恢复证据，不提前关闭。下一步LC-008公网资源稳定直连，LC-009/010真实浏览器apk/git及后续产品生命周期仍未完成。
+- 主清单原始30/范围29/完成5/剩余24，D08排除；连接器子清单7/15完成、8项剩余。D04/G0父项保持开放。无当前外部阻塞，可继续LC-008。仅本地修改和提交，未push/部署/远程迁移，未读生产秘密，未新增加密/备份门槛。

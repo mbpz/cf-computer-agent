@@ -38,6 +38,7 @@
     "test:browser-vm:direct-download": "node --test scripts/browser-vm-direct-download.test.mjs scripts/browser-vm-direct-download-page.test.mjs",
     "test:browser-vm:connector": "node --test scripts/browser-vm-connector-probe.test.mjs scripts/browser-vm-connector-client.test.mjs",
     "dev:browser-vm:connector": "node tools/browser-vm/connector-probe/server.mjs",
+    "test:browser-vm:connector-linux": "node --test scripts/browser-vm-connector-linux.test.mjs",
     "test:browser-vm:linux": "node --test --test-concurrency=1 tools/browser-vm/probe.test.mjs tools/browser-vm/terminal.test.mjs tools/browser-vm/network-recovery.test.mjs tools/browser-vm/browser-recovery.test.mjs",
     "test:browser-vm:network": "node --test tools/browser-vm/probe-network.test.mjs",
     "dev:browser-vm": "node tools/browser-vm/server.mjs",
