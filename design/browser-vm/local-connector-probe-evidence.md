@@ -208,3 +208,21 @@ Chrome 第一次撤回观察耗时约 80 秒，Edge 第一次退出观察为 70.
 - `rtk proxy node --test scripts/functional-checklist-audit.test.mjs`：9/9，通过；0 失败、0 skipped。
 - `rtk proxy npm run audit:functional-checklist`：29 范围内 / 5 父项完成 / 24 父项剩余；不将新关闭的 LC 子项算成 D04 完成。
 - 本轮仅更新证据与 checklist 文档；没有全应用构建、真实 Linux/公网验收、push、部署、迁移或生产写入。
+
+
+## 2026-09-29 LC-005 非允许 HTTPS 来源拒绝补齐
+
+- 页面仍为上文原 HTTPS 来源，没有新部署或访问其他来源。将临时组件的唯一允许来源设为保留值 `https://connector-origin-negative.invalid`，与真实页面 Origin 不匹配；不对该域名做 DNS 或浏览器访问。全部提交使用 43 个 `A` 的虚构码，不生成或传递真实配对码。
+- Chrome 154：站点本地应用权限 on、重载后连接回环 `55157`，控制台明确显示 `Unexpected response code: 403`；页面诚实显示通用不可用并清空输入。
+- Edge 152：权限 on、重载后连接回环 `55158`，控制台只显示通用 WebSocket failed，不能从 UI 单独推出 403。使用临时进程内只读观察包装器（不修改仓库服务逻辑）：观察 HTTP Server 的 upgrade 事件和原 socket.end 调用，原样委托；仅输出真实 Origin 是否等于授权测试页、路径是否为 `/probe` 两个布尔值以及固定 HTTP 403 结果，不打印请求头、码值或用户数据。同次点击后输出：
+
+  ```text
+  {"event":"upgrade-observed","expectedTestPage":true,"probePath":true}
+  origin-negative-response: HTTP 403
+  ```
+
+- 这证明真实 Edge 请求到达组件并被拒绝，不把浏览器预拦截误作服务端 Origin 校验通过。此前 Edge 55157 的纯通用错误不单独计为 403 证据；输入未送达的一次尝试不计结果。
+- missing/null Origin 不通过伪造浏览器请求验收，仍由真实回环协议测试覆盖；未配对/过期/重放结合本节前的浏览器矩阵与协议回归。探针没有出站拨号能力，拒绝发生在 WebSocket 升级前。
+- 完成后两浏览器该来源“设备上的应用”恢复 off 并重载，DevTools 关闭；两个临时进程 Ctrl+C 退出（包装层状态 1）；`lsof -nP -iTCP:55157 -iTCP:55158 -sTCP:LISTEN` 无监听。没有持久诊断修改、后台进程、push、部署或生产变更。
+- **LC-005 完成，第一连接准入门 LC-002～005 完成；下一步允许 LC-006 本地正式授权契约。** LC-006～015、完整 VM-006/G0 与 D04 仍未完成。上节“来源待补”是此前检查点，不再代表当前阻塞。
+- 本节后新鲜回归：连接器首次受沙箱 `listen EPERM` 阻止，不计通过；获准重跑后 18/18、0 skipped。checklist 审计测试 9/9，父项实算 29/5/24，`git diff --check` 通过。

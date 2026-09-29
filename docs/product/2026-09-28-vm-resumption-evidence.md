@@ -49,4 +49,4 @@ rtk proxy npx vitest run test/worker/environments.test.ts test/unit/environment-
 
 重要实测限制：撤回浏览器权限后既有连接不会立即断开；浏览器提示重载，重载后新连接被阻止。正式授权需独立撤销与有界租期，不把该行为写成即时撤权通过。
 
-本轮新鲜回环连接器 18/18、checklist 审计测试 9/9；父项计数仍为 **29 范围内 / 5 已关闭 / 24 未关闭**。当前下一步 LC-005 真实 HTTPS 非允许来源拒绝，协议层 missing/null/foreign Origin 已测试但不冒充浏览器矩阵。G0/D04 继续开放，LC-006 和正式 VM UI/联网接线尚不进入。仅文档更新和临时探针验收，无 push/部署/迁移。
+本轮新鲜回环连接器 18/18、checklist 审计测试 9/9；父项计数仍为 **29 范围内 / 5 已关闭 / 24 未关闭**。同日补齐 LC-005：原 HTTPS 测试页、虚构码、不匹配精确允许来源，Chrome 控制台 HTTP 403，Edge 通用错误与同次服务端 upgrade/403 诊断对应；missing/null Origin 仍只保留协议层证据。第一连接准入门完成，下一步允许 LC-006 本地正式授权契约。G0/D04 继续开放，正式 VM UI/联网尚未完成。仅文档更新和临时探针验收，无 push/部署/迁移。
