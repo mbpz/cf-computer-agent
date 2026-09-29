@@ -149,3 +149,13 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 六项临时变异（硬到期、abort、目标限制、credit扣减、单调时间推进、消息预算）全部被检出并逐字恢复；日志`/private/tmp/connector-client-mutation-*.log`。新增模块已做browser平台ESM打包，无Node依赖、无新增npm依赖。
 - fresh完整VM **311/311**（0失败/取消/跳过，约34秒），六套Worker **217/217**（约7.5秒），checklist审计测试 **9/9**；tsc --noEmit、node --check、browser ESM bundle、git diff --check通过。日志`/private/tmp/connector-client-vm-regression.log`与`/private/tmp/connector-client-worker-regression.log`。预期负向日志CONNECTOR_AUTHORIZATION_UNAVAILABLE及既有Invalid pending note journal不是测试失败。
 - 清单原始30 / 范围29 / 已完成5 / 剩余24，D08排除；仅关闭细化计划中的客户端授权传输子项，LC-007/D04/G0未关闭。下一步客体DNS/域名映射、v86流量适配/明确重建，再做真实客体链验收。无外部阻塞，允许继续。仅本地修改和提交，无push/部署/迁移/生产数据操作；未新增加密或备份任务。
+
+
+## 2026-09-30：LC-007 正式授权DNS控制面完成，客体接线待续
+
+- 在显式egress授权通道新增`resolve-destination`/`destination-resolved`，只接受三个精确域名；共享完整A+AAAA目的政策，返回单个canonical public IPv4。IPv6-only不能冒充当前IPv4客体DNS成功，无DoH/通用递归/探针合成表。
+- 单调requestId、最多3个pending、与TCP共享8个authority资源，独立5秒截止/abort/租约释放。每次track使用唯一回调，完成只释放自己的槽位；非法同批消息同步撤销，迟到答复不能复活。
+- 浏览器正式客户端新增Promise `resolve()`，冻结返回值，严格关联ID/域名/地址，控制消息不进入WISP回调；关闭/超时拒绝所有pending且不重试。DNS结果不赋予裸IP权限，每次TCP域名CONNECT仍独立重新解析/固定目标。
+- 新增6项DNS、3项客户端DNS、8项真实Worker/D1集成：从正式客户端取DNS后再开真实本地TCP，共两次独立DNS；取消真实resolver、未授权/control-only/非法批量不DNS；取续租票及服务端消费等待期间依旧遵守旧lease。
+- fresh VM **328/328**，0失败/取消/跳过（约41秒），checklist **9/9**；tsc --noEmit、node --check、browser ESM bundle **12364bytes**、git diff --check通过。四项临时变异均检出并还原，恢复后DNS/客户端 **33/33**。日志`/private/tmp/connector-dns-vm-regression.log`、`/private/tmp/connector-dns-integration.log`、`/private/tmp/connector-dns-mutation-{resource,deadline,domain,client-address}.log`。
+- 本轮没有重跑六套Worker217项，不把旧结果当作新验证。仍无真实VM联网、公网业务访问或生产验收；下一步v86客体DNS报文/有界关联表/TCP接线。总表仍30原始/29范围/5完成/24剩余，仅关闭DNS控制面子项，不关闭LC-007/D04/G0；无push/部署/迁移。

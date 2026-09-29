@@ -1,3 +1,5 @@
+import { CONNECTOR_HOSTS, isPublicIpv4Destination } from './destination-common.mjs';
+
 // Browser-compatible formal connector transport; no probe capability, host lookup,
 // global WebSocket replacement, reconnect, or credential persistence. A VM network
 // adapter must supply policy-approved domain CONNECT frames, not v86's raw IPs.
@@ -5,7 +7,7 @@ const realClock = {
   wallNow: () => Date.now(), monotonicNow: () => performance.now(),
   setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: id => clearTimeout(id),
 };
-const names = new Set(['dl-cdn.alpinelinux.org', 'github.com', 'api.github.com']);
+const names = new Set(CONNECTOR_HOSTS);
 const encoder = new TextEncoder();
 const fields = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -32,7 +34,8 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     throw new Error('Explicit connector endpoint, authorization and callbacks required');
   }
   let socket, phase = 'connecting', lease, pending, lastId = 0, usedBytes = 0, usedFrames = 0;
-  const streams = new Map(), timers = new Set();
+  const streams = new Map(), timers = new Set(), queries = new Map();
+  let lastQueryId = 0;
   let sampledWall = clock.wallNow(), sampledMono = clock.monotonicNow();
   const now = () => {
     const mono = clock.monotonicNow();
@@ -50,6 +53,8 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     const request = pending; pending = undefined;
     for (const id of timers) clock.clearTimer(id);
     timers.clear(); request?.controller.abort();
+    for (const query of queries.values()) query.reject(new Error('Connector DNS ended'));
+    queries.clear();
     try { socket?.close(1000); } catch { /* No retry, including failed native close. */ }
     try { onClose(); } catch { /* State is already irreversibly closed. */ }
     return false;
@@ -115,6 +120,14 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
       if (!fields(frame, ['type','version','protocol','forwarding']) || frame.protocol !== 'wisp-v1' || frame.forwarding !== true) return invalid();
       phase = 'window'; return;
     }
+    if (phase === 'active' && frame.type === 'destination-resolved') {
+      const query = queries.get(frame.requestId);
+      if (!fields(frame, ['type','version','requestId','hostname','address']) || !query
+        || frame.hostname !== query.hostname || !isPublicIpv4Destination(frame.address)
+        || clock.monotonicNow() >= query.deadline) return invalid();
+      queries.delete(frame.requestId); clear(query.timer);
+      query.resolve(Object.freeze({ hostname: frame.hostname, address: frame.address })); return;
+    }
     if (phase === 'active' && frame.type === 'renewal-needed') {
       if (!fields(frame, ['type','version','leaseId','revision']) || frame.leaseId !== lease.leaseId || frame.revision !== lease.revision) return invalid();
       startRenewal(); return;
@@ -178,6 +191,16 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
       return transmit(b);
     } catch { return finish(); }
   }
+  function resolve(hostname) {
+    if (!live() || phase !== 'active' || !names.has(hostname) || queries.size >= 3 || lastQueryId >= 0xffffffff) {
+      finish(); return Promise.reject(new Error('Connector DNS denied'));
+    }
+    return new Promise((resolve, reject) => {
+      const requestId = ++lastQueryId;
+      queries.set(requestId, { hostname, resolve, reject, deadline: clock.monotonicNow() + 5000, timer: later(finish,5000) });
+      transmit({ type: 'resolve-destination', version: 1, requestId, hostname });
+    });
+  }
   operationTimer = later(finish,5000);
   try {
     socket = new NativeWebSocket(url); socket.binaryType = 'arraybuffer';
@@ -191,5 +214,5 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     socket.addEventListener('message', message);
     socket.addEventListener('error', finish); socket.addEventListener('close', finish);
   } catch { finish(); }
-  return Object.freeze({ send, close: finish, get readyState() { return phase === 'closed' ? 3 : phase === 'active' ? 1 : 0; } });
+  return Object.freeze({ send, resolve, close: finish, get readyState() { return phase === 'closed' ? 3 : phase === 'active' ? 1 : 0; } });
 }

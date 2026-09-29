@@ -189,9 +189,34 @@ reusing a consumed ticket does not grant a new connection.
   this is not a substitute for the server's actual wire meter.
 - Close, timeout and protocol failure are terminal; late ticket promises cannot
   send or reopen. `onClose()` fires once and receives no credential/error text.
-  Guest DNS and the v86 adapter must still be implemented, including disabling
+  Guest DNS packet handling and the v86 adapter must still be implemented, including disabling
   its native reconnect and unbounded congestion queue. Do not install this client
   as a transparent WebSocket substitute and assume v86's IP CONNECTs will work.
+
+## Lease-scoped DNS association
+
+After explicit egress negotiation, `client.resolve(hostname)` sends a JSON
+`{type:"resolve-destination",version:1,requestId,hostname}`. It returns a Promise
+of a frozen `{hostname,address}` snapshot, never a WISP frame. Only the same three
+exact lower-case domains are accepted. The server runs the existing full A+AAAA
+policy, including rejecting a mixed public/private answer set, and returns one
+canonical public IPv4 address. IPv6-only results fail closed for this IPv4 guest
+contract; this is not a general recursive DNS service or a DoH fallback.
+
+Each request has a monotonically increasing uint32 ID, a five-second monotonic
+deadline, its own abort/resource registration, and no retry. At most three DNS
+queries may be pending; they share the authority's eight-resource cap with TCP
+streams. Resource exhaustion, malformed controls, unknown names, mismatched or
+late answers close the channel and reject all pending client promises. Active
+DNS may continue under the old live lease while renewal is pending, never beyond
+its hard deadline. Control messages use the existing wire/message budgets.
+
+A DNS answer is only a name association, **not** permission to dial a literal IP.
+Every TCP CONNECT must still send the approved domain; streams independently
+resolve and pin it again. The guest adapter must implement bounded association
+lifetime, ambiguity rejection, packet validation and cleanup on close/rebuild.
+Those guest-facing parts remain unimplemented; this control plane does not prove
+actual VM networking or authorize the probe's synthetic address table.
 
 ## Verification boundary
 
@@ -227,10 +252,17 @@ The built-in browser locally loaded this operator page and confirmed the stop
 status, disabled controls and empty code display; the temporary component exited.
 This is not a new remote HTTPS/Chrome/Edge admission or VM-network acceptance.
 
-The formal browser transport has 24 deterministic protocol/lifetime/budget tests.
+The formal browser transport has 27 deterministic protocol/lifetime/budget/DNS tests.
 Three additional real Worker/D1 integration tests use this exact client with a
 Node WebSocket implementing the browser EventTarget interface: live renewal on
 one TCP connection, canceled pending DNS, and policy-disabled renewal releasing
 TCP. Origin injection supplies only what a browser supplies automatically. These
 are not in-app-browser or guest-VM acceptance results. Browser-platform ESM
 bundling verifies module compatibility, not a deployed browser session.
+
+Eight additional same-chain integration cases exercise formal DNS resolution,
+independent re-resolution before TCP, cancellation with late-result suppression,
+unauthenticated/control-only/invalid coalesced requests, and DNS during both
+client-side issuance and server-side renewal consumption. Six DNS-unit tests
+cover shared resource accounting, limits, deadlines and failure cleanup. All
+DNS answers and final TCP destinations remain controlled local test fixtures.

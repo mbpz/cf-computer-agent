@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createConnectorDevice } from './authority.ts';
 import { createConnectorConsumeClient } from './consume-client.ts';
+import { createConnectorDns } from './dns.mjs';
 import { createConnectorStreams } from './streams.mjs';
 import { createWireBudget, decodeClientFrame, encodeContinue, encodeData, encodeClose } from './wire.mjs';
 
@@ -103,11 +104,11 @@ export async function startConnectorServer(options) {
     socket.on('data', meter);
     socket.once('close', () => socket.removeListener('data', meter));
     wss.handleUpgrade(req, socket, head, ws => {
-      let channel, streams, phase = 'waiting', killTimer, pendingBytes = 0;
+      let channel, streams, dns, phase = 'waiting', killTimer, pendingBytes = 0;
       const pendingSends = new Set();
       const stop = (code = 1008) => {
         if (phase === 'closed') return;
-        phase = 'closed'; channel?.close(); streams?.close();
+        phase = 'closed'; channel?.close(); streams?.close(); dns?.close();
         for (const finish of [...pendingSends]) finish(false);
         if (ws.readyState !== WebSocket.CLOSED) {
           ws.close(code);
@@ -168,6 +169,10 @@ export async function startConnectorServer(options) {
         let frame;
         try { frame = JSON.parse(bytes.toString()); } catch { return stop(); }
         if (fields(frame, ['type', 'version']) && frame.type === 'disconnect' && frame.version === 1) return stop(1000);
+        if (frame?.type === 'resolve-destination') {
+          if (!dns || !channel.isActive() || !['active','pending'].includes(phase)) return stop();
+          dns.request(frame); return;
+        }
         if (phase === 'pending') return stop();
         if (frame?.type === 'start-egress') {
           if (phase !== 'active' || streams || !channel.isActive() || !fields(frame, ['type','version','protocol'])
@@ -181,6 +186,9 @@ export async function startConnectorServer(options) {
             onClose: id => send(encodeClose(id)),
             onData: async (id, data) => { if (!await transmit(encodeData(id, data))) throw new Error('Connector send ended'); },
           });
+          dns = createConnectorDns({ authority: channel,
+            ...(options.egressTransport ? { resolveDestination: options.egressTransport.resolveDestination } : {}),
+            ...(clock ? { clock } : {}), onAnswer: send });
           send({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});
           send(encodeContinue(0,16)); return;
         }

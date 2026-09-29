@@ -202,3 +202,24 @@ test('all three approved names and both approved ports work without importing No
   }
   assert.equal(f.client.readyState,1);assert.equal(f.ws.sent.filter(Buffer.isBuffer).length,6);f.client.close();
 });
+
+
+test('formal client DNS stays on authorization JSON and returns only its matching policy-approved result',async()=>{
+ const f=fixture();f.active();const answer=f.client.resolve('github.com');assert.deepEqual(f.ws.sent.at(-1),{type:'resolve-destination',version:1,requestId:1,hostname:'github.com'});
+ f.json({type:'destination-resolved',version:1,requestId:1,hostname:'github.com',address:'140.82.112.3'});
+ assert.deepEqual(await answer,{hostname:'github.com',address:'140.82.112.3'});assert.deepEqual(f.frames,[credit0]);f.client.close();
+});
+test('client DNS refuses unknown names, mismatched replies, private IPs and duplicate results',async()=>{
+ const denied=fixture();denied.active();await assert.rejects(denied.client.resolve('evil.test'));assert.equal(denied.ws.sent.some(x=>x.type==='resolve-destination'),false);
+ for(const change of [{requestId:2},{hostname:'api.github.com'},{address:'127.0.0.1'},{address:'203.0.113.11'},{address:'140.082.112.3'},{address:'2606:4700::1'},{extra:true}]){
+  const f=fixture();f.active();const answer=f.client.resolve('github.com');const rejected=assert.rejects(answer);f.json({type:'destination-resolved',version:1,requestId:1,hostname:'github.com',address:'140.82.112.3',...change});await rejected;assert.equal(f.client.readyState,3);
+ }
+ const f=fixture();f.active();const answer=f.client.resolve('github.com');const frame={type:'destination-resolved',version:1,requestId:1,hostname:'github.com',address:'140.82.112.3'};f.json(frame);await answer;f.json(frame);assert.equal(f.client.readyState,3);
+});
+test('client DNS caps pending requests and rejects all on cancellation or late timeout without retry',async()=>{
+ for(const mode of ['cap','close','timeout','delayed-timer']){
+  const f=fixture();f.active();const pending=[f.client.resolve('github.com'),f.client.resolve('api.github.com'),f.client.resolve('dl-cdn.alpinelinux.org')];
+  const rejected=pending.map(p=>assert.rejects(p));if(mode==='cap')rejected.push(assert.rejects(f.client.resolve('github.com')));if(mode==='close')f.client.close();if(mode==='timeout')f.advance(5000);if(mode==='delayed-timer'){f.advance(5000,{run:false});f.json({type:'destination-resolved',version:1,requestId:1,hostname:'github.com',address:'140.82.112.3'});}
+  await Promise.all(rejected);assert.equal(f.client.readyState,3);assert.equal(f.ws.sent.filter(x=>x.type==='resolve-destination').length,3);assert.equal(f.instances,1);
+ }
+});

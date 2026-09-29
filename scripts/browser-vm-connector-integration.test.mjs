@@ -432,3 +432,48 @@ test('real Worker rejects disabled policy renewal and formal client closes its T
   const peerClosed=once(f.peer,'close');await f.advance(10_000);await c.closed;await peerClosed;
   assert.equal(c.client.readyState,3);assert.equal(c.renewals,1);assert.equal(f.dials,1);
 });
+
+const dnsRequest = (requestId = 1, hostname = 'github.com') => ({ type: 'resolve-destination', version: 1, requestId, hostname });
+test('formal DNS traverses real Worker/D1 authorization, then TCP independently resolves the domain again',limit,async t=>{
+  const f=await tcpFixture(t),c=await formalClient(t,f);await c.next();
+  assert.deepEqual(await c.client.resolve('github.com'),{hostname:'github.com',address:'140.82.112.3'});
+  assert.equal(f.dns,1);assert.equal(f.dials,0);assert.equal(await f.count(),1);
+  assert.equal(c.client.send(tcpConnect),true);
+  const payload=Buffer.from('0201000000646e73','hex');c.client.send(payload);assert.deepEqual(await c.next(),payload);
+  assert.equal(f.dns,2);assert.equal(f.dials,1);c.client.close();await c.closed;
+});
+test('formal DNS cancellation releases the actual pending resolver and late answer cannot dial',limit,async t=>{
+  const f=await tcpFixture(t,{pendingDns:true}),c=await formalClient(t,f);await c.next();
+  const rejected=assert.rejects(c.client.resolve('github.com'),/Connector DNS ended/);
+  await f.dnsStarted;c.client.close();await rejected;await c.closed;
+  const deadline=Date.now()+3000;
+  while(!f.cancellations){assert.ok(Date.now()<deadline);await new Promise(resolve=>setTimeout(resolve,10));}
+  f.releaseDns();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.dials,0);assert.equal(f.dns,1);
+});
+for(const state of ['unauthenticated','control-only','invalid-name','invalid-shape'])test(`real formal DNS rejects ${state} before any resolver work`,limit,async t=>{
+  const f=await tcpFixture(t),c=state==='unauthenticated'?await socket(t,f):await connect(t,f);
+  if(state.startsWith('invalid'))await enableEgress(c);
+  const first=state==='invalid-name'?dnsRequest(1,'evil.test'):state==='invalid-shape'?{...dnsRequest(),extra:1}:dnsRequest();
+  c.batchBinary([JSON.stringify(first),JSON.stringify(dnsRequest(2))]);
+  assert.equal(await c.closed,1008);assert.equal(f.dns,0);assert.equal(f.dials,0);
+});
+
+test('formal DNS remains on the old live lease while renewal issuance is pending',limit,async t=>{
+  const f=await tcpFixture(t);let release,started,issuance;
+  const gate=new Promise(resolve=>{release=resolve;}),renewing=new Promise(resolve=>{started=resolve;});
+  const c=await formalClient(t,f,{renewTicket:lease=>{issuance=(async()=>{started();await gate;return f.renewal(lease.leaseId);})();return issuance;}});await c.next();
+  await f.advance(30_000);await renewing;
+  assert.deepEqual(await c.client.resolve('github.com'),{hostname:'github.com',address:'140.82.112.3'});
+  assert.equal(f.dns,1);assert.equal(f.dials,0);assert.equal(await f.count(),1);
+  // Resolve issuance after closing: no late ticket may revive the channel.
+  c.client.close();await c.closed;release();await issuance;
+});
+
+test('server accepts formal DNS during real renewal consumption without extending the old lease early',limit,async t=>{
+  const f=await tcpFixture(t),c=await connect(t,f);await enableEgress(c);await f.advance(30_000);
+  const ticket=await f.renewal(c.lease.leaseId),a=c.next(),b=c.next();
+  c.batchBinary([JSON.stringify({type:'renew',version:1,ticket}),JSON.stringify(dnsRequest())]);
+  const results=await Promise.all([a,b]);assert.deepEqual(results.map(v=>v.type).sort(),['destination-resolved','renewed']);
+  assert.equal(f.dns,1);assert.equal(f.dials,0);assert.equal(await f.count(),2);
+  c.send({type:'disconnect',version:1});await c.closed;
+});

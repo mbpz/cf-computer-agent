@@ -72,3 +72,18 @@ Files: `tools/browser-vm/connector/server.mjs`、正式客户端适配及相应�
 第3节客户端授权传输验收（2026-09-30本地）：新增浏览器兼容`connector/egress-client.mjs`，不是对原生v86网络适配器的接线声明。只打开指定127.0.0.1端口/connector，一次连接，凭据仅首个JSON；ready与egress-ready不单独宣称数据可用，必须等初始stream-0信用窗口。授权JSON不进入onFrame。独立维护最多8流/16帧窗口、单帧16KiB、单调ID、原生bufferedAmount及完整消息层64MiB/100000上限，无应用排队或自动重连；浏览器无法观察原始WS分片，服务端wire meter仍为实际线协议预算。
 
 续租由产品层传入的`renewTicket(lease, signal)`一次获取新成员ticket；传输层不处理cookie或固定API以外的身份替代。5秒覆盖取票与ACK，任何不确定结果关闭且取消，不重试，旧硬租约不提前延长。冻结lease快照，验证leaseId/逐次revision/有效期/forwarding；系统时钟前跳后回拨仍按每次观测重锚单调时间，防止延后此前接受的新lease。关闭忽略晚到取票或网络事件。新测试24项及真实链3项；fresh完整VM311/311、Worker217/217、checklist9/9、tsc/语法/browser平台ESM打包/diff通过。六项变异（去掉到期、abort、目的域限制、credit扣减、单调推进、消息预算）均被检出还原。仅关闭本段子项，不关闭LC-007/D04/G0，无push或公网/真实VM联网声明。
+
+
+### 3.1 客体DNS接线所需正式契约（实施中）
+
+v86原生WISP把客体TCP目标变成IP，static DNS把任意名称都指向同一私网地址；不能作为正式域名身份。先实现授权通道上的有界`resolve-destination`/`destination-resolved`控制消息：只查询三个允许域名，由宿主现有系统Resolver执行完整A+AAAA/混合地址政策，返回已验证的单个IPv4地址。明确只服务当前IPv4客体的A查询；不开放通用DNS/任意递归/替代DoH，也不把探针203.0.113地址复制进产品。
+
+DNS请求带单调requestId，最多3个在途，登记到现有最多8个授权资源；5秒期限、取消/租约到期清理、迟到回答不得写回。结果只证明本次域名与地址的关联，不授予裸IP拨号；每个后续CONNECT仍发送域名，由现有streams重新独立解析/固定目标。VM适配器还必须处理DNS名称/IP歧义和有界关联有效期，关闭/重建清空，不允许直接把任意IP反向当作授权域名。浏览器发送/接收计量包含这些控制消息；正式浏览器客户端API取代手造JSON。
+
+- [x] 正式授权DNS控制面和客户端请求/回答/超时/取消，真实Worker/D1链证明无授权/非法目标不DNS。
+- [ ] v86客体DNS报文、关联表、TCP接线、无自动重连/无界队列。
+- [ ] 实际客体请求穿过上述完整正式链。
+
+第3.1节DNS控制面验收（2026-09-30本地）：完成`dns.mjs`、浏览器/宿主共享的canonical-public-IPv4政策以及`client.resolve()`，接入正式server而非探针。6项DNS单元、3项客户端DNS及8项真实Worker/D1链新增通过；每个等待中的DNS必须使用独立track回调，避免Set去重导致共享8资源计数失真。真实链证明单次DNS答复不拨号，后续域名CONNECT重新独立DNS后才接入真实TCP；未授权/control-only/非法同批请求DNS为0，取消确实停止解析，续租等待不提前延长租约。
+
+fresh完整VM **328/328**，0失败/取消/跳过，约41秒；checklist9/9、tsc --noEmit、browser ESM打包（12364bytes）、语法/diff检查通过。四项变异（漏资源登记、漏独立deadline、放开域名、客户端放开地址）均被检出并恢复，恢复后DNS+客户端33/33。本轮未重跑Worker六套217项；其既有结果不当作本轮新证据。只关闭DNS控制面子项，客体报文/关联表/v86接线与真实客体全链仍待完成，LC-007/D04/G0保持开放。无push、部署、远程迁移或公网业务拨号。
