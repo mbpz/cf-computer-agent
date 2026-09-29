@@ -159,3 +159,15 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 新增6项DNS、3项客户端DNS、8项真实Worker/D1集成：从正式客户端取DNS后再开真实本地TCP，共两次独立DNS；取消真实resolver、未授权/control-only/非法批量不DNS；取续租票及服务端消费等待期间依旧遵守旧lease。
 - fresh VM **328/328**，0失败/取消/跳过（约41秒），checklist **9/9**；tsc --noEmit、node --check、browser ESM bundle **12364bytes**、git diff --check通过。四项临时变异均检出并还原，恢复后DNS/客户端 **33/33**。日志`/private/tmp/connector-dns-vm-regression.log`、`/private/tmp/connector-dns-integration.log`、`/private/tmp/connector-dns-mutation-{resource,deadline,domain,client-address}.log`。
 - 本轮没有重跑六套Worker217项，不把旧结果当作新验证。仍无真实VM联网、公网业务访问或生产验收；下一步v86客体DNS报文/有界关联表/TCP接线。总表仍30原始/29范围/5完成/24剩余，仅关闭DNS控制面子项，不关闭LC-007/D04/G0；无push/部署/迁移。
+
+
+## 2026-09-30 03:47：LC-007 固定v86报文适配及正式同链接线
+
+- 新增`guest-network.mjs`：只接受暂停的新v86 fetch/static实例，移除实例默认HTTP回调并禁用native fetch/connect/probe；不替换全局WebSocket、不启用原生WISP自动重连。实际ARP/DHCP/TCP仍使用已安装v86状态机。
+- 校验Ethernet/IPv4/TCP/UDP/DNS边界及校验和；本地DHCP限router/broadcast和客体MAC，DNS仅router:53、三精确域名。正式resolve的A结果保留30秒，AAAA空答复，未知名拒绝；替换/过期/同址歧义不能扩大域名权限。TCP只提交关联域名80/443，每次服务端再独立解析。
+- 8流、独立16帧credit、每流256KiB/256块上传队列及256KiB下载ring，15秒idle和延迟timer前校验。慢客体超上限失败关闭；**尚非按客体读取进度的下载背压**。客体FIN先排完已收上行，服务端CLOSE先排完已收下行，显式取消立即清理且抑制迟到答复。
+- TDD实际发现并修复：错误调用不存在的ring.clear；服务端CLOSE立即release截断已收数据；独立idle期限遗漏；off-router DHCP误入本地响应。真实固定V86、独立报文夹具15项绿；没有用伪造TCPConnection替代实现。
+- 新增一条**同链**：真实v86 Ethernet→正式client→真实Worker/D1签发/consume→正式connector→公共地址政策解析→本机TCP。DNS及随后CONNECT各解析一次，来回字节及取消真实peer关闭通过。CPU暂停、夹具注入报文和受控最终地址，**不是Linux启动、公网目标、自带浏览器或生产验收**。
+- 五项最终变异（关联期限、idle、native HTTP回调、双层下载容量防线、跨流credit误归属）均检出并恢复。单独移除显式容量检查仍由native ring上限拦截，不误称该单层变异检出；移除两层后测试确实失败。
+- 变异恢复后fresh VM **344/344**，0失败/取消/跳过，42.1秒；checklist测试 **9/9**，审计29范围/5完成/24剩余；tsc --noEmit、node --check、browser ESM bundle（12.5KiB）、git diff --check通过。日志`/private/tmp/connector-guest-vm-regression.log`、`/private/tmp/connector-guest-unit.log`、`/private/tmp/connector-guest-mutation-*.log`。未重跑独立六套Worker217项，不使用旧结果替代本轮验证。
+- 仅关闭细化计划的报文适配子项；LC-007/D04/G0仍开放，LC-008至015尚未越级。下一步真实Linux客体同链及关闭/重建/恢复，产品生命周期接线仍未完成。仅本地代码/提交，无push、部署、远程迁移或生产凭据操作；无新增加密/备份范围。

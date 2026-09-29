@@ -1,3 +1,6 @@
+import { V86 } from 'v86';
+import { attachConnectorGuestNetwork } from '../tools/browser-vm/connector/guest-network.mjs';
+import { dns as guestDns, tcp as guestTcp } from './helpers/connector-guest-packets.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -476,4 +479,27 @@ test('server accepts formal DNS during real renewal consumption without extendin
   const results=await Promise.all([a,b]);assert.deepEqual(results.map(v=>v.type).sort(),['destination-resolved','renewed']);
   assert.equal(f.dns,1);assert.equal(f.dials,0);assert.equal(await f.count(),2);
   c.send({type:'disconnect',version:1});await c.closed;
+});
+
+test('real v86 Ethernet DNS and TCP traverse the formal client, signed Worker/D1 lease and local TCP',limit,async t=>{
+ const f=await tcpFixture(t);
+ const machine=new V86({wasm_path:process.cwd()+'/node_modules/v86/build/v86.wasm',autostart:false,disable_speaker:true,memory_size:16*1024*1024,net_device:{type:'ne2k',relay_url:'fetch',dns_method:'static'}});
+ await new Promise(resolve=>machine.add_listener('emulator-ready',resolve));t.after(()=>machine.destroy());
+ let network,readyResolve,readyReject,closeResolve;
+ const ready=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;}),closed=new Promise(resolve=>{closeResolve=resolve;});
+ const client=createConnectorEgressClient({url:f.server.url.replace('http:','ws:')+'/connector',pairingCode:await pair(f),ticket:f.ticket,clock:f.clock,
+  NativeWebSocket:class extends WebSocket{constructor(url){super(url,{headers:{origin}});}},renewTicket:lease=>f.renewal(lease.leaseId),
+  onReady:readyResolve,onFrame:frame=>network?.receive(frame),onClose:()=>{network?.close();readyReject(new Error('Closed before ready'));closeResolve();}});
+ t.after(()=>client.close());await ready;
+ network=attachConnectorGuestNetwork({machine,client,clock:f.clock});const frames=[],mac=machine.network_adapter.vm_mac;
+ machine.bus.pair.register('net0-receive',bytes=>frames.push(Buffer.from(bytes)));
+ const input=bytes=>machine.bus.pair.send('net0-send',bytes);
+ async function until(predicate){const deadline=Date.now()+3000;while(!predicate()){assert.ok(Date.now()<deadline,'No expected guest Ethernet response');await new Promise(resolve=>setTimeout(resolve,5));}}
+ input(guestDns(mac));await until(()=>frames.length===1);
+ assert.deepEqual([...frames[0].subarray(-4)],[140,82,112,3]);assert.equal(f.dns,1);assert.equal(f.dials,0);
+ input(guestTcp(mac));input(guestTcp(mac,{seq:101,ack:1338,flags:16}));input(guestTcp(mac,{seq:101,ack:1338,flags:24,data:'formal-v86'}));
+ await until(()=>frames.some(b=>b.length>54&&b.subarray(54).toString()==='formal-v86'));
+ assert.equal(f.dns,2);assert.equal(f.dials,1);assert.equal(await f.count(),1);
+ const peerClosed=once(f.peer,'close');network.close();await closed;await peerClosed;
+ input(guestTcp(mac,{source:12002}));assert.equal(f.dials,1);assert.equal(Object.keys(machine.network_adapter.tcp_conn).length,0);
 });

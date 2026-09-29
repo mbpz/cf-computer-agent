@@ -5,7 +5,7 @@ This directory is separate from the handshake-only `connector-probe`. The truste
 exposes the formal authorization protocol plus explicitly negotiated, bounded TCP
 egress. It does not configure host networking, read credential files, terminate
 guest TLS or install a background service. There is no production key loader,
-product launcher or formal VM-client adapter yet; LC-007 remains open.
+product launcher or booted-guest acceptance yet; LC-007 remains open.
 
 ## Trusted assembly
 
@@ -213,10 +213,9 @@ its hard deadline. Control messages use the existing wire/message budgets.
 
 A DNS answer is only a name association, **not** permission to dial a literal IP.
 Every TCP CONNECT must still send the approved domain; streams independently
-resolve and pin it again. The guest adapter must implement bounded association
-lifetime, ambiguity rejection, packet validation and cleanup on close/rebuild.
-Those guest-facing parts remain unimplemented; this control plane does not prove
-actual VM networking or authorize the probe's synthetic address table.
+resolve and pin it again. `guest-network.mjs` now implements bounded associations and packet-level wiring,
+but this does not prove booted-guest networking or authorize the probe's synthetic
+address table. See the explicit boundary below.
 
 ## Verification boundary
 
@@ -266,3 +265,43 @@ unauthenticated/control-only/invalid coalesced requests, and DNS during both
 client-side issuance and server-side renewal consumption. Six DNS-unit tests
 cover shared resource accounting, limits, deadlines and failure cleanup. All
 DNS answers and final TCP destinations remain controlled local test fixtures.
+
+
+## Pinned v86 guest packet adapter
+
+`attachConnectorGuestNetwork({machine, client, clock?})` accepts a fresh **paused**
+v86 0.5.458 fetch/static adapter and an already-ready formal client. Construct
+with `net_device: {type: 'ne2k', relay_url: 'fetch', dns_method: 'static'}`;
+route the formal client's `onFrame` to the returned `receive`, and `onClose` to
+`close`. Do not start the CPU before attachment. Destroy the adapter/client on
+logout, account/runtime change, restore or explicit cancellation; a closed
+instance is terminal, and new authority requires explicit new construction.
+This module is not yet wired to product UI or a booted Linux runtime.
+
+The adapter removes only its own native HTTP callback, disables native
+fetch/connect/probe entry points, and never installs v86's auto-reconnecting
+WISP transport. It preserves the actual local ARP/DHCP/TCP stack, validates
+bounded Ethernet/IPv4/transport packets, and drops unsupported UDP/IPv6. DHCP
+is local-only (router or broadcast); DNS is intercepted before native static or
+DoH resolution. A questions for the three names use `client.resolve`; AAAA is
+empty and unknown names are refused. Up to three name associations last 30
+seconds. Name replacement retires the old address; ambiguous live addresses
+close the channel. New TCP connections send the associated **domain**, not an
+IP, on port 80 or 443. Server-side independent DNS policy still applies.
+
+At most eight streams have separate 16-frame upload credit, 256KiB/256-chunk
+upload queues and 256KiB native download rings; exceeding limits closes rather
+than growing without bound. A non-reading guest currently causes bounded
+fail-closed overflow, **not** guest-consumption-driven downstream backpressure.
+Each flow has an independent 15-second idle deadline checked even if timers
+are delayed. Guest FIN waits for queued upload credit; server CLOSE drains
+already-received TCP bytes before FIN. Explicit cancellation discards queues,
+releases all connections and suppresses late DNS/data. Repeated SYN for an
+existing tuple is fail-closed, not a transparent retransmission/retry promise.
+
+Fifteen tests use the actual installed V86 instance and independent Ethernet
+fixtures, covering local configuration, DNS, TCP, credits, limits and lifecycle.
+One additional same-chain test injects actual v86 Ethernet through the formal
+client, real Worker/D1 lease and connector into real loopback TCP. The CPU is
+paused and DNS/dial endpoints are controlled: neither suite boots Linux,
+accesses public business targets, proves browser admission or closes LC-007.
