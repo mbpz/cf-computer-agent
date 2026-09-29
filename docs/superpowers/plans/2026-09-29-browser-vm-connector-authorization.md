@@ -18,7 +18,7 @@
 - 原始凭据不进入 URL、日志、持久化。没有明文共享服务端签名密钥到浏览器或连接器。
 - 本计划不启动外网拨号，不新增生产导航，不 push/部署/迁移，不改探针协议。后续 LC-007～015 依次执行。
 
-## LC-006.1 共享字段与上下文绑定（当前切片）
+## LC-006.1 共享字段与上下文绑定（本地完成）
 
 文件：新增 `shared/connector-authorization.ts`，新增 `scripts/browser-vm-connector-authorization.test.mjs`；package.json 增加独立测试入口并并入现有 VM 本地回归。
 
@@ -34,7 +34,7 @@
 目标文件在实施前对齐现有 `src/environments/{service,repository,lifecycle-repository}.ts`、身份/权限及路由模式；服务端签名选择及 key-id/轮换信任契约在此步细化。不得复用开发探针票据作正式授权。
 
 - [ ] RED/GREEN：认证主体派生身份、环境归属不存在/跨成员为 404、权限撤销/环境删除/代次或策略变化拒绝签发；请求字段不得覆盖权威绑定。
-- [ ] RED/GREEN：固定允许算法和信任 key-id，篡改/未知密钥/错误用途/超时拒绝；本地临时测试密钥，未配置时失败关闭。
+- [x] RED/GREEN：固定允许算法和信任 key-id，篡改/未知密钥/错误用途/超时拒绝；本地临时测试密钥，未配置时失败关闭。2026-09-29 完成低层签名器与验签器，不代表权威签发路由已接通。
 - [ ] Workers/D1→路由→真实验证器集成测试；路由幂等与未知结果不得静默重复产生有效票据。
 
 ## LC-006.3 原子消费、租期与撤销
@@ -50,3 +50,22 @@
 - 定向类型检查：`./node_modules/.bin/tsc --ignoreConfig --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --skipLibCheck shared/connector-authorization.ts` 退出 0。
 - 在临时副本中去除绑定比较、允许恰好到期、扩大有效期、允许 connect 携带 lease、去除 freeze，5 种突变均导致断言失败。第一轮发现 connect/lease 测试仅靠绑定不匹配拒绝，已补双方同值但不合法的断言后重跑；不是用匹配错误掩盖字段校验遗漏。
 - Checklist 审计测试 9/9，实算父项仍 29/5/24。仅新增共享契约及本地测试；没有签名、票据消费、续租撤销、服务端路由或转发接线。**LC-006 不关闭，下一步 LC-006.2。**
+
+
+## LC-006.2 签名子切片与信任契约（2026-09-29）
+
+实现：`src/environments/connector-signing.ts`（仅服务端低层签名器）、`shared/connector-authorization.ts`（字段契约 + 本机可用的公钥验签器）。没有新 HTTP 路由、迁移、Worker 配置或网络拨号。
+
+- 固定 Ed25519，compact JWS protected header 严格为 `alg=EdDSA`、`typ=memory-garden-connector+jws` 及固定格式 `kid`；固定规范 JSON/无 padding base64url，拒绝重复 JSON key、未知字段、算法替换、嵌入密钥或密钥 URL，输入最多 8192 字符，签名固定 64 字节。
+- 签名器仅接受服务端传入的不可导出私钥；不生成默认密钥，不接受公钥充当签名密钥。私钥加载/部署尚未接入，不读取生产密钥。测试密钥由运行时临时生成，不持久化。
+- 验签器的公钥必须经连接器受信配置提供，不能从浏览器/票据取得；最多 active + retiring 两把，重复 kid 或无配置拒绝全部票据。配置创建时快照；替换验证器并移除旧公钥后旧 kid 不能再验证。公钥分发、轮换发布与既有会话撤销仍需后续正式接线，不把公钥验签等同即时服务端撤权。
+- connect/renew 目的、leaseId 及全部 scope 匹配；验签/签名异步操作结束后再次检查时钟，不接受运算期间过期的票据。Ed25519 同一 key/claims 的结果确定，但**不是路由幂等实现**：下一步必须持久化并重用同一授权收据及 key-id，不能未知结果后另造 ticketId。
+- 现有 `environment_runtime_heads` 来自浏览器生命周期报告，明确不能直接充当授权状态。下一个接线切片要建立服务端控制的授权代次/撤销状态，认证主体派生成员，环境归属 404，再以 D1 原子收据与真实 HTTP 集成证明；不得直接把请求 claims 传给签名器。
+
+实测：
+
+- RED：Node 验签测试先因缺失导出失败；Workers 测试经监听许可后因缺失签名模块失败。初次沙箱 `listen EPERM` 是环境失败，不记成业务 RED 或测试通过。
+- GREEN：Node 字段/签名 26/26（原字段 14 + 新签名 12）；全体 VM 本地回归 146/146。Workers 签名 7/7，联合现有环境 HTTP/D1 回归 **2 文件 96/96**。这里是两个相邻测试套件，**尚非权威签发 HTTP→D1→签名的集成证明**。
+- 完整 `tsc --noEmit` 退出 0。临时副本分别绕过签名结果、放开算法、未知 kid 回落到任意已知 key、跳过异步后的过期校验，4 个突变均被拒绝测试检出；未改正式源码执行突变。
+- VM 全回归首次沙箱监听 EPERM 后获准原命令重跑通过。Workers 使用既有测试配置，运行器提示 AI binding warning；签名测试只调用本机 WebCrypto，环境回归仅本地 D1，不调用 AI、远程迁移或部署。
+- 本次只关闭 LC-006.2 的签名子项；权威状态/签发路由/幂等及 LC-006.3 仍开放。功能父项仍 29/5/24，LC-006、D04、VM-006/G0 均未关闭。

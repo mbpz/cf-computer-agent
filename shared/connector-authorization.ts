@@ -1,6 +1,7 @@
-/** Shared wire contract only. Parsing/matching is NOT authentication.
- * A caller must separately verify a trusted signature, current server authority,
- * local pairing and atomic one-time consumption before granting any network use.
+/** Shared claims contract and pinned-key signature verifier.
+ * Parsing/matching alone is NOT authentication. Even a valid signature requires
+ * current server authority, local pairing and atomic one-time consumption before
+ * granting network use. Neither function below starts a network connection.
  */
 export interface ConnectorAuthorizationBinding {
   purpose: "connect" | "renew";
@@ -83,4 +84,88 @@ function validId(value: unknown): value is string {
 
 function safeTime(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value < Number.MAX_SAFE_INTEGER;
+}
+
+
+export interface ConnectorVerificationKey {
+  keyId: string;
+  publicKey: CryptoKey;
+}
+
+export const CONNECTOR_AUTHORIZATION_TYPE = "memory-garden-connector+jws";
+
+/** Strict compact JWS encoding shared by the server and local verifier.
+ * This encodes data only; it does not sign or authorize anything.
+ */
+export function encodeConnectorAuthorizationPart(value: string | Uint8Array): string {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))
+    .replace(/\+/gu, "-").replace(/\//gu, "_").replace(/=+$/u, "");
+}
+
+/** Trust must be supplied out of band by the connector, never by a ticket/browser.
+ * Keep at most active + retiring public keys; replacing this verifier removes old
+ * trust. No key fetching, algorithm negotiation, or embedded key material.
+ * A verified ticket STILL needs current authority, pairing and atomic consumption.
+ */
+export function createConnectorAuthorizationVerifier(keys?: readonly ConnectorVerificationKey[]) {
+  const trusted = new Map<string, CryptoKey>();
+  if (keys && keys.length > 0 && keys.length <= 2) {
+    for (const entry of keys) {
+      const key = entry.publicKey;
+      if (!validId(entry.keyId) || trusted.has(entry.keyId) || !key
+        || key.type !== "public" || key.algorithm.name !== "Ed25519"
+        || key.usages.length !== 1 || key.usages[0] !== "verify") {
+        trusted.clear();
+        break;
+      }
+      trusted.set(entry.keyId, key);
+    }
+  }
+  return async (
+    token: unknown, expected: ConnectorAuthorizationBinding, now: () => number,
+  ): Promise<Readonly<ConnectorAuthorizationClaims> | undefined> => {
+    try {
+      if (!trusted.size || typeof token !== "string" || token.length > 8192) return undefined;
+      const parts = token.split(".");
+      if (parts.length !== 3) return undefined;
+      const [protectedPart, payloadPart, signaturePart] = parts;
+      const headerBytes = decodeAuthorizationPart(protectedPart);
+      const payloadBytes = decodeAuthorizationPart(payloadPart);
+      const signature = decodeAuthorizationPart(signaturePart);
+      if (!headerBytes || !payloadBytes || !signature || signature.length !== 64) return undefined;
+      const decoder = new TextDecoder("utf-8", { fatal: true });
+      const headerText = decoder.decode(headerBytes);
+      const header: unknown = JSON.parse(headerText);
+      const fields = ownJsonFields(header, ["alg", "typ", "kid"]);
+      if (!fields || fields.alg !== "EdDSA" || fields.typ !== CONNECTOR_AUTHORIZATION_TYPE
+        || !validId(fields.kid)) return undefined;
+      // A single canonical form also rejects duplicate JSON header keys.
+      if (headerText !== JSON.stringify({ alg: "EdDSA", typ: CONNECTOR_AUTHORIZATION_TYPE, kid: fields.kid })) return undefined;
+      const key = trusted.get(fields.kid);
+      if (!key) return undefined;
+      const binding = ownJsonFields(expected, bindingKeys);
+      if (!binding || !validBinding(binding)) return undefined;
+      const snapshot = Object.freeze(binding) as unknown as ConnectorAuthorizationBinding;
+      const payloadText = decoder.decode(payloadBytes);
+      const claims = readConnectorAuthorizationClaims(JSON.parse(payloadText), snapshot, now());
+      // Only this protocol's canonical claims, including no duplicate JSON keys.
+      if (!claims || JSON.stringify(claims) !== payloadText) return undefined;
+      const verified = await crypto.subtle.verify("Ed25519", key, signature,
+        new TextEncoder().encode(`${protectedPart}.${payloadPart}`));
+      if (!verified) return undefined;
+      // Do not accept a ticket which expired while crypto was pending.
+      return readConnectorAuthorizationClaims(claims, snapshot, now());
+    } catch {
+      // Malformed input, unsupported crypto, or clock failure never grants access.
+      return undefined;
+    }
+  };
+}
+
+function decodeAuthorizationPart(value: string): Uint8Array<ArrayBuffer> | undefined {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return undefined;
+  const decoded = atob(value.replace(/-/gu, "+").replace(/_/gu, "/"));
+  const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  return encodeConnectorAuthorizationPart(bytes) === value ? bytes : undefined;
 }
