@@ -47,9 +47,16 @@ Interface: `createConnectorStreams({authority,resolveDestination?,dial?,clock?,o
 
 Files: `tools/browser-vm/connector/server.mjs`、正式客户端适配及相应测试（接线前对照已有WISP v1和v86契约）。
 
-- [ ] 在ready后显式启用数据协议，消息用途区分授权JSON和数据帧；未授权/renew失败/close不能发出DNS或TCP。版本/帧大小/方向/credit严格校验，不沿用开发relay的ticket或合成地址信任。
-- [ ] 把已验证域名目的地接到streams；仍维持精确Host/Origin、有界socket和控制页。只在数据平面真正可用时报告forwarding能力；关闭/硬到期释放所有实际TCP资源。
-- [ ] 真实Worker/D1→WebSocket→DNS政策→TCP fixture的全链正常/恶意/背压/取消测试；不得用两套局部测试合并宣称全链。补齐后评估LC-007关闭，下一步LC-008。
+- [x] 在ready后显式启用数据协议，消息用途区分授权JSON和数据帧；未授权/renew失败/close不能发出DNS或TCP。版本/帧大小/方向/credit严格校验，不沿用开发relay的ticket或合成地址信任。
+- [x] 把已验证域名目的地接到streams；仍维持精确Host/Origin、有界socket和控制页。只在数据平面真正可用时报告forwarding能力；关闭/硬到期释放所有实际TCP资源。
+- [x] 真实Worker/D1→WebSocket→DNS政策→TCP fixture的全链正常/恶意/背压/取消测试；不得用两套局部测试合并宣称全链。服务端全链子项通过，不代替下项正式VM客户端。
+- [ ] 正式VM客户端适配：锁定v86原生WISP会发送IP目的地址且自动重连，必须适配域名策略、授权JSON/二进制分流、租约和显式重建；不能借用探针合成IP表/开发ticket。真实客体链验收后再评估LC-007关闭及进入LC-008。
+
+第3节服务端验收（2026-09-30本地）：授权ready仍为forwarding:false；显式start-egress/wisp-v1成功后才发送egress-ready和初始16帧窗口，续租报告同一通道状态。TCP connect不额外重置credit。默认解析/拨号维持目的地址政策，不接受浏览器配置或探针IP。
+
+新增严格WISP codec与原始WebSocket流量计，按实际帧（含空续帧、掩码、控制/JSON、upgrade head）及双向字节计数，缓冲最多14字节头部；ws负责协议合法性验证。出口计入发送回调积压且等待完成，真实暂停浏览器→上游TCP停写→恢复16MiB逐字节验收通过。修复同批非法帧后CONNECT先DNS的异步拒绝竞态，以及提前安装data监听导致upgrade head在ws接收器安装前被消费的流动竞态。
+
+最新完整VM284/284、相关Worker217/217、checklist9/9、类型与语法/diff检查通过；本次增加6项codec/预算、2项真实原始传输、13项真实Worker/D1数据链测试。五项临时变异（漏原始计量、异步拒绝、漏字节预算、不等待下行发送、升级时不暂停）均检出并已还原。正式VM客户端仍未接入，LC-007父项/D04/G0不勾选；无push/生产部署/远程迁移/公网目标拨号。
 
 ## 来源核对（2026-09-30本地）
 

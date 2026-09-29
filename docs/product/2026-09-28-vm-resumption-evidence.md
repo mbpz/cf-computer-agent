@@ -122,3 +122,17 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 2026-09-30 02:17 CST新鲜VM263/263、六套Worker217/217、tsc --noEmit、两个新文件语法检查通过。Worker负向日志中的Invalid pending note journal来自原有拒绝测试，不是新增失败。日志`/private/tmp/connector-streams-vm-regression.log`、`/private/tmp/connector-streams-worker-regression.log`及`/private/tmp/connector-streams-mutation-*.log`。真实TCP监听/连接由测试清理，进程正常退出。
 
 关闭LC-007细化计划第2节；第3节正式WebSocket接线与真实Worker/D1→WebSocket→DNS→TCP同链仍待完成。server.mjs未改变，forwarding:false保持，D04/G0/LC-007继续开放。原始30/范围29/已关闭5/未关闭24；当前无新阻塞，允许继续第3节。本轮仅本地代码、测试、证据和提交，无push/部署/远程迁移/生产写入/主机网络安全配置修改。
+
+
+## LC-007 正式服务端数据面与真实授权全链子项（2026-09-30 本地）
+
+- 前一子项已本地提交 `a577875`（授权绑定TCP资源管理）。本次实现 `connector/wire.mjs` 并接入正式 `server.mjs`，不是探针relay；控制页说明与README同步更新。
+- 实际成员Session/权限→D1 generation/ticket签发→Ed25519→配对→真实consume/lease→WebSocket显式start-egress→完整目的地址政策→实际TCP fixture在同一测试链运行。授权ready仍forwarding:false，显式启用后为true；续租不更换TCP或重赠送credit。普通网页消息不能替换宿主resolver/dial。
+- 测试DNS只返回固定公共地址，拨号前断言该字面量/族/端口/禁止自动家族回退，再显式替换为回环fixture。没有生产密钥、生产D1、真实公网目标或实际VM联网声明。正式v86适配仍待实现：当前原生适配器发送IP，不能用开发探针地址映射代替正式契约。
+- 同链覆盖正常双向字节、无授权/仅控制通道禁止二进制、重复/错误协商、客户端CONTINUE拒绝、探针IP不解析、10KiB JSON上限、硬租约/续租拒绝/停止实际断流、DNS取消与晚到答案、DNS等待期间17帧越界、256KiB下行分块、完整16帧credit更新和真实续租保留连接。
+- 真实浏览器侧WebSocket暂停读（本机ws测试客户端，非人工浏览器验收）使上游TCP写入实际阻塞；恢复后16MiB固定字节完整收回。不是只测试mock的pause调用。
+- 两个真实RED缺陷已修复：(1) 同一个TCP批次中非法帧抛出的异步拒绝尚未执行，后续CONNECT已先触发DNS；现同步关闭，DNS=0；(2) 提前添加data监听使upgrade head在ws接收器注册前被消费，正常分片变成1002；现安装期间暂停，接收器/消息监听齐备后恢复，空分片计量以1008关闭。
+- 原始WebSocket计量覆盖输入实际字节及帧（含空续帧、mask、控制/JSON、HTTP upgrade head）；只缓存最多14字节头部，ws仍是协议验证器。双向64MiB/100000帧预算预留关闭帧，出口保守计头部；send回调与bufferedAmount双重限积压。独立流模块的载荷/逻辑帧预算仍保留。
+- 五项临时变异：去掉原始meter、去掉同步decode拒绝、去掉字节预算、不等待下行发送、升级时不暂停，全部检出并逐项恢复。修订测试等待逻辑后，不等待发送变异明确报Connector closed before binary reply，漏meter明确报Raw fragment budget did not close the socket，而不是用全套测试的超时作为通过依据。
+- fresh `npm run test:browser-vm` **284/284**，0失败/取消/跳过；新增6项wire、2项原始传输、13项完整授权数据链。六套Worker **217/217**；`tsc --noEmit`、两生产模块`node --check`、`git diff --check`通过；checklist审计测试9/9。日志 `/private/tmp/connector-wire-vm-regression.log`、`/private/tmp/connector-wire-worker-regression.log`；变异日志 `/private/tmp/connector-wire-mutation-{raw-meter,sync-close,wire-bytes,backpressure,upgrade-head}.log`。
+- 总清单仍原始30 / 范围29 / 完成5 / 剩余24（D08排除）。本次只关闭LC-007服务端接线/同链子项；LC-007、D04/G0及LC-008～015继续开放。下一步正式VM客户端与真实客体链验收；无外部阻塞，允许继续，不新增加密/备份门槛。仅本地提交，不push/部署/迁移，不改浏览器/证书/代理/自启动。

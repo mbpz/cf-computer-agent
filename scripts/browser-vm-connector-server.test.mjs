@@ -344,3 +344,30 @@ test('shutdown bounds an uncooperative upgraded peer that does not acknowledge c
   assert.ok(performance.now() - before < 1500);
   c.ws.terminate(); await c.close;
 });
+
+test('raw ingress meter closes empty continuation flood even when ws emits no complete message', {timeout:3000}, async t=>{
+  const f=await fixture(t), c=await socket(t,f);
+  // One unfinished binary message, followed by empty continuation frames.
+  // maxPayload/maxFragments only see non-empty payloads; the raw meter must count these.
+  const frames=Buffer.alloc(6*100000);
+  for(let i=0;i<100000;i++) { frames[i*6]=i===0?2:0; frames[i*6+1]=128; }
+  c.ws._socket.write(frames);
+  let timer;
+  const deadline = new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Raw fragment budget did not close the socket')),2000);});
+  t.after(()=>clearTimeout(timer));
+  assert.equal((await Promise.race([c.close,deadline])).code,1008);
+  assert.deepEqual(c.messages,[]); assert.equal(f.requests.length,0);
+});
+
+test('raw ingress counts WebSocket bytes delivered in the HTTP upgrade head', {timeout:3000}, async t=>{
+  const f=await fixture(t), tcp=connectTcp({host:'127.0.0.1',port:Number(new URL(f.server.url).port)});
+  t.after(()=>tcp.destroy()); tcp.on('error',()=>{}); await once(tcp,'connect');
+  const response=[]; tcp.on('data',chunk=>response.push(chunk)); const closed=once(tcp,'close');
+  const request=`GET /connector HTTP/1.1\r\nHost: ${new URL(f.server.url).host}\r\nOrigin: ${origin}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==\r\n\r\n`;
+  const frames=Buffer.alloc(6*100000);
+  for(let i=0;i<100000;i++) { frames[i*6]=i===0?2:0; frames[i*6+1]=128; }
+  tcp.write(Buffer.concat([Buffer.from(request),frames])); await closed;
+  const bytes=Buffer.concat(response);
+  assert.match(bytes.toString('latin1'),/^HTTP\/1.1 101/);
+  assert.ok(bytes.includes(Buffer.from('880203f0','hex')), bytes.subarray(bytes.indexOf('\r\n\r\n')+4).toString('hex')); assert.equal(f.requests.length,0);
+});

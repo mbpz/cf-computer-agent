@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createConnectorDevice } from './authority.ts';
 import { createConnectorConsumeClient } from './consume-client.ts';
+import { createConnectorStreams } from './streams.mjs';
+import { createWireBudget, decodeClientFrame, encodeContinue, encodeData, encodeClose } from './wire.mjs';
 
 const fields = (value, names) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name));
@@ -10,12 +12,16 @@ const single = (req, name, value) => req.headers[name] === value
   && req.rawHeaders.filter((_, index) => index % 2 === 0 && req.rawHeaders[index].toLowerCase() === name).length === 1;
 
 /** Trusted assembly only: fetch/clock/keys are installed by the host, never a web
- * request. No CLI/discovery, credential files, forwarding or host network changes.
- * This version authorizes a control channel; LC-007 supplies the data plane.
+ * request. No CLI/discovery, credential files or host network changes.
+ * TCP egress requires a consumed lease AND explicit WISP v1 negotiation.
  */
 export async function startConnectorServer(options) {
-  if (!options || Object.keys(options).some(key => !['allowedOrigin', 'policyVersion', 'verificationKeys', 'port', 'fetch', 'clock'].includes(key))) {
+  if (!options || Object.keys(options).some(key => !['allowedOrigin', 'policyVersion', 'verificationKeys', 'port', 'fetch', 'clock', 'egressTransport'].includes(key))) {
     throw new Error('Invalid connector configuration');
+  }
+  if (options.egressTransport !== undefined && (!fields(options.egressTransport, ['resolveDestination', 'dial'])
+    || typeof options.egressTransport.resolveDestination !== 'function' || typeof options.egressTransport.dial !== 'function')) {
+    throw new Error('Invalid connector transport');
   }
   const { allowedOrigin, policyVersion, verificationKeys, clock, port = 0 } = options;
   if (!Number.isSafeInteger(port) || port < 0 || port > 65535) throw new Error('Invalid connector port');
@@ -29,7 +35,7 @@ export async function startConnectorServer(options) {
   } catch (error) { device.close(); throw error; }
   let url, host, stopped = false, shutdown, pairingBusy = false;
   const sockets = new Set(), channels = new Set();
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 10_240, maxFragments: 32, maxBufferedChunks: 64,
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 16_389, maxFragments: 32, maxBufferedChunks: 64,
     perMessageDeflate: false, autoPong: false });
   const server = createServer({ maxHeaderSize: 8192, connectionsCheckingInterval: 1000 }, (req, res) => {
     // Catch async pairing cancellation during shutdown; never log credentials/errors.
@@ -87,24 +93,49 @@ export async function startConnectorServer(options) {
       || req.headers['sec-websocket-protocol'] !== undefined || req.headers['transfer-encoding'] !== undefined
       || Number(req.headers['content-length'] ?? 0) !== 0) return reject('403 Forbidden');
     if (channels.size >= 4) return reject('429 Too Many Requests');
+    const budget = createWireBudget();
+    let rawStop = () => socket.destroy();
+    // Installed before ws's data listener; includes head when ws unshifts it.
+    const meter = bytes => { if (!budget.inbound(bytes)) rawStop(); };
+    // Adding a data listener would otherwise start flowing before ws installs
+    // its receiver; pause so unshifted upgrade head cannot be consumed early.
+    socket.pause();
+    socket.on('data', meter);
+    socket.once('close', () => socket.removeListener('data', meter));
     wss.handleUpgrade(req, socket, head, ws => {
-      let channel, phase = 'waiting', killTimer;
+      let channel, streams, phase = 'waiting', killTimer, pendingBytes = 0;
+      const pendingSends = new Set();
       const stop = (code = 1008) => {
         if (phase === 'closed') return;
-        phase = 'closed'; channel?.close();
+        phase = 'closed'; channel?.close(); streams?.close();
+        for (const finish of [...pendingSends]) finish(false);
         if (ws.readyState !== WebSocket.CLOSED) {
           ws.close(code);
           killTimer = setTimeout(() => ws.terminate(), 100).unref();
         }
       };
+      rawStop = () => stop();
       channels.add(stop);
-      const send = value => {
-        if (phase === 'closed' || !channel?.isActive() || ws.readyState !== WebSocket.OPEN) return;
-        // No accumulating output if a peer stops reading; no send queue/retry.
-        const text = JSON.stringify(value);
-        if (ws.bufferedAmount + Buffer.byteLength(text) > 4096) return stop();
-        ws.send(text, error => { if (error) stop(); });
+      const transmit = value => {
+        if (phase === 'closed' || !channel?.isActive() || ws.readyState !== WebSocket.OPEN) return Promise.resolve(false);
+        const body = Buffer.isBuffer(value) ? value : JSON.stringify(value);
+        const size = Buffer.byteLength(body);
+        // Eight bounded downstream sends plus small authorization controls. Track
+        // callbacks as well as ws.bufferedAmount; no unbounded application queue.
+        const outputLimit = streams ? 8 * (16389 + 10) + 4096 : 4096;
+        if (!budget.outbound(size) || pendingBytes + size > outputLimit || ws.bufferedAmount + size > outputLimit) {
+          stop(); return Promise.resolve(false);
+        }
+        return new Promise(resolve => {
+          pendingBytes += size;
+          const finish = ok => { if (!pendingSends.delete(finish)) return; pendingBytes -= size; resolve(ok); };
+          pendingSends.add(finish);
+          try { ws.send(body, { binary: Buffer.isBuffer(body), compress: false, fin: true }, error => {
+            finish(!error); if (error) stop();
+          }); } catch { finish(false); stop(); }
+        });
       };
+      const send = value => { void transmit(value); };
       ws.on('error', () => stop());
       ws.on('close', () => { stop(); clearTimeout(killTimer); channels.delete(stop); });
       // This version has no heartbeat/control-frame protocol. In particular, do
@@ -121,11 +152,38 @@ export async function startConnectorServer(options) {
       });
       async function handleMessage(bytes, binary) {
         if (phase === 'closed') return;
-        if (binary) return stop();
+        if (binary) {
+          // An in-flight renewal retains only the existing lease, never extends it.
+          if (!streams || !channel.isActive() || !['active','pending'].includes(phase)) return stop();
+          let data;
+          // ws can emit several messages synchronously from one TCP chunk.
+          // Revoke before returning, not in a later rejected-Promise callback.
+          try { data = decodeClientFrame(bytes); } catch { return stop(); }
+          if (data.type === 'connect') streams.open(data.id, data.target);
+          else if (data.type === 'data') streams.write(data.id, data.data);
+          else streams.closeStream(data.id);
+          return;
+        }
+        if (bytes.length > 10240) return stop();
         let frame;
         try { frame = JSON.parse(bytes.toString()); } catch { return stop(); }
         if (fields(frame, ['type', 'version']) && frame.type === 'disconnect' && frame.version === 1) return stop(1000);
         if (phase === 'pending') return stop();
+        if (frame?.type === 'start-egress') {
+          if (phase !== 'active' || streams || !channel.isActive() || !fields(frame, ['type','version','protocol'])
+            || frame.version !== 1 || frame.protocol !== 'wisp-v1') return stop();
+          streams = createConnectorStreams({ authority: channel, ...options.egressTransport,
+            ...(clock ? { clock } : {}),
+            // WISP streams inherit 16 from stream 0. Do NOT reset credit on TCP
+            // connect: pre-connect DATA may already be in flight in both peers.
+            onReady() {},
+            onCredit: (id, credits) => send(encodeContinue(id, credits)),
+            onClose: id => send(encodeClose(id)),
+            onData: async (id, data) => { if (!await transmit(encodeData(id, data))) throw new Error('Connector send ended'); },
+          });
+          send({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});
+          send(encodeContinue(0,16)); return;
+        }
         const initial = phase === 'waiting';
         if (frame?.version !== 1 || frame.type !== (initial ? 'authenticate' : 'renew')
           || !fields(frame, initial ? ['type', 'version', 'pairingCode', 'ticket'] : ['type', 'version', 'ticket'])
@@ -137,8 +195,9 @@ export async function startConnectorServer(options) {
         if (!accepted) return stop();
         const lease = channel.getLease(); if (!lease) return stop();
         phase = 'active';
-        send({ type: initial ? 'ready' : 'renewed', version: 1, forwarding: false, lease });
+        send({ type: initial ? 'ready' : 'renewed', version: 1, forwarding: Boolean(streams), lease });
       }
+      socket.resume(); // Both meter and ws receiver/message handlers are installed.
     });
   });
   function close() {

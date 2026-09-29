@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>连接器本机控制</title><script src="/control.js" defer></script></head>
-<body><main><h1>连接器本机控制</h1><p>当前仅验证正式授权协议，不提供 VM 联网或外网转发。</p>
+<body><main><h1>连接器本机控制</h1><p>成员授权成功并显式启用后，可向固定允许目标转发 TCP 字节。VM 联网客户端尚未接入；本页不会自动开启转发。</p>
 <dl><dt>允许的页面来源</dt><dd id="origin">加载中</dd><dt>本机连接器标识</dt><dd id="identity">加载中</dd><dt>固定策略</dt><dd id="policy">加载中</dd></dl>
 <p>仅在信任此来源时手动生成配对码。配对码 30 秒有效、只能使用一次；生成新码使旧码失效。不要保存、分享或写入网址。</p>
 <button id="pair" type="button" disabled>生成一次性配对码</button><p><output id="code" aria-label="一次性配对码"></output></p>

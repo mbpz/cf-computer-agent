@@ -1,10 +1,11 @@
-# Formal connector authorization transport (no egress yet)
+# Formal connector authorization and bounded TCP transport
 
 This directory is separate from the handshake-only `connector-probe`. The trusted
 `startConnectorServer` assembly now listens on an ephemeral loopback port and
-exposes the formal authorization protocol. It does **not** forward packets,
-configure host networking, read credential files or install a background service.
-There is no production key loader/product launcher yet. LC-007 supplies egress.
+exposes the formal authorization protocol plus explicitly negotiated, bounded TCP
+egress. It does not configure host networking, read credential files, terminate
+guest TLS or install a background service. There is no production key loader,
+product launcher or formal VM-client adapter yet; LC-007 remains open.
 
 ## Trusted assembly
 
@@ -79,9 +80,9 @@ Browser to connector:
 {"type":"disconnect","version":1}
 ```
 No extra fields/identity claims, out-of-order or concurrent authorization frames.
-Disconnect is also permitted during pending consumption and cancels it. Binary,
-DNS/connect/data messages, ping and pong are not part of this version and close
-the socket. The probe-authenticate/probe-ready protocol remains separate.
+Disconnect is also permitted during pending consumption and cancels it. Binary
+frames before explicit data negotiation, ping and pong close the socket. The
+probe-authenticate/probe-ready protocol remains separate.
 
 Connector to browser after successful signature **and live server consumption**:
 ```json
@@ -94,9 +95,11 @@ Neither signed tickets nor pairing codes are echoed. The leaseId/revision lets
 an authenticated browser request renewal from the workbench; it is not itself a
 capability. The device's retained binding and the server still govern authority.
 
-Bounds: 16 TCP connections, 4 upgraded channels (including pending/closing), 10KiB
-message payload, 32 buffered non-empty fragments, 64 receive chunks, 4KiB outgoing
-queue. Compression/automatic pong are disabled. The existing five-second auth/
+Bounds: 16 inbound TCP connections, 4 upgraded channels (including pending/closing),
+10KiB JSON controls, 16389-byte binary messages (16KiB TCP data plus WISP header),
+32 buffered non-empty fragments, 64 receive chunks. Control-only output is capped
+at 4KiB; with egress, pending output/send callbacks share a cap of eight maximum
+data frames plus 4KiB. There is no application send queue. Compression/automatic pong are disabled. The existing five-second auth/
 consumption deadlines and independently armed lease deadline apply to actual
 sockets. Close 1000 is explicit disconnect, 1001 is component shutdown, 1008 is
 policy/authorization/expiry rejection; parser-level invalid/oversize frames can
@@ -104,10 +107,55 @@ have standard protocol close codes. No reason string exposes credentials.
 Uncooperative peers/incomplete HTTP are force-closed after 100ms during shutdown.
 A busy explicit port fails rather than replacing another process.
 
-The optional programmatic `fetch`/`clock` inputs are trusted test/embed ports,
+The optional programmatic `fetch`/`clock` inputs and `egressTransport`
+(`{resolveDestination,dial}`) are trusted test/embed ports,
 not web request fields. Production assembly must leave HTTPS validation enabled,
 use the fixed issuer and install approved public keys. No synthetic keys or
 successful fixture consumption responses are installed by this module.
+
+## Explicit data negotiation
+
+After `ready`, the client can send exactly:
+```json
+{"type":"start-egress","version":1,"protocol":"wisp-v1"}
+```
+A consumed active lease is still required. Duplicate/unknown negotiation closes
+rather than replacing the stream manager. Server sends JSON `egress-ready` with
+`version:1`, `protocol:"wisp-v1"`, `forwarding:true`, then binary WISP CONTINUE on
+stream 0 with a 16-frame initial window. No DNS or TCP starts merely by enabling.
+Initial `ready` and public `/identity` retain `forwarding:false`: neither implies
+an active data plane. Subsequent `renewed` reports the channel's negotiated state.
+
+The TCP-only subset uses type:u8 + streamId:u32LE, CONNECT(type 1) with TCP byte 1,
+port:u16LE and ASCII hostname; DATA(type 2) of 1–16384 bytes; client CLOSE(type 4)
+with reason 2. Server emits DATA, CONTINUE(type 3, replacement u32LE credits), and
+sanitized CLOSE. No UDP, client CONTINUE, ID zero from client, IP mapping, unknown
+version or malformed/oversized frame. IDs increase without reuse. Invalid frames
+close synchronously before another message in the same TCP chunk can cause DNS.
+
+Each stream inherits the initial window; **TCP connect does not send a new credit**
+because pre-connect DATA can already be in flight. Only consuming and draining a
+whole window grants another 16. Real socket write callbacks/drain and downstream
+WebSocket send completion govern progress. A pending renewal can use only the old
+lease until its independent hard deadline; failure destroys all owned streams.
+
+Default egress uses the independent A/AAAA destination policy and a single pinned
+literal address, no second lookup, fallback or proxy: only
+`dl-cdn.alpinelinux.org`, `github.com`, `api.github.com`, ports 80/443. Special,
+private, mapped or mixed DNS answers are denied. Each channel has at most eight
+streams including DNS-pending, 5s DNS/connect and 15s stream idle deadlines.
+
+The raw ingress meter runs before ws consumes socket data, including upgrade head,
+mask/header bytes, empty continuation frames and JSON. It buffers at most 14 header
+bytes, not payloads; ws remains the protocol validator. Both directions share
+64MiB/100000 actual-frame upper bounds, reserving a final close frame and charging
+outgoing headers conservatively. These are ceilings, not promised usable throughput.
+They supplement the TCP manager's payload/logical-message budget.
+
+The installed v86 WISP adapter sends IP literals and schedules reconnects; it is
+**not yet compatible** with this domain-only, explicit-authority contract. Do not
+reuse the development probe's synthetic IP table or ticket as production authority.
+A formal guest DNS/client adapter and lifecycle acceptance are still required.
 
 ## Verification boundary
 
@@ -120,19 +168,24 @@ state tests use a small DOM harness, not a full browser.
 The focused socket suite still uses controlled issuer responses. The additional
 `scripts/browser-vm-connector-integration.test.mjs` runs the actual application,
 session service, signer and D1 in local Workerd, connected to this real WebSocket
-server through the fixed consume client. Its 17 cases verify issuance, pairing,
+server through the fixed consume client. Its authorization cases verify issuance, pairing,
 one-time consumption, renewal, live authority changes, lost committed responses,
 concurrency, restart and actual socket closure without fake successful ACKs.
 The test-only Worker entry is never included by the production entry or Wrangler.
-Keys and sessions are ephemeral; all outbound network requests are rejected.
+Keys and sessions are ephemeral; all Workerd outbound network requests are rejected.
 The canonical hostname is routed locally using Miniflare dispatchFetch, **not**
 accessed over the internet. These integration lease tests use a controlled clock;
 separate core/socket cases exercise default real timers.
 
 LC-006's local authorization-contract acceptance is complete. This does not prove
 production policy/key installation, real HTTPS consumption transport/certificates,
-TCP forwarding, VM networking or product UI/account lifecycle. LC-007 is next;
-LC-007–015 and D04/G0 remain open.
+VM networking or product UI/account lifecycle. New same-chain egress cases add the
+actual DNS policy and real local TCP: signed D1 consumption, explicit negotiation,
+bytes, renewal, expiry/stop/denial destruction, pending DNS cancellation, window
+exhaustion, 256KiB framing and paused-browser 16MiB backpressure. Test DNS returns
+a fixed public answer and the already-validated dial is intentionally routed to
+a loopback fixture. This proves local TCP behavior, not public-target connectivity.
+LC-007–015 and D04/G0 remain open until their remaining acceptance work is done.
 
 The built-in browser locally loaded this operator page and confirmed the stop
 status, disabled controls and empty code display; the temporary component exited.
