@@ -14,3 +14,49 @@ test('git acceptance requires clone then fetch, two commits and API repository i
  await assert.rejects(acceptGit(async text=>text.includes('cat /tmp/lc-api.json')?{exitCode:0,output:'200\n{"full_name":"evil/repo"}'}:good(text)),/identity/);
  await assert.rejects(acceptGit(async()=>({exitCode:0,output:'not a commit'})),/commit/);
 });
+
+import { runGuestCommand } from '../tools/browser-vm/acceptance/serial-command.mjs';
+function serialMachine() {
+ let listener, id;
+ return {
+  add_listener(_name, receive) { listener = receive; },
+  remove_listener() { listener = undefined; },
+  serial0_send(encoded) { id = encoded.match(/BEGIN:([a-f0-9]{16})/)[1]; },
+  reply(output, exitCode) { for (const c of `\x1eBEGIN:${id}\x1f${output}\x1eEND:${id}:${exitCode}\x1f`) listener?.(c.charCodeAt(0)); },
+  listening() { return Boolean(listener); },
+ };
+}
+test('slow guest package installation can finish after 90 seconds without bypassing the serial exit result', async t => {
+ t.mock.timers.enable({ apis: ['setTimeout'] });
+ const machine = serialMachine(); let settled = false;
+ const result = runGuestCommand(machine, 'apk add --no-cache git curl').then(value => { settled = true; return value; }, error => { settled = true; throw error; });
+ const rejection = result.catch(() => {});
+ t.mock.timers.tick(90001); await Promise.resolve();
+ assert.equal(settled, false, 'a package download must not be aborted by the ordinary 90-second budget');
+ machine.reply('OK: installed', 0);
+ assert.deepEqual(await result, { output: 'OK: installed', exitCode: 0 });
+ assert.equal(machine.listening(), false);
+ await rejection;
+});
+test('stalled package installation fails at ten minutes and ordinary commands still fail at ninety seconds', async t => {
+ t.mock.timers.enable({ apis: ['setTimeout'] });
+ for (const [text, budget] of [['apk add --no-cache git curl', 600000], ['apk update', 90000], ['git --version', 90000]]) {
+  const machine = serialMachine(); let settled = false;
+  const result = runGuestCommand(machine, text).finally(() => { settled = true; });
+  const rejection = assert.rejects(result, /Guest command timeout/);
+  t.mock.timers.tick(budget - 1); await Promise.resolve();
+  assert.equal(settled, false);
+  t.mock.timers.tick(1); await rejection;
+  assert.equal(machine.listening(), false);
+ }
+});
+test('late guest installation failures retain their nonzero exit code', async t => {
+ t.mock.timers.enable({ apis: ['setTimeout'] });
+ const machine = serialMachine();
+ const result = runGuestCommand(machine, 'apk add --no-cache git curl');
+ result.catch(() => {});
+ t.mock.timers.tick(100000);
+ machine.reply('ERROR: download failed', 1);
+ assert.deepEqual(await result, { output: 'ERROR: download failed', exitCode: 1 });
+ assert.equal(machine.listening(), false);
+});

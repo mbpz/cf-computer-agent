@@ -1,7 +1,7 @@
 import { V86 } from 'v86';
 import { prepareAlpineIso, readImageResponse } from '../alpine-iso.mjs';
 import { createTerminalSession } from '../terminal-session.mjs';
-import { encodeProbeCommand, parseProbeReply } from '../serial-protocol.mjs';
+import { runGuestCommand } from './serial-command.mjs';
 import { attachConnectorGuestNetwork } from '../connector/guest-network.mjs';
 import { createConnectorEgressClient } from '../connector/egress-client.mjs';
 import { acceptPackages, acceptGit } from './commands.mjs';
@@ -9,12 +9,8 @@ let machine,session,network,client,busy=false,started=false,packages=false,faile
 const progress=text=>postMessage({type:'progress',text});
 async function fail(error){if(failed)return;failed=true;network?.close();client?.close();await session?.close().catch(()=>{});postMessage({type:'error',text:String(error.message).slice(-12000)});}
 function command(text){
- progress(text);const id=crypto.randomUUID().replaceAll('-','').slice(0,16);
- return new Promise((resolve,reject)=>{let output='';const finish=(error,result)=>{clearTimeout(timer);machine.remove_listener('serial0-output-byte',receive);if(error)reject(error);else{postMessage({type:'command',command:text,exitCode:result.exitCode,output:result.output.slice(-12000)});resolve(result);}};
-  const receive=byte=>{output+=String.fromCharCode(byte);if(output.length>131072)return finish(Error('Guest output limit exceeded'));const result=parseProbeReply(output,id);if(result)finish(null,result);};
-  const timer=setTimeout(()=>finish(Error('Guest command timeout: '+text+'\n'+output.slice(-8000))),90000);
-  machine.add_listener('serial0-output-byte',receive);machine.serial0_send(encodeProbeCommand(text,id));
- });
+ progress(text);
+ return runGuestCommand(machine,text).then(result=>{postMessage({type:'command',command:text,exitCode:result.exitCode,output:result.output.slice(-12000)});return result;});
 }
 async function start({endpoint,capability}){
  if(started)throw Error('Already started');started=true;

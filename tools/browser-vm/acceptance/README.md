@@ -28,7 +28,7 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 
 1. 在自带浏览器打开终端给出的本机控制页，将地址和临时能力值输入已批准的 HTTPS 验收页。不将能力值粘贴到聊天。
 2. 明确启动后，浏览器 Worker 加载固定镜像，取得正式授权并启动真实 Alpine。
-3. 固定执行网络初始化、`apk update`、`apk add --no-cache git curl`，记录每条退出码以及 git/curl 版本。全部通过才关闭 LC-009。
+3. 固定执行网络初始化、`apk update`、`apk add --no-cache git curl`，安装命令最长10分钟，其余单条命令90秒；超时仍失败且不自动重试。记录每条退出码以及 git/curl 版本。全部通过才关闭 LC-009。
 4. 同一 VM 点击 Git 验收，完成 clone、fetch、两个 commit 校验及 API 仓库身份校验。全部通过才关闭 LC-010。
 5. 点击停止/关闭页面会销毁 VM。Ctrl+C 停止本机服务并清理临时 Worker/连接器；服务最长20分钟自动清理。失败不自动重连；重新开始需要重启本机服务取得新能力值。
 
@@ -37,3 +37,5 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 ## 当前证据
 
 2026-09-30：本地快速VM回归350/350、静态构建通过；新增夹具/HTTP边界/命令测试6项。尚未发布或完成真实浏览器公网验收。主清单5/29、剩余24，连接器8/15保持不变。
+
+2026-09-30 后续实际浏览器验收：网络初始化与 `apk update` 退出码0，安装在首个依赖下载期间触发原90秒上限，未取得安装退出码或版本。失败收据见 `design/browser-vm/2026-09-30-browser-apk-timeout.json`。现仅为固定安装命令设置10分钟上限，须重新手动配对后实际验证；LC-009/010仍开放。

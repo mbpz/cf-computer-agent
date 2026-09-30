@@ -1,0 +1,42 @@
+{
+  "observedOn": "2026-09-30",
+  "recordedAt": "2026-09-30T00:43:00.941270+00:00",
+  "deploymentUrl": "https://a867816b.memory-garden-vm-connector-probe.pages.dev/",
+  "sourceCommit": "2a4ab60",
+  "environment": "actual in-app browser Alpine guest; local test authority; formal connector TCP data plane",
+  "commands": [
+    {
+      "step": "guest network, CA bundle and APK key presence",
+      "exitCode": 0
+    },
+    {
+      "command": "apk update",
+      "exitCode": 0,
+      "availablePackages": 27019,
+      "repositories": [
+        "v3.24.2-52-g5fd3fec8a4a main",
+        "v3.24.2-55-gf4b1c038c08 community"
+      ]
+    },
+    {
+      "command": "apk add --no-cache git curl",
+      "exitCode": null,
+      "result": "harness_timeout",
+      "timeoutMs": 90000,
+      "lastOutput": "(1/13) Installing brotli-libs (1.2.0-r1); progress 1%"
+    }
+  ],
+  "certificateOrSignatureErrorObserved": false,
+  "installationVerified": false,
+  "gitVersion": null,
+  "curlVersion": null,
+  "LC009": "open",
+  "LC010": "not_started",
+  "productionTouched": false,
+  "limitations": [
+    "No installation exit code: the harness timed out and destroyed the VM.",
+    "Absence of a certificate/signature error is not installation success.",
+    "Full browser version and certificate UI were not reverified in this attempt."
+  ],
+  "nextAction": "Retry manually paired browser acceptance with bounded 600000ms package-install timeout; retain 90000ms for other commands."
+}
