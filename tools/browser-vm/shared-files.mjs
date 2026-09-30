@@ -1,7 +1,7 @@
 // Pinned v86 0.5.458 in-memory host9p adapter. Never maps to host disk or shell.
 // Install before machine.run(): guest async FS mutations are tracked so pausing
 // the CPU also waits for already-issued 9p writes. No network-backed FS/mounts.
-import { TEXT_LIMIT, UPLOAD_LIMIT, DOWNLOAD_CHUNK_SIZE, copyFileRequest } from './file-protocol.mjs';
+import { SUBMISSION_TEXT_LIMIT, TEXT_LIMIT, UPLOAD_LIMIT, DOWNLOAD_CHUNK_SIZE, copyFileRequest } from './file-protocol.mjs';
 const encoder = new TextEncoder();
 const fail = code => { throw new Error(code); };
 const same = (a,b) => a.length === b.length && a.every((byte,i) => byte === b[i]);
@@ -47,13 +47,16 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT, d
     return node;
   }
   const type = node => ({16384:'directory',32768:'file',40960:'symlink'}[node.mode & 0xf000] ?? 'unsupported');
-  function resolve(path, followFinal = true) {
+  function resolve(path, followFinal = true, submissionOnly = false) {
     let todo = parts(path), walked = [], id = 0, links = 0;
     while (todo.length) {
       const dir = inode(id); if (type(dir) !== 'directory') fail('NOT_DIRECTORY');
-      const name = todo.shift(), child = dir.direntries.get(name);
+      const name = todo.shift();
+      if (submissionOnly && name.startsWith('.')) fail('INVALID_PATH');
+      const child = dir.direntries.get(name);
       if (child === undefined) fail('FILE_NOT_FOUND');
       const node = inode(child);
+      if (submissionOnly && type(node) === 'symlink') fail('INVALID_PATH');
       if (type(node) === 'symlink' && (followFinal || todo.length)) {
         if (++links > 40) fail('SYMLINK_LOOP');
         const target = node.symlink;
@@ -118,8 +121,8 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT, d
       renewDownload();
       return {token: download.token, size: bytes.length, chunkSize: DOWNLOAD_CHUNK_SIZE};
     }
-    if (op === 'readText' || op === 'download') {
-      const record = resolve(path), bytes = new Uint8Array(data(record,op === 'readText' ? TEXT_LIMIT : UPLOAD_LIMIT));
+    if (op === 'readText' || op === 'readSubmissionText' || op === 'download') {
+      const record = resolve(path,true,op === 'readSubmissionText'), bytes = new Uint8Array(data(record,op === 'readSubmissionText' ? SUBMISSION_TEXT_LIMIT : op === 'readText' ? TEXT_LIMIT : UPLOAD_LIMIT));
       if (op === 'download') return {bytes};
       let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(bytes); } catch { fail('NOT_UTF8'); }
       const version = crypto.randomUUID();

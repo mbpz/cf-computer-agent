@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
+### 2026-10-01 selected-file submission local slice
+
+- [x] G4a / VM-030文本、Markdown和代码显式审核提交：共享根128 KiB专用读取不跟随链接；内容按字面显示；明确空间和可见范围；原幂等键/原载荷恢复；账户失效清理。聚焦32、兼容18、快速VM515及真实Alpine1均通过。收据：`design/browser-vm/2026-10-01-knowledge-import.json`。
+- [ ] PDF/图片等资产格式接入已有开关、上传、解析及审核流程；不以文本子集替代整个VM-030。
+- [ ] 认证正式应用和真实浏览器端到端验收；G0保持关闭入口，D04仍未关闭。原生保存验收仍待从上轮锁屏阻断继续。
+
 ## Global Constraints
 
 - 两种类型都必须完成；不以仅离线、模拟 shell、JavaScript 沙箱或远程云 VM 替代目标。

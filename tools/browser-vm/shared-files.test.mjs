@@ -42,6 +42,7 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   await first.runtime.write("cat /mnt/work/docs/ui.txt; printf '\\nUI-READ-DONE\\n'\n");
   await until(first.runtime,/前端真实上传\r?\nUI-READ-DONE\r?\n/);
   const read=await file({op:'readText',path:'/docs/ui.txt'});assert.equal(read.text,'前端真实上传');
+  assert.equal((await file({op:'readSubmissionText',path:'/docs/ui.txt'})).text,'前端真实上传');
   await first.runtime.write("printf '客体修改' > /mnt/work/docs/ui.txt; printf '\\nGUEST-EDIT-DONE\\n'\n");
   await until(first.runtime,/\r?\nGUEST-EDIT-DONE\r?\n/);
   await assert.rejects(file({op:'saveText',path:'/docs/ui.txt',version:read.version,text:'stale'}),/FILE_CONFLICT/);
@@ -53,6 +54,8 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   await until(first.runtime,/\r?\nLINKS-DONE\r?\n/);
   await assert.rejects(file({op:'readText',path:'/escape'}),/SYMLINK_ESCAPE/);
   assert.equal((await file({op:'readText',path:'/safe'})).text,'保存新版本');
+  await assert.rejects(file({op:'readSubmissionText',path:'/safe'}),/INVALID_PATH/);
+  await assert.rejects(file({op:'readSubmissionText',path:'/escape'}),/INVALID_PATH/);
   await file({op:'remove',path:'/safe'});
   await file({op:'rename',path:'/docs/ui.txt',destination:'/docs/moved.txt'});
   assert.equal(new TextDecoder().decode((await file({op:'download',path:'/docs/moved.txt'})).bytes),'保存新版本');
@@ -75,6 +78,7 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   await until(first.runtime,/\r?\nLARGE-READY\r?\n/);
   const expectedHash=first.runtime.getSnapshot().output.match(/([0-9a-f]{64})  \/mnt\/work\/large.bin/)[1];
   await assert.rejects(file({op:'download',path:'/large.bin'}),/FILE_TOO_LARGE/);
+  await assert.rejects(file({op:'readSubmissionText',path:'/large.bin'}),/FILE_TOO_LARGE/);
   const directory=await mkdtemp(join(tmpdir(),'vm-stream-'));
   t.after(()=>rm(directory,{recursive:true,force:true}));
   const destination=join(directory,'large.bin'),partial=join(directory,'large.part');
@@ -109,5 +113,5 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   await first.runtime.stop();assert.equal(workers[0].exited,true);
 
   await assert.rejects(file({op:'list',path:'/'}),/VM_NOT_RUNNING/);
-  console.log(JSON.stringify({sharedFilesRealAlpine:true,guestRoundtrip:true,conflictRejected:true,escapingSymlinkRejected:true,mutations:true,allWorkersExited:workers.every(w=>w.exited),accountExitAbortsStream:true,productionAcceptance:false}));
+  console.log(JSON.stringify({sharedFilesRealAlpine:true,submissionReadBoundedAndNoSymlinks:true,guestRoundtrip:true,conflictRejected:true,escapingSymlinkRejected:true,mutations:true,allWorkersExited:workers.every(w=>w.exited),accountExitAbortsStream:true,productionAcceptance:false}));
 });

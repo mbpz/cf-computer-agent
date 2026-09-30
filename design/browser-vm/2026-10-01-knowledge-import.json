@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "bad7499",
+  "scope": "D04 / VM-030 selected UTF-8 text/Markdown/code submission local implementation only",
+  "implemented": [
+    "Dedicated readSubmissionText RPC: shared root, no hidden components or symlinks, 128 KiB before buffer copy, strict UTF-8",
+    "Volatile selected snapshot; literal markup preview; explicit title, requested space, visibility and no-secrets acknowledgement",
+    "Existing /api/submissions adapter accepts an explicit validated destination; legacy caller defaults unchanged; session-derived server identity",
+    "Freeze key and payload before POST; no automatic retry; unknown outcome locks selection and permits only explicit original-intent retry",
+    "Runtime/account disposal aborts requests, clears content and ignores late receipts; never claims server rollback",
+    "Reusable bilingual file-panel integration gated on authenticated app binding; independent diagnostic preview cannot submit",
+    "Credential filename and private-key-marker rejection is a guard, not a comprehensive secret scanner; explicit user review required"
+  ],
+  "verification": {
+    "focusedControllerAdapterReact": {
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    "legacySubmissionCompatibility": {
+      "files": 2,
+      "passed": 18
+    },
+    "fastVm": {
+      "passed": 515,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50026.434583
+    },
+    "realAlpine": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "submissionReadTextMatches": true,
+      "submissionRejectsSafeAndEscapingSymlinks": true,
+      "submissionRejectsOversize": true,
+      "allWorkersExited": true,
+      "durationMs": 20395.557875
+    },
+    "projectTypecheck": "passed",
+    "strictComponentTypecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "checklistTests": 9,
+    "diffCheck": "passed"
+  },
+  "evidenceBoundary": {
+    "httpInNewControllerTests": "fixture transport exercising real existing frontend API adapter; not an authenticated production submission",
+    "sharedFilesystem": "actual Alpine + terminal Worker RPC exercised separately",
+    "nativeAcceptanceThisTurn": false,
+    "productionAcceptance": false
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "VM-030": "partial; text implementation only",
+    "connectorCompleted": 9,
+    "connectorUserSkippedNotPassed": 1,
+    "connectorPending": 5
+  },
+  "remaining": [
+    "PDF/image/document assets must use existing availability/upload/parse/review flow; not implemented in VM importer yet",
+    "Authenticated formal app integration/browser acceptance remains G0-gated",
+    "Native stream-save acceptance was blocked by device lock in previous turn and was not retried",
+    "Persistent VM save/restore, full engine network bridge and browser/production matrices remain open"
+  ],
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "githubRetried": false,
+    "apkReinstalled": false
+  },
+  "logs": [
+    "/private/tmp/vm-import-focused-final.log",
+    "/private/tmp/vm-import-compat.log",
+    "/private/tmp/vm-import-verified.log",
+    "/private/tmp/vm-import-real.log",
+    "/private/tmp/vm-import-types-final.log",
+    "/private/tmp/vm-import-build-final.log"
+  ],
+  "next": "Asset-backed selected-file import with existing feature gate and explicit upload/parse/review workflow; keep parent open until end-to-end acceptance"
+}

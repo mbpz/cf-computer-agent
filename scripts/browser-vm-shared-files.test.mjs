@@ -119,3 +119,10 @@ test('stream protocol rejects invalid offsets, huge chunks and malformed begin r
  assert.equal(validFileResult({op:'downloadChunk',offset:0},{offset:1,bytes:new Uint8Array(1),done:false}),false);
  assert.equal(validFileResult({op:'downloadChunk',offset:0},{offset:0,bytes:new Uint8Array(1048577),done:false}),false);
 });
+
+test('submission-only read rejects every symlink including hidden-target aliases and enforces 128 KiB before copying',async()=>{
+ const f=fixture();await f.files.request({op:'mkdir',path:'/.hidden'});await f.files.request({op:'upload',path:'/.hidden/key.txt',bytes:bytes('sensitive')});f.link('alias.txt','/mnt/work/.hidden/key.txt');f.link('directory','/mnt/work/.hidden');
+ for(const path of ['/.hidden/key.txt','/alias.txt','/directory/key.txt'])await assert.rejects(f.files.request({op:'readSubmissionText',path}),/INVALID_PATH/);
+ await f.files.request({op:'upload',path:'/valid.txt',bytes:bytes('review only')});const receipt=await f.files.request({op:'readSubmissionText',path:'/valid.txt'});assert.equal(receipt.text,'review only');assert.ok(receipt.version);
+ await f.files.request({op:'upload',path:'/large.txt',bytes:new Uint8Array(131073)});await assert.rejects(f.files.request({op:'readSubmissionText',path:'/large.txt'}),/FILE_TOO_LARGE/);assert.equal(f.running,true);f.files.close();
+});

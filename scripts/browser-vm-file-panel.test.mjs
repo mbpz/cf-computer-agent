@@ -7,12 +7,12 @@ import {Window} from 'happy-dom';
 let dir,FilesPanel;
 before(async()=>{dir=await mkdtemp(new URL('./.vm-files-',import.meta.url).pathname);await build({entryPoints:['frontend/features/environments/files/files-panel.tsx'],outfile:dir+'/module.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic'});({FilesPanel}=await import(dir+'/module.mjs'));});
 after(async()=>{if(dir)await rm(dir,{recursive:true,force:true});});
-async function render(t,handler,locale='en',nativeDownload=false,onOpenDownload){
+async function render(t,handler,locale='en',nativeDownload=false,onOpenDownload,submission){
  const window=new Window({url:'http://localhost'});const saved=new Map();
  for(const [key,value]of Object.entries({window,document:window.document,navigator:window.navigator,HTMLElement:window.HTMLElement,HTMLInputElement:window.HTMLInputElement,IS_REACT_ACT_ENVIRONMENT:true})){saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  const {createRoot}=await import('react-dom/client');const host=window.document.createElement('main');window.document.body.append(host);const root=createRoot(host);let snapshot={status:'running',environmentId:'a'};const subs=new Set(),calls=[],downloads=[];
  const runtime={getSnapshot:()=>snapshot,subscribe(fn){subs.add(fn);return()=>subs.delete(fn);},async file(input){calls.push(input);return handler(input);}};
- await act(async()=>root.render(React.createElement(FilesPanel,{runtime,locale,onOpenDownload,onDownload:nativeDownload?undefined:(...args)=>downloads.push(args)})));
+ await act(async()=>root.render(React.createElement(FilesPanel,{runtime,locale,onOpenDownload,submission,onDownload:nativeDownload?undefined:(...args)=>downloads.push(args)})));
  t.after(async()=>{await act(async()=>root.unmount());window.happyDOM.abort();for(const[k,d]of saved){if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}});
  return{host,window,calls,downloads,async switchEnvironment(){await act(async()=>{snapshot={status:'running',environmentId:'b'};for(const fn of subs)fn();});},async close(){await act(async()=>{snapshot={status:'closed',environmentId:null};for(const fn of subs)fn();});}};
 }
@@ -72,4 +72,20 @@ test('large file offers streaming save with progress and explicit local export w
 test('unsupported browser does not pretend large file streaming or enable its action',async t=>{
  const f=await render(t,()=>({...list(),entries:[{name:'large',type:'file',bytes:22*1048576}]}));
  assert.ok(f.host.querySelector('[data-file-stream]'));assert.equal(f.host.querySelector('[data-file-stream]').disabled,true);assert.match(f.host.textContent,/Streaming save is unavailable/);
+});
+
+test('selected VM file confirmation renders hostile markup as text and submits only after acknowledgement',async t=>{
+ const posts=[];const f=await render(t,input=>input.op==='list'?list():{text:'<img src=x onerror=alert(1)>',version:'v1'},'en',false,undefined,{memberId:'member-a',requester:async(url,init)=>{posts.push({url,init});return Response.json({submission:{id:'submission-ui'}});}});
+ await act(async()=>f.host.querySelector('[data-file-import]').click());assert.equal(posts.length,0);assert.equal(f.host.querySelector('[data-import-preview]').textContent,'<img src=x onerror=alert(1)>');assert.equal(f.host.querySelector('[data-import-preview] img'),null);
+ assert.equal(f.host.querySelector('[data-import-confirm]').disabled,true);
+ await fill(f.window,f.host.querySelector('[data-import-space]'),'team-notes');
+ await act(async()=>f.host.querySelector('[data-import-ack]').click());
+ await act(async()=>f.host.querySelector('[data-import-confirm]').click());assert.equal(posts.length,1);assert.equal(JSON.parse(posts[0].init.body).requestedSpaceId,'team-notes');assert.ok(f.host.textContent.includes('submission-ui'));assert.equal(f.host.querySelector('[data-import-preview]'),null);
+});
+test('VM import is gated without authenticated integration',async t=>{
+ const f=await render(t,()=>list());assert.equal(f.host.querySelector('[data-file-import]').disabled,true);
+});
+test('VM import clears selected content on runtime exit',async t=>{
+ const g=await render(t,input=>input.op==='list'?list():{text:'old owner content',version:'v1'},'zh-CN',false,undefined,{memberId:'member-a',requester:()=>{throw Error('must not post');}});
+ await act(async()=>g.host.querySelector('[data-file-import]').click());assert.ok(g.host.textContent.includes('old owner content'));await g.close();assert.equal(g.host.textContent.includes('old owner content'),false);
 });
