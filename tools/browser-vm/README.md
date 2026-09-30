@@ -140,3 +140,28 @@ the 512 MiB state cap is not a browser-process memory guarantee.
 - Server paths are explicitly allowlisted, do not expose the project directory, reject cross-origin requests, and return `no-store`. Do not expose this server publicly.
 
 The authoritative implementation plan is `docs/superpowers/plans/2026-09-09-browser-linux-vm.md`; outstanding requirements remain unchecked there and in the design spec.
+
+### Account-owned runtime proof (local only)
+
+`node tools/browser-vm/server.mjs <BIOS-directory> <ISO-directory> --runtime-owner`
+serves `/runtime-owner.html` and a bundled diagnostic entry only with explicit
+opt-in. It uses the product `account-vm-runtime.mjs` owner and the existing actual
+Alpine terminal Worker, not a simulated shell. It never connects guest networking.
+The fixed Web Lock is shared by tabs/accounts **within the same origin/profile**.
+There is no cross-origin/device lock, stealing, queued start, automatic restart,
+command replay, persistent output, or localStorage fallback. Missing Web Locks
+rejects startup. Stop/account disposal/environment removal invalidate callbacks
+and clear output; a failed resource close retains the lock until explicit cleanup
+succeeds. The session factory must return a cancellable handle synchronously and
+put asynchronous initialization in `ready`; `close` must confirm Worker termination.
+
+`BROWSER_VM_PROBE_ASSETS=<BIOS-directory> BROWSER_VM_PROBE_ISO_ASSETS=<ISO-directory>
+node --test tools/browser-vm/runtime-owner.test.mjs` runs actual Alpine in Node
+Workers: guest file round-trip, Ctrl+C, termination, deletion, account disposal,
+boot cancellation and lock exclusion. Without explicit assets it skips, never
+reports Linux acceptance. This test is also in `test:browser-vm:linux`.
+
+Diagnostic identities are not production login evidence; the development image
+is not a reviewed production release. The formal App currently exposes metadata
+management only. Snapshot/file UI, networking across the Worker boundary, full
+Chrome/Edge lifecycle acceptance and G0 review remain open.

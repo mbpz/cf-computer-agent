@@ -9,11 +9,18 @@ import { startRecoveryFixture } from './recovery-fixture.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 
-export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false }) {
+export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false, runtimeOwner = false }) {
   if (typeof assets !== 'string' || !assets) throw new Error('Explicit development assets required');
   if (isoAssets !== undefined && (typeof isoAssets !== 'string' || !isoAssets)) throw new Error('Explicit ISO assets required');
   if (typeof recovery !== 'boolean' || (recovery && !isoAssets)) throw new Error('Recovery requires explicit ISO assets');
   if (typeof directDownload !== 'boolean') throw new Error('Direct download requires explicit boolean opt-in');
+  if (typeof runtimeOwner !== 'boolean' || (runtimeOwner && !isoAssets)) throw new Error('Runtime owner requires explicit ISO assets');
+  let runtimeBundle;
+  if (runtimeOwner) {
+    const { build } = await import('esbuild');
+    const result = await build({entryPoints:[join(directory, 'runtime-owner-browser.mjs')], bundle:true, write:false, format:'esm', platform:'browser', target:'es2022'});
+    runtimeBundle = result.outputFiles[0].contents;
+  }
   const files = new Map([
     ['/', [join(directory, 'index.html'), 'text/html; charset=utf-8']],
     ...['browser.mjs', 'probe-core.mjs', 'probe-checkpoint.mjs', 'serial-protocol.mjs', 'probe-worker.mjs', 'probe-worker-client.mjs', 'alpine-artifact.mjs', 'alpine-iso.mjs', 'authenticated-probe-socket.mjs',
@@ -35,6 +42,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
   if (directDownload) for (const name of ['direct-download.html', 'direct-download-browser.mjs', 'direct-download-page.mjs', 'direct-download.mjs']) {
     files.set(`/${name}`, [join(directory, name), name.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8']);
   }
+  if (runtimeOwner) files.set('/runtime-owner.html', [join(directory, 'runtime-owner.html'), 'text/html; charset=utf-8']);
   const recoveryFixture = recovery ? await startRecoveryFixture() : undefined;
   let origin;
   let relay;
@@ -76,6 +84,10 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
       response.end(request.method === 'HEAD' ? undefined : content);
       return;
     }
+    if (runtimeBundle && request.url === '/runtime-owner-browser.mjs') {
+      response.writeHead(200, {'Content-Type':'text/javascript; charset=utf-8','Content-Length':runtimeBundle.length});
+      response.end(request.method === 'HEAD' ? undefined : runtimeBundle); return;
+    }
     const target = files.get(request.url);
     if (!target) { response.writeHead(404).end('Not found'); return; }
     try {
@@ -103,7 +115,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download' });
+  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download', runtimeOwner: process.argv[4] === '--runtime-owner' });
   console.log(`Local-only Linux verification: ${server.url}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
     await server.close();

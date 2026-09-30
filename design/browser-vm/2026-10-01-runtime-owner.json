@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseCommit": "f7cd550",
+  "scope": "D04 / LC-011/012 account-owned VM resource lifecycle; local proof, not parent acceptance",
+  "runtimeOwnerTests": {
+    "passed": 11,
+    "failed": 0,
+    "usesRealNodeLockManager": true
+  },
+  "focusedRuntimeAndServerTests": {
+    "passed": 20,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "fastVmTests": {
+    "passed": 466,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 49867.277875
+  },
+  "appChecklistI18nContracts": {
+    "passed": 30,
+    "failed": 0
+  },
+  "realAlpineWorkerTest": {
+    "passed": 1,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 51776.056291,
+    "workersCreated": 4,
+    "allWorkersExited": true,
+    "kernel": "6.18.35-0-virt",
+    "checks": [
+      "guest UTF-8 file write/read",
+      "foreground command Ctrl+C",
+      "one active Worker despite competing owner",
+      "explicit stop and restart",
+      "environment deletion",
+      "account disposal during run",
+      "account disposal during boot",
+      "no lock retained after confirmed termination"
+    ],
+    "command": "BROWSER_VM_PROBE_ASSETS=<explicit BIOS directory> BROWSER_VM_PROBE_ISO_ASSETS=<explicit ISO directory> node --test tools/browser-vm/runtime-owner.test.mjs"
+  },
+  "inAppBrowser": {
+    "scope": "two diagnostic tabs, same loopback origin, actual browser terminal Workers",
+    "observed": [
+      "first tab running; uname -r returned 6.18.35-0-virt and BROWSER-RUNTIME-OK",
+      "second tab start refused VM_BUSY",
+      "first stop cleared terminal output",
+      "second tab then booted successfully",
+      "diagnostic account exit showed closed, empty terminal and disabled start/send"
+    ],
+    "deletionUiClicked": false,
+    "note": "Deletion proven through real Node Worker owner path, not browser delete-button acceptance. Diagnostic identity is not production authentication. Full Chrome/Edge lifecycle matrix not claimed.",
+    "screenshot": "/private/tmp/runtime-owner-account-closed.png",
+    "browserObservations": "/private/tmp/runtime-owner-browser-observations.txt",
+    "temporaryTabsAndServerClosed": true
+  },
+  "regressionsFixed": [
+    "cancel from booting subscriber previously allocated a Worker after cancellation",
+    "network registry preserves legacy INVALID_SCOPE error contract"
+  ],
+  "initialRealTestFailures": "First harness assertion incorrectly expected no shell prompt between separate commands; adapter keyed listeners only by function despite shared error callback. Corrected command framing and per-event listeners; interrupted failed harness is not counted as passing.",
+  "safety": [
+    "manual start only; no lock steal/queue/fallback",
+    "cleanup failure retains lock until explicit successful stop retry",
+    "output cleared on invalidation; late callbacks ignored",
+    "stop disconnects only pre-existing network handle",
+    "local server exposes bundled diagnostic only on explicit opt-in"
+  ],
+  "verification": {
+    "typecheck": "passed",
+    "newDeclarationsStrictTypecheck": "passed",
+    "uiBuild": "passed; existing >500kB chunk warning"
+  },
+  "boundaries": {
+    "formalMetadataUi": true,
+    "formalRuntimeUiEnabled": false,
+    "networkWorkerBridge": false,
+    "snapshotsAndFileUi": false,
+    "productionImageRelease": false,
+    "productionDeployment": false,
+    "github": "user-skipped, not passed",
+    "g0": "open"
+  },
+  "parentChecklist": {
+    "scope": 29,
+    "complete": 5,
+    "open": 24
+  },
+  "connectorChecklist": {
+    "total": 15,
+    "complete": 9,
+    "userSkippedNotPassed": 1,
+    "pending": 5
+  },
+  "logs": {
+    "fastVm": "/private/tmp/runtime-owner-vm-regression-final.log",
+    "realLinux": "/private/tmp/runtime-owner-real-linux-final.log",
+    "focused": "/private/tmp/runtime-owner-focused-final.log",
+    "contracts": "/private/tmp/runtime-owner-contracts.log",
+    "uiBuild": "/private/tmp/runtime-owner-ui-build.log"
+  }
+}

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { get } from 'node:http';
 import { startProbeServer } from '../tools/browser-vm/server.mjs';
 
-async function fixture(t, { iso = false, recovery = false, directDownload = false } = {}) {
+async function fixture(t, { iso = false, recovery = false, directDownload = false, runtimeOwner = false } = {}) {
   const assets = await mkdtemp(join(tmpdir(), 'workbench-vm-server-'));
   t.after(() => rm(assets, { recursive: true, force: true }));
   await writeFile(join(assets, 'seabios.bin'), new Uint8Array([7, 8, 9]));
@@ -16,7 +16,7 @@ async function fixture(t, { iso = false, recovery = false, directDownload = fals
     await writeFile(join(assets, 'alpine-virt-3.24.1-x86.iso'), new Uint8Array([3, 4]));
     await writeFile(join(assets, 'private.txt'), 'not public');
   }
-  const server = await startProbeServer({ assets, recovery, directDownload, ...(iso ? { isoAssets: assets } : {}) });
+  const server = await startProbeServer({ assets, recovery, directDownload, runtimeOwner, ...(iso ? { isoAssets: assets } : {}) });
   t.after(async () => {
     await server.close();
   });
@@ -148,3 +148,15 @@ test('ticket capacity exhaustion returns a bounded error instead of crashing the
   })).status, 429);
   assert.equal((await fetch(server.url)).status, 200);
 });
+
+test('account runtime proof is opt-in, bundled and never serves repository source paths', async t => {
+ const ordinary = await fixture(t); assert.equal((await fetch(ordinary.url + '/runtime-owner.html')).status,404);
+ const server = await fixture(t,{iso:true,runtimeOwner:true});
+ for (const path of ['/runtime-owner.html','/runtime-owner-browser.mjs']) {
+ const response=await fetch(server.url+path);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+ assert.equal((await fetch(server.url+path,{headers:{Origin:'https://other.example'}})).status,403);
+ }
+ const html=await (await fetch(server.url+'/runtime-owner.html')).text();assert.match(html,/独立本地验收/);assert.match(html,/开发镜像/);
+ const bundle=await (await fetch(server.url+'/runtime-owner-browser.mjs')).text();assert.match(bundle,/memory-garden-vm-runtime-v1/);assert.match(bundle,/terminal-worker.mjs/);
+ for (const path of ['/frontend/features/environments/account-vm-runtime.mjs','/runtime-owner.test.mjs','/acceptance/terminal-node-worker.mjs'])assert.equal((await fetch(server.url+path)).status,404);
+ });

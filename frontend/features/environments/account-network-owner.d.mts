@@ -10,6 +10,9 @@ export interface AccountNetworkHandle {
 export interface AccountNetworkOwner {
   readonly scope: AccountNetworkScope;
   readonly signal: AbortSignal;
+  assertEnvironment(environmentId: string): void;
+  onEnvironmentRemoved(listener: (environmentId: string) => void): () => void;
+  disconnectEnvironment(environmentId: string): void;
   network(environmentId: string): AccountNetworkHandle;
   removeEnvironment(environmentId: string): void;
   dispose(): void;
