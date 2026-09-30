@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-09-30T08:14:53.738744+08:00",
+  "sourceCommit": "2a4ab60",
+  "project": "memory-garden-vm-connector-probe",
+  "branch": "lc009-acceptance",
+  "deploymentUrl": "https://a867816b.memory-garden-vm-connector-probe.pages.dev",
+  "aliasUrl": "https://lc009-acceptance.memory-garden-vm-connector-probe.pages.dev",
+  "scope": "standalone static acceptance preview only",
+  "files": {
+    "_headers": {
+      "bytes": 313,
+      "sha256": "e9d5135b15936fbad198524689cfd9c9b84c86270d0ecc7ae0abd8eeee8754f5"
+    },
+    "browser.js": {
+      "bytes": 2296,
+      "sha256": "163372325af430ae21caaf37d28abeaaddc5a6545962689aedf67ee3f0bb4239"
+    },
+    "engine.mjs": {
+      "bytes": 359445,
+      "sha256": "329a9185f889230dfc54c75213e1e6a855b0459d134fe5cbd18cbd402f7cdd30"
+    },
+    "index.html": {
+      "bytes": 1079,
+      "sha256": "64337198190d43e67617574ed930b63ec950563e785a8c186515efc6881c284e"
+    },
+    "worker.js": {
+      "bytes": 41253,
+      "sha256": "919afb0c82fcb3532329af6b9fefc1ba42f1eef299595c5632cb6e4786a6e47f"
+    }
+  },
+  "browserObserved": {
+    "provider": "Codex In-app Browser",
+    "title": "真实 VM 正式连接器验收",
+    "state": "尚未启动"
+  },
+  "productionDeployed": false,
+  "LC009": "open - actual browser installation not started",
+  "LC010": "open - actual browser Git acceptance not started"
+}
