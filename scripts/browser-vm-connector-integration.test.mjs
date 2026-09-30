@@ -16,7 +16,7 @@ async function socket(t, f) {
   t.after(() => ws.terminate()); ws.on('error', () => {});
   let isClosed = false;
   const closed = new Promise(resolve => ws.once('close', code => { isClosed = true; resolve(code); }));
-  const binaryQueue = [], binaryWaiters = [];
+  const binaryQueue = [], binaryWaiters = [], downloadBytes = new Map();
   ws.on('close', () => { for(const waiter of binaryWaiters.splice(0)) waiter.reject(new Error('Connector closed before binary reply')); });
   const messages = [], pending = [];
   ws.on('message', (bytes, binary) => { if (binary) { const waiter = binaryWaiters.shift(); if(waiter) waiter.resolve(bytes); else binaryQueue.push(bytes); return; } const value = JSON.parse(bytes.toString()); messages.push(value); pending.shift()?.(value); });
@@ -25,7 +25,15 @@ async function socket(t, f) {
     batchBinary: frames => { ws._socket.cork(); for(const frame of frames) ws.send(frame); ws._socket.uncork(); },
     pauseReceive: () => ws._socket.pause(), resumeReceive: () => ws._socket.resume(),
     send: value => ws.send(JSON.stringify(value)), sendBinary: value => ws.send(value),
-    nextBinary: () => binaryQueue.length ? Promise.resolve(binaryQueue.shift()) : isClosed ? Promise.reject(new Error('Connector closed before binary reply')) : new Promise((resolve,reject) => binaryWaiters.push({resolve,reject})) };
+    nextBinary: async ({ acknowledge = true } = {}) => {
+      const frame = binaryQueue.length ? binaryQueue.shift() : isClosed ? await Promise.reject(new Error('Connector closed before binary reply')) : await new Promise((resolve,reject) => binaryWaiters.push({resolve,reject}));
+      if (frame[0] === 2) {
+        const id = frame.readUInt32LE(1), bytes = (downloadBytes.get(id) || 0) + frame.length - 5;
+        downloadBytes.set(id,bytes);
+        if (acknowledge) ws.send(JSON.stringify({type:'downstream-drained',version:1,streamId:id,bytes}));
+      }
+      return frame;
+    }, get queuedBinary() { return binaryQueue.length; } };
 }
 async function connect(t, f) {
   const channel = await socket(t, f), pairingCode = await pair(f), ready = channel.next();
@@ -171,8 +179,8 @@ async function tcpFixture(t, { pendingDns = false } = {}) {
 }
 const tcpConnect=Buffer.from('010100000001bb016769746875622e636f6d','hex');
 async function enableEgress(c) {
-  const enabled=c.next(); c.send({type:'start-egress',version:1,protocol:'wisp-v1'});
-  assert.deepEqual(await enabled,{type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});
+  const enabled=c.next(); c.send({type:'start-egress',version:1,protocol:'wisp-v1-drain-v1'});
+  assert.deepEqual(await enabled,{type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});
   assert.equal((await c.nextBinary()).toString('hex'),'030000000010000000');
 }
 async function echo(c,text='hello') {
@@ -213,7 +221,7 @@ test('unsupported or repeated egress negotiation, malformed frames and synthetic
     if(kind==='version') c.send({type:'start-egress',version:1,protocol:'wisp-v2'});
     else {
       await enableEgress(c);
-      if(kind==='repeat') c.send({type:'start-egress',version:1,protocol:'wisp-v1'});
+      if(kind==='repeat') c.send({type:'start-egress',version:1,protocol:'wisp-v1-drain-v1'});
       if(kind==='continue') c.sendBinary(Buffer.from('030100000010000000','hex'));
       if(kind==='oversize-json') c.send({type:'x',padding:'x'.repeat(11000)});
       if(kind==='probe-ip') {
@@ -320,7 +328,11 @@ async function formalClient(t,f,options={}) {
     ...options});
   t.after(()=>client.close());await ready;
   return {client,closed,get lease(){return readyLease;},get renewals(){return renewals;},get renewalStops(){return renewalStops;},
-    next:()=>received.length?Promise.resolve(received.shift()):ended?Promise.reject(new Error('Formal client closed')):new Promise((resolve,reject)=>waiting.push({resolve,reject}))};
+    next:async()=>{
+      const frame=received.length?received.shift():ended?await Promise.reject(new Error('Formal client closed')):await new Promise((resolve,reject)=>waiting.push({resolve,reject}));
+      if(frame[0]===2)assert.equal(client.acknowledge(frame.readUInt32LE(1)),true);
+      return frame;
+    }};
 }
 test('formal browser client demuxes real Worker/D1 auth and renewals while the same real TCP stream stays live',limit,async t=>{
   const f=await tcpFixture(t),c=await formalClient(t,f);
@@ -419,4 +431,38 @@ test('real v86 Ethernet DNS and TCP traverse the formal client, signed Worker/D1
  assert.equal(f.dns,2);assert.equal(f.dials,1);assert.equal(await f.count(),1);
  const peerClosed=once(f.peer,'close');network.close();await closed;await peerClosed;
  input(guestTcp(mac,{source:12002}));assert.equal(f.dials,1);assert.equal(Object.keys(machine.network_adapter.tcp_conn).length,0);
+});
+
+// Native WebSocket receipt is deliberately NOT a consumption signal here.
+test('downstream source waits for exact guest receipt; duplicate receipt revokes real authority',limit,async t=>{
+ const f=await tcpFixture(t),c=await connect(t,f);await enableEgress(c);c.sendBinary(tcpConnect);
+ c.sendBinary(Buffer.from('02010000006869','hex'));
+ assert.equal((await c.nextBinary({acknowledge:false})).subarray(5).toString(),'hi');
+ f.peer.write(Buffer.alloc(32768,97));await new Promise(resolve=>setTimeout(resolve,60));
+ assert.equal(c.queuedBinary,0);assert.equal(c.isClosed,false);
+ c.send({type:'downstream-drained',version:1,streamId:1,bytes:2});
+ const next=await c.nextBinary({acknowledge:false});assert.equal(next.length,16389);
+ await new Promise(resolve=>setTimeout(resolve,40));assert.equal(c.queuedBinary,0);
+ const ended=once(f.peer,'close');c.send({type:'downstream-drained',version:1,streamId:1,bytes:2});
+ assert.equal(await c.closed,1008);await ended;
+});
+for(const mutation of ['wrong-total','unknown-stream','extra-field','fraction','zero','legacy'])test(`downstream protocol refuses ${mutation}`,limit,async t=>{
+ const f=await tcpFixture(t),c=await connect(t,f);
+ if(mutation==='legacy'){c.send({type:'start-egress',version:1,protocol:'wisp-v1'});assert.equal(await c.closed,1008);assert.equal(f.dials,0);return;}
+ await enableEgress(c);c.sendBinary(tcpConnect);c.sendBinary(Buffer.from('02010000006869','hex'));await c.nextBinary({acknowledge:false});
+ const receipt={type:'downstream-drained',version:1,streamId:1,bytes:2};
+ if(mutation==='wrong-total')receipt.bytes=3;
+ if(mutation==='unknown-stream')receipt.streamId=2;
+ if(mutation==='extra-field')receipt.extra=true;
+ if(mutation==='fraction')receipt.bytes=1.5;
+ if(mutation==='zero')receipt.bytes=0;
+ c.send(receipt);assert.equal(await c.closed,1008);
+});
+test('idle timeout cancels a pending downstream receipt; late ACK cannot reopen TCP',limit,async t=>{
+ const f=await tcpFixture(t),c=await connect(t,f);await enableEgress(c);c.sendBinary(tcpConnect);c.sendBinary(Buffer.from('02010000006869','hex'));
+ await c.nextBinary({acknowledge:false});const ended=once(f.peer,'close');await f.advance(15000);
+ assert.equal((await c.nextBinary())[0],4);await ended;
+ c.send({type:'downstream-drained',version:1,streamId:1,bytes:2});
+ await new Promise(resolve=>setTimeout(resolve,30));assert.equal(f.dials,1);assert.equal(c.isClosed,false);
+ c.send({type:'disconnect',version:1});await c.closed;
 });

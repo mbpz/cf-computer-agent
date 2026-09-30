@@ -119,11 +119,11 @@ successful fixture consumption responses are installed by this module.
 
 After `ready`, the client can send exactly:
 ```json
-{"type":"start-egress","version":1,"protocol":"wisp-v1"}
+{"type":"start-egress","version":1,"protocol":"wisp-v1-drain-v1"}
 ```
 A consumed active lease is still required. Duplicate/unknown negotiation closes
 rather than replacing the stream manager. Server sends JSON `egress-ready` with
-`version:1`, `protocol:"wisp-v1"`, `forwarding:true`, then binary WISP CONTINUE on
+`version:1`, `protocol:"wisp-v1-drain-v1"`, `forwarding:true`, then binary WISP CONTINUE on
 stream 0 with a 16-frame initial window. No DNS or TCP starts merely by enabling.
 Initial `ready` and public `/identity` retain `forwarding:false`: neither implies
 an active data plane. Subsequent `renewed` reports the channel's negotiated state.
@@ -138,8 +138,28 @@ close synchronously before another message in the same TCP chunk can cause DNS.
 Each stream inherits the initial window; **TCP connect does not send a new credit**
 because pre-connect DATA can already be in flight. Only consuming and draining a
 whole window grants another 16. Real socket write callbacks/drain and downstream
-WebSocket send completion govern progress. A pending renewal can use only the old
+WebSocket send completion **and guest-consumption receipts** govern progress. A pending renewal can use only the old
 lease until its independent hard deadline; failure destroys all owned streams.
+
+`wisp-v1-drain-v1` is this connector's explicitly negotiated extension, not
+an unchanged standard WISP peer. Legacy `wisp-v1` negotiation is rejected; both
+preview and local connector must be upgraded together. The binary subset and
+upload CONTINUE direction are unchanged. Each stream may have only one <=16KiB
+downstream DATA outstanding. Its consumer calls `client.acknowledge(streamId)`
+only after the native guest TCP send ring is empty (guest ACKs), **not** from
+`onFrame` merely on browser receipt. The client sends exactly:
+```json
+{"type":"downstream-drained","version":1,"streamId":1,"bytes":16384}
+```
+`bytes` is the cumulative payload count for that stream. The server resumes its
+paused TCP reader only after both local send completion and the exact pending
+receipt. Duplicate, premature, wrong-total, malformed or future-ID receipts
+close the channel. A closed/past stream ID may have an in-flight final receipt;
+it is ignored without recreating state, granting credit or touching deadlines.
+Receipts still count toward wire budgets. At most eight constant-size window
+records exist. Stream idle timeout, lease expiry, cancel and remote close settle
+pending waits and delete their records. Receipts may cross renewal only while
+the old lease remains active; they never extend it.
 
 Default egress uses the independent A/AAAA destination policy and a single pinned
 literal address, no second lookup, fallback or proxy: only
@@ -165,7 +185,7 @@ lifecycle acceptance remains required.
 `egress-client.mjs` is browser-compatible and has no Node imports. Call
 `createConnectorEgressClient({ url, pairingCode, ticket, renewTicket, onReady,
 onFrame, onClose })` for one explicit connection to
-`ws://127.0.0.1:<port>/connector`. The returned `send(binary)`, `close()` and
+`ws://127.0.0.1:<port>/connector`. The returned `send(binary)`, `acknowledge(streamId)`, `close()` and
 `readyState` (0 connecting, 1 ready, 3 closed) never reconnect or queue data.
 Constructing a new instance requires explicit product lifecycle authorization;
 reusing a consumed ticket does not grant a new connection.
@@ -294,8 +314,10 @@ IP, on port 80 or 443. Server-side independent DNS policy still applies.
 
 At most eight streams have separate 16-frame upload credit, 256KiB/256-chunk
 upload queues and 256KiB native download rings; exceeding limits closes rather
-than growing without bound. A non-reading guest currently causes bounded
-fail-closed overflow, **not** guest-consumption-driven downstream backpressure.
+than growing without bound. Guest TCP ACKs drain the current frame before a
+new downstream frame is admitted. A non-reading guest therefore stalls the host
+reader at one frame and is released by the existing idle/authorization deadlines;
+the independent 256KiB overflow guard remains as defense in depth.
 Each flow has an independent 15-second idle deadline checked even if timers
 are delayed. Guest FIN waits for queued upload credit; server CLOSE drains
 already-received TCP bytes before FIN. Explicit cancellation discards queues,

@@ -34,7 +34,7 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     throw new Error('Explicit connector endpoint, authorization and callbacks required');
   }
   let socket, phase = 'connecting', lease, pending, lastId = 0, usedBytes = 0, usedFrames = 0;
-  const streams = new Map(), timers = new Set(), queries = new Map();
+  const streams = new Map(), downloads = new Map(), timers = new Set(), queries = new Map();
   let lastQueryId = 0;
   let sampledWall = clock.wallNow(), sampledMono = clock.monotonicNow();
   const now = () => {
@@ -49,7 +49,7 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
   const clear = id => { if (timers.delete(id)) clock.clearTimer(id); };
   function finish() {
     if (phase === 'closed') return false;
-    phase = 'closed'; pairingCode = ''; ticket = ''; streams.clear(); lease = undefined;
+    phase = 'closed'; pairingCode = ''; ticket = ''; streams.clear(); downloads.clear(); lease = undefined;
     const request = pending; pending = undefined;
     for (const id of timers) clock.clearTimer(id);
     timers.clear(); request?.controller.abort();
@@ -114,10 +114,10 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     if (phase === 'authenticating' && frame.type === 'ready') {
       if (!fields(frame, ['type','version','forwarding','lease']) || frame.forwarding !== false) return invalid();
       acceptLease(frame.lease); phase = 'enabling';
-      transmit({ type: 'start-egress', version: 1, protocol: 'wisp-v1' }); return;
+      transmit({ type: 'start-egress', version: 1, protocol: 'wisp-v1-drain-v1' }); return;
     }
     if (phase === 'enabling' && frame.type === 'egress-ready') {
-      if (!fields(frame, ['type','version','protocol','forwarding']) || frame.protocol !== 'wisp-v1' || frame.forwarding !== true) return invalid();
+      if (!fields(frame, ['type','version','protocol','forwarding']) || frame.protocol !== 'wisp-v1-drain-v1' || frame.forwarding !== true) return invalid();
       phase = 'window'; return;
     }
     if (phase === 'active' && frame.type === 'destination-resolved') {
@@ -158,7 +158,12 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     } else if (b[0] !== 2) return invalid();
     // A voluntary close can cross data/credit/close already sent by the peer.
     if (!streams.has(id)) return;
-    if (b[0] === 4) streams.delete(id);
+    if (b[0] === 4) { streams.delete(id); downloads.delete(id); }
+    if (b[0] === 2) {
+      const entry = downloads.get(id);
+      if (!entry || entry.pending) return invalid();
+      entry.bytes += b.length - 5; entry.pending = true;
+    }
     onFrame(b.slice().buffer);
   }
   function message(event) {
@@ -182,14 +187,23 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
       if (b[0] === 1) {
         if (b.length < 9 || b.length > 261 || id <= lastId || streams.size >= 8 || b[5] !== 1 || ![80,443].includes(view.getUint16(6,true))
           || !names.has(String.fromCharCode(...b.subarray(8)))) return finish();
-        lastId = id; streams.set(id,16);
+        lastId = id; streams.set(id,16); downloads.set(id,{bytes:0,pending:false});
       } else if (b[0] === 2) {
         if (!streams.has(id) || streams.get(id) < 1) return finish();
         streams.set(id,streams.get(id)-1);
-      } else if (b[0] === 4 && b.length === 6 && b[5] === 2 && streams.has(id)) streams.delete(id);
+      } else if (b[0] === 4 && b.length === 6 && b[5] === 2 && streams.has(id)) { streams.delete(id); downloads.delete(id); }
       else return finish();
       return transmit(b);
     } catch { return finish(); }
+  }
+  function acknowledge(id) {
+    if (!live() || phase !== 'active' || !Number.isInteger(id) || id < 1 || id > lastId) return finish();
+    // Final data may still drain from the guest after a formal stream CLOSE.
+    if (!streams.has(id)) return true;
+    const entry = downloads.get(id);
+    if (!entry?.pending) return finish();
+    entry.pending = false;
+    return transmit({ type: 'downstream-drained', version: 1, streamId: id, bytes: entry.bytes });
   }
   function resolve(hostname) {
     if (!live() || phase !== 'active' || !names.has(hostname) || queries.size >= 3 || lastQueryId >= 0xffffffff) {
@@ -214,5 +228,5 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     socket.addEventListener('message', message);
     socket.addEventListener('error', finish); socket.addEventListener('close', finish);
   } catch { finish(); }
-  return Object.freeze({ send, resolve, close: finish, get readyState() { return phase === 'closed' ? 3 : phase === 'active' ? 1 : 0; } });
+  return Object.freeze({ send, resolve, acknowledge, close: finish, get readyState() { return phase === 'closed' ? 3 : phase === 'active' ? 1 : 0; } });
 }

@@ -31,6 +31,7 @@ export function attachConnectorGuestNetwork({ machine, client, clock = { monoton
   const handlers = net?.bus?.listeners?.['tcp-connection'];
   const owned = handlers?.filter(handler => handler.this_value === net);
   if (!net || installed.has(net) || machine.is_running() || client?.readyState !== 1
+    || typeof client.acknowledge !== 'function'
     || typeof net.send !== 'function' || typeof net.receive !== 'function' || typeof net.fetch !== 'function'
     || net.on_tcp_connection || net.dns_method !== 'static' || net.id !== 0
     || !same(net.router_ip,new Uint8Array([192,168,86,1])) || !same(net.vm_ip,new Uint8Array([192,168,86,100]))
@@ -51,6 +52,12 @@ export function attachConnectorGuestNetwork({ machine, client, clock = { monoton
   function touch(record) {
     clearTimer(record.timer); record.deadline = clock.monotonicNow() + 15_000;
     record.timer = setTimer(close,15_000); record.timer?.unref?.();
+  }
+  function acknowledgeDrained(record) {
+    if (record.downstreamPending && !record.conn.send_buffer.length) {
+      record.downstreamPending = false;
+      if (!client.acknowledge(record.id)) close();
+    }
   }
   function retire(record, notify) {
     if (!streams.delete(record.id)) return;
@@ -167,7 +174,10 @@ export function attachConnectorGuestNetwork({ machine, client, clock = { monoton
         const tuple = `${net.vm_ip.join('.')}:${pv.getUint16(0)}:${b.subarray(30,34).join('.')}:${pv.getUint16(2)}`;
         for (const record of streams.values()) if (record.conn.tuple === tuple) touch(record);
         originalSend(b.subarray(0,end));
-        for (const record of [...streams.values()]) if (!net.tcp_conn[record.conn.tuple]) retire(record,!record.remoteClosed);
+        for (const record of [...streams.values()]) {
+          if (!net.tcp_conn[record.conn.tuple]) retire(record,!record.remoteClosed);
+          else if (record.conn.tuple === tuple) acknowledgeDrained(record);
+        }
         return;
       }
       if (b[23] !== 17 || payload.length < 8 || pv.getUint16(4) !== payload.length || (pv.getUint16(6) && !transportValid(b,payload))) return;
@@ -193,7 +203,8 @@ export function attachConnectorGuestNetwork({ machine, client, clock = { monoton
       else if (b[0] === 2) {
         if (record.remoteClosed) return close();
         if (record.conn.send_buffer.length + b.length - 5 > LIMIT) return close();
-        record.conn.write(b.subarray(5));
+        record.downstreamPending = true; record.conn.write(b.subarray(5));
+        acknowledgeDrained(record);
       } else if (b[0] === 4 && b.length === 6 && b[5] === 2) { record.remoteClosed = true; record.queue.length = 0; record.bytes = 0; record.conn.close(); }
       else close();
     } catch { close(); }

@@ -1,0 +1,45 @@
+{
+  "recordedAt": "2026-09-30T11:57:10.057645+00:00",
+  "scope": "local regression only; not browser public APK acceptance",
+  "baselineCommit": "ad89925",
+  "protocol": "wisp-v1-drain-v1",
+  "fix": "Wait for cumulative downstream-drained receipt emitted only after guest TCP drains current frame before reading next upstream chunk",
+  "limits": {
+    "outstandingBytesPerStream": 16384,
+    "guestBufferHardLimit": 262144,
+    "maxStreams": 8,
+    "idleTimeoutMs": 15000,
+    "authorizationAndWireBudgetsUnchanged": true
+  },
+  "verification": {
+    "quickVm": {
+      "passed": 366,
+      "failed": 0,
+      "skipped": 0
+    },
+    "realAlpine": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "cases": [
+        "128 KiB exact length and SHA-256",
+        "1 MiB exact length and SHA-256",
+        "formal authorization offline recovery without request replay"
+      ],
+      "peakBufferedBytes": 16384
+    },
+    "typecheck": "passed",
+    "staticPreviewBuild": "passed"
+  },
+  "checklists": {
+    "mainCompleted": 5,
+    "mainInScope": 29,
+    "mainRemaining": 24,
+    "connectorCompleted": 8,
+    "connectorTotal": 15,
+    "LC009": "open",
+    "LC010": "not_started"
+  },
+  "productionTouched": false,
+  "browserAcceptance": "pending new preview and manual pairing; local result does not establish cause of prior browser timeout"
+}

@@ -105,10 +105,14 @@ export async function startConnectorServer(options) {
     socket.once('close', () => socket.removeListener('data', meter));
     wss.handleUpgrade(req, socket, head, ws => {
       let channel, streams, dns, phase = 'waiting', killTimer, pendingBytes = 0;
-      const pendingSends = new Set();
+      const pendingSends = new Set(), downloads = new Map();
+      let lastDownloadId = 0;
+      const cancelDownload = id => {
+        const entry = downloads.get(id); downloads.delete(id); entry?.resolve?.(false);
+      };
       const stop = (code = 1008) => {
         if (phase === 'closed') return;
-        phase = 'closed'; channel?.close(); streams?.close(); dns?.close();
+        phase = 'closed'; for (const id of downloads.keys()) cancelDownload(id); channel?.close(); streams?.close(); dns?.close();
         for (const finish of [...pendingSends]) finish(false);
         if (ws.readyState !== WebSocket.CLOSED) {
           ws.close(code);
@@ -160,9 +164,13 @@ export async function startConnectorServer(options) {
           // ws can emit several messages synchronously from one TCP chunk.
           // Revoke before returning, not in a later rejected-Promise callback.
           try { data = decodeClientFrame(bytes); } catch { return stop(); }
-          if (data.type === 'connect') streams.open(data.id, data.target);
+          if (data.type === 'connect') {
+            if (data.id <= lastDownloadId || downloads.size >= 8) return stop();
+            lastDownloadId = data.id; downloads.set(data.id, { bytes: 0 });
+            streams.open(data.id, data.target);
+          }
           else if (data.type === 'data') streams.write(data.id, data.data);
-          else streams.closeStream(data.id);
+          else { cancelDownload(data.id); streams.closeStream(data.id); }
           return;
         }
         if (bytes.length > 10240) return stop();
@@ -173,23 +181,43 @@ export async function startConnectorServer(options) {
           if (!dns || !channel.isActive() || !['active','pending'].includes(phase)) return stop();
           dns.request(frame); return;
         }
+        if (frame?.type === 'downstream-drained') {
+          if (!streams || !channel.isActive() || !['active','pending'].includes(phase)
+            || !fields(frame, ['type','version','streamId','bytes']) || frame.version !== 1
+            || !Number.isInteger(frame.streamId) || frame.streamId < 1 || frame.streamId > lastDownloadId
+            || !Number.isSafeInteger(frame.bytes) || frame.bytes < 1 || frame.bytes > 64 * 1024 * 1024) return stop();
+          const entry = downloads.get(frame.streamId);
+          // A remote/voluntary close can cross the final drain receipt. Never
+          // recreate a stream, grant credits, or extend authority for such ACKs.
+          if (!entry) return;
+          if (!entry.resolve || frame.bytes !== entry.bytes) return stop();
+          const resolve = entry.resolve; entry.resolve = undefined; resolve(true); return;
+        }
         if (phase === 'pending') return stop();
         if (frame?.type === 'start-egress') {
           if (phase !== 'active' || streams || !channel.isActive() || !fields(frame, ['type','version','protocol'])
-            || frame.version !== 1 || frame.protocol !== 'wisp-v1') return stop();
+            || frame.version !== 1 || frame.protocol !== 'wisp-v1-drain-v1') return stop();
           streams = createConnectorStreams({ authority: channel, ...options.egressTransport,
             ...(clock ? { clock } : {}),
             // WISP streams inherit 16 from stream 0. Do NOT reset credit on TCP
             // connect: pre-connect DATA may already be in flight in both peers.
             onReady() {},
             onCredit: (id, credits) => send(encodeContinue(id, credits)),
-            onClose: id => send(encodeClose(id)),
-            onData: async (id, data) => { if (!await transmit(encodeData(id, data))) throw new Error('Connector send ended'); },
+            onClose: id => { cancelDownload(id); send(encodeClose(id)); },
+            onData: async (id, data) => {
+              const entry = downloads.get(id);
+              if (!entry || entry.resolve) throw new Error('Connector download window exceeded');
+              entry.bytes += data.length;
+              // One <=16 KiB frame per stream, held until guest TCP consumes it.
+              // ws.send's callback alone only proves a local socket write.
+              const drained = new Promise(resolve => { entry.resolve = resolve; });
+              if (!await transmit(encodeData(id, data)) || !await drained) throw new Error('Connector send ended');
+            },
           });
           dns = createConnectorDns({ authority: channel,
             ...(options.egressTransport ? { resolveDestination: options.egressTransport.resolveDestination } : {}),
             ...(clock ? { clock } : {}), onAnswer: send });
-          send({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});
+          send({type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});
           send(encodeContinue(0,16)); return;
         }
         const initial = phase === 'waiting';

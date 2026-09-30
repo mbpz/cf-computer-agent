@@ -41,3 +41,5 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 2026-09-30 后续实际浏览器验收：网络初始化与 `apk update` 退出码0，安装在首个依赖下载期间触发原90秒上限，未取得安装退出码或版本。失败收据见 `design/browser-vm/2026-09-30-browser-apk-timeout.json`。现仅为固定安装命令设置10分钟上限，须重新手动配对后实际验证；LC-009/010仍开放。
 
 2026-09-30 最新尝试：`defdc955` 初始化成功，但索引更新在90秒超时；没有安装成功证据。独立真实Node guest中128KiB对照成功、1MiB下行在256KiB缓冲上限处关闭，见 `design/browser-vm/2026-09-30-browser-apk-update-failure.json`。先修复有界下行背压，保留内存上限和授权失效清理；不要用再次加大超时、放宽内存限制或宿主下载结果关闭LC-009。该受控复现不等于已证明浏览器失败的唯一原因。
+
+2026-09-30 下行修复已本地验证：新协议 `wisp-v1-drain-v1` 等待guest TCP消费确认，单流仅16KiB待确认，256KiB硬上限及授权预算不变。快速VM366/366、真实Alpine3/3通过，128KiB/1MiB下载长度及SHA-256一致、峰值缓冲16KiB。必须使用配套的新页面和本机服务，旧协议拒绝协商。下一步是独立预览的手动配对及实际apk重验；本地证据不关闭LC-009，也不能证明旧浏览器超时只有一个原因。主清单5/29、剩余24，连接器8/15、剩余7。

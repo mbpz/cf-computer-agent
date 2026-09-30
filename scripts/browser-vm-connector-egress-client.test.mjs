@@ -25,16 +25,16 @@ function fixture(options = {}) {
   const json=value=>ws.emit('message',JSON.stringify(value));
   const binary=value=>ws.emit('message',Uint8Array.from(value).buffer);
   const open=()=>{ws.emit('open');json({type:'ready',version:1,forwarding:false,lease});};
-  const active=()=>{open();json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});binary(credit0);};
+  const active=()=>{open();json({type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});binary(credit0);};
   return {client,ws,clock,frames,closed,ready,renewals,json,binary,open,active,timers,get instances(){return instances;},
     advance(ms,{run=true,wallDelta=ms}={}){mono+=ms;wall+=wallDelta;if(run)for(const[id,t]of[...timers])if(t.at<=mono){timers.delete(id);t.fn();}}};
 }
 
 test('formal credentials stay in initial JSON; data capability waits for enable ACK and stream-zero credit',()=>{
   const f=fixture(); assert.equal(f.client.readyState,0); assert.deepEqual(f.ws.sent,[]);
-  f.open(); assert.deepEqual(f.ws.sent,[{type:'authenticate',version:1,pairingCode,ticket:'initial-ticket'}, {type:'start-egress',version:1,protocol:'wisp-v1'}]);
+  f.open(); assert.deepEqual(f.ws.sent,[{type:'authenticate',version:1,pairingCode,ticket:'initial-ticket'}, {type:'start-egress',version:1,protocol:'wisp-v1-drain-v1'}]);
   assert.deepEqual(f.frames,[]);assert.deepEqual(f.ready,[]);
-  f.json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});assert.equal(f.client.readyState,0);
+  f.json({type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});assert.equal(f.client.readyState,0);
   f.binary(credit0);assert.equal(f.client.readyState,1);assert.deepEqual(f.ready,[lease]);assert.ok(Object.isFrozen(f.ready[0]));
   assert.deepEqual(f.frames,[credit0]);assert.equal(f.client.send(connect),true);assert.equal(f.client.send(data),true);
   f.binary(data);assert.deepEqual(f.frames,[credit0,data]);f.client.close();assert.equal(f.ws.closes,1);
@@ -51,7 +51,7 @@ test('cancel before native open prevents credentials, ignores late events and ne
 });
 
 test('pre-authorization or pre-credit data closes rather than queueing',()=>{
-  for(const prepare of [()=>{},f=>f.open(),f=>{f.open();f.json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});}]){
+  for(const prepare of [()=>{},f=>f.open(),f=>{f.open();f.json({type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});}]){
     const f=fixture();prepare(f);assert.equal(f.client.send(connect),false);assert.equal(f.client.readyState,3);assert.equal(f.ws.sent.some(Buffer.isBuffer),false);
   }
 });
@@ -154,7 +154,7 @@ test('callback exceptions fail closed and do not leak their message; close callb
 test('hard expiry beats the renewal timeout even when timer callbacks are suspended',async()=>{
   let signal;const f=fixture({renewTicket:(_lease,s)=>{signal=s;return new Promise(()=>{});}});
   f.ws.emit('open');f.json({type:'ready',version:1,forwarding:false,lease:{...lease,expiresAtMs:34_000}});
-  f.json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});f.binary(credit0);f.client.send(connect);
+  f.json({type:'egress-ready',version:1,protocol:'wisp-v1-drain-v1',forwarding:true});f.binary(credit0);f.client.send(connect);
   f.advance(30_000);await flush();f.advance(3000,{run:false,wallDelta:-100_000});
   assert.equal(f.client.send(data),false);assert.equal(signal.aborted,true);assert.equal(f.closed.length,1);
 });
@@ -222,4 +222,25 @@ test('client DNS caps pending requests and rejects all on cancellation or late t
   const rejected=pending.map(p=>assert.rejects(p));if(mode==='cap')rejected.push(assert.rejects(f.client.resolve('github.com')));if(mode==='close')f.client.close();if(mode==='timeout')f.advance(5000);if(mode==='delayed-timer'){f.advance(5000,{run:false});f.json({type:'destination-resolved',version:1,requestId:1,hostname:'github.com',address:'140.82.112.3'});}
   await Promise.all(rejected);assert.equal(f.client.readyState,3);assert.equal(f.ws.sent.filter(x=>x.type==='resolve-destination').length,3);assert.equal(f.instances,1);
  }
+});
+
+test('downstream DATA waits for consumer acknowledgement and uses cumulative byte receipts',()=>{
+ const f=fixture();f.active();f.client.send(connect);f.binary(data);
+ const before=f.ws.sent.length;assert.equal(f.client.acknowledge(1),true);
+ assert.deepEqual(f.ws.sent.slice(before),[{type:'downstream-drained',version:1,streamId:1,bytes:2}]);
+ f.binary(data);assert.equal(f.client.acknowledge(1),true);assert.equal(f.ws.sent.at(-1).bytes,4);
+ assert.equal(f.client.acknowledge(1),false);assert.equal(f.client.readyState,3);
+});
+test('a second downstream DATA without guest consumption fails closed',()=>{
+ const f=fixture();f.active();f.client.send(connect);f.binary(data);f.binary(data);assert.equal(f.client.readyState,3);
+});
+
+test('drain receipts cannot revive an expired channel or a closed stream',()=>{
+ const f=fixture();f.active();f.client.send(connect);f.binary(data);f.advance(60000,{run:false});
+ const before=f.ws.sent.length;assert.equal(f.client.acknowledge(1),false);assert.equal(f.ws.sent.length,before);assert.equal(f.client.readyState,3);
+ const g=fixture();g.active();g.client.send(connect);g.binary(data);g.binary(Buffer.from('040100000002','hex'));
+ const count=g.ws.sent.length;assert.equal(g.client.acknowledge(1),true);assert.equal(g.ws.sent.length,count);assert.equal(g.client.readyState,1);
+});
+test('client refuses a legacy peer without downstream drain negotiation',()=>{
+ const f=fixture();f.open();f.json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});assert.equal(f.client.readyState,3);
 });

@@ -9,7 +9,7 @@ async function fixture(t,options={}){
  await new Promise(resolve=>machine.add_listener('emulator-ready',resolve));t.after(()=>machine.destroy());
  const frames=[],sent=[],queries=[];let time=0,closed=0,active=true;
  machine.bus.pair.register('net0-receive',frame=>frames.push(Buffer.from(frame)));
- const client={get readyState(){return active?1:3;},send(frame){sent.push(Buffer.from(frame));return active;},async resolve(name){queries.push(name);return{hostname:name,address:'140.82.112.3'};},close(){closed++;active=false;},...options};
+ const client={acknowledge(){return active;},get readyState(){return active?1:3;},send(frame){sent.push(Buffer.from(frame));return active;},async resolve(name){queries.push(name);return{hostname:name,address:'140.82.112.3'};},close(){closed++;active=false;},...options};
  const network=attachConnectorGuestNetwork({machine,client,clock:{monotonicNow:()=>time}});t.after(()=>network.close());
  const mac=machine.network_adapter.vm_mac;
  return{machine,network,frames,sent,queries,mac,client,get closed(){return closed;},advance(ms){time+=ms;},input(b){machine.bus.pair.send('net0-send',b);}};
@@ -107,4 +107,14 @@ test('guest FIN waits for queued upload credit before sending formal CLOSE',asyn
  const f=await fixture(t);await open(f);for(let i=0;i<19;i++)f.input(tcp(f.mac,{seq:101+i,ack:1338,flags:24,data:'a'}));
  f.input(tcp(f.mac,{seq:120,ack:1338,flags:17}));assert.equal(f.sent.filter(b=>b[0]===4).length,0);
  f.network.receive(Buffer.from('030100000010000000','hex'));assert.deepEqual(f.sent.slice(-4).map(b=>b.toString('hex')),[...Array(3).fill('020100000061'),'040100000002']);
+});
+
+test('downstream drain acknowledgement waits for the actual guest TCP ACK, not browser receipt',async t=>{
+ const acknowledgements=[];const f=await fixture(t,{acknowledge:id=>{acknowledgements.push(id);return true;}});await open(f);
+ f.network.receive(Buffer.concat([Buffer.from('0201000000','hex'),Buffer.alloc(3000,97)]));
+ assert.deepEqual(acknowledgements,[]);
+ for(const ack of [2798,4258])f.input(tcp(f.mac,{seq:101,ack,flags:16}));
+ assert.deepEqual(acknowledgements,[]);
+ f.input(tcp(f.mac,{seq:101,ack:4338,flags:16}));assert.deepEqual(acknowledgements,[1]);
+ f.input(tcp(f.mac,{seq:101,ack:4338,flags:16}));assert.deepEqual(acknowledgements,[1]);
 });
