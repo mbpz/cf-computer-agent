@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-30",
+  "scope": "LC-011 account network API wiring",
+  "baseCommit": "d039de8",
+  "unitTests": {
+    "passed": 24,
+    "mutationControlsDetected": [
+      "credentials",
+      "reserve-generation",
+      "account-epoch",
+      "response-budget",
+      "overall-deadline"
+    ]
+  },
+  "actualWorkerD1Integration": {
+    "passed": 3,
+    "cases": [
+      "reserve sign consume renew and explicit reconnect",
+      "account epoch change before renewal",
+      "deleted environment rejects reconnect"
+    ]
+  },
+  "fastVmTests": {
+    "passed": 422,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 49382.394375
+  },
+  "realLinux": {
+    "passed": 3,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 115404.1125,
+    "boundaries": [
+      "snapshot-restore",
+      "download-cancel",
+      "browser-offline"
+    ],
+    "perCase": {
+      "webSockets": 2,
+      "requests": 3,
+      "d1Consumes": 2,
+      "originalPostCount": 1,
+      "oldStreamClosed": true,
+      "oldGuestExit": 1
+    },
+    "transport": "real Worker/D1 and WebSocket; controlled DNS and local HTTP target; actual Alpine guest",
+    "controller": "account-network-runtime"
+  },
+  "checklistTestsPassed": 9,
+  "typescript": "existing TS scope passes; new mjs not included",
+  "browserEsmBundleBytes": 40526,
+  "formalPageIntegrated": false,
+  "immediateLogoutIntegrated": false,
+  "actualBrowserLifecycleAccepted": false,
+  "productionDeployment": false,
+  "github": "user-skipped, not passed",
+  "parentChecklist": {
+    "scope": 29,
+    "complete": 5,
+    "open": 24
+  },
+  "connectorChecklist": {
+    "total": 15,
+    "complete": 9,
+    "userSkippedNotPassed": 1,
+    "pending": 5
+  }
+}

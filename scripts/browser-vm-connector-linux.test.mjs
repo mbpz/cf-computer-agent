@@ -14,8 +14,7 @@ import { sealCheckpoint, restoreCheckpoint } from '../tools/browser-vm/probe-che
 import { createTerminalSession } from '../tools/browser-vm/terminal-session.mjs';
 import { encodeProbeCommand, parseProbeReply } from '../tools/browser-vm/serial-protocol.mjs';
 import { createDestinationResolver } from '../tools/browser-vm/connector/destination-policy.mjs';
-import { createVmNetworkLifecycle } from '../frontend/features/environments/network-lifecycle.mjs';
-import { createVmConnectorSession } from '../frontend/features/environments/connector-session.mjs';
+import { createAccountVmNetwork } from '../frontend/features/environments/account-network.mjs';
 
 function event(machine,name){return new Promise((resolve,reject)=>{const listener=()=>{clearTimeout(timer);machine.remove_listener(name,listener);resolve();};const timer=setTimeout(()=>{machine.remove_listener(name,listener);reject(new Error('Engine event timeout: '+name));},10000);machine.add_listener(name,listener);});}
 function command(machine,text,timeoutMs=10000){
@@ -39,20 +38,18 @@ for (const boundary of ['snapshot-restore','download-cancel','browser-offline'])
  const resolveDestination=createDestinationResolver({createResolver:()=>({async resolve4(name){assert.equal(name,'github.com');dns++;return ['140.82.112.3'];},async resolve6(name){assert.equal(name,'github.com');return [];},cancel(){}})});
  const f=await fixture(t,{resolveDestination,dial(options){assert.equal(options.host,'140.82.112.3');assert.equal(options.port,80);assert.equal(options.family,4);assert.equal(options.autoSelectFamily,false);dials++;return connect({...options,host:'127.0.0.1',port:upstream.address().port});}});
  let machine,sockets=0;
- const events=new EventTarget();const lifecycle=createVmNetworkLifecycle({events});t.after(()=>lifecycle.dispose());
- async function authorize(ticket,binding){
-  let connection,closeResolve;const closed=new Promise(resolve=>{closeResolve=resolve;});
-  await lifecycle.connect({...binding,open({signal,onClose}){
-   connection=createVmConnectorSession({signal,clock:f.clock,
-    authorize:async()=>({url:f.server.url.replace('http:','ws:')+'/connector',pairingCode:await pair(f),ticket}),
-    NativeWebSocket:class extends WebSocket{constructor(url){super(url,{headers:{origin}});sockets++;}},
-    renewTicket:async lease=>{const res=await f.api('connector-renewals',{...binding,leaseId:lease.leaseId,operationId:crypto.randomUUID()});assert.equal(res.status,201);return(await res.json()).ticket;},
-    onClose:()=>{onClose();closeResolve();}});
-   return connection;
-  }});
-  return {connection,closed};
+ const events=new EventTarget();let onSocketClosed;
+ const lifecycle=createAccountVmNetwork({events,clock:f.clock,environmentId:'env-a',
+  scope:{origin,memberId:'member-a',sessionEpoch:1},isCurrent:()=>true,requester:f.requester,
+  NativeWebSocket:class extends WebSocket{constructor(url){super(url,{headers:{origin}});sockets++;this.once('close',onSocketClosed);}},
+ });t.after(()=>lifecycle.dispose());
+ async function authorize(){
+  const identity=await(await fetch(f.server.url+'/identity')).json();
+  const closed=new Promise(resolve=>{onSocketClosed=resolve;});
+  await lifecycle.connect({port:Number(new URL(f.server.url).port),connectorId:identity.connectorId,pairingCode:await pair(f)});
+  return {connection:lifecycle,closed};
  }
- const first=await authorize(f.ticket,f.binding);
+ const first=await authorize();
  let attachError;
  const session=createTerminalSession({bootTimeoutMs:60000,createMachine(){
   machine=profile.createMachine({type:'ne2k',relay_url:'fetch',dns_method:'static'});
@@ -82,16 +79,12 @@ for (const boundary of ['snapshot-restore','download-cancel','browser-offline'])
  assert.equal((await command(machine,'cat /tmp/formal-result')).output.trim(),'FORMAL-LINUX-ACK');
  const offline=await command(machine,'wget -T 1 -qO /tmp/formal-offline http://github.com/offline');assert.notEqual(offline.exitCode,0);assert.equal(sockets,1);assert.equal(dials,2);assert.equal(requests.length,2);
  stopped=event(machine,'emulator-stopped');machine.stop();await stopped;const offlineCheckpoint=await sealCheckpoint(await machine.save_state(),profile.checkpointIdentity);await machine.destroy();
- const identity=await(await fetch(f.server.url+'/identity')).json();
- const reserved=await f.api('connector-authority',{operationId:'explicit-rebuild',connectorId:identity.connectorId,expectedGeneration:f.binding.generation});assert.equal(reserved.status,201);
- const {authority}=await reserved.json();assert.equal(authority.generation,f.binding.generation+1);const binding={runtimeId:authority.runtimeId,generation:authority.generation};
- const issued=await f.api('connector-tickets',{...binding,operationId:'rebuild-ticket'});assert.equal(issued.status,201);
- const second=await authorize((await issued.json()).ticket,binding);
+ const second=await authorize();
  machine=profile.createMachine({type:'ne2k',relay_url:'fetch',dns_method:'static'});await event(machine,'emulator-ready');await restoreCheckpoint(machine,offlineCheckpoint,profile.checkpointIdentity);
  second.connection.attach(machine);machine.run();
  const after=await command(machine,'wget -T 3 -qO /tmp/formal-after http://github.com/after && cat /tmp/formal-after');assert.equal(after.exitCode,0,after.output);assert.equal(after.output.trim(),'FRESH-FORMAL-ACK');
  const old=await command(machine,'for n in 1 2 3 4 5 6 7 8 9 10; do test -s /tmp/formal-held-status && break; sleep 1; done; test -s /tmp/formal-held-status && cat /tmp/formal-held-status',12000);assert.equal(old.exitCode,0,old.output);assert.match(old.output.trim(),/^[1-9][0-9]*$/);
  assert.deepEqual(requests,[{method:'POST',path:'/once'},{method:'GET',path:'/hold'},{method:'GET',path:'/after'}]);assert.equal(sockets,2);assert.equal(dials,3);assert.equal(await f.count(),2);
  if(boundary==='browser-offline')await f.server.close();else await f.advance(60000);await second.closed;assert.equal(lifecycle.state.status,'offline');assert.equal(machine.is_running(),true);const closed=await command(machine,'wget -T 1 -qO /tmp/formal-closed http://github.com/closed');assert.notEqual(closed.exitCode,0);assert.equal(requests.length,3);assert.equal(dials,3);
- console.log(JSON.stringify({image:'alpine-iso',authorization:'real-Worker-D1',controller:'frontend-network-lifecycle',boundary,finalDisconnect:boundary==='browser-offline'?'connector-exit':'lease-expiry',recovery:'offline-then-explicit-new-generation',sockets,requests:requests.length,originalPostCount:requests.filter(r=>r.method==='POST').length,oldStreamClosed:holdClosed,oldGuestExit:Number(old.output.trim())}));
+ console.log(JSON.stringify({image:'alpine-iso',authorization:'real-Worker-D1',controller:'account-network-runtime',boundary,finalDisconnect:boundary==='browser-offline'?'connector-exit':'lease-expiry',recovery:'offline-then-explicit-new-generation',sockets,requests:requests.length,originalPostCount:requests.filter(r=>r.method==='POST').length,oldStreamClosed:holdClosed,oldGuestExit:Number(old.output.trim())}));
 });

@@ -203,3 +203,15 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 初始集成发现服务端为新generation分配新runtimeId，修正生命周期按环境而非runtimeId拒绝旧代次；测试误用server.stop导致一次失败，修正close后最终完整重跑通过。受限监听权限按审批重跑，无安全旁路。
 - tsc --noEmit及两模块浏览器ESM打包通过；TS配置不覆盖新增mjs，不能宣称新增模块已静态类型检查。checklist9/9、审计29/5/24通过。日志/private/tmp/lc011-fast-vm.log与/private/tmp/lc011-linux-final.log，持久化摘要design/browser-vm/2026-09-30-network-lifecycle.json。
 - LC-011只关闭已验证子步骤，正式运行时接线/真实浏览器矩阵仍开放；连接器9完成、1用户跳过未通过、5待完成。主清单29范围/5完成/24未完成。无外部阻塞，可继续正式接线；未push/发布/迁移/修改生产秘密，不增加加密或备份门槛。
+
+
+## 2026-09-30：LC-011账户API网络运行时接线
+
+- 从d039de8继续；用户跳过GitHub仍有效，不诊断公网Git、不修改VPN/代理、不重装APK。
+- 新增frontend/features/environments/account-network.mjs：固定同源current→reserve→ticket→renewal，Cookie鉴权，服务端分配runtimeId/generation，客户端不发送memberId。手动设备/端口/一次性码，无自动配对、持久化或写请求自动重试。取消覆盖授权准备/连接期；10秒总期限含API耗时，响应体16KiB限制，错误不输出服务端正文或票据。
+- 24/24账户单测；credentials、代次、账户epoch、响应预算、总期限五项行为变异均检出并还原。初版响应预算测试仅用无效JSON，变异未检出；改为合法超长JSON后才证实预算断言生效。总期限迟到ready测试曾检出缺陷，已修复，不将初始失败记作通过。
+- 真实Worker/D1会话API/签名/消费/续租3/3，含账户变化不续租、实际DELETE后404拒绝重连。fixture仅替换浏览器fetch/Origin/Cookie边界；初次非授权监听测试中断，不计通过；授权重跑和修正测试删除路径后通过。
+- 真实Alpine三组改用账户网络运行时，不再由测试手工预留/签发/续租：snapshot-restore/download-cancel/browser-offline，最终3/3、115.4秒。各2个WS、3个请求、2次消费、1次原POST；旧peer关闭、旧下载退出1，新显式连接可请求，末尾租约过期/连接器退出断网。DNS与HTTP目标受控映射本机，没有访问真实GitHub。
+- 最终完整快速VM422/422、0失败/取消/跳过，49.4秒；checklist9/9、实际审计29范围/5完成/24剩余；tsc --noEmit、浏览器ESM打包40526字节及diff检查通过。mjs不在TS静态类型覆盖范围。日志/private/tmp/lc011-account-fast.log、/private/tmp/lc011-account-linux-final.log；持久化收据design/browser-vm/2026-09-30-account-network.json。
+- 正式页面尚未引用账户网络模块，立即退出登录/切换账户的VM资源所有者接线及实际浏览器矩阵未完成；当前只在请求/续租/attach边界拒绝过期账户，不能声称即时登出撤销验收。LC-011/012保持开放，连接器9完成、1用户跳过未通过、5待完成，主29/5/24不变。
+- 无外部阻塞，可继续正式页面/账户VM所有者接线。仅本地实现、验证与提交，不push/发布/远程迁移、不读取生产秘密，不加密或备份设新门槛。

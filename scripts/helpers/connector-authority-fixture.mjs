@@ -67,7 +67,17 @@ export async function fixture(t, egressTransport, { allowedOrigin = origin, real
   const issued = await api('connector-tickets', { ...binding, operationId: 'ticket-1' });
   assert.equal(issued.status, 201);
   const { ticket } = await issued.json();
-  return { db, clock, get server() { return server; }, api, binding, ticket, consumptionStatuses,
+  // Browser fetch boundary only: inject the local test cookie and actual browser
+  // Origin, route relative product URLs to Workerd; never contact a remote host.
+  const requester = (path, init) => {
+    assert.match(path, /^\/api\/environments\/[A-Za-z0-9_-]{1,128}(\/(connector-authority|connector-tickets|connector-renewals))?$/);
+    assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error');
+    assert.equal(init.cache, 'no-store');
+    return mf.dispatchFetch(origin + path, { method: init.method,
+      headers: { ...init.headers, origin: allowedOrigin, cookie: `__Host-memory-session=${token}` },
+      ...(init.body === undefined ? {} : { body: init.body }), redirect: 'manual' });
+  };
+  return { db, clock, requester, get server() { return server; }, api, binding, ticket, consumptionStatuses,
     async restart() { await server.close(); server = await startConnectorServer(serverOptions); },
     count() { return db.prepare("SELECT count(*) AS n FROM connector_ticket_consumptions").first("n"); },
     loseResponse() { dropResponse = true; },
