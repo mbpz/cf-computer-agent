@@ -226,3 +226,14 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 完整快速VM438/438，0失败/取消/跳过，49782.47ms；App结构契约8/8；既有配置tsc --noEmit通过，另以--ignoreConfig对新增TSX/类型声明/logout helper严格检查通过（首次显式文件命令TS5112后按提示修正）。mjs本体仍是行为测试不是静态类型检查。
 - npm run build:ui通过，保留大于500kB分块提示；未运行读取秘密的总build命令。没有本轮重跑真实Alpine或原生浏览器验收，不借用前轮结果声称本轮新增边界已完成该矩阵。日志/private/tmp/account-boundary-vm-tests.log、/private/tmp/account-boundary-build.log；摘要design/browser-vm/2026-09-30-account-boundary.json。
 - 主清单29范围/5完成/24未完成；连接器9完成、1用户跳过未通过、5待完成。下一步正式环境页及VM资源所有者接线；无外部阻塞。GitHub按用户要求跳过，不重装APK、不配置VPN、不push/发布/迁移、不读取生产秘密。
+
+
+## 2026-10-01：正式环境元数据页面（D04 / LC-012/015子项）
+
+- 从6d6b932继续已有成员环境设计，正式App接入/environments及workspace.vm权限；补双语字段与受权限过滤的本地fallback导航，不新增角色授权、生产菜单种子或远程迁移。现有G0限制继续约束VM运行功能，本轮只开放既有独立元数据API。
+- 新增账户所属数据管理器：固定同源路径、同源cookie、不发送memberId、10秒deadline、响应成员/结构/版本校验、20条分页和类型筛选，拒绝过时读取。创建/改名/删除各分配独立operationId；未知结果保留确切body，禁新写入且仅手动重试。意图跨路由卸载保留，但账户关闭立即丢弃并清屏；不声称跨硬刷新持久化。
+- 真正React页面已接新建、重命名、删除确认与重试，删除先removeEnvironment再请求；失败不恢复旧网络。明确标注只有记录，不冒充运行中VM、不自动联网、不声称物理清除本地存储。
+- 新增16项行为测试包含实际App/HappyDOM CRUD及权限拒绝、路由往返保留重试、冲突不静默重基、分页校验、账户取消；实际Worker/D1链验证创建响应丢失后相同body重试只有一行、改名递增版本、删除产生version3墓碑，以及跨成员mutation不能改数据。全部仅本地临时DB，出站网络拒绝，无生产请求。
+- RED阶段的输入事件失败来自测试先于DOM导入ReactDOM，修正测试初始化后通过；补充反例发现未限制创建收据version1、错误把10k查询窗口当总量上限，两项修正后通过。分页仍遵守服务端page<=500限制。
+- 完整快速VM454/454（0失败/取消/跳过，50125.8875ms）；App/checklist/i18n契约30/30；限定当前根目录的3文件路由/locale29/29。第一次默认Vitest配置包含其他worktree，已用显式include重跑，只采用当前根目录结果。既有tsc和新增TS/TSX严格显式检查通过，i18n verifier通过，build:ui通过（>500kB分块警告）。未执行读取秘密的总build。
+- 摘要design/browser-vm/2026-10-01-environments-page.json；完整VM日志/private/tmp/memory-garden-environment-vm-tests.log。无本轮原生浏览器/真实Linux复跑，无push/部署/迁移。主清单仍29范围/5完成/24未完成，连接器9完成/1用户跳过未通过/5待完成；D04/G0不关闭。无外部阻塞，下一步账户所属VM运行资源接线；不重新追查GitHub、不重装APK、不增备份/加密门槛。

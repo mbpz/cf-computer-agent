@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseCommit": "6d6b932",
+  "scope": "D04 / LC-012/015 formal environment metadata page only",
+  "environmentPageTests": {
+    "passed": 16,
+    "failed": 0,
+    "scope": "manager / actual React App HappyDOM / actual local Workerd D1"
+  },
+  "evidence": [
+    "Actual App create rename and confirmed delete use versioned server operations",
+    "Wrong-member response and real cross-member D1 mutation rejected",
+    "Lost committed create response retried with identical body and exactly one D1 row",
+    "Pending intent survives route unmount but not account disposal",
+    "Deletion closes account-owned network before HTTP; wrong tombstone remains unknown",
+    "401/403 fail closed; stale reads and late writes cannot resurrect private state",
+    "RED non-initial create receipt and invented total limit controls passed after fixes"
+  ],
+  "fastVmTests": {
+    "passed": 454,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 50125.8875
+  },
+  "appChecklistI18nContractTestsPassed": 30,
+  "rootOnlyRouteLocaleVitest": {
+    "files": 3,
+    "passed": 29,
+    "note": "isolated node config, no production Wrangler configuration"
+  },
+  "typecheck": {
+    "existingConfig": "passed",
+    "newManagerAndTsx": "strict explicit scope passed"
+  },
+  "uiBuild": "passed with >500kB chunk warning",
+  "i18nVerifier": "passed",
+  "formalMetadataPageIntegrated": true,
+  "vmEngineTerminalStorageIntegrated": false,
+  "physicalErasureAccepted": false,
+  "nativeBrowserAcceptanceThisTurn": false,
+  "realLinuxRerunThisTurn": false,
+  "productionDeployment": false,
+  "newRoleGrantsOrRemoteMigration": false,
+  "github": "user-skipped not passed",
+  "parentChecklist": {
+    "scope": 29,
+    "complete": 5,
+    "open": 24
+  },
+  "connectorChecklist": {
+    "total": 15,
+    "complete": 9,
+    "userSkippedNotPassed": 1,
+    "pending": 5
+  }
+}

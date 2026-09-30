@@ -5,7 +5,7 @@ export type MenuAvailability = "ready" | "coming_soon";
 
 export type WorkspacePageKind =
   | "home" | "knowledge" | "search" | "agent" | "submit" | "my-submissions" | "graph"
-  | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
+  | "environments" | "tasks" | "goals" | "projects" | "calendar" | "today" | "focus" | "review" | "inbox" | "boards" | "notifications" | "messages" | "settings" | "admin" | "admin-submissions" | "admin-duplicates"
   | "admin-assets" | "admin-members" | "admin-roles" | "admin-menus"
   | "admin-spaces" | "admin-audit" | "admin-analytics" | "coming-soon";
 
@@ -45,6 +45,7 @@ export const WORKSPACE_ROUTE_CAPABILITIES = Object.freeze([
   { id: "review", path: "/review", pageKind: "review", availability: "ready", labelKey: "NAV_REVIEW", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "inbox", path: "/inbox", pageKind: "inbox", availability: "ready", labelKey: "NAV_INBOX", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
   { id: "boards", path: "/boards", pageKind: "boards", availability: "ready", labelKey: "NAV_BOARDS", group: "workspace", moduleKey: "work", capability: null, requiredPermission: "workspace.tasks" },
+  { id: "environments", path: "/environments", pageKind: "environments", availability: "ready", labelKey: "NAV_ENVIRONMENTS", group: "workspace", moduleKey: "workbench", capability: null, requiredPermission: "workspace.vm" },
   { id: "settings", path: "/settings", pageKind: "settings", availability: "ready", labelKey: "SHELL_SETTINGS", group: "workspace", moduleKey: "workbench", capability: null },
   { id: "admin", path: "/admin", pageKind: "admin", availability: "ready", labelKey: "NAV_ADMINISTRATION", group: "admin", moduleKey: "admin", capability: "submission:read-all" },
   { id: "admin-submissions", path: "/admin/submissions", pageKind: "admin-submissions", availability: "ready", labelKey: "NAV_REVIEW_QUEUE", group: "admin", moduleKey: "admin", capability: "knowledge:review" },

@@ -97,6 +97,7 @@ import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewReco
 import type { ReviewDecisionState } from "./components/review/review-decision-controls";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
 import { logoutAccount } from "./lib/logout-account";
+import { EnvironmentsPage } from "./features/environments/environments-page";
 import { AccountNetworkBoundary } from "./features/environments/account-network-boundary";
 import type { AccountNetworkOwner } from "./features/environments/account-network-owner.mjs";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
@@ -204,6 +205,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
     case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
+    case "environments": return session ? <EnvironmentsPage key={session.member.id} locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
     case "admin": return session ? <AdminDashboardRoute locale={locale} session={session} /> : <NotFoundPage locale={locale} />;

@@ -7,7 +7,7 @@ describe("React app route dispatch", () => {
   it.each([
     ["/", "home"], ["/knowledge", "knowledge"], ["/search", "search"], ["/agent", "agent"],
     ["/submit", "submit"], ["/my-submissions", "my-submissions"], ["/tasks", "tasks"], ["/boards", "boards"], ["/notifications", "notifications"],
-    ["/messages", "messages"], ["/messages/thread-1", "message-thread"], ["/admin", "admin"],
+    ["/environments", "environments"], ["/messages", "messages"], ["/messages/thread-1", "message-thread"], ["/admin", "admin"],
     ["/admin/submissions", "admin-submissions"], ["/admin/duplicates", "admin-duplicates"], ["/admin/assets", "admin-assets"],
     ["/admin/members", "admin-members"], ["/admin/spaces", "admin-spaces"], ["/admin/audit", "admin-audit"],
   ])("dispatches %s", (path, expected) => {
@@ -23,6 +23,7 @@ describe("React app route dispatch", () => {
   it("distinguishes registered coming-soon routes from unknown paths", () => {
     expect(routeCapability("/knowledge")?.availability).toBe("ready");
     expect(routeCapability("/tasks")?.availability).toBe("ready");
+    expect(routeCapability("/environments")).toMatchObject({ availability: "ready", pageKind: "environments", requiredPermission: "workspace.vm" });
     expect(routeCapability("/boards")).toMatchObject({ availability: "ready", pageKind: "boards", requiredPermission: "workspace.tasks" });
     expect(routeCapability("/notifications")).toMatchObject({ availability: "ready", pageKind: "notifications" });
     expect(pageKindForPath("/notifications")).toBe("notifications");
