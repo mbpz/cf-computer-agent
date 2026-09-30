@@ -192,3 +192,14 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 完整逐请求DNS、远端IP、TLS/状态/字节/SHA-256及耗时收据归档 `design/browser-vm/2026-09-30-host-direct-downloads.json`；方法、命令与边界见同名md。不含任何秘密，下载正文只留临时目录，不安装宿主软件、不改网络/CA/安全设置。
 - 主checklist仍原始30/范围29/完成5/剩余24，D08排除；连接器8/15完成，LC-009～015共7项剩余。D04/G0保持开放。未将宿主下载当作浏览器VM、签名安装、依赖解析或完整Git克隆验收。
 - 下一步LC-009使用自带浏览器真实Alpine与正式授权连接；目前无外部阻塞。仅本地证据/清单与提交，无push/部署/迁移/生产配置变更。
+
+## 2026-09-30：LC-011本地生命周期所有者与真实Linux验收
+
+- 从d97a9ae继续；尊重用户跳过GitHub，不重装APK、不访问GitHub或改变网络设置。
+- 新增frontend/features/environments/network-lifecycle.mjs及connector-session.mjs，实际Linux链路使用这两个模块而非测试内手工持有网络。明确连接才授权；取消、断网、页面离开、连接器关闭、快照恢复均撤销网络；迟到授权不得开socket，旧代次回调不得影响新连接；不保留凭据或客体命令，不自动重连，不销毁VM。
+- 单测24/24，代次/迟到回调/单调期限/迟到授权/网络清理五项变异全部检出并还原；完整快速VM395/395，0失败/取消/跳过，46.3秒。
+- 真实Worker/D1→正式WS→真实Alpine：snapshot-restore、download-cancel、browser-offline三项3/3，117.8秒。各仅2个WS、3个请求、2次D1消费、1次POST，旧peer关闭、旧下载退出1；显式新代次可请求，在线事件不自动重连；末尾测试租约到期和真实连接器server.close。
+- 受控DNS固定地址映射本机HTTP，Node驱动真实v86/Alpine；不是公网TLS或实际浏览器正式页面验收。浏览器事件由EventTarget模拟，产品页面尚未引用新模块。
+- 初始集成发现服务端为新generation分配新runtimeId，修正生命周期按环境而非runtimeId拒绝旧代次；测试误用server.stop导致一次失败，修正close后最终完整重跑通过。受限监听权限按审批重跑，无安全旁路。
+- tsc --noEmit及两模块浏览器ESM打包通过；TS配置不覆盖新增mjs，不能宣称新增模块已静态类型检查。checklist9/9、审计29/5/24通过。日志/private/tmp/lc011-fast-vm.log与/private/tmp/lc011-linux-final.log，持久化摘要design/browser-vm/2026-09-30-network-lifecycle.json。
+- LC-011只关闭已验证子步骤，正式运行时接线/真实浏览器矩阵仍开放；连接器9完成、1用户跳过未通过、5待完成。主清单29范围/5完成/24未完成。无外部阻塞，可继续正式接线；未push/发布/迁移/修改生产秘密，不增加加密或备份门槛。

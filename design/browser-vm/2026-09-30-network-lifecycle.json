@@ -1,0 +1,51 @@
+{
+  "date": "2026-09-30",
+  "scope": "LC-011 local lifecycle slice",
+  "baseCommit": "d97a9ae",
+  "unitTests": {
+    "passed": 24,
+    "mutationControlsDetected": 5
+  },
+  "fastVmTests": {
+    "passed": 395,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "realLinux": {
+    "passed": 3,
+    "boundaries": [
+      "snapshot-restore",
+      "download-cancel",
+      "browser-offline"
+    ],
+    "perCase": {
+      "webSockets": 2,
+      "requests": 3,
+      "d1Consumes": 2,
+      "originalPostCount": 1,
+      "oldStreamClosed": true,
+      "oldGuestExit": 1
+    },
+    "finalDisconnects": [
+      "lease-expiry",
+      "connector-exit"
+    ],
+    "transport": "real Worker/D1 and WebSocket; controlled DNS and HTTP target; actual Alpine guest"
+  },
+  "formalPageIntegrated": false,
+  "actualBrowserLifecycleAccepted": false,
+  "productionDeployment": false,
+  "github": "user-skipped, not passed",
+  "parentChecklist": {
+    "scope": 29,
+    "complete": 5,
+    "open": 24
+  },
+  "connectorChecklist": {
+    "total": 15,
+    "complete": 9,
+    "userSkippedNotPassed": 1,
+    "pending": 5
+  }
+}
