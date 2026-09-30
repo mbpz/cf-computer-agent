@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-09-30T12:03:25.399339+00:00",
+  "sourceCommit": "9f8c380",
+  "project": "memory-garden-vm-connector-probe",
+  "branch": "lc009-acceptance",
+  "deploymentUrl": "https://08460309.memory-garden-vm-connector-probe.pages.dev",
+  "aliasUrl": "https://lc009-acceptance.memory-garden-vm-connector-probe.pages.dev",
+  "scope": "standalone static acceptance preview only",
+  "files": {
+    "_headers": {
+      "bytes": 313,
+      "sha256": "e9d5135b15936fbad198524689cfd9c9b84c86270d0ecc7ae0abd8eeee8754f5"
+    },
+    "browser.js": {
+      "bytes": 2296,
+      "sha256": "163372325af430ae21caaf37d28abeaaddc5a6545962689aedf67ee3f0bb4239"
+    },
+    "engine.mjs": {
+      "bytes": 359445,
+      "sha256": "329a9185f889230dfc54c75213e1e6a855b0459d134fe5cbd18cbd402f7cdd30"
+    },
+    "index.html": {
+      "bytes": 1181,
+      "sha256": "11dfff0fd0a8c5f9a8f14cba745a78b987f023883554e2d687b81fdd6b298f71"
+    },
+    "worker.js": {
+      "bytes": 42852,
+      "sha256": "a07278407d46ed90bf04051d5b37a28ba4c7385fecf10bdee24b10a9e2a527c6"
+    }
+  },
+  "deploymentResult": "Wrangler exit 0; 1 file uploaded, 3 already uploaded, _headers uploaded",
+  "browserObserved": "New preview loaded in in-app browser; non-secret local endpoint filled; not started. Fresh loopback service allows only exact new origin. Awaiting user manual capability pairing and APK start.",
+  "remoteByteComparison": false,
+  "productionTouched": false,
+  "LC009": "open",
+  "LC010": "not_started",
+  "localFixReceipt": "2026-09-30-download-backpressure-fix.json",
+  "screenshot": "/Users/doug/.codex/visualizations/2026/09/24/01a0d349-03dd-7bb3-ad58-65f5ab02daf1/lc009-drain-preview-ready.png"
+}
