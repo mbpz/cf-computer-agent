@@ -96,7 +96,9 @@ import type { AssetPreviewModel } from "./components/assets/asset-preview-model"
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
 import type { ReviewDecisionState } from "./components/review/review-decision-controls";
 import type { SubmissionDraft } from "./components/submissions/submission-form-model";
-import { postLogout } from "./lib/logout";
+import { logoutAccount } from "./lib/logout-account";
+import { AccountNetworkBoundary } from "./features/environments/account-network-boundary";
+import type { AccountNetworkOwner } from "./features/environments/account-network-owner.mjs";
 import { createLocaleRuntime, frontendText, type LocaleRuntime } from "./lib/i18n";
 import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
@@ -157,21 +159,12 @@ export function App() {
   if (!session) return <main aria-busy="true" className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">{frontendText(locale, "APP_LOADING_TITLE")}</h1><p className="mt-2 text-sm text-muted-foreground">{frontendText(locale, "APP_LOADING_DESCRIPTION")}</p></main>;
 
   const navigate = (path: string) => writeWorkspaceHistory("push", path);
-  const logout = async () => {
+  const logout = async (owner: AccountNetworkOwner) => {
     if (logoutPending) return;
     setLogoutPending(true);
     setLogoutError(null);
     try {
-      await postLogout(session.logoutUrl);
-      // Do not present a local signed-out screen until the server confirms
-      // that this browser no longer has an active session. This catches stale
-      // cookies or an edge that failed to apply the Set-Cookie deletion.
-      try {
-        await sessionSnapshot();
-        throw new Error("LOGOUT_NOT_CONFIRMED");
-      } catch (error: unknown) {
-        if (!isAnonymousSessionError(error)) throw error;
-      }
+      await logoutAccount(owner, session.logoutUrl);
       // Return to the anonymous shell. Starting OAuth here would immediately
       // sign the user back in when GitHub still has an active browser session.
       setSession(null);
@@ -185,7 +178,7 @@ export function App() {
   };
   const kind = pageKindForPath(pathname);
   const page = renderPage(kind, pathname, locale, location.search, session);
-  return <AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={logout} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>;
+  return <AccountNetworkBoundary memberId={session.member.id}>{(owner) => <AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={() => logout(owner)} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>}</AccountNetworkBoundary>;
 }
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {

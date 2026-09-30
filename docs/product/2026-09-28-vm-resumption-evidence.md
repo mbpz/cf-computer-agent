@@ -215,3 +215,14 @@ TDD先观察缺失实现，再空接口10项行为失败，完整实现通过；
 - 最终完整快速VM422/422、0失败/取消/跳过，49.4秒；checklist9/9、实际审计29范围/5完成/24剩余；tsc --noEmit、浏览器ESM打包40526字节及diff检查通过。mjs不在TS静态类型覆盖范围。日志/private/tmp/lc011-account-fast.log、/private/tmp/lc011-account-linux-final.log；持久化收据design/browser-vm/2026-09-30-account-network.json。
 - 正式页面尚未引用账户网络模块，立即退出登录/切换账户的VM资源所有者接线及实际浏览器矩阵未完成；当前只在请求/续租/attach边界拒绝过期账户，不能声称即时登出撤销验收。LC-011/012保持开放，连接器9完成、1用户跳过未通过、5待完成，主29/5/24不变。
 - 无外部阻塞，可继续正式页面/账户VM所有者接线。仅本地实现、验证与提交，不push/发布/远程迁移、不读取生产秘密，不加密或备份设新门槛。
+
+
+## 2026-09-30：LC-011/012正式App账户网络边界
+
+- 从e11402a继续，新增account-network-owner和React AccountNetworkBoundary，正式App已包裹该边界；上下文按member和本地epoch隔离。owner只管网络，不冒充VM引擎/存储所有者。默认不发起连接，不保存配对码。
+- 本标签退出登录在POST之前dispose全部网络和授权准备；即使HTTP失败也不恢复旧owner。沿用POST退出后GET session确认AUTH_REQUIRED的既有语义。账户切换、卸载、pagehide立即失效；StrictMode effect重放创建新的有效owner。HTTP开发壳可渲染但network仍拒绝非HTTPS。
+- TDD：缺模块RED后完成实现；真实DOM测试发现HTTP开发壳崩溃并修正。会话匿名fixture改为真实AUTH_REQUIRED；App集成测试用真实React/HappyDOM及actual App，不使用假App。6项owner+8项DOM全部通过；移除owner abort、固定epoch两个变异均由断言检出，恢复后23/23（含9项checklist）通过。
+- 真实Worker/D1+正式WebSocket 5/5，新增owner dispose及removeEnvironment立即关闭实际WS、30秒后无续租、旧handle不可复用两项。removeEnvironment仅接口验收，尚未连接删除UI；不宣称服务端票据已撤销或跨标签即时注销。
+- 完整快速VM438/438，0失败/取消/跳过，49782.47ms；App结构契约8/8；既有配置tsc --noEmit通过，另以--ignoreConfig对新增TSX/类型声明/logout helper严格检查通过（首次显式文件命令TS5112后按提示修正）。mjs本体仍是行为测试不是静态类型检查。
+- npm run build:ui通过，保留大于500kB分块提示；未运行读取秘密的总build命令。没有本轮重跑真实Alpine或原生浏览器验收，不借用前轮结果声称本轮新增边界已完成该矩阵。日志/private/tmp/account-boundary-vm-tests.log、/private/tmp/account-boundary-build.log；摘要design/browser-vm/2026-09-30-account-boundary.json。
+- 主清单29范围/5完成/24未完成；连接器9完成、1用户跳过未通过、5待完成。下一步正式环境页及VM资源所有者接线；无外部阻塞。GitHub按用户要求跳过，不重装APK、不配置VPN、不push/发布/迁移、不读取生产秘密。

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WebSocket} from 'ws';
 import {fixture,pair,origin} from './helpers/connector-authority-fixture.mjs';
+import {createAccountNetworkOwner} from '../frontend/features/environments/account-network-owner.mjs';
 import {createAccountVmNetwork} from '../frontend/features/environments/account-network.mjs';
 const tick=()=>new Promise(resolve=>setTimeout(resolve,10));
 async function connected(t){
@@ -36,4 +37,24 @@ test('deleted environment denies new authority and cannot be reopened by the UI'
  const x=await connected(t);x.runtime.disconnect();
  const removed=await x.f.requester('/api/environments/env-a',{method:'DELETE',credentials:'same-origin',redirect:'error',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify({operationId:'delete-from-product',version:1})});assert.equal(removed.status,200);
  await assert.rejects(x.connect(),/NETWORK_API_404/);assert.equal(x.sockets,1);assert.equal(await x.f.count(),1);
+});
+
+for (const action of ['dispose', 'removeEnvironment']) test(`account owner ${action} immediately closes real WS and cancels renewal`,{timeout:20000},async t=>{
+ const f=await fixture(t),calls=[];let socket;
+ const owner=createAccountNetworkOwner({origin,memberId:'member-a',events:new EventTarget(),clock:f.clock,
+  requester:(path,init)=>{calls.push(path);return f.requester(path,init);},
+  NativeWebSocket:class extends WebSocket{constructor(url){super(url,{headers:{origin}});socket=this;}},
+ });t.after(()=>owner.dispose());
+ const runtime=owner.network('env-a');
+ const identity=await(await fetch(f.server.url+'/identity')).json();
+ const input={port:Number(new URL(f.server.url).port),connectorId:identity.connectorId,pairingCode:await pair(f)};
+ await runtime.connect(input);assert.equal(runtime.state.status,'connected');assert.equal(await f.count(),1);
+ const closed=new Promise(resolve=>socket.once('close',resolve));
+ owner[action]('env-a');assert.equal(runtime.state.status,'closed');
+ await closed;assert.equal(socket.readyState,WebSocket.CLOSED);
+ await f.advance(30000);await tick();
+ assert.equal(calls.filter(path=>path.endsWith('/connector-renewals')).length,0);
+ assert.equal(await f.count(),1);
+ await assert.rejects(runtime.connect(input),/NETWORK_CLOSED/);
+ assert.throws(()=>owner.network('env-a'),action==='dispose'?/ACCOUNT_CLOSED/:/ENVIRONMENT_REMOVED/);
 });

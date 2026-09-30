@@ -121,6 +121,7 @@ VM 可保持运行但处于离线。停止联网只关闭网络；停止 VM 同�
   - [x] 2026-09-30 账户网络API接线：固定同源current→reserve→ticket→renewal，服务端分配代次，Cookie鉴权且不发送memberId；取消包含授权准备期，10秒总期限，响应体16KiB上限，无写操作自动重试。24/24单测、5项变异检出，真实Worker/D1账户链3/3，快速VM422/422。账户运行时驱动真实Alpine恢复/取消/offline三项3/3，原POST只执行一次；收据design/browser-vm/2026-09-30-account-network.json。账户变化在请求/续租/attach边界拒绝旧owner；立即退出登录仍待正式VM所有者调用dispose。不是正式页面或实际浏览器验收。
   - [ ] 正式页面/账户VM运行时接线和实际浏览器生命周期矩阵尚未完成；上述Node受控目标证据不替代它们，LC-011父项保持开放。
 - [ ] LC-012：退出登录、切换账户、环境删除与本机撤销分别验证网络断开和旧授权不可复用。
+  - [x] 2026-09-30 正式App账户网络边界：按member及本地epoch隔离owner，退出HTTP请求前立即dispose（失败也不恢复）；换账户、卸载、pagehide关闭，StrictMode建立新owner。6项owner、8项真实React/HappyDOM（含实际App登出）通过，真实Worker/D1+WS 5/5、快速VM438/438；2项行为变异检出。收据design/browser-vm/2026-09-30-account-boundary.json。removeEnvironment接口已验证但未连接正式删除UI；不是VM引擎/存储所有者，跨标签即时撤销和实际浏览器矩阵未验收，父项保持开放。
 - [ ] LC-013：分别记录桌面 Chrome/Edge 的系统、版本和权限交互；未测试平台不列入支持范围。
 - [ ] LC-014：安装/卸载、手动启动/退出、更新校验和故障提示有独立设计与测试；不自动开机运行，不增加管理员权限要求。
 - [ ] LC-015：完成正式 shadcn 页面和账户运行时接入，再复核 VM-006/G0 及后续交付门槛；单个本机探针成功不代表产品完成。

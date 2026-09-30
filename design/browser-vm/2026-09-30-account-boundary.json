@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-30",
+  "baseCommit": "e11402a",
+  "scope": "LC-011/012 actual App account network boundary",
+  "ownerTestsPassed": 6,
+  "actualReactDomTestsPassed": 8,
+  "actualWorkerD1WebSocketTestsPassed": 5,
+  "mutationControlsDetected": [
+    "owner-abort",
+    "fresh-epoch"
+  ],
+  "fastVmTests": {
+    "passed": 438,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 49782.472083
+  },
+  "appContractTestsPassed": 8,
+  "checklistTestsPassed": 9,
+  "typecheck": {
+    "existingConfig": "passed",
+    "newTsxDeclarationsLogoutHelper": "passed strict explicit scope",
+    "mjsBody": "not statically checked"
+  },
+  "uiBuild": "passed with large chunk warning",
+  "formalAppAccountBoundaryIntegrated": true,
+  "immediateThisTabLogoutIntegrated": true,
+  "formalVmPageIntegrated": false,
+  "vmEngineAndStorageOwnerIntegrated": false,
+  "deletionUiIntegrated": false,
+  "crossTabImmediateLogoutAccepted": false,
+  "actualBrowserLifecycleAccepted": false,
+  "realLinuxRerunThisTurn": false,
+  "productionDeployment": false,
+  "github": "user-skipped, not passed",
+  "parentChecklist": {
+    "scope": 29,
+    "complete": 5,
+    "open": 24
+  },
+  "connectorChecklist": {
+    "total": 15,
+    "complete": 9,
+    "userSkippedNotPassed": 1,
+    "pending": 5
+  }
+}
