@@ -1,0 +1,38 @@
+{
+  "recordedAt": "2026-09-30T00:49:28.003593+00:00",
+  "sourceCommit": "34378c3",
+  "project": "memory-garden-vm-connector-probe",
+  "branch": "lc009-acceptance",
+  "deploymentUrl": "https://defdc955.memory-garden-vm-connector-probe.pages.dev",
+  "aliasUrl": "https://lc009-acceptance.memory-garden-vm-connector-probe.pages.dev",
+  "scope": "standalone static acceptance preview only",
+  "files": {
+    "_headers": {
+      "bytes": 313,
+      "sha256": "e9d5135b15936fbad198524689cfd9c9b84c86270d0ecc7ae0abd8eeee8754f5"
+    },
+    "browser.js": {
+      "bytes": 2296,
+      "sha256": "163372325af430ae21caaf37d28abeaaddc5a6545962689aedf67ee3f0bb4239"
+    },
+    "engine.mjs": {
+      "bytes": 359445,
+      "sha256": "329a9185f889230dfc54c75213e1e6a855b0459d134fe5cbd18cbd402f7cdd30"
+    },
+    "index.html": {
+      "bytes": 1181,
+      "sha256": "11dfff0fd0a8c5f9a8f14cba745a78b987f023883554e2d687b81fdd6b298f71"
+    },
+    "worker.js": {
+      "bytes": 41619,
+      "sha256": "703e9c68c23404ac100996a76f08f4d9cb111a1b0865e755c4a370b5469a0746"
+    }
+  },
+  "deploymentResult": "Wrangler exit 0; 2 files uploaded, 2 already uploaded, _headers uploaded",
+  "browserObserved": "Page loaded in in-app browser, displays ten-minute package timeout and not-started state; endpoint prefilled; waiting for manual capability pairing/start.",
+  "remoteByteComparison": false,
+  "productionTouched": false,
+  "LC009": "open",
+  "LC010": "not_started",
+  "previousFailedAttempt": "2026-09-30-browser-apk-timeout.json"
+}
