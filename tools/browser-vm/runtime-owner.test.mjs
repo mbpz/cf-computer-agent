@@ -25,7 +25,7 @@ test('actual Alpine Worker runtime: command, interrupt, stop, deletion, account 
         postMessage: value=>native.postMessage(value), terminate(){return termination??=native.terminate();},
       };
       const terminal = connectTerminal({createWorker:()=>worker,...callbacks});
-      return {ready:terminal.ready,write:terminal.write,close(){terminal.close();return worker.terminate();}};
+      return {ready:terminal.ready,write:terminal.write,file:terminal.file,close(){terminal.close();return worker.terminate();}};
     }});
     t.after(async()=>{owner.dispose();await runtime.stop();});return {owner,runtime};
   }

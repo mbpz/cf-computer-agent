@@ -87,3 +87,15 @@ test('mismatched receipts fail closed instead of accepting a different command',
   await assert.rejects(accepted, /Invalid/);
   assert.equal(worker.terminated, true);
 });
+
+
+test('file RPC returns bounded results and rejects business errors without replay or closing terminal', async () => {
+ const worker=new WorkerPort(), terminal=connectTerminal({createWorker:()=>worker,pollMs:10000});
+ worker.reply({type:'ready',id:1});await terminal.ready;
+ const request=terminal.file({op:'readText',path:'/a'});const id=worker.messages.at(-1).id;
+ await assert.rejects(terminal.file({op:'list',path:'/'}),/FILES_BUSY/);
+ worker.reply({type:'file-result',id,value:{text:'文件',version:'v1'}});assert.equal((await request).text,'文件');
+ const failed=terminal.file({op:'saveText',path:'/a',version:'v1',text:'changed'});
+ worker.reply({type:'file-result',id:worker.messages.at(-1).id,error:'FILE_CONFLICT'});await assert.rejects(failed,/FILE_CONFLICT/);
+ assert.equal(terminal.state,'ready');terminal.close();
+});

@@ -24,7 +24,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
   const files = new Map([
     ['/', [join(directory, 'index.html'), 'text/html; charset=utf-8']],
     ...['browser.mjs', 'probe-core.mjs', 'probe-checkpoint.mjs', 'serial-protocol.mjs', 'probe-worker.mjs', 'probe-worker-client.mjs', 'alpine-artifact.mjs', 'alpine-iso.mjs', 'authenticated-probe-socket.mjs',
-      'terminal-session.mjs', 'terminal-client.mjs', 'terminal-worker.mjs', 'terminal-worker-endpoint.mjs'].map(name => [
+      'terminal-session.mjs', 'shared-files.mjs', 'file-protocol.mjs', 'terminal-client.mjs', 'terminal-worker.mjs', 'terminal-worker-endpoint.mjs'].map(name => [
       `/${name}`, [join(directory, name), 'text/javascript; charset=utf-8'],
     ]),
     ['/engine/libv86.mjs', [resolve(directory, '../../node_modules/v86/build/libv86.mjs'), 'text/javascript']],

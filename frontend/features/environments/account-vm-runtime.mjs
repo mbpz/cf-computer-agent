@@ -24,6 +24,8 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
   function invalidate(run, reason) {
     if (run.cancelled) return;
     run.cancelled = true;
+    for (const request of run.files) request.reject(new Error('VM_NOT_RUNNING'));
+    run.files.clear();
     clearTimeout(run.timer);
     run.started.reject(new Error(reason));
     publish({ status: 'stopping', output: '', reason });
@@ -63,7 +65,7 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
       owner.assertEnvironment(environment.id);
       if (!locks?.request) throw new Error('LOCKS_UNAVAILABLE');
       if (current) throw new Error('VM_BUSY');
-      const run = { environment: Object.freeze({ ...environment }), started: deferred(), release: deferred(), factoryDone: deferred(), cancelled: false, creating: false };
+      const run = { environment: Object.freeze({ ...environment }), started: deferred(), release: deferred(), factoryDone: deferred(), cancelled: false, creating: false, files: new Set() };
       current = run;
       publish({ status: 'acquiring', environmentId: environment.id, output: '', reason: '' });
       // Start through a microtask so even a throwing lock implementation is caught.
@@ -110,6 +112,24 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
     async stop() {
       if (current) await halt(current, 'STOPPED');
       else if (owner.signal.aborted) publish({ status: 'closed', output: '', environmentId: null });
+    },
+    async file(input) {
+      const run = current;
+      if (!run || !live(run) || snapshot.status !== 'running') throw new Error('VM_NOT_RUNNING');
+      if (typeof run.session.file !== 'function') throw new Error('UNSUPPORTED_FILESYSTEM');
+      const request = deferred();
+      run.files.add(request);
+      // Observe late settlement, but invalidate immediately even if a faulty
+      // session never settles. Never expose an old account's result or replay it.
+      Promise.resolve().then(() => {
+        if (!live(run)) throw new Error('VM_NOT_RUNNING');
+        return run.session.file(input);
+      }).then(value => {
+        if (live(run)) request.resolve(value);
+        else request.reject(new Error('VM_NOT_RUNNING'));
+      }, error => request.reject(live(run) ? error : new Error('VM_NOT_RUNNING')));
+      try { return await request.promise; }
+      finally { run.files.delete(request); }
     },
     async write(text) {
       const run = current;

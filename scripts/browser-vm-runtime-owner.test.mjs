@@ -65,3 +65,13 @@ test('failed termination keeps exclusive lock until explicit successful cleanup 
  await first.runtime.start(environment);await assert.rejects(first.runtime.stop(),/CLEANUP_FAILED/);assert.equal(first.runtime.getSnapshot().status,'failed');
  await assert.rejects(second.runtime.start(environment),/VM_BUSY/);fail=false;await first.runtime.stop();await second.runtime.start(environment);assert.equal(closes,2);
 });
+
+
+test('account invalidation rejects in-flight file reads before a noncooperative session returns',async t=>{
+ let resolve,calls=0;const {owner,runtime}=fixture(t,args=>({...session(args),file(){calls++;return new Promise(r=>{resolve=r;});}}));
+ await runtime.start(environment);const pending=runtime.file({op:'readText',path:'/private'});
+ const rejected=assert.rejects(pending,/VM_NOT_RUNNING/);await Promise.resolve();owner.dispose();await runtime.stop();
+ await Promise.race([rejected,new Promise((_,reject)=>setTimeout(()=>reject(Error('file result retained across account exit')),100))]);
+ resolve({text:'private',version:'old'});await Promise.resolve();assert.equal(calls,1);
+ await assert.rejects(runtime.file({op:'list',path:'/'}),/VM_NOT_RUNNING/);
+});

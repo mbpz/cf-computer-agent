@@ -1,3 +1,4 @@
+import { createSharedFiles } from './shared-files.mjs';
 import { encodeProbeCommand, parseProbeReply } from './serial-protocol.mjs';
 
 const encoder = new TextEncoder();
@@ -11,6 +12,7 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
   const machine = createMachine();
   let state = 'booting';
   let closing;
+  let files;
   const pending = new Set();
   const ring = new Uint8Array(65_536);
   let cursor = 0;
@@ -66,6 +68,7 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
   function close() {
     if (closing) return closing;
     state = 'closed';
+    files?.close();
     for (const cancel of [...pending]) cancel();
     machine.remove_listener('serial0-output-byte', output);
     ring.fill(0);
@@ -87,6 +90,7 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
   const ready = (async () => {
     try {
       await wait('emulator-ready', () => true);
+      if (machine.fs9p) files = createSharedFiles({machine});
       await serial(text => text.includes('localhost login: ') ? true : null, () => machine.run());
       await serial(text => text.includes('localhost:~# ') ? true : null, () => send('root\n'));
       const id = Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -110,6 +114,11 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
       const bytes = encoder.encode(text);
       if (bytes.length > 4096) throw new Error('Terminal input exceeds 4096 bytes');
       machine.serial_send_bytes(0, bytes);
+    },
+    file(input) {
+      if (state !== 'ready') return Promise.reject(new Error('FILES_CLOSED'));
+      if (!files) return Promise.reject(new Error('UNSUPPORTED_FILESYSTEM'));
+      return files.request(input);
     },
     drain() {
       const bytes = new Uint8Array(size);

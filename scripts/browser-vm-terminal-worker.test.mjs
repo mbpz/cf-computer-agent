@@ -65,3 +65,18 @@ test('output is emitted only in response to an explicit poll with its matching r
   port.send({ type: 'poll', id: 2 });
   assert.deepEqual(port.messages[1], { type: 'output', id: 2, bytes: new Uint8Array([65]), droppedBytes: 7 });
 });
+
+
+test('file business errors are bounded receipts, not terminal failures; one operation at a time', async () => {
+  const port = new Port(); let release, calls = 0;
+  attachTerminalWorker(port, async () => ({ready:Promise.resolve(),close:async()=>{},
+    file: async input => {calls++;if(input.op==='readText')throw Error('FILE_CONFLICT');return new Promise(r=>{release=r;});},
+  }));
+  port.send({type:'start',id:1});await tick();
+  port.send({type:'file',id:2,input:{op:'readText',path:'/a'}});await tick();
+  assert.deepEqual(port.messages.at(-1),{type:'file-result',id:2,error:'FILE_CONFLICT'});assert.equal(port.closed,false);
+  port.send({type:'file',id:3,input:{op:'list',path:'/'}});
+  port.send({type:'file',id:4,input:{op:'list',path:'/'}});await tick();
+  assert.equal(port.messages.at(-1).error,'FILES_BUSY');assert.equal(calls,2);
+  release({entries:[]});await tick();assert.equal(port.messages.at(-1).id,3);
+});

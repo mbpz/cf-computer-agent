@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseCommit": "f646c08",
+  "scope": "D04 / VM-028 shared 9p file adapter and bounded terminal Worker RPC; local proof only",
+  "focusedTests": {
+    "passed": 32,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "fastVmTests": {
+    "passed": 477,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 50409.622125
+  },
+  "checklistTests": {
+    "passed": 9,
+    "failed": 0
+  },
+  "realAlpineSharedFiles": {
+    "passed": 1,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 18194.365042,
+    "allWorkersExited": true,
+    "checks": [
+      "UI-to-guest UTF-8 upload/read",
+      "guest edit invalidates CAS token",
+      "CAS save visible in guest",
+      "safe/escaping symlink boundaries",
+      "non-overwriting rename and download",
+      "nonempty directory refusal",
+      "open guest fid deletion refused before mutation; guest read preserved; deletion after close",
+      "numeric page 2",
+      "oversized upload rejected",
+      "account stop rejects later file calls"
+    ]
+  },
+  "realAlpineRuntimeRegression": {
+    "passed": 1,
+    "failed": 0,
+    "workersCreated": 4,
+    "allWorkersExited": true,
+    "durationMs": 52016.195292,
+    "note": "Ran with shared-files adapter before final deletion-only correction; final files test and full fast suite rerun after correction."
+  },
+  "verification": {
+    "projectTypecheck": "passed",
+    "strictDeclarations": "passed",
+    "buildUi": "passed; existing >500 kB chunk warnings",
+    "diffCheck": "passed",
+    "browserUiAcceptance": false,
+    "productionAcceptance": false
+  },
+  "regressionHistory": [
+    {
+      "case": "Account file request surviving invalidation",
+      "red": "file result retained across account exit",
+      "fix": "immediate per-run deferred rejection; late settlement observed and discarded"
+    },
+    {
+      "case": "Removed unreferenced file retaining quota",
+      "red": "NO_SPACE on replacement upload",
+      "fix": "reclaim only with known guest fid table and zero hardlinks"
+    },
+    {
+      "case": "Actual guest open file deletion",
+      "red": "cat: read error: No such file or directory",
+      "cause": "Pinned v86 0.5.458 9p reader rejects status=4 unlinked inode even with open fid",
+      "fix": "FILE_IN_USE before directory mutation; actual guest read remains valid, then close and remove pass"
+    },
+    {
+      "case": "Sandbox full suite",
+      "result": "interrupted stalled run; not counted as passed",
+      "followup": "Full suite rerun outside sandbox with listener approval; 477/477"
+    }
+  ],
+  "limits": {
+    "pageSizes": [
+      20,
+      50,
+      100
+    ],
+    "textBytes": 1048576,
+    "uploadBytes": 20971520,
+    "currentDownloadRpcBytes": 20971520,
+    "sharedMemoryBudgetBytes": 134217728,
+    "retainedEditVersions": 8,
+    "concurrency": "one file request per Worker; no replay",
+    "notes": [
+      "in-memory host9p only, no host disk mapping",
+      "quota measures actual allocated buffers; does not reserve persistent browser quota or constrain guest writes",
+      "unknown fid table retains deleted buffers conservatively",
+      "current download is bounded RPC, not large-file streaming",
+      "no per-file/bulk cancellation UI yet; owner/Worker shutdown rejects pending work"
+    ]
+  },
+  "checklist": {
+    "originalTotal": 30,
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "VM-028": "partial",
+    "connectorComplete": 9,
+    "connectorUserSkippedNotPassed": 1,
+    "connectorPending": 5
+  },
+  "next": [
+    "shared file panel with pagination/edit conflict handling and explicit cancellation",
+    "large-file streaming download",
+    "knowledge submission integration",
+    "full VM persistence/restore, Worker network bridge, production assets and browser matrix"
+  ],
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "githubRetried": false
+  },
+  "logs": [
+    "/private/tmp/shared-files-focused.log",
+    "/private/tmp/shared-files-full-verified.log",
+    "/private/tmp/shared-files-real-final.log",
+    "/private/tmp/shared-files-real-reclaim.log",
+    "/private/tmp/shared-files-real-reclaim-final.log",
+    "/private/tmp/shared-files-types-final.log",
+    "/private/tmp/shared-files-declarations-final.log",
+    "/private/tmp/shared-files-build-final.log",
+    "/private/tmp/shared-files-checklist-tests.log"
+  ]
+}

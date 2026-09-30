@@ -1,9 +1,11 @@
+import { FILE_ERRORS, copyFileRequest } from './file-protocol.mjs';
 // One disposable Worker owns one session. Monotonic request IDs reject replay;
 // output is pull-based so a suspended page cannot accumulate Worker messages.
 export function attachTerminalWorker(port, prepareSession) {
   let state = 'idle';
   let sequence = 0;
   let session;
+  let filePending = false;
   function fail(error) {
     if (state === 'closed') return;
     state = 'closed';
@@ -24,6 +26,16 @@ export function attachTerminalWorker(port, prepareSession) {
       port.postMessage({ type: 'ready', id });
     } catch (error) { fail(error); }
   }
+  async function file(id, input) {
+    if (filePending) { port.postMessage({type:'file-result',id,error:'FILES_BUSY'}); return; }
+    filePending = true;
+    try {
+      const value = await session.file(copyFileRequest(input));
+      if (state === 'ready') port.postMessage({type:'file-result',id,value}, value?.bytes instanceof Uint8Array ? [value.bytes.buffer] : []);
+    } catch (error) {
+      if (state === 'ready') port.postMessage({type:'file-result',id,error:FILE_ERRORS.has(error?.message) ? error.message : 'FILE_OPERATION_FAILED'});
+    } finally { filePending = false; }
+  }
   function receive({ data }) {
     try {
       if (!Number.isSafeInteger(data?.id) || data.id <= sequence) throw new Error('Invalid or repeated terminal request');
@@ -34,6 +46,8 @@ export function attachTerminalWorker(port, prepareSession) {
       } else if (data.type === 'input' && state === 'ready') {
         session.write(data.text);
         port.postMessage({ type: 'accepted', id: data.id });
+      } else if (data.type === 'file' && state === 'ready') {
+        void file(data.id, data.input);
       } else if (data.type === 'poll' && state === 'ready') {
         const { bytes, droppedBytes } = session.drain();
         port.postMessage({ type: 'output', id: data.id, bytes, droppedBytes }, [bytes.buffer]);

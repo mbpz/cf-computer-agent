@@ -1,3 +1,4 @@
+import { FILE_ERRORS, copyFileRequest, validFileResult } from './file-protocol.mjs';
 // Local-only terminal transport. Input acknowledgements mean bytes accepted,
 // never command success. Lost acknowledgements fail closed without replay.
 export function connectTerminal({
@@ -33,7 +34,7 @@ export function connectTerminal({
       if (state === 'closed') { reject(new Error('Terminal closed')); return; }
       const id = ++sequence;
       const timer = setTimeout(() => close(new Error(`Terminal ${type} timed out; command execution is unknown`)), timeoutMs);
-      requests.set(id, { type, resolve, reject, timer });
+      requests.set(id, { type, input: fields.input, resolve, reject, timer });
       try { worker.postMessage({ type, id, ...fields }); }
       catch (error) { close(error); }
     });
@@ -41,12 +42,17 @@ export function connectTerminal({
   function receive({ data }) {
     if (data?.type === 'failure') { close(new Error(typeof data.message === 'string' ? data.message.slice(0, 512) : 'Terminal failed')); return; }
     const pending = requests.get(data?.id);
-    if (!pending || !({ start: 'ready', input: 'accepted', poll: 'output' }[pending.type] === data.type)) {
+    if (!pending || !({ start: 'ready', input: 'accepted', poll: 'output', file: 'file-result' }[pending.type] === data.type)) {
       close(new Error('Invalid terminal Worker receipt')); return;
     }
     if (data.type === 'output' && (!(data.bytes instanceof Uint8Array) || data.bytes.length > 65_536
       || !Number.isSafeInteger(data.droppedBytes) || data.droppedBytes < 0)) {
       close(new Error('Invalid terminal output')); return;
+    }
+    if (data.type === 'file-result') {
+      if (Object.hasOwn(data,'error') ? !FILE_ERRORS.has(data.error) || Object.hasOwn(data,'value') : !validFileResult(pending.input,data.value)) {
+        close(new Error('Invalid file Worker receipt')); return;
+      }
     }
     clearTimeout(pending.timer);
     requests.delete(data.id);
@@ -60,7 +66,8 @@ export function connectTerminal({
         if (text) onOutput?.(text);
       } catch (error) { pending.reject(error); close(error); return; }
     }
-    pending.resolve();
+    if (data.type === 'file-result' && data.error) pending.reject(new Error(data.error));
+    else pending.resolve(data.type === 'file-result' ? data.value : undefined);
   }
   async function poll() {
     try {
@@ -89,6 +96,11 @@ export function connectTerminal({
         || new TextEncoder().encode(text).length > 4096) throw new Error('Invalid terminal input (4096 byte maximum)');
       if ([...requests.values()].some(item => item.type === 'input')) throw new Error('Terminal input pending');
       await request('input', { text }, requestTimeoutMs);
+    },
+    async file(input) {
+      if (state !== 'ready') throw new Error('FILES_CLOSED');
+      if ([...requests.values()].some(item => item.type === 'file')) throw new Error('FILES_BUSY');
+      return request('file', {input:copyFileRequest(input)}, requestTimeoutMs);
     },
     close,
   };
