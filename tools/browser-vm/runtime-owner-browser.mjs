@@ -1,3 +1,6 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { FilesPanel } from '../../frontend/features/environments/files/files-panel.tsx';
 import { createAccountNetworkOwner } from '../../frontend/features/environments/account-network-owner.mjs';
 import { createAccountVmRuntime } from '../../frontend/features/environments/account-vm-runtime.mjs';
 import { connectTerminal } from './terminal-client.mjs';
@@ -24,3 +27,7 @@ element('logout').onclick=()=>perform(()=>{clearInput();owner.dispose();return r
 element('send').onclick=()=>perform(async()=>{const input=element('command').value;if(!input)throw Error('EMPTY_INPUT');clearInput();await runtime.write(input+'\n');});
 element('interrupt').onclick=()=>perform(()=>runtime.write('\x03'));
 window.addEventListener('pagehide',clearInput);runtime.subscribe(render);render();
+
+const filesRoot = createRoot(element('files'));
+filesRoot.render(React.createElement(FilesPanel, {runtime, locale:'zh-CN'}));
+window.addEventListener('pagehide', () => filesRoot.unmount(), {once:true});

@@ -1,5 +1,5 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>账户 VM 运行资源 · 本地验收</title>
-<h1>账户 VM 运行资源 · 独立本地验收</h1>
+<link rel="stylesheet" href="/runtime-owner.css"><h1>账户 VM 运行资源 · 独立本地验收</h1>
 <p>仅使用诊断身份和开发镜像；不是生产登录、正式 VM 页面或 G0 通过证明。联网关闭，不测试 GitHub，不保存快照。停止、删除或退出会丢弃运行中的数据。</p>
 <p>同一来源/浏览器配置文件只允许一个运行实例。可在另一标签打开此页，点击启动验证锁冲突。不同来源或配置文件不受此锁协调。</p>
 <button id="start">启动 Alpine</button> <button id="stop">停止 / 取消启动</button> <button id="remove">删除诊断环境</button> <button id="logout">退出诊断账户</button>
@@ -7,4 +7,5 @@
 <label>终端命令（提交后追加换行）<input id="command" maxlength="4095" size="60" autocomplete="off" spellcheck="false"></label>
 <button id="send">发送命令</button> <button id="interrupt">中断 Ctrl+C</button>
 <pre id="terminal" aria-label="真实 Alpine 终端输出"></pre>
+<div id="files"></div>
 <script type="module" src="/runtime-owner-browser.mjs"></script></html>

@@ -160,3 +160,11 @@ test('account runtime proof is opt-in, bundled and never serves repository sourc
  const bundle=await (await fetch(server.url+'/runtime-owner-browser.mjs')).text();assert.match(bundle,/memory-garden-vm-runtime-v1/);assert.match(bundle,/terminal-worker.mjs/);
  for (const path of ['/frontend/features/environments/account-vm-runtime.mjs','/runtime-owner.test.mjs','/acceptance/terminal-node-worker.mjs'])assert.equal((await fetch(server.url+path)).status,404);
  });
+
+test('file panel styles stay same-origin and opt-in without allowing inline styles',async t=>{
+ const ordinary=await fixture(t);assert.equal((await fetch(ordinary.url+'/runtime-owner.css')).status,404);
+ const server=await fixture(t,{iso:true,runtimeOwner:true});
+ const response=await fetch(server.url+'/runtime-owner.html');assert.match(response.headers.get('content-security-policy'),/style-src 'self';/);assert.doesNotMatch(response.headers.get('content-security-policy'),/unsafe-inline/);
+ const html=await response.text();assert.match(html,/href="\/runtime-owner.css"/);assert.doesNotMatch(html,/<style>/);
+ const css=await fetch(server.url+'/runtime-owner.css');assert.match(css.headers.get('content-type'),/text\/css/);assert.equal(css.status,200);
+});

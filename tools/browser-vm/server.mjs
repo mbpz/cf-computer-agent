@@ -18,7 +18,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
   let runtimeBundle;
   if (runtimeOwner) {
     const { build } = await import('esbuild');
-    const result = await build({entryPoints:[join(directory, 'runtime-owner-browser.mjs')], bundle:true, write:false, format:'esm', platform:'browser', target:'es2022'});
+    const result = await build({entryPoints:[join(directory, 'runtime-owner-browser.mjs')], bundle:true, write:false, format:'esm', platform:'browser', target:'es2022', jsx:'automatic'});
     runtimeBundle = result.outputFiles[0].contents;
   }
   const files = new Map([
@@ -42,7 +42,10 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
   if (directDownload) for (const name of ['direct-download.html', 'direct-download-browser.mjs', 'direct-download-page.mjs', 'direct-download.mjs']) {
     files.set(`/${name}`, [join(directory, name), name.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8']);
   }
-  if (runtimeOwner) files.set('/runtime-owner.html', [join(directory, 'runtime-owner.html'), 'text/html; charset=utf-8']);
+  if (runtimeOwner) {
+    files.set('/runtime-owner.html', [join(directory, 'runtime-owner.html'), 'text/html; charset=utf-8']);
+    files.set('/runtime-owner.css', [join(directory, 'runtime-owner.css'), 'text/css; charset=utf-8']);
+  }
   const recoveryFixture = recovery ? await startRecoveryFixture() : undefined;
   let origin;
   let relay;
@@ -51,6 +54,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
     response.setHeader('X-Content-Type-Options', 'nosniff');
     // v86's pinned scheduler creates a blob Worker. This policy is local-probe-only.
     response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+    if (runtimeOwner && request.url === '/runtime-owner.html') response.setHeader('Content-Security-Policy', response.getHeader('Content-Security-Policy') + "; style-src 'self';");
     if (directDownload && request.url === '/direct-download.html') {
       // No same-origin connect permission: this document cannot contact the local relay.
       response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src https://dl-cdn.alpinelinux.org https://api.github.com https://github.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");

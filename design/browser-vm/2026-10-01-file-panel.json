@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-01",
+  "baseline": "e1ed3eb",
+  "scope": "D04 / VM-028 local shared file panel; no formal App runtime enablement",
+  "implemented": [
+    "volatile account/epoch-owned manager",
+    "numeric pagination 20/50/100",
+    "create/rename/remove with confirmation UI",
+    "UTF-8 editor and CAS conflict draft preservation; reload or create-only save-as",
+    "sequential upload results and cancellation of unsent operations; no replay/rollback claim",
+    "explicit user-gesture download link and object URL revocation on invalidation",
+    "bilingual reusable shadcn component mounted in isolated real-Alpine harness",
+    "same-origin opt-in stylesheet without unsafe-inline"
+  ],
+  "tests": {
+    "newManagerAndPanel": 12,
+    "finalFastVm": {
+      "passed": 490,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50386.331084
+    },
+    "projectTypecheck": "passed",
+    "strictComponentTypecheck": "passed",
+    "buildUi": "passed; existing chunk size warning",
+    "checklistTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "checklistAudit": "29 in scope / 5 complete / 24 remaining",
+    "diffCheck": "passed"
+  },
+  "nativeBrowser": {
+    "browser": "Codex in-app",
+    "fixture": "real Alpine Linux 3.24 / Linux 6.18.35-0-virt, diagnostic identity, networking off",
+    "checks": [
+      "26 files: page size 20 yields 20+6 rows; size 50 yields 26",
+      "guest concurrent edit triggers FILE_CONFLICT and preserves draft",
+      "save-as keeps draft-copy.txt and original guest change separately",
+      "real download RPC produces explicit 18-byte save link",
+      "account exit status closed; output/list/editor/download link cleared"
+    ],
+    "download": {
+      "path": "/Users/doug/Downloads/acceptance.txt",
+      "modifiedAt": "2026-10-01T01:36:05.254197+08:00",
+      "bytes": 18,
+      "expectedUtf8": "verified-download\n",
+      "sha256": "a043a2ee144a1f0ed7356a35d4c2673d4e2067c7d5c6dbe0a65397222ceeac6b",
+      "verifiedBy": "host file exact bytes and contemporaneous mtime after native save-link click",
+      "automationEvent": "download event timed out; not used as success evidence"
+    },
+    "screenshot": "/private/tmp/vm-file-panel-verified.png",
+    "limitations": [
+      "No native destructive delete/rename/upload UI actions; those paths covered by controller/component tests",
+      "Final runtime-binding/epoch render guards added after native bundle startup; final full tests and strict types cover these guards",
+      "Not real member login, production deployment, full Chrome/Edge/device/keyboard matrix"
+    ]
+  },
+  "regressionHistory": [
+    "Initial missing module RED before implementation",
+    "Environment ready-to-ready switch left modal open: RED then epoch clearing fix",
+    "Inline diagnostic styles blocked by CSP: native inspection and failing server assertion then same-origin external CSS fix",
+    "Explicit user-gesture save-link test RED then implementation",
+    "Sandbox full suite interrupted, not counted; listener-approved final rerun 490/490"
+  ],
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "VM-028": "partial",
+    "connectorComplete": 9,
+    "connectorUserSkippedNotPassed": 1,
+    "connectorPending": 5
+  },
+  "limits": {
+    "textBytes": 1048576,
+    "uploadBytes": 20971520,
+    "downloadRpcBytes": 20971520,
+    "uploadBatch": 100
+  },
+  "next": [
+    "large-file streaming download",
+    "knowledge submission",
+    "persistence/full restore, Worker networking bridge, G0 and production acceptance"
+  ],
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "githubRetried": false,
+    "apkReinstalled": false
+  },
+  "logs": [
+    "/private/tmp/file-panel-commit-regression.log",
+    "/private/tmp/file-panel-final-build.log"
+  ]
+}
