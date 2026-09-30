@@ -4,7 +4,7 @@ import { createTerminalSession } from '../terminal-session.mjs';
 import { runGuestCommand } from './serial-command.mjs';
 import { attachConnectorGuestNetwork } from '../connector/guest-network.mjs';
 import { createConnectorEgressClient } from '../connector/egress-client.mjs';
-import { acceptPackages, acceptGit } from './commands.mjs';
+import { ACCEPTANCE_SETUP_COMMAND, acceptPackages, acceptGit } from './commands.mjs';
 let machine,session,network,client,busy=false,started=false,packages=false,failed=false;
 const progress=text=>postMessage({type:'progress',text});
 async function fail(error){if(failed)return;failed=true;network?.close();client?.close();await session?.close().catch(()=>{});postMessage({type:'error',text:String(error.message).slice(-12000)});}
@@ -26,7 +26,7 @@ async function start({endpoint,capability}){
  progress('正式授权已通过，启动真实 Alpine');
  session=createTerminalSession({bootTimeoutMs:60000,createMachine(){machine=profile.createMachine({type:'ne2k',relay_url:'fetch',dns_method:'static'});machine.add_listener('emulator-ready',()=>{try{network=attachConnectorGuestNetwork({machine,client});}catch(error){attachError=error;}});return machine;}});
  await session.ready;if(attachError)throw attachError;if(failed)return;
- const setup=await command('ifconfig eth0 up && udhcpc -i eth0 -n -q -t 3 -T 1 && printf "nameserver 192.168.86.1\\n" > /etc/resolv.conf && printf "https://dl-cdn.alpinelinux.org/alpine/v3.24/main\\nhttps://dl-cdn.alpinelinux.org/alpine/v3.24/community\\n" > /etc/apk/repositories && test -s /etc/ssl/certs/ca-certificates.crt && test "$(ls /etc/apk/keys | wc -l)" -gt 0');
+ const setup=await command(ACCEPTANCE_SETUP_COMMAND);
  if(setup.exitCode!==0)throw Error('Guest network/CA/key setup failed: '+setup.output);
  const result=await acceptPackages(command);if(failed)return;packages=true;postMessage({type:'result',stage:'packages',result:{...result,actualBrowserGuest:true,production:false,guestCertificateAndSignatureChecks:'enabled'}});
 }

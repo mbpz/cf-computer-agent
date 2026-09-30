@@ -1,0 +1,95 @@
+{
+  "recordedAt": "2026-09-30T13:23:38.175394+00:00",
+  "scope": "approved exact NJU mirror expansion; local real Node/v86 guest, not browser acceptance",
+  "baseCommit": "7bbe8fb",
+  "newHostname": "mirrors.nju.edu.cn",
+  "repositories": [
+    "https://mirrors.nju.edu.cn/alpine/v3.24/main",
+    "https://mirrors.nju.edu.cn/alpine/v3.24/community"
+  ],
+  "tdd": {
+    "red": "2/2 expected failures: missing setup constant and mirror destination denied",
+    "green": "2/2 passed"
+  },
+  "verification": {
+    "quickVm": "371/371 passed, zero skipped",
+    "typecheck": "tsc --noEmit passed",
+    "realGuest": "1/1 passed, zero skipped, 32.1 seconds including boot",
+    "logSha256": "b20d83210533b7763a8789d7413c3eaa8e61018fa2171eb331656dbc89a79b46"
+  },
+  "events": [
+    {
+      "event": "setup",
+      "elapsedMs": 18030,
+      "exitCode": 0
+    },
+    {
+      "event": "command-start",
+      "elapsedMs": 18030,
+      "command": "apk update"
+    },
+    {
+      "event": "command-result",
+      "elapsedMs": 22557,
+      "command": "apk update",
+      "output": "\u001b7[fetch https://mirrors.nju.edu.cn/alpine/v3....]\u001b8\u001b[0K\u001b7[fetch https://mirrors.nju.edu.cn/alpine/v3....]\u001b8\u001b[0Kv3.24.2-52-g5fd3fec8a4a [https://mirrors.nju.edu.cn/alpine/v3.24/main]\nv3.24.2-53-g1f65910814d [https://mirrors.nju.edu.cn/alpine/v3.24/community]\nOK: 27019 distinct packages available\n",
+      "exitCode": 0
+    },
+    {
+      "event": "command-start",
+      "elapsedMs": 22557,
+      "command": "apk add --no-cache git curl"
+    },
+    {
+      "event": "command-result",
+      "elapsedMs": 31980,
+      "command": "apk add --no-cache git curl",
+      "output": "âââââââââââââââââââââââââââ      \u001b8\u001b[0K\u001b7 90% âââââââââââââââââââââââââââââââââââââââ     \u001b8\u001b[0K\u001b7 92% ââââââââââââââââââââââââââââââââââââââââ    \u001b8\u001b[0K\u001b7 94% âââââââââââââââââââââââââââââââââââââââââ   \u001b8\u001b[0K\u001b7 95% ââââââââââââââââââââââââââââââââââââââââââ  \u001b8\u001b[0K\u001b7 97% ââââââââââââââââââââââââââââââââââââââââââ  \u001b8\u001b[0K\u001b7 98% âââââââââââââââââââââââââââââââââââââââââââ \u001b8\u001b[0K(13/13) Installing git-init-template (2.54.0-r0)\n\u001b7 98% âââââââââââââââââââââââââââââââââââââââââââ \u001b8\u001b[0K\u001b7 99% âââââââââââââââââââââââââââââââââââââââââââ \u001b8\u001b[0K\u001b7100% ââââââââââââââââââââââââââââââââââââââââââââ\u001b8\u001b[0KExecuting busybox-1.37.0-r31.trigger\n\u001b7[syncing disks...]\u001b8\u001b[0KOK: 21.7 MiB in 41 packages\n",
+      "exitCode": 0
+    },
+    {
+      "event": "command-start",
+      "elapsedMs": 31981,
+      "command": "git --version"
+    },
+    {
+      "event": "command-result",
+      "elapsedMs": 32023,
+      "command": "git --version",
+      "output": "git version 2.54.0\n",
+      "exitCode": 0
+    },
+    {
+      "event": "command-start",
+      "elapsedMs": 32023,
+      "command": "curl --version"
+    },
+    {
+      "event": "command-result",
+      "elapsedMs": 32098,
+      "command": "curl --version",
+      "output": "curl 8.22.0 (i586-alpine-linux-musl) libcurl/8.22.0 OpenSSL/3.5.7 zlib/1.3.2 brotli/1.2.0 zstd/1.5.7 c-ares/1.34.8 libidn2/2.3.8 libpsl/0.21.5 nghttp2/1.69.0\nRelease-Date: 2026-09-02\nProtocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns mqtt mqtts pop3 pop3s rtsp smtp smtps telnet tftp ws wss\nFeatures: alt-svc AsynchDNS brotli HSTS HTTP2 HTTPS-proxy IDN IPv6 Largefile libz PSL SSL threadsafe UnixSockets zstd\n",
+      "exitCode": 0
+    },
+    {
+      "event": "packages-installed",
+      "elapsedMs": 32098,
+      "gitVersion": "git version 2.54.0",
+      "curlVersion": "curl 8.22.0 (i586-alpine-linux-musl) libcurl/8.22.0 OpenSSL/3.5.7 zlib/1.3.2 brotli/1.2.0 zstd/1.5.7 c-ares/1.34.8 libidn2/2.3.8 libpsl/0.21.5 nghttp2/1.69.0",
+      "actualBrowserGuest": false,
+      "production": false
+    }
+  ],
+  "security": "TLS and apk signature validation retained; public-only DNS pinning; resource/timeout limits unchanged; fresh test authority for browser preview",
+  "productionTouched": false,
+  "actualBrowserGuest": false,
+  "LC009": "open",
+  "LC010": "not_started",
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "connectorCompleted": 8,
+    "connectorTotal": 15
+  }
+}

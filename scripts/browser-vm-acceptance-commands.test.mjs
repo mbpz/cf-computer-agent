@@ -60,3 +60,17 @@ test('late guest installation failures retain their nonzero exit code', async t 
  assert.deepEqual(await result, { output: 'ERROR: download failed', exitCode: 1 });
  assert.equal(machine.listening(), false);
 });
+
+// Shared fixed setup keeps browser and real-guest validation on the same repositories.
+test('acceptance setup uses only approved NJU HTTPS repositories and retains CA/key checks', async () => {
+ const { ACCEPTANCE_SETUP_COMMAND: setup } = await import('../tools/browser-vm/acceptance/commands.mjs');
+ assert.equal(typeof setup,'string');
+ assert.deepEqual(setup.match(/https:\/\/[^\\" ]+/g),[
+  'https://mirrors.nju.edu.cn/alpine/v3.24/main',
+  'https://mirrors.nju.edu.cn/alpine/v3.24/community',
+ ]);
+ assert.ok(setup.includes('test -s /etc/ssl/certs/ca-certificates.crt'));
+ assert.ok(setup.includes('ls /etc/apk/keys'));
+ assert.ok(setup.includes('udhcpc -i eth0 -n -q -t 3 -T 1'));
+ assert.doesNotMatch(setup,/allow-untrusted|no-check-certificate/);
+});

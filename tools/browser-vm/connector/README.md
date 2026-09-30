@@ -163,7 +163,7 @@ the old lease remains active; they never extend it.
 
 Default egress uses the independent A/AAAA destination policy and a single pinned
 literal address, no second lookup, fallback or proxy: only
-`dl-cdn.alpinelinux.org`, `github.com`, `api.github.com`, ports 80/443. Special,
+`dl-cdn.alpinelinux.org`, `mirrors.nju.edu.cn`, `github.com`, `api.github.com`, ports 80/443. The NJU mirror is an explicitly approved exact name, not a wildcard. Special,
 private, mapped or mixed DNS answers are denied. Each channel has at most eight
 streams including DNS-pending, 5s DNS/connect and 15s stream idle deadlines.
 

@@ -267,3 +267,13 @@ test('a full 32-answer DNS response stays usable without selecting alternate add
   const f = fixture(Array(16).fill('140.82.112.3'), Array(16).fill('2606:4700::1111'));
   assert.deepEqual(await createDestinationResolver(f)(target), { ...target, address: '140.82.112.3', family: 4 });
 });
+
+// Approved mirror expansion is exact, not a wildcard or a DNS-policy bypass.
+test('NJU mirror is pinned while lookalikes and private mirror answers fail closed', async () => {
+ const f = fixture(), resolve = createDestinationResolver(f);
+ assert.equal((await resolve({hostname:'mirrors.nju.edu.cn',port:443})).hostname,'mirrors.nju.edu.cn');
+ for(const hostname of ['nju.edu.cn','other.nju.edu.cn','mirrors.nju.edu.cn.evil.test','mirrors.nju.edu.cn.'])
+  await assert.rejects(resolve({hostname,port:443}),/destination/);
+ await assert.rejects(createDestinationResolver(fixture(['127.0.0.1'],noData))({hostname:'mirrors.nju.edu.cn',port:443}),/DNS/);
+ assert.equal(f.instances.length,1);
+});

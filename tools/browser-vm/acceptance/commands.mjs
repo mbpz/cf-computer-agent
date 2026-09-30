@@ -1,3 +1,5 @@
+// Fixed approved HTTPS repositories; never accept shell fragments or mirror URLs from the page.
+export const ACCEPTANCE_SETUP_COMMAND = 'ifconfig eth0 up && udhcpc -i eth0 -n -q -t 3 -T 1 && printf "nameserver 192.168.86.1\\n" > /etc/resolv.conf && printf "https://mirrors.nju.edu.cn/alpine/v3.24/main\\nhttps://mirrors.nju.edu.cn/alpine/v3.24/community\\n" > /etc/apk/repositories && test -s /etc/ssl/certs/ca-certificates.crt && test "$(ls /etc/apk/keys | wc -l)" -gt 0';
 // Fixed development acceptance commands; no user-supplied shell fragments.
 async function checked(command,text){const result=await command(text);if(result.exitCode!==0)throw Error(`Guest command failed (${result.exitCode}): ${text}\n${result.output}`);return result.output.trim();}
 export async function acceptPackages(command){

@@ -1,4 +1,4 @@
-export const CONNECTOR_HOSTS = Object.freeze(['dl-cdn.alpinelinux.org', 'github.com', 'api.github.com']);
+export const CONNECTOR_HOSTS = Object.freeze(['dl-cdn.alpinelinux.org', 'mirrors.nju.edu.cn', 'github.com', 'api.github.com']);
 
 // Conservative policy: special-purpose allocations are denied even when globally reachable.
 // IANA IPv4/IPv6 Special-Purpose Address Registries, reviewed 2026-09-30.

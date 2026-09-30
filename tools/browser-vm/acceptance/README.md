@@ -47,3 +47,5 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 新版独立预览已发布：`https://08460309.memory-garden-vm-connector-probe.pages.dev`，来源提交 `9f8c380`。自带浏览器已打开并确认尚未启动；新回环服务只允许该精确来源，等待用户手动配对和启动。部署收据见 `design/browser-vm/2026-09-30-browser-acceptance-drain-preview.json`；未部署生产或取得新浏览器安装成功证据。
 
 2026-09-30 上述 `08460309` 手动启动后的实际结果：初始化0，但 `apk update` 在90秒超时，安装与版本检查未执行。新失败证据及公网对照见 `design/browser-vm/2026-09-30-drain-preview-apk-failure.json`。独立发现并本地修复两端续租定时器提前唤醒问题（不改变硬到期或远端提前通知拒绝），快速VM369/369和类型检查通过；尚未发布新修复，且不能据此宣称公网超时根因已解决。真实时钟本地Worker/D1→WebSocket控制连续100秒、3次续租通过（1/1），不含公网或浏览器VM；后续继续定位公网传输，不重复要求用户启动旧预览。主清单5/29、剩余24，连接器8/15、剩余7；LC-009仍开放，LC-010不得提前验收。
+
+2026-09-30 已按用户确认切换固定验收源至南大 HTTPS Alpine v3.24 main/community，精确增加 `mirrors.nju.edu.cn` 白名单；TLS、apk签名、DNS公网校验/固定地址与原预算不变。先见2项预期RED，再通过371/371快速VM回归、类型检查及1/1真实Node/v86公网安装：索引4.527秒、安装9.423秒，均退出0，Git 2.54.0 / curl 8.22.0。详情见 `design/browser-vm/2026-09-30-nju-apk-install.json`。这是本地真实guest证据，不是浏览器验收；LC-009/010仍开放，主清单5/29、剩余24，连接器8/15、剩余7。新预览须使用新启动且只允许确切预览来源的本机服务，重新手动配对。
