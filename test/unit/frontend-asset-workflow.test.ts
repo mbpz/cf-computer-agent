@@ -14,6 +14,30 @@ function setup(extra: Partial<AssetWorkflowOptions> = {}) {
   return { workflow: createAssetWorkflow(options), store, requester, requests, options };
 }
 describe("member asset workflow", () => {
+  it("persists the chosen destination before submission and replays it unchanged after reload", async () => {
+    const ctx = setup(); await ctx.workflow.select(file()); const bodies: string[] = []; const keys: string[] = [];
+    ctx.requester.mockImplementation(async (p, init) => {
+      if (String(p).endsWith("/submit")) { bodies.push(String(init!.body)); keys.push(new Headers(init?.headers).get("idempotency-key")!); if (bodies.length === 1) throw Error("lost"); return Response.json({ submission: { id: "submission-1" } }); }
+      const result = record("succeeded"); result.asset.idempotencyKey = new Headers(init?.headers).get("idempotency-key")!; return Response.json(result);
+    });
+    const target = { requestedSpaceId: "research", requestedCollectionId: "reports", requestedVisibility: "admin_only" as const };
+    await ctx.workflow.submit("Selected report", target);
+    expect(JSON.parse(bodies[0])).toEqual({ title: "Selected report", requestedSpaceId: "research", requestedCollectionId: "reports", requestedVisibility: "admin_only" });
+    target.requestedSpaceId = "changed";
+    const restored = createAssetWorkflow(ctx.options); expect(bodies).toHaveLength(1);
+    await restored.submit("Changed title", target);
+    expect(bodies[1]).toBe(bodies[0]); expect(keys[1]).toBe(keys[0]); expect(restored.state().kind).toBe("submitted");
+  });
+  it("rejects invalid destinations before any review POST and fails closed on corrupt persisted targets", async () => {
+    const ctx = setup(); await ctx.workflow.select(file());
+    ctx.requester.mockImplementation(async (_p, init) => { const result = record("succeeded"); result.asset.idempotencyKey = new Headers(init?.headers).get("idempotency-key")!; return Response.json(result); });
+    await ctx.workflow.submit("Report", { requestedSpaceId: "../bad", requestedCollectionId: null, requestedVisibility: "shared" });
+    expect(ctx.workflow.state().error).toBe("validation"); expect(ctx.requester.mock.calls.filter(([p]) => String(p).endsWith("/submit"))).toHaveLength(0);
+    const loaded = loadAssetIntent("alice", ctx.store); if (loaded.kind !== "ready") throw Error("missing");
+    ctx.store.setItem("personal-workbench:asset-intent:v1:alice", JSON.stringify({ ...loaded.intent, review: { key: "review-key-123456", title: "Report", target: { requestedSpaceId: "space", requestedCollectionId: null, requestedVisibility: "public" } } }));
+    expect(loadAssetIntent("alice", ctx.store).kind).toBe("invalid");
+  });
+
   it("allows explicitly releasing only a verified terminal failure without deleting the server asset", async () => {
     const ctx = setup(); await ctx.workflow.select(file()); await ctx.workflow.releaseFailed(); expect(loadAssetIntent("alice",ctx.store).kind).toBe("ready");
     const loaded = loadAssetIntent("alice",ctx.store); if (loaded.kind !== "ready") throw Error("missing");

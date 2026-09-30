@@ -10,8 +10,9 @@ const encoder = new TextEncoder();
 const object = value => value && Object.getPrototypeOf(value) === Object.prototype;
 const path = value => typeof value === 'string' && value.length <= 4096 && encoder.encode(value).length <= 4096;
 export function copyFileRequest(value) {
-  const keys = {list:['page','pageSize'],readText:[],readSubmissionText:[],download:[],downloadBegin:[],downloadChunk:['token','offset'],downloadEnd:['token'],mkdir:[],remove:[],rename:['destination'],saveText:['version','text'],upload:['bytes']}[value?.op];
+  const keys = {list:['page','pageSize'],readText:[],readSubmissionText:[],readSubmissionAsset:['maxBytes'],download:[],downloadBegin:[],downloadChunk:['token','offset'],downloadEnd:['token'],mkdir:[],remove:[],rename:['destination'],saveText:['version','text'],upload:['bytes']}[value?.op];
   if (!object(value) || !keys || !path(value.path) || Object.keys(value).some(key => !['op','path',...keys].includes(key))) throw Error('INVALID_FILE_OPERATION');
+  if (value.op === 'readSubmissionAsset' && (!Number.isSafeInteger(value.maxBytes) || value.maxBytes < 1 || value.maxBytes > UPLOAD_LIMIT)) throw Error('INVALID_FILE_OPERATION');
   if (['downloadChunk','downloadEnd'].includes(value.op) && (typeof value.token !== 'string' || !value.token.length || value.token.length > 128)) throw Error('INVALID_FILE_OPERATION');
   if (value.op === 'downloadChunk' && (!Number.isSafeInteger(value.offset) || value.offset < 0)) throw Error('INVALID_FILE_OPERATION');
   if (value.op === 'saveText' && (typeof value.version !== 'string' || !value.version.length || value.version.length > 128)) throw Error('FILE_CONFLICT');
@@ -30,6 +31,7 @@ export function validFileResult(input,value) {
   if (input.op === 'downloadChunk') return value.offset === input.offset && value.bytes instanceof Uint8Array && value.bytes.byteLength <= DOWNLOAD_CHUNK_SIZE && typeof value.done === 'boolean';
   if (input.op === 'readText' || input.op === 'readSubmissionText') return typeof value.text === 'string' && value.text.length <= (input.op === 'readSubmissionText' ? SUBMISSION_TEXT_LIMIT : TEXT_LIMIT) && encoder.encode(value.text).length <= (input.op === 'readSubmissionText' ? SUBMISSION_TEXT_LIMIT : TEXT_LIMIT)
     && typeof value.version === 'string' && value.version.length > 0 && value.version.length <= 128;
+  if (input.op === 'readSubmissionAsset') return value.bytes instanceof Uint8Array && value.bytes.byteLength <= input.maxBytes;
   if (input.op === 'download') return value.bytes instanceof Uint8Array && value.bytes.byteLength <= UPLOAD_LIMIT;
   if (input.op !== 'list') return value.ok === true;
   return path(value.path) && [20,50,100].includes(value.pageSize)

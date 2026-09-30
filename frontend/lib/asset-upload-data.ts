@@ -1,3 +1,4 @@
+import { validateSubmissionTarget } from "./submission-data";
 import { apiFetch, type Fetcher } from "./api";
 import type { AssetIntent } from "./asset-upload-intent";
 export type AssetResult = { asset: { id: string; ownerId: string; originalName: string; byteSize: number; contentType: string; contentSha256: string; idempotencyKey: string; submissionId?: string | null }; job: { assetId: string; status: "queued" | "processing" | "succeeded" | "failed_retryable" | "failed_terminal" } };
@@ -22,7 +23,7 @@ export function cancelAsset(assetId: string, requester: Fetcher, signal: AbortSi
   return apiFetch<void>(`/api/assets/${assetId}/cancel`, { method: "POST", requester, signal });
 }
 export async function submitAsset(assetId: string, review: NonNullable<AssetIntent["review"]>, requester: Fetcher, signal: AbortSignal): Promise<string> {
-  const result = await apiFetch<{ submission: { id: string } }>(`/api/assets/${assetId}/submit`, { method: "POST", requester, signal, headers: { "content-type": "application/json", "idempotency-key": review.key }, body: JSON.stringify({ requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared", title: review.title }) });
+  const result = await apiFetch<{ submission: { id: string } }>(`/api/assets/${assetId}/submit`, { method: "POST", requester, signal, headers: { "content-type": "application/json", "idempotency-key": review.key }, body: JSON.stringify({ ...validateSubmissionTarget(review.target ?? { requestedSpaceId: "default", requestedCollectionId: null, requestedVisibility: "shared" }), title: review.title }) });
   if (!id(result?.submission?.id)) throw Error("ASSET_SUBMISSION_RESPONSE_INVALID"); return result.submission.id;
 }
 export function assetContentType(file: File): string {

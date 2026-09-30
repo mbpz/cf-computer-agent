@@ -9,6 +9,8 @@ import { createFileManager, type FileManager } from './file-manager.mjs';
 
 import {createKnowledgeImport, type KnowledgeImport} from './knowledge-import';
 import {KnowledgeImportPanel} from './knowledge-import-panel';
+import {createVmAssetImport, type VmAssetImport} from './asset-import';
+import {VmAssetImportPanel} from './asset-import-panel';
 import type {Fetcher} from '../../../lib/api';
 
 import type { DownloadSink } from './stream-download.mjs';
@@ -20,11 +22,11 @@ type SavePicker = (options: {suggestedName: string}) => Promise<{createWritable(
 type Props = { submission?: {memberId:string;requester?:Fetcher}; runtime: AccountVmRuntime; locale?: 'en' | 'zh-CN'; onOpenDownload?: (name: string) => Promise<DownloadSink>; onDownload?: (name: string, bytes: Uint8Array) => void };
 /** Shared with the isolated acceptance harness; mounting never starts a VM or network. */
 export function FilesPanel({ runtime, submission, ...props }: Props) {
-  const [binding, setBinding] = useState<{runtime: AccountVmRuntime; memberId?:string; requester?:Fetcher; manager: FileManager; importer?:KnowledgeImport} | null>(null);
-  useEffect(() => { const manager = createFileManager(runtime); const importer=submission?.memberId.trim()?createKnowledgeImport({runtime,requester:submission.requester}):undefined; setBinding({runtime,memberId:submission?.memberId,requester:submission?.requester,manager,importer}); return () => {manager.dispose();importer?.dispose();}; }, [runtime,submission?.memberId,submission?.requester]);
-  return binding?.runtime === runtime && binding.memberId===submission?.memberId && binding.requester===submission?.requester ? <FileView manager={binding.manager} importer={binding.importer} {...props} /> : null;
+  const [binding, setBinding] = useState<{runtime: AccountVmRuntime; memberId?:string; requester?:Fetcher; manager: FileManager; importer?:KnowledgeImport; assetImporter?:VmAssetImport} | null>(null);
+  useEffect(() => { const manager = createFileManager(runtime); const importer=submission?.memberId.trim()?createKnowledgeImport({runtime,requester:submission.requester}):undefined; const assetImporter=submission?.memberId.trim()?createVmAssetImport({runtime,memberId:submission.memberId,requester:submission.requester}):undefined; setBinding({runtime,memberId:submission?.memberId,requester:submission?.requester,manager,importer,assetImporter}); return () => {manager.dispose();importer?.dispose();assetImporter?.dispose();}; }, [runtime,submission?.memberId,submission?.requester]);
+  return binding?.runtime === runtime && binding.memberId===submission?.memberId && binding.requester===submission?.requester ? <FileView manager={binding.manager} importer={binding.importer} assetImporter={binding.assetImporter} {...props} /> : null;
 }
-function FileView({ manager, importer, locale = 'en', onDownload, onOpenDownload }: Omit<Props, 'runtime'> & { manager: FileManager; importer?:KnowledgeImport }) {
+function FileView({ manager, importer, assetImporter, locale = 'en', onDownload, onOpenDownload }: Omit<Props, 'runtime'> & { manager: FileManager; importer?:KnowledgeImport; assetImporter?:VmAssetImport }) {
   const state = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
   const [modal, setModal] = useState<{ action: 'mkdir' | 'rename' | 'remove'; name: string; epoch: number } | null>(null);
   const [name, setName] = useState('');
@@ -47,8 +49,10 @@ function FileView({ manager, importer, locale = 'en', onDownload, onOpenDownload
   const picker = typeof window === 'undefined' ? undefined : (window as Window & {showSaveFilePicker?: SavePicker}).showSaveFilePicker;
   const openDownload = onOpenDownload ?? (picker ? async (name: string) => (await picker.call(window, {suggestedName: name})).createWritable() : undefined);
   const importState=useSyncExternalStore(importer?.subscribe??noImportSubscribe,importer?.getSnapshot??noImportState);
+  const assetState=useSyncExternalStore(assetImporter?.subscribe??noImportSubscribe,assetImporter?.getSnapshot??noImportState);
+  const assetOpen=!!assetState&&assetState.kind!=='idle';
   const importOpen=!!importState&&importState.kind!=='idle';
-  const blocked = state.busy || !!state.editor || importOpen;
+  const blocked = state.busy || !!state.editor || importOpen || assetOpen;
   const openModal = (action: 'mkdir' | 'rename' | 'remove', filename = '') => { setName(action === 'rename' ? filename : ''); setModal({ action, name: filename, epoch: state.epoch }); };
   const confirm = () => { if (!modal || modal.epoch !== state.epoch) return; const { action, name: original } = modal; setModal(null); if (action === 'mkdir') void manager.mkdir(name); else if (action === 'rename') void manager.rename(original, name); else void manager.remove(original); setName(''); };
   const messages: Record<string, string> = {
@@ -81,7 +85,7 @@ function FileView({ manager, importer, locale = 'en', onDownload, onOpenDownload
     <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>{t('Name', '名称')}</th><th>{t('Type', '类型')}</th><th>{t('Bytes', '字节')}</th><th>{t('Actions', '操作')}</th></tr></thead><tbody>
       {state.entries.map(entry => <tr key={entry.name} data-file-entry><td>{entry.name}</td><td>{entry.type}</td><td>{entry.bytes}</td><td className="flex flex-wrap gap-2">
         {entry.type === 'directory' && <Button disabled={blocked} onClick={() => void manager.load((state.path === '/' ? '' : state.path) + '/' + entry.name, 1)}>{t('Open', '打开')}</Button>}
-        {entry.type === 'file' && <><Button data-file-edit disabled={blocked || entry.bytes > 1048576} onClick={() => { setSaveName(''); void manager.open(entry.name); }}>{t('Edit', '编辑')}</Button><Button data-file-download disabled={blocked || entry.bytes > 20971520} onClick={() => void manager.download(entry.name, receive)}>{t('Download', '下载')}</Button><Button data-file-stream disabled={blocked || !openDownload} onClick={() => { if (openDownload) void manager.downloadTo(entry.name, () => openDownload(entry.name)); }}>{t('Stream save', '流式保存')}</Button><Button data-file-import disabled={blocked || !importer || entry.bytes>131072 || !entry.bytes} onClick={()=>void importer?.select((state.path==='/'?'':state.path)+'/'+entry.name)}>{t('Submit text for review','提交文本审核')}</Button></>}
+        {entry.type === 'file' && <><Button data-file-edit disabled={blocked || entry.bytes > 1048576} onClick={() => { setSaveName(''); void manager.open(entry.name); }}>{t('Edit', '编辑')}</Button><Button data-file-download disabled={blocked || entry.bytes > 20971520} onClick={() => void manager.download(entry.name, receive)}>{t('Download', '下载')}</Button><Button data-file-stream disabled={blocked || !openDownload} onClick={() => { if (openDownload) void manager.downloadTo(entry.name, () => openDownload(entry.name)); }}>{t('Stream save', '流式保存')}</Button><Button data-file-import disabled={blocked || !importer || entry.bytes>131072 || !entry.bytes} onClick={()=>void importer?.select((state.path==='/'?'':state.path)+'/'+entry.name)}>{t('Submit text for review','提交文本审核')}</Button><Button data-file-asset-import disabled={blocked || !assetImporter || entry.bytes>20971520 || !entry.bytes} onClick={()=>void assetImporter?.select((state.path==='/'?'':state.path)+'/'+entry.name)}>{t('Import asset','导入资产')}</Button></>}
         {['file', 'directory'].includes(entry.type) && <><Button disabled={blocked} onClick={() => openModal('rename', entry.name)}>{t('Rename', '重命名')}</Button><Button data-file-remove variant="destructive" disabled={blocked} onClick={() => openModal('remove', entry.name)}>{t('Remove', '删除')}</Button></>}
       </td></tr>)}
     </tbody></table>{!state.entries.length && <p>{t('No files in this directory.', '目录暂无文件。')}</p>}</div>
@@ -92,6 +96,7 @@ function FileView({ manager, importer, locale = 'en', onDownload, onOpenDownload
       <Select aria-label={t('Files per page', '每页文件数')} value={state.pageSize} disabled={blocked} onChange={event => void manager.load(state.path, 1, Number(event.target.value) as 20 | 50 | 100)}>{[20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}</Select>
     </nav>
     {!importer&&<p className="text-xs text-muted-foreground">{t('Knowledge submission requires an authenticated app integration; diagnostic previews cannot submit.','知识提交需已认证应用接入；独立诊断预览不可提交。')}</p>}
+    {assetImporter&&<><Button disabled={blocked} onClick={()=>void assetImporter.recover()}>{t('Recover pending asset (read only)','恢复未决资产（只读）')}</Button><VmAssetImportPanel model={assetImporter} locale={locale}/></>}
     {importer&&<KnowledgeImportPanel model={importer} locale={locale}/>}
     {state.editor && <div className="space-y-2 rounded border p-3"><h3>{state.editor.name}{state.editor.dirty ? ' *' : ''}</h3>
       <Textarea aria-label={t('File contents', '文件内容')} rows={12} maxLength={1048576} value={state.editor.text} disabled={state.busy} onChange={event => manager.edit(event.target.value)} />

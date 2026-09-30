@@ -126,3 +126,15 @@ test('submission-only read rejects every symlink including hidden-target aliases
  await f.files.request({op:'upload',path:'/valid.txt',bytes:bytes('review only')});const receipt=await f.files.request({op:'readSubmissionText',path:'/valid.txt'});assert.equal(receipt.text,'review only');assert.ok(receipt.version);
  await f.files.request({op:'upload',path:'/large.txt',bytes:new Uint8Array(131073)});await assert.rejects(f.files.request({op:'readSubmissionText',path:'/large.txt'}),/FILE_TOO_LARGE/);assert.equal(f.running,true);f.files.close();
 });
+
+test('asset import reads a bounded binary snapshot but rejects hidden files and every symlink',async()=>{
+ const f=fixture();const raw=new Uint8Array([0,255,37,80,68,70]);await f.files.request({op:'upload',path:'/report.pdf',bytes:raw});
+ const result=await f.files.request({op:'readSubmissionAsset',path:'/report.pdf',maxBytes:6});assert.deepEqual(result.bytes,raw);
+ result.bytes[0]=99;assert.equal((await f.files.request({op:'readSubmissionAsset',path:'/report.pdf',maxBytes:6})).bytes[0],0);
+ await assert.rejects(f.files.request({op:'readSubmissionAsset',path:'/report.pdf',maxBytes:5}),/FILE_TOO_LARGE/);
+ for(const maxBytes of [0,-1,1.5,20*1024*1024+1,undefined])await assert.rejects(f.files.request({op:'readSubmissionAsset',path:'/report.pdf',maxBytes}),/INVALID_FILE_OPERATION/);
+ await f.files.request({op:'upload',path:'/.private.pdf',bytes:raw});f.link('alias.pdf','/mnt/work/report.pdf');
+ await f.files.request({op:'mkdir',path:'/folder'});await f.files.request({op:'upload',path:'/folder/a.pdf',bytes:raw});f.link('alias-folder','/mnt/work/folder');
+ for(const path of ['/.private.pdf','/alias.pdf','/alias-folder/a.pdf'])await assert.rejects(f.files.request({op:'readSubmissionAsset',path,maxBytes:6}),/INVALID_PATH/);
+ assert.equal(f.running,true);
+});

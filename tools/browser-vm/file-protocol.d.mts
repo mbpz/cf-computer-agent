@@ -6,6 +6,7 @@ export const FILE_ERRORS: Set<string>;
 export type FileRequest =
   | { op: 'list'; path: string; page?: number; pageSize?: 20 | 50 | 100 }
   | { op: 'readText' | 'readSubmissionText' | 'download' | 'downloadBegin' | 'mkdir' | 'remove'; path: string }
+  | { op: 'readSubmissionAsset'; path: string; maxBytes: number }
   | { op: 'downloadChunk'; path: string; token: string; offset: number }
   | { op: 'downloadEnd'; path: string; token: string }
   | { op: 'rename'; path: string; destination: string }

@@ -13,7 +13,7 @@
 ### 2026-10-01 selected-file submission local slice
 
 - [x] G4a / VM-030文本、Markdown和代码显式审核提交：共享根128 KiB专用读取不跟随链接；内容按字面显示；明确空间和可见范围；原幂等键/原载荷恢复；账户失效清理。聚焦32、兼容18、快速VM515及真实Alpine1均通过。收据：`design/browser-vm/2026-10-01-knowledge-import.json`。
-- [ ] PDF/图片等资产格式接入已有开关、上传、解析及审核流程；不以文本子集替代整个VM-030。
+- [x] PDF/图片等资产格式的本地接入：复用已有开关、上传、解析及审核流程，确认原件、解析内容与目标；快速 VM 528、兼容 46、真实 Alpine 1 均通过。收据：`design/browser-vm/2026-10-01-asset-import.json`。HTTP 为测试边界，不代表真实解析或整个 VM-030 验收。
 - [ ] 认证正式应用和真实浏览器端到端验收；G0保持关闭入口，D04仍未关闭。原生保存验收仍待从上轮锁屏阻断继续。
 
 ## Global Constraints
@@ -203,3 +203,12 @@ await assert.rejects(verifyArtifacts(manifest, root), /engine|size|digest/);
 - G1～G5 的细化计划必须给出代码接口与失败用例，至少覆盖越权、幂等冲突、并发失效、存储失败和真实 UI 行为，不以零断言测试或 mock 成功替代。
 - 生产中继位置、维护和预算授权作为发布门槛独立保留；本地开发并不包含任何自动购买/部署授权。
 - 最终逐项回看完整规格而非只看本计划的勾选；任何未证明的要求都视为尚未完成。
+
+
+## 2026-10-01 VM-030 asset-backed import local evidence
+
+- [x] Selected-file asset flow reuses availability → upload → parse → owned preview → review submission; explicit consent at upload and review boundaries; target-aware existing review intent and same-key recovery.
+- [x] Bounded no-symlink binary Worker RPC and reusable member-bound React panel; real Alpine binary read/bounds verified separately from fixture HTTP controller/DOM tests.
+- [ ] Authenticated browser/formal mounting and actual configured asset parser acceptance remain G0-gated. Do not infer delivery from local component tests.
+
+Receipt: `design/browser-vm/2026-10-01-asset-import.json`; next D04 implementation item is account-owned persistent VM save/restore, with formal integration/production gates retained. This does not close the VM-030 parent or D04.

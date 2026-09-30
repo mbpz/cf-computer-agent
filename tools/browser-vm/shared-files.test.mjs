@@ -43,6 +43,11 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   await until(first.runtime,/前端真实上传\r?\nUI-READ-DONE\r?\n/);
   const read=await file({op:'readText',path:'/docs/ui.txt'});assert.equal(read.text,'前端真实上传');
   assert.equal((await file({op:'readSubmissionText',path:'/docs/ui.txt'})).text,'前端真实上传');
+  await first.runtime.write("printf '\\045\\120\\104\\106\\000\\377' > /mnt/work/report.pdf; printf '\\nBINARY-READY\\n'\n");
+  await until(first.runtime,/\r?\nBINARY-READY\r?\n/);
+  assert.deepEqual((await file({op:'readSubmissionAsset',path:'/report.pdf',maxBytes:6})).bytes,new Uint8Array([37,80,68,70,0,255]));
+  await assert.rejects(file({op:'readSubmissionAsset',path:'/report.pdf',maxBytes:5}),/FILE_TOO_LARGE/);
+  await file({op:'remove',path:'/report.pdf'});
   await first.runtime.write("printf '客体修改' > /mnt/work/docs/ui.txt; printf '\\nGUEST-EDIT-DONE\\n'\n");
   await until(first.runtime,/\r?\nGUEST-EDIT-DONE\r?\n/);
   await assert.rejects(file({op:'saveText',path:'/docs/ui.txt',version:read.version,text:'stale'}),/FILE_CONFLICT/);
@@ -56,6 +61,8 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   assert.equal((await file({op:'readText',path:'/safe'})).text,'保存新版本');
   await assert.rejects(file({op:'readSubmissionText',path:'/safe'}),/INVALID_PATH/);
   await assert.rejects(file({op:'readSubmissionText',path:'/escape'}),/INVALID_PATH/);
+  await assert.rejects(file({op:'readSubmissionAsset',path:'/safe',maxBytes:100}),/INVALID_PATH/);
+  await assert.rejects(file({op:'readSubmissionAsset',path:'/escape',maxBytes:100}),/INVALID_PATH/);
   await file({op:'remove',path:'/safe'});
   await file({op:'rename',path:'/docs/ui.txt',destination:'/docs/moved.txt'});
   assert.equal(new TextDecoder().decode((await file({op:'download',path:'/docs/moved.txt'})).bytes),'保存新版本');
@@ -79,6 +86,7 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   const expectedHash=first.runtime.getSnapshot().output.match(/([0-9a-f]{64})  \/mnt\/work\/large.bin/)[1];
   await assert.rejects(file({op:'download',path:'/large.bin'}),/FILE_TOO_LARGE/);
   await assert.rejects(file({op:'readSubmissionText',path:'/large.bin'}),/FILE_TOO_LARGE/);
+  await assert.rejects(file({op:'readSubmissionAsset',path:'/large.bin',maxBytes:20*1024*1024}),/FILE_TOO_LARGE/);
   const directory=await mkdtemp(join(tmpdir(),'vm-stream-'));
   t.after(()=>rm(directory,{recursive:true,force:true}));
   const destination=join(directory,'large.bin'),partial=join(directory,'large.part');

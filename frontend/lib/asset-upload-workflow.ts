@@ -1,3 +1,4 @@
+import { validateSubmissionTarget, type SubmissionTarget } from "./submission-data";
 import { assetUploadModel } from "../components/assets/asset-upload-model";
 import { ApiRequestError, type Fetcher } from "./api";
 import { assetContentType, cancelAsset, parseAsset, resumeAsset, submitAsset, uploadAsset, validateAssetResult, type AssetResult } from "./asset-upload-data";
@@ -65,12 +66,15 @@ export function createAssetWorkflow(options: AssetWorkflowOptions) {
       if (record.job.status !== "failed_terminal") { emit({ error: "not_ready" }); return; }
       if (clear()) emit({ kind: "released", record: undefined, progress: null });
     }); },
-    submit(title: string) { return run(async signal => {
+    submit(title: string, target?: SubmissionTarget) { return run(async signal => {
       const record = await read(signal); if (!record || !valid(signal) || !state.intent) return;
       if (record.job.status !== "succeeded") { emit({ error: "not_ready" }); return; }
       if (!state.intent.review) {
         if (!title.trim() || new TextEncoder().encode(title.trim()).byteLength > 512) { emit({ error: "validation" }); return; }
-        if (!persist({ ...state.intent, review: { key: newAssetKey(), title: title.trim() } })) return;
+        let destination: SubmissionTarget | undefined;
+        try { destination = target === undefined ? undefined : validateSubmissionTarget(target); }
+        catch { emit({ error: "validation" }); return; }
+        if (!persist({ ...state.intent, review: { key: newAssetKey(), title: title.trim(), ...(destination ? { target: destination } : {}) } })) return;
       }
       const submissionId = await submitAsset(record.asset.id, state.intent.review!, requester, signal);
       if (valid(signal) && clear()) emit({ kind: "submitted", record: undefined, submissionId, progress: null });

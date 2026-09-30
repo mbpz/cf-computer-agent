@@ -83,9 +83,39 @@ test('selected VM file confirmation renders hostile markup as text and submits o
  await act(async()=>f.host.querySelector('[data-import-confirm]').click());assert.equal(posts.length,1);assert.equal(JSON.parse(posts[0].init.body).requestedSpaceId,'team-notes');assert.ok(f.host.textContent.includes('submission-ui'));assert.equal(f.host.querySelector('[data-import-preview]'),null);
 });
 test('VM import is gated without authenticated integration',async t=>{
- const f=await render(t,()=>list());assert.equal(f.host.querySelector('[data-file-import]').disabled,true);
+ const f=await render(t,()=>list());assert.equal(f.host.querySelector('[data-file-import]').disabled,true);assert.equal(f.host.querySelector('[data-file-asset-import]').disabled,true);
 });
 test('VM import clears selected content on runtime exit',async t=>{
  const g=await render(t,input=>input.op==='list'?list():{text:'old owner content',version:'v1'},'zh-CN',false,undefined,{memberId:'member-a',requester:()=>{throw Error('must not post');}});
  await act(async()=>g.host.querySelector('[data-file-import]').click());assert.ok(g.host.textContent.includes('old owner content'));await g.close();assert.equal(g.host.textContent.includes('old owner content'),false);
+});
+
+test('asset import UI separates upload consent, parsing, literal review preview and destination confirmation',async t=>{
+ const requests=[];let asset,status='queued';
+ const f=await render(t,input=>input.op==='list'?{...list(),entries:[{name:'report.pdf',type:'file',bytes:5}]}:{bytes:new TextEncoder().encode('hello')},'en',false,undefined,{memberId:'member-a',requester:async(url,init)=>{
+  requests.push({url,init});
+  if(url.endsWith('/availability'))return Response.json({storageEnabled:true,reason:null,maxBytes:1000});
+  if(url==='/api/assets'){asset={id:'asset-1',ownerId:'member-a',originalName:'report.pdf',byteSize:5,contentType:'application/pdf',contentSha256:'2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',idempotencyKey:init.headers['idempotency-key']};return Response.json({asset,job:{assetId:'asset-1',status}});}
+  if(url.endsWith('/resume'))return Response.json({asset,job:{assetId:'asset-1',status}});
+  if(url.endsWith('/asset-1')){status='succeeded';return Response.json({asset,job:{assetId:'asset-1',status}});}
+  if(url.endsWith('/preview'))return Response.json({assetId:'asset-1',originalName:'report.pdf',markdown:'<img src=x onerror=alert(1)>',warnings:[],lineCount:1,codeMetadata:null,parserSchemaVersion:'1'});
+  if(url.endsWith('/submit'))return Response.json({submission:{id:'asset-submission-ui'}});
+  throw Error('unexpected '+url);
+ }});
+ assert.ok(f.host.querySelector('[data-file-asset-import]'));await act(async()=>f.host.querySelector('[data-file-asset-import]').click());
+ for(let i=0;i<30&&!f.host.querySelector('[data-vm-asset-upload]');i++)await act(async()=>new Promise(r=>setTimeout(r,5)));
+ assert.equal(requests.filter(r=>r.init.method==='POST').length,0);assert.ok(f.host.querySelector('[data-vm-asset-upload]'),f.host.textContent);assert.equal(f.host.querySelector('[data-vm-asset-upload]').disabled,true);
+ await act(async()=>f.host.querySelector('[data-vm-asset-upload-ack]').click());await act(async()=>f.host.querySelector('[data-vm-asset-upload]').click());
+ for(let i=0;i<30&&!f.host.querySelector('[data-vm-asset-parse]');i++)await act(async()=>new Promise(r=>setTimeout(r,5)));
+ assert.equal(requests.filter(r=>r.init.method==='POST').length,1);assert.ok(f.host.querySelector('[data-vm-asset-parse]'),f.host.textContent);
+ await act(async()=>f.host.querySelector('[data-vm-asset-parse]').click());await act(async()=>f.host.querySelector('[data-vm-asset-preview]').click());
+ assert.equal(f.host.querySelector('[data-vm-asset-markdown]').textContent,'<img src=x onerror=alert(1)>');assert.equal(f.host.querySelector('[data-vm-asset-markdown] img'),null);
+ assert.equal(f.host.querySelector('[data-vm-asset-submit]').disabled,true);await fill(f.window,f.host.querySelector('[data-vm-asset-space]'),'research');
+ await act(async()=>f.host.querySelector('[data-vm-asset-review-ack]').click());await act(async()=>f.host.querySelector('[data-vm-asset-submit]').click());
+ assert.equal(JSON.parse(requests.at(-1).init.body).requestedSpaceId,'research');assert.ok(f.host.textContent.includes('asset-submission-ui'));
+ assert.equal(f.host.querySelector('[data-vm-asset-markdown]'),null);
+});
+test('asset import UI shows feature-disabled state without reading file bytes or enabling upload',async t=>{
+ const f=await render(t,input=>{assert.equal(input.op,'list');return list();},'zh-CN',false,undefined,{memberId:'member-a',requester:async()=>Response.json({storageEnabled:false,reason:'ASSET_STORAGE_NOT_CONFIGURED',maxBytes:1000})});
+ await act(async()=>f.host.querySelector('[data-file-asset-import]').click());assert.match(f.host.textContent,/对象存储未启用/);assert.equal(f.host.querySelector('[data-vm-asset-upload]'),null);
 });

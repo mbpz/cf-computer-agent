@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "613f636",
+  "scope": "D04 / VM-030 selected asset import; local implementation, not authenticated acceptance",
+  "implemented": [
+    "Selected binary snapshot via bounded readSubmissionAsset RPC; rejects hidden components and all symlinks before copying",
+    "Existing asset availability gate before VM read and each upload/parse/review action; no storage provisioning",
+    "Separate explicit original-file consent, upload, parse, literal parsed preview and destination/review confirmation",
+    "Existing member-scoped workflow and API adapters; persisted original review target and idempotency key survive unknown outcomes and explicit retry",
+    "No automatic POST replay; stop/runtime/account disposal aborts waiting and ignores late receipts without claiming server rollback",
+    "Volatile bytes and parsed content; existing unencrypted member-scoped metadata recovery only; filename guards are not a comprehensive secret scanner"
+  ],
+  "verification": {
+    "focusedControllerReactSharedFilesAndText": {
+      "passed": 45,
+      "failed": 0
+    },
+    "legacyAssetAndSubmissionCompatibility": {
+      "files": 5,
+      "passed": 46,
+      "failed": 0
+    },
+    "fastVm": {
+      "passed": 528,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 47230.361667
+    },
+    "realAlpine": {
+      "passed": 1,
+      "failed": 0,
+      "binaryBytesMatch": true,
+      "rejectsSafeAndEscapingSymlinks": true,
+      "rejectsOversizeBeforeCopy": true,
+      "allWorkersExited": true,
+      "durationMs": 22775.012042
+    },
+    "projectTypecheck": "passed",
+    "strictComponentTypecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "checklistTests": 9,
+    "diffCheck": "passed"
+  },
+  "evidenceBoundary": {
+    "http": "Fixture transport exercising real existing frontend asset workflow and API adapters; synthetic PDF fixture is not a real parser acceptance",
+    "sharedFilesystem": "Actual Alpine and terminal Worker RPC tested separately",
+    "nativeAcceptanceThisTurn": false,
+    "authenticatedParserAcceptance": false,
+    "productionAcceptance": false
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "VM-030": "local text and asset implementation; authenticated end-to-end acceptance pending"
+  },
+  "remaining": [
+    "G0-gated authenticated formal app integration and configured parser browser acceptance",
+    "Account-owned persistent VM save/restore",
+    "Native stream-save acceptance not retried this turn",
+    "Full engine network bridge and browser/production acceptance matrices"
+  ],
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "githubRetried": false,
+    "apkReinstalled": false,
+    "paidStorageProvisioned": false
+  },
+  "logs": [
+    "/private/tmp/vm-asset-focused.log",
+    "/private/tmp/vm-asset-compat.log",
+    "/private/tmp/vm-asset-final-full.log",
+    "/private/tmp/vm-asset-real.log",
+    "/private/tmp/vm-asset-final-types.log",
+    "/private/tmp/vm-asset-final-build.log"
+  ],
+  "next": "Account-owned persistent VM save/restore within existing local and G0 boundaries"
+}

@@ -121,6 +121,10 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT, d
       renewDownload();
       return {token: download.token, size: bytes.length, chunkSize: DOWNLOAD_CHUNK_SIZE};
     }
+    if (op === 'readSubmissionAsset') {
+      const record = resolve(path,true,true);
+      return {bytes: new Uint8Array(data(record,input.maxBytes))};
+    }
     if (op === 'readText' || op === 'readSubmissionText' || op === 'download') {
       const record = resolve(path,true,op === 'readSubmissionText'), bytes = new Uint8Array(data(record,op === 'readSubmissionText' ? SUBMISSION_TEXT_LIMIT : op === 'readText' ? TEXT_LIMIT : UPLOAD_LIMIT));
       if (op === 'download') return {bytes};

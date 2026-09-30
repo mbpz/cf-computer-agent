@@ -1,7 +1,8 @@
+import { validateSubmissionTarget, type SubmissionTarget } from "./submission-data";
 import { createIdempotencyKey } from "../components/submissions/submission-form-model";
 export type AssetIntent = {
   version: 1; key: string; file: { name: string; size: number; type: string; sha256: string };
-  review?: { key: string; title: string };
+  review?: { key: string; title: string; target?: SubmissionTarget };
 };
 export type AssetIntentStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 export type AssetIntentLoad = { kind: "empty" | "invalid" | "unavailable" } | { kind: "ready"; intent: AssetIntent };
@@ -11,13 +12,14 @@ function storageKey(memberId: string) {
 }
 function browserStorage() { const storage = (globalThis as { window?: { localStorage?: Storage } }).window?.localStorage; if (!storage) throw Error("ASSET_STORAGE_UNAVAILABLE"); return storage; }
 const validKey = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{16,128}$/u.test(value);
+function validTarget(value: unknown) { try { validateSubmissionTarget(value as SubmissionTarget); return true; } catch { return false; } }
 function valid(value: unknown): value is AssetIntent {
   if (!value || typeof value !== "object") return false;
   const v = value as AssetIntent; const f = v.file;
   return v.version === 1 && validKey(v.key) && Boolean(f) && typeof f.name === "string" && !!f.name.trim() && f.name.length <= 200
     && !/[\/\\\u0000-\u001f\u007f]/u.test(f.name) && Number.isSafeInteger(f.size) && f.size > 0
     && typeof f.type === "string" && /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/u.test(f.type) && /^[a-f0-9]{64}$/u.test(f.sha256)
-    && (v.review === undefined || Boolean(v.review && validKey(v.review.key) && typeof v.review.title === "string" && v.review.title.trim() && new TextEncoder().encode(v.review.title).byteLength <= 512));
+    && (v.review === undefined || Boolean(v.review && validKey(v.review.key) && typeof v.review.title === "string" && v.review.title.trim() && new TextEncoder().encode(v.review.title).byteLength <= 512 && (v.review.target === undefined || validTarget(v.review.target))));
 }
 export function loadAssetIntent(memberId: string, storage?: AssetIntentStorage): AssetIntentLoad {
   try {
