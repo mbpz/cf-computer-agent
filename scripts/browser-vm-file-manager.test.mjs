@@ -44,3 +44,16 @@ test('failed write is not replayed and successful write with failed refresh rema
  let writes=0;const f=fixture(input=>{if(input.op==='list')throw Error('unsafe private detail');writes++;return{ok:true};});
  await f.manager.mkdir('a');assert.equal(writes,1);assert.equal(f.manager.getSnapshot().notice,'WRITE_DONE_REFRESH_FAILED');assert.equal(f.manager.getSnapshot().error,'FILE_OPERATION_FAILED');await f.manager.load();assert.equal(writes,1);f.manager.dispose();
 });
+
+test('stream download progress is account-owned, cancellation aborts sink and clears on invalidation',async()=>{
+ const pending=deferred();let aborts=0,closes=0;
+ const f=fixture(input=>input.op==='downloadBegin'?{token:'lease',size:1,chunkSize:1048576}:input.op==='downloadChunk'?{offset:0,bytes:new Uint8Array([42]),done:true}:{ok:true});
+ const task=f.manager.downloadTo('a',()=>({write:()=>pending.promise,async close(){closes++;},async abort(){aborts++;}}));await new Promise(r=>setImmediate(r));assert.deepEqual(f.manager.getSnapshot().download,{written:0,total:1});
+ f.manager.cancel();await task;assert.equal(aborts,1);assert.equal(closes,0);assert.equal(f.manager.getSnapshot().notice,'DOWNLOAD_CANCELLED');assert.equal(f.calls.at(-1).op,'downloadEnd');
+ f.change({status:'closed',environmentId:null});assert.equal(f.manager.getSnapshot().download,null);pending.resolve();f.manager.dispose();
+});
+test('account closes pending picker: late sink is aborted without file reads or completion notice',async()=>{
+ const picker=deferred();let aborted=0;const f=fixture(()=>{throw Error('must not read');});
+ const task=f.manager.downloadTo('a',()=>picker.promise);f.change({status:'closed',environmentId:null});picker.resolve({async write(){},async close(){throw Error('must not commit');},async abort(){aborted++;}});await task;
+ assert.equal(aborted,1);assert.equal(f.calls.length,0);assert.equal(f.manager.getSnapshot().notice,'');f.manager.dispose();
+});

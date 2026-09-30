@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { mkdtemp, open, rename, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { writeFileDownload } from '../../frontend/features/environments/files/stream-download.mjs';
 import { createAccountNetworkOwner } from '../../frontend/features/environments/account-network-owner.mjs';
 import { createAccountVmRuntime, VM_RUNTIME_LOCK } from '../../frontend/features/environments/account-vm-runtime.mjs';
 import { connectTerminal } from './terminal-client.mjs';
@@ -64,7 +69,45 @@ test('actual Alpine Worker files: guest roundtrip, conflict, links, pagination, 
   for(let i=0;i<23;i++)await file({op:'mkdir',path:'/d'+String(i).padStart(2,'0')});
   const page=await file({op:'list',path:'/',page:2,pageSize:20});assert.equal(page.total,24);assert.equal(page.entries.length,4);
   await assert.rejects(file({op:'upload',path:'/oversized',bytes:new Uint8Array(20*1024*1024+1)}),/FILE_TOO_LARGE/);
+  // Real guest-created file exceeds the old 20 MiB RPC cap. The sink is a
+  // disk-backed atomic temp/rename adapter, not a native browser picker claim.
+  await first.runtime.write("dd if=/dev/zero of=/mnt/work/large.bin bs=1048576 count=24 2>/dev/null; printf 'stream-tail' >> /mnt/work/large.bin; sha256sum /mnt/work/large.bin; printf '\nLARGE-READY\n'\n");
+  await until(first.runtime,/\r?\nLARGE-READY\r?\n/);
+  const expectedHash=first.runtime.getSnapshot().output.match(/([0-9a-f]{64})  \/mnt\/work\/large.bin/)[1];
+  await assert.rejects(file({op:'download',path:'/large.bin'}),/FILE_TOO_LARGE/);
+  const directory=await mkdtemp(join(tmpdir(),'vm-stream-'));
+  t.after(()=>rm(directory,{recursive:true,force:true}));
+  const destination=join(directory,'large.bin'),partial=join(directory,'large.part');
+  let writes=0,maxChunk=0,total=0,handle;
+  const receipt=await writeFileDownload({file,path:'/large.bin',async openSink(){
+    handle=await open(partial,'wx');
+    return {async write(bytes){writes++;maxChunk=Math.max(maxChunk,bytes.length);await handle.writeFile(bytes);total+=bytes.length;},async close(){await handle.close();await rename(partial,destination);},async abort(){await handle.close();await rm(partial,{force:true});}};
+  }});
+  assert.equal(receipt.committed,true);assert.equal(receipt.bytes,24*1024*1024+11);
+  assert.equal(total,receipt.bytes);assert.equal((await stat(destination)).size,total);
+  assert.equal(writes,25);assert.equal(maxChunk,1048576);
+  const hash=createHash('sha256');for await(const chunk of createReadStream(destination))hash.update(chunk);
+  assert.equal(hash.digest('hex'),expectedHash);
+  await first.runtime.write("printf '\nSTREAM-RESUMED\n'\n");
+  await until(first.runtime,/\r?\nSTREAM-RESUMED\r?\n/);
+  // Cancel after one real chunk and ensure the genuine VM lease is released.
+  const abort=new AbortController();let cancelledWrites=0,aborted=false,closed=false;
+  await assert.rejects(writeFileDownload({file,path:'/large.bin',signal:abort.signal,openSink:async()=>({
+    async write(){cancelledWrites++;abort.abort();},async close(){closed=true;},async abort(){aborted=true;}
+  })}),/DOWNLOAD_CANCELLED/);
+  assert.equal(cancelledWrites,1);assert.equal(closed,false);assert.equal(aborted,true);
+  assert.equal((await file({op:'list',path:'/',page:1,pageSize:50})).entries.some(e=>e.name==='large.bin'),true);
+  await first.runtime.write("printf '\nCANCEL-RESUMED\n'\n");
+  await until(first.runtime,/\r?\nCANCEL-RESUMED\r?\n/);
+  console.log(JSON.stringify({streamDownload:{bytes:total,writes,maxChunk,sha256:expectedHash,diskHashMatches:true,cancelStopsAfterOneChunk:true,guestResumesAfterSuccessAndCancel:true,nativePickerAcceptance:false}}));
+  let exitWrites=0,exitAborted=false,exitClosed=false;
+  await assert.rejects(writeFileDownload({file,path:'/large.bin',openSink:async()=>({
+    async write(){exitWrites++;first.owner.dispose();await first.runtime.stop();},
+    async close(){exitClosed=true;},async abort(){exitAborted=true;}
+  })}),/VM_NOT_RUNNING|VM_ACCOUNT_CLOSED|VM_RUNTIME_CLOSED/);
+  assert.equal(exitWrites,1);assert.equal(exitAborted,true);assert.equal(exitClosed,false);
   await first.runtime.stop();assert.equal(workers[0].exited,true);
+
   await assert.rejects(file({op:'list',path:'/'}),/VM_NOT_RUNNING/);
-  console.log(JSON.stringify({sharedFilesRealAlpine:true,guestRoundtrip:true,conflictRejected:true,escapingSymlinkRejected:true,mutations:true,allWorkersExited:workers.every(w=>w.exited),productionAcceptance:false}));
+  console.log(JSON.stringify({sharedFilesRealAlpine:true,guestRoundtrip:true,conflictRejected:true,escapingSymlinkRejected:true,mutations:true,allWorkersExited:workers.every(w=>w.exited),accountExitAbortsStream:true,productionAcceptance:false}));
 });

@@ -7,14 +7,17 @@ import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/dialo
 import type { AccountVmRuntime } from '../account-vm-runtime.mjs';
 import { createFileManager, type FileManager } from './file-manager.mjs';
 
-type Props = { runtime: AccountVmRuntime; locale?: 'en' | 'zh-CN'; onDownload?: (name: string, bytes: Uint8Array) => void };
+import type { DownloadSink } from './stream-download.mjs';
+
+type SavePicker = (options: {suggestedName: string}) => Promise<{createWritable(): Promise<DownloadSink>}>;
+type Props = { runtime: AccountVmRuntime; locale?: 'en' | 'zh-CN'; onOpenDownload?: (name: string) => Promise<DownloadSink>; onDownload?: (name: string, bytes: Uint8Array) => void };
 /** Shared with the isolated acceptance harness; mounting never starts a VM or network. */
 export function FilesPanel({ runtime, ...props }: Props) {
   const [binding, setBinding] = useState<{runtime: AccountVmRuntime; manager: FileManager} | null>(null);
   useEffect(() => { const value = createFileManager(runtime); setBinding({runtime, manager:value}); return () => value.dispose(); }, [runtime]);
   return binding?.runtime === runtime ? <FileView manager={binding.manager} {...props} /> : null;
 }
-function FileView({ manager, locale = 'en', onDownload }: Omit<Props, 'runtime'> & { manager: FileManager }) {
+function FileView({ manager, locale = 'en', onDownload, onOpenDownload }: Omit<Props, 'runtime'> & { manager: FileManager }) {
   const state = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
   const [modal, setModal] = useState<{ action: 'mkdir' | 'rename' | 'remove'; name: string; epoch: number } | null>(null);
   const [name, setName] = useState('');
@@ -34,10 +37,15 @@ function FileView({ manager, locale = 'en', onDownload }: Omit<Props, 'runtime'>
     const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' }));
     urls.current.add(url); setPrepared({url, name: filename, bytes: bytes.byteLength, epoch: state.epoch});
   };
+  const picker = typeof window === 'undefined' ? undefined : (window as Window & {showSaveFilePicker?: SavePicker}).showSaveFilePicker;
+  const openDownload = onOpenDownload ?? (picker ? async (name: string) => (await picker.call(window, {suggestedName: name})).createWritable() : undefined);
   const blocked = state.busy || !!state.editor;
   const openModal = (action: 'mkdir' | 'rename' | 'remove', filename = '') => { setName(action === 'rename' ? filename : ''); setModal({ action, name: filename, epoch: state.epoch }); };
   const confirm = () => { if (!modal || modal.epoch !== state.epoch) return; const { action, name: original } = modal; setModal(null); if (action === 'mkdir') void manager.mkdir(name); else if (action === 'rename') void manager.rename(original, name); else void manager.remove(original); setName(''); };
   const messages: Record<string, string> = {
+    DOWNLOAD_DONE: t('File saved to this device.', '文件已保存到本机。'),
+    DOWNLOAD_CANCELLED: t('Download cancelled; no further chunks sent.', '下载已取消，不再发送后续分块。'),
+    FILE_DOWNLOAD_EXPIRED: t('Download expired; the VM was released. Start a new save explicitly.', '下载租期已过期，虚拟机已释放。请明确重新保存。'),
     FILE_CONFLICT: t('The guest changed this file. Keep your draft: reload explicitly or save a new copy.', '虚拟机已更改此文件。草稿已保留：请明确重新加载，或另存为新文件。'),
     WRITE_DONE: t('Write confirmed.', '写入已确认。'), WRITE_DONE_CANCELLED: t('Write confirmed before cancellation; not rolled back.', '取消前的写入已确认，不会回滚。'),
     WRITE_DONE_REFRESH_FAILED: t('Write confirmed; refresh failed. Refresh the list, do not repeat the write.', '写入已确认，但刷新失败。请刷新列表，不要重复写入。'),
@@ -58,10 +66,13 @@ function FileView({ manager, locale = 'en', onDownload }: Omit<Props, 'runtime'>
     {prepared?.epoch === state.epoch && <p role="status"><a className="underline" href={prepared.url} download={prepared.name}>{t('Save to this device', '保存到本机')} · {prepared.name}</a> ({prepared.bytes} {t('bytes ready', '字节已就绪')})</p>}
     {state.error && <p role="alert">{messages[state.error] || t('Operation failed', '操作失败')} <code>{state.error}</code></p>}
     <p role="status" aria-live="polite">{messages[state.notice] || (state.busy ? t('Working…', '处理中…') : '')}</p>
+    <p className="text-sm">{t('Exported plaintext files survive account logout. Streaming save temporarily pauses the VM; 30 seconds without a chunk request releases it.', '导出的明文文件不会随账户退出擦除。流式保存期间暂时暂停虚拟机；30秒没有分块读取会自动释放。')}</p>
+    {!openDownload && <p role="note">{t('Streaming save is unavailable in this browser; bounded downloads up to 20 MiB remain available.', '当前浏览器不支持流式保存；仍可使用不超过20 MiB的限额下载。')}</p>}
+    {state.download && <div><progress aria-label={t('Download progress', '下载进度')} max={Math.max(1,state.download.total)} value={state.download.written} /><span> {state.download.written} / {state.download.total} {t('bytes', '字节')}</span></div>}
     <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>{t('Name', '名称')}</th><th>{t('Type', '类型')}</th><th>{t('Bytes', '字节')}</th><th>{t('Actions', '操作')}</th></tr></thead><tbody>
       {state.entries.map(entry => <tr key={entry.name} data-file-entry><td>{entry.name}</td><td>{entry.type}</td><td>{entry.bytes}</td><td className="flex flex-wrap gap-2">
         {entry.type === 'directory' && <Button disabled={blocked} onClick={() => void manager.load((state.path === '/' ? '' : state.path) + '/' + entry.name, 1)}>{t('Open', '打开')}</Button>}
-        {entry.type === 'file' && <><Button data-file-edit disabled={blocked || entry.bytes > 1048576} onClick={() => { setSaveName(''); void manager.open(entry.name); }}>{t('Edit', '编辑')}</Button><Button data-file-download disabled={blocked || entry.bytes > 20971520} onClick={() => void manager.download(entry.name, receive)}>{t('Download', '下载')}</Button></>}
+        {entry.type === 'file' && <><Button data-file-edit disabled={blocked || entry.bytes > 1048576} onClick={() => { setSaveName(''); void manager.open(entry.name); }}>{t('Edit', '编辑')}</Button><Button data-file-download disabled={blocked || entry.bytes > 20971520} onClick={() => void manager.download(entry.name, receive)}>{t('Download', '下载')}</Button><Button data-file-stream disabled={blocked || !openDownload} onClick={() => { if (openDownload) void manager.downloadTo(entry.name, () => openDownload(entry.name)); }}>{t('Stream save', '流式保存')}</Button></>}
         {['file', 'directory'].includes(entry.type) && <><Button disabled={blocked} onClick={() => openModal('rename', entry.name)}>{t('Rename', '重命名')}</Button><Button data-file-remove variant="destructive" disabled={blocked} onClick={() => openModal('remove', entry.name)}>{t('Remove', '删除')}</Button></>}
       </td></tr>)}
     </tbody></table>{!state.entries.length && <p>{t('No files in this directory.', '目录暂无文件。')}</p>}</div>

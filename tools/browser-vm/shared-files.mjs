@@ -1,7 +1,7 @@
 // Pinned v86 0.5.458 in-memory host9p adapter. Never maps to host disk or shell.
 // Install before machine.run(): guest async FS mutations are tracked so pausing
 // the CPU also waits for already-issued 9p writes. No network-backed FS/mounts.
-import { TEXT_LIMIT, UPLOAD_LIMIT, copyFileRequest } from './file-protocol.mjs';
+import { TEXT_LIMIT, UPLOAD_LIMIT, DOWNLOAD_CHUNK_SIZE, copyFileRequest } from './file-protocol.mjs';
 const encoder = new TextEncoder();
 const fail = code => { throw new Error(code); };
 const same = (a,b) => a.length === b.length && a.every((byte,i) => byte === b[i]);
@@ -12,11 +12,20 @@ function parts(path) {
   if (result.some(item => encoder.encode(item).length > 255)) fail('INVALID_PATH');
   return result;
 }
-export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT }) {
+export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT, downloadIdleMs = 30_000 }) {
   const fs = machine?.fs9p;
   if (!fs || !Array.isArray(fs.inodes) || !fs.inodedata || fs.mounts?.length
-    || !Number.isSafeInteger(capacityBytes) || capacityBytes <= 0) fail('UNSUPPORTED_FILESYSTEM');
-  let closed = false, busy = false;
+    || !Number.isSafeInteger(capacityBytes) || capacityBytes <= 0 || !Number.isSafeInteger(downloadIdleMs) || downloadIdleMs <= 0) fail('UNSUPPORTED_FILESYSTEM');
+  let closed = false, busy = false, download;
+  function releaseDownload() {
+    const previous = download; download = undefined;
+    if (!previous) return; clearTimeout(previous.timer);
+    if (!closed && previous.resume) machine.run();
+  }
+  function renewDownload() {
+    clearTimeout(download.timer); download.timer = setTimeout(releaseDownload, downloadIdleMs);
+    download.timer.unref?.();
+  }
   const versions = new Map(), pending = new Set(), originals = new Map();
   for (const name of ['Write','ChangeSize','Rename','CreateBinaryFile','DeleteData','OpenInode','CloseInode']) {
     if (typeof fs[name] !== 'function') continue;
@@ -103,6 +112,12 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT })
         const node = inode(record.node.direntries.get(name)); return {name,type:type(node),bytes:node.size};
       })};
     }
+    if (op === 'downloadBegin') {
+      const record = resolve(path), bytes = data(record, Number.MAX_SAFE_INTEGER);
+      download = { token: crypto.randomUUID(), path, bytes, offset: 0, resume: false };
+      renewDownload();
+      return {token: download.token, size: bytes.length, chunkSize: DOWNLOAD_CHUNK_SIZE};
+    }
     if (op === 'readText' || op === 'download') {
       const record = resolve(path), bytes = new Uint8Array(data(record,op === 'readText' ? TEXT_LIMIT : UPLOAD_LIMIT));
       if (op === 'download') return {bytes};
@@ -154,7 +169,18 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT })
   }
   return Object.freeze({
     async request(input) {
-      live(); if (busy) fail('FILES_BUSY'); input = copyFileRequest(input); busy = true;
+      live(); if (busy) fail('FILES_BUSY'); input = copyFileRequest(input);
+      if (input.op === 'downloadChunk' || input.op === 'downloadEnd') {
+        if (!download || input.token !== download.token || input.path !== download.path) fail('FILE_DOWNLOAD_EXPIRED');
+        if (input.op === 'downloadEnd') { releaseDownload(); return {ok:true}; }
+        if (input.offset !== download.offset) fail('INVALID_FILE_OPERATION');
+        const offset = download.offset, end = Math.min(offset + DOWNLOAD_CHUNK_SIZE, download.bytes.length);
+        const bytes = new Uint8Array(download.bytes.subarray(offset,end));
+        download.offset = end; renewDownload();
+        return {offset,bytes,done:end === download.bytes.length};
+      }
+      if (download) fail('FILES_BUSY');
+      busy = true;
       const resume = machine.is_running();
       let paused = false;
       try {
@@ -162,11 +188,11 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT })
         live();
         while (pending.size) { await Promise.allSettled([...pending]); live(); }
         if (machine.is_running() || fs.mounts?.length) fail('UNSUPPORTED_FILESYSTEM');
-        const result = await operate(input); live(); return result;
-      } finally { busy = false; if (!closed && resume && paused) machine.run(); }
+        const result = await operate(input); live(); if (download) download.resume = resume && paused; return result;
+      } finally { busy = false; if (!closed && !download && resume && paused) machine.run(); }
     },
     close() {
-      if (closed) return; closed = true; versions.clear();
+      if (closed) return; closed = true; releaseDownload(); versions.clear();
       for (const [name,original] of originals) fs[name] = original;
     },
   });

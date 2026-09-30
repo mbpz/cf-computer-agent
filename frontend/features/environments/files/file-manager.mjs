@@ -1,3 +1,4 @@
+import {writeFileDownload} from './stream-download.mjs';
 import { FILE_ERRORS, TEXT_LIMIT, UPLOAD_LIMIT, validFileResult } from '../../../../tools/browser-vm/file-protocol.mjs';
 const encoder = new TextEncoder();
 const cleanError = error => FILE_ERRORS.has(error?.message) ? error.message : 'FILE_OPERATION_FAILED';
@@ -5,7 +6,7 @@ function namePath(directory,name) {
   if (typeof name !== 'string' || !name || name === '.' || name === '..' || /[/\\\x00-\x1f\x7f]/.test(name) || encoder.encode(name).length > 255) throw Error('INVALID_PATH');
   return (directory === '/' ? '' : directory)+'/'+name;
 }
-const empty = (available, epoch=0) => ({available,epoch,path:'/',page:1,pageSize:20,total:0,pages:1,entries:[],editor:null,results:[],busy:false,cancelling:false,error:'',notice:''});
+const empty = (available, epoch=0) => ({available,epoch,path:'/',page:1,pageSize:20,total:0,pages:1,entries:[],editor:null,results:[],download:null,busy:false,cancelling:false,error:'',notice:''});
 /** Volatile account/runtime-owned file UI state. Never persists content or tokens.
  * Cancellation stops unsent work; sent mutations settle once, never replay/rollback.
  */
@@ -18,7 +19,7 @@ export function createFileManager(runtime) {
   const unsubscribe=runtime.subscribe(()=>{
     const next=runtime.getSnapshot(), ready=next.status==='running';
     if (ready===available&&next.environmentId===identity) return;
-    generation++;identity=next.environmentId;available=ready;current=undefined;
+    current?.abort.abort();generation++;identity=next.environmentId;available=ready;current=undefined;
     publish(empty(ready,generation));
   });
   async function call(input) {
@@ -28,7 +29,7 @@ export function createFileManager(runtime) {
   }
   async function run(fn) {
     if(disposed||!available||current)return;
-    const token={generation,cancelled:false};current=token;publish({busy:true,cancelling:false,error:'',notice:''});
+    const token={generation,cancelled:false,abort:new AbortController()};current=token;publish({busy:true,cancelling:false,error:'',notice:'',download:null});
     try {await fn(token);}catch(error){if(live(token))publish({error:cleanError(error)});}
     finally {if(live(token)){current=undefined;publish({busy:false,cancelling:false});}}
   }
@@ -70,6 +71,17 @@ export function createFileManager(runtime) {
       return run(async token=>{await call({op:'upload',path:namePath(state.path,name),bytes:encoder.encode(text)});if(live(token))publish({editor:null});await written(token);});
     },
     download(name,receive){return run(async token=>{const {bytes}=await call({op:'download',path:namePath(state.path,name)});if(wanted(token))receive(name,bytes);});},
+    downloadTo(name,openSink){return run(async token=>{
+      publish({download:null});
+      try {
+        await writeFileDownload({file:call,path:namePath(state.path,name),openSink,signal:token.abort.signal,
+          onProgress:download=>{if(wanted(token))publish({download});}});
+        if(live(token))publish({notice:'DOWNLOAD_DONE'});
+      } catch(error) {
+        if(live(token)&&error?.message==='DOWNLOAD_CANCELLED'){publish({notice:'DOWNLOAD_CANCELLED'});return;}
+        throw error;
+      }
+    });},
     upload(selected){return run(async token=>{
       const files=Array.from(selected);if(!files.length||files.length>100)throw Error('INVALID_FILE');
       const directory=state.path;const results=files.map(file=>({name:String(file.name).slice(0,255),status:'pending',error:''}));
@@ -92,8 +104,8 @@ export function createFileManager(runtime) {
       publish({notice:token.cancelled?'BATCH_CANCELLED':'BATCH_DONE'});
       if(!token.cancelled){try{await refresh(token);}catch(error){if(live(token))publish({error:cleanError(error)});}}
     });},
-    cancel(){if(current){current.cancelled=true;publish({cancelling:true,notice:'CANCEL_REQUESTED'});}},
-    dispose(){if(disposed)return;disposed=true;generation++;current=undefined;available=false;unsubscribe();publish(empty(false,generation));listeners.clear();},
+    cancel(){if(current){current.cancelled=true;current.abort.abort();publish({cancelling:true,notice:'CANCEL_REQUESTED'});}},
+    dispose(){if(disposed)return;disposed=true;current?.abort.abort();generation++;current=undefined;available=false;unsubscribe();publish(empty(false,generation));listeners.clear();},
   };
   return Object.freeze(manager);
 }

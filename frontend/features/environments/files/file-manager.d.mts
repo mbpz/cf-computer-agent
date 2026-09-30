@@ -1,9 +1,11 @@
+import type {DownloadSink,DownloadProgress} from './stream-download.mjs';
 import type { AccountVmRuntime } from '../account-vm-runtime.mjs';
 export interface FileEntry { name: string; type: 'directory'|'file'|'symlink'|'unsupported'; bytes: number; }
 export interface FileEditor { path: string; name: string; text: string; version: string; dirty: boolean; conflict: boolean; }
 export interface FileManagerSnapshot {
   epoch: number; available: boolean; path: string; page: number; pageSize: 20|50|100; total: number; pages: number;
   entries: FileEntry[]; editor: FileEditor|null; results: {name: string; status: string; error: string}[];
+  download: DownloadProgress|null;
   busy: boolean; cancelling: boolean; error: string; notice: string;
 }
 export interface FileManager {
@@ -13,6 +15,7 @@ export interface FileManager {
   open(name:string):Promise<void>; edit(text:string):void; closeEditor():void;
   save():Promise<void>; saveAs(name:string):Promise<void>;
   download(name:string,receive:(name:string,bytes:Uint8Array)=>void):Promise<void>;
+  downloadTo(name:string,openSink:()=>DownloadSink|Promise<DownloadSink>):Promise<void>;
   upload(files:Iterable<{name:string;size:number;arrayBuffer():Promise<ArrayBuffer>}>):Promise<void>;
   cancel():void; dispose():void;
 }

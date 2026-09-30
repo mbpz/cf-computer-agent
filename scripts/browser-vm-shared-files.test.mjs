@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSharedFiles } from '../tools/browser-vm/shared-files.mjs';
-function fixture({capacityBytes=128*1024*1024}={}) {
+function fixture({capacityBytes=128*1024*1024,downloadIdleMs=30000}={}) {
  const nodes=[{mode:0x4000,direntries:new Map(),qid:{path:0,version:0},size:0,nlinks:1}], data={};let running=true;
  const fs={inodes:nodes,inodedata:data,mounts:[],
   CreateFile(name,parent){const id=nodes.length;nodes.push({mode:0x8000,direntries:new Map(),qid:{path:id,version:0},size:0,nlinks:1});nodes[parent].direntries.set(name,id);return id;},
@@ -11,7 +11,7 @@ function fixture({capacityBytes=128*1024*1024}={}) {
   async Write(id,offset,count,bytes){await Promise.resolve();data[id]=new Uint8Array(bytes);nodes[id].size=count;},
  };
  const machine={fs9p:fs,is_running:()=>running,async stop(){running=false;},run(){running=true;}};
- const files=createSharedFiles({machine,capacityBytes});
+ const files=createSharedFiles({machine,capacityBytes,downloadIdleMs});
  return {files,fs,nodes,data,machine,get running(){return running;},link(name,target){const id=fs.CreateFile(name,0);nodes[id].mode=0xa000;nodes[id].symlink=target;return id;}};
 }
 const bytes=text=>new TextEncoder().encode(text);
@@ -93,4 +93,29 @@ test('remove releases unreferenced buffers but preserves data owned by a guest f
  assert.equal(f.nodes[0].direntries.get('b'),id);
  await assert.rejects(f.files.request({op:'upload',path:'/c',bytes:bytes('x')}),/NO_SPACE/);
  f.files.close();
+});
+
+
+test('large download is sequential bounded copies and holds the guest until explicit release',async()=>{
+ const f=fixture();const id=f.fs.CreateFile('large',0);f.data[id]=new Uint8Array(21*1024*1024+3).fill(42);f.nodes[id].size=f.data[id].length;
+ const start=await f.files.request({op:'downloadBegin',path:'/large'});assert.equal(start.size,f.data[id].length);assert.equal(start.chunkSize,1048576);assert.equal(f.running,false);
+ await assert.rejects(f.files.request({op:'mkdir',path:'/blocked'}),/FILES_BUSY/);
+ await assert.rejects(f.files.request({op:'downloadChunk',path:'/large',token:start.token,offset:1}),/INVALID_FILE_OPERATION/);
+ let offset=0;while(offset<start.size){const result=await f.files.request({op:'downloadChunk',path:'/large',token:start.token,offset});assert.equal(result.offset,offset);assert.ok(result.bytes.length<=1048576);assert.equal(result.bytes[0],42);assert.notEqual(result.bytes.buffer,f.data[id].buffer);offset+=result.bytes.length;assert.equal(result.done,offset===start.size);}
+ assert.equal(f.running,false);await f.files.request({op:'downloadEnd',path:'/large',token:start.token});assert.equal(f.running,true);f.files.close();
+});
+test('download expiry, wrong scope and owner close release bounded state without resuming a closed VM',async()=>{
+ const f=fixture({downloadIdleMs:15});await f.files.request({op:'upload',path:'/a',bytes:bytes('abc')});const start=await f.files.request({op:'downloadBegin',path:'/a'});
+ await assert.rejects(f.files.request({op:'downloadChunk',path:'/other',token:start.token,offset:0}),/FILE_DOWNLOAD_EXPIRED/);
+ await new Promise(r=>setTimeout(r,35));assert.equal(f.running,true);await assert.rejects(f.files.request({op:'downloadChunk',path:'/a',token:start.token,offset:0}),/FILE_DOWNLOAD_EXPIRED/);
+ const next=await f.files.request({op:'downloadBegin',path:'/a'});assert.notEqual(next.token,start.token);f.files.close();await new Promise(r=>setTimeout(r,25));assert.equal(f.running,false);
+});
+test('stream protocol rejects invalid offsets, huge chunks and malformed begin receipts',async()=>{
+ const {copyFileRequest,validFileResult}=await import('../tools/browser-vm/file-protocol.mjs');
+ assert.deepEqual(copyFileRequest({op:'downloadBegin',path:'/a'}),{op:'downloadBegin',path:'/a'});
+ for(const offset of [-1,1.5,Number.MAX_SAFE_INTEGER+1])assert.throws(()=>copyFileRequest({op:'downloadChunk',path:'/a',token:'token',offset}),/INVALID_FILE_OPERATION/);
+ assert.equal(validFileResult({op:'downloadBegin'},{token:'token',size:30*1024*1024,chunkSize:1048576}),true);
+ assert.equal(validFileResult({op:'downloadBegin'},{token:'token',size:-1,chunkSize:1048576}),false);
+ assert.equal(validFileResult({op:'downloadChunk',offset:0},{offset:1,bytes:new Uint8Array(1),done:false}),false);
+ assert.equal(validFileResult({op:'downloadChunk',offset:0},{offset:0,bytes:new Uint8Array(1048577),done:false}),false);
 });

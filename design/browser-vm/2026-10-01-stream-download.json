@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "65b49c1",
+  "scope": "D04 / VM-028 local bounded streaming download implementation; parent remains open",
+  "implemented": [
+    "begin/chunk/end lease with exact ordered offsets and 1 MiB transferable chunks",
+    "pause guest during consistent read; resume on end or 30-second idle timeout; close cannot resurrect VM",
+    "disk backpressure without whole-file Blob or read-ahead",
+    "abort signal on cancel/account epoch invalidation and no automatic retry",
+    "explicit native picker from user gesture; progress and capability fallback; plaintext export warning"
+  ],
+  "verification": {
+    "fastVm": {
+      "passed": 502,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50106.7835
+    },
+    "focusedAdapter": 11,
+    "focusedSinkManagerUi": 21,
+    "projectTypecheck": "passed",
+    "strictComponentTypecheck": "passed",
+    "buildUi": "passed; existing chunk size warning",
+    "checklistTests": 9,
+    "diffCheck": "passed"
+  },
+  "realAlpine": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 19752.921584,
+    "bytes": 25165835,
+    "writes": 25,
+    "maxChunkBytes": 1048576,
+    "sha256": "a58588d4de0b66b8d271eba168493ebe3a6eb13b40c454c8dc546b0a9c0a9a38",
+    "diskHashMatches": true,
+    "sink": "temporary disk-backed open/write/close/rename adapter, cleaned after test; not native picker",
+    "guestResumesAfterSuccessAndCancel": true,
+    "cancelAfterFirstChunkStopsMoreReads": true,
+    "accountExitAbortsWithoutSinkCommit": true,
+    "allWorkersExited": true
+  },
+  "nativeBrowser": {
+    "browser": "Codex in-app",
+    "checks": [
+      "real Alpine started with diagnostic identity and network off",
+      "guest generated stream-native.bin, 25165835 bytes, same SHA256",
+      "file row visible, bounded download disabled, stream save enabled",
+      "stream save click enters processing"
+    ],
+    "nativeSaveAcceptance": false,
+    "blocker": "Mac locked; native app inventory could not access save window. Stopped native acceptance, no bypass, no successful native disk write claimed.",
+    "screenshot": null,
+    "localServerStopped": true
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "VM-028": "partial",
+    "connectorCompleted": 9,
+    "connectorUserSkippedNotPassed": 1,
+    "connectorPending": 5
+  },
+  "limits": [
+    "1 MiB chunk; one request/write in flight",
+    "guest is paused during stream, maximum idle 30 seconds",
+    "pre-existing VM file buffer is retained, not a host filesystem mapping",
+    "sink abort requested best effort; no general rollback guarantee",
+    "completed plaintext exports survive logout",
+    "native picker/full browser matrix and production acceptance remain pending"
+  ],
+  "next": [
+    "knowledge submission integration",
+    "native save after unlock",
+    "persistence/full restore, Worker network bridge, G0"
+  ],
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "githubRetried": false,
+    "apkReinstalled": false
+  },
+  "logs": [
+    "/private/tmp/stream-download-full.log",
+    "/private/tmp/stream-download-real-final.log",
+    "/private/tmp/stream-download-types.log",
+    "/private/tmp/stream-download-build.log"
+  ]
+}

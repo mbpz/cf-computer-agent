@@ -7,12 +7,12 @@ import {Window} from 'happy-dom';
 let dir,FilesPanel;
 before(async()=>{dir=await mkdtemp(new URL('./.vm-files-',import.meta.url).pathname);await build({entryPoints:['frontend/features/environments/files/files-panel.tsx'],outfile:dir+'/module.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic'});({FilesPanel}=await import(dir+'/module.mjs'));});
 after(async()=>{if(dir)await rm(dir,{recursive:true,force:true});});
-async function render(t,handler,locale='en',nativeDownload=false){
+async function render(t,handler,locale='en',nativeDownload=false,onOpenDownload){
  const window=new Window({url:'http://localhost'});const saved=new Map();
  for(const [key,value]of Object.entries({window,document:window.document,navigator:window.navigator,HTMLElement:window.HTMLElement,HTMLInputElement:window.HTMLInputElement,IS_REACT_ACT_ENVIRONMENT:true})){saved.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  const {createRoot}=await import('react-dom/client');const host=window.document.createElement('main');window.document.body.append(host);const root=createRoot(host);let snapshot={status:'running',environmentId:'a'};const subs=new Set(),calls=[],downloads=[];
  const runtime={getSnapshot:()=>snapshot,subscribe(fn){subs.add(fn);return()=>subs.delete(fn);},async file(input){calls.push(input);return handler(input);}};
- await act(async()=>root.render(React.createElement(FilesPanel,{runtime,locale,onDownload:nativeDownload?undefined:(...args)=>downloads.push(args)})));
+ await act(async()=>root.render(React.createElement(FilesPanel,{runtime,locale,onOpenDownload,onDownload:nativeDownload?undefined:(...args)=>downloads.push(args)})));
  t.after(async()=>{await act(async()=>root.unmount());window.happyDOM.abort();for(const[k,d]of saved){if(d)Object.defineProperty(globalThis,k,d);else delete globalThis[k];}});
  return{host,window,calls,downloads,async switchEnvironment(){await act(async()=>{snapshot={status:'running',environmentId:'b'};for(const fn of subs)fn();});},async close(){await act(async()=>{snapshot={status:'closed',environmentId:null};for(const fn of subs)fn();});}};
 }
@@ -53,4 +53,23 @@ test('browser download exposes an explicit user-gesture link and revokes its byt
  await act(async()=>f.host.querySelector('[data-file-download]').click());
  const link=f.host.querySelector('a[download]');assert.equal(!!link,true);assert.equal(link.download,'a.txt');assert.match(link.href,/^blob:/);
  const url=link.href;await f.close();assert.equal(!!f.host.querySelector('a[download]'),false);assert.deepEqual(revoked,[url]);
+});
+
+
+test('large file offers streaming save with progress and explicit local export warning',async t=>{
+ let writes=0,closed=0,picked=0;const size=21*1048576+1;
+ const f=await render(t,input=>{
+  if(input.op==='list')return{...list(),entries:[{name:'large.bin',type:'file',bytes:size}]};
+  if(input.op==='downloadBegin')return{token:'lease',size,chunkSize:1048576};
+  if(input.op==='downloadChunk'){const length=Math.min(1048576,size-input.offset);return{offset:input.offset,bytes:new Uint8Array(length),done:input.offset+length===size};}
+  return{ok:true};
+ },'en',false,async name=>{picked++;assert.equal(name,'large.bin');return{async write(bytes){writes+=bytes.length;},async close(){closed++;},async abort(){throw Error('unexpected abort');}};});
+ assert.equal(f.host.querySelector('[data-file-download]').disabled,true);
+ const button=f.host.querySelector('[data-file-stream]');assert.ok(button);assert.equal(button.disabled,false);
+ assert.match(f.host.textContent,/survive account logout/);
+ await act(async()=>button.click());assert.equal(picked,1);assert.equal(writes,size);assert.equal(closed,1);assert.match(f.host.textContent,/File saved/);assert.equal(f.host.querySelector('progress').value,size);
+});
+test('unsupported browser does not pretend large file streaming or enable its action',async t=>{
+ const f=await render(t,()=>({...list(),entries:[{name:'large',type:'file',bytes:22*1048576}]}));
+ assert.ok(f.host.querySelector('[data-file-stream]'));assert.equal(f.host.querySelector('[data-file-stream]').disabled,true);assert.match(f.host.textContent,/Streaming save is unavailable/);
 });
