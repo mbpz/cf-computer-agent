@@ -15,6 +15,11 @@ function clock() {
     clearTimer(id) { timers.delete(id); },
     advance(ms, run = true) { wall += ms; mono += ms; if (run) this.flush(); },
     rollback(ms) { wall -= ms; },
+    fireEarly(at) {
+      const entry = [...timers].find(([, timer]) => timer.at === at);
+      assert.ok(entry, `timer at ${at} exists`);
+      timers.delete(entry[0]); entry[1].fn();
+    },
     flush() { for (const [id, t] of [...timers]) if (t.at <= mono) { timers.delete(id); t.fn(); } },
     get timers() { return timers.size; },
   };
@@ -287,4 +292,21 @@ test('adapter receives only an immutable active lease receipt for authenticated 
   assert.throws(() => { receipt.leaseId = 'other'; });
   f.time.advance(60_000, false);
   assert.equal(channel.getLease(), undefined); assert.equal(f.closes, 1); f.device.close();
+});
+
+
+test('early local renewal notification wakeup re-arms without notifying before its deadline', async () => {
+  const f = fixture(); const { channel } = await f.connect();
+  try {
+    f.time.advance(29_999, false);
+    f.time.fireEarly(30_000);
+    assert.equal(f.due, 0);
+    assert.equal(channel.isActive(), true);
+    f.time.advance(1);
+    assert.equal(f.due, 1);
+    f.time.advance(30_000);
+    assert.equal(channel.isActive(), false);
+    assert.equal(f.closes, 1);
+  } finally { f.device.close(); }
+  assert.equal(f.time.timers, 0);
 });

@@ -1,0 +1,267 @@
+{
+  "recordedAt": "2026-09-30T12:37:15.711829+00:00",
+  "scope": "Independent preview acceptance failure and local diagnostics; no production changes",
+  "previewSourceCommit": "9f8c380",
+  "browser": {
+    "observedAt": "2026-09-30T12:19:30.398Z",
+    "url": "https://08460309.memory-garden-vm-connector-probe.pages.dev/",
+    "status": "失败（未验收）：Guest command timeout: apk update\nprintf '\\036BEGIN:599abb598e4441fe\\037'; ( apk update ); vm_probe_rc=$?; printf '\\036END:599abb598e4441fe:%s\\037' \"$vm_probe_rc\"\r\nlocalhost:~# printf '\\036BEGIN:599abb598e4441fe\\037'; ( apk update ); vm_probe_r\r\r\nc=$?; printf '\\036END:599abb598e4441fe:%s\\037' \"$vm_probe_rc\"\r\n\u001eBEGIN:599abb598e4441fe\u001f\u001b7[fetch https://dl-cdn.alpinelinux.org/alpine...]\u001b8\u001b[0K\u001b7[fetch https://dl-cdn.alpinelinux.org/alpine...]",
+    "results": "{\"command\":\"ifconfig eth0 up && udhcpc -i eth0 -n -q -t 3 -T 1 && printf \\\"nameserver 192.168.86.1\\\\n\\\" > /etc/resolv.conf && printf \\\"https://dl-cdn.alpinelinux.org/alpine/v3.24/main\\\\nhttps://dl-cdn.alpinelinux.org/alpine/v3.24/community\\\\n\\\" > /etc/apk/repositories && test -s /etc/ssl/certs/ca-certificates.crt && test \\\"$(ls /etc/apk/keys | wc -l)\\\" -gt 0\",\"exitCode\":0,\"output\":\"udhcpc: started, v1.37.0\\nudhcpc: broadcasting discover\\nudhcpc: broadcasting select for 192.168.86.100, server 192.168.86.1\\nudhcpc: lease of 192.168.86.100 obtained from 192.168.86.1, lease time 134217728\\n\"}\n"
+  },
+  "browserResult": {
+    "setupExitCode": 0,
+    "apkUpdate": "timeout after 90000ms",
+    "apkInstall": "not reached",
+    "packageVersions": "not obtained",
+    "accepted": false
+  },
+  "screenshot": "/Users/doug/.codex/visualizations/2026/09/24/01a0d349-03dd-7bb3-ad58-65f5ab02daf1/lc009-drain-apk-timeout.png",
+  "publicGuestDiagnostic": {
+    "command": "BROWSER_VM_PUBLIC_DIAGNOSTIC=1 BROWSER_VM_PROBE_ASSETS=<pinned boot assets> BROWSER_VM_PROBE_ISO_ASSETS=<pinned iso assets> node --test design/browser-vm/2026-09-30-public-apk-diagnostic.mjs",
+    "passed": 0,
+    "failed": 1,
+    "events": [
+      {
+        "event": "setup",
+        "elapsedMs": 18445,
+        "exitCode": 0
+      },
+      {
+        "event": "dns-ok",
+        "elapsedMs": 18565,
+        "hostname": "dl-cdn.alpinelinux.org",
+        "port": 443,
+        "ms": 5
+      },
+      {
+        "event": "dns-ok",
+        "elapsedMs": 18581,
+        "hostname": "dl-cdn.alpinelinux.org",
+        "port": 443,
+        "ms": 4
+      },
+      {
+        "event": "tcp-connected",
+        "elapsedMs": 18834,
+        "id": 1
+      },
+      {
+        "event": "renewed",
+        "elapsedMs": 30896
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 33242,
+        "downBytes": 58422,
+        "downFrames": 26,
+        "channelState": 1,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 58422,
+            "written": 1818,
+            "buffered": 0,
+            "closed": false
+          }
+        ],
+        "guestConnections": [
+          {
+            "buffered": 0,
+            "state": "established"
+          }
+        ]
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 48244,
+        "downBytes": 169022,
+        "downFrames": 80,
+        "channelState": 1,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 169022,
+            "written": 1818,
+            "buffered": 0,
+            "closed": false
+          }
+        ],
+        "guestConnections": [
+          {
+            "buffered": 0,
+            "state": "established"
+          }
+        ]
+      },
+      {
+        "event": "renewed",
+        "elapsedMs": 60917
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 63246,
+        "downBytes": 328622,
+        "downFrames": 158,
+        "channelState": 1,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 328622,
+            "written": 1818,
+            "buffered": 0,
+            "closed": false
+          }
+        ],
+        "guestConnections": [
+          {
+            "buffered": 0,
+            "state": "established"
+          }
+        ]
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 78248,
+        "downBytes": 520422,
+        "downFrames": 245,
+        "channelState": 1,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 520422,
+            "written": 1818,
+            "buffered": 0,
+            "closed": false
+          }
+        ],
+        "guestConnections": [
+          {
+            "buffered": 0,
+            "state": "established"
+          }
+        ]
+      },
+      {
+        "event": "channel-closed",
+        "elapsedMs": 90919
+      },
+      {
+        "event": "tcp-closed",
+        "elapsedMs": 90922,
+        "id": 1,
+        "bytesRead": 627141,
+        "bytesWritten": 2022
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 93249,
+        "downBytes": 627141,
+        "downFrames": 304,
+        "channelState": 3,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 627141,
+            "written": 2022,
+            "buffered": 0,
+            "closed": true
+          }
+        ],
+        "guestConnections": []
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 108250,
+        "downBytes": 627141,
+        "downFrames": 304,
+        "channelState": 3,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 627141,
+            "written": 2022,
+            "buffered": 0,
+            "closed": true
+          }
+        ],
+        "guestConnections": []
+      },
+      {
+        "event": "transport-sample",
+        "elapsedMs": 108447,
+        "downBytes": 627141,
+        "downFrames": 304,
+        "channelState": 3,
+        "sockets": [
+          {
+            "id": 1,
+            "read": 627141,
+            "written": 2022,
+            "buffered": 0,
+            "closed": true
+          }
+        ],
+        "guestConnections": []
+      }
+    ],
+    "result": "apk update timed out; channel closed around 90.9s after diagnostic start; reason not proven"
+  },
+  "hostDefaultTlsControl": {
+    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+    "timeoutMs": 30000,
+    "elapsedMs": 30005,
+    "payloadBytes": 485184,
+    "result": "timeout",
+    "tlsVerificationDisabled": false
+  },
+  "interpretation": [
+    "Public transfer made progress, but neither control completed within its time budget.",
+    "Guest samples did not show a buffer overflow; samples cannot rule out every unsampled event.",
+    "Early local renewal timers are independently reproduced bugs, not a proven sole cause of this browser failure.",
+    "No certificate bypass, timeout extension, relaxed budget, automatic APK retry or production change."
+  ],
+  "localTimerFix": {
+    "client": "Re-arm local wakeup when earlier than renewAfterMs; do not request early renewal",
+    "server": "Re-arm early local notification timer; do not send premature renewal-needed",
+    "unchanged": [
+      "hard lease expiry",
+      "early remote notification rejection",
+      "unknown renewal result fails closed without network retry",
+      "authorization and transfer budgets"
+    ],
+    "redGreen": "Client early timer assertion failed before fix; server notification counter was 1 instead of 0 before fix; focused suite now 59/59",
+    "quickVm": {
+      "passed": 369,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "realClockControl": {
+      "command": "node --test design/browser-vm/2026-09-30-renewal-realclock.test.mjs",
+      "passed": 1,
+      "failed": 0,
+      "durationMs": 100000,
+      "renewals": 3,
+      "publicDnsAndTcp": "forbidden by control fixture",
+      "browserAcceptance": false
+    }
+  },
+  "diagnosticLimitations": [
+    "Initial ad-hoc real-clock control produced no output and was terminated, not counted as pass.",
+    "First bounded control failed fixture validation (missing resolver); fixture corrected before rerun."
+  ],
+  "checklists": {
+    "originalMainTotal": 30,
+    "excluded": 1,
+    "mainInScope": 29,
+    "mainCompleted": 5,
+    "mainRemaining": 24,
+    "connectorCompleted": 8,
+    "connectorTotal": 15,
+    "connectorRemaining": 7,
+    "LC009": "open",
+    "LC010": "blocked pending actual browser package install"
+  },
+  "productionTouched": false,
+  "newPreviewPublishedThisTurn": false
+}

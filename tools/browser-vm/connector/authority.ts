@@ -167,9 +167,18 @@ export function createConnectorDevice(options: DeviceOptions) {
         clearTimers(); cancelPending = undefined; abort = undefined;
         bound = claims; lease = accepted; phase = "active";
         expiryTimer = clock.setTimer(close, accepted.expiresAtMs - now());
-        if (accepted.renewAfterMs < accepted.expiresAtMs) renewTimer = clock.setTimer(() => {
-          if (isActive()) { try { renewalDue(); } catch { close(); } }
-        }, Math.max(0, accepted.renewAfterMs - now()));
+        if (accepted.renewAfterMs < accepted.expiresAtMs) {
+          const scheduleRenewal = () => {
+            renewTimer = clock.setTimer(() => {
+              if (!isActive()) return;
+              // Local timers can wake early; never send an early protocol notification.
+              // Re-arm only the wakeup, without moving the independent hard expiry.
+              if (now() < accepted.renewAfterMs) { scheduleRenewal(); return; }
+              try { renewalDue(); } catch { close(); }
+            }, Math.max(1, Math.ceil(accepted.renewAfterMs - now())));
+          };
+          scheduleRenewal();
+        }
         return true;
       } catch { close(); return false; }
     }

@@ -244,3 +244,23 @@ test('drain receipts cannot revive an expired channel or a closed stream',()=>{
 test('client refuses a legacy peer without downstream drain negotiation',()=>{
  const f=fixture();f.open();f.json({type:'egress-ready',version:1,protocol:'wisp-v1',forwarding:true});assert.equal(f.client.readyState,3);
 });
+
+
+test('an early local renewal timer rearms without revocation, early issuance or duplicate renewal',async()=>{
+ const f=fixture();f.active();
+ const [id,timer]=[...f.timers].find(([,timer])=>timer.at===30000);
+ f.advance(29999.5,{run:false,wallDelta:29999});f.timers.delete(id);timer.fn();
+ assert.equal(f.client.readyState,1);assert.equal(f.renewals.length,0);
+ assert.equal(f.timers.size,2);assert.ok([...f.timers.values()].some(timer=>timer.at===30000.5));
+ f.advance(1,{wallDelta:1});await flush();
+ f.json({type:'renewal-needed',version:1,leaseId:'lease-a',revision:1});await flush();
+ assert.equal(f.renewals.length,1);assert.equal(f.client.readyState,1);
+ f.client.close();assert.equal(f.timers.size,0);
+});
+
+test('early renewal rearm preserves hard expiry and never authorizes a server early notification',()=>{
+ const f=fixture();f.active();const [id,timer]=[...f.timers].find(([,timer])=>timer.at===30000);
+ f.advance(29999.5,{run:false,wallDelta:29999});f.timers.delete(id);timer.fn();
+ f.advance(30001,{run:false});assert.equal(f.client.send(connect),false);assert.equal(f.client.readyState,3);assert.equal(f.renewals.length,0);assert.equal(f.timers.size,0);
+ const other=fixture();other.active();other.json({type:'renewal-needed',version:1,leaseId:'lease-a',revision:1});assert.equal(other.client.readyState,3);assert.equal(other.renewals.length,0);
+});

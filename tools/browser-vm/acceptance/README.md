@@ -45,3 +45,5 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 2026-09-30 下行修复已本地验证：新协议 `wisp-v1-drain-v1` 等待guest TCP消费确认，单流仅16KiB待确认，256KiB硬上限及授权预算不变。快速VM366/366、真实Alpine3/3通过，128KiB/1MiB下载长度及SHA-256一致、峰值缓冲16KiB。必须使用配套的新页面和本机服务，旧协议拒绝协商。下一步是独立预览的手动配对及实际apk重验；本地证据不关闭LC-009，也不能证明旧浏览器超时只有一个原因。主清单5/29、剩余24，连接器8/15、剩余7。
 
 新版独立预览已发布：`https://08460309.memory-garden-vm-connector-probe.pages.dev`，来源提交 `9f8c380`。自带浏览器已打开并确认尚未启动；新回环服务只允许该精确来源，等待用户手动配对和启动。部署收据见 `design/browser-vm/2026-09-30-browser-acceptance-drain-preview.json`；未部署生产或取得新浏览器安装成功证据。
+
+2026-09-30 上述 `08460309` 手动启动后的实际结果：初始化0，但 `apk update` 在90秒超时，安装与版本检查未执行。新失败证据及公网对照见 `design/browser-vm/2026-09-30-drain-preview-apk-failure.json`。独立发现并本地修复两端续租定时器提前唤醒问题（不改变硬到期或远端提前通知拒绝），快速VM369/369和类型检查通过；尚未发布新修复，且不能据此宣称公网超时根因已解决。真实时钟本地Worker/D1→WebSocket控制连续100秒、3次续租通过（1/1），不含公网或浏览器VM；后续继续定位公网传输，不重复要求用户启动旧预览。主清单5/29、剩余24，连接器8/15、剩余7；LC-009仍开放，LC-010不得提前验收。

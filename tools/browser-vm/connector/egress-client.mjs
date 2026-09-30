@@ -90,7 +90,17 @@ export function createConnectorEgressClient({ url, pairingCode, ticket,
     lease = Object.freeze({ ...value });
     clear(expiryTimer); clear(renewalTimer);
     expiryTimer = later(finish, lease.expiresAtMs - now());
-    renewalTimer = later(startRenewal, lease.renewAfterMs - now());
+    scheduleRenewal();
+  }
+  function scheduleRenewal() {
+    clear(renewalTimer);
+    // Timers may fire before a fractional monotonic deadline. Re-arm only the
+    // local wakeup, never issue early or extend the independently enforced lease.
+    renewalTimer = later(() => {
+      if (!live()) return;
+      if (now() < lease.renewAfterMs) { scheduleRenewal(); return; }
+      startRenewal();
+    }, Math.max(1, Math.ceil(lease.renewAfterMs - now())));
   }
   function startRenewal() {
     if (!live()) return;
