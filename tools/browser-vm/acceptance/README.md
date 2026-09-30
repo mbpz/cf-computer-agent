@@ -51,3 +51,5 @@ rtk proxy env BROWSER_VM_PROBE_ASSETS=/absolute/boot-assets BROWSER_VM_PROBE_ISO
 2026-09-30 已按用户确认切换固定验收源至南大 HTTPS Alpine v3.24 main/community，精确增加 `mirrors.nju.edu.cn` 白名单；TLS、apk签名、DNS公网校验/固定地址与原预算不变。先见2项预期RED，再通过371/371快速VM回归、类型检查及1/1真实Node/v86公网安装：索引4.527秒、安装9.423秒，均退出0，Git 2.54.0 / curl 8.22.0。详情见 `design/browser-vm/2026-09-30-nju-apk-install.json`。这是本地真实guest证据，不是浏览器验收；LC-009/010仍开放，主清单5/29、剩余24，连接器8/15、剩余7。新预览须使用新启动且只允许确切预览来源的本机服务，重新手动配对。
 
 南大换源独立预览已发布：`https://5c937927.memory-garden-vm-connector-probe.pages.dev`，来源提交 `34fe4ec`（包含此前续租早唤醒修复）。自带浏览器已打开、显示尚未启动；新的精确来源本机服务等待用户手动配对。收据 `design/browser-vm/2026-09-30-nju-preview.json`。仅此独立静态预览已发布，未push或部署生产；LC-009须等实际浏览器安装退出码与版本证据。
+
+2026-09-30 当前验收结果：用户贴文及实时内置浏览器 `5c937927` 确認apk update/install与版本检查全退出0（Git 2.54.0 / curl 8.22.0），LC-009关闭。紧接同一VM的clone退出128（github.com DNS超时），fetch/API未执行；用户说明本地不启用VPN也无法访问GitHub并明确要求忽略，因此LC-010记为用户跳过、不是通过，停止诊断且不改VPN/网络策略。收据 `design/browser-vm/2026-09-30-browser-packages-git.json`。下一步LC-011；连接器9完成/1跳过未通过/5待执行，主清单5/29、剩余24。此前失败记录保留为历史，不覆盖本次APK成功。
