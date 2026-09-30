@@ -1,0 +1,75 @@
+{
+  "observedOn": "2026-09-30",
+  "recordedAt": "2026-09-30T11:08:06.428270+00:00",
+  "deploymentUrl": "https://defdc955.memory-garden-vm-connector-probe.pages.dev/",
+  "previewSourceCommit": "34378c3",
+  "repositoryHeadAtObservation": "1d45d5c",
+  "browserAttempt": {
+    "environment": "actual in-app browser Alpine guest; local test authority; formal connector TCP",
+    "localEndpoint": "http://127.0.0.1:61006",
+    "networkCaAndKeySetupExitCode": 0,
+    "command": "apk update",
+    "exitCode": null,
+    "result": "harness_timeout",
+    "timeoutMs": 90000,
+    "lastOutput": "fetch https://dl-cdn.alpinelinux.org/alpine... (twice); no terminal exit marker",
+    "installationStarted": false,
+    "installationVerified": false,
+    "gitVersion": null,
+    "curlVersion": null,
+    "browserConsoleErrorsOrWarningsObserved": [],
+    "lifecycle": "failure handler destroyed VM; Git and stop controls disabled; no automatic retry"
+  },
+  "diagnostics": [
+    {
+      "kind": "real Node Alpine + formal authorization + loopback upstream, not browser acceptance",
+      "bytes": 131072,
+      "exitCode": 0,
+      "guestByteCount": 131072,
+      "dnsCalls": 2,
+      "tcpDials": 1,
+      "clientState": 1
+    },
+    {
+      "kind": "same controlled chain, 1 MiB burst",
+      "requestedBytes": 1048576,
+      "exitCode": 1,
+      "guestOutput": "wget: download timed out",
+      "clientState": 3,
+      "closeTriggeredOnDataFrameBytes": 16389,
+      "guestSendBufferBeforeCloseBytes": 262144,
+      "reproduction": "design/browser-vm/2026-09-30-download-backpressure-repro.mjs",
+      "expectedCurrentResult": "128 KiB control passes; 1 MiB delivery assertion fails"
+    },
+    {
+      "kind": "independent Node guest public apk-index diagnostic, not browser acceptance",
+      "timeoutMs": 90000,
+      "lastFrameCount": 410,
+      "lastFramedByteCount": 956771,
+      "lastClientState": 3,
+      "completedExitCode": null,
+      "limitation": "No close-reason instrumentation in this attempt; it does not prove which guard closed the channel."
+    },
+    {
+      "kind": "host-only comparison; NOT guest acceptance",
+      "resource": "https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86/APKINDEX.tar.gz",
+      "httpStatus": 200,
+      "bytes": 525970,
+      "seconds": 0.706246,
+      "bytesPerSecond": 744740
+    }
+  ],
+  "finding": "A real consuming guest can overflow the bounded downstream ring on a 1 MiB burst. The current fail-closed memory guard is necessary; end-to-end downstream backpressure is missing.",
+  "causalityLimit": "The controlled overflow is reproduced, but the exact cause of this browser timeout remains unproven without browser-side transport diagnostics.",
+  "unchangedSecurityBoundaries": [
+    "No buffer-limit removal",
+    "No increased command timeout",
+    "TLS and APK signatures remain enabled",
+    "No host fetch substituted for guest acceptance",
+    "No automatic installation retry"
+  ],
+  "LC009": "open",
+  "LC010": "not_started",
+  "productionTouched": false,
+  "nextAction": "Implement and test bounded end-to-end downstream backpressure, retaining hard memory/lease bounds; collect transport diagnostics before a new manually paired browser attempt."
+}
