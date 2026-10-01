@@ -20,9 +20,11 @@
     <section aria-labelledby="terminal-heading">
       <h2 id="terminal-heading">交互终端 · 离线 Alpine</h2>
       <p>独立 Worker 内的真实 Linux。仅本地开发验收，关闭即丢弃状态；不访问宿主文件、不联网、不保存。与上方固定验证互斥。</p>
+      <label><input id="terminal-chunked-images" type="checkbox">分块公共镜像缓存（须本地服务开启 --chunked-images；不缓存客体文件）</label>
       <button id="terminal-start" type="button">启动交互 Linux</button>
       <button id="terminal-stop" type="button" disabled>停止交互 Linux</button>
       <p id="terminal-status" role="status">尚未启动交互会话</p>
+      <p id="terminal-image-status"></p>
       <p><label>串口输出（纯文本，非完整终端模拟器）<br>
         <textarea id="terminal-output" rows="16" cols="90" readonly wrap="off" spellcheck="false"></textarea>
       </label></p>

@@ -111,8 +111,10 @@ terminalStart.addEventListener('click', async () => {
   if (terminalStart.disabled) return;
   terminalOutput.value = '';
   terminalInput.value = '';
+  document.querySelector('#terminal-image-status').textContent = '';
   terminalStatus.textContent = '正在验证资源并启动完整 Alpine…';
   const connection = connectTerminal({
+    chunkedImages: document.querySelector('#terminal-chunked-images')?.checked === true,
     onOutput: text => {
       const combined = terminalOutput.value + text;
       terminalOutput.value = combined.length > 65_536
@@ -129,6 +131,8 @@ terminalStart.addEventListener('click', async () => {
   terminalControls();
   try {
     await connection.ready;
+    const images = connection.imageLoad;
+    if (images) document.querySelector('#terminal-image-status').textContent = `公共镜像：${images.cache === 'persistent' ? 'CacheStorage 可用（可能被浏览器回收）' : '缓存不可用，仅校验下载'}；请求 ${images.requests}；缓存命中 ${images.cacheHits}；完整摘要通过 ${images.verifiedImages}。不缓存客体文件。`;
     terminalStatus.textContent = '离线 Linux 已就绪，可输入真实命令。';
     terminalControls();
     terminalInput.focus();

@@ -3,15 +3,18 @@ import { FILE_ERRORS, copyFileRequest, validFileResult } from './file-protocol.m
 // Local-only terminal transport. Input acknowledgements mean bytes accepted,
 // never command success. Lost acknowledgements fail closed without replay.
 export function connectTerminal({
-  createWorker = () => new Worker(new URL('./terminal-worker.mjs', import.meta.url), { type: 'module' }),
+  chunkedImages = false,
+  createWorker = () => new Worker(new URL(chunkedImages ? './terminal-worker.mjs?chunked=1' : './terminal-worker.mjs', import.meta.url), { type: 'module' }),
   onOutput, onClosed, checkpoint, checkpointTimeoutMs=30000, pollMs = 50, requestTimeoutMs = 3000, bootTimeoutMs = 60_000,
 } = {}) {
+  if (typeof chunkedImages !== 'boolean') throw new Error('Chunked images requires boolean opt-in');
   for (const value of [pollMs, requestTimeoutMs, bootTimeoutMs, checkpointTimeoutMs]) {
     if (!Number.isSafeInteger(value) || value <= 0) throw new Error('Positive terminal deadlines required');
   }
   let worker;
   let state = 'booting';
   let sequence = 0;
+  let imageLoad;
   let pollTimer;
   let decoder = new TextDecoder();
   const requests = new Map();
@@ -45,6 +48,14 @@ export function connectTerminal({
     const pending = requests.get(data?.id);
     if (!pending || !({ start: 'ready', input: 'accepted', poll: 'output', file: 'file-result', checkpoint: 'checkpoint-result' }[pending.type] === data.type)) {
       close(new Error('Invalid terminal Worker receipt')); return;
+    }
+    if (data.type === 'ready' && Object.hasOwn(data,'imageLoad')) {
+      const value = data.imageLoad;
+      if (!value || !['persistent','unavailable'].includes(value.cache)
+        || !['requests','cacheHits','verifiedImages'].every(key => Number.isSafeInteger(value[key]) && value[key] >= 0 && value[key] <= (key === 'verifiedImages' ? 16 : 2048))) {
+        close(new Error('Invalid public image Worker receipt')); return;
+      }
+      imageLoad = {cache:value.cache,requests:value.requests,cacheHits:value.cacheHits,verifiedImages:value.verifiedImages};
     }
     if (data.type === 'output' && (!(data.bytes instanceof Uint8Array) || data.bytes.length > 65_536
       || !Number.isSafeInteger(data.droppedBytes) || data.droppedBytes < 0)) {
@@ -95,6 +106,7 @@ export function connectTerminal({
   return {
     ready,
     get state() { return state; },
+    get imageLoad() { return imageLoad && {...imageLoad}; },
     async write(text) {
       if (state !== 'ready') throw new Error(state === 'closed' ? 'Terminal closed' : 'Terminal not ready');
       if (typeof text !== 'string' || !text.length || text.length > 4096 || text.includes('\0')

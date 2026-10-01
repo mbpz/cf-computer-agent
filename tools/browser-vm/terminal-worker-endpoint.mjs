@@ -25,7 +25,7 @@ export function attachTerminalWorker(port, prepareSession) {
       await session.ready;
       if (state === 'closed') return;
       state = 'ready';
-      port.postMessage({ type: 'ready', id });
+      port.postMessage({ type: 'ready', id, ...(session.imageLoad === undefined ? {} : {imageLoad:session.imageLoad}) });
     } catch (error) { fail(error); }
   }
   async function file(id, input) {

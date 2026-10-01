@@ -264,3 +264,13 @@ await assert.rejects(verifyArtifacts(manifest, root), /engine|size|digest/);
 - [ ] Authenticated browser/formal mounting and actual configured asset parser acceptance remain G0-gated. Do not infer delivery from local component tests.
 
 Receipt: `design/browser-vm/2026-10-01-asset-import.json`; the subsequent account-owned persistence slice is recorded above, with formal integration/production gates retained. This does not close the VM-030 parent or D04.
+
+
+## 2026-10-01 VM-033 chunked public image local evidence
+
+- [x] Content-addressed bounded manifests/chunks, per-chunk and original whole-image SHA256, interruption resume, corruption eviction, owned generation cleanup and explicit cache fallback.
+- [x] Local server/terminal opt-in, automated 632/632 VM and 14/14 actual Alpine/server checks, typecheck and UI build including static isolation gate.
+- [x] Native in-app browser reload/new Worker: 0 template requests, 18 cache hits, 6 full pins verified; actual kernel and file commands passed, earlier guest file absent after restart. Loopback proof only.
+- [ ] Production hosting export/limits/headers and complete HTTPS/native failure/browser matrix remain required; no VM-033/D04/G0 parent closure.
+
+Receipt: `design/browser-vm/2026-10-01-chunked-images.json`. Current checklist remains 29 in scope / 5 complete / 24 remaining. No push, deployment, migration, secrets or GitHub access.

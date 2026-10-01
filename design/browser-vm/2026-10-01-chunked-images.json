@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-01",
+  "scope": "VM-033 local public boot image chunking and native loopback CacheStorage only",
+  "baseline": "cac0c8e",
+  "status": "local-verified",
+  "implementation": [
+    "Pinned originals verified before local serving; content-addressed manifest and chunks, default 8 MiB cap",
+    "Explicit approved set bounded to 16 artifacts/256 MiB; every chunk and whole image SHA256 verified before boot",
+    "Interrupted reads retain only complete verified chunks; no implicit retry; cache corruption fails closed and evicts bad entry",
+    "Owned cache generation cleanup and orphan cleanup; unavailable cache visibly falls back to verified downloads",
+    "Opt-in local terminal Worker integration; native cache counters in bounded ready receipt; no guest data caching"
+  ],
+  "verification": {
+    "red": "Missing loader module, server opt-in, orphan cleanup, diagnostics and optional ready receipt assertions failed before their implementation",
+    "focused": {
+      "command": "node --test scripts/browser-vm-terminal-client.test.mjs scripts/browser-vm-terminal-worker.test.mjs scripts/browser-vm-chunked-image.test.mjs",
+      "passed": 29
+    },
+    "vm": {
+      "command": "npm run test:browser-vm",
+      "passed": 632,
+      "failed": 0,
+      "skipped": 0
+    },
+    "actualLinuxAndServer": {
+      "command": "BROWSER_VM_PROBE_ASSETS=/private/tmp/memory-garden-formal-guest/boot BROWSER_VM_PROBE_ISO_ASSETS=/private/tmp/memory-garden-formal-guest/iso node --test scripts/browser-vm-server.test.mjs tools/browser-vm/chunked-image.test.mjs",
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "cacheImplementation": "in-memory Cache API test adapter, not native persistence",
+      "runs": [
+        {
+          "mode": "cold",
+          "requests": 18,
+          "transferredBytes": 69449332,
+          "loadedMs": 157,
+          "bootAndCommandMs": 17737
+        },
+        {
+          "mode": "warm",
+          "requests": 0,
+          "transferredBytes": 0,
+          "loadedMs": 106,
+          "bootAndCommandMs": 17786
+        }
+      ],
+      "kernel": "6.18.35-0-virt",
+      "maxChunkBytes": 8388608,
+      "guestNetwork": "off"
+    },
+    "nativeBrowser": {
+      "browser": "Codex in-app browser",
+      "origin": "http://127.0.0.1:54411",
+      "freshWorkerAfterPageReload": true,
+      "receipt": {
+        "cache": "persistent",
+        "requests": 0,
+        "cacheHits": 18,
+        "verifiedImages": 6
+      },
+      "actualGuestOutput": [
+        "6.18.35-0-virt",
+        "PUBLIC-CACHE-ONLY",
+        "native warm ok"
+      ],
+      "publicCacheOnly": "Earlier cold-boot /mnt/work/chunk-cold.txt was absent after restart; new file write/read succeeded",
+      "coldBoot": "Succeeded before adding ready counters; native cold transfer count not measured",
+      "screenshot": "design/browser-vm/2026-10-01-chunked-images-native.png",
+      "stoppedAfterVerification": true
+    },
+    "typecheck": {
+      "command": "npm run typecheck",
+      "exitCode": 0
+    },
+    "build": {
+      "command": "npm run build:ui",
+      "exitCode": 0,
+      "staticIsolationGate": "passed",
+      "warning": "Existing >500 kB output warning; not a performance acceptance"
+    },
+    "diffCheck": "passed"
+  },
+  "limitations": [
+    "Native proof is loopback in-app browser only, not the full HTTPS/browser/version/restart acceptance matrix",
+    "Native quota exhaustion, physical network interruption and generation upgrades were not manually injected; automated failure tests use Cache API adapters",
+    "8 MiB is a local policy cap, not a claim about current platform hosting limits; production export/upload/limits/headers acceptance still missing",
+    "No signature/release provenance claim; trusted existing whole-artifact pins remain authoritative",
+    "Guest networking, formal runtime mounting, G0 and VM-033/D04 parent closure remain unproven"
+  ],
+  "boundaries": {
+    "push": false,
+    "productionDeployment": false,
+    "migration": false,
+    "secretsRead": false,
+    "previewChanged": false,
+    "encryptionAdded": false,
+    "backupCreated": false,
+    "githubRetried": false
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": "D08"
+  }
+}

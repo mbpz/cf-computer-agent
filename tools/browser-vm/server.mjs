@@ -3,19 +3,21 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ALPINE_FILE } from './alpine-artifact.mjs';
+import { buildChunkedImage } from './chunked-image.mjs';
 import { ALPINE_ISO_ARTIFACTS } from './alpine-iso.mjs';
 import { attachLocalProbeRelay } from './relay/local-relay.mjs';
 import { startRecoveryFixture } from './recovery-fixture.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 
-export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false, runtimeOwner = false, checkpointRecovery = false }) {
+export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false, runtimeOwner = false, checkpointRecovery = false, chunkedImages = false }) {
   if (typeof assets !== 'string' || !assets) throw new Error('Explicit development assets required');
   if (isoAssets !== undefined && (typeof isoAssets !== 'string' || !isoAssets)) throw new Error('Explicit ISO assets required');
   if (typeof recovery !== 'boolean' || (recovery && !isoAssets)) throw new Error('Recovery requires explicit ISO assets');
   if (typeof directDownload !== 'boolean') throw new Error('Direct download requires explicit boolean opt-in');
   if (typeof runtimeOwner !== 'boolean' || (runtimeOwner && !isoAssets)) throw new Error('Runtime owner requires explicit ISO assets');
   if (typeof checkpointRecovery !== 'boolean') throw new Error('Checkpoint recovery requires explicit boolean opt-in');
+  if (typeof chunkedImages !== 'boolean' || (chunkedImages && !isoAssets)) throw new Error('Chunked images require explicit ISO assets and boolean opt-in');
   const recoveryBundles = new Map();
   if (checkpointRecovery) {
     const { build } = await import('esbuild');
@@ -56,6 +58,18 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
     files.set('/runtime-owner.css', [join(directory, 'runtime-owner.css'), 'text/css; charset=utf-8']);
   }
   if (checkpointRecovery) files.set('/checkpoint-recovery.html', [join(directory, 'checkpoint-recovery.html'), 'text/html; charset=utf-8']);
+  const imageFiles = new Map();
+  if (chunkedImages) {
+    // Build from the pinned original files BEFORE opening a listener. No arbitrary
+    // filesystem paths or download proxy are exposed by these immutable routes.
+    for (const artifact of ALPINE_ISO_ARTIFACTS) {
+      const path = files.get(`/${artifact.location}/${artifact.name}`)[0];
+      const {files: chunks} = await buildChunkedImage(await readFile(path), artifact);
+      for (const entry of chunks) imageFiles.set(...entry);
+    }
+    files.set('/chunked-image.mjs', [join(directory,'chunked-image.mjs'),'text/javascript; charset=utf-8']);
+    files.set('/terminal-worker.mjs?chunked=1', files.get('/terminal-worker.mjs'));
+  }
   const recoveryFixture = recovery ? await startRecoveryFixture() : undefined;
   let origin;
   let relay;
@@ -107,6 +121,11 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
       response.writeHead(200, {'Content-Type':'text/javascript; charset=utf-8','Content-Length':runtimeBundle.length});
       response.end(request.method === 'HEAD' ? undefined : runtimeBundle); return;
     }
+    const chunk = imageFiles.get(request.url);
+    if (chunk) {
+      response.writeHead(200, {'Content-Type':request.url.endsWith('.json')?'application/json':'application/octet-stream','Content-Length':chunk.byteLength});
+      response.end(request.method==='HEAD'?undefined:chunk); return;
+    }
     const target = files.get(request.url);
     if (!target) { response.writeHead(404).end('Not found'); return; }
     try {
@@ -134,7 +153,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download', runtimeOwner: process.argv[4] === '--runtime-owner', checkpointRecovery: process.argv[4] === '--checkpoint-recovery' });
+  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download', runtimeOwner: process.argv[4] === '--runtime-owner', checkpointRecovery: process.argv.slice(4).includes('--checkpoint-recovery'), chunkedImages: process.argv.slice(4).includes('--chunked-images') });
   console.log(`Local-only Linux verification: ${server.url}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
     await server.close();

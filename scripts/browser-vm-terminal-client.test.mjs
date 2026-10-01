@@ -106,3 +106,40 @@ test('checkpoint RPC serializes input/files, returns bounded envelope and closes
  const request=worker.messages.at(-1);assert.equal(request.type,'checkpoint');worker.reply({type:'checkpoint-result',id:request.id,error:'CHECKPOINT_SAVE_FAILED'});await assert.rejects(pending,/CHECKPOINT_SAVE_FAILED/);assert.equal(terminal.state,'ready');
  const bad=terminal.checkpoint();worker.reply({type:'checkpoint-result',id:worker.messages.at(-1).id,value:{state:new ArrayBuffer(0)}});await assert.rejects(bad,/Invalid checkpoint/);assert.equal(worker.terminated,true);
 });
+
+
+test('chunked image opt-in selects the Worker URL and invalid values fail before constructing', () => {
+  const original=globalThis.Worker, urls=[];
+  globalThis.Worker=class {
+    constructor(url) {urls.push(String(url));}
+    addEventListener() {} removeEventListener() {} postMessage() {} terminate() {}
+  };
+  try {
+    for(const chunkedImages of [false,true]) {
+      const terminal=connectTerminal({chunkedImages});terminal.ready.catch(()=>{});terminal.close();
+    }
+    assert.equal(new URL(urls[0]).search,'');assert.equal(new URL(urls[1]).search,'?chunked=1');
+    assert.throws(()=>connectTerminal({chunkedImages:'true'}),/boolean/);assert.equal(urls.length,2);
+  } finally {globalThis.Worker=original;}
+});
+
+
+test('public image loading receipt is bounded, copied and optional', async () => {
+  const worker = new WorkerPort();
+  const terminal = connectTerminal({ createWorker: () => worker });
+  const imageLoad = {cache:'persistent',requests:0,cacheHits:18,verifiedImages:6};
+  worker.reply({type:'ready',id:1,imageLoad});
+  await terminal.ready;
+  try {
+    assert.deepEqual(terminal.imageLoad,imageLoad);
+    terminal.imageLoad.requests=100;
+    assert.equal(terminal.imageLoad.requests,0);
+  } finally { terminal.close(); }
+  for(const invalid of [null,{}, {...imageLoad,cache:'unknown'}, {...imageLoad,requests:-1}, {...imageLoad,cacheHits:99999}, {...imageLoad,verifiedImages:17}]) {
+    const worker = new WorkerPort();
+    const terminal = connectTerminal({createWorker:()=>worker});
+    worker.reply({type:'ready',id:1,imageLoad:invalid});
+    await assert.rejects(terminal.ready,/image/i);
+    assert.equal(worker.terminated,true);
+  }
+});

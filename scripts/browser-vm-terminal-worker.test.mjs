@@ -92,3 +92,13 @@ test('closed checkpoint session is a fatal sanitized failure, not a reusable bus
  port.send({type:'start',id:1});await tick();port.send({type:'checkpoint',id:2});await tick();
  assert.equal(port.closed,true);assert.deepEqual(port.messages.at(-1),{type:'failure',message:'CHECKPOINT_SESSION_FAILED'});
 });
+
+
+test('ready forwards optional public image counters without changing ordinary receipts', async () => {
+  const port = new Port();
+  const imageLoad = {cache:'unavailable',requests:18,cacheHits:0,verifiedImages:6};
+  attachTerminalWorker(port, async () => ({ready:Promise.resolve(),imageLoad,close:async()=>{}}));
+  port.send({type:'start',id:1});
+  await tick();
+  assert.deepEqual(port.messages[0],{type:'ready',id:1,imageLoad});
+});

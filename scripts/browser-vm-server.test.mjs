@@ -196,3 +196,12 @@ test('VM-only Worker and wasm permissions remain bounded to the diagnostic serve
   await response.arrayBuffer();
  }
 });
+
+
+test('chunked distribution fails before listening without explicit, correctly pinned ISO assets', async t => {
+  await assert.rejects(async()=>{const server=await startProbeServer({assets:'/tmp',chunkedImages:true});await server.close();},/Chunked images/);
+  await assert.rejects(async()=>{const server=await startProbeServer({assets:'/tmp',isoAssets:'/tmp',chunkedImages:'yes'});await server.close();},/Chunked images/);
+  const ordinary=await fixture(t);
+  assert.equal((await fetch(ordinary.url+'/terminal-worker.mjs?chunked=1')).status,404);
+  assert.equal((await fetch(ordinary.url+'/image-chunks/'+ 'a'.repeat(64)+'/manifest.json')).status,404);
+});
