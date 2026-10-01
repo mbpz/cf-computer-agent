@@ -1,3 +1,4 @@
+import { approveTerminalText, guardTerminalPaste } from './terminal-input-policy.mjs';
 import { runWorkerProbe } from './probe-worker-client.mjs';
 import { connectTerminal } from './terminal-client.mjs';
 
@@ -95,6 +96,8 @@ const terminalOutput = document.querySelector('#terminal-output');
 const terminalInput = document.querySelector('#terminal-input');
 const terminalSend = document.querySelector('#terminal-send');
 const terminalInterrupt = document.querySelector('#terminal-interrupt');
+const removePasteGuard = guardTerminalPaste(terminalInput, message => window.confirm(message));
+window.addEventListener('pagehide', removePasteGuard, { once: true });
 let terminal;
 let sending = false;
 function terminalControls() {
@@ -145,16 +148,22 @@ async function sendInput(interrupt = false) {
   if (!terminal || terminal.state !== 'ready' || sending) return;
   const text = interrupt ? '\x03' : terminalInput.value;
   if (!text.length) return;
-  const submitted = !interrupt && !text.endsWith('\n') ? text + '\n' : text;
   const connection = terminal;
+  if (!interrupt && !approveTerminalText(text, message => window.confirm(message))) {
+    terminalStatus.textContent = '已取消或输入超限；未发送。';
+    return;
+  }
+  if (terminal !== connection || connection.state !== 'ready' || sending || (!interrupt && terminalInput.value !== text)) return;
+  const submitted = !interrupt && !text.endsWith('\n') ? text + '\n' : text;
   sending = true;
   terminalControls();
   try {
     await connection.write(submitted);
+    if (terminal !== connection || connection.state !== 'ready') return;
     if (!interrupt && terminalInput.value === text) terminalInput.value = '';
     if (connection.state === 'ready') terminalStatus.textContent = '输入已交给 Linux；请从输出判断执行结果。';
   } catch (error) {
-    if (connection.state !== 'closed') terminalStatus.textContent = `输入未发送：${error.message}`;
+    if (terminal === connection && connection.state !== 'closed') terminalStatus.textContent = `输入未发送：${error.message}`;
   } finally { sending = false; terminalControls(); }
 }
 terminalSend.addEventListener('click', () => void sendInput());

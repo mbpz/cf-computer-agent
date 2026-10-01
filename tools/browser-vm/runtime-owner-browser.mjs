@@ -1,3 +1,4 @@
+import { approveTerminalText, guardTerminalPaste } from './terminal-input-policy.mjs';
 import React from 'react';
 import {mountCheckpointControls} from './checkpoint-controls.mjs';
 import { createRoot } from 'react-dom/client';
@@ -14,7 +15,9 @@ const runtime = createAccountVmRuntime({owner,checkpoints,createSession:callback
   ...callbacks,createWorker:()=>new Worker('/terminal-worker.mjs',{type:'module'}),
 })});
 const element = id=>document.getElementById(id);
-let removed=false, cleanupComplete=false, action=0;
+let removed=false, cleanupComplete=false, action=0, sending=false;
+const removePasteGuard=guardTerminalPaste(element('command'),message=>window.confirm(message));
+window.addEventListener('pagehide',removePasteGuard,{once:true});
 function render(){
   const state=runtime.getSnapshot();element('status').textContent=state.status;element('reason').textContent=state.reason;
   element('terminal').textContent=state.output;
@@ -22,7 +25,7 @@ function render(){
   element('restore').disabled=element('start').disabled;
   element('save').disabled=element('save-stop').disabled=state.status!=='running';
   element('saved').textContent=state.savedAt?new Date(state.savedAt).toLocaleString():'本次会话尚无确认保存';
-  element('send').disabled=element('interrupt').disabled=state.status!=='running';
+  element('send').disabled=element('interrupt').disabled=sending||state.status!=='running';
   element('remove').disabled=cleanupComplete||owner.signal.aborted;element('logout').disabled=owner.signal.aborted;
 }
 async function perform(fn){const ticket=++action;element('result').textContent='执行中';try{await fn();if(ticket===action)element('result').textContent='操作完成';}catch(error){if(ticket===action)element('result').textContent=`失败（未验收）：${error.message}`;}finally{render();}}
@@ -34,7 +37,15 @@ element('save-stop').onclick=()=>perform(()=>runtime.saveAndStop());
 element('stop').onclick=()=>perform(()=>{clearInput();return runtime.stop();});
 element('remove').onclick=()=>perform(async()=>{removed=true;clearInput();owner.removeEnvironment(environment.id);await runtime.stop();await checkpoints.remove(environment.id);cleanupComplete=true;});
 element('logout').onclick=()=>perform(()=>{clearInput();owner.revoke();return runtime.stop();});
-element('send').onclick=()=>perform(async()=>{const input=element('command').value;if(!input)throw Error('EMPTY_INPUT');clearInput();await runtime.write(input+'\n');});
+element('send').onclick=async()=>{
+  const before=runtime.getSnapshot(),input=element('command').value;
+  if(sending||before.status!=='running'||!input)return;
+  if(!approveTerminalText(input,message=>window.confirm(message))){element('result').textContent='已取消或输入超限；未发送。';return;}
+  if(runtime.getSnapshot()!==before||owner.signal.aborted||element('command').value!==input)return;
+  sending=true;render();
+  try{await perform(async()=>{await runtime.write(input+'\n');if(element('command').value===input)clearInput();});}
+  finally{sending=false;render();}
+};
 element('interrupt').onclick=()=>perform(()=>runtime.write('\x03'));
 window.addEventListener('pagehide',clearInput);runtime.subscribe(render);render();
 

@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-01",
+  "step": "VM-029 explicit terminal paste/input consent",
+  "baseCommit": "83671c3",
+  "scope": "Existing local diagnostic terminals only; approved multiline/control-character consent requirement; no formal runtime mounting",
+  "changes": [
+    "Multiline, C0/C1 control, Unicode line separator and bidi-control input requires explicit confirmation at paste and send boundaries",
+    "Escaped bounded text preview; cancel or unavailable confirmation does not insert/send; no automatic Clipboard API reads/writes",
+    "Plain single-line sends and dedicated Ctrl+C retain their existing behavior; serial transport keeps its independent byte/content checks",
+    "Recheck terminal identity/readiness and unchanged draft after confirmation; ignore late acknowledgements after close",
+    "Account-owned terminal coalesces pending sends and keeps failed draft; only acknowledged unchanged draft clears",
+    "Terminal output remains plain textarea/textContent; no OSC clipboard interpretation or automatic links"
+  ],
+  "verification": {
+    "newUiBoundaryTests": {
+      "passed": 16,
+      "failed": 0,
+      "scope": "Actual browser module handlers in happy-dom; injected transport/runtime boundaries, not native browser or real authentication"
+    },
+    "allFastVmTests": {
+      "passed": 666,
+      "failed": 0,
+      "skipped": 0
+    },
+    "actualAlpineTerminal": {
+      "passed": 1,
+      "failed": 0,
+      "elapsedMs": 17134,
+      "checks": [
+        "UTF-8 guest file bytes",
+        "Actual kernel output",
+        "Explicit Ctrl+C interrupts foreground command",
+        "Subsequent command succeeds",
+        "Closed session rejects input"
+      ],
+      "scope": "Real offline engine transport regression; does not prove native clipboard confirmation"
+    },
+    "typecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "buildIsolation": "passed",
+    "checklistTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "red": [
+      "Five input/paste consent failures before implementation",
+      "Five account-owned UI failures against committed baseline",
+      "Late acknowledgement draft deletion reproduced before fix"
+    ]
+  },
+  "nativeBrowserAcceptance": false,
+  "productionAcceptance": false,
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "parentsKeptOpen": [
+      "VM-029",
+      "D04",
+      "G0"
+    ]
+  },
+  "remaining": [
+    "Unlock Mac for native browser paste/confirm/cancel and keyboard acceptance",
+    "Formal authenticated runtime integration and complete VM-029 file/terminal interaction matrix",
+    "Previously pending native VM-033 six-action cache acceptance"
+  ],
+  "boundaries": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "secretsRead": false,
+    "githubAccess": false,
+    "previewChanged": false,
+    "encryptionAdded": false,
+    "backupAdded": false
+  }
+}

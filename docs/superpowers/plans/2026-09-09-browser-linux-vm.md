@@ -293,3 +293,13 @@ Receipt: `design/browser-vm/2026-10-01-chunked-images.json`. Current checklist r
 - [ ] Native browser actions remain unaccepted: tool reported Mac locked; no alternate control path used. Actual HTTPS/browser matrix/release gates remain open.
 
 Receipt: `design/browser-vm/2026-10-01-image-failure-acceptance.json`. Overall 29 in scope / 5 completed / 24 remaining; VM-033/D04/G0 unchanged. No push/deploy/migration/secrets/preview changes.
+
+
+## 2026-10-01 VM-029 terminal input consent local evidence
+
+- [x] Existing approved clipboard boundary implemented in both local diagnostic terminals: risky paste and send require separate explicit consent; escaped control/bidi preview; no automatic Clipboard API reads, output interpretation or automatic commands.
+- [x] Cancel preserves draft; post-confirmation terminal/readiness/draft checks prevent stale sends. Account-owned pending writes are coalesced, failed drafts retained, and closed-terminal late acknowledgements ignored.
+- [x] Actual UI handler tests 16/16; full fast VM 666/666; real offline Alpine UTF-8/interrupt/closed-session regression 1/1; typecheck, UI build/isolation and checklist 9/9 passed.
+- [ ] Native browser clipboard/confirmation/keyboard acceptance still requires desktop unlock. Formal authenticated runtime and full VM-029 remain open; DOM fixtures are not native evidence.
+
+Receipt: `design/browser-vm/2026-10-01-terminal-input-consent.json`. No changes to existing hosted preview, production, encryption or backups. Overall 29 in scope / 5 completed / 24 remaining. Next permitted work is the outstanding native VM-029/VM-033 acceptance after unlock or other independently authorized local checklist work.

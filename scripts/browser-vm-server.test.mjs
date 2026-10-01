@@ -93,7 +93,7 @@ test('complete ISO resources are explicitly opt-in and expose only pinned names'
 
 test('interactive terminal modules are served locally but test files and source directories remain private', async t => {
   const server = await fixture(t);
-  for (const path of ['/terminal-session.mjs', '/terminal-client.mjs', '/terminal-worker.mjs', '/terminal-worker-endpoint.mjs']) {
+  for (const path of ['/terminal-input-policy.mjs', '/terminal-session.mjs', '/terminal-client.mjs', '/terminal-worker.mjs', '/terminal-worker-endpoint.mjs']) {
     const response = await fetch(server.url + path);
     assert.equal(response.status, 200, path);
     assert.match(response.headers.get('content-type'), /javascript/);
