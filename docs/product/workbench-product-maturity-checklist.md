@@ -176,6 +176,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 - [ ] `R2-006` 建立 `EntityForm` 字段校验、dirty、pending 和离开确认。
 - [ ] `R2-007` 建立 `EntitySheet` 查看、编辑、保存和并发错误反馈。
 - [ ] `R2-008` 建立危险操作 `ConfirmAction` 和不可逆影响说明。
+  - 2026-10-01：共享 ConfirmAction 已在成员访问启用/禁用中本地接线，目标/影响、取消、单次确认及失效保护见[证据](./2026-10-01-admin-member-confirmation-evidence.md)。仅一个管理页的交付，全部危险操作迁移与原生验收仍缺，父项不关闭。
 - [ ] `R2-009` 建立 `StatCard`、`ChartCard`、`StatusBadge` 和 `ActivityTimeline`。
 - [ ] `R2-010` 将知识、提交、任务、通知和管理列表迁移至共享模式。
 - [ ] `R2-011` 验证所有列表 URL 恢复、刷新、后退/前进和 stale response 防护。
