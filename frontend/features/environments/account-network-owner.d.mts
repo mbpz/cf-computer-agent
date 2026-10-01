@@ -15,10 +15,12 @@ export interface AccountNetworkOwner {
   disconnectEnvironment(environmentId: string): void;
   network(environmentId: string): AccountNetworkHandle;
   removeEnvironment(environmentId: string): void;
+  revoke(): void;
   dispose(): void;
 }
 export function createAccountNetworkOwner(options: {
   origin: string; memberId: string; events?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+  createChannel?: (name: string) => Pick<BroadcastChannel, 'postMessage' | 'close' | 'addEventListener' | 'removeEventListener'>;
   requester?: typeof fetch; NativeWebSocket?: typeof WebSocket;
   clock?: {monotonicNow(): number; wallNow(): number; setTimer(fn: () => void, ms: number): unknown; clearTimer(id: unknown): void};
 }): AccountNetworkOwner;

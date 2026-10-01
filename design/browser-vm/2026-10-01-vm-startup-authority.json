@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "bd8c374",
+  "scope": "D04 local startup authority and same-origin same-account invalidation; formal VM mounting remains G0-gated",
+  "implemented": [
+    "Authenticated runtime composition re-fetches session, vm:use and exact member/id/type environment metadata on every explicit fresh start and restore, before checkpoint read or Worker allocation",
+    "10-second overall deadline; cancellation races uncooperative HTTP; malformed/error/offline responses refuse boot without fallback or automatic retry",
+    "Explicit revoke broadcasts a versioned origin/member invalidation hint; logout and observed 401/403 revoke before subsequent work",
+    "Received invalidation quietly closes owner resources without rebroadcast, authorization, tombstone creation or snapshot deletion; ordinary unmount/pagehide remains local",
+    "Native BroadcastChannel wired to React account boundary and isolated diagnostic page; local environment-removal intent invalidates other same-account tabs conservatively"
+  ],
+  "verification": {
+    "redBeforeImplementation": {
+      "startupAdapterMissing": 13,
+      "crossTabBehaviorFailures": 2
+    },
+    "focused": {
+      "passed": 35,
+      "startup": 15,
+      "crossTab": 5,
+      "reconciliation": 7,
+      "accountBoundary": 8
+    },
+    "fastVm": {
+      "passed": 587,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 47925.222875,
+      "sandboxAttempt": "interrupted without result; rerun with local-listener permission passed"
+    },
+    "realAlpine": {
+      "passed": 1,
+      "workers": 4,
+      "allExited": true,
+      "network": "off",
+      "durationMs": 52190.760417,
+      "scope": "existing runtime owner regression, not HTTP authorization acceptance"
+    },
+    "nativeBrowser": {
+      "browser": "Codex in-app browser",
+      "origin": "http://127.0.0.1:51551",
+      "path": "/runtime-owner.html",
+      "diagnosticIdentity": true,
+      "nativeBroadcastChannel": true,
+      "sequence": [
+        "tab A booted Alpine to running",
+        "tab B clicked diagnostic logout",
+        "tab A closed with ACCOUNT_CLOSED; terminal and file UI cleared; actions disabled"
+      ],
+      "screenshot": "design/browser-vm/cross-tab-authority-native-browser.png",
+      "cleanup": "both agent-created tabs closed and local probe server stopped"
+    },
+    "projectTypecheck": "passed",
+    "strictAdapterTypecheck": "passed with --ignoreConfig (initial invocation rejected config/file combination)",
+    "buildUi": "passed; existing large-chunk warning",
+    "checklistTests": {
+      "passed": 9
+    },
+    "diffCheck": "passed"
+  },
+  "limitations": [
+    "Startup HTTP fixtures are the external test boundary; no production authenticated VM start or new formal-page mount",
+    "Cross-tab delivery is best-effort only among live participating tabs in one browser storage partition; no cross-device or cross-origin coordination; absent BroadcastChannel does not claim synchronization",
+    "No polling/visibility-resume revocation guarantee; server requests remain authoritative and each explicit start must revalidate",
+    "Tombstone adapter remains explicit, not automatically scheduled by the new factory; an empty or 404 metadata response never authorizes deletion",
+    "Signed production image and complete native browser crash/quota/revocation matrix remain open; diagnostic development image is not production acceptance",
+    "No encryption, backup, push, deployment, migration, secrets read/upload or GitHub retry"
+  ],
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "G0": "not passed"
+  },
+  "next": "Continue local failure/recovery acceptance matrix (native quota, crash and authority lifecycle); formal startup/reconciliation mounting awaits G0"
+}

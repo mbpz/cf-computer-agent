@@ -12,7 +12,7 @@ function deferred() {
  * Persistence is optional and delegated to the account-scoped checkpoint store.
  * Full checkpoints can contain guest credentials/data; callers must disclose this.
  */
-export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.locks, createSession, checkpoints, autoSaveMs = 300000, bootTimeoutMs = 60000 }) {
+export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.locks, createSession, beforeStart, checkpoints, autoSaveMs = 300000, bootTimeoutMs = 60000 }) {
   if (!owner?.signal || typeof createSession !== 'function' || !Number.isFinite(bootTimeoutMs) || bootTimeoutMs <= 0) throw new Error('INVALID_RUNTIME');
   if (!Number.isSafeInteger(autoSaveMs) || autoSaveMs < 0) throw new Error('INVALID_RUNTIME');
   let current;
@@ -88,6 +88,18 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
       run.lockTask = Promise.resolve().then(() => locks.request(VM_RUNTIME_LOCK, { mode: 'exclusive', ifAvailable: true }, async lock => {
         if (run.cancelled) return;
         if (!lock) throw new Error('VM_BUSY');
+        if (beforeStart) {
+          try {
+            await Promise.race([
+              beforeStart({environment:run.environment,signal:run.operation.signal}),
+              run.cancelWait.promise.then(() => {throw Error('VM_NOT_RUNNING');}),
+            ]);
+            if (!live(run)) return;
+          } catch {
+            if (live(run)) invalidate(run, 'STARTUP_REVALIDATION_FAILED');
+            await cleanup(run);return;
+          }
+        }
         let restored;
         if (restore) {
           publish({status:'restoring'});

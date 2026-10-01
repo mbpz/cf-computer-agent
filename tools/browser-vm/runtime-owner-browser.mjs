@@ -7,7 +7,7 @@ import { createAccountVmRuntime } from '../../frontend/features/environments/acc
 import { createCheckpointStore } from '../../frontend/features/environments/storage/checkpoints.mjs';
 import { alpineCheckpointIdentity } from './alpine-iso.mjs';
 import { connectTerminal } from './terminal-client.mjs';
-const owner = createAccountNetworkOwner({origin:location.origin,memberId:'diagnostic',events:window});
+const owner = createAccountNetworkOwner({origin:location.origin,memberId:'diagnostic',events:window,createChannel:typeof BroadcastChannel==='function'?name=>new BroadcastChannel(name):undefined});
 const environment = Object.freeze({id:'diagnostic-alpine',memberId:'diagnostic',type:'personal'});
 const checkpoints = createCheckpointStore({owner,identity:await alpineCheckpointIdentity()});
 const runtime = createAccountVmRuntime({owner,checkpoints,createSession:callbacks=>connectTerminal({
@@ -33,7 +33,7 @@ element('save').onclick=()=>perform(()=>runtime.save());
 element('save-stop').onclick=()=>perform(()=>runtime.saveAndStop());
 element('stop').onclick=()=>perform(()=>{clearInput();return runtime.stop();});
 element('remove').onclick=()=>perform(async()=>{removed=true;clearInput();owner.removeEnvironment(environment.id);await runtime.stop();await checkpoints.remove(environment.id);cleanupComplete=true;});
-element('logout').onclick=()=>perform(()=>{clearInput();owner.dispose();return runtime.stop();});
+element('logout').onclick=()=>perform(()=>{clearInput();owner.revoke();return runtime.stop();});
 element('send').onclick=()=>perform(async()=>{const input=element('command').value;if(!input)throw Error('EMPTY_INPUT');clearInput();await runtime.write(input+'\n');});
 element('interrupt').onclick=()=>perform(()=>runtime.write('\x03'));
 window.addEventListener('pagehide',clearInput);runtime.subscribe(render);render();

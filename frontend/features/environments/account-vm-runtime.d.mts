@@ -16,5 +16,6 @@ export interface AccountVmRuntime {
 }
 export function createAccountVmRuntime(options: {
   owner: AccountNetworkOwner; checkpoints?:CheckpointStore; autoSaveMs?:number; locks?: Pick<LockManager, 'request'> | null; bootTimeoutMs?: number;
+  beforeStart?(options: {environment: RuntimeEnvironment; signal: AbortSignal}): Promise<void>;
   createSession(options: {environment: RuntimeEnvironment; checkpoint?:Checkpoint; onOutput(text: string): void; onClosed(): void}): VmSession;
 }): AccountVmRuntime;

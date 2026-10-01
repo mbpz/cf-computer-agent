@@ -19,7 +19,7 @@ const id = (x: unknown): x is string => typeof x === 'string' && /^[A-Za-z0-9_-]
 const integer = (x: unknown): x is number => typeof x === 'number' && Number.isSafeInteger(x) && x >= 0;
 const date = (x: unknown): x is string => typeof x === 'string' && Number.isFinite(Date.parse(x)) && new Date(x).toISOString() === x;
 function name(input: unknown): string { if (typeof input !== 'string' || !input.trim() || input.length > 512 || [...input.trim()].length > 120 || /[\u0000-\u001f\u007f]/.test(input)) throw Error('INVALID_INPUT'); return input.trim(); }
-function metadata(value: unknown, memberId: string): EnvironmentMetadata {
+export function parseEnvironmentMetadata(value: unknown, memberId: string): EnvironmentMetadata {
   const x = record(value);
   if (!id(x.id) || x.memberId !== memberId || typeof x.name !== 'string' || name(x.name) !== x.name || !['personal','temporary'].includes(String(x.type))
     || !(x.taskId === null || typeof x.taskId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x.taskId))
@@ -47,7 +47,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
     } finally { clearTimeout(timer); signal.removeEventListener('abort',abort); }
   }
   function unauthorized(error: unknown) {
-    if (error instanceof ApiRequestError && [401,403].includes(error.status)) { owner.dispose(); return true; } return false;
+    if (error instanceof ApiRequestError && [401,403].includes(error.status)) { owner.revoke(); return true; } return false;
   }
   async function load(page = state.pagination.page, filter: Filter = state.filter) {
     current();
@@ -60,7 +60,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
       const p = record(raw.pagination);
       if (!Array.isArray(raw.items) || p.page !== page || p.pageSize !== 20 || !integer(p.total) || p.totalPages !== Math.ceil(p.total/20)
         || raw.items.length !== Math.max(0,Math.min(20,p.total-(page-1)*20))) invalid();
-      const items = (raw.items as unknown[]).map(x => metadata(x,owner.scope.memberId));
+      const items = (raw.items as unknown[]).map(x => parseEnvironmentMetadata(x,owner.scope.memberId));
       if (new Set(items.map(x => x.id)).size !== items.length || filter && items.some(x => x.type !== filter)) invalid();
       publish({items:Object.freeze(items),pagination: p as Pagination});
     } catch (error) {
@@ -79,7 +79,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
         const x = record(result.tombstone);
         if (x.environmentId !== intent.expected.id || x.version !== intent.expected.version || !date(x.deletedAt)) invalid();
       } else {
-        const x = metadata(result.environment,owner.scope.memberId);
+        const x = parseEnvironmentMetadata(result.environment,owner.scope.memberId);
         for (const [key,value] of Object.entries(intent.expected)) if (x[key as keyof EnvironmentMetadata] !== value) invalid();
       }
       publish({pending:null,writing:false});

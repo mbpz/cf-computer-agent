@@ -30,7 +30,7 @@ export async function reconcileAccountCheckpoints({owner,checkpoints,runtime,req
           new Promise<never>((_,reject)=>{abort=()=>reject(Error('CANCELLED'));cancel.addEventListener('abort',abort,{once:true});if(cancel.aborted)abort();}),
         ]);
       } catch(error) {
-        if (error instanceof ApiRequestError && [401,403].includes(error.status)) owner.dispose();
+        if (error instanceof ApiRequestError && [401,403].includes(error.status)) owner.revoke();
         throw error;
       } finally {clearTimeout(timer);cancel.removeEventListener('abort',abort);}
     },

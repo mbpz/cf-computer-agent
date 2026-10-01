@@ -24,7 +24,8 @@ function AccountNetworkScope({ memberId, children }: {
   useLayoutEffect(() => {
     // Allocate in the effect, not render/useMemo: discarded renders must not
     // register listeners, and StrictMode replay requires a fresh live owner.
-    const next = createAccountNetworkOwner({ origin: window.location.origin, memberId, events: window });
+    const next = createAccountNetworkOwner({ origin: window.location.origin, memberId, events: window,
+      createChannel: typeof window.BroadcastChannel === 'function' ? name => new window.BroadcastChannel(name) : undefined });
     setOwner(next);
     return () => next.dispose();
   }, [memberId]);

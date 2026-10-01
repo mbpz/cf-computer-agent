@@ -6,8 +6,8 @@ import { isAnonymousSessionError } from "./session-state";
 /** Local network authority is revoked before contacting the server. A failed
  * logout never reactivates old resources, even while the shell remains signed in.
  */
-export async function logoutAccount(owner: { dispose(): void }, logoutUrl: string, requester?: Fetcher): Promise<void> {
-  owner.dispose();
+export async function logoutAccount(owner: { revoke(): void }, logoutUrl: string, requester?: Fetcher): Promise<void> {
+  owner.revoke();
   await postLogout(logoutUrl, requester);
   try {
     await sessionSnapshot(requester);
