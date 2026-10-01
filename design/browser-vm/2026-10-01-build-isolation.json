@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-01",
+  "scope": "VM-034 local emitted-build isolation gate only",
+  "baseline": "ec5a55d",
+  "status": "local-verified",
+  "changes": [
+    "Existing audit and 23 tests retained from ec5a55d without amending it",
+    "build:ui now invokes verify:browser-vm:build after Vite succeeds",
+    "test:browser-vm includes the build-isolation regression suite"
+  ],
+  "verification": {
+    "integrationRed": "npm run verify:browser-vm:build failed with Missing script before package wiring",
+    "focused": {
+      "command": "npm run test:browser-vm:build",
+      "passed": 23
+    },
+    "vm": {
+      "command": "npm run test:browser-vm",
+      "passed": 616,
+      "failed": 0,
+      "skipped": 0
+    },
+    "landing": {
+      "command": "npm run verify:landing",
+      "passed": 97
+    },
+    "contracts": {
+      "command": "node --test scripts/functional-checklist-audit.test.mjs scripts/frontend-app-contract.test.mjs",
+      "passed": 17
+    },
+    "typecheck": {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0
+    },
+    "build": {
+      "command": "npm run build:ui",
+      "exitCode": 0,
+      "warning": "Existing chunk-size warning above 500 kB; not represented as a performance acceptance"
+    },
+    "buildIsolation": {
+      "scope": "emitted-static-module-graph; not runtime network or production acceptance",
+      "entryKeys": [
+        "index.html"
+      ],
+      "verifiedChunks": 3,
+      "initialChunks": [
+        "assets/index-CLxM2GUJ.js"
+      ],
+      "initialAssets": [
+        "assets/index-EX1WyWIl.css",
+        "assets/poster-desktop-B57ndMzK.webp",
+        "assets/poster-mobile-D7rTdxCo.webp",
+        "assets/workbench-jKGxDzq4.glb"
+      ],
+      "deferredVmChunks": []
+    }
+  },
+  "coverage": [
+    "All emitted JS chunks checked against module provenance, edges and SHA256 bytes",
+    "All manifest entries and static transitive dependencies checked; lazy VM dependencies allowed",
+    "Rejects eager engine, terminal, runtime and binary assets including renamed/compressed assets",
+    "Negative tests include missing/tampered provenance, path/symlink escapes and actual Vite eager versus lazy package fixtures"
+  ],
+  "limitations": [
+    "Not a live browser request trace, authenticated workflow, formal release or production acceptance",
+    "Does not cover arbitrary hand-written HTML preload/public scripts, CSS URL references or computed runtime fetches",
+    "VM-034 parent, VM-035, D04 and G0 stay open"
+  ],
+  "boundaries": {
+    "productionDeployment": false,
+    "push": false,
+    "migration": false,
+    "secretsRead": false,
+    "browserSecurityRelaxation": false,
+    "encryptionAdded": false,
+    "backupCreated": false,
+    "githubRetried": false
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": "D08"
+  }
+}

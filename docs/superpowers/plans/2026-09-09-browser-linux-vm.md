@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
+### 2026-10-01 build isolation local slice
+
+- [x] 保留既有构建审计及23项回归：实际Vite eager/lazy夹具、入口静态闭包、模块来源/摘要/边校验、重命名/压缩镜像及路径/符号链接反例通过。
+- [x] 默认 `build:ui` 接入产物隔离门禁，快速 `test:browser-vm` 接入该测试；本轮23/23、快速VM616/616、首页97/97、契约17/17及类型检查、真实UI构建通过。
+- [x] 证据 `design/browser-vm/2026-10-01-build-isolation.json`；3个输出JS块均经校验，入口静态模块图无VM引擎/终端/镜像，未改CSP、未发布。
+- [ ] VM-034完整首屏请求/正式发布验收仍缺；门禁只覆盖输出静态模块图，不涵盖任意HTML预加载、public脚本、CSS URL或计算式运行时请求。D04/G0保持开放；下一项VM-035先核对本地CSP/登录兼容回归。
+
 ### 2026-10-01 checkpoint failure recovery execution slice
 
 - [x] 同步QuotaExceededError归一化先RED再修复；同步/异步配额、排队写入后的取消/撤权/关闭、旧两代回滚及显式重试回归通过。
