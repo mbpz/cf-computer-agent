@@ -16,8 +16,8 @@ export interface PlanningCreateCallbacks {
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function PlanningCreateForm({ locale, kind, createMemberId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: PlanningCreateCallbacks & {
-  locale: LocaleRuntime; kind: "GOALS" | "PROJECTS"; pending?: boolean;
+export function PlanningCreateForm({ locale, kind, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: PlanningCreateCallbacks & {
+  locale: LocaleRuntime; kind: "GOALS" | "PROJECTS"; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredPlanningIntent>(() => createMemberId ? loadPlanningIntent(createMemberId, kind) : { kind: "empty" });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
@@ -70,7 +70,7 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
     }
   };
   const submit = async () => {
-    if (pending || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
       if (!title.trim() || [...title.trim()].length > 200 || [...description.trim()].length > 200_000) { setError(true); return; }

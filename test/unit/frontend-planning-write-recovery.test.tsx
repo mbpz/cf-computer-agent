@@ -17,7 +17,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(path: string) { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
   async function mount(raw: string | null = null, memberId = "alice") {
-    app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
+    app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"); const path = url.pathname;
       if (path === "/api/session") return Response.json({ member: { id: memberId, email: `${memberId}@app.test`, role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
       if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
@@ -36,9 +36,21 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
       return Response.json({ items: [row()], pagination: { page: Number(url.searchParams.get("page") ?? 1), pageSize: Number(url.searchParams.get("pageSize") ?? 20), total: 1, totalPages: 1 } });
     } }); await waitForApp(() => !!complete());
   }
+  async function submitStatus() {
+    const count = writes.length;
+    await click(complete()); expect(writes).toHaveLength(count);
+    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    await click(confirm!);
+  }
   afterEach(async () => { await app?.unmount(); app = undefined; writes = []; reads = []; failure = undefined; detailId = "row"; delayed = false; defer = undefined; writeStatus = 503; listFailure = undefined; detailVersion = version; delayDetail = false; resolveDetail = undefined; });
+  it("cancel and route exit leave no write recovery marker or request", async () => {
+    await mount(); await click(complete()); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await click(main().querySelector<HTMLButtonElement>("[data-cancel-action]")!); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await click(complete()); await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
+    expect(main().querySelector('[role="alertdialog"]')).toBeNull(); expect(writes).toEqual([]); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+  });
   it("persists before POST and recovers an unknown write after a route return using GET only", async () => {
-    await mount(); await click(complete()); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: version }]);
+    await mount(); await submitStatus(); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: version }]);
     expect(complete().disabled).toBe(true); expect(recover()).toBeTruthy();
     const raw = app!.browser.sessionStorage.getItem(key); expect(raw).toContain('"id":"row"');
     await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
@@ -63,7 +75,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   });
   it("fails closed before POST on quota failure, and storage retry never writes", async () => {
     await mount(); const spy = vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
-    await click(complete()); expect(writes).toEqual([]); expect(complete().disabled).toBe(true);
+    await submitStatus(); expect(writes).toEqual([]); expect(complete().disabled).toBe(true);
     spy.mockRestore(); await click(recover()); await waitForApp(() => !complete().disabled); expect(writes).toEqual([]);
   });
   it.each([503, 401, 403, 404])("keeps recovery read-only on target read failure %s", async status => {
@@ -79,21 +91,21 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
     spy.mockRestore(); await click(recover()); await waitForApp(() => !complete().disabled); expect(writes).toEqual([]);
   });
   it("ignores a late success from the old mount and never clears its new recovery barrier", async () => {
-    await mount(); delayed = true; await click(complete()); await waitForApp(() => !!defer);
+    await mount(); delayed = true; await submitStatus(); await waitForApp(() => !!defer);
     const raw = app!.browser.sessionStorage.getItem(key); await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
     await act(async () => defer!(Response.json({ ...row(), status: "completed", updatedAt: "2026-09-27T00:00:00.001Z" })));
     expect(app!.browser.sessionStorage.getItem(key)).toBe(raw); expect(complete().disabled).toBe(true); expect(writes).toHaveLength(1);
   });
   it("clears a successful write only after readback and preserves a success whose readback fails", async () => {
-    await mount(); writeStatus = 200; await click(complete()); await waitForApp(() => !complete().disabled);
+    await mount(); writeStatus = 200; await submitStatus(); await waitForApp(() => !complete().disabled);
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
-    listFailure = 503; await click(complete()); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    listFailure = 503; await submitStatus(); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull(); expect(writes).toHaveLength(2);
     listFailure = undefined; await click(recover()); await waitForApp(() => !!complete() && !complete().disabled); expect(writes).toHaveLength(2);
   });
   it("releases a known rejected write but retains retryable failures", async () => {
-    await mount(); writeStatus = 400; await click(complete()); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(complete().disabled).toBe(false);
-    writeStatus = 408; await click(complete()); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull(); expect(complete().disabled).toBe(true);
+    await mount(); writeStatus = 400; await submitStatus(); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(complete().disabled).toBe(false);
+    writeStatus = 408; await submitStatus(); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull(); expect(complete().disabled).toBe(true);
   });
   it.each(["invalid", "2026-09-26T00:00:00.000Z"])("keeps the barrier for invalid or regressed target version %s", async value => {
     await mount(marker); detailVersion = value; await click(recover()); expect(app!.browser.sessionStorage.getItem(key)).toBe(marker); expect(complete().disabled).toBe(true); expect(writes).toEqual([]);
@@ -114,7 +126,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   });
   it("uses the new displayed version for a new explicit action after review, not the old request", async () => {
     await mount(marker); detailVersion = "2026-09-27T00:00:00.002Z"; await click(recover()); await waitForApp(() => !complete().disabled);
-    await click(complete()); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: "2026-09-27T00:00:00.002Z" }]);
+    await submitStatus(); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: "2026-09-27T00:00:00.002Z" }]);
   });
   if (module === "goals") it("persists the progress write barrier too", async () => {
     await mount(); const node = main().querySelector('input[type="range"]')!; const prop = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;

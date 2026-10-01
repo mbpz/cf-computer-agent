@@ -30,7 +30,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise((done) => setTimeout(done, 0)); }); }
   async function mount() {
     bodies = []; reads = 0; readFailure = false; readStatus = 503; respond = receipt;
-    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -221,6 +221,9 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     const complete = [...main().querySelectorAll("button")].find((node) => node.textContent === "Complete")!;
     const submit = create();
     await act(async () => { complete.click(); submit.click(); });
+    expect(bodies).toHaveLength(0);
+    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    await click(confirm!);
     expect(bodies).toHaveLength(1); expect(bodies[0]).toEqual({ status: "completed", expectedUpdatedAt: "2026-09-26T00:00:00.000Z" });
     await act(async () => resolve(Response.json({ ...entity({ id: "existing", clientKey: "existing", title: "Existing private row" }), status: "completed", updatedAt: "2026-09-26T00:00:00.001Z" })));
     await waitForApp(() => !title().disabled);

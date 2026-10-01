@@ -31,6 +31,9 @@ describe("goal task association journey", () => {
         if (failure) return apiError(failure, "UNKNOWN", true);
         return Response.json({ goalId: badReceipt ? "foreign" : "g", taskId, linked, changed: true, updatedAt: version() });
       }
+      // Shell unread reads are not goal-task readbacks.
+      if (url.pathname === "/api/notifications/summary") return Response.json({ unread: 0 });
+      expect(url.pathname).toBe("/api/goals/g/tasks");
       reads.push(url.search);
       if (readFailure) return apiError(readFailure, "READ_FAILED", readFailure >= 500);
       const page = Number(url.searchParams.get("page")), pageSize = Number(url.searchParams.get("pageSize"));

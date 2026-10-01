@@ -15,7 +15,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   const row = (fresh: boolean) => ({ id: "row", clientKey: "row", title: fresh ? "Fresh private row" : "Stale private row", description: null, status: "active", progress: 10, targetAt: null, createdAt: oldVersion, updatedAt: fresh ? newVersion : oldVersion });
   async function mount() {
     bodies = []; reads = 0; failRead = undefined; delay = false; resolveRead = undefined;
-    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}`, role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -30,18 +30,24 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     await waitForApp(() => !!complete());
   }
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
+  async function submitStatus() {
+    const count = bodies.length;
+    await click(complete()); expect(bodies).toHaveLength(count);
+    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(confirm).not.toBeNull();
+    await click(confirm!);
+  }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("sends the displayed version and reloads conflict data without automatically replaying the write", async () => {
-    await mount(); await click(complete());
+    await mount(); await submitStatus();
     await waitForApp(() => main().textContent!.includes("Fresh private row"));
     expect(bodies).toEqual([{ status: "completed", expectedUpdatedAt: oldVersion }]);
     expect(main().textContent).not.toContain("Stale private row");
     expect(main().textContent).toContain("Review the latest data before trying again.");
-    await click(complete());
+    await submitStatus();
     expect(bodies[1]).toEqual({ status: "completed", expectedUpdatedAt: newVersion });
   });
   it.each([401, 403, 503])("clears stale rows if conflict readback fails (%s), and retries GET only", async status => {
-    await mount(); failRead = status; await click(complete());
+    await mount(); failRead = status; await submitStatus();
     await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().querySelectorAll("h2")).toHaveLength(0); expect(bodies).toHaveLength(1);
     failRead = undefined;
@@ -50,7 +56,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     expect(bodies).toHaveLength(1);
   });
   it("locks duplicate writes while conflict reconciliation is pending", async () => {
-    await mount(); delay = true; await click(complete());
+    await mount(); delay = true; await submitStatus();
     await waitForApp(() => !!resolveRead);
     expect(complete().disabled).toBe(true); await click(complete()); expect(bodies).toHaveLength(1);
     await act(async () => resolveRead!());
@@ -58,7 +64,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     expect(complete().disabled).toBe(false);
   });
   it("ignores a conflict readback after leaving the route", async () => {
-    await mount(); delay = true; await click(complete());
+    await mount(); delay = true; await submitStatus();
     await waitForApp(() => !!resolveRead);
     await act(async () => { window.history.pushState({}, "", "/settings"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
     await act(async () => resolveRead!());
