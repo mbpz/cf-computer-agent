@@ -15,14 +15,14 @@ const { Window } = await import("happy-dom");
 
 describe("space write recovery", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/spaces" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/spaces" }); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function render(runtime = locale()) { await act(async () => root.render(<AdminSpacesRoute locale={runtime} />)); await flush(); }
   function button(label: string) { return [...container.querySelectorAll("button")].find(item => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
   async function input(id:string,value:string) { const el=container.querySelector(`#${id}`) as HTMLInputElement;await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,value);el.dispatchEvent(new browser.Event("input",{bubbles:true}));}); }
   async function draft(name="New space",slug="new-space") { await click("Create space");await input("admin-space-name",name);await input("admin-space-slug",slug); }
-  async function submit() {await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});await flush();}
+  async function submit() {await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});await flush();if(container.querySelector("[data-confirm-action]")) await click("Confirm changes");}
   function reads(url:unknown){return String(url).includes("/collections")?json({items:[]}):json({items:[space()]});}
 
   async function select(id: string, value: string) {
@@ -41,6 +41,25 @@ describe("space write recovery", () => {
       return json(String(url).includes("collections") ? { collection: item } : { space: item });
     });
   }
+  it.each(["Edit space: Private space", "Edit collection: Private collection"])("canceling %s confirmation sends no PATCH and keeps the draft", async label => {
+    const writes: {url:string;body:Record<string,unknown>}[] = []; managementFetch(writes);
+    await render();await click(label);await input("admin-record-name","Unsaved");
+    await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
+    expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();expect(writes).toHaveLength(0);
+    await act(async()=>{(container.querySelector("[data-cancel-action]") as HTMLButtonElement).click();});
+    expect(writes).toHaveLength(0);expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Unsaved");
+  });
+  it("rejects a stale editor snapshot after recovery rather than rebasing it", async () => {
+    const bodies: Record<string,unknown>[] = [];let updated=false;
+    vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{
+      if(init?.method){bodies.push(JSON.parse(String(init.body)));updated=true;return new Response(null,{status:409});}
+      return String(url).includes("/collections")?json({items:[]}):json({items:[space({updatedAt:updated?"2026-10-01T00:00:00.000Z":"2026-09-28T00:00:00.000Z"})]});
+    });
+    await render();await click("Edit space: Private space");await input("admin-record-name","Stale");await submit();await click("Try again");
+    expect(bodies).toHaveLength(1);await submit();expect(bodies).toHaveLength(2);
+    expect(bodies.map(body=>body.expectedUpdatedAt)).toEqual(["2026-09-28T00:00:00.000Z","2026-09-28T00:00:00.000Z"]);
+    expect((container.querySelector("#admin-record-name") as HTMLInputElement).value).toBe("Stale");
+  });
   it("edits a space through its full management form and refreshes authoritative data", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
     await render(); await click("Edit space: Private space");
@@ -73,7 +92,7 @@ describe("space write recovery", () => {
   it("rejects invalid position before edit and cancel leaves no writes", async () => {
     const writes: { url: string; body: Record<string, unknown> }[] = []; managementFetch(writes);
     await render(); await click("Edit space: Private space"); await input("admin-record-position", "1000001"); await submit(); expect(writes).toHaveLength(0);
-    await click("Cancel"); expect(container.querySelector("form")).toBeNull();
+    await click("Cancel"); await click("Discard changes"); expect(container.querySelector("form")).toBeNull();
   });
   it("coalesces collection submits and reuses its request key after response loss", async () => {
     const first = deferred<Response>(); const requests: { key: string | null; body: unknown }[] = [];
