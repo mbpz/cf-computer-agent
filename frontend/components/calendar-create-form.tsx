@@ -16,8 +16,8 @@ export interface CalendarCreateCallbacks {
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function CalendarCreateForm({ locale, createMemberId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: CalendarCreateCallbacks & {
-  locale: LocaleRuntime; pending?: boolean;
+export function CalendarCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: CalendarCreateCallbacks & {
+  locale: LocaleRuntime; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredCalendarIntent>(() => createMemberId ? loadCalendarIntent(createMemberId) : { kind: "blocked" });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
@@ -76,7 +76,7 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, on
     }
   };
   const submit = async () => {
-    if (pending || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
       const candidate: CalendarCreateIntent = { id: crypto.randomUUID(), clientKey: crypto.randomUUID(), title: title.trim(), startsAt: localCalendarInstant(startsAt) ?? "", endsAt: localCalendarInstant(endsAt) ?? "", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" };
