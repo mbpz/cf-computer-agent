@@ -48,8 +48,11 @@ export function createTasksRequestController(requester: Fetcher = fetch) {
     loadTasks(input.filters, input, requester, signal));
 }
 
-export async function loadTaskSummary(requester: Fetcher = fetch): Promise<TaskSummary> {
-  return apiFetch<TaskSummary>("/api/tasks/summary", { requester });
+export async function loadTaskSummary(requester: Fetcher = fetch, signal?: AbortSignal): Promise<TaskSummary> {
+  const data = await apiFetch<TaskSummary>("/api/tasks/summary", { requester, signal });
+  if (!data || ![data.todo, data.doing, data.blocked, data.done, data.canceled, data.dueToday, data.overdue].every(value => Number.isSafeInteger(value) && value >= 0)
+    || !Number.isSafeInteger(data.todo + data.doing + data.blocked + data.done + data.canceled)) throw new Error("TASK_SUMMARY_INVALID");
+  return data;
 }
 
 export async function loadTaskDetail(id: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<TaskDetail> {

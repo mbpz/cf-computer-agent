@@ -27,7 +27,7 @@ import { SpacesPage } from "./pages/admin/spaces-page";
 import { AuditPage } from "./pages/admin/audit-page";
 import { DuplicateQueuePage } from "./pages/admin/duplicate-queue-page";
 import { AgentPage } from "./pages/agent-page";
-import { HomePage } from "./pages/home-page";
+import { HomePage, type WorkbenchHomeState } from "./pages/home-page";
 import { KnowledgePage } from "./pages/knowledge-page";
 import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
 import { SearchPage } from "./pages/search-page";
@@ -72,7 +72,7 @@ import { cancelCalendarEvent, createCalendarEvent, loadCalendarEvent, readCreate
 import { loadToday } from "./lib/today-data";
 import { type FocusSession, loadFocusTransitionReceipt, loadCurrentFocus, loadFocusReceipt, startFocus, transitionFocus } from "./lib/focus-data";
 import { loadWorkbenchReview } from "./lib/workbench-review-data";
-import { buildWorkbenchSummary, type WorkbenchSummary } from "./lib/workbench-data";
+import { buildWorkbenchSummary } from "./lib/workbench-data";
 import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
@@ -184,7 +184,7 @@ export function App() {
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
   switch (kind) {
-    case "home": return <HomeRoute locale={locale} />;
+    case "home": return <HomeRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute locale={locale} search={search} />;
@@ -229,25 +229,51 @@ function assertNever(value: never): never {
 }
 
 function HomeRoute({ locale }: { locale: LocaleRuntime }) {
-  const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; summary: WorkbenchSummary } | { kind: "error"; message: string }>({ kind: "loading" });
+  const [state, setState] = useState<WorkbenchHomeState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
+  const pending = useRef(true);
   useEffect(() => {
-    let active = true;
-    void Promise.allSettled([loadTaskSummary(), loadRecentKnowledge(), loadWorkspaceActivity()]).then(([taskResult, knowledgeResult, activityResult]) => {
-      if (!active) return;
-      const taskSummary = taskResult.status === "fulfilled" ? taskResult.value : undefined;
-      const knowledge = knowledgeResult.status === "fulfilled" ? knowledgeResult.value : [];
-      const activity = activityResult.status === "fulfilled" ? activityResult.value.items : [];
-      if (taskResult.status === "rejected" && knowledgeResult.status === "rejected" && activityResult.status === "rejected") {
+    const controller = new AbortController();
+    pending.current = true;
+    // A denial invalidates the entire protected snapshot immediately, even if
+    // another endpoint is stalled or ignores cancellation.
+    const guard = <T,>(request: Promise<T>): Promise<T> => request.catch((error: unknown) => {
+      if (!controller.signal.aborted && error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
+        controller.abort();
+        setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD"), retryable: false });
+      }
+      throw error;
+    });
+    void Promise.allSettled([
+      guard(loadTaskSummary(fetch, controller.signal)),
+      guard(loadRecentKnowledge(fetch, controller.signal)),
+      guard(loadWorkspaceActivity({ signal: controller.signal })),
+    ]).then(([taskResult, knowledgeResult, activityResult]) => {
+      if (controller.signal.aborted) return;
+      pending.current = false;
+      const unavailable: Array<"tasks" | "knowledge" | "activity"> = [];
+      if (taskResult.status === "rejected") unavailable.push("tasks");
+      if (knowledgeResult.status === "rejected") unavailable.push("knowledge");
+      if (activityResult.status === "rejected") unavailable.push("activity");
+      if (unavailable.length === 3) {
         setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
         return;
       }
-      const summary = buildWorkbenchSummary({ taskSummary, knowledge, activity });
-      setState({ kind: "ready", summary });
+      const summary = buildWorkbenchSummary({
+        taskSummary: taskResult.status === "fulfilled" ? taskResult.value : undefined,
+        knowledge: knowledgeResult.status === "fulfilled" ? knowledgeResult.value : [],
+        activity: activityResult.status === "fulfilled" ? activityResult.value.items : [],
+      });
+      setState({ kind: "ready", summary, unavailable });
     });
-    return () => { active = false; };
+    return () => controller.abort();
   }, [locale, retry]);
-  return <HomePage locale={locale} state={state} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+  return <HomePage locale={locale} state={state} onRetry={() => {
+    if (pending.current) return;
+    pending.current = true;
+    setState({ kind: "loading" });
+    setRetry(value => value + 1);
+  }} />;
 }
 
 export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics }: { locale: LocaleRuntime; search: string; load?: (input: LoadAdminAnalyticsInput) => Promise<AdminAnalyticsOverview> }) {

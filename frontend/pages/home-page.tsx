@@ -5,8 +5,8 @@ import type { WorkbenchSummary } from "../lib/workbench-data";
 
 export type WorkbenchHomeState =
   | { kind: "loading" }
-  | { kind: "ready"; summary: WorkbenchSummary }
-  | { kind: "error"; message: string };
+  | { kind: "ready"; summary: WorkbenchSummary; unavailable?: readonly ("tasks" | "knowledge" | "activity")[] }
+  | { kind: "error"; message: string; retryable?: boolean };
 
 /** Compatibility boundary for older embeds; the app uses WorkbenchHomeState. */
 export type LegacyHomeState = {
@@ -57,10 +57,13 @@ function legacySummary(state: LegacyHomeState): WorkbenchSummary {
 
 export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?: LocaleRuntime; onRetry?: () => void }) {
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}><button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button></PageState>;
+  if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{state.retryable !== false && <button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button>}</PageState>;
 
   const summary = "summary" in state ? state.summary : legacySummary(state);
   if (!("summary" in state)) return <LegacyHomePage locale={locale} summary={summary} />;
+
+  const unavailable = new Set(state.unavailable);
+  const failed = <div role="status"><p>{frontendText(locale, "COMMON_UNABLE_TO_LOAD")}</p><button type="button" onClick={onRetry} className="mt-3 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">{frontendText(locale, "COMMON_RETRY")}</button></div>;
 
   return (
     <section className="space-y-6" aria-labelledby="workbench-title">
@@ -91,13 +94,13 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
           <CardHeader className="flex-row items-start justify-between space-y-0">
             <div>
               <CardTitle>{frontendText(locale, "WORKBENCH_TASKS_TITLE")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">{textWithCount(locale, "WORKBENCH_TASKS_COUNT", summary.taskCount)}</p>
+              {!unavailable.has("tasks") && <p className="mt-1 text-sm text-muted-foreground">{textWithCount(locale, "WORKBENCH_TASKS_COUNT", summary.taskCount)}</p>}
             </div>
             <a href="/tasks" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "WORKBENCH_OPEN_TASKS")}</a>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-semibold tabular-nums">{summary.taskCount}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{textWithCount(locale, "WORKBENCH_OVERDUE", summary.overdueTaskCount)}</p>
+            {unavailable.has("tasks") ? failed : <><p className="text-4xl font-semibold tabular-nums">{summary.taskCount}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{textWithCount(locale, "WORKBENCH_OVERDUE", summary.overdueTaskCount)}</p></>}
           </CardContent>
         </Card>
       </div>
@@ -109,7 +112,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
             <a href="/knowledge" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "HOME_OPEN_KNOWLEDGE")}</a>
           </CardHeader>
           <CardContent>
-            {summary.recentKnowledge.length ? (
+            {unavailable.has("knowledge") ? failed : summary.recentKnowledge.length ? (
               <div className="divide-y">
                 {summary.recentKnowledge.map((item) => (
                   <a key={item.id} href={`/knowledge/${encodeURIComponent(item.id)}`} className="block py-3 first:pt-0 last:pb-0 hover:text-primary">
@@ -125,7 +128,7 @@ export function HomePage({ state, locale, onRetry }: { state: HomeState; locale?
         <Card>
           <CardHeader><CardTitle>{frontendText(locale, "WORKBENCH_ACTIVITY_TITLE")}</CardTitle></CardHeader>
           <CardContent>
-            {summary.recentActivity.length ? (
+            {unavailable.has("activity") ? failed : summary.recentActivity.length ? (
               <div className="space-y-4">
                 {summary.recentActivity.map((item) => {
                   const label = frontendText(locale, ACTIVITY_LABEL_KEYS[item.label] ?? "WORKBENCH_ACTIVITY_UNKNOWN");

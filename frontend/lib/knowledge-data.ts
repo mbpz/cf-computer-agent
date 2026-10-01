@@ -70,12 +70,12 @@ export async function loadKnowledgePage({ page, pageSize, requester = fetch, sig
 
 export async function loadRecentKnowledge(requester: Fetcher = fetch, signal?: AbortSignal): Promise<RecentKnowledgeItem[]> {
   const data = await apiFetch<{ items?: unknown[] }>("/api/knowledge/recent?limit=8", { requester, signal });
-  if (!Array.isArray(data.items)) return [];
+  if (!Array.isArray(data?.items)) throw new Error("RECENT_KNOWLEDGE_INVALID");
   return data.items.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("RECENT_KNOWLEDGE_INVALID");
     const item = value as Record<string, unknown>;
     if (typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
-      || typeof item.title !== "string" || typeof item.lastVisitedAt !== "string") return [];
+      || typeof item.title !== "string" || typeof item.lastVisitedAt !== "string") throw new Error("RECENT_KNOWLEDGE_INVALID");
     return [{
       id: item.knowledgeItemId,
       title: item.title,

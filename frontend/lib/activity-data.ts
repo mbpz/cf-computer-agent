@@ -33,7 +33,12 @@ export async function loadWorkspaceActivity({ cursor, requester = fetch, signal 
   const params = new URLSearchParams({ limit: "12" });
   if (cursor) params.set("cursor", cursor);
   const data = await apiFetch<{ items?: unknown; nextCursor?: unknown }>(`/api/activity?${params.toString()}`, { requester, signal });
-  const items = Array.isArray(data.items) ? data.items.map(normalizeActivity).filter((item): item is WorkspaceActivityItem => item !== null) : [];
+  if (!Array.isArray(data?.items)) throw new Error("ACTIVITY_RESPONSE_INVALID");
+  const items = data.items.map(value => {
+    const item = normalizeActivity(value);
+    if (!item) throw new Error("ACTIVITY_RESPONSE_INVALID");
+    return item;
+  });
   return { items, nextCursor: typeof data.nextCursor === "string" && data.nextCursor ? data.nextCursor : null };
 }
 
