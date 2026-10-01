@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { menuSnapshot } from "../../../shared/admin-menu-fields";
-import { MenuEditor } from "./menu-editor";
+import { ConfirmAction } from "../../components/ui/confirm-action";
+import { MenuEditor, describeMenuChanges } from "./menu-editor";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 
 export function AdminMenusPage({ onLoadRetry, state, locale, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked = false, readPending = false, readRequired = false }: { onLoadRetry?: () => void; state: { kind: "loading" } | { kind: "error" | "forbidden"; message?: string } | { kind: "ready"; menus: readonly AdminMenu[] }; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onCreate?: (input: AdminMenuCreate) => Promise<boolean>; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; error?: string | null; writeBlocked?: boolean; readPending?: boolean; readRequired?: boolean }) {
@@ -18,9 +19,28 @@ type ReadyProps = Omit<Parameters<typeof AdminMenusPage>[0], "state"> & { menus:
 function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired }: ReadyProps) {
   const [editor, setEditor] = useState<{ menu?: AdminMenu } | null>(null);
   const busy = Boolean(pendingId) || Boolean(writeBlocked);
+  type Confirmation = { menu: AdminMenu; input?: AdminMenuUpdate; menus: readonly AdminMenu[] };
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const confirmationRef = useRef<Confirmation | null>(null);
+  const validConfirmation = !!(confirmation && !busy && !readPending && !editor && menus === confirmation.menus);
+  const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };
+  useEffect(() => { if (confirmation && !validConfirmation) cancelConfirmation(); }, [confirmation, validConfirmation]);
+  useEffect(() => () => { confirmationRef.current = null; }, []);
+  const requestConfirmation = (menu: AdminMenu, input?: AdminMenuUpdate) => {
+    if (busy || readPending || editor || confirmationRef.current || menu.isSystem) return;
+    if (input ? !onUpdate : !onDelete || menu.children.length > 0) return;
+    const next = { menu, input, menus }; confirmationRef.current = next; setConfirmation(next);
+  };
+  const confirmAction = () => {
+    if (!validConfirmation || !confirmation || confirmationRef.current !== confirmation) return;
+    cancelConfirmation();
+    if (confirmation.input) void onUpdate?.(confirmation.menu, confirmation.input);
+    else onDelete?.(confirmation.menu);
+  };
+
   const recovery = (error || readRequired) && <div className="mb-4 space-y-2"><p role="alert" className="text-sm text-destructive">{error || frontendText(locale, "ADMIN_MENUS_READ_REQUIRED")}</p>{onLoadRetry && <Button type="button" variant="outline" disabled={readPending} onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</div>;
   const edit = (menu: AdminMenu) => setEditor({ menu });
-  return <section className="space-y-6">
+  return <><section className="space-y-6" inert={validConfirmation || undefined} aria-hidden={validConfirmation || undefined}>
     <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p><h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_MENUS_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_MENUS_DESCRIPTION")}</p></div>
     {onCreate && <Button type="button" disabled={busy || Boolean(editor) || countMenus(menus) >= 200} onClick={() => setEditor({})}>{frontendText(locale, "ADMIN_MENUS_CREATE")}</Button>}
     {recovery}
@@ -28,8 +48,13 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
       const saved = editor.menu ? await onUpdate?.(editor.menu, { ...input, expected: menuSnapshot(editor.menu) }) : await onCreate?.(input as AdminMenuCreate);
       if (saved) setEditor(null);
     }} />}
-    {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><div className="space-y-2">{menus.map(menu => <MenuNode key={menu.id} menu={menu} depth={0} locale={locale} onUpdate={onUpdate} onDelete={onDelete} onEdit={onUpdate ? edit : undefined} pendingId={pendingId} writeBlocked={busy || Boolean(editor)} />)}</div></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
-  </section>;
+    {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><div className="space-y-2">{menus.map(menu => <MenuNode key={menu.id} menu={menu} depth={0} locale={locale} onUpdate={onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined} onDelete={onDelete ? menu => requestConfirmation(menu) : undefined} onEdit={onUpdate ? edit : undefined} pendingId={pendingId} writeBlocked={busy || Boolean(editor) || validConfirmation} />)}</div></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
+  </section><ConfirmAction open={validConfirmation}
+    title={frontendText(locale, confirmation?.input ? "ADMIN_MENUS_CONFIRM_TITLE" : "ADMIN_MENUS_DELETE_CONFIRM_TITLE")}
+    description={confirmation ? `${confirmation.menu.key} · ${confirmation.menu.path || confirmation.menu.id}. ${confirmation.input ? describeMenuChanges(confirmation.menu, confirmation.input, locale) : frontendText(locale, "ADMIN_MENUS_DELETE_IMPACT")}` : ""}
+    cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "ADMIN_MENUS_APPLY_CONFIRM")}
+    destructive={!confirmation?.input || confirmation.input.status === "disabled" || confirmation.input.visible === false}
+    onCancel={cancelConfirmation} onConfirm={confirmAction} /></>;
 }
 function countMenus(menus: readonly AdminMenu[]): number { return menus.reduce((total, menu) => total + 1 + countMenus(menu.children), 0); }
 
