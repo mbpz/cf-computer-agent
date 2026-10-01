@@ -1976,7 +1976,7 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
     <Button disabled={pending} onClick={() => setRetryVersion(value => value + 1)}>{frontendText(locale, "FOCUS_RETRY")}</Button>
     {recovery.kind === "ready" && !recovery.acknowledged && <Button disabled={pending} onClick={() => void mutate(epoch => sendStart(epoch, recovery.intent, recovery.intent), true)}>{frontendText(locale, "FOCUS_RETRY_START")}</Button>}
   </section>;
-  return <FocusPage locale={locale} state={state} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(epoch => sendStart(epoch, input))} onTransition={action => {
+  return <FocusPage locale={locale} state={state} memberId={memberId} pending={pending} actionError={actionError} actionNotice={actionNotice} selectionVersion={selectionVersion} onDenied={clearDenied} onRetry={() => setRetryVersion(value => value + 1)} onStart={input => void mutate(epoch => sendStart(epoch, input))} onTransition={action => {
     if (state.kind === "ready" && state.session) void mutate(epoch => sendTransition(epoch, Object.freeze({id: state.session!.id, taskId: state.session!.taskId, clientKey: state.session!.clientKey, action, expectedUpdatedAt: state.session!.updatedAt})));
   }} />;
 }

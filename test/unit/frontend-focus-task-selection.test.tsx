@@ -24,12 +24,14 @@ describe("Focus owned task selection through App", () => {
   const main = () => app!.container.querySelector("main")!;
   const button = (text: string) => [...main().querySelectorAll<HTMLButtonElement>("button")].find(n => n.textContent === text)!;
   const click = async (node: HTMLElement) => act(async () => node.click());
+  async function finish(label: string) { await click(button(label)); const confirm=main().querySelector<HTMLButtonElement>("[data-confirm-action]")!; expect(confirm).not.toBeNull(); await act(async()=>{confirm.click();confirm.click();}); }
   async function input(value: string) { await act(async () => { const node = main().querySelector('input[aria-label="Search tasks"]')!; const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!; (node as any)[key].onChange({currentTarget: {value}}); }); }
   async function mount(wait = true) {
     app = await mountAuthenticatedApp({url: "https://app.test/focus", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => {for (const [key, value] of seedStorage) browser.sessionStorage.setItem(key, value);}, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), method = init?.method ?? "GET";
       calls.push({path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : undefined, signal: init?.signal});
       if (url.pathname === "/api/navigation") return Response.json({tree: currentNavigationFixture("contributor", "0x100000")});
+      if (url.pathname === "/api/notifications/summary") return Response.json({unread: 0});
       if (url.pathname === "/api/telemetry/pageview") return Response.json({});
       if (url.pathname === "/api/focus/current") return delayedCurrent ? delayedCurrent() : Response.json({session: current});
       if (/^\/api\/focus\/[^/]+$/.test(url.pathname)) return receiptStatus ? apiError(receiptStatus, "DENIED") : receipt && receipt.id === url.pathname.split("/").pop() ? Response.json(receipt) : apiError(404, "FOCUS_NOT_FOUND");
@@ -64,6 +66,24 @@ describe("Focus owned task selection through App", () => {
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
   afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; delayedTransition = undefined; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  it.each(["Complete", "Abandon"])("keeps %s confirmation, cancel and route exit free of writes and journals",async label=>{
+    await mount();await select();await click(button("Start focus"));await waitForApp(()=>!!button("Pause"));
+    const trigger=button(label);trigger.focus();await click(trigger);expect(document.activeElement?.textContent).toBe("Cancel");
+    expect(calls.filter(c=>/^\/api\/focus\/[^/]+\//.test(c.path))).toHaveLength(0);expect(app!.browser.sessionStorage.getItem(transitionKey)).toBeNull();
+    await click(button("Cancel"));expect(document.activeElement).toBe(trigger);await click(trigger);
+    const old=main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;await navigate("/settings");await click(old);
+    expect(calls.filter(c=>/^\/api\/focus\/[^/]+\//.test(c.path))).toHaveLength(0);expect(app!.browser.sessionStorage.getItem(transitionKey)).toBeNull();
+    await navigate("/focus");await waitForApp(()=>!!button("Pause"));expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+  });
+  it.each(["Complete", "Abandon"])("%s confirmation excludes same-tick pause and persists the exact version only once",async label=>{
+    await mount();await select();await click(button("Start focus"));await waitForApp(()=>!!button("Pause"));const original={...current};
+    const terminal=button(label),pause=button("Pause");await act(async()=>{terminal.click();pause.click();});
+    expect(calls.filter(c=>/^\/api\/focus\/[^/]+\//.test(c.path))).toHaveLength(0);expect(app!.browser.sessionStorage.getItem(transitionKey)).toBeNull();
+    delayedTransition=async()=>{expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({intent:{id:original.id,taskId:original.taskId,clientKey:original.clientKey,action:label.toLowerCase(),expectedUpdatedAt:stamp},acknowledged:false});throw new Error("lost terminal response");};
+    const confirm=main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;await act(async()=>{confirm.click();confirm.click();});await waitForApp(()=>!!button("Try focus again"));
+    expect(calls.filter(c=>/^\/api\/focus\/[^/]+\//.test(c.path)).map(c=>({action:c.path.split("/").pop(),body:c.body}))).toEqual([{action:label.toLowerCase(),body:{expectedUpdatedAt:stamp}}]);
+    expect(app!.browser.sessionStorage.getItem(transitionKey)).not.toBeNull();
+  });
   it("persists the exact transition before POST and retains it after an unknown result", async () => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     const original = {...current};
@@ -78,7 +98,7 @@ describe("Focus owned task selection through App", () => {
   it.each(["completed", "abandoned"])("recovers exact %s outcome after refresh instead of inferring success from empty current", async status => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     const original = {...current}; transitionStatus = 500;
-    await click(button("Complete")); await waitForApp(() => !!button("Try focus again"));
+    await finish("Complete"); await waitForApp(() => !!button("Try focus again"));
     seedStorage = [[transitionKey, app!.browser.sessionStorage.getItem(transitionKey)!]];
     receipt = {...original, status, endedAt: stamp, updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
     await app!.unmount(); app = undefined; await mount(false);
@@ -121,7 +141,7 @@ describe("Focus owned task selection through App", () => {
   it("retains acknowledged transitions after current read failure and never offers another POST", async () => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     delayedCurrent = async () => apiError(500, "READ_FAILED");
-    await click(button("Complete")); await waitForApp(() => !!button("Try focus again"));
+    await finish("Complete"); await waitForApp(() => !!button("Try focus again"));
     expect(JSON.parse(app!.browser.sessionStorage.getItem(transitionKey)!)).toMatchObject({acknowledged: true});
     seedStorage = [[transitionKey, app!.browser.sessionStorage.getItem(transitionKey)!]];
     await app!.unmount(); app = undefined; delayedCurrent = undefined; await mount(false);
@@ -162,7 +182,7 @@ describe("Focus owned task selection through App", () => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     const original = {...current}; let resolve!: (response: Response) => void;
     delayedTransition = () => new Promise(done => {resolve = done;});
-    await click(button("Complete")); await waitForApp(() => !!resolve); await navigate("/settings");
+    await finish("Complete"); await waitForApp(() => !!resolve); await navigate("/settings");
     const reads = calls.filter(c => c.path === "/api/focus/current").length;
     receipt = {...original, status: "completed", updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
     await act(async () => resolve(Response.json(receipt)));
@@ -350,7 +370,7 @@ describe("Focus owned task selection through App", () => {
     await click(button("Pause")); await waitForApp(() => !!button("Resume"));
     expect(main().textContent).toContain("Paused");
     await click(button("Resume")); await waitForApp(() => !!button("Pause"));
-    await click(button(action)); await waitForApp(() => !!button("Start focus"));
+    await finish(action); await waitForApp(() => !!button("Start focus"));
     expect(main().querySelector('[role="status"]')?.textContent).toContain(status);
     const actions = calls.filter(c => /^\/api\/focus\/[^/]+\//.test(c.path));
     expect(actions.map(c => c.path.split("/").pop())).toEqual(["pause", "resume", action.toLowerCase()]);
