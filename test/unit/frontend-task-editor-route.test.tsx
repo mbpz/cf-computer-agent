@@ -146,7 +146,95 @@ describe("task editor through the real route", () => {
     trigger.focus(); await click("Edit: Alpha (task-alpha)");
     await change("Task tags (comma-separated)", Array.from({ length: 11 }, (_, index) => `tag-${index}`).join(",")); await click("Save tags"); expect(writes).toHaveLength(0);
     await act(async () => { container.querySelector('[role="dialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event); });
+    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull(); await click("Discard changes");
     expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(browser.document.activeElement).toBe(trigger);
+  });
+  it.each([
+    ["Task title", "Draft"], ["Task notes", "Draft notes"], ["Task priority", "high"],
+    ["Task due date", "2026-10-02T12:30"], ["Task status", "doing"], ["Task progress", "40"],
+    ["Task tags (comma-separated)", "draft"], ["Knowledge item ID", "knowledge-draft"],
+  ])("protects unsaved %s on close and refresh without submitting", async (label, value) => {
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change(label, value);
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
+    await click("Close task editor");
+    const confirmation = container.querySelector('[role="alertdialog"]'); expect(confirmation).not.toBeNull();
+    expect(confirmation?.textContent).toContain("task-alpha"); expect(confirmation?.textContent).toContain("No changes will be submitted");
+    expect(browser.document.activeElement?.textContent).toBe("Keep editing"); expect(writes).toHaveLength(0);
+    await click("Keep editing"); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect((container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement).value).toBe(value);
+    await click("Close task editor"); const discard = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => { discard.click(); discard.click(); });
+    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(writes).toHaveLength(0);
+    const after = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(after); expect(after.defaultPrevented).toBe(false);
+  });
+  it("does not warn for untouched or reverted task fields", async () => {
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Draft"); await change("Task title", "Alpha");
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(false);
+    await click("Close task editor"); expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+  it("keeps new-task drafts on Escape and consumes discard before stale clicks", async () => {
+    await mount(); await click("New task"); await change("Task title", "Unsubmitted task");
+    await act(async () => container.querySelector('[role="dialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain("Unsubmitted task");
+    await act(async () => container.querySelector('[role="alertdialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Unsubmitted task");
+    await click("Close task editor"); const stale = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await click("Discard changes"); await click("New task"); await act(async () => stale.click());
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull(); expect(writes).toHaveLength(0);
+  });
+  it("blocks same-tick submit behind discard confirmation", async () => {
+    await mount(); await click("New task"); await change("Task title", "Draft");
+    const close = [...container.querySelectorAll("button")].find(node => node.textContent === "Close task editor")!;
+    const form = container.querySelector("form")!;
+    await act(async () => { close.click(); form.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }) as unknown as Event); });
+    expect(writes).toHaveLength(0); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click("Keep editing"); await click("Create task"); expect(writes).toHaveLength(1); expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("preserves other unsaved forms when a status write is acknowledged", async () => {
+    responder = (url, init) => { if (url.endsWith("/status")) { saved = { ...saved, ...JSON.parse(String(init?.body)) }; return Response.json(saved); } };
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Unsaved title");
+    await change("Task tags (comma-separated)", "unsaved-tag"); await change("Knowledge item ID", "unsaved-link");
+    await change("Task status", "doing"); await click("Save status");
+    expect(writes).toHaveLength(1); expect(writes[0]!.body).toEqual({ status: "doing" });
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Unsaved title");
+    expect((container.querySelector('[aria-label="Task tags (comma-separated)"]') as HTMLInputElement).value).toBe("unsaved-tag");
+    expect((container.querySelector('[aria-label="Knowledge item ID"]') as HTMLInputElement).value).toBe("unsaved-link");
+    await click("Close task editor"); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+  });
+  it("clears only acknowledged fields and preserves another draft through GET-only recovery", async () => {
+    let failRead = false;
+    responder = (url, init) => {
+      if (init?.method === "PATCH") { saved = { ...saved, ...JSON.parse(String(init.body)) }; failRead = true; return Response.json(saved); }
+      if (url === "/api/tasks/task-alpha" && !init?.method && failRead) return Response.json({}, { status: 500 });
+    };
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Saved title"); await change("Task progress", "45");
+    await click("Save task"); expect(writes).toHaveLength(1);
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true);
+    failRead = false; await click("Reload task details");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Saved title");
+    expect((container.querySelector('[aria-label="Task progress"]') as HTMLInputElement).value).toBe("45");
+    expect(writes).toHaveLength(1); await click("Close task editor"); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+  });
+  it("removes dirty protection after the only edited fields are saved", async () => {
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Saved"); await click("Save task");
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(false);
+    await click("Close task editor"); expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(writes).toHaveLength(1);
+  });
+  it("invalidates an old confirmation callback even when reopening the unchanged draft", async () => {
+    await mount(); await click("New task"); await change("Task title", "Same draft"); await click("Close task editor");
+    const confirm = container.querySelector('[data-confirm-action]')!;
+    const key = Object.keys(confirm).find(value => value.startsWith("__reactProps$"))!;
+    const stale = (confirm as unknown as Record<string, { onClick: () => void }>)[key]!.onClick;
+    await click("Keep editing"); await click("Close task editor"); await act(async () => stale());
+    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull(); expect(writes).toHaveLength(0);
+    await click("Discard changes"); expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("keeps unknown outcomes locked rather than offering to discard", async () => {
+    responder = (_url, init) => init?.method === "PATCH" ? Promise.reject(new TypeError("offline")) : undefined;
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task title", "Unknown"); await click("Save task");
+    await act(async () => container.querySelector('[role="dialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(container.textContent).toContain("The write result is unknown");
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload); expect(unload.defaultPrevented).toBe(true); expect(writes).toHaveLength(1);
   });
   it("accepts the backend's Unicode character limits without counting surrogate pairs twice", async () => {
     await mount(); await click("New task"); await change("Task title", "🌱".repeat(200)); await click("Create task");

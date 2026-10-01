@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Button } from "../../components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "../../components/ui/sheet";
@@ -9,7 +10,8 @@ import { addTaskLink, createTask, loadTaskDetail, removeTaskLink, replaceTaskTag
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
 
 type Fields = { title: string; notes: string; priority: string; dueAt: string };
-type Intent = { write: () => Promise<unknown> };
+type Draft = { fields: Fields; tags: string; status: TaskItem["status"]; progress: string; knowledgeId: string };
+type Intent = { write: () => Promise<unknown>; clean?: (keyof Draft)[]; acceptedDraft?: Draft };
 const blank: Fields = { title: "", notes: "", priority: "medium", dueAt: "" };
 const transitions: Record<TaskItem["status"], TaskItem["status"][]> = {
   todo: ["todo", "doing", "done", "canceled"], doing: ["doing", "todo", "blocked", "done", "canceled"],
@@ -38,7 +40,18 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
   const active = useRef(true); const gate = useRef(false); const intent = useRef<Intent | null>(null);
   const readController = useRef<AbortController | null>(null); const generation = useRef(0);
   const callbacks = useRef({ onChanged, onDenied, onClose }); callbacks.current = { onChanged, onDenied, onClose };
-  const locked = busy || unknown;
+  const [discardDecision, setDiscardDecision] = useState<{ snapshot: string } | null>(null);
+  const discardRef = useRef<typeof discardDecision>(null);
+  const baseline = useRef<Draft>({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "" });
+  const currentDraft = useRef<Draft>(baseline.current);
+  currentDraft.current = { fields, tags, status, progress, knowledgeId };
+  const snapshot = JSON.stringify([taskId, currentDraft.current]);
+  const dirty = JSON.stringify(currentDraft.current) !== JSON.stringify(baseline.current);
+  const confirmingDiscard = discardDecision !== null && discardDecision.snapshot === snapshot && !busy && !unknown;
+  const locked = busy || unknown || confirmingDiscard;
+  const cancelDiscard = () => { discardRef.current = null; setDiscardDecision(null); };
+  useEffect(() => { if (discardDecision !== null && !confirmingDiscard) cancelDiscard(); }, [discardDecision, confirmingDiscard]);
+  useEffect(() => () => { discardRef.current = null; }, []);
   const denied = (cause: unknown) => {
     if (!(cause instanceof ApiRequestError) || (cause.status !== 401 && cause.status !== 403)) return false;
     readController.current?.abort(); generation.current += 1;
@@ -51,8 +64,14 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     try {
       const next = await loadTaskDetail(taskId, fetch, controller.signal);
       if (!active.current || controller.signal.aborted || version !== generation.current) return;
-      setDetail(next); setFields({ title: next.task.title, notes: next.task.notes, priority: next.task.priority, dueAt: localTaskDate(next.task.dueAt) });
-      setTags(next.tags.join(", ")); setStatus(next.task.status); setProgress(String(next.task.progress)); setKnowledgeId("");
+      const loaded: Draft = { fields: { title: next.task.title, notes: next.task.notes, priority: next.task.priority, dueAt: localTaskDate(next.task.dueAt) },
+        tags: next.tags.join(", "), status: next.task.status, progress: String(next.task.progress), knowledgeId: "" };
+      // A subform write/readback must not erase drafts belonging to other subforms.
+      const merged = Object.fromEntries((Object.keys(loaded) as (keyof Draft)[]).map(key => [key,
+        JSON.stringify(currentDraft.current[key]) !== JSON.stringify(baseline.current[key]) ? currentDraft.current[key] : loaded[key],
+      ])) as Draft;
+      baseline.current = loaded; currentDraft.current = merged;
+      setDetail(next); setFields(merged.fields); setTags(merged.tags); setStatus(merged.status); setProgress(merged.progress); setKnowledgeId(merged.knowledgeId);
     } catch (cause) {
       if (!active.current || controller.signal.aborted || version !== generation.current) return;
       if (!denied(cause)) setReadError(true);
@@ -64,20 +83,23 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     // The route keys this component by member and task, so each mount has one target.
   }, [taskId]);
   useEffect(() => {
-    if (!locked) return;
+    if (!locked && !dirty) return;
     const preventUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", preventUnload);
     return () => window.removeEventListener("beforeunload", preventUnload);
-  }, [locked]);
+  }, [locked, dirty]);
 
   async function perform(next: Intent, retry = false) {
-    if (gate.current || (intent.current && !retry)) return;
+    if (discardRef.current !== null || gate.current || (intent.current && !retry)) return;
+    if (!retry) next = { ...next, acceptedDraft: currentDraft.current };
     gate.current = true; intent.current = next; setBusy(true); setError(false);
     let confirmed = false;
     try {
       await next.write();
       if (!active.current) return;
       confirmed = true; intent.current = null; setUnknown(false);
+      // Only an acknowledged write advances the submitted subform's baseline.
+      baseline.current = { ...baseline.current, ...Object.fromEntries((next.clean ?? []).map(key => [key, next.acceptedDraft![key]])) };
     } catch (cause) {
       if (!active.current) return;
       if (denied(cause)) return;
@@ -102,16 +124,24 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     // Preserve the exact original instant (including milliseconds and DST ambiguity) if unchanged.
     const dueAt = detail && fields.dueAt === localTaskDate(detail.task.dueAt) ? detail.task.dueAt : date?.toISOString() ?? null;
     const patch = { title, notes, priority: fields.priority, dueAt };
-    if (taskId) void perform({ write: () => updateTask(taskId, patch) });
-    else { const input = { ...patch, id: crypto.randomUUID() }; void perform({ write: () => createTask(input) }); }
+    if (taskId) void perform({ clean: ["fields"], write: () => updateTask(taskId, patch) });
+    else { const input = { ...patch, id: crypto.randomUUID() }; void perform({ clean: ["fields"], write: () => createTask(input) }); }
   }
   function saveTags() {
     if (!taskId || locked) return;
     const next = [...new Set(tags.split(",").map((tag) => tag.trim()).filter(Boolean))];
     if (next.length > 10 || next.some((tag) => [...tag].length > 32 || /[\u0000-\u001f\u007f-\u009f]/u.test(tag))) { setError(true); return; }
-    void perform({ write: () => replaceTaskTags(taskId, next) });
+    void perform({ clean: ["tags"], write: () => replaceTaskTags(taskId, next) });
   }
-  const close = () => { if (!gate.current && !intent.current) callbacks.current.onClose(); };
+  const close = () => {
+    if (gate.current || intent.current || discardRef.current !== null) return;
+    if (!dirty) { callbacks.current.onClose(); return; }
+    const decision = { snapshot }; discardRef.current = decision; setDiscardDecision(decision);
+  };
+  const discard = () => {
+    if (!active.current || !confirmingDiscard || discardRef.current !== discardDecision || gate.current || intent.current) return;
+    cancelDiscard(); callbacks.current.onClose();
+  };
   const content = <div className="space-y-4" aria-busy={busy || reading}>
     {busy && <p role="status">{t("TASKS_SAVING")}</p>}
     {unknown && <div role="alert"><p>{t("TASKS_WRITE_UNKNOWN")}</p><Button disabled={busy} onClick={() => { if (intent.current) void perform(intent.current, true); }}>{t("TASKS_RETRY_WRITE")}</Button></div>}
@@ -126,11 +156,11 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
         <Button type="submit" disabled={locked}>{t(taskId ? "TASKS_SAVE" : "TASKS_CREATE")}</Button>
       </form>
       {taskId && detail && <>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = status; void perform({ write: () => setTaskStatus(taskId, next) }); } }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = status; void perform({ clean: ["status"], write: () => setTaskStatus(taskId, next) }); } }}>
           <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => setStatus(event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_STATUS")}</Button>
         </form>
-        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ write: () => setTaskProgress(taskId, next) }); }}>
+        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], write: () => setTaskProgress(taskId, next) }); }}>
           <label>{t("TASKS_FIELD_PROGRESS")}<Input type="number" min={0} max={100} step={1} required aria-label={t("TASKS_FIELD_PROGRESS")} value={progress} disabled={locked || ["done", "canceled"].includes(detail.task.status)} onChange={(event) => setProgress(event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || ["done", "canceled"].includes(detail.task.status)}>{t("TASKS_SAVE_PROGRESS")}</Button>
         </form>
@@ -138,7 +168,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
           <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => setTags(event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_TAGS")}</Button>
         </form>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = knowledgeId.trim(); if (!locked && id) void perform({ write: () => addTaskLink(taskId, id) }); }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], write: () => addTaskLink(taskId, id) }); }}>
           <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => setKnowledgeId(event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
@@ -147,7 +177,13 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     </>}
     <Button variant="outline" disabled={locked} onClick={close}>{t("TASKS_CLOSE")}</Button>
   </div>;
-  return taskId
+  const editor = taskId
     ? <Sheet open onOpenChange={(open) => { if (!open) close(); }}><SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl" aria-labelledby="task-editor-heading"><SheetTitle id="task-editor-heading" className="mb-4">{t("TASKS_EDIT")}</SheetTitle>{content}</SheetContent></Sheet>
     : <Dialog open onOpenChange={(open) => { if (!open) close(); }}><DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto" aria-labelledby="task-editor-heading"><DialogTitle id="task-editor-heading" className="mb-4">{t("TASKS_NEW")}</DialogTitle>{content}</DialogContent></Dialog>;
+  return <><div inert={confirmingDiscard} aria-hidden={confirmingDiscard || undefined}>{editor}</div>
+    <ConfirmAction open={confirmingDiscard} title={t("TASKS_DISCARD_TITLE")}
+      description={`${fields.title.trim() || t("TASKS_NEW")}${taskId ? ` (${taskId})` : ""}. ${t("TASKS_DISCARD_IMPACT")}`}
+      cancelLabel={t("TASKS_KEEP_EDITING")} confirmLabel={t("TASKS_DISCARD_CONFIRM")}
+      onCancel={cancelDiscard} onConfirm={discard} />
+  </>;
 }
