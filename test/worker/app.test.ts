@@ -905,6 +905,25 @@ describe("Worker application", () => {
     expectProtectedResponse(stylesheet);
   });
 
+  it("keeps VM diagnostic permissions out of application shells and emitted entries", async () => {
+    const policy = "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'";
+    const manifest = await (await SELF.fetch("https://example.test/manifest.json")).json() as Record<string, { isEntry?: boolean; file: string }>;
+    const entries = Object.values(manifest).filter(entry => entry.isEntry);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const path of ["/", "/environments", "/knowledge/example", ...entries.map(entry => `/${entry.file}`)]) {
+      const page = await SELF.fetch(`https://example.test${path}`);
+      expect(page.status, path).toBe(200);
+      expect(page.headers.get("content-security-policy"), path).toBe(policy);
+      expect(page.headers.get("x-frame-options"), path).toBe("DENY");
+      expect(page.headers.get("x-content-type-options"), path).toBe("nosniff");
+      expect(page.headers.get("referrer-policy"), path).toBe("no-referrer");
+      // Pin the current baseline; future isolation changes require separate compatibility review.
+      expect(page.headers.get("cross-origin-opener-policy"), path).toBeNull();
+      expect(page.headers.get("cross-origin-embedder-policy"), path).toBeNull();
+      await page.arrayBuffer();
+    }
+  });
+
   it("serves the SPA for direct Notifications and Messages refreshes", async () => {
     for (const path of ["/notifications", "/messages", "/messages/thread-1"]) {
       const page = await SELF.fetch(`https://example.test${path}`);

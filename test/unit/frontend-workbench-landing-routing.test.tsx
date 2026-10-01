@@ -98,6 +98,28 @@ describe("public knowledge studio authentication boundary", () => {
     } finally { await app.unmount(); }
   });
 
+  it("keeps deep-link GitHub login as same-tab navigation without a popup or connector call", async () => {
+    let popupCalls = 0;
+    const calls: string[] = [];
+    const app = await mountApp({ url: "https://app.test/environments", configureBrowser: browser => {
+      browser.open = (() => { popupCalls += 1; return null; }) as typeof browser.open;
+    }, fetch: async input => {
+      const path = String(input); calls.push(path);
+      if (path === "/api/session") return errorResponse(401, "AUTH_REQUIRED");
+      if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      throw new Error(`UNEXPECTED_REQUEST:${path}`);
+    } });
+    try {
+      await waitForApp(() => Boolean(app.container.querySelector("[data-login-page]")));
+      const button = app.container.querySelector<HTMLButtonElement>("[data-login-page] button");
+      expect(button).not.toBeNull();
+      await act(async () => button!.click());
+      expect(app.browser.location.href).toBe("https://app.test/auth/github");
+      expect(popupCalls).toBe(0);
+      expect(calls.every(path => ["/api/session", "/api/telemetry/pageview"].includes(path))).toBe(true);
+    } finally { await app.unmount(); }
+  });
+
   it("keeps anonymous deep links on the existing login page", async () => {
     const app = await mountApp({ url: "https://app.test/knowledge/example", fetch: async (input) => {
       if (String(input) === "/api/session") return errorResponse(401, "AUTH_REQUIRED");

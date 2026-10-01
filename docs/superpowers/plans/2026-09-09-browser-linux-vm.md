@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
+### 2026-10-01 policy and OAuth local regression slice
+
+- [x] 固定正式Worker首页/环境页/知识深链及输出JS入口的现有CSP与安全头基线，防止诊断页wasm/blob Worker/外连权限混入全站；没有修改生产策略。
+- [x] 独立诊断服务同源连接、无CORS权限与Worker/wasm策略回归；真实App DOM点击登录确认当前页导航且不调用弹窗/连接器，OAuth服务端既有回调/状态/会话回归通过。
+- [x] 7文件181/181、诊断12/12、完整快速VM617/617及类型检查通过；收据 `design/browser-vm/2026-10-01-policy-auth-regression.json`。测试使用模拟OAuth提供者，没有重试真实GitHub。
+- [ ] VM-035正式浏览器CSP执行、Worker/WSS兼容及真实认证往返仍缺；当前产品并无OAuth弹窗实现，不虚报弹窗验收。VM-034/035、D04/G0保持开放；可继续独立本地项，正式运行接线仍须G0。
+
 ### 2026-10-01 build isolation local slice
 
 - [x] 保留既有构建审计及23项回归：实际Vite eager/lazy夹具、入口静态闭包、模块来源/摘要/边校验、重命名/压缩镜像及路径/符号链接反例通过。

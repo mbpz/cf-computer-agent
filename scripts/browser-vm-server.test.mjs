@@ -181,3 +181,18 @@ test('checkpoint failure matrix is opt-in and cannot expose source or accept cro
  }
  assert.equal((await fetch(server.url+'/frontend/features/environments/storage/checkpoints.mjs')).status,404);
 });
+
+// Characterization of the local diagnostic boundary, not browser CSP enforcement.
+test('VM-only Worker and wasm permissions remain bounded to the diagnostic server', async t => {
+ const server = await fixture(t, { iso: true, runtimeOwner: true });
+ const base = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
+ for (const path of ['/', '/runtime-owner.html', '/terminal-worker.mjs']) {
+  const response = await fetch(server.url + path);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-security-policy'), base + (path === '/runtime-owner.html' ? "; style-src 'self';" : ''));
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  await response.arrayBuffer();
+ }
+});

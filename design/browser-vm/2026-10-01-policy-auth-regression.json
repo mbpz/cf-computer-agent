@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-01",
+  "baseline": "e00d883",
+  "scope": "VM-035 local policy and existing OAuth compatibility characterization",
+  "status": "local-verified; native browser and formal integration not accepted",
+  "changes": [
+    "Worker HTTP regression pins CSP, frame/referrer/content-type and existing isolation-header baseline on root, environments, knowledge deep link and all emitted JS entries",
+    "Loopback diagnostic regression pins wasm/Worker permissions and same-origin connect policy without adding CORS",
+    "Real App React DOM regression clicks anonymous environment login and verifies same-tab /auth/github navigation, no popup and no connector API calls"
+  ],
+  "verification": {
+    "authAndFrontend": {
+      "command": "npx vitest run test/worker/app.test.ts test/worker/m1-api.test.ts test/unit/github-oauth.test.ts test/unit/session.test.ts test/unit/automation.test.ts test/unit/frontend-login.test.tsx test/unit/frontend-workbench-landing-routing.test.tsx",
+      "files": 7,
+      "passed": 181,
+      "failed": 0
+    },
+    "diagnostic": {
+      "command": "node --test scripts/browser-vm-server.test.mjs",
+      "passed": 12,
+      "failed": 0
+    },
+    "vm": {
+      "command": "npm run test:browser-vm",
+      "passed": 617,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0
+    }
+  },
+  "interpretation": [
+    "Regression-only change for existing behavior, not new production feature implementation",
+    "Actual Worker/D1 and emitted assets tested locally; GitHub OAuth provider responses are test doubles",
+    "App login currently navigates the current tab: no OAuth popup implementation is claimed",
+    "Header equality and DOM tests do not prove native CSP enforcement or actual Worker/WSS browser interoperability"
+  ],
+  "remaining": [
+    "G0-controlled formal VM integration and real browser Worker/WSS enforcement",
+    "Real authenticated account/provider round trip on default browser configuration",
+    "Complete VM-034 initial-network trace and release acceptance",
+    "VM-035, D04 and G0 remain open"
+  ],
+  "boundaries": {
+    "productionCodeChanged": false,
+    "securityPolicyChanged": false,
+    "remoteOAuthRequested": false,
+    "githubRetried": false,
+    "previewTabChanged": false,
+    "push": false,
+    "deployment": false,
+    "migration": false,
+    "secretsRead": false
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24
+  }
+}
