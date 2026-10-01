@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PERMISSION_BITS, capabilitiesForMask, hasPermission, parsePermissionMask, type PermissionKey } from "../../../src/authorization/permission-bitmap";
+import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -32,14 +33,16 @@ function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember,
   const [mask, setMask] = useState(initialMask);
   useEffect(() => setMask(parsePermissionMask(selected.allowBits)), [roles, selected.id, selected.allowBits]);
   const locked = saving || writeBlocked;
-  const selectRole = (id: string) => {
+  const switchRole = (id: string) => {
     const next = roles.find((role) => role.id === id);
-    if (!next) return;
+    if (!next || locked) return;
     setSelectedId(id);
+    setMemberId("");
     setMask(parsePermissionMask(next.allowBits));
     onSelect?.(id);
   };
   const toggle = (key: PermissionKey) => {
+    if (locked || selected.isSystem) return;
     const bit = PERMISSION_BITS[key];
     setMask((current) => hasPermission(current, bit) ? current & ~(1n << BigInt(bit)) : current | (1n << BigInt(bit)));
   };
@@ -48,13 +51,68 @@ function RoleEditor({ roles, locale, onSelect, onSave, onCreate, onAssignMember,
   const [newMask, setNewMask] = useState("0x0");
   const [memberId, setMemberId] = useState("");
   const assignedMemberIds = selected.assignedMemberIds ?? [];
-  return <section className="space-y-6">
+  const dirtyPermissions = mask !== initialMask;
+  type Action = { kind: "save" } | { kind: "assign" | "unassign"; memberId: string } | { kind: "switch"; nextId: string };
+  type Confirmation = { action: Action; roles: typeof roles; role: AdminRole; mask: bigint; memberDraft: string };
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const confirmationRef = useRef<Confirmation | null>(null);
+  const mounted = useRef(false);
+  const latestDraft = useRef({ roleId: selected.id, memberId });
+  useEffect(() => { latestDraft.current = { roleId: selected.id, memberId }; }, [selected.id, memberId]);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; confirmationRef.current = null; }; }, []);
+  const validConfirmation = !!(confirmation && !locked && roles === confirmation.roles && selected === confirmation.role
+    && mask === confirmation.mask && memberId === confirmation.memberDraft);
+  const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };
+  useEffect(() => { if (confirmation && !validConfirmation) cancelConfirmation(); }, [confirmation, validConfirmation]);
+  const requestConfirmation = (action: Action) => {
+    if (locked || confirmationRef.current) return;
+    if (action.kind !== "switch" && selected.isSystem) return;
+    if ((action.kind === "assign" || action.kind === "unassign") && dirtyPermissions) return;
+    if (action.kind === "save" && !onSave) return;
+    if (action.kind === "assign" && (!onAssignMember || !action.memberId || assignedMemberIds.includes(action.memberId))) return;
+    if (action.kind === "unassign" && (!onUnassignMember || !assignedMemberIds.includes(action.memberId))) return;
+    const next = { action, roles, role: selected, mask, memberDraft: memberId };
+    confirmationRef.current = next; setConfirmation(next);
+  };
+  const selectRole = (id: string) => {
+    if (locked || confirmationRef.current || id === selected.id || !roles.some(role => role.id === id)) return;
+    if (dirtyPermissions || memberId.trim()) requestConfirmation({ kind: "switch", nextId: id });
+    else switchRole(id);
+  };
+  const confirmAction = async () => {
+    if (!validConfirmation || !confirmation || confirmationRef.current !== confirmation) return;
+    const { action, role, mask: confirmedMask, memberDraft } = confirmation;
+    // Consume the confirmation synchronously before the route admits the write.
+    cancelConfirmation();
+    if (action.kind === "switch") switchRole(action.nextId);
+    else if (action.kind === "save") onSave?.(role, `0x${confirmedMask.toString(16)}`);
+    else if (action.kind === "unassign") void onUnassignMember?.(role, action.memberId);
+    else if (await onAssignMember?.(role, action.memberId) === true && mounted.current
+      && latestDraft.current.roleId === role.id && latestDraft.current.memberId === memberDraft) setMemberId("");
+  };
+  const action = confirmation?.action;
+  const confirmationTitle = frontendText(locale, action?.kind === "switch" ? "ADMIN_ROLES_DISCARD_TITLE"
+    : action?.kind === "assign" ? "ADMIN_ROLES_ASSIGN_CONFIRM_TITLE" : action?.kind === "unassign" ? "ADMIN_ROLES_UNASSIGN_CONFIRM_TITLE" : "ADMIN_ROLES_SAVE_CONFIRM_TITLE");
+  const permissionNames = (value: bigint) => capabilitiesForMask(value).map(key => frontendText(locale, permissionLabelKey(key))).join(", ") || frontendText(locale, "ADMIN_ROLES_NO_PERMISSION_CHANGE");
+  const added = mask & ~initialMask;
+  const removed = initialMask & ~mask;
+  const confirmationDescription = action?.kind === "switch"
+    ? `${selected.name} → ${roles.find(role => role.id === action.nextId)?.name || action.nextId}. ${frontendText(locale, "ADMIN_ROLES_DISCARD_IMPACT")}`
+    : action?.kind === "assign" || action?.kind === "unassign"
+      ? `${selected.name} · ${action.memberId}. ${frontendText(locale, action.kind === "assign" ? "ADMIN_ROLES_ASSIGN_IMPACT" : "ADMIN_ROLES_UNASSIGN_IMPACT")}`
+      : `${selected.name} · ${selected.memberCount} ${frontendText(locale, "ADMIN_ROLES_MEMBERS")}. ${frontendText(locale, "ADMIN_ROLES_SAVE_IMPACT")} ${selected.allowBits} → 0x${mask.toString(16)}. ${frontendText(locale, "ADMIN_ROLES_ADDED_PERMISSIONS")}: ${permissionNames(added)}. ${frontendText(locale, "ADMIN_ROLES_REMOVED_PERMISSIONS")}: ${permissionNames(removed)}.`;
+
+  return <><section className="space-y-6" inert={validConfirmation} aria-hidden={validConfirmation || undefined}>
     <div><p className="text-sm font-medium text-primary">{frontendText(locale, "ADMIN_EYEBROW")}</p><h1 className="mt-2 text-2xl font-semibold">{frontendText(locale, "ADMIN_ROLES_TITLE")}</h1><p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DESCRIPTION")}</p></div>
     <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
-      <Card><CardHeader><CardTitle className="text-sm">{frontendText(locale, "ADMIN_ROLES_LIST")}</CardTitle></CardHeader><CardContent className="space-y-1 p-2">{roles.map((role) => <button key={role.id} type="button" onClick={() => selectRole(role.id)} className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${role.id === selected.id ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"}`}><span><span className="block font-medium">{role.name}</span><span className="text-xs text-muted-foreground">{role.memberCount} {frontendText(locale, "ADMIN_ROLES_MEMBERS")}</span></span>{role.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_ROLES_SYSTEM")}</Badge>}</button>)}<div className="mt-3 space-y-2 border-t p-2"><p className="text-xs font-medium">{frontendText(locale, "ADMIN_ROLES_CREATE")}</p><Input disabled={locked} className="h-8" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_KEY_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_KEY")} /><Input disabled={locked} className="h-8" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_NAME_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_NAME")} /><Input disabled={locked} className="h-8" value={newMask} onChange={(event) => setNewMask(event.target.value)} placeholder="0x0" aria-label={frontendText(locale, "ADMIN_ROLES_MASK")} /><Button type="button" size="sm" disabled={locked || !newKey || !newName} onClick={async () => { if (await onCreate?.({ key: newKey, name: newName, allowBits: newMask }) === true) { setNewKey(""); setNewName(""); setNewMask("0x0"); } }}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button></div></CardContent></Card>
-      <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{selected.name}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{selected.description || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</p></div><code className="rounded bg-muted px-2 py-1 text-xs">0x{mask.toString(16)}</code></div></CardHeader><CardContent className="space-y-6">{groups.map((group) => { const selectedCount = group.keys.filter((key) => hasPermission(mask, PERMISSION_BITS[key])).length; return <fieldset key={group.labelKey} className="space-y-3"><legend className="flex items-center gap-2 text-sm font-semibold"><span>{frontendText(locale, group.labelKey)}</span><span className="text-xs font-normal text-muted-foreground">{selectedCount}/{group.keys.length} {frontendText(locale, "ADMIN_ROLES_SELECTED")}</span></legend><div className="grid gap-2 sm:grid-cols-2">{group.keys.map((key) => <label key={key} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors has-[:checked]:border-primary/60 has-[:checked]:bg-primary/5"><Checkbox checked={hasPermission(mask, PERMISSION_BITS[key])} onChange={() => toggle(key)} disabled={selected.isSystem || locked} aria-label={frontendText(locale, permissionLabelKey(key))} /><span className="min-w-0"><span className="block truncate">{frontendText(locale, permissionLabelKey(key))}</span><code className="text-[10px] text-muted-foreground">{key}</code></span></label>)}</div></fieldset>; })}<fieldset className="space-y-3 border-t pt-5"><legend className="text-sm font-semibold">{frontendText(locale, "ADMIN_ROLES_ASSIGNED_MEMBERS")}</legend><div className="flex flex-wrap gap-2">{assignedMemberIds.length ? assignedMemberIds.map((id) => <span key={id} className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs"><code>{id}</code>{!selected.isSystem && <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" disabled={locked} onClick={() => onUnassignMember?.(selected, id)}>{frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER")}</Button>}</span>) : <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_NO_ASSIGNED_MEMBERS")}</p>}</div>{!selected.isSystem && <div className="flex flex-col gap-2 sm:flex-row"><Input disabled={locked} value={memberId} onChange={(event) => setMemberId(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_MEMBER_ID_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_ASSIGNED_MEMBERS")} /><Button type="button" disabled={locked || !memberId.trim()} onClick={async () => { const id = memberId.trim(); if (await onAssignMember?.(selected, id) === true) setMemberId(""); }}>{frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER")}</Button></div>}</fieldset>{saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}<Button type="button" disabled={selected.isSystem || locked} onClick={() => onSave?.(selected, `0x${mask.toString(16)}`)}>{saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE")}</Button></CardContent></Card>
+      <Card><CardHeader><CardTitle className="text-sm">{frontendText(locale, "ADMIN_ROLES_LIST")}</CardTitle></CardHeader><CardContent className="space-y-1 p-2">{roles.map((role) => <button key={role.id} type="button" disabled={locked} onClick={() => selectRole(role.id)} className={`flex w-full items-start justify-between rounded-md px-3 py-2 text-left text-sm ${role.id === selected.id ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"}`}><span><span className="block font-medium">{role.name}</span><span className="text-xs text-muted-foreground">{role.memberCount} {frontendText(locale, "ADMIN_ROLES_MEMBERS")}</span></span>{role.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_ROLES_SYSTEM")}</Badge>}</button>)}<div className="mt-3 space-y-2 border-t p-2"><p className="text-xs font-medium">{frontendText(locale, "ADMIN_ROLES_CREATE")}</p><Input disabled={locked} className="h-8" value={newKey} onChange={(event) => setNewKey(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_KEY_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_KEY")} /><Input disabled={locked} className="h-8" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_NAME_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_NAME")} /><Input disabled={locked} className="h-8" value={newMask} onChange={(event) => setNewMask(event.target.value)} placeholder="0x0" aria-label={frontendText(locale, "ADMIN_ROLES_MASK")} /><Button type="button" size="sm" disabled={locked || !newKey || !newName} onClick={async () => { if (await onCreate?.({ key: newKey, name: newName, allowBits: newMask }) === true) { setNewKey(""); setNewName(""); setNewMask("0x0"); } }}>{frontendText(locale, "ADMIN_ROLES_CREATE")}</Button></div></CardContent></Card>
+      <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{selected.name}</CardTitle><p className="mt-1 text-sm text-muted-foreground">{selected.description || frontendText(locale, "COMMON_VALUE_UNAVAILABLE")}</p></div><code className="rounded bg-muted px-2 py-1 text-xs">0x{mask.toString(16)}</code></div></CardHeader><CardContent className="space-y-6">{groups.map((group) => { const selectedCount = group.keys.filter((key) => hasPermission(mask, PERMISSION_BITS[key])).length; return <fieldset key={group.labelKey} className="space-y-3"><legend className="flex items-center gap-2 text-sm font-semibold"><span>{frontendText(locale, group.labelKey)}</span><span className="text-xs font-normal text-muted-foreground">{selectedCount}/{group.keys.length} {frontendText(locale, "ADMIN_ROLES_SELECTED")}</span></legend><div className="grid gap-2 sm:grid-cols-2">{group.keys.map((key) => <label key={key} className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors has-[:checked]:border-primary/60 has-[:checked]:bg-primary/5"><Checkbox checked={hasPermission(mask, PERMISSION_BITS[key])} onChange={() => toggle(key)} disabled={selected.isSystem || locked} aria-label={frontendText(locale, permissionLabelKey(key))} /><span className="min-w-0"><span className="block truncate">{frontendText(locale, permissionLabelKey(key))}</span><code className="text-[10px] text-muted-foreground">{key}</code></span></label>)}</div></fieldset>; })}<fieldset className="space-y-3 border-t pt-5">{dirtyPermissions && <p role="status" className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP")}</p>}<legend className="text-sm font-semibold">{frontendText(locale, "ADMIN_ROLES_ASSIGNED_MEMBERS")}</legend>{dirtyPermissions && <p role="status" className="text-xs text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_DIRTY_MEMBERSHIP")}</p>}<div className="flex flex-wrap gap-2">{assignedMemberIds.length ? assignedMemberIds.map((id) => <span key={id} className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1 text-xs"><code>{id}</code>{!selected.isSystem && <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" disabled={locked || dirtyPermissions || !onUnassignMember} onClick={() => requestConfirmation({ kind: "unassign", memberId: id })}>{frontendText(locale, "ADMIN_ROLES_UNASSIGN_MEMBER")}</Button>}</span>) : <p className="text-sm text-muted-foreground">{frontendText(locale, "ADMIN_ROLES_NO_ASSIGNED_MEMBERS")}</p>}</div>{!selected.isSystem && <div className="flex flex-col gap-2 sm:flex-row"><Input disabled={locked} value={memberId} onChange={(event) => setMemberId(event.target.value)} placeholder={frontendText(locale, "ADMIN_ROLES_MEMBER_ID_PLACEHOLDER")} aria-label={frontendText(locale, "ADMIN_ROLES_ASSIGNED_MEMBERS")} /><Button type="button" disabled={locked || dirtyPermissions || !onAssignMember || !memberId.trim() || assignedMemberIds.includes(memberId.trim())} onClick={() => requestConfirmation({ kind: "assign", memberId: memberId.trim() })}>{frontendText(locale, "ADMIN_ROLES_ASSIGN_MEMBER")}</Button></div>}</fieldset>{saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}<Button type="button" disabled={selected.isSystem || locked || !onSave} onClick={() => requestConfirmation({ kind: "save" })}>{saving ? frontendText(locale, "ADMIN_ROLES_SAVING") : frontendText(locale, "ADMIN_ROLES_SAVE")}</Button></CardContent></Card>
     </div>
-  </section>;
+  </section><ConfirmAction open={validConfirmation} title={confirmationTitle} description={confirmationDescription}
+    cancelLabel={frontendText(locale, "COMMON_CANCEL")}
+    confirmLabel={frontendText(locale, action?.kind === "switch" ? "ADMIN_ROLES_DISCARD_CONFIRM" : "ADMIN_ROLES_APPLY_CONFIRM")}
+    destructive={action?.kind === "switch" || action?.kind === "unassign" || (action?.kind === "save" && removed !== 0n)}
+    onCancel={cancelConfirmation} onConfirm={() => { void confirmAction(); }} /></>;
 }
 
 function permissionLabelKey(key: PermissionKey): string {
