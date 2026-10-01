@@ -51,3 +51,19 @@ test('scheduled saves run only while a personal instance is live',async t=>{
  await runtime.start(environment);const deadline=Date.now()+1000;while(!saves&&Date.now()<deadline)await new Promise(r=>setTimeout(r,5));assert.ok(saves>0);
  await runtime.stop();const stopped=saves;await new Promise(r=>setTimeout(r,35));assert.equal(saves,stopped);
 });
+
+test('explicit previous revision restores selected bytes while subsequent save CAS advances from newest head',async t=>{
+ const calls=[];const a=fixture(t,options=>{calls.push(options);return session();});
+ const item=text=>sealCheckpoint(new TextEncoder().encode(text).buffer,identity);
+ await a.store.save(environment,await item('old'),{expectedRevision:0});await a.store.save(environment,await item('latest'),{expectedRevision:1});
+ await a.runtime.start(environment,{restore:true,revision:1});
+ assert.equal(new TextDecoder().decode(calls[0].checkpoint.state),'old');assert.equal(a.runtime.getSnapshot().restoredRevision,1);
+ assert.equal((await a.runtime.save()).revision,3);await a.runtime.stop();
+});
+test('invalid or evicted recovery selection never falls back to latest or a fresh boot',async t=>{
+ let boots=0;const a=fixture(t,()=>{boots++;return session();});
+ for(const revision of [0,-1,1.5,'1',NaN,Number.MAX_SAFE_INTEGER]) await assert.rejects(a.runtime.start(environment,{restore:true,revision}),/INVALID_RESTORE/);
+ await assert.rejects(a.runtime.start(environment,{revision:1}),/INVALID_RESTORE/);
+ await a.store.save(environment,await record(),{expectedRevision:0});await a.store.save(environment,await record(),{expectedRevision:1});await a.store.save(environment,await record(),{expectedRevision:2});
+ await assert.rejects(a.runtime.start(environment,{restore:true,revision:1}),/CHECKPOINT_NOT_FOUND|CHECKPOINT_RESTORE_FAILED/);await a.runtime.stop();assert.equal(boots,0);
+});

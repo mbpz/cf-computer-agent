@@ -41,6 +41,12 @@ test('real Alpine: persist full checkpoint, destroy Worker/account, restore root
  const second=pair();await second.runtime.start(environment,{restore:true});
  assert.equal((await second.runtime.file({op:'readText',path:'/persisted.txt'})).text,'shared survives');
  await second.runtime.write("cat /root/persisted.txt; printf '\\nRESTORED-OK\\n'; cat /etc/alpine-release\n");await until(second.runtime,/root survives\r?\nRESTORED-OK\r?\n3\.24\.1/);
- assert.equal((await second.runtime.save()).revision,2);await second.runtime.stop();assert.equal(workers.length,2);assert.equal(workers.every(w=>w.exited),true);
- console.log(JSON.stringify({realAlpine:true,rootAndSharedFilesRestored:true,newWorkerAndOwner:true,offline:true,checkpointBytes:receipt.bytes,checkpoints:2,workersExited:2,indexedDB:'fake-indexeddb boundary, not native browser acceptance',productionAcceptance:false}));
+ await second.runtime.write("printf 'newer shared' > /mnt/work/persisted.txt; printf 'newer root' > /root/persisted.txt; printf '\nNEWER-OK\n'\n");await until(second.runtime,/\r?\nNEWER-OK\r?\n/);
+ assert.equal((await second.runtime.save()).revision,2);await second.runtime.stop();second.owner.dispose();second.checkpoints.close();
+ const third=pair();assert.deepEqual((await third.checkpoints.list(environment)).map(x=>x.revision),[2,1]);await third.runtime.start(environment,{restore:true,revision:1});
+ assert.equal((await third.runtime.file({op:'readText',path:'/persisted.txt'})).text,'shared survives');
+ await third.runtime.write("cat /root/persisted.txt; printf '\nPREVIOUS-RESTORED-OK\n'\n");await until(third.runtime,/root survives\r?\nPREVIOUS-RESTORED-OK/);
+ assert.equal(third.runtime.getSnapshot().restoredRevision,1);assert.equal((await third.runtime.save()).revision,3);await third.runtime.stop();
+ assert.equal(workers.length,3);assert.equal(workers.every(w=>w.exited),true);
+ console.log(JSON.stringify({realAlpine:true,rootAndSharedFilesRestored:true,newWorkerAndOwner:true,offline:true,checkpointBytes:receipt.bytes,checkpoints:3,workersExited:3,explicitPreviousRevisionRestored:1,indexedDB:'fake-indexeddb boundary, not native browser acceptance',productionAcceptance:false}));
 });

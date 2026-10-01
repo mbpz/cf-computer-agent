@@ -92,17 +92,39 @@ export function createCheckpointStore({owner,identity,indexedDB=globalThis.index
     if(!result)return null;
     const checkpoint=await verified(result.checkpoint);check(environment,signal);return {...result,checkpoint};
   }
+  // A catalog is not an integrity receipt. The selected state is hashed again by load().
+  async function list(environment,{signal}={}){
+    check(environment,signal);
+    return transact(environment.id,'readonly',signal,({tx,head,set,fail})=>{
+      headCheck(head);if(!head){set([]);return;}
+      const rows=[];set(rows);
+      for(const wanted of head.revisions){
+        const read=tx.objectStore('states').get([...key(environment.id),wanted]);
+        read.onsuccess=()=>{
+          const value=read.result;
+          if(!value||value.revision!==wanted||typeof value.savedAt!=='string'||!Number.isFinite(Date.parse(value.savedAt))
+            ||!Number.isSafeInteger(value.checkpoint?.bytes)||value.checkpoint.bytes<1||value.checkpoint.bytes>536870912){fail(Error('CHECKPOINT_CORRUPT'));return;}
+          rows.push({revision:wanted,savedAt:value.savedAt,bytes:value.checkpoint.bytes});
+        };
+      }
+    });
+  }
   function remove(environmentId){
     try{current();if(!id(environmentId))throw Error('INVALID_ENVIRONMENT');}catch(error){return Promise.reject(error);}
     if(removals.has(environmentId))return removals.get(environmentId);
     for(const [tx,target] of transactions)if(target===environmentId){try{tx.abort();}catch{}}
     const pending=transact(environmentId,'readwrite',undefined,({tx,head,set})=>{
-      for(const old of head?.revisions??[])tx.objectStore('states').delete([...key(environmentId),old]);
+      // Scan keys, not snapshot values. A damaged head must not hide orphan bytes.
+      const states=tx.objectStore('states'), scan=states.openKeyCursor(), prefix=key(environmentId);
+      scan.onsuccess=()=>{const cursor=scan.result;if(!cursor)return;const k=cursor.primaryKey;
+        if(Array.isArray(k)&&prefix.every((part,i)=>k[i]===part))states.delete(k);
+        cursor.continue();
+      };
       tx.objectStore('heads').put({deleted:true},key(environmentId));set({removed:true});
     },true).finally(()=>removals.delete(environmentId));removals.set(environmentId,pending);return pending;
   }
   function close(){if(closed)return;closed=true;unsubscribe();owner.signal.removeEventListener('abort',close);for(const tx of transactions.keys()){try{tx.abort();}catch{}}database?.close();database=undefined;}
   const unsubscribe=owner.onEnvironmentRemoved(environmentId=>{void remove(environmentId).catch(()=>{});});
   owner.signal.addEventListener('abort',close,{once:true});
-  return Object.freeze({save,load,remove,close});
+  return Object.freeze({scope:owner.scope,save,load,list,remove,close});
 }

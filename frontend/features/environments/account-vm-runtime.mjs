@@ -73,17 +73,17 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
   const runtime = {
     getSnapshot: () => snapshot,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    async start(environment, {restore = false} = {}) {
+    async start(environment, {restore = false, revision} = {}) {
       if (!environment || environment.memberId !== owner.scope.memberId || !['personal', 'temporary'].includes(environment.type)) throw new Error('INVALID_ENVIRONMENT');
       owner.assertEnvironment(environment.id);
-      if (typeof restore !== 'boolean') throw Error('INVALID_RESTORE');
+      if (typeof restore !== 'boolean' || revision !== undefined && (!restore || !Number.isSafeInteger(revision) || revision < 1 || revision >= Number.MAX_SAFE_INTEGER)) throw Error('INVALID_RESTORE');
       if (restore && environment.type !== 'personal') throw Error('PERSISTENCE_PERSONAL_ONLY');
       if (restore && !checkpoints) throw Error('CHECKPOINT_STORAGE_UNAVAILABLE');
       if (!locks?.request) throw new Error('LOCKS_UNAVAILABLE');
       if (current) throw new Error('VM_BUSY');
       const run = { environment: Object.freeze({ ...environment }), started: deferred(), release: deferred(), factoryDone: deferred(), cancelled: false, creating: false, files: new Set(), operation: new AbortController(), cancelWait: deferred(), revision: 0 };
       current = run;
-      publish({ status: 'acquiring', environmentId: environment.id, output: '', reason: '', savedAt: undefined });
+      publish({ status: 'acquiring', environmentId: environment.id, output: '', reason: '', savedAt: undefined, restoredRevision: undefined });
       // Start through a microtask so even a throwing lock implementation is caught.
       run.lockTask = Promise.resolve().then(() => locks.request(VM_RUNTIME_LOCK, { mode: 'exclusive', ifAvailable: true }, async lock => {
         if (run.cancelled) return;
@@ -94,13 +94,13 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
           owner.disconnectEnvironment(environment.id);
           try {
             restored = await Promise.race([
-              checkpoints.load(run.environment, {signal:run.operation.signal}),
+              checkpoints.load(run.environment, {revision,signal:run.operation.signal}),
               run.cancelWait.promise.then(() => {throw Error('VM_NOT_RUNNING');}),
             ]);
             if (!restored) throw Error('CHECKPOINT_NOT_FOUND');
             run.revision = restored.headRevision;
             if (!live(run)) return;
-            publish({savedAt:restored.savedAt});
+            publish({savedAt:restored.savedAt,restoredRevision:restored.revision});
           } catch (error) {
             if (live(run)) invalidate(run, error?.message === 'CHECKPOINT_NOT_FOUND' ? 'CHECKPOINT_NOT_FOUND' : 'CHECKPOINT_RESTORE_FAILED');
             await cleanup(run);return;

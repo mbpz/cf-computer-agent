@@ -5,14 +5,14 @@ export const VM_RUNTIME_LOCK: string;
 export interface RuntimeEnvironment { readonly id: string; readonly memberId: string; readonly type: 'personal' | 'temporary'; }
 export interface VmRuntimeSnapshot {
   readonly status: 'idle' | 'acquiring' | 'booting' | 'restoring' | 'saving' | 'running' | 'stopping' | 'failed' | 'closed';
-  readonly environmentId: string | null; readonly output: string; readonly reason: string; readonly savedAt?: string;
+  readonly environmentId: string | null; readonly output: string; readonly reason: string; readonly savedAt?: string; readonly restoredRevision?:number;
 }
 export interface VmSession { readonly ready: Promise<void>; checkpoint?(): Promise<Checkpoint>; file?(input: FileRequest): Promise<FileResult>; write(text: string): Promise<void>; close(): void | Promise<void>; }
 export interface AccountVmRuntime {
   getSnapshot(): VmRuntimeSnapshot; subscribe(listener: () => void): () => void;
   file(input: FileRequest): Promise<FileResult>;
   save(): Promise<CheckpointReceipt>; saveAndStop(): Promise<CheckpointReceipt>;
-  start(environment: RuntimeEnvironment, options?:{restore?:boolean}): Promise<void>; stop(): Promise<void>; write(text: string): Promise<void>;
+  start(environment: RuntimeEnvironment, options?:{restore?:boolean;revision?:number}): Promise<void>; stop(): Promise<void>; write(text: string): Promise<void>;
 }
 export function createAccountVmRuntime(options: {
   owner: AccountNetworkOwner; checkpoints?:CheckpointStore; autoSaveMs?:number; locks?: Pick<LockManager, 'request'> | null; bootTimeoutMs?: number;

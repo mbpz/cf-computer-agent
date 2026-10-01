@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "a2dfe95",
+  "scope": "D04 local checkpoint deletion reconciliation and explicit previous-version recovery; not formal authenticated mounting",
+  "implemented": [
+    "Authenticated explicit tombstone adapter with account-lifetime binding, 10-second default bounded HTTP, auth-loss disposal, late-response rejection, and commit-before-complete receipt",
+    "Transactional exact-account/environment deletion scans keys to remove orphan states even with a corrupt head; does not claim physical erasure",
+    "Metadata-only public version catalog with explicit selected-revision restore, no silent fallback, and current-head CAS for the next save",
+    "Diagnostic page version selector, invalidation cleanup, and explicit retry after failed local deletion"
+  ],
+  "verification": {
+    "focused": {
+      "passed": 33,
+      "store": 12,
+      "runtime": 11,
+      "reconciliation": 7,
+      "controls": 3,
+      "redBeforeImplementation": true
+    },
+    "fastVm": {
+      "passed": 567,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50512.184667
+    },
+    "realAlpine": {
+      "passed": 1,
+      "durationMs": 19803.251458,
+      "checkpointBytes": 136758348,
+      "checkpoints": 3,
+      "workersExited": 3,
+      "explicitPreviousRevisionRestored": 1,
+      "nextRevision": 3,
+      "rootAndSharedFilesRestored": true,
+      "newWorkerAndOwner": true,
+      "offline": true,
+      "indexedDB": "fake-indexeddb external boundary"
+    },
+    "nativeBrowser": {
+      "browser": "Codex in-app browser",
+      "origin": "http://127.0.0.1:50200",
+      "path": "/runtime-owner.html",
+      "nativeIndexedDB": true,
+      "savedRevisions": [
+        1,
+        2
+      ],
+      "pageReloaded": true,
+      "explicitSelectedRevision": 1,
+      "rootMarker": "previous-root-ok",
+      "sharedMarker": "previous-shared-ok",
+      "terminalReceipt": "PREVIOUS-VERSION-RESTORED-OK",
+      "screenshot": "design/browser-vm/recovery-controls-native-browser.png",
+      "stoppedAfterAcceptance": true,
+      "scope": "Diagnostic previous-version happy path only; GUI deletion and full browser matrix not asserted"
+    },
+    "projectTypecheck": "passed",
+    "strictDeclarationAndAdapterTypecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "cleanup": "VM stopped; agent-created tab closed; local probe server stopped. Diagnostic IndexedDB remains local.",
+    "checklistTests": {
+      "passed": 9
+    },
+    "diffCheck": "passed"
+  },
+  "limitations": [
+    "No formal application invocation/scheduler; startup account-metadata revalidation and cross-tab invalidation are next",
+    "Native browser test uses diagnostic identity/development image, not production authentication or signed image",
+    "No native GUI deletion acceptance; transactional deletion verified with fake-indexeddb failure injection",
+    "Unencrypted snapshots are not private from same-origin code or device users; no backup or upload",
+    "Catalog currently reads up to two state rows internally; it returns metadata only; selected restore separately verifies integrity"
+  ],
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "G0": "not passed"
+  },
+  "boundaries": {
+    "push": false,
+    "deployment": false,
+    "remoteMigration": false,
+    "secretsRead": false,
+    "githubRetried": false,
+    "backup": false,
+    "encryption": false
+  },
+  "next": "Local startup account-metadata revalidation and cross-tab invalidation; formal mounting remains G0-gated"
+}

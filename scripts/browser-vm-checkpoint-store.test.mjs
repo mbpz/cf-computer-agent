@@ -64,3 +64,25 @@ test('corrupted persisted bytes are rejected on load, without silently restoring
  await new Promise((resolve,reject)=>{const tx=db.transaction('states','readwrite'),store=tx.objectStore('states'),key=['https://workbench.example','alice','env',2],request=store.get(key);request.onsuccess=()=>{const value=request.result;new Uint8Array(value.checkpoint.state)[0]^=1;store.put(value,key);};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();
  await assert.rejects(a.store.load(env),/digest/i);assert.equal(text(await a.store.load(env,{revision:1})),'old');
 });
+
+async function rawDatabase(factory, body) {
+ const db=await new Promise((resolve,reject)=>{const r=factory.open(CHECKPOINT_DATABASE,1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+ try {return await body(db);}finally{db.close();}
+}
+test('revision catalog exposes only bounded metadata, preserves account isolation and needs no restore',async t=>{
+ const a=pair(t);assert.deepEqual(await a.store.list(env),[]);
+ const first=await a.store.save(env,await record('old'),{expectedRevision:0});const second=await a.store.save(env,await record('newest'),{expectedRevision:1});
+ assert.deepEqual(await a.store.list(env),[{revision:2,savedAt:second.savedAt,bytes:6},{revision:1,savedAt:first.savedAt,bytes:3}]);
+ const b=pair(t,{indexedDB:a.indexedDB,memberId:'bob'});assert.deepEqual(await b.store.list({...env,memberId:'bob'}),[]);
+ await assert.rejects(b.store.list(env),/INVALID_ENVIRONMENT/);await assert.rejects(a.store.list({...env,type:'temporary'}),/PERSISTENCE_PERSONAL_ONLY/);
+ await a.store.remove(env.id);await assert.rejects(a.store.list(env),/ENVIRONMENT_REMOVED/);
+});
+test('purge removes orphan revisions despite a corrupt head, without erasing another account or environment',async t=>{
+ const a=pair(t),b=pair(t,{indexedDB:a.indexedDB,memberId:'bob'});const other={...env,id:'other'};
+ await a.store.save(env,await record('secret'),{expectedRevision:0});await a.store.save(other,await record('keep-other'),{expectedRevision:0});await b.store.save({...env,memberId:'bob'},await record('keep-bob'),{expectedRevision:0});
+ await rawDatabase(a.indexedDB,db=>new Promise((resolve,reject)=>{const tx=db.transaction(['states','heads'],'readwrite');tx.objectStore('states').put({orphan:'private'},['https://workbench.example','alice','env',99]);tx.objectStore('heads').put({revision:99,revisions:[]},['https://workbench.example','alice','env']);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);}));
+ assert.deepEqual(await a.store.remove(env.id),{removed:true});
+ const keys=await rawDatabase(a.indexedDB,db=>new Promise((resolve,reject)=>{const r=db.transaction('states').objectStore('states').getAllKeys();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}));
+ assert.deepEqual(keys,[['https://workbench.example','alice','other',1],['https://workbench.example','bob','env',1]]);
+ assert.equal(text(await a.store.load(other)),'keep-other');assert.equal(text(await b.store.load({...env,memberId:'bob'})),'keep-bob');
+});

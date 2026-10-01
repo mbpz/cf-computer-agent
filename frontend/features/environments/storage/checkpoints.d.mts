@@ -5,6 +5,8 @@ export interface Checkpoint { schemaVersion:1; identity:CheckpointIdentity; stat
 export interface CheckpointReceipt { revision:number; savedAt:string; bytes:number; }
 export interface LoadedCheckpoint {revision:number;headRevision:number;savedAt:string;checkpoint:Checkpoint;}
 export interface CheckpointStore {
+ readonly scope:AccountNetworkOwner["scope"];
+ list(environment:RuntimeEnvironment,options?:{signal?:AbortSignal}):Promise<CheckpointReceipt[]>;
  save(environment:RuntimeEnvironment,checkpoint:Checkpoint,options:{expectedRevision:number;signal?:AbortSignal}):Promise<CheckpointReceipt>;
  load(environment:RuntimeEnvironment,options?:{revision?:number;signal?:AbortSignal}):Promise<LoadedCheckpoint|null>;
  remove(environmentId:string):Promise<{removed:true}>;
