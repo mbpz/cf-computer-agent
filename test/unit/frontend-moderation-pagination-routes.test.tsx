@@ -15,7 +15,7 @@ const { Window } = await import("happy-dom");
 
 describe("moderation numbered routes", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   const queues = [
@@ -68,7 +68,7 @@ describe("moderation numbered routes", () => {
     browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable&page=2"); const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState");
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({}); gets.push(url); return gets.length === 1 ? numbered([{ asset: { id: "asset-1", originalName: "broken.pdf" }, job: { status: "failed_retryable" } }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Retry"); await flush();
+    await retryAsset(); await flush();
     expect(gets).toHaveLength(3); expect(gets.every((url) => url.includes("status=failed_retryable"))).toBe(true); expect(replace).toHaveBeenCalledTimes(1); expect(browser.location.search).toContain("status=failed_retryable"); expect(browser.location.search).not.toContain("page=2");
   });
 
@@ -76,7 +76,7 @@ describe("moderation numbered routes", () => {
     browser.history.replaceState({}, "", "/admin/duplicates?page=2"); const gets: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({ candidate: duplicate("associate") }); gets.push(url); return gets.length === 1 ? numbered([duplicate("pending")], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
-    expect(container.textContent).not.toContain("Load more"); await clickButton("Associate"); await flush();
+    expect(container.textContent).not.toContain("Load more"); await clickButton("Associate"); await clickButton("Confirm decision"); await flush();
     expect(gets).toHaveLength(3); expect(browser.location.search).not.toContain("page=2");
   });
 
@@ -84,7 +84,7 @@ describe("moderation numbered routes", () => {
     browser.history.replaceState({}, "", "/admin/duplicates?page=2"); const mutation = deferred<Response>(); const gets: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return mutation.promise; gets.push(url); return queryOf(url, "page") === "2" ? numbered([duplicate("pending", "old")], 2, 21) : numbered(Array.from({ length: 20 }, (_, index) => duplicate("pending", index === 0 ? "latest" : `latest-${index}`)), 1, 20); });
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Associate");
+    await clickButton("Associate"); await clickButton("Confirm decision");
     await act(async () => { browser.history.pushState({}, "", "/admin/duplicates"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect(container.textContent).toContain("latest"); mutation.resolve(json({ candidate: duplicate("associate", "old") })); await flush();
     expect(container.textContent).toContain("latest"); expect(container.textContent).not.toContain("old"); expect(gets).toHaveLength(2);
@@ -408,6 +408,9 @@ describe("moderation numbered routes", () => {
     await renderAssets();
     const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
     await act(async () => { retry.click(); retry.click(); });
+    expect(posts).toBe(0);
+    const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => {confirm.click();confirm.click();});
     expect(posts).toBe(1);
     await act(async () => mutation.resolve(json({}))); await flush();
   });
@@ -440,7 +443,7 @@ describe("moderation numbered routes", () => {
       if (String(input).endsWith("/preview")) { signal = init?.signal as AbortSignal; return preview.promise; }
       return numbered([assetRow()], 2, 21);
     });
-    await renderAssets(); await clickButton("Preview"); await clickButton("Retry"); await flush();
+    await renderAssets(); await clickButton("Preview"); await retryAsset(); await flush();
     expect(signal?.aborted).toBe(true);
     await act(async () => preview.resolve(assetPreview())); await flush();
     expect(container.textContent).not.toContain("Private asset contents");
@@ -475,7 +478,7 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") return mutation.promise;
       return ++gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status });
     });
-    await renderAssets(); await clickButton("Retry");
+    await renderAssets(); await retryAsset();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     await act(async () => mutation.resolve(json({}))); await flush();
     expect(gets).toBe(2);
@@ -489,7 +492,7 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") { posts++; return json({}); }
       gets++; return gets === 2 ? new Response(null, { status: 500 }) : numbered([assetRow()], 2, 21);
     });
-    await renderAssets(); await clickButton("Retry"); await flush();
+    await renderAssets(); await retryAsset(); await flush();
     await clickButton("Try again"); await flush();
     expect(posts).toBe(1); expect(gets).toBe(3);
     expect(container.querySelector('[role="alert"]')).toBeNull();
@@ -501,7 +504,7 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") { posts++; return new Response(null, { status: 503 }); }
       gets++; return gets === 1 ? numbered([assetRow()], 2, 21) : recovery.promise;
     });
-    await renderAssets(); await clickButton("Retry"); await flush();
+    await renderAssets(); await retryAsset(); await flush();
     const retry = container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement;
     expect(retry.disabled).toBe(true); expect(gets).toBe(1); expect(posts).toBe(1);
     const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
@@ -518,7 +521,7 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") return mutation.promise;
       gets++; return pageResponse(String(input), assetRow);
     });
-    await renderAssets(); await clickButton("Retry");
+    await renderAssets(); await retryAsset();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets?page=2&status=failed_retryable"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect(gets).toBe(3);
@@ -538,7 +541,7 @@ describe("moderation numbered routes", () => {
       gets++; if (gets === 2) return new Response(null, { status: 403 });
       return gets === 3 ? recovery.promise : pageResponse(String(input), assetRow);
     });
-    await renderAssets(); await clickButton("Retry");
+    await renderAssets(); await retryAsset();
     await act(async () => { browser.history.pushState({}, "", "/admin/assets"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     const read = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
     await act(async () => { read.click(); read.click(); }); await flush(); expect(gets).toBe(3);
@@ -554,7 +557,7 @@ describe("moderation numbered routes", () => {
       if (init?.method === "POST") { posts++; return json({}); }
       gets++; return gets === 1 ? numbered([assetRow()], 2, 21) : new Response(null, { status: gets === 2 ? 500 : 403 });
     });
-    await renderAssets(); await clickButton("Retry"); await flush();
+    await renderAssets(); await retryAsset(); await flush();
     expect((container.querySelector('button[aria-label="Retry asset-1.pdf"]') as HTMLButtonElement).disabled).toBe(true);
     await clickButton("Try again"); await flush();
     expect(posts).toBe(1); expect(gets).toBe(3);
@@ -583,11 +586,38 @@ describe("moderation numbered routes", () => {
       if (gets === 2) return new Response(null, { status: 500 });
       return numbered([], Number(queryOf(String(input), "page")), 0);
     });
-    await renderAssets(); await clickButton("Retry"); await flush(); await clickButton("Try again"); await flush();
+    await renderAssets(); await retryAsset(); await flush(); await clickButton("Try again"); await flush();
     expect(posts).toBe(1); expect(gets).toBe(4);
     expect(urls.map((url) => queryOf(url, "page"))).toEqual(["2", "2", "2", "1"]);
     expect(urls.every((url) => queryOf(url, "status") === "failed_retryable")).toBe(true);
     expect(browser.location.search).not.toContain("page=2");
+  });
+
+  async function retryAsset() {await clickButton("Retry");await clickButton("Confirm retry");}
+
+  it("canceling an asset retry performs neither POST nor a new queue read", async () => {
+    let posts=0;let gets=0;
+    vi.stubGlobal("fetch",async (_input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});} gets++;return numbered([assetRow()],2,21);});
+    await renderAssets();await clickButton("Retry");expect(posts).toBe(0);
+    await clickButton("Cancel");expect(posts).toBe(0);expect(gets).toBe(1);
+    expect(container.textContent).toContain("asset-1.pdf");expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it.each(["page","filter"])("discards asset retry confirmation on %s navigation", async kind => {
+    let posts=0;
+    vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});} return pageResponse(String(input),assetRow);});
+    await renderAssets();await clickButton("Retry");const old=container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => {browser.history.pushState({},"",kind === "page" ? "/admin/assets?page=1&status=failed_retryable" : "/admin/assets?page=2&status=queued");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
+  });
+
+  it("clears a pending asset confirmation when an in-flight preview is denied",async () => {
+    const preview=deferred<Response>();let posts=0;
+    vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});}return String(input).endsWith("/preview") ? preview.promise : numbered([assetRow()],2,21);});
+    await renderAssets();await clickButton("Preview");await clickButton("Retry");const old=container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => preview.resolve(new Response(null,{status:403})));await flush();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();expect(container.textContent).not.toContain("asset-1.pdf");
+    await act(async () => old.click());expect(posts).toBe(0);
   });
 
   async function clickButton(label: string) { const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes(label)) as HTMLButtonElement; expect(button).toBeTruthy(); await act(async () => button.click()); }

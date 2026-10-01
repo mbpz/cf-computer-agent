@@ -215,7 +215,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "admin-submissions": return <ReviewQueueRoute locale={locale} search={search} />;
     case "admin-submission-detail": return <ReviewDetailRoute locale={locale} id={pathname.split("/").pop() || ""} />;
     case "admin-duplicates": return <AdminDuplicateRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
-    case "admin-assets": return <AdminAssetsRoute locale={locale} search={search} />;
+    case "admin-assets": return <AdminAssetsRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-members": return <AdminMembersRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} search={search} />;
     case "admin-spaces": return <AdminSpacesRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "admin-audit": return <AdminAuditRoute locale={locale} search={search} />;
