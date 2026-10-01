@@ -283,3 +283,13 @@ Receipt: `design/browser-vm/2026-10-01-chunked-images.json`. Current checklist r
 - [x] New unit tests 10/10, full fast VM 642/642; CLI export/verify both passed. Real Alpine from independent disk-file HTTP host passed cold/warm boot (18/0 requests, 6 original digests each); Cache API adapter, not native-browser evidence.
 - [x] Typecheck, UI build/isolation and checklist audit/tests passed. Receipt: `design/browser-vm/2026-10-01-static-image-bundle.json`.
 - [ ] Actual authorized HTTPS hosting, response encoding/headers, native interrupt/upgrade/failure/browser matrix and release proof remain open. VM-033/D04/G0 unchanged; overall 29 in scope / 5 complete / 24 remaining.
+
+
+## 2026-10-01 VM-033 actual transport failure evidence
+
+- [x] Isolated allowlisted loopback host verifies exported files before serving; fixed same-origin fault control truncates a real HTTP body. No relay, deployment or production route changes.
+- [x] Explicit-action harness rejects interruption/corruption before boot; separate retry reuses verified chunks. Controlled approved-set generation transition preserves unrelated cache. Browser lifecycle fixtures reject late timeout/cancel receipts and recover from Worker constructor failures.
+- [x] Actual Alpine four boots passed; interruption retained 12 entries, resume requested 6, corrupt retry requested 1, warm boot requested 0. New tests 8/8, fast VM 650/650, typecheck/UI isolation build and checklist 9/9 passed.
+- [ ] Native browser actions remain unaccepted: tool reported Mac locked; no alternate control path used. Actual HTTPS/browser matrix/release gates remain open.
+
+Receipt: `design/browser-vm/2026-10-01-image-failure-acceptance.json`. Overall 29 in scope / 5 completed / 24 remaining; VM-033/D04/G0 unchanged. No push/deploy/migration/secrets/preview changes.

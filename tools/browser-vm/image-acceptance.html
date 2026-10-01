@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM 公共镜像失败场景验收</title></head>
+<body><h1>公共镜像断流与缓存验收</h1>
+<p>仅本地独立验收。使用原生 CacheStorage 和真实离线 Alpine；不连接客体外网，不发布。每一步需单独点击，不自动重试。</p>
+<p>“制造断流”清除此专用本机来源的公共镜像缓存；“损坏缓存”和“代际切换”只修改测试缓存。代际切换使用固定资源集合变化，不代表新 OS 版本验收。HTTPS/完整浏览器矩阵仍需单独验收。</p>
+<button data-action="interrupt">1. 制造断流（应拒绝启动）</button>
+<button data-action="resume">2. 续传并验证真实启动</button>
+<button data-action="corrupt">3. 损坏缓存（应拒绝启动）</button>
+<button data-action="retry">4. 显式重新加载并启动</button>
+<button data-action="upgrade">5. 缓存代际切换并启动</button>
+<button data-action="warm">6. 零请求热启动</button>
+<button id="cancel" disabled>取消当前验收</button>
+<p id="status" role="status" aria-live="polite">未验收</p><pre id="results"></pre>
+<script type="module" src="/image-acceptance-browser.mjs"></script></body></html>

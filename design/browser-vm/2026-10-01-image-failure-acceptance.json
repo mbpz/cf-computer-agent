@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-01",
+  "step": "VM-033 local actual-transport failure acceptance",
+  "baseCommit": "923e9d4",
+  "scope": "Dedicated loopback test host and explicit-action harness; not production or native browser acceptance",
+  "actualAlpine": {
+    "test": "tools/browser-vm/image-acceptance.test.mjs",
+    "passed": 1,
+    "failed": 0,
+    "realBoots": 4,
+    "kernel": "6.18.35-0-virt",
+    "marker": "IMAGE-FAILURE-RECOVERY-OK",
+    "guestNetworking": "off",
+    "cache": "deliberate Cache API adapter; not native",
+    "runs": [
+      {
+        "action": "interrupt",
+        "result": "expected-failure",
+        "booted": false,
+        "requests": 13,
+        "retainedEntries": 12,
+        "partialCached": false,
+        "interruptions": 1,
+        "elapsedMs": 110
+      },
+      {
+        "action": "resume",
+        "result": "booted",
+        "requests": 6,
+        "cacheHits": 12,
+        "verifiedImages": 6,
+        "elapsedMs": 17843
+      },
+      {
+        "action": "corrupt",
+        "result": "expected-failure",
+        "booted": false,
+        "requests": 0,
+        "corruptEntryEvicted": true,
+        "elapsedMs": 38
+      },
+      {
+        "action": "retry",
+        "result": "booted",
+        "requests": 1,
+        "cacheHits": 17,
+        "verifiedImages": 6,
+        "elapsedMs": 17597
+      },
+      {
+        "action": "upgrade",
+        "result": "booted",
+        "requests": 18,
+        "serverRequests": 20,
+        "cacheHits": 0,
+        "verifiedImages": 6,
+        "obsoleteGenerationRemoved": true,
+        "unrelatedCachePreserved": true,
+        "scope": "controlled approved-set transition; not new OS version",
+        "elapsedMs": 17280
+      },
+      {
+        "action": "warm",
+        "result": "booted",
+        "requests": 0,
+        "cacheHits": 18,
+        "verifiedImages": 6,
+        "elapsedMs": 21916
+      }
+    ]
+  },
+  "verification": {
+    "newUnitTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "allFastVmTests": {
+      "passed": 650,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "buildIsolation": "passed",
+    "checklistTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "red": "Unimplemented host tests failed first; page tests reproduced late-timeout receipt and Worker-construction recovery bugs before fixes"
+  },
+  "nativeBrowser": {
+    "status": "blocked-device-locked",
+    "accepted": false,
+    "reason": "Computer-use tool reported the Mac locked; no alternate browser/control bypass was attempted"
+  },
+  "hostedHttpsAcceptance": false,
+  "productionAcceptance": false,
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "parentsKeptOpen": [
+      "VM-033",
+      "D04",
+      "G0"
+    ]
+  },
+  "remaining": [
+    "Native in-app browser six-action acceptance after unlock",
+    "Authorized HTTPS hosting and actual response headers/encoding/platform proof",
+    "Complete browser matrix and licensing/build/signed-release proof; other checklist parents"
+  ],
+  "boundaries": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "secretsRead": false,
+    "githubAccess": false,
+    "previewChanged": false
+  }
+}
