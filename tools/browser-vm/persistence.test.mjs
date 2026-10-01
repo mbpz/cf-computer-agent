@@ -8,11 +8,11 @@ import {V86} from 'v86';
 import {prepareAlpineIso} from './alpine-iso.mjs';
 import {connectTerminal} from './terminal-client.mjs';
 import {createAccountNetworkOwner} from '../../frontend/features/environments/account-network-owner.mjs';
-import {createAccountVmRuntime} from '../../frontend/features/environments/account-vm-runtime.mjs';
+import {createAccountVmRuntime,VM_RUNTIME_LOCK} from '../../frontend/features/environments/account-vm-runtime.mjs';
 import {createCheckpointStore} from '../../frontend/features/environments/storage/checkpoints.mjs';
 const boot=process.env.BROWSER_VM_PROBE_ASSETS,iso=process.env.BROWSER_VM_PROBE_ISO_ASSETS;
 const environment={id:'saved-alpine',memberId:'diagnostic',type:'personal'};
-test('real Alpine: persist full checkpoint, destroy Worker/account, restore root and shared files offline in a new instance',{
+test('real Alpine: persist, select prior revision, lose Worker unexpectedly and explicitly restore committed files offline',{
  skip:(!boot||!iso)&&'Explicit development BIOS and ISO assets required',timeout:120000,
 },async t=>{
  const engine=resolve('node_modules/v86/build');
@@ -46,7 +46,23 @@ test('real Alpine: persist full checkpoint, destroy Worker/account, restore root
  const third=pair();assert.deepEqual((await third.checkpoints.list(environment)).map(x=>x.revision),[2,1]);await third.runtime.start(environment,{restore:true,revision:1});
  assert.equal((await third.runtime.file({op:'readText',path:'/persisted.txt'})).text,'shared survives');
  await third.runtime.write("cat /root/persisted.txt; printf '\nPREVIOUS-RESTORED-OK\n'\n");await until(third.runtime,/root survives\r?\nPREVIOUS-RESTORED-OK/);
- assert.equal(third.runtime.getSnapshot().restoredRevision,1);assert.equal((await third.runtime.save()).revision,3);await third.runtime.stop();
- assert.equal(workers.length,3);assert.equal(workers.every(w=>w.exited),true);
- console.log(JSON.stringify({realAlpine:true,rootAndSharedFilesRestored:true,newWorkerAndOwner:true,offline:true,checkpointBytes:receipt.bytes,checkpoints:3,workersExited:3,explicitPreviousRevisionRestored:1,indexedDB:'fake-indexeddb boundary, not native browser acceptance',productionAcceptance:false}));
+ assert.equal(third.runtime.getSnapshot().restoredRevision,1);assert.equal((await third.runtime.save()).revision,3);
+ // Kill the actual v86 Worker without calling runtime.stop(). Output polling
+ // must notice the loss, clear state and release the origin lock, never reboot.
+ await third.runtime.write("printf 'UNSAVED' > /root/persisted.txt; printf 'UNSAVED' > /mnt/work/persisted.txt; touch /root/never-replay; printf '\nUNSAVED-READY\n'\n");
+ await until(third.runtime,/\r?\nUNSAVED-READY\r?\n/);
+ await workers[2].native.terminate();
+ const deadline=performance.now()+10000;
+ while(third.runtime.getSnapshot().status!=='idle'&&performance.now()<deadline)await new Promise(r=>setTimeout(r,20));
+ assert.equal(third.runtime.getSnapshot().status,'idle');assert.equal(third.runtime.getSnapshot().reason,'WORKER_CLOSED');assert.equal(third.runtime.getSnapshot().output,'');
+ assert.equal(workers.length,3);assert.equal((await navigator.locks.query()).held.filter(lock=>lock.name===VM_RUNTIME_LOCK).length,0);
+ third.owner.dispose();third.checkpoints.close();
+ const fourth=pair();assert.equal(fourth.runtime.getSnapshot().status,'idle');await fourth.runtime.start(environment,{restore:true});
+ assert.equal(fourth.runtime.getSnapshot().restoredRevision,3);
+ assert.equal((await fourth.runtime.file({op:'readText',path:'/persisted.txt'})).text,'shared survives');
+ await fourth.runtime.write("cat /root/persisted.txt; test ! -e /root/never-replay && printf '\nCRASH-RESTORED-NO-REPLAY\n'\n");
+ await until(fourth.runtime,/root survives\r?\nCRASH-RESTORED-NO-REPLAY/);await fourth.runtime.stop();
+ assert.equal((await navigator.locks.query()).held.filter(lock=>lock.name===VM_RUNTIME_LOCK).length,0);
+ assert.equal(workers.length,4);assert.equal(workers.every(w=>w.exited),true);
+ console.log(JSON.stringify({realAlpine:true,rootAndSharedFilesRestored:true,newWorkerAndOwner:true,offline:true,checkpointBytes:receipt.bytes,checkpoints:3,workersExited:4,unexpectedWorkerLoss:true,unsavedChangesLost:true,noAutomaticRestart:true,noCommandReplay:true,explicitPreviousRevisionRestored:1,indexedDB:'fake-indexeddb boundary, not native browser acceptance',productionAcceptance:false}));
 });

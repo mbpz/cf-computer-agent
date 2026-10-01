@@ -9,12 +9,21 @@ import { startRecoveryFixture } from './recovery-fixture.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 
-export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false, runtimeOwner = false }) {
+export async function startProbeServer({ assets, isoAssets, recovery = false, directDownload = false, runtimeOwner = false, checkpointRecovery = false }) {
   if (typeof assets !== 'string' || !assets) throw new Error('Explicit development assets required');
   if (isoAssets !== undefined && (typeof isoAssets !== 'string' || !isoAssets)) throw new Error('Explicit ISO assets required');
   if (typeof recovery !== 'boolean' || (recovery && !isoAssets)) throw new Error('Recovery requires explicit ISO assets');
   if (typeof directDownload !== 'boolean') throw new Error('Direct download requires explicit boolean opt-in');
   if (typeof runtimeOwner !== 'boolean' || (runtimeOwner && !isoAssets)) throw new Error('Runtime owner requires explicit ISO assets');
+  if (typeof checkpointRecovery !== 'boolean') throw new Error('Checkpoint recovery requires explicit boolean opt-in');
+  const recoveryBundles = new Map();
+  if (checkpointRecovery) {
+    const { build } = await import('esbuild');
+    for (const name of ['checkpoint-recovery-browser.mjs', 'checkpoint-recovery-worker.mjs']) {
+      const result = await build({entryPoints:[join(directory, name)], bundle:true, write:false, format:'esm', platform:'browser', target:'es2022'});
+      recoveryBundles.set('/' + name, result.outputFiles[0].contents);
+    }
+  }
   let runtimeBundle;
   if (runtimeOwner) {
     const { build } = await import('esbuild');
@@ -46,6 +55,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
     files.set('/runtime-owner.html', [join(directory, 'runtime-owner.html'), 'text/html; charset=utf-8']);
     files.set('/runtime-owner.css', [join(directory, 'runtime-owner.css'), 'text/css; charset=utf-8']);
   }
+  if (checkpointRecovery) files.set('/checkpoint-recovery.html', [join(directory, 'checkpoint-recovery.html'), 'text/html; charset=utf-8']);
   const recoveryFixture = recovery ? await startRecoveryFixture() : undefined;
   let origin;
   let relay;
@@ -88,6 +98,11 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
       response.end(request.method === 'HEAD' ? undefined : content);
       return;
     }
+    const recoveryBundle = recoveryBundles.get(request.url);
+    if (recoveryBundle) {
+      response.writeHead(200, {'Content-Type':'text/javascript; charset=utf-8','Content-Length':recoveryBundle.length});
+      response.end(request.method === 'HEAD' ? undefined : recoveryBundle); return;
+    }
     if (runtimeBundle && request.url === '/runtime-owner-browser.mjs') {
       response.writeHead(200, {'Content-Type':'text/javascript; charset=utf-8','Content-Length':runtimeBundle.length});
       response.end(request.method === 'HEAD' ? undefined : runtimeBundle); return;
@@ -119,7 +134,7 @@ export async function startProbeServer({ assets, isoAssets, recovery = false, di
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download', runtimeOwner: process.argv[4] === '--runtime-owner' });
+  const server = await startProbeServer({ assets: process.argv[2], isoAssets: process.argv[3], recovery: process.argv[4] === '--recovery-fixture', directDownload: process.argv[4] === '--direct-download', runtimeOwner: process.argv[4] === '--runtime-owner', checkpointRecovery: process.argv[4] === '--checkpoint-recovery' });
   console.log(`Local-only Linux verification: ${server.url}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
     await server.close();

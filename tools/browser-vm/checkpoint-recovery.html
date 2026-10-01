@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>检查点故障恢复 · 独立本地验收</title></head>
+<body><main>
+<h1>检查点故障恢复 · 独立本地验收</h1>
+<p>真实存储适配器 + 原生 IndexedDB。仅随机诊断身份与合成快照，不启动客体，不接入正式账户，不代表完整浏览器或生产验收。</p>
+<p>Worker 故障仅终止本页创建的测试 Worker；不会重启浏览器。配额测试最多写入 256 KiB，需开发者工具对本页来源临时设置配额后操作，不填满设备磁盘。</p>
+<button id="seed">1. 创建两代诊断检查点</button>
+<button id="crash" disabled>2. 中断 Worker 写入并重新打开</button>
+<button id="revoke" disabled>3. 写入中撤权与取消</button>
+<button id="quota" disabled>4. 验证原生存储配额失败</button>
+<button id="retry" disabled>5. 故障后显式重试</button>
+<p><button id="skip-quota" disabled>工具不支持配额模拟：记为未验收并继续</button></p>
+<p id="status" role="status">未开始；不会自动执行</p>
+<pre id="report"></pre>
+<script type="module" src="/checkpoint-recovery-browser.mjs"></script>
+</main></body></html>

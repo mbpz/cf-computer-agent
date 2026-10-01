@@ -86,3 +86,39 @@ test('purge removes orphan revisions despite a corrupt head, without erasing ano
  assert.deepEqual(keys,[['https://workbench.example','alice','other',1],['https://workbench.example','bob','env',1]]);
  assert.equal(text(await a.store.load(other)),'keep-other');assert.equal(text(await b.store.load({...env,memberId:'bob'})),'keep-bob');
 });
+
+// External storage faults are injected below the real transaction/save logic.
+for (const boundary of ['synchronous-put', 'asynchronous-abort']) {
+ test(`quota at ${boundary} preserves both committed generations and permits explicit retry`,async t=>{
+  const a=pair(t);await a.store.save(env,await record('one'),{expectedRevision:0});await a.store.save(env,await record('two'),{expectedRevision:1});
+  const candidate=await record('uncommitted'),original=IDBObjectStore.prototype.put;let injected=false;
+  t.after(()=>{IDBObjectStore.prototype.put=original;});
+  IDBObjectStore.prototype.put=function(...args){
+   if(this.name!=='states'||injected)return original.apply(this,args);
+   injected=true;
+   if(boundary==='synchronous-put')throw new DOMException('Full','QuotaExceededError');
+   const result=original.apply(this,args),tx=this.transaction;
+   queueMicrotask(()=>{Object.defineProperty(tx,'error',{value:new DOMException('Full','QuotaExceededError')});tx.abort();});
+   return result;
+  };
+  await assert.rejects(a.store.save(env,candidate,{expectedRevision:2}),/^Error: CHECKPOINT_QUOTA$/);
+  IDBObjectStore.prototype.put=original;
+  assert.equal(injected,true);assert.equal(text(await a.store.load(env)),'two');assert.equal(text(await a.store.load(env,{revision:1})),'one');
+  const retry=await a.store.save(env,await record('three'),{expectedRevision:2});assert.equal(retry.revision,3);assert.equal(text(await a.store.load(env)),'three');
+ });
+}
+for(const boundary of ['cancel','revoke','store-close']) {
+ test(`${boundary} after state/head/eviction queueing cannot publish a new head or evict retained state`,async t=>{
+  const a=pair(t);await a.store.save(env,await record('one'),{expectedRevision:0});await a.store.save(env,await record('two'),{expectedRevision:1});
+  const candidate=await record('partial'),controller=new AbortController(),original=IDBObjectStore.prototype.put;let injected=false;
+  t.after(()=>{IDBObjectStore.prototype.put=original;});
+  IDBObjectStore.prototype.put=function(...args){const request=original.apply(this,args);
+   if(this.name==='states'&&!injected){injected=true;queueMicrotask(()=>{
+    if(boundary==='cancel')controller.abort();else if(boundary==='revoke')a.owner.revoke();else a.store.close();
+   });}return request;
+  };
+  await assert.rejects(a.store.save(env,candidate,{expectedRevision:2,signal:controller.signal}),/CHECKPOINT_CANCELLED|CHECKPOINT_TRANSACTION_FAILED|ACCOUNT_CLOSED|CHECKPOINT_CLOSED/);
+  IDBObjectStore.prototype.put=original;assert.equal(injected,true);a.store.close();
+  const b=pair(t,{indexedDB:a.indexedDB});assert.equal(text(await b.store.load(env)),'two');assert.equal((await b.store.load(env)).revision,2);assert.equal(text(await b.store.load(env,{revision:1})),'one');
+ });
+}

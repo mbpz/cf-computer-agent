@@ -48,7 +48,7 @@ export function createCheckpointStore({owner,identity,indexedDB=globalThis.index
       const abort=()=>{error=Error('CHECKPOINT_CANCELLED');try{tx.abort();}catch{}};
       transactions.set(tx,environmentId);signal?.addEventListener('abort',abort,{once:true});
       const finish=()=>{transactions.delete(tx);signal?.removeEventListener('abort',abort);};
-      tx.onabort=()=>{finish();reject(error??Error(tx.error?.name==='QuotaExceededError'?'CHECKPOINT_QUOTA':'CHECKPOINT_TRANSACTION_FAILED'));};
+      tx.onabort=()=>{finish();const cause=error??tx.error;reject(cause?.name==='QuotaExceededError'?Error('CHECKPOINT_QUOTA'):error??Error('CHECKPOINT_TRANSACTION_FAILED'));};
       tx.onerror=()=>{};
       tx.oncomplete=()=>{finish();try{current(signal);if(!allowRemoved)owner.assertEnvironment(environmentId);resolve(value);}catch(e){reject(e);}};
       const fail=e=>{error=e;try{tx.abort();}catch{}};

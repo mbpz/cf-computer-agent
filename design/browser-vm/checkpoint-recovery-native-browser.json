@@ -1,0 +1,61 @@
+{
+  "productionAcceptance": false,
+  "syntheticState": true,
+  "results": [
+    {
+      "test": "seed",
+      "status": "passed",
+      "evidence": {
+        "head": 2,
+        "older": 1,
+        "verifiedBytes": true
+      }
+    },
+    {
+      "test": "crash",
+      "status": "passed",
+      "evidence": {
+        "workerTerminated": true,
+        "head": 2,
+        "older": 1,
+        "verifiedBytes": true,
+        "browserProcessCrash": false
+      }
+    },
+    {
+      "test": "revoke",
+      "status": "passed",
+      "evidence": [
+        {
+          "mode": "cancel",
+          "failure": "CHECKPOINT_CANCELLED",
+          "head": 2,
+          "older": 1,
+          "verifiedBytes": true
+        },
+        {
+          "mode": "revoke",
+          "failure": "CHECKPOINT_TRANSACTION_FAILED",
+          "head": 2,
+          "older": 1,
+          "verifiedBytes": true
+        }
+      ]
+    },
+    {
+      "test": "quota",
+      "status": "not-run",
+      "reason": "工具不支持安全的按来源配额模拟；未填满磁盘"
+    },
+    {
+      "test": "retry",
+      "status": "passed",
+      "evidence": {
+        "head": 3,
+        "older": 2,
+        "verifiedBytes": true,
+        "automaticRetry": false
+      }
+    }
+  ]
+}

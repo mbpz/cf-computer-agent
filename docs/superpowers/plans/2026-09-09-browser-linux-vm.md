@@ -10,12 +10,19 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
+### 2026-10-01 checkpoint failure recovery execution slice
+
+- [x] 同步QuotaExceededError归一化先RED再修复；同步/异步配额、排队写入后的取消/撤权/关闭、旧两代回滚及显式重试回归通过。
+- [x] 独立本机页原生IndexedDB终止未提交事务Worker，重新打开仍保留两代；真实Alpine异常终止Worker后释放锁、清屏，不自动重启，显式恢复v3不重放丢失命令，4个Worker均退出。
+- [ ] 原生浏览器配额耗尽/恢复：内置浏览器拒绝Storage.overrideQuotaForOrigin（raw CDP不支持），未运行、未填满磁盘或绕过工具限制；注入配额回归不替代原生验收。独立的故障后显式重试已原生通过。
+- [x] 聚焦28/28、快速VM593/593、真实Alpine1/1、类型/UI构建和checklist9/9通过；原生存储页4/5通过，配额项明确not-run。证据 `design/browser-vm/2026-10-01-checkpoint-failure-recovery.json`；全浏览器进程崩溃/设备掉电、正式账户及生产验收仍开放。
+
 ### 2026-10-01 startup authority local slice
 
 - [x] RED→GREEN：每次显式启动/恢复在读快照和分配Worker之前重新校验session、vm:use及所属环境；失败/取消不回退。
 - [x] 同源同账户跨标签失效通知只关闭运行资源，不作为删除快照或授权依据；退出/撤权/删除广播，普通卸载不广播。
 - [x] 有界请求、迟到响应、账号切换、404、跨标签隔离；聚焦35/35、快速VM587/587、真实Alpine1/1（4个Worker退出）、类型/UI构建通过；内置浏览器双标签真实Alpine退出作废，终端与文件UI清空。收据 `design/browser-vm/2026-10-01-vm-startup-authority.json`。
-- [ ] 下一项：本地浏览器崩溃/配额/撤权恢复矩阵。正式启动及墓碑调度挂载仍由G0控制；不把测试HTTP边界当作正式账户验收。
+- [ ] 本地浏览器崩溃/配额/撤权恢复矩阵部分完成（见上方切片）；原生配额和全浏览器进程矩阵未验收。正式启动及墓碑调度挂载仍由G0控制；不把测试HTTP边界当作正式账户验收。
 
 跨标签通知是同一存储分区内在线参与标签的尽力传递，不是跨设备撤权保证；不支持BroadcastChannel时不宣称同步。无后台轮询或可见性恢复时撤权保证，所有显式启动仍须服务器重验证。
 

@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "b085789",
+  "scope": "D04 local checkpoint failure boundaries; not full browser/process or production acceptance",
+  "implemented": [
+    "Normalize synchronous object-store QuotaExceededError through the same CHECKPOINT_QUOTA contract as asynchronous transaction quota aborts",
+    "Regression: synchronous and asynchronous quota faults preserve two committed generations and allow explicit retry; cancellation, account revocation and store closure after queued state/head/eviction writes roll back",
+    "Opt-in loopback diagnostic page uses production checkpoint store and native IndexedDB; synthetic diagnostic state, no guest or formal account",
+    "Dedicated native Worker holds an uncommitted production-store save; parent terminates it and a fresh store verifies both earlier generations",
+    "Real offline Alpine regression kills the actual running v86 Worker without runtime.stop, verifies failure detection/lock release/output clearing, then explicitly restores committed root/shared files in a new Worker with no replay"
+  ],
+  "verification": {
+    "red": {
+      "synchronousQuota": "17 tests: 16 passed, 1 failed; raw QuotaExceededError rather than CHECKPOINT_QUOTA",
+      "optInServer": "expected 200, actual 404; initial sandbox EPERM was not counted as RED"
+    },
+    "focused": {
+      "passed": 28,
+      "checkpointStore": 17,
+      "server": 11
+    },
+    "fastVm": {
+      "command": "rtk proxy npm run test:browser-vm",
+      "passed": 593,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50379.369958
+    },
+    "realAlpine": {
+      "command": "rtk proxy env BROWSER_VM_PROBE_ASSETS=/private/tmp/memory-garden-formal-guest/boot BROWSER_VM_PROBE_ISO_ASSETS=/private/tmp/memory-garden-formal-guest/iso node --test tools/browser-vm/persistence.test.mjs",
+      "passed": 1,
+      "durationMs": 22040.687083,
+      "workersExited": 4,
+      "checkpointBytes": 136635468,
+      "restoredCommittedRevision": 3,
+      "unsavedChangesLost": true,
+      "noAutomaticRestart": true,
+      "noCommandReplay": true,
+      "locksReleased": true,
+      "storageBoundary": "fake-indexeddb; separate native browser verification below"
+    },
+    "nativeBrowser": {
+      "browser": "Codex in-app browser",
+      "origin": "http://127.0.0.1:53510",
+      "path": "/checkpoint-recovery.html",
+      "passed": 4,
+      "notRun": 1,
+      "report": "design/browser-vm/checkpoint-recovery-native-browser.json",
+      "screenshot": "design/browser-vm/checkpoint-recovery-native-browser.png",
+      "nativeIndexedDB": true,
+      "syntheticStateNotGuest": true,
+      "partialWriteWorkerTerminated": true,
+      "cancelAndRevokeQueuedWritesRollback": true,
+      "explicitRetryHead": 3,
+      "retainedOlderRevision": 2,
+      "cleanup": "agent-created tab closed; local servers stopped; user preview untouched"
+    },
+    "projectTypecheck": "passed: rtk proxy npx tsc --noEmit",
+    "buildUi": "passed: rtk proxy npm run build:ui; existing large chunk warning",
+    "checklistTests": {
+      "passed": 9
+    },
+    "diffCheck": "passed"
+  },
+  "openEvidence": [
+    {
+      "item": "Native storage quota exhaustion and retry after quota restoration",
+      "status": "not-run",
+      "blocker": "In-app browser CDP rejects Storage.getUsageAndQuota and Storage.overrideQuotaForOrigin: This method is not supported through raw CDP. No override applied; did not exhaust disk or bypass browser control restrictions. Deterministic injected quota tests pass, but do not replace native quota acceptance."
+    },
+    {
+      "item": "Full browser-process crash / device power loss / supported browser version matrix",
+      "status": "not-run",
+      "boundary": "Native dedicated-Worker termination is narrower; did not crash or restart user browser"
+    },
+    {
+      "item": "Signed production assets, G0 formal authenticated integration and production acceptance",
+      "status": "open"
+    }
+  ],
+  "restrictions": [
+    "No encryption or backup",
+    "No push, deployment, migrations, production secrets access/upload or GitHub retry"
+  ],
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open",
+    "G0": "not passed"
+  },
+  "next": "Keep unsupported native quota and full-browser gates open; continue only independently allowed local verification, or finish native quota acceptance when supported per-origin quota tooling becomes available. No formal mount before G0."
+}

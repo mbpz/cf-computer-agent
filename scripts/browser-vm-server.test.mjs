@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { get } from 'node:http';
 import { startProbeServer } from '../tools/browser-vm/server.mjs';
 
-async function fixture(t, { iso = false, recovery = false, directDownload = false, runtimeOwner = false } = {}) {
+async function fixture(t, { iso = false, recovery = false, directDownload = false, runtimeOwner = false, checkpointRecovery = false } = {}) {
   const assets = await mkdtemp(join(tmpdir(), 'workbench-vm-server-'));
   t.after(() => rm(assets, { recursive: true, force: true }));
   await writeFile(join(assets, 'seabios.bin'), new Uint8Array([7, 8, 9]));
@@ -16,7 +16,7 @@ async function fixture(t, { iso = false, recovery = false, directDownload = fals
     await writeFile(join(assets, 'alpine-virt-3.24.1-x86.iso'), new Uint8Array([3, 4]));
     await writeFile(join(assets, 'private.txt'), 'not public');
   }
-  const server = await startProbeServer({ assets, recovery, directDownload, runtimeOwner, ...(iso ? { isoAssets: assets } : {}) });
+  const server = await startProbeServer({ assets, recovery, directDownload, runtimeOwner, checkpointRecovery, ...(iso ? { isoAssets: assets } : {}) });
   t.after(async () => {
     await server.close();
   });
@@ -167,4 +167,17 @@ test('file panel styles stay same-origin and opt-in without allowing inline styl
  const response=await fetch(server.url+'/runtime-owner.html');assert.match(response.headers.get('content-security-policy'),/style-src 'self';/);assert.doesNotMatch(response.headers.get('content-security-policy'),/unsafe-inline/);
  const html=await response.text();assert.match(html,/href="\/runtime-owner.css"/);assert.doesNotMatch(html,/<style>/);
  const css=await fetch(server.url+'/runtime-owner.css');assert.match(css.headers.get('content-type'),/text\/css/);assert.equal(css.status,200);
+});
+
+test('checkpoint failure matrix is opt-in and cannot expose source or accept cross-origin actions', async t => {
+ const ordinary=await fixture(t);
+ const paths=['/checkpoint-recovery.html','/checkpoint-recovery-browser.mjs','/checkpoint-recovery-worker.mjs'];
+ for(const path of paths)assert.equal((await fetch(ordinary.url+path)).status,404);
+ const server=await fixture(t,{checkpointRecovery:true});
+ for(const path of paths){
+  const response=await fetch(server.url+path);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal((await fetch(server.url+path,{headers:{Origin:'https://other.example'}})).status,403);
+  assert.equal((await fetch(server.url+path,{method:'POST'})).status,405);
+ }
+ assert.equal((await fetch(server.url+'/frontend/features/environments/storage/checkpoints.mjs')).status,404);
 });
