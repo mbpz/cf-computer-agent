@@ -16,15 +16,23 @@ describe("inbox archive and restore recovery through App", () => {
   const action = () => [...main().querySelectorAll<HTMLButtonElement>("button")].find(node => ["Archive", "Restore"].includes(node.textContent ?? ""))!;
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   const click = async (node: HTMLButtonElement) => { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); };
+  const confirmAction = async () => {
+    const before = bodies.length;
+    await click(action()); expect(bodies).toHaveLength(before);
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+  };
   const navigate = async (path: string) => { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); };
   async function mount(raw: string | null = null, member = "alice") {
     app = await mountApp({ url: "https://app.test/inbox?page=2&status=inbox", configureBrowser(browser) {
+      vi.stubGlobal("HTMLElement", browser.HTMLElement);
       if (raw !== null) browser.sessionStorage.setItem(key, raw);
     }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"), path = url.pathname;
       if (path === "/api/session") return Response.json({ member: { id: member, email: `${member}@app.test`, role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
       if (path === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (path === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (path === "/api/notifications/summary") return Response.json({ unread: 0 });
+      expect(path).toMatch(/^\/api\/inbox(?:\/|$)/);
       calls.push(`${init?.method ?? "GET"} ${url.pathname}${url.search}`);
       if (init?.method === "PATCH") {
         expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
@@ -44,18 +52,31 @@ describe("inbox archive and restore recovery through App", () => {
     } }); await waitForApp(() => !!action());
   }
   afterEach(async () => { await app?.unmount(); app = undefined; calls = []; bodies = []; writeStatus = detailStatus = listStatus = 200; wrongId = staleReceipt = malformedDetail = delay = false; status = "inbox"; updatedAt = version; resolveWrite = undefined; detailVersion = undefined; });
+  it("query navigation invalidates an unsubmitted decision without a marker", async () => {
+    await mount(); await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await navigate("/inbox?page=2"); await waitForApp(() => !!action()); await click(stale);
+    expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+  });
+  it("cancel and route exit leave no write or recovery marker", async () => {
+    await mount(); await click(action()); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await click(main().querySelector<HTMLButtonElement>("[data-cancel-action]")!);
+    expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await click(action()); const stale = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await navigate("/unknown"); await click(stale); expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
+    await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action()); expect(main().querySelector('[role="alertdialog"]')).toBeNull();
+  });
   it("archives with version and owned detail plus exact current page readback", async () => {
-    await mount(); await click(action()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
+    await mount(); await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
     expect(main().textContent).not.toContain("Private row");
     expect(bodies).toEqual([{ status: "archived", expectedUpdatedAt: version }]);
     expect(calls).toEqual(["GET /api/inbox?page=2&pageSize=20&status=inbox", "PATCH /api/inbox/row", "GET /api/inbox/row", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
     await navigate("/inbox?page=2&status=archived"); await waitForApp(() => action()?.textContent === "Restore");
-    await click(action()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies[1]).toEqual({ status: "inbox", expectedUpdatedAt: next });
+    await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies[1]).toEqual({ status: "inbox", expectedUpdatedAt: next });
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
   });
   it.each([409, 503])("retains unknown/conflicting write %s across route return, recovers with GET only", async code => {
-    await mount(); writeStatus = code; await click(action()); expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
+    await mount(); writeStatus = code; await confirmAction(); expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
     const saved = app!.browser.sessionStorage.getItem(key)!; expect(saved).not.toContain("Private row"); expect(saved).not.toContain('"status"');
     await navigate("/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
     expect(action().disabled).toBe(true); expect(bodies).toHaveLength(1);
@@ -64,16 +85,16 @@ describe("inbox archive and restore recovery through App", () => {
   });
   it.each(["id", "version"])("keeps a malformed %s receipt unresolved without write retry", async mode => {
     await mount(); wrongId = mode === "id"; staleReceipt = mode === "version";
-    await click(action()); expect(recover()).toBeTruthy(); expect(bodies).toHaveLength(1);
+    await confirmAction(); expect(recover()).toBeTruthy(); expect(bodies).toHaveLength(1);
     await click(recover()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies).toHaveLength(1);
   });
   it.each([401, 403, 404, 503])("clears private rows on owned read failure %s after ACK", async code => {
-    await mount(); detailStatus = code; await click(action()); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    await mount(); detailStatus = code; await confirmAction(); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("Private row"); expect(bodies).toHaveLength(1);
     expect(app!.browser.sessionStorage.getItem(key) === null).toBe(code === 401 || code === 403);
   });
   it("retains the lock when exact page readback fails and can recover without PATCH", async () => {
-    await mount(); listStatus = 503; await click(action()); await waitForApp(() => main().textContent!.includes("Unable to load"));
+    await mount(); listStatus = 503; await confirmAction(); await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(recover()).toBeTruthy(); listStatus = 200; await click(recover()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies).toHaveLength(1);
   });
   it("clears private rows and retains the marker for malformed recovery detail", async () => {
@@ -86,13 +107,13 @@ describe("inbox archive and restore recovery through App", () => {
     expect(app!.browser.sessionStorage.getItem(key) === null).toBe(code === 401 || code === 403);
   });
   it("unlocks a definite rejection but never silently retries it", async () => {
-    await mount(); writeStatus = 400; await click(action()); expect(action().disabled).toBe(false);
+    await mount(); writeStatus = 400; await confirmAction(); expect(action().disabled).toBe(false);
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull(); expect(bodies).toHaveLength(1);
   });
   it.each(["ack", "recovery"])("rejects a regressed owned version during %s", async phase => {
     await mount(phase === "recovery" ? marker : null);
     detailVersion = phase === "ack" ? version : "2026-09-27T00:00:00.000Z";
-    await click(phase === "ack" ? action() : recover());
+    if (phase === "ack") await confirmAction(); else await click(recover());
     expect(main().textContent).not.toContain("Private row"); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
     expect(bodies).toHaveLength(phase === "ack" ? 1 : 0);
   });
@@ -103,10 +124,12 @@ describe("inbox archive and restore recovery through App", () => {
     await mount(raw); expect(action().disabled).toBe(true); await click(recover()); expect(bodies).toHaveLength(0);
   });
   it("does not write when the recovery marker cannot be saved", async () => {
-    await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); }); await click(action()); expect(bodies).toHaveLength(0); expect(action().disabled).toBe(true);
+    await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); }); await confirmAction(); expect(bodies).toHaveLength(0); expect(action().disabled).toBe(true);
   });
   it("deduplicates clicks and ignores a late response after route leave", async () => {
-    await mount(); delay = true; const button = action(); await act(async () => { button.click(); button.click(); }); await waitForApp(() => !!resolveWrite);
+    await mount(); delay = true; const button = action(); await act(async () => { button.click(); button.click(); }); expect(bodies).toHaveLength(0);
+    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await act(async () => { confirm.click(); confirm.click(); }); await waitForApp(() => !!resolveWrite);
     await navigate("/unknown"); const count = calls.length; await act(async () => resolveWrite!());
     expect(calls).toHaveLength(count); expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
     await navigate("/inbox?page=2"); await waitForApp(() => !!action()); expect(action().disabled).toBe(true);

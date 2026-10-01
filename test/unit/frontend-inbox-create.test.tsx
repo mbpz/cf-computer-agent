@@ -30,6 +30,8 @@ describe("inbox stable capture through App", () => {
       if (url.pathname === "/api/session") return Response.json({ member: { id: memberId, email: "contributor@app.test", role: "contributor" }, capabilities: ["knowledge:read", "submission:create", "submission:read-own"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (url.pathname === "/api/notifications/summary") return Response.json({ unread: 0 });
+      expect(url.pathname).toMatch(/^\/api\/inbox(?:\/|$)/);
       if (init?.method === "POST") { const body = JSON.parse(String(init.body)); bodies.push(body); return respond(body); }
       reads++;
       if (readFailure) return apiError(503, "UNAVAILABLE", true);

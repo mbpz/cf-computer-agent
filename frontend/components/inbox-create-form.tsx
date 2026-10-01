@@ -16,8 +16,8 @@ export interface InboxCreateCallbacks {
 type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "storage-blocked";
 
 // Persist before POST; restored intents require explicit retry, never a new key.
-export function InboxCreateForm({ locale, createMemberId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: InboxCreateCallbacks & {
-  locale: LocaleRuntime; pending?: boolean;
+export function InboxCreateForm({ locale, createMemberId, pending = false, isSubmitBlocked, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: InboxCreateCallbacks & {
+  locale: LocaleRuntime; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredInboxIntent>(() => createMemberId ? loadInboxIntent(createMemberId) : { kind: "blocked" });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
@@ -76,7 +76,7 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, onCre
     }
   };
   const submit = async () => {
-    if (pending || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
       const candidate: InboxCreateIntent = { id: crypto.randomUUID(), clientKey: crypto.randomUUID(), kind, content: content.trim(), sourceUrl: kind === "link" ? sourceUrl.trim() : null };

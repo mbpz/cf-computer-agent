@@ -20,10 +20,12 @@ describe("inbox numbered pages through App", () => {
   async function mount(search = "", count = 43) {
     total = count; delayWrite = false; resolveWrite = undefined; failReadAfterWrite = false;
     requests = []; methods = []; delayPageTwo = false; resolvePageTwo = undefined; delayedSignal = undefined; fail = undefined; malformed = false;
-    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}${search}`, role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: `https://app.test/${kind}${search}`, role: "contributor", permissionMask: "0x100000", configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (url.pathname === "/api/notifications/summary") return Response.json({ unread: 0 });
+      expect(url.pathname).toMatch(/^\/api\/inbox(?:\/|$)/);
       requests.push(url); methods.push(init?.method ?? "GET");
       if (init?.method === "PATCH") {
         const id = Number(url.pathname.split("row-")[1]);
@@ -155,6 +157,8 @@ describe("inbox numbered pages through App", () => {
   it("refreshes the exact numbered filter after archive, never appending", async () => {
     await mount("?page=2&status=inbox");
     await click([...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!);
+    expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     await waitForApp(() => methods.length === 4 && main().textContent!.includes("Private row 20"));
     expect(methods).toEqual(["GET", "PATCH", "GET", "GET"]);
     expect(requests[3]!.search).toBe(requests[0]!.search);
@@ -163,6 +167,8 @@ describe("inbox numbered pages through App", () => {
   it("denied readback removes private rows after a successful write", async () => {
     await mount(); failReadAfterWrite = true;
     await click([...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!);
+    expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
     await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("Private row");
   });
@@ -170,6 +176,9 @@ describe("inbox numbered pages through App", () => {
     await mount(); delayWrite = true;
     const archive = [...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!;
     await act(async () => { archive.click(); archive.click(); });
+    expect(methods.filter(method => method === "PATCH")).toHaveLength(0);
+    const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await act(async () => { confirm.click(); confirm.click(); });
     await waitForApp(() => !!resolveWrite);
     await navigate("?page=3"); await waitForApp(() => main().textContent!.includes("Private row 42"));
     const before = requests.length;
