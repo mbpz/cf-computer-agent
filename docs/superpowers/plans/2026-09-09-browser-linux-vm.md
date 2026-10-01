@@ -10,6 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-09-browser-linux-vm-design.md`；网络变更见 `docs/superpowers/specs/2026-09-11-browser-vm-local-connector-design.md`（2026-09-11 用户批准顺序实施，HTTPS 准入仍开放）。
 
+### 2026-10-01 personal checkpoint local slice
+
+**范围覆盖说明：** 当前用户明确选择“不加密、不备份”。本批提供未加密本地快照，不实施原设计的加密/备份部分；旧设计相关条款仅为历史，不可将其勾成已交付。保留两代检查点用于事务恢复，不是外部备份。账户分区不能抵御同源恶意代码或设备访问。
+
+- [x] 账户/来源/环境隔离的 IndexedDB 存储、两代原子提交、CAS、摘要与兼容性校验、配额和墓碑保护。
+- [x] 运行时保存/保存并停止/显式恢复，个人环境5分钟自动保存、临时环境拒绝持久化、取消与账户退出隔离。
+- [x] Worker暂停快照、文件租约互斥、恢复不重放引导命令；恢复运行失败关闭引擎。
+- [x] 自带浏览器原生IndexedDB：保存并停止→刷新页面→恢复→根目录与共享文件读回；仅独立诊断身份。本轮不是旧文件流式保存验收。
+- [x] 快速VM553/553、真实Alpine1/1（两个实例均退出）、类型及UI构建通过。收据 `design/browser-vm/2026-10-01-vm-persistence.json`。
+- [ ] 下一项：本地副本删除对账及上一完整版本恢复入口；账户元数据与跨标签作废接线、正式认证挂载仍遵守G0。
+- [ ] 签名生产镜像、完整浏览器崩溃/配额/撤权矩阵及生产验收；D04保持开放，不将诊断页当正式交付。
+
 ### 2026-10-01 selected-file submission local slice
 
 - [x] G4a / VM-030文本、Markdown和代码显式审核提交：共享根128 KiB专用读取不跟随链接；内容按字面显示；明确空间和可见范围；原幂等键/原载荷恢复；账户失效清理。聚焦32、兼容18、快速VM515及真实Alpine1均通过。收据：`design/browser-vm/2026-10-01-knowledge-import.json`。
@@ -211,4 +223,4 @@ await assert.rejects(verifyArtifacts(manifest, root), /engine|size|digest/);
 - [x] Bounded no-symlink binary Worker RPC and reusable member-bound React panel; real Alpine binary read/bounds verified separately from fixture HTTP controller/DOM tests.
 - [ ] Authenticated browser/formal mounting and actual configured asset parser acceptance remain G0-gated. Do not infer delivery from local component tests.
 
-Receipt: `design/browser-vm/2026-10-01-asset-import.json`; next D04 implementation item is account-owned persistent VM save/restore, with formal integration/production gates retained. This does not close the VM-030 parent or D04.
+Receipt: `design/browser-vm/2026-10-01-asset-import.json`; the subsequent account-owned persistence slice is recorded above, with formal integration/production gates retained. This does not close the VM-030 parent or D04.

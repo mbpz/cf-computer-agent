@@ -88,3 +88,19 @@ test('missing real login prompt times out, destroys the engine and never reports
   assert.equal(session.state, 'closed');
   assert.equal(engine.destroyed, 1);
 });
+
+const checkpointIdentity={engineVersion:'v1',imageVersion:'v1',memoryBytes:268435456,filesystem:'ram-root+in-memory-9p+readonly-iso'};
+test('checkpoint pauses engine, resumes on success/failure, and restore does not replay boot commands',async()=>{
+ const engine=new Engine();let running=false,fail=false;engine.run=()=>{running=true;if(!engine.inputs.length)queueMicrotask(()=>engine.output('localhost login: '));};engine.stop=async()=>{running=false;};engine.is_running=()=>running;engine.save_state=async()=>{assert.equal(running,false);if(fail)throw Error('save failed');return new TextEncoder().encode('ram and files').buffer;};
+ const first=createTerminalSession({createMachine:()=>engine,checkpointIdentity});await first.ready;const record=await first.checkpoint();assert.equal(running,true);fail=true;await assert.rejects(first.checkpoint(),/save failed/);assert.equal(running,true);await first.close();
+ const next=new Engine({boot:false});let restored;next.restore_state=async bytes=>{restored=new TextDecoder().decode(bytes);};const second=createTerminalSession({createMachine:()=>next,checkpointIdentity,checkpoint:record});await second.ready;assert.equal(restored,'ram and files');assert.deepEqual(next.inputs,[]);await second.close();
+});
+test('checkpoint cannot resume a closed session or leak late bytes',async()=>{
+ const engine=new Engine();let release,runs=0;engine.stop=async()=>{};engine.is_running=()=>false;engine.save_state=()=>new Promise(r=>release=r);
+ const session=createTerminalSession({createMachine:()=>engine,checkpointIdentity});await session.ready;engine.run=()=>{runs++;};const pending=session.checkpoint();while(!release)await new Promise(r=>setImmediate(r));await session.close();release(new Uint8Array([1]).buffer);await assert.rejects(pending,/closed/i);assert.equal(runs,0);
+});
+test('failure to resume after snapshot closes the engine instead of pretending ready',async()=>{
+ const engine=new Engine();engine.stop=async()=>{};engine.is_running=()=>false;engine.save_state=async()=>new Uint8Array([1]).buffer;
+ const session=createTerminalSession({createMachine:()=>engine,checkpointIdentity});await session.ready;engine.run=()=>{throw Error('private resume failure');};
+ await assert.rejects(session.checkpoint(),/CHECKPOINT_RESUME_FAILED/);assert.equal(session.state,'closed');assert.equal(engine.destroyed,1);
+});

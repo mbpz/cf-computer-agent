@@ -1,11 +1,12 @@
+import { sealCheckpoint, restoreCheckpoint } from './probe-checkpoint.mjs';
 import { createSharedFiles } from './shared-files.mjs';
 import { encodeProbeCommand, parseProbeReply } from './serial-protocol.mjs';
 
 const encoder = new TextEncoder();
 
 // Local G0 session, not the authenticated product runtime. The caller supplies
-// the verified Alpine profile. No networking, persistence or automatic replay.
-export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 }) {
+// the verified Alpine profile. No networking, automatic persistence or command replay.
+export function createTerminalSession({ createMachine, checkpointIdentity, checkpoint, bootTimeoutMs = 30_000 }) {
   if (typeof createMachine !== 'function' || !Number.isSafeInteger(bootTimeoutMs) || bootTimeoutMs <= 0) {
     throw new Error('Engine factory and positive boot deadline required');
   }
@@ -90,6 +91,15 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
   const ready = (async () => {
     try {
       await wait('emulator-ready', () => true);
+      if (checkpoint !== undefined) {
+        if (checkpointIdentity?.filesystem !== 'ram-root+in-memory-9p+readonly-iso') throw Error('UNSUPPORTED_CHECKPOINT');
+        await restoreCheckpoint(machine,checkpoint,checkpointIdentity);
+        if(state==='closed')throw Error('Terminal closed');
+        if(machine.fs9p)files=createSharedFiles({machine});
+        await machine.run();
+        if(state==='closed')throw Error('Terminal closed');
+        state='ready';return;
+      }
       if (machine.fs9p) files = createSharedFiles({machine});
       await serial(text => text.includes('localhost login: ') ? true : null, () => machine.run());
       await serial(text => text.includes('localhost:~# ') ? true : null, () => send('root\n'));
@@ -114,6 +124,27 @@ export function createTerminalSession({ createMachine, bootTimeoutMs = 30_000 })
       const bytes = encoder.encode(text);
       if (bytes.length > 4096) throw new Error('Terminal input exceeds 4096 bytes');
       machine.serial_send_bytes(0, bytes);
+    },
+    async checkpoint() {
+      if(state!=='ready')throw Error('Terminal not ready');
+      if(checkpointIdentity?.filesystem!=='ram-root+in-memory-9p+readonly-iso')throw Error('UNSUPPORTED_CHECKPOINT');
+      if(files?.busy)throw Error('FILES_BUSY');
+      state='saving';
+      try {
+        await machine.stop();
+        if(state==='closed')throw Error('Terminal closed');
+        if(machine.is_running())throw Error('CHECKPOINT_PAUSE_FAILED');
+        const bytes=await machine.save_state();
+        if(state==='closed')throw Error('Terminal closed');
+        const result=await sealCheckpoint(bytes,checkpointIdentity);
+        if(state==='closed')throw Error('Terminal closed');
+        return result;
+      } finally {
+        if(state!=='closed') {
+          try {await machine.run();if(state!=='closed')state='ready';}
+          catch {await close().catch(()=>{});throw Error('CHECKPOINT_RESUME_FAILED');}
+        }
+      }
     },
     file(input) {
       if (state !== 'ready') return Promise.reject(new Error('FILES_CLOSED'));

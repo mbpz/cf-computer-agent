@@ -80,3 +80,15 @@ test('file business errors are bounded receipts, not terminal failures; one oper
   assert.equal(port.messages.at(-1).error,'FILES_BUSY');assert.equal(calls,2);
   release({entries:[]});await tick();assert.equal(port.messages.at(-1).id,3);
 });
+
+test('worker passes explicit restore envelope, transfers checkpoint and sanitizes checkpoint errors',async()=>{
+ const port=new Port();let restore,fail=false;const record={schemaVersion:1,identity:{engineVersion:'v1',imageVersion:'v1',memoryBytes:1,filesystem:'ram-root+in-memory-9p+readonly-iso'},state:new Uint8Array([1]).buffer,bytes:1,sha256:'a'.repeat(64)};
+ attachTerminalWorker(port,async input=>{restore=input;return{ready:Promise.resolve(),close:async()=>{},checkpoint:async()=>{if(fail)throw Error('private data');return record;}};});
+ port.send({type:'start',id:1,checkpoint:record});await tick();assert.equal(restore,record);port.send({type:'checkpoint',id:2});await tick();assert.equal(port.messages.at(-1).value,record);
+ fail=true;port.send({type:'checkpoint',id:3});await tick();assert.deepEqual(port.messages.at(-1),{type:'checkpoint-result',id:3,error:'CHECKPOINT_SAVE_FAILED'});assert.equal(port.closed,false);
+});
+test('closed checkpoint session is a fatal sanitized failure, not a reusable business receipt',async()=>{
+ const port=new Port();attachTerminalWorker(port,async()=>({ready:Promise.resolve(),state:'closed',close:async()=>{},checkpoint:async()=>{throw Error('private engine failure');}}));
+ port.send({type:'start',id:1});await tick();port.send({type:'checkpoint',id:2});await tick();
+ assert.equal(port.closed,true);assert.deepEqual(port.messages.at(-1),{type:'failure',message:'CHECKPOINT_SESSION_FAILED'});
+});

@@ -175,6 +175,7 @@ export function createSharedFiles({ machine, capacityBytes = 128 * TEXT_LIMIT, d
     fail('INVALID_FILE_OPERATION');
   }
   return Object.freeze({
+    get busy() {return busy || !!download;},
     async request(input) {
       live(); if (busy) fail('FILES_BUSY'); input = copyFileRequest(input);
       if (input.op === 'downloadChunk' || input.op === 'downloadEnd') {

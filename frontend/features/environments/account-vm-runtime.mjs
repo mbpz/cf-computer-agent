@@ -9,10 +9,12 @@ function deferred() {
 
 /** Account-owned, explicitly started VM. Factory must synchronously return its
  * cancellable resource handle; asynchronous initialization belongs in ready.
- * No images, credentials, output or commands are persisted by this owner.
+ * Persistence is optional and delegated to the account-scoped checkpoint store.
+ * Full checkpoints can contain guest credentials/data; callers must disclose this.
  */
-export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.locks, createSession, bootTimeoutMs = 60000 }) {
+export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.locks, createSession, checkpoints, autoSaveMs = 300000, bootTimeoutMs = 60000 }) {
   if (!owner?.signal || typeof createSession !== 'function' || !Number.isFinite(bootTimeoutMs) || bootTimeoutMs <= 0) throw new Error('INVALID_RUNTIME');
+  if (!Number.isSafeInteger(autoSaveMs) || autoSaveMs < 0) throw new Error('INVALID_RUNTIME');
   let current;
   let snapshot = Object.freeze({ status: owner.signal.aborted ? 'closed' : 'idle', environmentId: null, output: '', reason: '' });
   const listeners = new Set();
@@ -27,6 +29,9 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
     for (const request of run.files) request.reject(new Error('VM_NOT_RUNNING'));
     run.files.clear();
     clearTimeout(run.timer);
+    clearTimeout(run.autoTimer);
+    run.operation.abort();
+    run.cancelWait.resolve();
     run.started.reject(new Error(reason));
     publish({ status: 'stopping', output: '', reason });
     // Disconnect only an existing network handle; stopping never creates one.
@@ -57,27 +62,57 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
   const unsubscribe = owner.onEnvironmentRemoved(id => { if (current?.environment.id === id) cancel('ENVIRONMENT_REMOVED'); });
   owner.signal.addEventListener('abort', () => { cancel('ACCOUNT_CLOSED'); unsubscribe(); }, { once: true });
 
-  return Object.freeze({
+  function scheduleSave(run) {
+    clearTimeout(run.autoTimer);
+    if (autoSaveMs && checkpoints && live(run) && run.environment.type === 'personal') {
+      run.autoTimer = setTimeout(() => {
+        if (live(run)) void runtime.save().catch(() => {}).finally(() => { if (live(run)) scheduleSave(run); });
+      }, autoSaveMs);
+    }
+  }
+  const runtime = {
     getSnapshot: () => snapshot,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    async start(environment) {
+    async start(environment, {restore = false} = {}) {
       if (!environment || environment.memberId !== owner.scope.memberId || !['personal', 'temporary'].includes(environment.type)) throw new Error('INVALID_ENVIRONMENT');
       owner.assertEnvironment(environment.id);
+      if (typeof restore !== 'boolean') throw Error('INVALID_RESTORE');
+      if (restore && environment.type !== 'personal') throw Error('PERSISTENCE_PERSONAL_ONLY');
+      if (restore && !checkpoints) throw Error('CHECKPOINT_STORAGE_UNAVAILABLE');
       if (!locks?.request) throw new Error('LOCKS_UNAVAILABLE');
       if (current) throw new Error('VM_BUSY');
-      const run = { environment: Object.freeze({ ...environment }), started: deferred(), release: deferred(), factoryDone: deferred(), cancelled: false, creating: false, files: new Set() };
+      const run = { environment: Object.freeze({ ...environment }), started: deferred(), release: deferred(), factoryDone: deferred(), cancelled: false, creating: false, files: new Set(), operation: new AbortController(), cancelWait: deferred(), revision: 0 };
       current = run;
-      publish({ status: 'acquiring', environmentId: environment.id, output: '', reason: '' });
+      publish({ status: 'acquiring', environmentId: environment.id, output: '', reason: '', savedAt: undefined });
       // Start through a microtask so even a throwing lock implementation is caught.
       run.lockTask = Promise.resolve().then(() => locks.request(VM_RUNTIME_LOCK, { mode: 'exclusive', ifAvailable: true }, async lock => {
         if (run.cancelled) return;
         if (!lock) throw new Error('VM_BUSY');
+        let restored;
+        if (restore) {
+          publish({status:'restoring'});
+          owner.disconnectEnvironment(environment.id);
+          try {
+            restored = await Promise.race([
+              checkpoints.load(run.environment, {signal:run.operation.signal}),
+              run.cancelWait.promise.then(() => {throw Error('VM_NOT_RUNNING');}),
+            ]);
+            if (!restored) throw Error('CHECKPOINT_NOT_FOUND');
+            run.revision = restored.headRevision;
+            if (!live(run)) return;
+            publish({savedAt:restored.savedAt});
+          } catch (error) {
+            if (live(run)) invalidate(run, error?.message === 'CHECKPOINT_NOT_FOUND' ? 'CHECKPOINT_NOT_FOUND' : 'CHECKPOINT_RESTORE_FAILED');
+            await cleanup(run);return;
+          }
+        }
         publish({ status: 'booting' });
         if (run.cancelled) return;
         run.creating = true;
         try {
           run.session = createSession({
             environment: run.environment,
+            ...(restored ? {checkpoint:restored.checkpoint} : {}),
             onOutput(text) { if (live(run) && typeof text === 'string') publish({ output: (snapshot.output + text).slice(-OUTPUT_LIMIT) }); },
             onClosed() { if (live(run)) void halt(run, 'WORKER_CLOSED').catch(() => {}); },
           });
@@ -95,6 +130,7 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
           clearTimeout(run.timer);
           publish({ status: 'running' });
           run.started.resolve();
+          scheduleSave(run);
         }, () => { if (live(run)) void halt(run, 'BOOT_FAILED').catch(() => {}); });
         await run.release.promise;
       })).catch(error => {
@@ -108,6 +144,34 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
         publish({ status: owner.signal.aborted ? 'closed' : 'idle', environmentId: null, output: '' });
       });
       return run.started.promise;
+    },
+    async save() {
+      const run = current;
+      if (!run || !live(run) || snapshot.status !== 'running') throw Error('VM_NOT_RUNNING');
+      if (run.environment.type !== 'personal') throw Error('PERSISTENCE_PERSONAL_ONLY');
+      if (!checkpoints || typeof run.session.checkpoint !== 'function') throw Error('CHECKPOINT_STORAGE_UNAVAILABLE');
+      if (run.files.size) throw Error('VM_BUSY');
+      const request = deferred();run.files.add(request);clearTimeout(run.autoTimer);
+      publish({status:'saving',reason:''});
+      Promise.resolve().then(async () => {
+        if (!live(run)) throw Error('VM_NOT_RUNNING');
+        const checkpoint = await run.session.checkpoint();
+        if (!live(run)) throw Error('VM_NOT_RUNNING');
+        const receipt = await checkpoints.save(run.environment, checkpoint, {expectedRevision:run.revision,signal:run.operation.signal});
+        if (!live(run)) throw Error('VM_NOT_RUNNING');
+        run.revision=receipt.revision;publish({savedAt:receipt.savedAt});return receipt;
+      }).then(receipt=>request.resolve(receipt),error=>{
+        const reason = !live(run) ? 'VM_NOT_RUNNING' : ['CHECKPOINT_CONFLICT','CHECKPOINT_QUOTA'].includes(error?.message) ? error.message : 'CHECKPOINT_SAVE_FAILED';
+        if(live(run)) publish({reason});request.reject(Error(reason));
+      });
+      try {return await request.promise;}
+      finally {run.files.delete(request);if(live(run)){publish({status:'running'});scheduleSave(run);}}
+    },
+    async saveAndStop() {
+      const run=current;
+      const receipt=await runtime.save();
+      if(current!==run || !live(run)) throw Error('VM_NOT_RUNNING');
+      await runtime.stop();return receipt;
     },
     async stop() {
       if (current) await halt(current, 'STOPPED');
@@ -138,5 +202,6 @@ export function createAccountVmRuntime({ owner, locks = globalThis.navigator?.lo
       catch { throw new Error(live(run) ? 'INPUT_FAILED' : 'VM_NOT_RUNNING'); }
       if (!live(run)) throw new Error('VM_NOT_RUNNING');
     },
-  });
+  };
+  return Object.freeze(runtime);
 }

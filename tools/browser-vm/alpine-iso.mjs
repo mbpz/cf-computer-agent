@@ -53,6 +53,18 @@ export async function verifyImageBytes(input, artifact) {
   return owned;
 }
 
+// Compatibility can be obtained without fetching or booting the development image.
+export async function alpineCheckpointIdentity() {
+  const identityDigest = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({
+    artifacts: ALPINE_ISO_ARTIFACTS, checkpointDeviceOptions,
+  }))));
+  const checkpointIdentity = Object.freeze({
+    engineVersion: 'v86-0.5.458', imageVersion: `alpine-virt-3.24.1-x86@${identityDigest}`,
+    memoryBytes: 256 * 1024 * 1024, filesystem: 'ram-root+in-memory-9p+readonly-iso',
+  });
+  return checkpointIdentity;
+}
+
 export async function prepareAlpineIso({ readAsset, Engine }) {
   if (typeof readAsset !== 'function' || typeof Engine !== 'function') throw new Error('An image reader and engine are required');
   const buffers = new Map();
@@ -62,13 +74,7 @@ export async function prepareAlpineIso({ readAsset, Engine }) {
   // Compile verified bytes, not a URL that the engine would fetch again later.
   // Do this before construction so a compilation failure cannot strand an engine.
   const wasmModule = await WebAssembly.compile(buffers.get('wasm'));
-  const identityDigest = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({
-    artifacts: ALPINE_ISO_ARTIFACTS, checkpointDeviceOptions,
-  }))));
-  const checkpointIdentity = Object.freeze({
-    engineVersion: 'v86-0.5.458', imageVersion: `alpine-virt-3.24.1-x86@${identityDigest}`,
-    memoryBytes: 256 * 1024 * 1024, filesystem: 'ram-root+in-memory-9p+readonly-iso',
-  });
+  const checkpointIdentity = await alpineCheckpointIdentity();
   const copy = role => ({ buffer: new Uint8Array(buffers.get(role)).buffer });
   return Object.freeze({
     checkpointIdentity,

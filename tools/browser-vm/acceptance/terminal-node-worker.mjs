@@ -12,7 +12,7 @@ const port = {
   removeEventListener(type, fn) { parentPort.off(type, listeners.get(fn)); listeners.delete(fn); },
   postMessage: (value, transfers) => parentPort.postMessage(value, transfers), close: () => parentPort.close(),
 };
-attachTerminalWorker(port, async () => {
+attachTerminalWorker(port, async checkpoint => {
   const profile = await prepareAlpineIso({ Engine: V86, readAsset: artifact => readFile(join(workerData[artifact.location], artifact.name)) });
-  return createTerminalSession({ createMachine: () => profile.createMachine() });
+  return createTerminalSession({ checkpoint, checkpointIdentity:profile.checkpointIdentity, createMachine: () => profile.createMachine() });
 });

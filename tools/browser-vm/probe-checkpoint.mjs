@@ -43,3 +43,12 @@ export async function restoreCheckpoint(machine, record, expectedIdentity) {
   if (await digest(state) !== expectedDigest) throw new Error('Checkpoint digest mismatch');
   await machine.restore_state(state);
 }
+
+// Shape/size guard for the Worker boundary. This is NOT digest verification.
+export function isCheckpointEnvelope(record) {
+  try {
+    if(!record || record.schemaVersion!==1 || typeof record.sha256!=='string' || !/^[a-f0-9]{64}$/.test(record.sha256))return false;
+    copyIdentity(record.identity);
+    return record.state instanceof ArrayBuffer && Number.isSafeInteger(record.bytes) && record.bytes>0 && record.bytes<=MAX_BYTES && record.state.byteLength===record.bytes;
+  } catch {return false;}
+}

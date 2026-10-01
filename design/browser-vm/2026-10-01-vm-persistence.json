@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-01",
+  "timezone": "Asia/Shanghai",
+  "baseline": "d4f3cc8",
+  "scope": "D04 personal VM local checkpoints; isolated diagnostic mounting, not formal authenticated release",
+  "implemented": [
+    "Unencrypted account/origin/environment-scoped IndexedDB checkpoints; temporary environments refused",
+    "Atomic head+state transaction, compare-and-swap revisions, retain newest two complete generations, quota preflight and 512 MiB cap",
+    "Digest and fixed engine/image/profile compatibility checked before persistence and restore; no silent old-version fallback",
+    "Persistent deletion tombstone and abort/owner-disposal guards; explicit cleanup receipt required",
+    "Manual save, save-and-stop, explicit restore, 5-minute personal autosave; no command replay and restore disconnects existing network",
+    "Worker checkpoint transport; pause/capture/resume and fatal cleanup on resume failure; streamed download lease prevents snapshots",
+    "Isolated diagnostic page exposes save/restore/status and unencrypted storage warnings"
+  ],
+  "verification": {
+    "fastVm": {
+      "passed": 553,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 50226.782583
+    },
+    "checkpointStore": {
+      "passed": 10,
+      "includes": "aborted active transaction, corrupt persisted bytes, quota, CAS, tombstones, isolation"
+    },
+    "runtimeCheckpoint": {
+      "passed": 9,
+      "includes": "autosave, cancellation, fresh-instance overwrite refusal, save-and-stop"
+    },
+    "realAlpine": {
+      "passed": 1,
+      "checkpointBytes": 136926284,
+      "newOwnerAndWorker": true,
+      "rootAndSharedFilesRestored": true,
+      "workersExited": 2,
+      "checkpointRevisions": 2,
+      "offline": true,
+      "indexedDB": "fake-indexeddb external boundary",
+      "durationMs": 20160.703166
+    },
+    "nativeBrowser": {
+      "browser": "Codex in-app browser",
+      "origin": "http://127.0.0.1:50804",
+      "path": "/runtime-owner.html",
+      "nativeIndexedDB": true,
+      "savedThenStopped": true,
+      "pageReloaded": true,
+      "explicitRestore": true,
+      "rootMarker": "native-root-ok",
+      "sharedMarker": "native-shared-ok",
+      "terminalReceipt": "NATIVE-RESTORED-OK",
+      "sharedFileListed": "native.txt",
+      "stoppedAfterAcceptance": true,
+      "screenshot": "design/browser-vm/persistence-native-browser.png",
+      "scope": "One diagnostic browser happy path; not full browser matrix, quota/crash or authenticated acceptance"
+    },
+    "projectTypecheck": "passed",
+    "strictDeclarationTypecheck": "passed",
+    "buildUi": "passed; existing large-chunk warning",
+    "checklistTests": {
+      "passed": 9
+    },
+    "diffCheck": "passed",
+    "cleanup": "Diagnostic VM stopped, agent-created tab closed, local probe server stopped; interrupted-test generated directory removed"
+  },
+  "limitations": [
+    "Unencrypted snapshots can include guest credentials or other private data. Account partitioning is not protection from same-origin code or device access. No cloud backup or persistence guarantee against browser eviction.",
+    "Only fixed RAM-root + in-memory-9p + readonly-ISO development profile; arbitrary writable external disks are unsupported.",
+    "Production signed image/manifest and formal authenticated UI mounting remain G0-gated.",
+    "Formal deletion-reconciler wiring, cross-tab/account metadata revalidation and complete browser crash/quota/revocation matrix remain pending.",
+    "Retained previous version has a store-level explicit load API; no recovery-selection UI yet.",
+    "No permission changes, external network/GitHub retry, APK reinstall or production operations."
+  ],
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "excluded": [
+      "D08"
+    ],
+    "D04": "open"
+  },
+  "operations": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "productionSecretsRead": false,
+    "encryptionAdded": false,
+    "backupAdded": false
+  },
+  "logs": [
+    "/private/tmp/vm-persistence-full.log",
+    "/private/tmp/vm-persistence-real.log",
+    "/private/tmp/vm-persistence-build.log"
+  ],
+  "next": "Complete local VM cleanup/reconciliation and recovery controls; preserve G0 gate for formal authenticated mounting."
+}

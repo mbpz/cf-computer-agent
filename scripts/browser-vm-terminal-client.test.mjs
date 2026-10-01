@@ -99,3 +99,10 @@ test('file RPC returns bounded results and rejects business errors without repla
  worker.reply({type:'file-result',id:worker.messages.at(-1).id,error:'FILE_CONFLICT'});await assert.rejects(failed,/FILE_CONFLICT/);
  assert.equal(terminal.state,'ready');terminal.close();
 });
+
+test('checkpoint RPC serializes input/files, returns bounded envelope and closes on malformed receipt',async()=>{
+ const worker=new WorkerPort(),terminal=connectTerminal({createWorker:()=>worker,pollMs:10000});worker.reply({type:'ready',id:1});await terminal.ready;
+ const pending=terminal.checkpoint();await assert.rejects(terminal.write('no'),/pending/i);await assert.rejects(terminal.file({op:'list',path:'/'}),/FILES_BUSY/);
+ const request=worker.messages.at(-1);assert.equal(request.type,'checkpoint');worker.reply({type:'checkpoint-result',id:request.id,error:'CHECKPOINT_SAVE_FAILED'});await assert.rejects(pending,/CHECKPOINT_SAVE_FAILED/);assert.equal(terminal.state,'ready');
+ const bad=terminal.checkpoint();worker.reply({type:'checkpoint-result',id:worker.messages.at(-1).id,value:{state:new ArrayBuffer(0)}});await assert.rejects(bad,/Invalid checkpoint/);assert.equal(worker.terminated,true);
+});
