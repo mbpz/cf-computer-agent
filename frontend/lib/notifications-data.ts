@@ -1,3 +1,4 @@
+import { invalidateNotificationSummary } from "./notification-summary-events";
 import { apiFetch, type Fetcher } from "./api";
 import { createNumberedRequestController, normalizeNumberedPage, type FrontendNumberedPage, type FrontendPageRequest } from "./numbered-page";
 
@@ -80,12 +81,14 @@ export function createNotificationsRequestController(requester: Fetcher = fetch)
 
 export async function markNotificationRead(id: string, requester: Fetcher = fetch): Promise<NotificationItem> {
   assertId(id, "NOTIFICATION_ID_INVALID");
-  const receipt = normalizeNotification(await apiFetch<unknown>(`/api/notifications/${encodeURIComponent(id)}/read`, {
-    requester,
-    method: "POST",
-  }));
-  if (receipt.id !== id || receipt.readAt === null) throw new Error("NOTIFICATION_READ_RESPONSE_INVALID");
-  return receipt;
+  try {
+    const receipt = normalizeNotification(await apiFetch<unknown>(`/api/notifications/${encodeURIComponent(id)}/read`, {
+      requester,
+      method: "POST",
+    }));
+    if (receipt.id !== id || receipt.readAt === null) throw new Error("NOTIFICATION_READ_RESPONSE_INVALID");
+    return receipt;
+  } finally { invalidateNotificationSummary(); }
 }
 
 export async function markVisibleNotificationsRead(ids: readonly string[], requester: Fetcher = fetch): Promise<{ marked: number }> {
@@ -96,17 +99,19 @@ export async function markVisibleNotificationsRead(ids: readonly string[], reque
     try { assertId(id, "NOTIFICATION_BULK_INVALID"); } catch { throw new Error("NOTIFICATION_BULK_INVALID"); }
     if (!seen.has(id)) { seen.add(id); unique.push(id); }
   }
-  const value = await apiFetch<unknown>("/api/notifications/read", {
-    requester,
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ids: unique }),
-  });
-  if (!isRecord(value) || Object.keys(value).some((key) => key !== "marked")
-    || !Number.isSafeInteger(value.marked) || typeof value.marked !== "number" || value.marked < 0 || value.marked > unique.length) {
-    throw new Error("NOTIFICATION_BULK_RESPONSE_INVALID");
-  }
-  return { marked: value.marked };
+  try {
+    const value = await apiFetch<unknown>("/api/notifications/read", {
+      requester,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids: unique }),
+    });
+    if (!isRecord(value) || Object.keys(value).some((key) => key !== "marked")
+      || !Number.isSafeInteger(value.marked) || typeof value.marked !== "number" || value.marked < 0 || value.marked > unique.length) {
+      throw new Error("NOTIFICATION_BULK_RESPONSE_INVALID");
+    }
+    return { marked: value.marked };
+  } finally { invalidateNotificationSummary(); }
 }
 
 function notificationQuery(filters: NotificationFilters, pagination: FrontendPageRequest): string {

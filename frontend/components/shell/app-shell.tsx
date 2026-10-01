@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNotificationSummary } from "../../lib/use-notification-summary";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Bell, BookOpen, CalendarBlank, CaretDown, ChartLine, ChatCircle, Check, Checks, DotsThree, Files, FolderSimple, GearSix, House, Kanban, MagnifyingGlass, Moon, NotePencil, Scroll, ShieldCheck, SidebarSimple, Sparkle, Stack, Sun, Target, Timer, UploadSimple, UsersThree } from "@phosphor-icons/react";
 import { ROUTES } from "../../contracts/routes";
 import type { SessionSnapshot } from "../../contracts/api";
@@ -75,6 +76,13 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
     : navigationTree("admin", session);
   const memberLabel = displayValue(session.member.email, locale.t("COMMON_VALUE_UNAVAILABLE"));
   const collaborationLinks = collaborationQuickLinks(session);
+  const notificationSummary = useNotificationSummary(
+    JSON.stringify([session.member.id, session.member.role, session.permissionMask, [...session.capabilities].sort()]),
+    pathname, !logoutPending && collaborationLinks.some(link => link.path === "/notifications"),
+  );
+  const unreadState = notificationSummary.state;
+  const unreadLabel = unreadState.kind === "ready" ? `${locale.t("NOTIFICATIONS_UNREAD_COUNT")} ${unreadState.unread}`
+    : locale.t(unreadState.kind === "loading" ? "SHELL_UNREAD_LOADING" : unreadState.kind === "forbidden" ? "NOTIFICATIONS_FORBIDDEN" : "SHELL_UNREAD_ERROR");
   const sidebarWorkspaceRoutes = withoutCollaborationRoutes(workspaceRoutes);
   const navigate = (path: string) => onNavigate?.(path);
   const changeTheme = (mode: ThemeMode) => {
@@ -110,7 +118,7 @@ export function AppShell({ session, pathname, contentScrollKey = pathname, local
           <div data-shell-topbar-actions className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2">
             <CommandPalette session={session} locale={locale} onNavigate={navigate} onToggleTheme={toggleTheme} onLogout={onLogout} logoutPending={logoutPending} />
             <nav data-shell-collaboration-navigation aria-label={locale.t("SHELL_COLLABORATION_NAVIGATION")} className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
-              {collaborationLinks.map((link) => <a key={link.path} data-route-id={routeCapability(link.path)?.id} href={link.path} title={locale.t(link.labelKey)} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} className={cn("flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-sm", isCollaborationActive(pathname, link.activePrefix) && "bg-accent font-medium text-accent-foreground")}><NavIcon path={link.icon} /><span className="hidden sm:inline sm:max-w-28 sm:truncate lg:max-w-none">{locale.t(link.labelKey)}</span></a>)}
+              {collaborationLinks.map((link) => <Fragment key={link.path}><a data-route-id={routeCapability(link.path)?.id} href={link.path} title={locale.t(link.labelKey)} aria-label={locale.t(link.labelKey)} aria-current={isCollaborationActive(pathname, link.activePrefix) ? "page" : undefined} onClick={(event) => { event.preventDefault(); navigate(link.path); }} className={cn("flex min-h-10 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:text-sm", isCollaborationActive(pathname, link.activePrefix) && "bg-accent font-medium text-accent-foreground")}><NavIcon path={link.icon} /><span className="hidden sm:inline sm:max-w-28 sm:truncate lg:max-w-none">{locale.t(link.labelKey)}</span>{link.path === "/notifications" && <span data-notification-summary data-state={unreadState.kind} role="status" aria-live="polite" aria-label={unreadLabel} title={unreadLabel} className="rounded bg-muted px-1 text-xs tabular-nums">{unreadState.kind === "ready" ? unreadState.unread : unreadState.kind === "loading" ? "…" : "—"}</span>}</a>{link.path === "/notifications" && unreadState.kind === "error" && <Button data-notification-summary-retry variant="ghost" size="sm" aria-label={locale.t("SHELL_UNREAD_RETRY")} onClick={notificationSummary.retry}>{locale.t("COMMON_RETRY")}</Button>}</Fragment>)}
             </nav>
             <DropdownMenu menuId="language" open={activeMenu === "language"} onOpenChange={(open) => setActiveMenu(open ? "language" : null)}>
               <DropdownMenuTrigger aria-label={locale.t("SHELL_LANGUAGE_LABEL")}><span aria-hidden="true">{locale.locale === "zh-CN" ? "中" : "EN"}</span></DropdownMenuTrigger>
