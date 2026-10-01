@@ -13,7 +13,7 @@ const { Window } = await import("happy-dom");
 
 describe("private task numbered route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("restores filters and page on popstate while aborting the stale request", async () => {
@@ -60,6 +60,7 @@ describe("private task numbered route", () => {
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     const button = container.querySelector("button.bg-destructive") as HTMLButtonElement; expect(button).toBeTruthy();
     await act(async () => button.click()); await flush();
+    expect(deleted).toBe(false); await clickButton("Delete permanently"); await flush();
     expect(browser.location.search).toContain("status=doing"); expect(browser.location.search).not.toContain("page=2");
     expect(urls.filter((url) => url.startsWith("/api/tasks?")).length).toBe(3);
   });
@@ -272,6 +273,76 @@ describe("private task numbered route", () => {
     expect(secondComplete.disabled).toBe(true); expect(secondDelete.disabled).toBe(true);
     await act(async () => secondComplete.click()); expect(mutations).toBe(1);
     await act(async () => resolveMutation(Response.json(items[0]))); await flush();
+  });
+
+  it("cancels deletion without HTTP writes then deletes the exact same-title target once", async () => {
+    browser.history.replaceState({}, "", "/tasks"); const writes: string[] = []; let finish!: (response: Response) => void;
+    const items = [{ ...createTask("Same"), id: "first" }, { ...createTask("Same"), id: "second-id" }];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") { writes.push(String(input)); return new Promise<Response>(resolve => { finish = resolve; }); }
+      return Response.json({ items: writes.length ? [items[0]] : items, pagination: { page: 1, pageSize: 20, total: writes.length ? 1 : 2, totalPages: 1 } });
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search="" />)); await flush();
+    await clickButton("Delete: Same (second-id)"); expect(writes).toEqual([]); await clickButton("Cancel"); expect(writes).toEqual([]);
+    await clickButton("Delete: Same (second-id)"); const confirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => { confirm.click(); confirm.click(); }); expect(writes).toEqual(["/api/tasks/second-id"]);
+    expect((container.querySelector('[aria-label="Delete: Same (first)"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finish(new Response(null, { status: 204 }))); await flush();
+    expect(container.querySelector('[aria-label="Delete: Same (second-id)"]')).toBeNull();
+    expect((container.querySelector('[aria-label="Delete: Same (first)"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it.each([401, 403])("clears tasks and does not replay a confirmed delete denied with %s", async status => {
+    let deletes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") { deletes++; return Response.json({ error: { code: "DENIED", message: "private server detail" } }, { status }); }
+      return taskPage(String(input));
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Delete: Alpha (task-alpha)"); expect(deletes).toBe(0); await clickButton("Delete permanently"); await flush();
+    expect(deletes).toBe(1); expect(container.textContent).not.toContain("Alpha"); expect(container.textContent).not.toContain("private server detail");
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); await clickButton("Try search again"); await flush();
+    expect(deletes).toBe(1); expect(container.textContent).toContain("Alpha");
+  });
+
+  it("invalidates an open delete during browser history read and rejects its stale button", async () => {
+    let gets = 0; let deletes = 0; let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") { deletes++; return new Response(null, { status: 204 }); }
+      return ++gets === 1 ? taskPage(String(input)) : new Promise<Response>(resolve => { finish = resolve; });
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Delete: Alpha (task-alpha)"); const old = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
+    await act(async () => { browser.history.pushState({}, "", "/tasks?page=1"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => old.click()); expect(deletes).toBe(0);
+    await act(async () => finish(taskPage("/api/tasks?page=1"))); await flush();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(0);
+  });
+
+  it("blocks stale deletion after a successful delete whose list read fails until explicit GET recovery", async () => {
+    let gets = 0; let deletes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") { deletes++; return new Response(null, { status: 204 }); }
+      if (++gets === 2) return errorResponse(); return taskPage(String(input));
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
+    const stale = container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement; expect(stale.disabled).toBe(true);
+    await act(async () => stale.click()); expect(container.querySelector('[role="alertdialog"]')).toBeNull(); expect(deletes).toBe(1);
+    await clickButton("Try search again"); await flush(); expect(gets).toBe(3); expect(deletes).toBe(1);
+    expect((container.querySelector('[aria-label="Delete: Alpha (task-alpha)"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not automatically repeat a failed delete and requires a fresh confirmation for another attempt", async () => {
+    let deletes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") { deletes++; throw new TypeError("Network failed"); } return taskPage(String(input));
+    });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    await clickButton("Delete: Alpha (task-alpha)"); await clickButton("Delete permanently"); await flush();
+    expect(deletes).toBe(1); expect(container.textContent).toContain("Unable to update the task."); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    await clickButton("Delete: Alpha (task-alpha)"); expect(deletes).toBe(1); await clickButton("Cancel"); expect(deletes).toBe(1);
   });
 
   async function clickButton(name: string) {
