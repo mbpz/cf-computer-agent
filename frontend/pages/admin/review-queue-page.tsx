@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
@@ -17,6 +18,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
   pendingId?: string | null; completedId?: string | null; decisionState?: ReviewDecisionState; localError?: string; pending?: boolean;
   onPageChange?: (page: number) => void; onPageSizeChange?: (size: SupportedPageSize) => void; locale: LocaleRuntime;
 }) {
+  const confirmationLock = useRef<object | null>(null);
   const retry = <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>;
   if (state.kind === "loading") return <div aria-busy="true"><Skeleton className="h-24" /></div>;
   if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")}>{retry}</PageState>;
@@ -39,9 +41,9 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
         </h2><p className="mt-1 text-xs text-muted-foreground">{item.submitter || frontendText(locale, "ADMIN_REVIEW_SUBMITTER_UNAVAILABLE")}</p></div>
           <Badge variant="outline">{item.status || frontendText(locale, "ADMIN_REVIEW_STATUS_UNAVAILABLE")}</Badge>
         </div>
-        <ReviewDecisionControls disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
+        <ReviewDecisionControls confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
           pendingAction={pendingId === item.id && decisionState.kind === "pending" ? decisionState.action : undefined}
-          targetLabel={target} locale={locale} onDecision={(action, details) => onReview?.(item.id, action, details)} />
+          targetId={item.id} snapshot={state.data} targetLabel={target} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />
       </CardContent></Card>;
     }) : <PageState kind="empty" title={frontendText(locale, "ADMIN_REVIEW_EMPTY")} description={frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")} />}
     <DataPagination {...state.data.pagination} locale={locale} pending={pending || Boolean(pendingId) || locked}

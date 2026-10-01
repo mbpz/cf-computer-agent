@@ -1,4 +1,5 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ConfirmAction } from "../ui/confirm-action";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
@@ -17,40 +18,92 @@ export function reviewDecisionLocked(state: ReviewDecisionState): boolean {
   return state.kind === "pending" || (state.kind === "error" && state.recovery !== "edit");
 }
 
-export function ReviewDecisionControls({ disabled, terminal, pendingAction, onDecision, locale, targetLabel }: {
+type NoteAction = "reject" | "request_changes";
+const initialDetails = (action: NoteAction): ReviewNoteInput => ({ reasonCode: action === "reject" ? "not_relevant" : "needs_revision", note: "" });
+const decisionLabel = (action: ReviewDecision) => action === "publish" ? "ADMIN_REVIEW_PUBLISH" : action === "reject" ? "ADMIN_REVIEW_REJECT" : "ADMIN_REVIEW_REQUEST_CHANGES";
+
+export function ReviewDecisionControls({ disabled, terminal, pendingAction, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock }: {
   disabled?: boolean; terminal?: boolean; pendingAction?: ReviewDecision;
-  onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void; locale?: LocaleRuntime; targetLabel?: string;
+  onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void; locale?: LocaleRuntime; targetLabel: string; targetId: string; snapshot: unknown; confirmationLock?: { current: object | null };
 }) {
-  const [selected, setSelected] = useState<"reject" | "request_changes" | null>(null);
-  return <div className="space-y-3">
-    <div className="flex flex-wrap gap-2">
-      {(["publish", "request_changes", "reject"] as const).map((action) => {
-        const label = frontendText(locale, action === "publish" ? "ADMIN_REVIEW_PUBLISH" : action === "reject" ? "ADMIN_REVIEW_REJECT" : "ADMIN_REVIEW_REQUEST_CHANGES");
-        return <Button key={action} type="button" disabled={disabled || terminal} variant={action === "publish" ? "default" : action === "reject" ? "destructive" : "outline"}
-          aria-label={targetLabel ? `${label} ${targetLabel}` : undefined} aria-busy={pendingAction === action}
-          aria-expanded={action === "publish" ? undefined : selected === action}
-          onClick={() => { if (action === "publish") onDecision?.(action); else setSelected(action); }}>
-          {pendingAction === action ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : label}
-        </Button>;
-      })}
+  type Confirmation = { kind: "decision"; action: ReviewDecision; details?: ReviewNoteInput; snapshot: unknown; targetId: string; targetLabel: string }
+    | { kind: "discard"; next: ReviewDecision | null; snapshot: unknown; targetId: string; targetLabel: string };
+  const [selected, setSelected] = useState<NoteAction | null>(null);
+  const [details, setDetails] = useState<ReviewNoteInput>(initialDetails("reject"));
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const confirmationRef = useRef<Confirmation | null>(null);
+  const owner = useRef({});
+  const ownedElsewhere = () => Boolean(confirmationLock?.current && confirmationLock.current !== owner.current);
+  const locked = Boolean(disabled || terminal || pendingAction || !onDecision);
+  const valid = Boolean(confirmation && !locked && confirmation.snapshot === snapshot && confirmation.targetId === targetId && confirmation.targetLabel === targetLabel);
+  const release = () => { if (confirmationLock?.current === owner.current) confirmationLock.current = null; };
+  const cancel = () => { confirmationRef.current = null; setConfirmation(null); release(); };
+  useEffect(() => { if (confirmation && !valid) cancel(); }, [confirmation, valid]);
+  useEffect(() => { setSelected(null); setDetails(initialDetails("reject")); }, [snapshot, targetId]);
+  useEffect(() => () => { confirmationRef.current = null; release(); }, [confirmationLock]);
+  const open = (next: Confirmation) => {
+    if (ownedElsewhere()) return;
+    if (confirmationLock) confirmationLock.current = owner.current;
+    confirmationRef.current = next; setConfirmation(next);
+  };
+  const capture = { snapshot, targetId, targetLabel };
+  const dirty = selected !== null && (details.note !== "" || details.reasonCode !== initialDetails(selected).reasonCode);
+  const choose = (next: ReviewDecision | null) => {
+    setSelected(next === "publish" ? null : next);
+    if (next === "publish") open({ kind: "decision", action: "publish", ...capture });
+    else if (next) setDetails(initialDetails(next));
+  };
+  const requestChoice = (next: ReviewDecision | null) => {
+    if (locked || ownedElsewhere() || confirmationRef.current || (next !== null && next === selected)) return;
+    if (dirty) open({ kind: "discard", next, ...capture });
+    else choose(next);
+  };
+  const submit = () => {
+    if (locked || ownedElsewhere() || confirmationRef.current || !selected || !validReviewNote(details.note)) return;
+    open({ kind: "decision", action: selected, details: { ...details }, ...capture });
+  };
+  const confirm = () => {
+    if (!valid || !confirmation || confirmationRef.current !== confirmation) return;
+    cancel(); // Consume synchronously: a stale/double click cannot send another decision.
+    if (confirmation.kind === "discard") choose(confirmation.next);
+    else onDecision?.(confirmation.action, confirmation.details);
+  };
+  const description = !confirmation ? "" : `${confirmation.targetLabel} (${confirmation.targetId}). ${confirmation.kind === "discard"
+    ? frontendText(locale, "ADMIN_REVIEW_DISCARD_IMPACT")
+    : `${frontendText(locale, confirmation.action === "publish" ? "ADMIN_REVIEW_PUBLISH_IMPACT" : confirmation.action === "reject" ? "ADMIN_REVIEW_REJECT_IMPACT" : "ADMIN_REVIEW_REVISION_IMPACT")}${confirmation.details ? ` ${frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}: ${frontendText(locale, `ADMIN_REVIEW_REASON_${confirmation.details.reasonCode.toUpperCase()}`)}. ${frontendText(locale, "ADMIN_REVIEW_NOTE")}: ${confirmation.details.note}` : ""}`}`;
+  return <>
+    <div className="space-y-3" inert={valid} aria-hidden={valid || undefined}>
+      <div className="flex flex-wrap gap-2">
+        {(["publish", "request_changes", "reject"] as const).map((action) => {
+          const label = frontendText(locale, decisionLabel(action));
+          return <Button key={action} type="button" disabled={locked || valid} variant={action === "publish" ? "default" : action === "reject" ? "destructive" : "outline"}
+            aria-label={`${label} ${targetLabel}`} aria-busy={pendingAction === action}
+            aria-expanded={action === "publish" ? undefined : selected === action} onClick={() => requestChoice(action)}>
+            {pendingAction === action ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : label}
+          </Button>;
+        })}
+      </div>
+      {selected && !terminal && <ReviewDecisionForm action={selected} details={details} onChange={setDetails} disabled={locked || valid} locale={locale}
+        onCancel={() => requestChoice(null)} onSubmit={submit} />}
     </div>
-    {selected && !terminal && <ReviewDecisionForm key={selected} action={selected} disabled={disabled} locale={locale}
-      onCancel={() => setSelected(null)} onSubmit={(details) => onDecision?.(selected, details)} />}
-  </div>;
+    <ConfirmAction key={confirmation?.kind === "decision" ? confirmation.action : "discard"} open={valid} title={frontendText(locale, confirmation?.kind === "discard" ? "ADMIN_RECORD_DISCARD_TITLE" : "ADMIN_REVIEW_CONFIRM_TITLE")}
+      description={description} cancelLabel={frontendText(locale, "ADMIN_REVIEW_CANCEL")}
+      confirmLabel={frontendText(locale, confirmation?.kind === "discard" ? "ADMIN_RECORD_DISCARD_CONFIRM" : "ADMIN_REVIEW_CONFIRM_DECISION")}
+      destructive={confirmation?.kind === "discard" || confirmation?.action === "reject"} onCancel={cancel} onConfirm={confirm} />
+  </>;
 }
 
-export function ReviewDecisionForm({ action, disabled, locale, onSubmit, onCancel }: {
-  action: "reject" | "request_changes"; disabled?: boolean; locale?: LocaleRuntime;
+export function ReviewDecisionForm({ action, details, onChange, disabled, locale, onSubmit, onCancel }: {
+  action: "reject" | "request_changes"; details: ReviewNoteInput; onChange: (details: ReviewNoteInput) => void; disabled?: boolean; locale?: LocaleRuntime;
   onSubmit: (details: ReviewNoteInput) => void; onCancel: () => void;
 }) {
   const id = useId();
-  const [note, setNote] = useState("");
-  const [reasonCode, setReason] = useState<ReviewNoteInput["reasonCode"]>(action === "reject" ? "not_relevant" : "needs_revision");
+  const {note, reasonCode} = details;
   const valid = validReviewNote(note);
   return <form className="space-y-3 rounded-md border bg-muted/20 p-3" onSubmit={(event) => { event.preventDefault(); if (!disabled && valid) onSubmit({ reasonCode, note }); }}>
     {action === "reject" && <div className="space-y-2">
       <Label htmlFor={`${id}-reason`}>{frontendText(locale, "SUBMISSIONS_REVIEW_REASON")}</Label>
-      <Select id={`${id}-reason`} data-review-reason disabled={disabled} value={reasonCode} onChange={(event) => setReason(event.target.value as ReviewNoteInput["reasonCode"])}>
+      <Select id={`${id}-reason`} data-review-reason disabled={disabled} value={reasonCode} onChange={(event) => onChange({ ...details, reasonCode: event.target.value as ReviewNoteInput["reasonCode"] })}>
         <option value="not_relevant">{frontendText(locale, "ADMIN_REVIEW_REASON_NOT_RELEVANT")}</option>
         <option value="duplicate">{frontendText(locale, "ADMIN_REVIEW_REASON_DUPLICATE")}</option>
         <option value="unsafe">{frontendText(locale, "ADMIN_REVIEW_REASON_UNSAFE")}</option>
@@ -58,7 +111,7 @@ export function ReviewDecisionForm({ action, disabled, locale, onSubmit, onCance
     </div>}
     <div className="space-y-2">
       <Label htmlFor={`${id}-note`}>{frontendText(locale, "ADMIN_REVIEW_NOTE")}</Label>
-      <Textarea id={`${id}-note`} data-review-note disabled={disabled} value={note} onChange={(event) => setNote(event.target.value)}
+      <Textarea id={`${id}-note`} data-review-note disabled={disabled} value={note} onChange={(event) => onChange({ ...details, note: event.target.value })}
         aria-invalid={!valid} aria-describedby={`${id}-hint`} />
       <p id={`${id}-hint`} className={valid ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>
         {new TextEncoder().encode(note).byteLength} / {MAX_REVIEW_NOTE_BYTES} {frontendText(locale, "ADMIN_REVIEW_NOTE_HINT")}

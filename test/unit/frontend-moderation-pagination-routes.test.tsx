@@ -59,7 +59,7 @@ describe("moderation numbered routes", () => {
     const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState");
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return rejected("review-1"); gets.push(url); return gets.length === 1 ? numbered([{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(gets.map((url) => new URL(url, "https://app.test").searchParams.get("page") || "1")).toEqual(["2", "2", "1"]);
     expect(replace).toHaveBeenCalledTimes(1); expect(browser.location.search).not.toContain("page=2");
   });
@@ -94,14 +94,14 @@ describe("moderation numbered routes", () => {
     let gets = 0;
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") return rejected("review-kept"); gets += 1; if (gets > 1) throw new Error("refresh failed"); return numbered([{ id: "review-kept", title: "Review kept", submitterId: "m1", status: "review_pending" }], 2, 21); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(container.textContent).toContain("Review kept"); expect(container.querySelector('[role="alert"]')?.textContent).toBe("Unable to load the page."); expect(container.textContent).not.toContain("Unable to save this review decision.");
   });
 
   it("keeps the review list and reports action failure when the mutation itself fails", async () => {
     vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST" ? new Response(null, { status: 500 }) : numbered([{ id: "review-action", title: "Review action", submitterId: "m1", status: "review_pending" }], 2, 21));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(container.textContent).toContain("Review action"); expect(container.querySelector('[role="alert"]')?.textContent).toContain("The result is unknown"); expect(container.textContent).not.toContain("Unable to load the page.");
   });
 
@@ -143,7 +143,7 @@ describe("moderation numbered routes", () => {
       return numbered([{ id: "review-kept", title: gets === 1 ? "Before decision" : "After read retry" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(container.textContent).toContain("Before decision");
     await clickButton("Try again"); await flush();
     expect(container.textContent).toContain("After read retry"); expect(posts).toBe(1); expect(gets).toBe(3);
@@ -174,7 +174,8 @@ describe("moderation numbered routes", () => {
     const reject = container.querySelector('button[aria-label="Reject item-2-0"]') as HTMLButtonElement;
     await act(async () => { reject.click(); reject.click(); });
     const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm rejection")!;
-    await act(async () => { confirm.click(); confirm.click(); }); expect(posts).toBe(1);
+    await act(async () => { confirm.click(); confirm.click(); }); expect(posts).toBe(0);
+    const final = container.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async () => {final.click();final.click();});expect(posts).toBe(1);
     await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     expect((container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement).disabled).toBe(false);
     await act(async () => decision.resolve(rejected("item-2-0"))); await flush();
@@ -188,7 +189,7 @@ describe("moderation numbered routes", () => {
       return String(input).endsWith("/item-2-0") ? preview.promise : pageResponse(String(input), (id) => ({ id, title: id }));
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish");
+    await submitReview("Publish");
     await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     await act(async () => preview.resolve(json({ preview: { submissionId: "item-2-0", title: "Old item", status: "review_pending", requestedSpaceId: "default" } }))); await flush();
     expect(posts).toBe(0); expect(container.textContent).toContain("item-1-0");
@@ -197,7 +198,7 @@ describe("moderation numbered routes", () => {
   it.each([401, 403])("clears the queue if the publication preview returns %i", async (status) => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/item-2-0") ? new Response(null, { status }) : pageResponse(String(input), (id) => ({ id, title: id })));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush();
+    await submitReview("Publish"); await flush();
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
     expect(container.textContent).not.toContain("item-2-0");
   });
@@ -209,7 +210,7 @@ describe("moderation numbered routes", () => {
       gets++; return numbered([{ id: "review-1", title: "Review", status: "review_pending" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await typeNote("Please verify the source"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await typeNote("Please verify the source"); await submitReview("Confirm rejection"); await flush();
     expect(gets).toBe(1); expect(bodies).toHaveLength(1); expect(JSON.parse(bodies[0]!).note).toBe("Please verify the source");
     expect((container.querySelector('button[aria-label="Publish Review"]') as HTMLButtonElement).disabled).toBe(true);
     const again = [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry same decision")!;
@@ -226,7 +227,7 @@ describe("moderation numbered routes", () => {
       listReads++; return numbered([{ id: "review-1", title: "Review" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush();
+    await submitReview("Publish"); await flush();
     expect(listReads).toBe(1); expect(posts).toBe(1); expect(container.textContent).toContain("The result is unknown");
     expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
   });
@@ -240,7 +241,7 @@ describe("moderation numbered routes", () => {
       gets++; return json({ items: gets === 1 ? [{ id: "review-1", title: "Review" }] : [], pagination: { page: gets < 3 ? 2 : 1, pageSize: 50, total: gets === 1 ? 51 : 0, totalPages: gets === 1 ? 2 : 0 } });
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
     expect(gets).toBe(1); expect(container.textContent).toContain("The submission state changed");
     await clickButton("Reload current state"); await flush();
     expect(posts).toBe(1); expect(gets).toBe(3); expect(browser.location.search).toContain("pageSize=50"); expect(browser.location.search).toContain("view=pending");
@@ -254,7 +255,7 @@ describe("moderation numbered routes", () => {
       return numbered([{ id: "review-1", title: "Private review" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await typeNote("Private note"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await typeNote("Private note"); await submitReview("Confirm rejection"); await flush();
     await clickButton("Retry same decision"); await flush();
     expect(container.textContent).not.toContain("Private review"); expect(container.querySelector("textarea[data-review-note]")).toBeNull();
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
@@ -271,7 +272,7 @@ describe("moderation numbered routes", () => {
       return ++gets === 1 ? numbered([{ id: "review-1", title: "Review" }], 2, 21) : new Response(null, { status: 503 });
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush();
+    await submitReview("Publish"); await flush();
     expect(container.querySelector('[role="status"]')?.textContent).toContain(message);
     expect(container.textContent).toContain("rev-1"); expect(container.textContent).toContain("item-1");
     expect((container.querySelector('button[aria-label="Publish Review"]') as HTMLButtonElement).disabled).toBe(true);
@@ -292,7 +293,7 @@ describe("moderation numbered routes", () => {
       gets++; return numbered([{ id: "review-1", title: "Review", status: gets === 1 ? "review_pending" : "published" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
     expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]); expect(gets).toBe(1);
     expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
     expect(container.textContent).not.toContain("was not accepted");
@@ -311,7 +312,7 @@ describe("moderation numbered routes", () => {
       return numbered([{ id: "review-1", title: "Review", status: "review_pending" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
     await clickButton("Reload current state"); await flush();
     if (failRead) { await clickButton("Try again"); await flush(); }
     expect((container.querySelector('button[aria-label="Reject Review"]') as HTMLButtonElement).disabled).toBe(true);
@@ -332,7 +333,7 @@ describe("moderation numbered routes", () => {
       return numbered(reads === 1 ? [{ id: "review-1", title: "Review", status: "review_pending" }] : [], 2, reads === 1 ? 21 : 20);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
     await clickButton("Reload current state"); await flush();
     expect(detailReads).toBe(2); expect(reads).toBe(2); expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
     expect(browser.location.search).toBe("?page=2");
@@ -350,7 +351,7 @@ describe("moderation numbered routes", () => {
       return numbered(reads === 1 ? [{ id: "review-1", title: "Review", status: "review_pending" }] : [], 2, reads === 1 ? 21 : 20);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
+    await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
     await clickButton("Reload current state"); await flush(); expect(detailReads).toBe(2);
     await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
     await act(async () => late.resolve(new Response(null, { status: 403 }))); await flush();
@@ -366,7 +367,7 @@ describe("moderation numbered routes", () => {
       gets++; return numbered([{ id: "review-1", title: "Review" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={language} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await typeNote("Source needs verification"); await clickButton("Confirm rejection"); await flush();
+    await clickButton("Reject"); await typeNote("Source needs verification"); await submitReview("Confirm rejection"); await flush();
     await act(async () => { language.setLocale("zh-CN"); root.render(<ReviewQueueRoute locale={language} search={browser.location.search} />); });
     expect(gets).toBe(1); expect((container.querySelector('textarea[data-review-note]') as HTMLTextAreaElement).disabled).toBe(true);
     await clickButton("重试原决定"); await flush();
@@ -380,7 +381,7 @@ describe("moderation numbered routes", () => {
       gets++; return numbered([{ id: "review-1", title: "Review" }], 2, 21);
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await clickButton("Reject"); await clickButton("Confirm rejection");
+    await clickButton("Reject"); await submitReview("Confirm rejection");
     await act(async () => root.render(<p>Signed out</p>));
     await act(async () => response.resolve(rejected("review-1"))); await flush();
     expect(gets).toBe(1); expect(container.textContent).toBe("Signed out");
@@ -591,6 +592,24 @@ describe("moderation numbered routes", () => {
     expect(urls.map((url) => queryOf(url, "page"))).toEqual(["2", "2", "2", "1"]);
     expect(urls.every((url) => queryOf(url, "status") === "failed_retryable")).toBe(true);
     expect(browser.location.search).not.toContain("page=2");
+  });
+
+  async function submitReview(label: string) {await clickButton(label);await clickButton("Submit decision");}
+
+  it("canceling publication does not fetch a preview or send a decision",async () => {
+    const paths: string[]=[]; let posts=0;
+    vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {paths.push(String(input));if(init?.method === "POST") {posts++;return json({});}return numbered([{id:"review-1",title:"Review",status:"review_pending"}],2,21);});
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>));await flush();await clickButton("Publish");
+    expect(paths).toHaveLength(1);expect(posts).toBe(0);await clickButton("Cancel");expect(paths).toHaveLength(1);expect(posts).toBe(0);
+  });
+
+  it("page navigation invalidates an unsubmitted review confirmation",async () => {
+    let posts=0;
+    vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});}return pageResponse(String(input),id=>({id,title:id,status:"review_pending"}));});
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>));await flush();await clickButton("Publish");
+    const old=container.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(old).toBeTruthy();
+    await act(async () => {browser.history.pushState({},"","/admin/submissions");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
   });
 
   async function retryAsset() {await clickButton("Retry");await clickButton("Confirm retry");}

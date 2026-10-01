@@ -15,11 +15,13 @@ const { Window } = await import("happy-dom");
 describe("review detail read recovery", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
-  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions/sub-1" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions/sub-1" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   const withComments = (requester: Fetcher): Fetcher => (input, init) => String(input).endsWith("/comments") ? Promise.resolve(json({ comments: [] })) : requester(input, init);
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
   function button(label: string) { const found = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }
+
+  async function submitDecision(label: string) { await act(async () => button(label).click()); await act(async () => button("Submit decision").click()); }
 
   it("recovers the same detail after read failure without a decision and deduplicates immediate retry", async () => {
     const pending = deferred<Response>(); const paths: string[] = []; const methods: string[] = [];
@@ -63,6 +65,7 @@ describe("review detail read recovery", () => {
     const requester = withComments(async (_input, init) => { if (init?.method === "POST") { posts++; return decision.promise; } return preview("sub-1"); });
     await render(requester);
     const publish = button("Publish"); await act(async () => { publish.click(); publish.click(); });
+    expect(posts).toBe(0); const confirm = button("Submit decision"); await act(async () => {confirm.click();confirm.click();});
     expect(posts).toBe(1);
     await act(async () => decision.resolve(published("indexed"))); await flush();
     expect(button("Publish").disabled).toBe(true); expect(container.textContent).toContain("published");
@@ -71,7 +74,7 @@ describe("review detail read recovery", () => {
   it("does not apply an old decision to a newly opened submission", async () => {
     const decision = deferred<Response>();
     const requester = withComments(async (input, init) => init?.method === "POST" ? decision.promise : preview(String(input).split("/").at(-1)!));
-    await render(requester); await act(async () => button("Reject").click()); await act(async () => button("Confirm rejection").click());
+    await render(requester); await act(async () => button("Reject").click()); await submitDecision("Confirm rejection");
     await render(requester, "sub-2"); await act(async () => decision.resolve(json({ decision: { submissionId: "sub-1", decision: "rejected" } }))); await flush();
     expect(container.querySelector("h1")?.textContent).toBe("Title sub-2"); expect(button("Publish").disabled).toBe(false);
     expect(container.textContent).not.toContain("rejected");
@@ -79,7 +82,7 @@ describe("review detail read recovery", () => {
 
   it.each([401, 403])("removes private content when a decision discovers permission revocation (%i)", async (status) => {
     const requester = withComments(async (_input, init) => init?.method === "POST" ? new Response(null, { status }) : preview("sub-1"));
-    await render(requester); await act(async () => button("Publish").click()); await flush();
+    await render(requester); await submitDecision("Publish"); await flush();
     expect(container.textContent).toContain("You no longer have permission");
     expect(container.querySelector("pre")).toBeNull();
     expect(container.textContent).not.toContain("Title sub-1");
@@ -104,7 +107,7 @@ describe("review detail read recovery", () => {
     });
     await render(requester); await act(async () => button("Reject").click());
     await typeNote("Please verify the source");
-    await act(async () => button("Confirm rejection").click()); await flush();
+    await submitDecision("Confirm rejection"); await flush();
     expect(sent).toHaveLength(1); expect(JSON.parse(sent[0]!)).toEqual({ reasonCode: "not_relevant", note: "Please verify the source" });
     expect(button("Publish").disabled).toBe(true);
     expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).disabled).toBe(true);
@@ -123,7 +126,7 @@ describe("review detail read recovery", () => {
       bodies.push(String(init.body)); return bodies.length === 1 ? new Response(null, { status: 503 }) : published("indexed");
     });
     await act(async () => root.render(<ReviewDetailRoute id="sub-1" locale={language} requester={requester} />)); await flush();
-    await act(async () => button("Publish").click()); await flush();
+    await submitDecision("Publish"); await flush();
     await act(async () => { language.setLocale("zh-CN"); root.render(<ReviewDetailRoute id="sub-1" locale={language} requester={requester} />); });
     expect(reads).toBe(1); expect(button("驳回").disabled).toBe(true);
     await act(async () => button("重试原决定").click()); await flush();
@@ -133,7 +136,7 @@ describe("review detail read recovery", () => {
   it("ignores a decision that arrives after the review session is unmounted", async () => {
     const response = deferred<Response>();
     const requester = withComments(async (_input, init) => init?.method === "POST" ? response.promise : preview("sub-1"));
-    await render(requester); await act(async () => button("Publish").click());
+    await render(requester); await submitDecision("Publish");
     await act(async () => root.render(<p>Signed out</p>));
     await act(async () => response.resolve(published("indexed"))); await flush();
     expect(container.textContent).toBe("Signed out"); expect(container.querySelector('[role="status"]')).toBeNull();
@@ -150,7 +153,7 @@ describe("review detail read recovery", () => {
     await typeNote("Duplicate source");
     const select = container.querySelector('select[data-review-reason]') as HTMLSelectElement;
     await act(async () => { select.value = "duplicate"; select.dispatchEvent(new browser.Event("change", { bubbles: true })); });
-    await act(async () => button("Confirm rejection").click()); await flush();
+    await submitDecision("Confirm rejection"); await flush();
     expect(sent).toEqual([{ reasonCode: "duplicate", note: "Duplicate source" }]);
   });
 
@@ -158,7 +161,7 @@ describe("review detail read recovery", () => {
     let posts = 0;
     await render(withComments(async (_input, init) => init?.method === "POST" ? (posts++, new Response(null, { status: 400 })) : preview("sub-1")));
     await act(async () => button("Request changes").click()); await typeNote("Please add references");
-    await act(async () => button("Confirm request for changes").click()); await flush();
+    await submitDecision("Confirm request for changes"); await flush();
     expect(posts).toBe(1); expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Please add references");
     expect(button("Confirm request for changes").disabled).toBe(false);
   });
@@ -171,7 +174,7 @@ describe("review detail read recovery", () => {
       if (bodies.length === 1) throw new TypeError("Response lost after commit");
       return new Response(JSON.stringify({ error: { code: "PUBLICATION_TARGET_INVALID", message: "Target unavailable", retryable: false } }), { status: 400 });
     }));
-    await act(async () => button("Publish").click()); await flush();
+    await submitDecision("Publish"); await flush();
     await act(async () => button("Retry same decision").click()); await flush();
     expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]);
     expect(button("Reject").disabled).toBe(true); expect(button("Publish").disabled).toBe(true);
@@ -191,7 +194,7 @@ describe("review detail read recovery", () => {
       if (failRead && reads === 2) return new Response(null, { status: 503 });
       return preview("sub-1");
     }));
-    await act(async () => button("Publish").click()); await flush();
+    await submitDecision("Publish"); await flush();
     await act(async () => button("Retry same decision").click()); await flush();
     await act(async () => button("Reload current state").click()); await flush();
     if (failRead) { await act(async () => button("Try again").click()); await flush(); }
@@ -206,7 +209,7 @@ describe("review detail read recovery", () => {
       if (init?.method === "POST") { posts++; return new Response(null, { status: 409 }); }
       reads++; return preview("sub-1", reads > 1 ? "rejected" : "review_pending");
     }));
-    await act(async () => button("Publish").click()); await flush();
+    await submitDecision("Publish"); await flush();
     expect(button("Reject").disabled).toBe(true); expect(container.textContent).toContain("The submission state changed");
     expect(container.textContent).not.toContain("Retry same decision");
     await act(async () => button("Reload current state").click()); await flush();
@@ -219,7 +222,7 @@ describe("review detail read recovery", () => {
     ["search_degraded", "Published. Search is currently degraded."], ["failed", "Published. Search indexing failed."],
   ])("shows %s separately from the completed publication", async (status, message) => {
     await render(withComments(async (_input, init) => init?.method === "POST" ? published(status) : preview("sub-1")));
-    await act(async () => button("Publish").click()); await flush();
+    await submitDecision("Publish"); await flush();
     expect(container.textContent).toContain(message); expect(container.textContent).toContain("rev-1"); expect(container.textContent).toContain("ki-1");
     expect(button("Publish").disabled).toBe(true);
   });
