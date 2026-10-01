@@ -274,3 +274,12 @@ Receipt: `design/browser-vm/2026-10-01-asset-import.json`; the subsequent accoun
 - [ ] Production hosting export/limits/headers and complete HTTPS/native failure/browser matrix remain required; no VM-033/D04/G0 parent closure.
 
 Receipt: `design/browser-vm/2026-10-01-chunked-images.json`. Current checklist remains 29 in scope / 5 complete / 24 remaining. No push, deployment, migration, secrets or GitHub access.
+
+
+## 2026-10-01 VM-033 static public-image export evidence
+
+- [x] Offline exclusive-directory export, approved source reader, independent inventory/digest verifier and scoped static headers. No guest/private files or deployment.
+- [x] Rechecked official Pages Free limits and header rules; local budget is bundle-only, not account or future combined-site acceptance.
+- [x] New unit tests 10/10, full fast VM 642/642; CLI export/verify both passed. Real Alpine from independent disk-file HTTP host passed cold/warm boot (18/0 requests, 6 original digests each); Cache API adapter, not native-browser evidence.
+- [x] Typecheck, UI build/isolation and checklist audit/tests passed. Receipt: `design/browser-vm/2026-10-01-static-image-bundle.json`.
+- [ ] Actual authorized HTTPS hosting, response encoding/headers, native interrupt/upgrade/failure/browser matrix and release proof remain open. VM-033/D04/G0 unchanged; overall 29 in scope / 5 complete / 24 remaining.

@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-01",
+  "step": "VM-033 local static public-image bundle",
+  "baseCommit": "db6d735",
+  "scope": "Offline development export plus independent disk verification; not deployment or release approval",
+  "bundle": {
+    "artifacts": 6,
+    "files": 20,
+    "bytes": 69455731,
+    "maxFileBytes": 8388608,
+    "reservedFiles": 0,
+    "productionAcceptance": false
+  },
+  "cli": {
+    "export": "passed",
+    "verify": "passed",
+    "localOutput": "/private/tmp/memory-garden-public-images-ieav7L/public"
+  },
+  "actualAlpine": {
+    "test": "tools/browser-vm/image-bundle.test.mjs",
+    "passed": 1,
+    "kernel": "6.18.35-0-virt",
+    "command": "uname -r; printf DISK-BUNDLE-BOOT-OK",
+    "runs": [
+      {
+        "mode": "cold",
+        "requests": 18,
+        "cacheHits": 0,
+        "verifiedImages": 6,
+        "elapsedMs": 17962
+      },
+      {
+        "mode": "warm",
+        "requests": 0,
+        "cacheHits": 18,
+        "verifiedImages": 6,
+        "elapsedMs": 17086
+      }
+    ],
+    "network": "off",
+    "nativeBrowserCache": false,
+    "hostedHttpsAcceptance": false
+  },
+  "verification": {
+    "newUnitTests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "allFastVmTests": {
+      "passed": 642,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "buildUi": "passed (existing large-chunk warning)",
+    "buildIsolation": "passed",
+    "checklistTests": {
+      "passed": 9,
+      "failed": 0
+    },
+    "red": "8 expected failures with unimplemented exports; then green"
+  },
+  "platformPolicy": {
+    "checked": "2026-10-01",
+    "method": "Read-only official HTTPS document requests, HTTP 200; no account or deployment access",
+    "sources": [
+      "https://developers.cloudflare.com/pages/platform/limits/",
+      "https://developers.cloudflare.com/pages/configuration/headers/"
+    ],
+    "freeFiles": 20000,
+    "maxAssetBytes": 26214400,
+    "maxHeaderRules": 100,
+    "maxHeaderLineCharacters": 2000,
+    "scope": "Bundle-only conservative local gate. Future complete site/platform must be rechecked; _headers does not apply to Functions responses."
+  },
+  "checklist": {
+    "inScope": 29,
+    "completed": 5,
+    "remaining": 24,
+    "parentsKeptOpen": [
+      "VM-033",
+      "D04",
+      "G0"
+    ]
+  },
+  "remaining": [
+    "Authorized actual HTTPS hosting and headers/encoding/Content-Length validation",
+    "Complete native-browser interrupt/upgrade/failure matrix",
+    "License/reproducible-build/signed-release acceptance and remaining checklist tasks"
+  ],
+  "boundaries": {
+    "push": false,
+    "deploy": false,
+    "remoteMigration": false,
+    "secretsRead": false,
+    "githubAccess": false,
+    "previewChanged": false
+  }
+}
