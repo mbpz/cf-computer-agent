@@ -203,3 +203,45 @@ describe("prepared commit boundary", () => {
     expect(gate.request(vi.fn())).toBe("committed");
   });
 });
+
+
+describe("leave cleanup at final admission", () => {
+  it("blocks the route action when cleanup fails and allows a fresh attempt", () => {
+    const gate = createWorkspaceNavigationGate(); let removable = false; let committed = 0;
+    gate.register(() => ({ kind: "allow", beforeCommit: () => removable }));
+    expect(gate.request(() => committed++)).toBe("blocked"); expect(committed).toBe(0);
+    removable = true; expect(gate.request(() => committed++)).toBe("committed"); expect(committed).toBe(1);
+  });
+  it("defers cleanup until the history permit is consumed and rejects a failed cleanup", () => {
+    const gate = createWorkspaceNavigationGate(); let permit: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit | undefined; let cleanups = 0; let committed = 0; let canceled = 0;
+    gate.register(() => ({ kind: "allow", beforeCommit: () => { cleanups++; return false; } }));
+    gate.prepare(value => { permit = value; }, () => canceled++); expect(cleanups).toBe(0);
+    expect(permit!.commit(() => committed++)).toBe(false); expect(cleanups).toBe(1); expect(committed).toBe(0); expect(canceled).toBe(1);
+    expect(permit!.commit(() => committed++)).toBe(false); expect(cleanups).toBe(1);
+  });
+  it("does not delete recovery state if another guard or final availability rejects navigation", () => {
+    const gate = createWorkspaceNavigationGate(); let cleanups = 0; let blocked = true;
+    gate.register(() => ({ kind: "allow", beforeCommit: () => { cleanups++; return true; } }));
+    gate.register(() => ({ kind: blocked ? "block" : "allow" }));
+    expect(gate.request(() => {}, () => true)).toBe("blocked"); blocked = false;
+    expect(gate.request(() => {}, () => false)).toBe("blocked"); expect(cleanups).toBe(0);
+  });
+  it("releases the reservation after cleanup throws without executing the route", () => {
+    const gate = createWorkspaceNavigationGate(); let fails = true; let committed = 0;
+    gate.register(() => ({ kind: "allow", beforeCommit: () => { if (fails) throw new Error("storage denied"); return true; } }));
+    expect(() => gate.request(() => committed++)).toThrow("storage denied"); expect(committed).toBe(0);
+    fails = false; expect(gate.request(() => committed++)).toBe("committed"); expect(committed).toBe(1);
+  });
+  it("rejects navigation reentry during cleanup and runs the admitted action once", () => {
+    const gate = createWorkspaceNavigationGate(); const committed: string[] = [];
+    gate.register(() => ({ kind: "allow", beforeCommit: () => { expect(gate.request(() => committed.push("nested"))).toBe("blocked"); return true; } }));
+    expect(gate.request(() => committed.push("outer"))).toBe("committed"); expect(committed).toEqual(["outer"]);
+  });
+  it("does not clean up a canceled or scope-invalidated history permit", () => {
+    const gate = createWorkspaceNavigationGate(); let permit: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit | undefined; let cleanups = 0;
+    const remove = gate.register(() => ({ kind: "allow", beforeCommit: () => { cleanups++; return true; } }));
+    gate.prepare(value => { permit = value; }, () => {}); permit!.cancel(); expect(permit!.commit(() => {})).toBe(false);
+    gate.prepare(value => { permit = value; }, () => {}); remove(); expect(permit!.commit(() => {})).toBe(false); expect(cleanups).toBe(0);
+  });
+
+});

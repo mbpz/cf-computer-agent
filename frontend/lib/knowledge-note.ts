@@ -75,6 +75,7 @@ export function loadPrivateKnowledgeNote(knowledgeItemId: string, storage: NoteS
 export function clearPrivateKnowledgeNote(knowledgeItemId: string, storage: NoteStorage = browserStorage()): void {
   assertKnowledgeItemId(knowledgeItemId);
   storage.removeItem(noteKey(knowledgeItemId));
+  if (storage.getItem(noteKey(knowledgeItemId)) !== null) throw new Error("KNOWLEDGE_NOTE_CACHE_REMOVE_FAILED");
 }
 
 export function savePrivateKnowledgeNote(

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "./api";
 import type { LocaleRuntime } from "./i18n";
 import { clearPrivateKnowledgeNote, loadPrivateKnowledgeNote, loadRemotePrivateKnowledgeNote, memberKnowledgeNoteStorage, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote, type PrivateKnowledgeNoteCitation, type RemotePrivateKnowledgeNote } from "./knowledge-note";
-import { WORKSPACE_LOCATION_CHANGE_EVENT } from "./workspace-location";
 import { useCreateDraft } from "./use-create-draft";
 
 type Fields = { title: string; body: string };
@@ -18,27 +17,29 @@ export function useReaderNote(memberId: string, knowledgeItemId: string, locale?
   const persistedRef = useRef(persisted);
   function remember(note: RemotePrivateKnowledgeNote | null) { persistedRef.current = note; setPersisted(note); }
   const cachedDraft = useRef(false);
+  const [discardError, setDiscardError] = useState(false);
   const [phase, setPhase] = useState<Phase>("loading");
   const phaseRef = useRef<Phase>("loading");
   const [access, setAccess] = useState<"owner" | "shared">("owner");
   const accessRef = useRef<"owner" | "shared">("owner");
   const [status, setStatus] = useState<"idle" | "saved" | "saving" | "unsaved" | "error">("idle");
   const draft = useCreateDraft(blank, blank, () => intent.current !== null || actionBlocked(), locale,
-    () => !owner.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || actionBlocked());
+    () => !owner.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || actionBlocked(), discardCache);
   function transition(next: Phase) { phaseRef.current = next; setPhase(next); }
   useEffect(() => {
     if (!memberId || !knowledgeItemId) { transition("load-error"); return; }
     const controller = new AbortController(); owner.current = controller;
     void load(controller);
-    const browser = window;
-    const committed = () => {
-      if (owner.current !== controller || intent.current || !cachedDraft.current) return;
-      try { clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId)); cachedDraft.current = false; }
-      catch { /* Cannot claim persistent deletion if the browser denies storage access. */ }
-    };
-    browser.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed);
-    return () => { browser.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed); controller.abort(); owner.current = null; intent.current = null; };
+    return () => { controller.abort(); owner.current = null; intent.current = null; };
   }, []);
+  function discardCache() {
+    if (!owner.current || intent.current || actionBlocked()) return false;
+    if (!cachedDraft.current) return true;
+    try {
+      clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId));
+      cachedDraft.current = false; setDiscardError(false); return true;
+    } catch { setDiscardError(true); return false; }
+  }
   async function load(controller: AbortController) {
     transition("loading");
     try {
@@ -98,6 +99,7 @@ export function useReaderNote(memberId: string, knowledgeItemId: string, locale?
     // A stale cached draft must not resurrect after a successful save. Keep the
     // intent locked if cleanup fails; a subsequent read may retry cleanup only.
     if (cachedDraft.current) { clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId)); cachedDraft.current = false; }
+    setDiscardError(false);
     remember(result);
     draft.set("title", operation.fields.title); draft.set("body", operation.fields.body); draft.checkpoint(operation.fields);
     intent.current = null; transition("idle"); setStatus("saved");
@@ -115,7 +117,7 @@ export function useReaderNote(memberId: string, knowledgeItemId: string, locale?
     if (owner.current === controller && intent.current === operation) transition("unknown");
   }
   const isOwnLocked = () => !owner.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || draft.isConfirming();
-  return { draft, access, status, phase, edit, save, check, retryLoad, persisted, getPersisted: () => persistedRef.current, isOwnLocked,
+  return { draft, access, status, phase, discardError, edit, save, check, retryLoad, persisted, getPersisted: () => persistedRef.current, isOwnLocked,
     locked: phase !== "idle" || access !== "owner" || draft.confirming || actionBlocked(),
     isLocked: () => isOwnLocked() || actionBlocked() };
 }

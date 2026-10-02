@@ -100,6 +100,39 @@ describe("private reader note draft ownership", () => {
     await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
     await render("member-b"); await render("member-a"); expect(body().value).toBe(""); expect(unloadWarns()).toBe(false);
   });
+  it.each(["throws", "silently keeps the value"])("refuses discard when cache removal %s, then allows an explicit retry", async mode => {
+    await mount(async init => init?.method === "PUT" ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: null }));
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    const remove = vi.spyOn(browser.localStorage, "removeItem").mockImplementation(() => { if (mode === "throws") throw new Error("Storage unavailable"); });
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(body().value).toBe("Body"); expect(unloadWarns()).toBe(true);
+    expect(container.querySelector("[data-note-discard-error]")?.textContent).toContain("cache");
+    remove.mockRestore();
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
+    expect(browser.location.pathname).toBe("/tasks"); expect(body().value).toBe(""); expect(unloadWarns()).toBe(false);
+    await render("member-b"); await render("member-a"); expect(body().value).toBe("");
+  });
+  it("preserves cached recovery when another guard rejects the approved discard", async () => {
+    await mount(async init => init?.method === "PUT" ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: null }));
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    let blocked = false; const unregister = registerWorkspaceLeaveGuard(() => ({ kind: blocked ? "block" : "allow" }));
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); blocked = true; await click("[data-confirm-action]");
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); unregister();
+    await render("member-b"); await render("member-a"); expect(body().value).toBe("Body"); expect(unloadWarns()).toBe(true);
+  });
+  it("keeps the cached draft when the user cancels discard", async () => {
+    await mount(async init => init?.method === "PUT" ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: null }));
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-cancel-action]");
+    await render("member-b"); await render("member-a"); expect(body().value).toBe("Body"); expect(browser.location.pathname).toBe("/knowledge/knowledge-a");
+  });
+  it("does not discard when the cache removal readback fails", async () => {
+    await mount(async init => init?.method === "PUT" ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: null }));
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    const get = vi.spyOn(browser.localStorage, "getItem").mockImplementation(() => { throw new Error("storage denied"); });
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await click("[data-confirm-action]");
+    expect(browser.location.pathname).toBe("/knowledge/knowledge-a"); expect(body().value).toBe("Body"); expect(unloadWarns()).toBe(true); get.mockRestore();
+  });
   it("keeps a saved draft locked when old cached input cannot be removed, and retries cleanup only by reading", async () => {
     let writes = 0;
     await mount(async init => { if (init?.method === "PUT") { writes++; return writes === 1 ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: receipt() }); } return Response.json({ note: writes > 1 ? receipt() : null }); });

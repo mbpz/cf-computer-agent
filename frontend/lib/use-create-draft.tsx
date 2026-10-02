@@ -5,7 +5,8 @@ import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "./
 import type { WorkspaceLeaveDecision } from "./workspace-navigation-gate";
 
 /** Owned by a member/target-keyed form. Unresolved intents are never discardable. */
-export function useCreateDraft<T extends Record<string, string>>(initial: T, blank: T, blocked: () => boolean, locale: LocaleRuntime | undefined, editBlocked: () => boolean) {
+export function useCreateDraft<T extends Record<string, string>>(initial: T, blank: T, blocked: () => boolean, locale: LocaleRuntime | undefined, editBlocked: () => boolean, beforeDiscard?: () => boolean) {
+  const discard = useRef(beforeDiscard); discard.current = beforeDiscard;
   const [fields, setFields] = useState(initial);
   const current = useRef(initial);
   const baseline = useRef(blank);
@@ -39,11 +40,12 @@ export function useCreateDraft<T extends Record<string, string>>(initial: T, bla
       // Only this reserved application may carry its exact source draft through
       // navigation. Other owners still confirm/block; unload still warns.
       if (applying.current) return { kind: applying.current.version === version() ? "allow" : "block" };
-      if (!dirty()) return { kind: "allow" };
+      const beforeCommit = () => !discard.current || discard.current();
+      if (!dirty()) return { kind: "allow", beforeCommit };
       const snapshot = version();
       return { kind: "confirm", version: snapshot, prompt(navigation) {
         const next = { version: snapshot, navigation }; decisionRef.current = next; setDecision(next);
-      }, dismiss };
+      }, dismiss, beforeCommit };
     });
     // Approval alone cannot erase input: another guard or final admission may fail.
     const committed = () => { if (alive.current && !isBlocked.current()) reset(); };

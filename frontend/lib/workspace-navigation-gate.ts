@@ -1,9 +1,9 @@
 /** A decision belongs to exactly one navigation attempt, not just one draft. */
 export interface WorkspaceLeaveDecision { accept(): void; cancel(): void }
 export type WorkspaceLeaveState =
-  | { kind: "allow" }
+  | { kind: "allow"; beforeCommit?: () => boolean }
   | { kind: "block" }
-  | { kind: "confirm"; version: string; prompt(decision: WorkspaceLeaveDecision): void; dismiss(): void };
+  | { kind: "confirm"; version: string; prompt(decision: WorkspaceLeaveDecision): void; dismiss(): void; beforeCommit?: () => boolean };
 export type WorkspaceLeaveGuard = () => WorkspaceLeaveState;
 export interface WorkspaceNavigationPermit { commit(action: () => void): boolean; cancel(): void }
 export type WorkspaceNavigationResult = "committed" | "deferred" | "blocked";
@@ -49,6 +49,25 @@ export function createWorkspaceNavigationGate() {
     finally { try { if (!attempt.committing) attempt.canceled?.(); } finally { callbackDepth--; } }
   }
 
+  // Run fallible owner cleanup only after every guard and availability check passed.
+  // Preparation alone (history replay) must never delete a recoverable draft.
+  function commitAdmitted(attempt: Attempt, states: WorkspaceLeaveState[], action: () => void): boolean {
+    callbackDepth++;
+    try {
+      for (const state of states) {
+        if (state.kind !== "block" && state.beforeCommit && !state.beforeCommit()) {
+          if (pending === attempt) invalidate(); return false;
+        }
+        if (pending !== attempt) return false;
+      }
+      attempt.committing = true;
+      action(); attempt.result = "committed"; return true;
+    } catch (cause) {
+      if (pending === attempt && !attempt.committing) invalidate();
+      throw cause;
+    } finally { callbackDepth--; if (attempt.committing && pending === attempt) pending = null; }
+  }
+
   function completePrepared(attempt: Attempt, action: () => void): boolean {
     if (pending !== attempt || !attempt.prepared) return false;
     // Consume before reading guards: a reentrant/stale permit is never usable twice.
@@ -60,11 +79,8 @@ export function createWorkspaceNavigationGate() {
         || (state.kind === "confirm" && attempt.approved.get(registration) !== state.version))) {
         invalidate(); return false;
       }
+      return commitAdmitted(attempt, states.map(({ state }) => state), action);
     } catch (cause) { if (pending === attempt) invalidate(); throw cause; }
-    attempt.committing = true;
-    callbackDepth++;
-    try { action(); attempt.result = "committed"; return true; }
-    finally { callbackDepth--; if (pending === attempt) pending = null; }
   }
 
   function advance(attempt: Attempt): void {
@@ -105,9 +121,7 @@ export function createWorkspaceNavigationGate() {
       }
       // Keep the synchronous reservation through commit: a route callback cannot
       // recursively navigate, even if it unmounts its guard during the commit.
-      callbackDepth++;
-      try { attempt.commit!(); attempt.result = "committed"; }
-      finally { callbackDepth--; if (pending === attempt) pending = null; }
+      commitAdmitted(attempt, states.map(({ state }) => state), attempt.commit!);
     } catch (cause) {
       if (pending === attempt) invalidate();
       throw cause;

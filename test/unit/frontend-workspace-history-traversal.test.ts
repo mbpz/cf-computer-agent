@@ -140,3 +140,16 @@ describe("accepted history traversal", () => {
   });
 
 });
+
+
+describe("fallible draft cleanup during history replay", () => {
+  it("returns to the accepted entry without publishing if cache removal fails at replay arrival", () => {
+    const h = harness(); let removable = false; let cleanups = 0;
+    h.gate.register(() => ({ kind: "allow", beforeCommit: () => { cleanups++; return removable; } }));
+    h.arrive(b); h.arrive(a); h.decisions[0].accept(); expect(cleanups).toBe(0);
+    h.arrive(b); expect(cleanups).toBe(1); expect(h.published).toEqual([]); expect(h.moves.map(m => m.entry)).toEqual([a, b, a]);
+    h.arrive(a); expect(h.controller.accepted()).toEqual(a); expect(h.controller.busy()).toBe(false);
+    removable = true; h.arrive(b); h.arrive(a); h.decisions[1].accept(); h.arrive(b);
+    expect(h.published).toEqual([b]); expect(h.controller.accepted()).toEqual(b); expect(cleanups).toBe(2);
+  });
+});
