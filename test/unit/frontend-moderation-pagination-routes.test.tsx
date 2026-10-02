@@ -1,3 +1,4 @@
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act } from "react";
@@ -15,8 +16,8 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 const { Window } = await import("happy-dom");
 
 describe("moderation numbered routes", () => {
-  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let historyDriver: ReturnType<typeof installWorkspaceHistoryDriver>;
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); historyDriver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   const queues = [
@@ -30,11 +31,19 @@ describe("moderation numbered routes", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, item); });
     await act(async () => root.render(render(browser.location.search))); await flush();
     expect(queryOf(gets.at(-1)!, "page")).toBe("2");
-    await act(async () => { browser.history.pushState({}, "", `${path}?pageSize=20`); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { writeWorkspaceHistory("push", `${path}?pageSize=20`); }); await flush();
     expect(queryOf(gets.at(-1)!, "page") || "1").toBe("1");
-    await act(async () => browser.history.back()); await flush();
+    let delivered = 0;
+    const settle = async () => {
+      while (delivered < historyDriver.requests.length) {
+        expect(delivered).toBeLessThan(5);
+        const request = historyDriver.requests[delivered++];
+        await act(async () => { historyDriver.arrive(request.index); request.resolve(); }); await flush();
+      }
+    };
+    await act(async () => browser.history.back()); await flush(); await settle();
     expect(queryOf(gets.at(-1)!, "page")).toBe("2");
-    await act(async () => browser.history.forward()); await flush();
+    await act(async () => browser.history.forward()); await flush(); await settle();
     expect(queryOf(gets.at(-1)!, "page") || "1").toBe("1");
   });
 
@@ -81,12 +90,14 @@ describe("moderation numbered routes", () => {
     expect(gets).toHaveLength(3); expect(browser.location.search).not.toContain("page=2");
   });
 
-  it("does not let a completed duplicate mutation refresh overwrite a newer query", async () => {
+  it("does not let a late duplicate mutation overwrite a new session", async () => {
     browser.history.replaceState({}, "", "/admin/duplicates?page=2"); const mutation = deferred<Response>(); const gets: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return mutation.promise; gets.push(url); return queryOf(url, "page") === "2" ? numbered([duplicate("pending", "old")], 2, 21) : numbered(Array.from({ length: 20 }, (_, index) => duplicate("pending", index === 0 ? "latest" : `latest-${index}`)), 1, 20); });
     await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Associate"); await clickButton("Confirm decision");
-    await act(async () => { browser.history.pushState({}, "", "/admin/duplicates"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => root.render(null));
+    browser.history.replaceState({}, "", "/admin/duplicates");
+    await act(async () => root.render(<AdminDuplicateRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect(container.textContent).toContain("latest"); mutation.resolve(json({ candidate: duplicate("associate", "old") })); await flush();
     expect(container.textContent).toContain("latest"); expect(container.textContent).not.toContain("old"); expect(gets).toHaveLength(2);
   });

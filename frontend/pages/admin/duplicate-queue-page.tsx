@@ -7,6 +7,7 @@ import { PageState } from "../../components/ui/page-state";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import type { AdminDuplicateCandidate, DuplicateDecision } from "../../lib/admin-duplicates-data";
 import type { AdminDuplicatePageResult } from "../../lib/admin-duplicates-data";
+import { useCreateDraft } from "../../lib/use-create-draft";
 import { DataPagination } from "../../components/data-pagination";
 import type { SupportedPageSize } from "../../lib/numbered-page";
 
@@ -28,6 +29,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
   type Confirmation = { item: AdminDuplicateCandidate; decision: DuplicateDecision; data: AdminDuplicatePageResult };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
+  useCreateDraft({}, {}, () => confirmationRef.current !== null, locale, () => false);
   const cancel = () => { confirmationRef.current = null; setConfirmation(null); };
   const valid = Boolean(confirmation && state.kind === "ready" && state.data === confirmation.data
     && !pending && !pendingId && !lockedIds?.includes(confirmation.item.submissionId)
@@ -47,7 +49,7 @@ export function DuplicateQueuePage({ onLoadRetry, state, locale, pendingId, pend
   };
   const label = (decision: DuplicateDecision) => frontendText(locale, decision === "associate" ? "ADMIN_DUPLICATE_ASSOCIATE" : decision === "keep_separate" ? "ADMIN_DUPLICATE_KEEP_SEPARATE" : "ADMIN_DUPLICATE_REJECT");
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />;
-  if (state.kind === "error" || state.kind === "forbidden") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
+  if (state.kind !== "ready") return <PageState kind={state.kind} title={state.message || frontendText(locale, "COMMON_UNABLE_TO_LOAD")} >{onLoadRetry && <Button type="button" variant="outline" onClick={onLoadRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}</PageState>;
   return <>
     <section className="space-y-5" inert={valid} aria-hidden={valid || undefined}>
       <div>

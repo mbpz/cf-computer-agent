@@ -1192,6 +1192,24 @@ describe("M1 trusted knowledge HTTP journey", () => {
     await expect(env.DB.prepare("SELECT count(*) AS n FROM audit_events WHERE action = 'submission.duplicate_decided'").first()).resolves.toEqual({n: 0});
   });
 
+  it.each(["associate", "keep_separate", "reject"] as const)("reads a duplicate %s result without repeating its decision", async (decision) => {
+    const id = await createDuplicateForDecision(); const path = `/api/admin/duplicates/${id}`;
+    const pending = await memberApi("admin", path);
+    expect(pending.status).toBe(200);
+    await expect(pending.json()).resolves.toMatchObject({candidate: {submissionId: id, decision: "pending"}});
+    const write = await memberApi("admin", `${path}/decision`, {method: "POST", body: JSON.stringify({decision})});
+    const receipt = await write.json();
+    for (let i = 0; i < 2; i++) await expect(memberApi("admin", path).then(r => r.json())).resolves.toEqual(receipt);
+    await expect(env.DB.prepare("SELECT count(*) AS n FROM audit_events WHERE action = 'submission.duplicate_decided' AND resource_id = ?").bind(id).first()).resolves.toEqual({n: 1});
+    await expectApiError(memberApi("contributor", path), 403, "FORBIDDEN");
+    expect((await memberApi("unknown", path)).status).toBe(401);
+    expect((await memberApi("disabled", path)).status).toBe(403);
+    await expectApiError(memberApi("admin", "/api/admin/duplicates/missing"), 404, "DUPLICATE_NOT_FOUND");
+    await expectApiError(memberApi("admin", "/api/admin/duplicates/bad%20id"), 400, "DUPLICATE_REQUEST_INVALID");
+    expect((await memberApi("admin", `${path}?decision=reject`)).status).toBe(400);
+    expect((await memberApi("admin", path, {method: "POST", body: "{}"})).status).toBe(405);
+  });
+
   async function createDuplicateForDecision(): Promise<string> {
     await createSubmission("contributor", {requestedSpaceId: "default", kind: "markdown", title: "Canonical", content: "# API duplicate decision\n"}, "api-decision-canonical");
     const duplicate = await createSubmission("contributor", {requestedSpaceId: "default", kind: "markdown", title: "Duplicate", content: "# API duplicate decision\n"}, "api-decision-duplicate");

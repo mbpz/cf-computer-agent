@@ -13,6 +13,15 @@ export class DuplicateCandidatesService {
     return this.repository.listPending(request);
   }
 
+  async get(submissionId: string) {
+    if (!/^[A-Za-z0-9_-]{1,128}$/u.test(submissionId)) {
+      throw new AppError("DUPLICATE_REQUEST_INVALID", "Duplicate candidate request is invalid", 400);
+    }
+    const candidate = await this.repository.find(submissionId);
+    if (!candidate) throw new AppError("DUPLICATE_NOT_FOUND", "Duplicate candidate not found", 404);
+    return candidate;
+  }
+
   async decide(reviewerId: string, submissionId: string, decision: unknown): Promise<Awaited<ReturnType<DuplicateCandidatesRepository["decide"]>>> {
     if (!/^[A-Za-z0-9_-]{1,128}$/u.test(reviewerId) || !/^[A-Za-z0-9_-]{1,128}$/u.test(submissionId)) {
       throw new AppError("DUPLICATE_REQUEST_INVALID", "Duplicate candidate request is invalid", 400);

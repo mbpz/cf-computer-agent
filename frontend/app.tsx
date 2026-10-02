@@ -94,7 +94,7 @@ import { createNumberedRequestController, parsePageSearch, writePageSearch, type
 import { assignAdminRoleMember, createAdminRole, loadAdminRoles, unassignAdminRoleMember, updateAdminRole, type AdminRole } from "./lib/admin-roles-data";
 import { createAdminMenu, deleteAdminMenu, loadAdminMenus, updateAdminMenu, type AdminMenu } from "./lib/admin-menus-data";
 import { createAdminAssetsRequestController, loadAdminAssetPreview, retryAdminAsset, type AdminAssetsPage, type AdminAssetStatus } from "./lib/admin-assets-data";
-import { createAdminDuplicateRequestController, decideAdminDuplicate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
+import { createAdminDuplicateRequestController, decideAdminDuplicate, loadAdminDuplicate, type AdminDuplicateCandidate, type AdminDuplicatePageResult, type DuplicateDecision } from "./lib/admin-duplicates-data";
 import type { AssetPreviewModel } from "./components/assets/asset-preview-model";
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewOperation, type ReviewNoteInput } from "./components/review/review-detail-data";
 import type { ReviewDecisionState } from "./components/review/review-decision-controls";
@@ -2838,8 +2838,17 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
   // not proof of a particular decision, and an acknowledged terminal receipt
   // must never be unlocked by stale pending data.
   const needsReadRef = useRef(new Set<string>());
+  const unresolvedWrites = useRef(new Map<string, AdminDuplicateCandidate>());
   const acknowledgedRef = useRef(new Set<string>());
   const needsClampRef = useRef(false);
+  useEffect(() => {
+    const owner = window;
+    const locked = () => mutationRef.current !== null || unresolvedWrites.current.size > 0;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, []);
   const syncLocks = () => setLockedIds([...needsReadRef.current]);
   const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
   const invalidateQuery = () => {
@@ -2849,8 +2858,9 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
   };
   const deny = (error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
-    invalidateQuery(); mutationRef.current = null; setPendingId(null);
-    needsReadRef.current.clear(); acknowledgedRef.current.clear(); syncLocks();
+    // A denied read can overlap an actual POST after a locale refresh. Hide
+    // private data, but only the POST settlement may release its active token.
+    invalidateQuery(); syncLocks();
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
@@ -2869,6 +2879,18 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     try {
       const data = await request.promise;
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+      setState({ kind: "ready", data });
+      // A pending-only page cannot prove the outcome of an absent candidate.
+      // Recover it through an authenticated detail GET, never by replaying POST.
+      for (const [id, expected] of unresolvedWrites.current) {
+        if (id === activeAtStart || id === mutationRef.current?.id) continue;
+        const row = data.items.find(item => item.submissionId === id) ?? await loadAdminDuplicate(id);
+        if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
+        if (row.canonicalSubmissionId !== expected.canonicalSubmissionId || row.canonicalSourceId !== expected.canonicalSourceId || row.canonicalSourceVersionId !== expected.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
+        unresolvedWrites.current.delete(id);
+        if (row.decision === "pending") needsReadRef.current.delete(id);
+        else acknowledgedRef.current.add(id);
+      }
       for (const row of data.items) {
         if (row.submissionId !== activeAtStart && row.submissionId !== mutationRef.current?.id && !acknowledgedRef.current.has(row.submissionId)) needsReadRef.current.delete(row.submissionId);
       }
@@ -2907,12 +2929,12 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     const candidate = state.kind === "ready" ? state.data.items.find((item) => item.submissionId === id) : undefined;
     if (!candidate || candidate.decision !== "pending") return;
     const token = { id }; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
-    mutationRef.current = token; needsReadRef.current.add(id); syncLocks(); setPendingId(id); setLocalError(undefined);
+    mutationRef.current = token; needsReadRef.current.add(id); unresolvedWrites.current.set(id, candidate); syncLocks(); setPendingId(id); setLocalError(undefined);
     try {
       const receipt = await decideAdminDuplicate(id, decision);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
       if (receipt.canonicalSubmissionId !== candidate.canonicalSubmissionId || receipt.canonicalSourceId !== candidate.canonicalSourceId || receipt.canonicalSourceVersionId !== candidate.canonicalSourceVersionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
-      acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null); needsClampRef.current = true;
+      unresolvedWrites.current.delete(id); acknowledgedRef.current.add(id); mutationRef.current = null; setPendingId(null); needsClampRef.current = true;
       if (controllerRef.current) await read(controllerRef.current, actionQuery, true);
     } catch (error: unknown) {
       if (scopeRef.current === scope && sameQuery(actionQuery) && !deny(error)) setLocalError(frontendText(locale, "COMMON_UNABLE_TO_LOAD"));

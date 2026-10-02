@@ -6,6 +6,9 @@ import { DuplicateQueuePage } from "../../frontend/pages/admin/duplicate-queue-p
 import type { AdminDuplicatePageResult } from "../../frontend/lib/admin-duplicates-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
+
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
 vi.mock("node:vm", () => ({ default: { Script: InertVmScript, createContext(value: object) { vmContexts.add(value); return value; }, isContext(value: object) { return vmContexts.has(value); } }, Script: InertVmScript }));
@@ -19,6 +22,7 @@ describe("duplicate decision confirmation", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let onDecision: ReturnType<typeof vi.fn>;
   beforeEach(async () => {
     browser = new Window({url:"https://app.test/admin/duplicates"});
+    installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
     for (const [key,value] of Object.entries({window:browser,document:browser.document,navigator:browser.navigator,HTMLElement:browser.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})) vi.stubGlobal(key,value);
     container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node);
     const {createRoot} = await import("react-dom/client"); root = createRoot(container); onDecision = vi.fn();
@@ -28,6 +32,18 @@ describe("duplicate decision confirmation", () => {
   function button(label:string) {const el = [...container.querySelectorAll("button")].find(el => el.textContent === label); expect(el,label).toBeTruthy(); return el as HTMLButtonElement;}
   async function click(label:string) {await act(async () => button(label).click());}
   const dialog = () => container.querySelector('[role="alertdialog"]');
+  it.each(["Cancel", "Confirm decision"])("blocks same-batch leave and unload until %s", async outcome => {
+    await mount();
+    await act(async () => { button("Associate").click(); writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/admin/duplicates");
+    const unload = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true); expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
+    await click(outcome);
+    expect(onDecision).toHaveBeenCalledTimes(outcome === "Cancel" ? 0 : 1);
+    const clean = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(clean);
+    expect(clean.defaultPrevented).toBe(false);
+    await act(async () => writeWorkspaceHistory("push", "/home")); expect(browser.location.pathname).toBe("/home");
+  });
   it.each([["Associate","associate"],["Keep separate","keep_separate"],["Reject","reject"]] as const)("confirms %s with exact target and one write",async (label,decision) => {
     await mount(); await click(label); expect(onDecision).not.toHaveBeenCalled();
     for (const value of [item.submissionTitle,item.submissionId,item.canonicalTitle,item.canonicalSubmissionId,item.canonicalSourceId,item.canonicalSourceVersionId,label]) expect(dialog()?.textContent).toContain(value);

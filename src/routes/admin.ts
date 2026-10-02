@@ -90,6 +90,14 @@ export async function routeAdminApi(
     return jsonResponse(await services.duplicates.listPending(parseNumberedPageRequest(url, [])), 200, context.requestId);
   }
 
+  const duplicateDetail = /^\/api\/admin\/duplicates\/([^/]+)$/.exec(url.pathname);
+  if (duplicateDetail) {
+    requireCapability(principal, "submission:read-all");
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireNoQuery(url);
+    return jsonResponse({ candidate: await services.duplicates.get(decodePathId(duplicateDetail[1]!)) }, 200, context.requestId);
+  }
+
   const duplicateDecision = /^\/api\/admin\/duplicates\/([^/]+)\/decision$/.exec(url.pathname);
   if (duplicateDecision) {
     requireCapability(principal, "submission:read-all");

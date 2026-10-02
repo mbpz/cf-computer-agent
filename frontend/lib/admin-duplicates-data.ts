@@ -11,6 +11,13 @@ export async function loadAdminDuplicatePage({ page, pageSize, requester = fetch
   if (data.pagination.page !== page || data.pagination.pageSize !== pageSize || data.items.some((item) => item.decision !== "pending") || new Set(data.items.map((item) => item.submissionId)).size !== data.items.length) throw new Error("DUPLICATE_RESPONSE_INVALID");
   return data;
 }
+export async function loadAdminDuplicate(submissionId: string, requester: Fetcher = fetch): Promise<AdminDuplicateCandidate> {
+  if (!/^[A-Za-z0-9_-]{1,128}$/u.test(submissionId)) throw new Error("DUPLICATE_REQUEST_INVALID");
+  const data = await apiFetch<{ candidate?: unknown }>(`/api/admin/duplicates/${encodeURIComponent(submissionId)}`, { requester });
+  const candidate = normalizeCandidate(data?.candidate);
+  if (candidate.submissionId !== submissionId) throw new Error("DUPLICATE_RESPONSE_INVALID");
+  return candidate;
+}
 export async function decideAdminDuplicate(submissionId: string, decision: DuplicateDecision, requester: Fetcher = fetch): Promise<AdminDuplicateCandidate> {
   if (!/^[A-Za-z0-9_-]{1,128}$/u.test(submissionId)) throw new Error("DUPLICATE_REQUEST_INVALID");
   const data = await apiFetch<{ candidate?: unknown }>(`/api/admin/duplicates/${encodeURIComponent(submissionId)}/decision`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision }) });

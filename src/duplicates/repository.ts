@@ -100,7 +100,7 @@ export class DuplicateCandidatesRepository {
     return updated;
   }
 
-  private async find(submissionId: string): Promise<DuplicateCandidate | null> {
+  async find(submissionId: string): Promise<DuplicateCandidate | null> {
     const row = await this.db.prepare(
       `SELECT dc.submission_id, dc.canonical_submission_id, dc.canonical_source_id,
               dc.canonical_source_version_id, submitted.title AS submission_title,
