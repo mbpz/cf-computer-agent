@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminMenusRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -24,6 +25,21 @@ describe("menu write recovery", () => {
   function button(label: string) { return [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; }
   async function click(label: string) { expect(button(label)).toBeTruthy(); await act(async () => button(label).click()); await flush(); }
 
+  it.each(["pending", "unknown", "forbidden"])("route-blocks %s menu writes even after editor removal", async outcome => {
+    const response = deferred<Response>(); const requests: string[] = [];
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      requests.push(init?.method || "GET");
+      return init?.method === "PATCH" ? response.promise : json({ tree: [menu()] });
+    });
+    await render(); await click("Disable");
+    await act(async () => { button("Confirm change").click(); writeWorkspaceHistory("push", "/tasks"); });
+    expect(browser.location.pathname).toBe("/admin/submissions");
+    if (outcome !== "pending") { response.resolve(new Response("{}", { status: outcome === "forbidden" ? 403 : 500, headers: { "content-type": "application/json" } })); await flush(); }
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); expect(browser.location.pathname).toBe("/admin/submissions");
+    const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); expect(e.defaultPrevented).toBe(true);
+    if (outcome !== "pending") { await click("Try again"); expect(requests).toEqual(["GET", "PATCH", "GET"]); await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); expect(browser.location.pathname).toBe("/tasks"); }
+    else { response.resolve(json({ menu: menu({ status: "disabled" }) })); await flush(); }
+  });
   async function confirmChange(label: string) {
     await click(label); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
     await click("Confirm change");
@@ -137,6 +153,11 @@ describe("menu write recovery", () => {
   });
   it("refreshes position input from authoritative read after an uncertain write",async()=>{
     let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));await render();await position(4);await confirmChange("Save");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");await click("Try again");expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("7");expect(button("Save").disabled).toBe(true);
+  });
+  it("preserves an independent position draft when recovering a different row action",async()=>{
+    let gets=0;vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>init?.method?new Response(null,{status:503}):json({tree:[menu({position:++gets===1?1:7})]}));
+    await render();await position(4);await confirmChange("Disable");await click("Try again");
+    expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("4");expect(button("Save").disabled).toBe(false);
   });
   it("does not let a late old-scope denial clear a freshly read tree",async()=>{
     const pending=deferred<Response>();let gets=0;const calls:string[]=[];vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{calls.push(init?.method||"GET");return init?.method?pending.promise:json({tree:[menu({labelKey:++gets===1?"Old":"New scope"})]});});await render();await confirmChange("Disable");await render(locale());pending.resolve(new Response(null,{status:403}));await flush();expect(container.textContent).toContain("New scope");expect(button("Disable").disabled).toBe(true);await click("Try again");expect(calls).toEqual(["GET","PATCH","GET","GET"]);expect(button("Disable").disabled).toBe(false);

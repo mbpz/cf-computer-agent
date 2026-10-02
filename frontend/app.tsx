@@ -495,6 +495,18 @@ export function AdminMenusRoute({ locale }: { locale: LocaleRuntime }) {
   const readRef = useRef<AbortController | null>(null);
   const writeRef = useRef<object | null>(null);
   const blockedRef = useRef(false);
+  useEffect(() => {
+    // This guard outlives the editor: denied/failed reads can replace its UI
+    // without resolving a write. Never offer "discard" for an unknown outcome.
+    const owner = window;
+    const locked = () => writeRef.current !== null || blockedRef.current;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => {
+      if (locked()) { event.preventDefault(); event.returnValue = ""; }
+    };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, []);
   const deny = (error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
     setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_MENUS_UNAVAILABLE") });

@@ -3,6 +3,7 @@ import { MENU_LABEL_KEYS } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { Button } from "../../components/ui/button";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
+import { useCreateDraft } from "../../lib/use-create-draft";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 
 // A mounted editor owns its initial snapshot. A recovery GET must not rebase it.
@@ -10,30 +11,32 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave }: {
   menu?: AdminMenu; menus: readonly AdminMenu[]; locale?: LocaleRuntime; busy: boolean;
   onCancel: () => void; onSave: (input: AdminMenuCreate | AdminMenuUpdate) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState(() => ({ key: menu?.key ?? "", labelKey: menu?.labelKey ?? "NAV_HOME", path: menu?.path ?? "", parentId: menu?.parentId ?? "", icon: menu?.icon ?? "", groupName: menu?.groupName ?? "workspace", position: String(menu?.position ?? 0), requiredBits: menu?.requiredBits ?? "0x0", status: menu?.status ?? "active", visible: String(menu?.visible ?? true) }));
-  const initialDraft = useRef(draft);
-  const dirty = Object.keys(draft).some(key => draft[key as keyof typeof draft] !== initialDraft.current[key as keyof typeof draft]);
+  const initialDraft = useRef({ key: menu?.key ?? "", labelKey: menu?.labelKey ?? "NAV_HOME", path: menu?.path ?? "", parentId: menu?.parentId ?? "", icon: menu?.icon ?? "", groupName: menu?.groupName ?? "workspace", position: String(menu?.position ?? 0), requiredBits: menu?.requiredBits ?? "0x0", status: menu?.status ?? "active", visible: String(menu?.visible ?? true) });
   const [invalid, setInvalid] = useState(false);
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
   const disabled = busy || pending;
-  type Confirmation = { kind: "save"; input: AdminMenuUpdate; draft: typeof draft; menus: typeof menus } | { kind: "discard"; draft: typeof draft };
+  type Confirmation = { kind: "save"; input: AdminMenuUpdate; draft: typeof initialDraft.current; menus: typeof menus } | { kind: "discard"; draft: typeof initialDraft.current };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
+  const alive = useRef(true);
+  const formDraft = useCreateDraft(initialDraft.current, initialDraft.current,
+    () => busy || submitting.current || confirmationRef.current !== null, locale, () => false);
+  const draft = formDraft.fields;
   const validConfirmation = !!(confirmation && !pending && confirmation.draft === draft
     && (confirmation.kind === "discard" || (!busy && confirmation.menus === menus)));
   const cancelConfirmation = () => { confirmationRef.current = null; setConfirmation(null); };
   useEffect(() => { if (confirmation && !validConfirmation) cancelConfirmation(); }, [confirmation, validConfirmation]);
-  useEffect(() => () => { confirmationRef.current = null; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; confirmationRef.current = null; }; }, []);
   const requestConfirmation = (next: Confirmation) => { if (!confirmationRef.current) { confirmationRef.current = next; setConfirmation(next); } };
   const save = async (input: AdminMenuCreate | AdminMenuUpdate) => {
-    if (disabled || submitting.current) return;
+    if (!alive.current || disabled || submitting.current || formDraft.isConfirming()) return;
     submitting.current = true; setPending(true);
     try { await onSave(input); }
-    finally { submitting.current = false; setPending(false); }
+    finally { submitting.current = false; if (alive.current) setPending(false); }
   };
   const confirmAction = () => {
-    if (!validConfirmation || !confirmation || confirmationRef.current !== confirmation) return;
+    if (!alive.current || formDraft.isConfirming() || !validConfirmation || !confirmation || confirmationRef.current !== confirmation || confirmation.draft !== formDraft.current.current) return;
     cancelConfirmation();
     if (confirmation.kind === "discard") onCancel();
     else void save(confirmation.input);
@@ -47,10 +50,11 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave }: {
   const visit = (nodes: readonly AdminMenu[], depth: number) => nodes.forEach(node => { if (!excluded.has(node.id) && depth + (menu ? height(menu) : 1) <= 4) parents.push(node); visit(node.children, depth + 1); });
   visit(menus, 1);
   const text = (key: string) => frontendText(locale, key);
-  const field = (name: keyof typeof draft, label: string, choices?: readonly { value: string; label: string }[]) => <label className="grid gap-1 text-sm" key={name}><span>{text(label)}</span>{choices ? <select className="h-10 rounded-md border bg-background px-3" name={name} value={draft[name]} onChange={event => setDraft({ ...draft, [name]: event.target.value })}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select> : <input autoFocus={name === (menu ? "path" : "key")} className="h-10 rounded-md border bg-background px-3" name={name} type={name === "position" ? "number" : "text"} min={name === "position" ? 0 : undefined} max={name === "position" ? 10000 : undefined} maxLength={name === "path" ? 200 : 128} value={draft[name]} onChange={event => setDraft({ ...draft, [name]: event.target.value })} />}</label>;
+  const field = (name: keyof typeof draft, label: string, choices?: readonly { value: string; label: string }[]) => <label className="grid gap-1 text-sm" key={name}><span>{text(label)}</span>{choices ? <select className="h-10 rounded-md border bg-background px-3" name={name} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)}>{choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select> : <input autoFocus={name === (menu ? "path" : "key")} className="h-10 rounded-md border bg-background px-3" name={name} type={name === "position" ? "number" : "text"} min={name === "position" ? 0 : undefined} max={name === "position" ? 10000 : undefined} maxLength={name === "path" ? 200 : 128} value={draft[name]} onChange={event => formDraft.edit(name, event.target.value)} />}</label>;
   return <><form inert={validConfirmation || undefined} aria-hidden={validConfirmation || undefined} className="rounded-lg border p-4" aria-label={text(menu ? "ADMIN_MENUS_EDIT" : "ADMIN_MENUS_CREATE")} noValidate onSubmit={async event => {
     event.preventDefault();
-    if (disabled || submitting.current || confirmationRef.current) return;
+    if (!alive.current || disabled || submitting.current || confirmationRef.current || formDraft.isConfirming()) return;
+    const draft = formDraft.current.current;
     const position = Number(draft.position);
     const valid = (menu || /^[a-z][a-z0-9_-]{1,63}$/u.test(draft.key)) && draft.position.trim() !== "" && Number.isSafeInteger(position) && position >= 0 && position <= 10000 && (!draft.path || (/^\/[A-Za-z0-9_\-/:.]*$/u.test(draft.path) && draft.path.length <= 200)) && /^0x[0-9a-f]{1,16}$/iu.test(draft.requiredBits) && (!draft.parentId || parents.some(parent => parent.id === draft.parentId));
     if (!valid) { setInvalid(true); return; }
@@ -73,13 +77,13 @@ export function MenuEditor({ menu, menus, locale, busy, onCancel, onSave }: {
     </fieldset>
     <p className="mt-3 text-sm text-muted-foreground">{text("ADMIN_MENUS_EDITOR_HINT")}</p>
     {invalid && <p role="alert" className="mt-3 text-sm text-destructive">{text("ADMIN_MENUS_INVALID")}</p>}
-    <div className="mt-4 flex gap-2"><Button type="submit" disabled={disabled}>{text(menu ? "ADMIN_MENUS_SAVE_FULL" : "ADMIN_MENUS_CREATE_SUBMIT")}</Button><Button type="button" variant="outline" disabled={pending} onClick={() => { if (pending || submitting.current || confirmationRef.current) return; if (dirty) requestConfirmation({ kind: "discard", draft }); else onCancel(); }}>{text("ADMIN_MENUS_CANCEL")}</Button></div>
+    <div className="mt-4 flex gap-2"><Button type="submit" disabled={disabled}>{text(menu ? "ADMIN_MENUS_SAVE_FULL" : "ADMIN_MENUS_CREATE_SUBMIT")}</Button><Button type="button" variant="outline" disabled={pending} onClick={() => { if (pending || submitting.current || confirmationRef.current || formDraft.isConfirming()) return; const draft = formDraft.current.current; if (JSON.stringify(draft) !== JSON.stringify(initialDraft.current)) requestConfirmation({ kind: "discard", draft }); else onCancel(); }}>{text("ADMIN_MENUS_CANCEL")}</Button></div>
   </form><ConfirmAction open={validConfirmation}
     title={text(confirmation?.kind === "discard" ? "ADMIN_MENUS_DISCARD_TITLE" : "ADMIN_MENUS_CONFIRM_TITLE")}
     description={confirmation?.kind === "save" && menu ? `${menu.key} · ${menu.path || menu.id}. ${describeMenuChanges(menu, confirmation.input, locale)}` : text("ADMIN_MENUS_DISCARD_IMPACT")}
     cancelLabel={text("COMMON_CANCEL")} confirmLabel={text(confirmation?.kind === "discard" ? "ADMIN_MENUS_DISCARD_CONFIRM" : "ADMIN_MENUS_APPLY_CONFIRM")}
     destructive={confirmation?.kind === "discard" || (confirmation?.kind === "save" && (confirmation.input.status === "disabled" || confirmation.input.visible === false))}
-    onCancel={cancelConfirmation} onConfirm={confirmAction} /></>;
+    onCancel={cancelConfirmation} onConfirm={confirmAction} />{formDraft.confirmation}</>;
 }
 
 /** Show only changed fields, while the full original snapshot remains the CAS precondition. */

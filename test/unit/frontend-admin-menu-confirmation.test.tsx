@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminMenusPage } from "../../frontend/pages/admin/menus-page";
 import type { AdminMenu } from "../../frontend/lib/admin-menus-data";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
@@ -31,6 +32,42 @@ describe("menu action confirmation", () => {
   async function click(label: string) { await act(async () => button(label).click()); }
   async function input(selector: string, value: string) { const el = container.querySelector(selector) as HTMLInputElement; expect(el).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,value); el.dispatchEvent(new browser.Event("input",{bubbles:true})); }); }
   const dialog = () => container.querySelector('[role="alertdialog"]');
+  function unloadWarns() { const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); return e.defaultPrevented; }
+  async function navigate() { await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); }
+  async function decision(accept: boolean) { await act(async () => (dialog()!.querySelector(accept ? "[data-confirm-action]" : "[data-cancel-action]") as HTMLButtonElement).click()); }
+  it.each(["create", "edit", "position"])("protects %s draft from navigation and unload", async mode => {
+    await mount(); expect(unloadWarns()).toBe(false);
+    if (mode !== "position") await click(mode === "create" ? "Create menu" : "Edit menu");
+    const selector = mode === "position" ? 'input[type="number"]' : '[name="path"]';
+    await input(selector, mode === "position" ? "7" : "/changed"); await navigate();
+    expect(browser.location.pathname).toBe("/admin/menus"); expect(unloadWarns()).toBe(true);
+    await decision(false); expect(unloadWarns()).toBe(true); await navigate(); await decision(true);
+    expect(browser.location.pathname).toBe("/tasks"); expect(unloadWarns()).toBe(false);
+    expect(onUpdate).not.toHaveBeenCalled(); expect(onCreate).not.toHaveBeenCalled(); expect(onDelete).not.toHaveBeenCalled();
+  });
+  it.each(["create", "edit", "position"])("preserves %s input after final admission denial", async mode => {
+    await mount(); if (mode !== "position") await click(mode === "create" ? "Create menu" : "Edit menu");
+    const selector = mode === "position" ? 'input[type="number"]' : '[name="path"]';
+    const value = mode === "position" ? "7" : "/changed"; await input(selector, value);
+    let denied = false; const stop = registerWorkspaceLeaveGuard(() => ({ kind: denied ? "block" : "allow" }));
+    try { await navigate(); denied = true; await decision(true);
+      expect(browser.location.pathname).toBe("/admin/menus"); expect((container.querySelector(selector) as HTMLInputElement).value).toBe(value); expect(unloadWarns()).toBe(true);
+    } finally { stop(); }
+  });
+  it.each(["Delete", "Disable", "Hide"])("does not navigate out of an open %s confirmation", async label => {
+    await mount(); await click(label); await navigate(); expect(browser.location.pathname).toBe("/admin/menus");
+    expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1); await click("Cancel"); await navigate(); expect(browser.location.pathname).toBe("/tasks");
+  });
+  it("preserves an independent row position draft after authoritative list refresh", async () => {
+    await mount(); await input('input[type="number"]', "7"); await mount({ state: { kind: "ready", menus: [{ ...menu }] } });
+    expect((container.querySelector('input[type="number"]') as HTMLInputElement).value).toBe("7"); expect(unloadWarns()).toBe(true);
+  });
+  it("blocks form submission and local cancel during a leave decision", async () => {
+    await mount(); await click("Edit menu"); await input('[name="path"]', "/changed"); await navigate();
+    await act(async () => { button("Save menu").click(); button("Cancel").click(); });
+    expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1); expect(onUpdate).not.toHaveBeenCalled();
+    await decision(false); expect((container.querySelector('[name="path"]') as HTMLInputElement).value).toBe("/changed");
+  });
   it.each(["Save", "Disable", "Enable", "Hide", "Show", "Delete"])("requires one explicit confirmation for %s", async label => {
     const target = {...menu,status:label === "Enable" ? "disabled" as const : "active" as const, visible:label !== "Show"};
     await mount({state:{kind:"ready",menus:[target]}});
