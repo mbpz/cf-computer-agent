@@ -1,3 +1,4 @@
+import type { DiscussionOperationJournal } from "../../lib/discussion-intent";
 import type { DiscussionContext, DiscussionCursorRequest, DiscussionSendInput } from "../../lib/discussions-data";
 
 export interface DiscussionSearch extends DiscussionCursorRequest {
@@ -68,11 +69,21 @@ export function mentionIdsFromBody(body: string): string[] {
   return mentions;
 }
 
-export function createDiscussionSubmitController(keyFactory: () => string = () => crypto.randomUUID()) {
+export function createDiscussionSubmitController(keyFactory: () => string = () => crypto.randomUUID(), journal?: DiscussionOperationJournal) {
   let pending = false;
-  let attempt: { fingerprint: string; input: DiscussionSendInput } | null = null;
+  const restored = journal?.load();
+  const blocked = restored?.kind === "blocked";
+  let attempt: { fingerprint: string; input: DiscussionSendInput } | null = restored?.kind === "ready"
+    ? { fingerprint: discussionSendFingerprint(restored.input), input: restored.input } : null;
+  const copy = (input: DiscussionSendInput): DiscussionSendInput => ({ ...input, context: { ...input.context }, mentionMemberIds: [...(input.mentionMemberIds ?? [])] });
+  const settle = (input: DiscussionSendInput) => {
+    if (journal && !journal.clear(input)) throw new Error("DISCUSSION_STORAGE_UNAVAILABLE");
+    attempt = null;
+  };
   return {
-    hasUnresolved: () => attempt !== null,
+    hasUnresolved: () => blocked || attempt !== null,
+    recoveryBlocked: () => blocked,
+    snapshot: () => attempt ? copy(attempt.input) : null,
     operationKey: () => attempt?.input.clientKey ?? null,
     async reconcile(lookup: (input: DiscussionSendInput) => Promise<boolean>): Promise<boolean> {
       if (pending || !attempt) return false;
@@ -82,7 +93,7 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
         const found = await lookup({ ...currentAttempt.input, context: { ...currentAttempt.input.context },
           mentionMemberIds: [...(currentAttempt.input.mentionMemberIds ?? [])] });
         if (found !== true || attempt !== currentAttempt) return false;
-        attempt = null;
+        settle(currentAttempt.input);
         return true;
       } finally { pending = false; }
     },
@@ -91,6 +102,7 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
       sender: (input: DiscussionSendInput) => Promise<unknown>,
     ): Promise<boolean> {
       if (pending) return false;
+      if (blocked) throw new Error("DISCUSSION_RECOVERY_BLOCKED");
       const fingerprint = discussionSendFingerprint(input);
       if (attempt && attempt.fingerprint !== fingerprint) throw new Error("DISCUSSION_WRITE_UNRESOLVED");
       if (!attempt) attempt = {
@@ -101,11 +113,12 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
       const currentAttempt = attempt;
       pending = true;
       try {
+        if (journal && !journal.save(currentAttempt.input)) throw new Error("DISCUSSION_STORAGE_UNAVAILABLE");
         // Neither caller edits nor a transport mutating its argument may change a retry.
         await sender({ ...currentAttempt.input, context: { ...currentAttempt.input.context },
           mentionMemberIds: [...(currentAttempt.input.mentionMemberIds ?? [])] });
         if (attempt !== currentAttempt) return false;
-        attempt = null;
+        settle(currentAttempt.input);
         return true;
       } finally {
         pending = false;

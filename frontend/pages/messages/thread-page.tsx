@@ -1,3 +1,4 @@
+import { createDiscussionOperationJournal } from "../../lib/discussion-intent";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Alert, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -15,7 +16,8 @@ export type ThreadPageState =
   | { kind: "error" }
   | { kind: "ready"; thread: DiscussionThread; messages: readonly DiscussionMessage[]; nextCursor?: string };
 
-export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRefresh, onNext, onPrevious, onLimitChange, onSend, onLookup, onSent }: {
+export function ThreadPage({ recoveryOwner, locale, state, page, limit, pending, onRetry, onRefresh, onNext, onPrevious, onLimitChange, onSend, onLookup, onSent }: {
+  recoveryOwner?: { memberId: string; threadId: string };
   locale: LocaleRuntime;
   state: ThreadPageState;
   page: number;
@@ -30,17 +32,22 @@ export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRef
   onLookup?: (input: DiscussionSendInput) => Promise<boolean>;
   onSent?: () => void;
 }) {
-  const [status, setStatus] = useState<"idle" | "pending" | "checking" | "error">("idle");
   const submitControllerRef = useRef<ReturnType<typeof createDiscussionSubmitController> | null>(null);
-  if (!submitControllerRef.current) submitControllerRef.current = createDiscussionSubmitController();
+  if (!submitControllerRef.current) submitControllerRef.current = createDiscussionSubmitController(undefined,
+    recoveryOwner ? createDiscussionOperationJournal(recoveryOwner.memberId, recoveryOwner.threadId) : undefined);
+  const restored = useRef(submitControllerRef.current.snapshot()).current;
+  const [status, setStatus] = useState<"idle" | "pending" | "checking" | "error">(restored ? "error" : "idle");
   const submitPendingRef = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const blank = { body: "", replyId: "", replyAuthor: "" };
-  const draft = useCreateDraft(blank, blank,
+  const draft = useCreateDraft(restored ? { body: restored.body, replyId: restored.replyToMessageId ?? "", replyAuthor: "" } : blank, blank,
     () => submitPendingRef.current || submitControllerRef.current!.hasUnresolved(), locale,
     () => state.kind !== "ready");
   const { body, replyId, replyAuthor } = draft.fields;
+  const frozen = submitControllerRef.current.snapshot();
+  const recoveryBlocked = submitControllerRef.current.recoveryBlocked() || (frozen !== null && state.kind === "ready"
+    && (frozen.context.kind !== state.thread.contextKind || frozen.context.id !== state.thread.contextId));
   const locked = submitControllerRef.current.hasUnresolved() || status === "pending" || draft.confirming;
   const replyTo = replyId ? { id: replyId, authorMemberId: replyAuthor } : null;
   const selectReply = (message: DiscussionMessage | null) => {
@@ -49,7 +56,7 @@ export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRef
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!alive.current || state.kind !== "ready" || submitPendingRef.current || draft.isConfirming()) return;
+    if (!alive.current || recoveryBlocked || state.kind !== "ready" || submitPendingRef.current || draft.isConfirming()) return;
     const input = discussionComposerInput(state.thread, draft.current.current.body, draft.current.current.replyId);
     if (!input) return;
     submitPendingRef.current = true;
@@ -70,7 +77,7 @@ export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRef
     }
   };
   const checkResult = async () => {
-    if (!alive.current || state.kind !== "ready" || !onLookup || submitPendingRef.current || draft.isConfirming()) return;
+    if (!alive.current || recoveryBlocked || state.kind !== "ready" || !onLookup || submitPendingRef.current || draft.isConfirming()) return;
     submitPendingRef.current = true;
     setStatus("checking");
     try {
@@ -85,6 +92,7 @@ export function ThreadPage({ locale, state, page, limit, pending, onRetry, onRef
   };
   if (state.kind === "loading") return <div>{draft.confirmation}<span className="sr-only">{frontendText(locale, "MESSAGES_THREAD_LOADING")}</span><PageState kind="loading" title={frontendText(locale, "MESSAGES_THREAD_LOADING")} /></div>;
   if (state.kind === "error") return <>{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "MESSAGES_RETRY")}</Button></PageState></>;
+  if (recoveryBlocked) return <>{draft.confirmation}<PageState kind="error" title={frontendText(locale, "MESSAGES_RECOVERY_BLOCKED")} /></>;
   return <section className="flex min-h-0 flex-col gap-4">
     {draft.confirmation}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><a href="/messages" className="text-sm font-medium text-primary hover:underline">{frontendText(locale, "MESSAGES_BACK")}</a><h1 className="mt-1 text-2xl font-semibold">{frontendText(locale, "MESSAGES_THREAD_TITLE")}</h1><a className="text-sm text-muted-foreground hover:underline" href={discussionContextHref({ kind: state.thread.contextKind, id: state.thread.contextId })}>{state.thread.contextId}</a></div><Button variant="outline" disabled={pending} onClick={onRefresh}>{frontendText(locale, "MESSAGES_REFRESH")}</Button></div>
@@ -109,7 +117,7 @@ function DiscussionComposer({ locale, body, status, locked, replyTo, onBodyChang
   onSubmit: (event: FormEvent) => Promise<void>;
 }) {
   return <form className="space-y-2 rounded-lg border bg-card p-3" onSubmit={(event) => void onSubmit(event)}>
-    {replyTo && <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{frontendText(locale, "MESSAGES_REPLYING_TO")} {replyTo.authorMemberId}</span><button type="button" className="text-primary hover:underline" disabled={locked} onClick={onCancelReply}>{frontendText(locale, "MESSAGES_CANCEL_REPLY")}</button></div>}
+    {replyTo && <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>{frontendText(locale, "MESSAGES_REPLYING_TO")} {replyTo.authorMemberId || replyTo.id}</span><button type="button" className="text-primary hover:underline" disabled={locked} onClick={onCancelReply}>{frontendText(locale, "MESSAGES_CANCEL_REPLY")}</button></div>}
     {status === "error" && <Alert variant="destructive"><AlertTitle>{frontendText(locale, "MESSAGES_SEND_ERROR")}</AlertTitle></Alert>}
     {operationKey && <div className="space-y-2 text-xs text-muted-foreground"><p>{frontendText(locale, "MESSAGES_OPERATION_KEY")} <code className="break-all">{operationKey}</code></p>{onLookup && <Button type="button" variant="outline" disabled={status === "pending" || status === "checking"} onClick={() => void onLookup()}>{frontendText(locale, status === "checking" ? "MESSAGES_CHECKING_RESULT" : "MESSAGES_CHECK_RESULT")}</Button>}</div>}
     <label className="block text-sm font-medium" htmlFor="discussion-composer">{frontendText(locale, "MESSAGES_COMPOSER_LABEL")}</label>

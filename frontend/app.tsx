@@ -213,7 +213,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "boards": return <BoardsRoute key={session?.member.id} locale={locale} search={search} />;
     case "notifications": return <NotificationsRoute locale={locale} search={search} isAdmin={session?.member.role === "admin"} />;
     case "messages": return <MessagesRoute locale={locale} search={search} />;
-    case "message-thread": return <DiscussionThreadRoute locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
+    case "message-thread": return <DiscussionThreadRoute memberId={session?.member.id} locale={locale} threadId={decodeRouteId(pathname)} search={search} />;
     case "environments": return session ? <EnvironmentsPage key={session.member.id} locale={locale} session={session} /> : <NotFoundPage locale={locale} />;
     case "settings": return session ? <SettingsPage locale={locale} email={session.member.email} role={session.member.role} /> : <NotFoundPage locale={locale} />;
     case "coming-soon": return <ComingSoonPage locale={locale} />;
@@ -2314,7 +2314,12 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
     onLimitChange={(limit) => navigate({ page: 1, limit })} />;
 }
 
-export function DiscussionThreadRoute({ locale, threadId, search }: { locale: LocaleRuntime; threadId: string; search: string }) {
+export function DiscussionThreadRoute({ memberId, locale, threadId, search }: { memberId?: string; locale: LocaleRuntime; threadId: string; search: string }) {
+  if (!memberId) return <PageState kind="error" title={frontendText(locale, "MESSAGES_THREAD_ERROR")} />;
+  return <MemberDiscussionThreadRoute key={`${memberId}:${threadId}`} memberId={memberId} locale={locale} threadId={threadId} search={search} />;
+}
+
+function MemberDiscussionThreadRoute({ memberId, locale, threadId, search }: { memberId: string; locale: LocaleRuntime; threadId: string; search: string }) {
   const initial = useMemo(() => parseDiscussionSearch(search), [search]);
   const [query, setQuery] = useState<DiscussionSearch>(initial);
   const [state, setState] = useState<ThreadPageState>({ kind: "loading" });
@@ -2402,7 +2407,7 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
     else setRetryVersion((value) => value + 1);
   };
   const visibleState: ThreadPageState = state.kind === "ready" && state.thread.id !== threadId ? { kind: "loading" } : state;
-  return <ThreadPage key={threadId} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
+  return <ThreadPage key={threadId} recoveryOwner={{ memberId, threadId }} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRefresh={() => setRetryVersion((value) => value + 1)}
     onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}

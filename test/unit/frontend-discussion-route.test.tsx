@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, DiscussionThreadRoute, MessagesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { createDiscussionOperationJournal } from "../../frontend/lib/discussion-intent";
 import { createDiscussionSubmitController } from "../../frontend/pages/messages/discussion-model";
 
 const vmContexts = new WeakSet<object>();
@@ -29,6 +30,146 @@ describe("discussion routes", () => {
   });
 
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+
+  it.each(["lookup", "retry"])("restores a frozen operation after remount without automatic traffic: %s", async action => {
+    const sent: Record<string, unknown>[] = []; let queries = 0; let complete = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/discussions/messages" && init?.method === "POST") {
+        sent.push(JSON.parse(String(init.body)));
+        if (!complete) throw Error("unknown");
+        return Response.json({ thread: thread(), message: message({ body: "Restore original", clientKey: String(sent[0].clientKey) }), created: false });
+      }
+      if (path.startsWith("/api/discussions/messages/requests?")) {
+        queries++; expect(new URL(path, "https://app.test").searchParams.get("clientKey")).toBe(sent[0].clientKey);
+        return Response.json({ result: { thread: thread(), message: message({ body: "Restore original", clientKey: String(sent[0].clientKey) }), created: false } });
+      }
+      return Response.json(path === "/api/discussions/thread-1" ? thread() : { items: [message()] });
+    });
+    const render = () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />);
+    await act(async () => { render(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("textarea")!, "Restore original");
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => container.querySelector("[role=alert]") !== null);
+    await act(async () => root.unmount()); root = createRoot(container);
+    await act(async () => { render(); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    expect(container.querySelector("textarea")!.value).toBe("Restore original");
+    expect(container.querySelector("textarea")!.disabled).toBe(true);
+    expect(container.textContent).toContain(String(sent[0].clientKey));
+    expect(sent).toHaveLength(1); expect(queries).toBe(0);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    complete = true;
+    await act(async () => {
+      if (action === "lookup") [...container.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!.click();
+      else container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => container.querySelector("textarea")?.value === "" && !container.querySelector("textarea")?.disabled);
+    expect(sent).toHaveLength(action === "lookup" ? 1 : 2);
+    if (action === "retry") expect(sent[1]).toEqual(sent[0]);
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-operation:v1:member-1:thread-1")).toBeNull();
+  });
+
+  it("does not expose or clear A's journal when the member changes during an unknown write", async () => {
+    let release!: (response: Response) => void; let payload: { clientKey: string } | undefined;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { payload = JSON.parse(String(init.body)); return new Promise<Response>(resolve => { release = resolve; }); }
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [] });
+    });
+    const render = (memberId: string) => root.render(<DiscussionThreadRoute memberId={memberId} locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />);
+    await act(async () => render("member-1")); await waitFor(() => container.querySelector("textarea") !== null);
+    await changeReactTextarea(container.querySelector("textarea")!, "Private A");
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => !!payload);
+    await act(async () => render("member-2")); await waitFor(() => container.querySelector("textarea") !== null);
+    expect(container.querySelector("textarea")!.value).toBe(""); expect(container.textContent).not.toContain(payload!.clientKey);
+    await act(async () => release(Response.json({ thread: thread(), message: message({ body: "Private A", clientKey: payload!.clientKey }), created: true })));
+    await flush();
+    expect(browser.sessionStorage.getItem("memory-garden:discussion-operation:v1:member-1:thread-1")).not.toBeNull();
+    await act(async () => render("member-1")); await waitFor(() => container.querySelector("textarea") !== null);
+    expect(container.querySelector("textarea")!.value).toBe("Private A");
+    expect(container.textContent).toContain(payload!.clientKey);
+  });
+
+  it("blocks corrupt recovery without discarding it or issuing a write", async () => {
+    const key = "memory-garden:discussion-operation:v1:member-1:thread-1";
+    browser.sessionStorage.setItem(key, "broken");
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [] }));
+    vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.textContent!.includes("Saved operation cannot be restored"));
+    expect(container.querySelector("textarea")).toBeNull(); expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(browser.sessionStorage.getItem(key)).toBe("broken");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+  });
+
+  it("does not enable a persistent writer without a verified member identity", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await flush(); expect(container.querySelector("textarea")).toBeNull(); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each(["denied", "wrong-context"])("hides recovered private content until its exact authorized target is loaded: %s", async outcome => {
+    const saved = { context: { kind: "task" as const, id: "task-1" }, body: "Private recovered draft", clientKey: "restore-key", mentionMemberIds: [] };
+    const journal = createDiscussionOperationJournal("member-1", "thread-1");
+    expect(journal.save(saved)).toBe(true);
+    let restoreAccess = false; let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST" || String(input).includes("/requests?")) { writes++; throw Error("no automatic recovery traffic"); }
+      if (String(input) === "/api/discussions/thread-1") {
+        if (!restoreAccess && outcome === "denied") return new Response(null, { status: 403 });
+        return Response.json(thread({ contextId: !restoreAccess && outcome === "wrong-context" ? "other-task" : "task-1" }));
+      }
+      return Response.json({ items: [] });
+    });
+    const render = () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />);
+    await act(async () => { render(); }); await waitFor(() => container.querySelector("[data-page-state=error]") !== null);
+    expect(container.textContent).not.toContain(saved.body); expect(container.textContent).not.toContain(saved.clientKey);
+    expect(container.querySelector("textarea")).toBeNull(); expect(writes).toBe(0);
+    restoreAccess = true;
+    await act(async () => root.unmount()); root = createRoot(container);
+    await act(async () => { render(); }); await waitFor(() => container.querySelector("textarea") !== null);
+    expect(container.querySelector("textarea")!.value).toBe(saved.body); expect(container.textContent).toContain(saved.clientKey);
+    expect(journal.load()).toEqual({ kind: "ready", input: saved }); expect(writes).toBe(0);
+  });
+
+  it("keeps the same in-memory number if storage fails before the first network send", async () => {
+    let writes = 0; let savedKey = "";
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { writes++; const payload = JSON.parse(String(init.body)); expect(payload.clientKey).toBe(savedKey); throw Error("unknown"); }
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("textarea") !== null);
+    await changeReactTextarea(container.querySelector("textarea")!, "Keep original");
+    const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementationOnce(() => { throw Error("quota"); });
+    const submit = () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+    await act(async () => { submit(); }); await waitFor(() => container.querySelector("[role=alert]") !== null);
+    savedKey = container.querySelector("code")!.textContent!;
+    expect(writes).toBe(0); expect(savedKey).not.toBe(""); expect(container.querySelector("textarea")!.disabled).toBe(true);
+    await act(async () => { submit(); }); await flush();
+    expect(writes).toBe(1); expect(container.querySelector("code")!.textContent).toBe(savedKey);
+    set.mockRestore();
+  });
+
+  it("restores replies and mentions exactly rather than converting a retry into a new message", async () => {
+    const saved = { context: { kind: "task" as const, id: "task-1" }, body: "Original @member-2", replyToMessageId: "message-1", mentionMemberIds: ["member-2"], clientKey: "reply-restore" };
+    const journal = createDiscussionOperationJournal("member-1", "thread-1"); expect(journal.save(saved)).toBe(true);
+    const sends: unknown[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        const payload = JSON.parse(String(init.body)); sends.push(payload);
+        return Response.json({ thread: thread(), message: message({ body: saved.body, replyToMessageId: saved.replyToMessageId, mentionMemberIds: saved.mentionMemberIds, clientKey: saved.clientKey }), created: false });
+      }
+      return Response.json(String(input) === "/api/discussions/thread-1" ? thread() : { items: [] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("textarea") !== null); expect(sends).toEqual([]);
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await waitFor(() => container.querySelector("textarea")?.value === "");
+    expect(sends).toEqual([saved]); expect(journal.load()).toEqual({ kind: "empty" });
+  });
 
   it("creates the authorized context thread and replaces the URL with its canonical thread route", async () => {
     const calls: Array<{ path: string; method?: string; body: string }> = [];
@@ -58,7 +199,7 @@ describe("discussion routes", () => {
       if (String(input) === "/api/discussions/thread-1") return Response.json(thread(!valid && mismatch === "detail" ? { id: "wrong-thread" } : {}));
       return Response.json({ items: [message(!valid && mismatch === "messages" ? { threadId: "wrong-thread" } : {})] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
     expect(container.querySelector("#discussion-composer")).toBeNull();
     expect(container.textContent).not.toContain("Thread A");
@@ -82,7 +223,7 @@ describe("discussion routes", () => {
       if (path === "/api/discussions/thread-1") return Response.json(thread());
       return Response.json({ items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Keep my draft");
@@ -114,7 +255,7 @@ describe("discussion routes", () => {
       if (failRead) return Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 503 });
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Retry this reply");
     await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
@@ -159,7 +300,7 @@ describe("discussion routes", () => {
       if (denied) return Response.json({ error: { code: "DENIED", message: "Denied", retryable: false } }, { status });
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Secret draft");
     await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
@@ -194,7 +335,7 @@ describe("discussion routes", () => {
       if (denied) return Response.json({ error: { code: "DENIED", message: "Denied", retryable: false } }, { status: 403 });
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Old attempt");
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
@@ -229,12 +370,12 @@ describe("discussion routes", () => {
       if (init?.method === "POST") {
         writes += 1; acknowledged = true; failRead = true;
         const payload = JSON.parse(String(init.body));
-        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload.clientKey }), created: true });
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload!.clientKey }), created: true });
       }
       if (failRead) return Response.json({ error: { code: "UNAVAILABLE", message: "Unavailable", retryable: true } }, { status: 503 });
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Acknowledged");
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
@@ -261,7 +402,7 @@ describe("discussion routes", () => {
       }
       return Response.json({ items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Private draft");
     await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Refresh")!.click(); });
@@ -284,7 +425,7 @@ describe("discussion routes", () => {
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
     browser.history.replaceState({}, "", "/messages/thread-1");
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Keep draft");
@@ -312,7 +453,7 @@ describe("discussion routes", () => {
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
     browser.history.replaceState({}, "", "/messages/thread-1");
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Original");
@@ -462,7 +603,7 @@ describe("discussion routes", () => {
     });
     await act(async () => root.render(kind === "list"
       ? <MessagesRoute locale={createLocaleRuntime()} search={browser.location.search} />
-      : <DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
+      : <DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
     await waitFor(() => container.querySelector("button[aria-label='Next page']") !== null);
     await act(async () => { (container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).click(); });
     await waitFor(() => container.querySelector("[data-page-state='error']") !== null);
@@ -500,7 +641,7 @@ describe("discussion routes", () => {
     });
     await act(async () => root.render(kind === "list"
       ? <MessagesRoute locale={createLocaleRuntime()} search="" />
-      : <DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+      : <DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("button[aria-label='Next page']") !== null);
     await act(async () => { (container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).click(); });
     await waitFor(() => pageSignal !== undefined);
@@ -525,12 +666,12 @@ describe("discussion routes", () => {
       if (init?.method === "POST") {
         writes += 1;
         const payload = JSON.parse(String(init.body));
-        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload.clientKey }), created: true });
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ sequence: 2, body: payload.body, clientKey: payload!.clientKey }), created: true });
       }
       reads.push(String(input));
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search={browser.location.search} />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const historyLength = browser.history.length;
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "New reply");
@@ -553,9 +694,9 @@ describe("discussion routes", () => {
       if (/^\/api\/discussions\/thread-[12]\/messages\?limit=20$/u.test(path)) return Response.json({ items: [] });
       throw new Error(`unexpected request: ${path}`);
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => calls.length === 2);
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-2" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-2" search="" />));
     await waitFor(() => calls.length === 4);
 
     expect(calls.slice(2)).toEqual([
@@ -583,7 +724,7 @@ describe("discussion routes", () => {
       if (path === "/api/discussions/messages" && init?.method === "POST") { sentKey = JSON.parse(String(init.body)).clientKey; return delayedSendA; }
       return Promise.reject(new Error(`unexpected request: ${path}`));
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("[data-message-id='message-1']") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Draft for A");
@@ -591,7 +732,7 @@ describe("discussion routes", () => {
     await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
     await waitFor(() => calls.includes("POST /api/discussions/messages"));
 
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-2" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-2" search="" />));
 
     expect(container.querySelector("[data-message-id='message-1']")).toBeNull();
     expect(container.querySelector("#discussion-composer")).toBeNull();
@@ -628,7 +769,7 @@ describe("discussion routes", () => {
       if (path === "/api/discussions/messages" && init?.method === "POST") { sentKey = JSON.parse(String(init.body)).clientKey; return delayedSend; }
       return Promise.reject(new Error(`unexpected request: ${path}`));
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("[data-message-id='message-1']") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Keep this draft");
     await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
@@ -657,7 +798,7 @@ describe("discussion routes", () => {
       if (path === "/api/discussions/messages" && init?.method === "POST") { sentKey = JSON.parse(String(init.body)).clientKey; return delayedSend; }
       return Promise.reject(new Error(`unexpected request: ${path}`));
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("[data-message-id='message-1']") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Keep restored draft");
@@ -695,7 +836,7 @@ describe("discussion routes", () => {
       if (path === "/api/discussions/thread-1") return denied ? new Response(null, { status: 403 }) : Response.json(thread());
       return Response.json({ items: [message()] });
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Original");
     const submit = () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
@@ -741,7 +882,7 @@ describe("discussion routes", () => {
       }
       throw new Error(`unexpected request: ${path}`);
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Original");
     const submit = () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
@@ -794,7 +935,7 @@ describe("discussion routes", () => {
       }
       throw new Error(`unexpected request: ${path}`);
     });
-    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await act(async () => root.render(<DiscussionThreadRoute memberId="member-1" locale={createLocaleRuntime()} threadId="thread-1" search="" />));
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
 
