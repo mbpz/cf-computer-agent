@@ -337,3 +337,8 @@ TaskEditor两个实际入口与App侧栏显式导航已接入共享准入；同�
 ## 2026-10-02 专注草稿离页保护续行
 
 基线 `fff9a75`：FocusPage 标题/任务选择纳入 useCreateDraft，取消与最终准入拒绝保留草稿；同事件最新标题提交、确认/启动后迟到编辑隔离，预检转写入后旧确认不能放行。4项RED→GREEN，共8项新增测试；定向8文件224/224、扩大50文件1254/1254、严格组件DOM类型/项目类型/UI/VM隔离/双语通过。证据：`docs/product/navigation-focus-draft-protection-evidence.md`。29范围内/5完成/24未关闭；A05/R2-008与Task 4整体开放，下一允许继续其他页面草稿/未决写入核查，无外部阻塞。合成DOM不是原生验收；未push/发布/远程迁移。
+
+
+## 2026-10-02 问答未决请求离页保护续行
+
+基线 `14fd10f`：AgentConversationRoute 同步pending/内存意图/当前成员恢复记录接导航与beforeunload守卫；未知或损坏记录不误放行，正常回执清理或显式停止/放弃才释放，只读恢复不误锁。7项行为RED→GREEN，共12项新增，定向6文件135/135、扩大50文件1266/1266、项目类型/UI/VM隔离/双语通过。证据：`docs/product/navigation-agent-write-protection-evidence.md`。29范围内/5完成/24未关闭；A05/R2-008与Task 4整体开放。下一允许继续未提交问题/来源草稿与反馈写入核查，无外部阻塞；未push/发布/远程迁移。不是原生或真实身份验收。

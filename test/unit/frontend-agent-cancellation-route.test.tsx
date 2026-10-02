@@ -2,6 +2,8 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { createAgentIntent, saveAgentIntent } from "../../frontend/lib/agent-turn-intent";
 import { AgentRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -261,6 +263,111 @@ describe("agent request cancellation route", () => {
     expect(requests).toHaveLength(2);
     expect(new Headers(requests[0]?.headers).get("idempotency-key")).not.toBe(new Headers(requests[1]?.headers).get("idempotency-key"));
     expect(JSON.parse(String(requests[1]?.body))).toEqual({ question: "Second", scope: { kind: "all" }, conversationId: "conv-stable" });
+  });
+
+  function unloadBlocked() {
+    const event = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(event); return event.defaultPrevented;
+  }
+  function leave() { return writeWorkspaceHistory("push", "/tasks"); }
+
+  it("blocks navigation synchronously with the first question POST and releases after a verified receipt", async () => {
+    const late = deferred<Response>(); let init: RequestInit | undefined;
+    vi.stubGlobal("fetch", (_url: unknown, options?: RequestInit) => {init = options; return late.promise;});
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Pending question");
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new browser.Event("submit", {bubbles: true, cancelable: true}) as unknown as Event);
+      expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    });
+    expect(browser.location.pathname).toBe("/agent"); expect(init?.signal?.aborted).toBe(false);
+    await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: []})));
+    await flush(); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+  });
+
+  it("retains the leave lock for an uncertain question until explicit abandonment", async () => {
+    vi.stubGlobal("fetch", async () => new Response(null, {status: 503}));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Unknown question"); await submit();
+    expect(container.textContent).toContain("Unconfirmed question"); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+  });
+
+  it("blocks restored unconfirmed questions without replaying and partitions navigation locks by member", async () => {
+    expect(saveAgentIntent(createAgentIntent("navigation-member", "Restored", {kind: "all"}))).toBe(true);
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true); expect(fetcher).not.toHaveBeenCalled();
+    await act(async () => root.render(<AgentRoute locale={language} memberId="other-member" />));
+    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed"); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("blocks unreadable stored questions and releases only after explicit successful clearing", async () => {
+    browser.sessionStorage.setItem("memory-garden:agent-turn:v1:navigation-member", "invalid");
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed"); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("does not release pending navigation if the stored question disappears before its receipt", async () => {
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Pending"); await submit(); browser.sessionStorage.clear();
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Stop"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+  });
+
+  it("keeps the navigation lock when a verified receipt cannot clear its journal", async () => {
+    const late = deferred<Response>(); let init: RequestInit | undefined;
+    vi.stubGlobal("fetch", (_url: unknown, options?: RequestInit) => {init = options; return late.promise;});
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Pending"); await submit();
+    const storage = browser.sessionStorage;
+    Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: (key: string) => storage.getItem(key), removeItem: () => {throw new Error("denied");}}});
+    try {
+      await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: []}))); await flush();
+      expect(container.textContent).toContain("Question recovery storage is unavailable or invalid");
+      expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+      await click("Abandon unconfirmed question"); expect(leave()).toBe("blocked");
+    } finally {Object.defineProperty(browser, "sessionStorage", {configurable: true, value: storage});}
+    await click("Abandon unconfirmed question"); expect(leave()).toBe("committed");
+  });
+
+  it("blocks an anonymous preview pending request but allows leaving after explicit Stop", async () => {
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+    await render(); await question("Preview"); await submit();
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Stop"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+  });
+
+  it.each([401, 403])("keeps an unconfirmed question locked after denied receipt %s", async (status) => {
+    vi.stubGlobal("fetch", async () => new Response(null, {status}));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Denied"); await submit();
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Abandon unconfirmed question"); expect(leave()).toBe("committed");
+  });
+
+  it("does not release navigation for a mismatched receipt", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({answer: "Wrong receipt", conversationId: "conv-nav", idempotencyKey: "another-key-00000001", citations: []}));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    await question("Pending"); await submit();
+    expect(container.textContent).not.toContain("Wrong receipt"); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+  });
+
+  it("reads journal availability at navigation time rather than trusting the mounted snapshot", async () => {
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
+    const storage = browser.sessionStorage;
+    Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: () => {throw new Error("denied");}}});
+    try {expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);}
+    finally {Object.defineProperty(browser, "sessionStorage", {configurable: true, value: storage});}
+    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+  });
+
+  it("does not lock navigation for a read-only conversation restore", async () => {
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
+    await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" search="?conversationId=conv-read" />));
+    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
   });
 
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }

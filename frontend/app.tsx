@@ -847,6 +847,17 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const pendingRef = useRef(false);
   const conversationIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    // A verified receipt or explicit Stop/abandon owns release, not a route change.
+    // Include synchronous refs so submit + navigation in one event cannot escape.
+    const locked = () => pendingRef.current || intentRef.current !== null
+      || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({kind: locked() ? "block" : "allow"}));
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) {event.preventDefault(); event.returnValue = "";} };
+    owner.addEventListener("beforeunload", warn);
+    return () => {unregister(); owner.removeEventListener("beforeunload", warn);};
+  }, [memberId]);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
   useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
   const submit = (nextQuestion = question) => {
