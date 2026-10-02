@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeRoute, MySubmissionsRoute, SearchRoute } from "../../frontend/app";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 const vmContexts = new WeakSet<object>();
@@ -26,11 +27,11 @@ describe("reader numbered routes", () => {
     expect(browser.location.search).toContain("spaceId=default"); expect(browser.location.search).not.toContain("page=2"); expect(container.textContent).not.toContain("Load more");
   });
 
-  it("restores search query and page on popstate and aborts the stale request", async () => {
+  it("restores search query and page on admitted navigation and aborts the stale request", async () => {
     browser.history.replaceState({}, "", "/search?q=worker&page=2"); const requests: Array<{ url: string; signal?: AbortSignal }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); requests.push({ url, signal: init?.signal || undefined }); return auxiliary(url) ?? page(url, "search"); });
     await act(async () => root.render(<SearchRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await act(async () => { browser.history.pushState({}, "", "/search?q=new&pageSize=50"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { expect(writeWorkspaceHistory("push", "/search?q=new&pageSize=50")).toBe("committed"); }); await flush();
     const formal = requests.filter(({ url }) => url.includes("/api/knowledge/search")); expect(formal[0]?.signal?.aborted).toBe(true); expect(formal.at(-1)?.url).toContain("q=new"); expect(formal.at(-1)?.url).toContain("pageSize=50");
   });
 

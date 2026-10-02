@@ -58,7 +58,8 @@ import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnow
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
 import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
-import { createSavedView, deleteSavedView, loadSavedViews, type SavedViewItem } from "./lib/saved-views-data";
+import { type SavedViewItem } from "./lib/saved-views-data";
+import { useSavedViews } from "./lib/use-saved-views";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
@@ -194,7 +195,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "home": return <HomeRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
     case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
-    case "search": return <SearchRoute locale={locale} search={search} />;
+    case "search": return <SearchRoute memberId={session?.member.id} locale={locale} search={search} />;
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
@@ -704,7 +705,11 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
   return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
-export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntime; search: string; memberId?: string }) {
+  return <MemberSearchRoute key={memberId ?? "preview"} locale={locale} search={search} />;
+}
+
+function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
   const [query, setQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
   const [activeQuery, setActiveQuery] = useState(query);
@@ -726,16 +731,11 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createSearchRequestController> | null>(null);
   const queryRef = useRef({ query: activeQuery, page, pageSize });
-  const [savedViews, setSavedViews] = useState<SavedViewItem[]>([]);
-  const [savedViewPending, setSavedViewPending] = useState(false);
-  const [savedViewError, setSavedViewError] = useState<string | undefined>();
-
-  useEffect(() => {
-    let active = true;
-    void loadSavedViews().then((items) => { if (active) setSavedViews(items); }).catch(() => { if (active) setSavedViews([]); });
-    return () => { active = false; };
-  }, []);
-
+  const saved = useSavedViews(locale, () => {
+    const params = new URLSearchParams(readWorkspaceLocation().search);
+    return { q: params.get("q") ?? "", spaceId: params.get("spaceId"), collectionId: params.get("collectionId"),
+      tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or" };
+  });
   useEffect(() => {
     const onPopState = () => {
       const next = new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "";
@@ -777,41 +777,21 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
     });
   };
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
-  const saveView = async (name: string) => {
-    if (savedViewPending) return;
-    setSavedViewPending(true);
-    setSavedViewError(undefined);
-    try {
-      const created = await createSavedView(name, { q: activeQuery });
-      setSavedViews((views) => [created, ...views.filter((view) => view.id !== created.id)]);
-    } catch {
-      setSavedViewError(frontendText(locale, "SEARCH_SAVED_VIEW_ERROR"));
-    } finally {
-      setSavedViewPending(false);
-    }
-  };
   const applyView = (view: SavedViewItem) => {
+    if (!saved.mayApply(view)) return;
     const normalized = view.filters.q.trim();
-    const nextUrl = normalized ? `/search?q=${encodeURIComponent(normalized)}` : "/search";
+    const params = new URLSearchParams(); if (normalized) params.set("q", normalized);
+    if (view.filters.spaceId) params.set("spaceId", view.filters.spaceId);
+    if (view.filters.collectionId) params.set("collectionId", view.filters.collectionId);
+    for (const id of view.filters.tagIds) params.append("tagId", id);
+    params.set("tagMode", view.filters.tagMode);
+    const nextUrl = `/search?${params.toString()}`;
     writeWorkspaceHistory("push", nextUrl, () => {
       setQuery(normalized); setActiveQuery(normalized);
       setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
-  const removeView = async (id: string) => {
-    if (savedViewPending) return;
-    setSavedViewPending(true);
-    setSavedViewError(undefined);
-    try {
-      await deleteSavedView(id);
-      setSavedViews((views) => views.filter((view) => view.id !== id));
-    } catch {
-      setSavedViewError(frontendText(locale, "SEARCH_SAVED_VIEW_ERROR"));
-    } finally {
-      setSavedViewPending(false);
-    }
-  };
-  return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViews={savedViews} savedViewPending={savedViewPending} savedViewError={savedViewError} onSaveView={(name) => { void saveView(name); }} onApplyView={applyView} onDeleteView={(id) => { void removeView(id); }} />;
+  return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={saved.confirmation} savedViews={saved.items} savedViewPending={saved.locked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {

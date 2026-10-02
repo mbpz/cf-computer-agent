@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -13,7 +13,7 @@ export type SearchState =
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query = "", pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError }: {
+export function SearchPage({ state, locale, query = "", pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView }: {
   state: SearchState;
   locale: LocaleRuntime;
   query?: string;
@@ -27,10 +27,15 @@ export function SearchPage({ state, locale, query = "", pending = false, localEr
   onDeleteView?: (id: string) => void;
   savedViewPending?: boolean;
   savedViewError?: string;
+  savedViewUnknown?: boolean; onCheckSavedView?: () => void;
+  savedViewName?: string; onSavedViewNameChange?: (value: string) => void; savedViewConfirmation?: ReactNode;
 }) {
-  const [savedViewName, setSavedViewName] = useState("");
+  const [localName, setLocalName] = useState("");
+  const savedViewName = controlledName ?? localName;
+  const setSavedViewName = onSavedViewNameChange ?? setLocalName;
   const resultQuery = state.kind === "ready" && state.query !== undefined ? state.query : query;
   return <section className="space-y-5">
+    {savedViewConfirmation}
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SEARCH_TITLE")}</h1></div>
     <form className="flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
       <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={resultQuery} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>
@@ -38,14 +43,15 @@ export function SearchPage({ state, locale, query = "", pending = false, localEr
     </form>
     {(savedViews || onSaveView) && <div className="rounded-lg border bg-card p-4" data-saved-view-controls>
       {savedViewError && <p role="alert" className="mb-3 text-sm text-destructive">{savedViewError}</p>}
+      {savedViewUnknown && <Button data-saved-view-check type="button" variant="outline" onClick={onCheckSavedView}>{frontendText(locale, "SEARCH_SAVED_VIEW_CHECK")}</Button>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div><h2 className="text-sm font-semibold">{frontendText(locale, "SEARCH_SAVED_VIEWS")}</h2><p className="mt-1 text-xs text-muted-foreground">{frontendText(locale, "SEARCH_SAVED_VIEWS_DESCRIPTION")}</p></div>
-        {onSaveView && <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); const name = savedViewName.trim(); if (!name) return; onSaveView(name); setSavedViewName(""); }}>
-          <Input aria-label={frontendText(locale, "SEARCH_SAVED_VIEW_NAME")} value={savedViewName} onChange={(event) => setSavedViewName(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_SAVED_VIEW_NAME_PLACEHOLDER")} maxLength={80} />
+        {onSaveView && <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); const name = savedViewName.trim(); if (controlledName === undefined && !name) return; onSaveView(name); }}>
+          <Input aria-label={frontendText(locale, "SEARCH_SAVED_VIEW_NAME")} disabled={savedViewPending} value={savedViewName} onChange={(event) => setSavedViewName(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_SAVED_VIEW_NAME_PLACEHOLDER")} maxLength={80} />
           <Button type="submit" disabled={savedViewPending || !savedViewName.trim()}>{frontendText(locale, "SEARCH_SAVE_VIEW")}</Button>
         </form>}
       </div>
-      {!!savedViews?.length && <div className="mt-3 flex flex-wrap gap-2">{savedViews.map((view) => <div key={view.id} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-sm"><button type="button" className="font-medium hover:underline" onClick={() => onApplyView?.(view)}>{view.name}</button><button type="button" aria-label={`${frontendText(locale, "SEARCH_DELETE_VIEW")}: ${view.name}`} className="rounded px-1 text-muted-foreground hover:bg-muted" onClick={() => onDeleteView?.(view.id)}>×</button></div>)}</div>}
+      {!!savedViews?.length && <div className="mt-3 flex flex-wrap gap-2">{savedViews.map((view) => <div key={view.id} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-sm"><button type="button" data-saved-view-apply={view.id} className="font-medium hover:underline" disabled={savedViewPending} onClick={() => onApplyView?.(view)}>{view.name}</button><button type="button" disabled={savedViewPending || !onDeleteView} aria-label={`${frontendText(locale, "SEARCH_DELETE_VIEW")}: ${view.name}`} className="rounded px-1 text-muted-foreground hover:bg-muted" onClick={() => onDeleteView?.(view.id)}>×</button></div>)}</div>}
     </div>}
     {state.kind === "loading" ? <PageState kind="loading" title={frontendText(locale, "APP_LOADING_TITLE")} />
       : state.kind === "error" ? <PageState kind="error" title={state.message || frontendText(locale, "COMMON_SEARCH_UNAVAILABLE")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "SEARCH_RETRY")}</Button></PageState>
