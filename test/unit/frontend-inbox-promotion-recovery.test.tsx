@@ -2,7 +2,7 @@
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const version = "2026-09-28T00:00:00.000Z", next = "2026-09-28T00:00:00.001Z";
@@ -77,11 +77,12 @@ describe("inbox promotion recovery through App", () => {
     expect(bodies).toEqual([{ expectedUpdatedAt: version }]);
     expect(calls).toEqual(["GET /api/inbox?page=2&pageSize=20&status=inbox", "POST /api/inbox/row/promote/task", "GET /api/inbox/row", "GET /api/inbox?page=2&pageSize=20&status=inbox"]);
   });
-  it.each([409, 503])("locks unknown result %s across route return and recovers only by reading", async code => {
+  it.each([409, 503])("locks unknown result %s across forced teardown and recovers only by reading", async code => {
     await mount(); writeStatus = code; await confirmAction();
     expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
     expect(app!.browser.sessionStorage.getItem(key)).not.toContain("Private row");
-    await navigate("/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
     expect(action().disabled).toBe(true); await click(recover()); await waitForApp(() => !app!.browser.sessionStorage.getItem(key));
     expect(bodies).toHaveLength(1);
   });
@@ -109,12 +110,13 @@ describe("inbox promotion recovery through App", () => {
     expect(app!.browser.document.body.textContent).not.toContain("Owned task notes");
     expect([...app!.browser.document.querySelectorAll("input")].some(node => node.value === "Target task")).toBe(false);
   });
-  it("suppresses double clicks and ignores late receipt after leaving", async () => {
+  it("suppresses double clicks and ignores late receipt after forced teardown", async () => {
     await mount(); delay = true; const button = action();
     await act(async () => { button.click(); button.click(); }); expect(bodies).toHaveLength(0);
     const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { confirm.click(); confirm.click(); }); await waitForApp(() => !!resolveWrite);
-    await navigate("/unknown"); const count = calls.length; await act(async () => resolveWrite!());
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/unknown"); const count = calls.length; await act(async () => resolveWrite!());
     expect(calls).toHaveLength(count); expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
   });
   it("recovers a committed request whose response was lost without a second POST", async () => {

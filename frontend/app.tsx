@@ -106,7 +106,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, registerWorkspaceLeaveGuard, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -1262,14 +1262,6 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "GOALS", search);
-  // Keep unresolved writes protected even when the relation/error subtree closes.
-  useEffect(() => {
-    const owner = window;
-    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: writeRecovery.isLocked() ? "block" : "allow" }));
-    const warn = (event: BeforeUnloadEvent) => { if (writeRecovery.isLocked()) { event.preventDefault(); event.returnValue = ""; } };
-    owner.addEventListener("beforeunload", warn);
-    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
-  }, [writeRecovery.isLocked]);
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1404,14 +1396,6 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
 export function ProjectsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "PROJECTS", search);
-  // This guard outlives the editor/error subtree and reads the synchronous marker.
-  useEffect(() => {
-    const owner = window;
-    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: writeRecovery.isLocked() ? "block" : "allow" }));
-    const warn = (event: BeforeUnloadEvent) => { if (writeRecovery.isLocked()) { event.preventDefault(); event.returnValue = ""; } };
-    owner.addEventListener("beforeunload", warn);
-    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
-  }, [writeRecovery.isLocked]);
   const statuses = new URLSearchParams(search).getAll("status");
   const status = statuses.length === 0 ? undefined : statuses.length === 1 ? statuses[0] : "invalid";
   const query = parsePageSearch(search);
@@ -1589,14 +1573,6 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
 export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" }: { locale: LocaleRuntime; projectId: string; memberId?: string; search?: string }) {
   const { page: requestedPage, pageSize } = useMemo(() => parsePageSearch(search), [search]);
   const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, `${projectId}:${requestedPage}:${pageSize}`);
-  // This guard outlives the editor/error subtree and reads the synchronous marker.
-  useEffect(() => {
-    const owner = window;
-    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: writeRecovery.isLocked() ? "block" : "allow" }));
-    const warn = (event: BeforeUnloadEvent) => { if (writeRecovery.isLocked()) { event.preventDefault(); event.returnValue = ""; } };
-    owner.addEventListener("beforeunload", warn);
-    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
-  }, [writeRecovery.isLocked]);
   useEffect(() => {
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
     if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);

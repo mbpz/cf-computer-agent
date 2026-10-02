@@ -94,3 +94,8 @@ Task 4逐页项目关联续行（基线5776cf0）：项目目标/任务关联/�
 ## 2026-10-02 目标任务关联保护续行
 
 基线 `7f88cd4`：目标任务关联/解除精确确认、同步写锁、旧决定与旧行隔离，GoalsRoute 持有跨编辑器关闭的未决写入导航/beforeunload 保护。9项行为 RED→GREEN；44文件1135/1135、独立严格 DOM 类型、项目类型、UI构建与双语通过。证据：`docs/product/navigation-goal-tasks-protection-evidence.md`。A05/R2-008 与 Task 4 整体仍开放，29/5/24不变；下一允许核查收件箱/日程/专注及其余逐页未决写入边界。强制组件重挂载不算原生验收；未 push、发布或远端迁移。
+
+
+## 2026-10-02 共享未决写入保护续行
+
+基线 `126fd7a`：守卫归属 usePlanningWriteRecovery，补齐收件箱状态/转任务与日程取消，删除目标/项目/时间线重复注册。9项行为RED→GREEN，最终44文件1144/1144、独立严格DOM类型、项目类型、UI/VM隔离、双语通过；详见 `docs/product/navigation-shared-write-protection-evidence.md`。29/5/24不变，A05/R2-008与Task 4整体开放。下一允许本地推进FocusRoute独立创建/转换恢复记录的离页准入；已确认的运行会话不应被误锁。未push/发布/远端迁移，强制组件重挂载不是原生验收。

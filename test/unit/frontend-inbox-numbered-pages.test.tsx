@@ -3,7 +3,7 @@ import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../fronte
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const kind = "inbox";
@@ -189,7 +189,7 @@ describe("inbox numbered pages through App", () => {
     await waitForApp(() => main().textContent!.includes("Unable to load"));
     expect(main().textContent).not.toContain("Private row");
   });
-  it("late writes do not refresh an obsolete page and duplicate clicks issue one write", async () => {
+  it("blocks pagination while writing and ignores late writes after forced teardown", async () => {
     await mount(); delayWrite = true;
     const archive = [...main().querySelectorAll("button")].find(node => node.textContent === "Archive")!;
     await act(async () => { archive.click(); archive.click(); });
@@ -197,7 +197,8 @@ describe("inbox numbered pages through App", () => {
     const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { confirm.click(); confirm.click(); });
     await waitForApp(() => !!resolveWrite);
-    await navigate("?page=3"); await waitForApp(() => main().textContent!.includes("Private row 42"));
+    await act(async () => expect(writeWorkspaceHistory("push", "/inbox?page=3")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/inbox?page=3"); await waitForApp(() => main().textContent!.includes("Private row 42"));
     const before = requests.length;
     await act(async () => resolveWrite!());
     expect(requests).toHaveLength(before);

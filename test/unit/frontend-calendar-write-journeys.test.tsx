@@ -8,6 +8,7 @@ vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const from="2026-09-28T00:00:00.000Z", to="2026-09-29T00:00:00.000Z";
 describe("calendar creation and cancellation through App", () => {
   let app: MountedApp | undefined, event: any, posts: any[], deletes: any[], failPost=false, failDelete=false, failRead=false, failList=false, denyPost=0, denyRead=0, denyList=0;
+  let holdDelete: Promise<void> | undefined;
   const main=()=>app!.container.querySelector("main")!;
   const button=(text:string)=>[...main().querySelectorAll<HTMLButtonElement>("button")].find(n=>n.textContent===text)!;
   const click=async(node:HTMLElement)=>act(async()=>node.click());
@@ -27,7 +28,7 @@ describe("calendar creation and cancellation through App", () => {
         return Response.json({event,created:posts.length===1});
       }
       if(url.pathname.startsWith("/api/calendar/events/")) {
-        if(method==="DELETE") {deletes.push(JSON.parse(String(init!.body)));event={...event,status:"canceled",updatedAt:to};if(failDelete)throw new TypeError("Lost response");return Response.json(event);}
+        if(method==="DELETE") {deletes.push(JSON.parse(String(init!.body)));await holdDelete;event={...event,status:"canceled",updatedAt:to};if(failDelete)throw new TypeError("Lost response");return Response.json(event);}
         if(denyRead)return apiError(denyRead,"DENIED","Denied");
         if(failRead)return apiError(500,"READ_FAILED","Read failed");
         return Response.json(event);
@@ -43,7 +44,7 @@ describe("calendar creation and cancellation through App", () => {
     await waitForApp(()=>!main().querySelector('[aria-busy="true"]'));
   }
   async function draft(){await input("Event title","A stable event");await input("Starts","2026-09-28T10:00");await input("Ends","2026-09-28T11:00");}
-  afterEach(async()=>{await app?.unmount();app=undefined;vi.unstubAllGlobals();event=undefined;posts=[];deletes=[];failPost=failDelete=failRead=failList=false;denyPost=denyRead=denyList=0;});
+  afterEach(async()=>{await app?.unmount();app=undefined;vi.unstubAllGlobals();event=undefined;posts=[];deletes=[];failPost=failDelete=failRead=failList=false;denyPost=denyRead=denyList=0;holdDelete=undefined;});
   it("rejects reversed times locally without clearing the draft or POSTing",async()=>{posts=[];await mount();await draft();await input("Ends","2026-09-28T09:00");await click(button("Add event"));expect(posts).toHaveLength(0);expect((main().querySelector('input[aria-label="Event title"]') as HTMLInputElement).value).toBe("A stable event");});
   it("retries the same immutable intent after a lost response and double click",async()=>{
     posts=[];failPost=true;await mount();await draft();await act(async()=>{button("Add event").click();button("Add event").click();});
@@ -64,6 +65,32 @@ describe("calendar creation and cancellation through App", () => {
     await waitForApp(()=>!main().querySelector("[data-planning-write-recover]"));expect(deletes).toHaveLength(1);expect(main().querySelector('[aria-label="Cancel event"]')).toBeNull();
   });
   const cancelJournal="memory-garden:planning-write:v1:contributor-route-auditor:CALENDAR";
+  const unload = () => { const e = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(e); return e.defaultPrevented; };
+  async function readyToCancel() { posts=[];deletes=[];await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector('[aria-label="Cancel event"]'));await click(main().querySelector('[aria-label="Cancel event"]')!); }
+  it("blocks same-event navigation and unload until cancellation readback completes",async()=>{
+    await readyToCancel();let release!:()=>void;holdDelete=new Promise(resolve=>{release=resolve;});
+    await act(async()=>{button("Confirm cancellation").click();expect(writeWorkspaceHistory("push","/unknown")).toBe("blocked");expect(unload()).toBe(true);});
+    expect(deletes).toHaveLength(1);await act(async()=>release());await waitForApp(()=>!main().querySelector("[data-planning-write-recover]"));
+    expect(unload()).toBe(false);await navigate("/unknown");expect(deletes).toHaveLength(1);
+  });
+  it("keeps lost cancellation protected through GET failure, then recovers without replay",async()=>{
+    await readyToCancel();failDelete=true;await click(button("Confirm cancellation"));await waitForApp(()=>!!main().querySelector("[data-planning-write-recover]"));
+    expect(unload()).toBe(true);await act(async()=>expect(writeWorkspaceHistory("push","/unknown")).toBe("blocked"));
+    await waitForApp(()=>!!main().querySelector<HTMLButtonElement>("[data-planning-write-recover]") && !main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!.disabled);
+    failRead=true;await click(main().querySelector("[data-planning-write-recover]")!);await waitForApp(()=>main().textContent!.includes("Current data could not be verified") && !main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!.disabled);expect(unload()).toBe(true);
+    failRead=false;await click(main().querySelector("[data-planning-write-recover]")!);await waitForApp(()=>!main().querySelector("[data-planning-write-recover]"));
+    expect(unload()).toBe(false);expect(deletes).toHaveLength(1);await navigate("/unknown");
+  });
+  it("blocks a corrupt restored calendar journal without writing",async()=>{
+    posts=[];deletes=[];await mount({[cancelJournal]:"invalid marker"});expect(unload()).toBe(true);
+    await act(async()=>expect(writeWorkspaceHistory("push","/unknown")).toBe("blocked"));expect(deletes).toHaveLength(0);expect(posts).toHaveLength(0);
+  });
+  it("blocks navigation when persisting cancellation fails without sending DELETE",async()=>{
+    await readyToCancel();const save=vi.spyOn(app!.browser.sessionStorage,"setItem").mockImplementation(()=>{throw new Error("quota");});
+    await click(button("Confirm cancellation"));expect(deletes).toHaveLength(0);expect(unload()).toBe(true);
+    await act(async()=>expect(writeWorkspaceHistory("push","/unknown")).toBe("blocked"));
+    save.mockRestore();await click(main().querySelector("[data-planning-write-recover]")!);expect(unload()).toBe(false);await navigate("/unknown");
+  });
   async function navigate(path:string) { await act(async()=>{expect(writeWorkspaceHistory("push",path)).toBe("committed");}); }
   it("keeps cancellation write-free and journal-free on dismiss and route exit",async()=>{
     posts=[];deletes=[];await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector('[aria-label="Cancel event"]'));

@@ -2,7 +2,7 @@
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const version = "2026-09-28T00:00:00.000Z", next = "2026-09-28T00:00:00.001Z";
@@ -76,10 +76,11 @@ describe("inbox archive and restore recovery through App", () => {
     await confirmAction(); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null); expect(bodies[1]).toEqual({ status: "inbox", expectedUpdatedAt: next });
     expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
   });
-  it.each([409, 503])("retains unknown/conflicting write %s across route return, recovers with GET only", async code => {
+  it.each([409, 503])("retains unknown/conflicting write %s across forced teardown, recovers with GET only", async code => {
     await mount(); writeStatus = code; await confirmAction(); expect(action().disabled).toBe(true); expect(recover()).toBeTruthy();
     const saved = app!.browser.sessionStorage.getItem(key)!; expect(saved).not.toContain("Private row"); expect(saved).not.toContain('"status"');
-    await navigate("/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/unknown"); await navigate("/inbox?page=2&status=inbox"); await waitForApp(() => !!action());
     expect(action().disabled).toBe(true); expect(bodies).toHaveLength(1);
     await click(recover()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
     expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).toBeNull();
@@ -127,11 +128,37 @@ describe("inbox archive and restore recovery through App", () => {
   it("does not write when the recovery marker cannot be saved", async () => {
     await mount(); vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); }); await confirmAction(); expect(bodies).toHaveLength(0); expect(action().disabled).toBe(true);
   });
-  it("deduplicates clicks and ignores a late response after route leave", async () => {
+  const unload = () => { const e = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(e); return e.defaultPrevented; };
+  it("blocks same-event navigation and unload until status write readback completes", async () => {
+    await mount(); delay = true; await click(action()); const approve = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await act(async () => { approve.click(); expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"); expect(unload()).toBe(true); });
+    expect(bodies).toHaveLength(1); expect(main().textContent).toContain("Private row");
+    await act(async () => resolveWrite!()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
+    expect(unload()).toBe(false); await navigate("/unknown"); expect(bodies).toHaveLength(1);
+  });
+  it("keeps failed status write protected through GET failure and releases only after verified recovery", async () => {
+    await mount(); writeStatus = 503; await confirmAction(); expect(unload()).toBe(true);
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    detailStatus = 503; await click(recover()); expect(main().textContent).not.toContain("Private row"); expect(unload()).toBe(true);
+    detailStatus = 200; await click(recover()); await waitForApp(() => app!.browser.sessionStorage.getItem(key) === null);
+    expect(unload()).toBe(false); expect(bodies).toHaveLength(1); await navigate("/unknown");
+  });
+  it.each([marker, "invalid marker"])("protects restored or corrupt inbox journal from navigation (%s)", async raw => {
+    await mount(raw); expect(unload()).toBe(true); await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    expect(bodies).toHaveLength(0); expect(app!.browser.sessionStorage.getItem(key)).toBe(raw);
+  });
+  it("blocks navigation when saving a status intent fails, without sending PATCH", async () => {
+    await mount(); const save = vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    await confirmAction(); expect(bodies).toHaveLength(0); expect(unload()).toBe(true);
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    save.mockRestore(); await click(recover()); expect(unload()).toBe(false); await navigate("/unknown");
+  });
+  it("deduplicates clicks and ignores a late response after forced teardown", async () => {
     await mount(); delay = true; const button = action(); await act(async () => { button.click(); button.click(); }); expect(bodies).toHaveLength(0);
     const confirm = main().querySelector<HTMLButtonElement>("[data-confirm-action]")!;
     await act(async () => { confirm.click(); confirm.click(); }); await waitForApp(() => !!resolveWrite);
-    await navigate("/unknown"); const count = calls.length; await act(async () => resolveWrite!());
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/unknown"); const count = calls.length; await act(async () => resolveWrite!());
     expect(calls).toHaveLength(count); expect(bodies).toHaveLength(1); expect(app!.browser.sessionStorage.getItem(key)).not.toBeNull();
     await navigate("/inbox?page=2"); await waitForApp(() => !!action()); expect(action().disabled).toBe(true);
   });

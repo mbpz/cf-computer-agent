@@ -6,6 +6,7 @@ import { loadInboxItem } from "../lib/inbox-data";
 import { loadGoal } from "../lib/goals-data";
 import { loadProject, loadProjectTimelineItem } from "../lib/projects-data";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
+import { registerWorkspaceLeaveGuard } from "../lib/workspace-location";
 import { Button } from "./ui/button";
 
 export function usePlanningWriteRecovery(memberId: string | undefined, module: PlanningWriteModule, locationKey: string) {
@@ -24,6 +25,15 @@ export function usePlanningWriteRecovery(memberId: string | undefined, module: P
     return () => { active.current = false; generation.current++; controller.current?.abort(); };
   }, [locationKey]);
   const isLocked = useCallback(() => current.current.kind !== "empty", []);
+  // The journal owner, not a transient editor/error subtree, owns leave protection.
+  // Read the synchronous ref so approval and navigation in one event cannot race.
+  useEffect(() => {
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: isLocked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (isLocked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, [isLocked]);
   const begin = useCallback((id: string, expectedUpdatedAt: string) => {
     if (current.current.kind !== "empty" || busy.current) return null;
     const record = Object.freeze({ token: crypto.randomUUID(), id, expectedUpdatedAt });
