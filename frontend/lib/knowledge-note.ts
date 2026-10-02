@@ -138,11 +138,11 @@ export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, sign
 
 export async function listPrivateKnowledgeNoteShares(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteShare[]> {
   assertKnowledgeItemId(knowledgeItemId);
-  const data = await apiFetch<{ shares?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares`, { requester, signal });
-  if (!Array.isArray(data.shares)) return [];
-  return data.shares.flatMap((value) => {
-    try { return [normalizeShare(value)]; } catch { return []; }
-  });
+  const data = await apiFetch<{ shares?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares`, { requester: statusRequester(requester, 200), signal });
+  if (!Array.isArray(data?.shares)) throw new Error("KNOWLEDGE_NOTE_SHARES_INVALID");
+  const rows = data.shares.map(normalizeShare);
+  if (new Set(rows.map(row => row.recipientMemberId)).size !== rows.length) throw new Error("KNOWLEDGE_NOTE_SHARES_INVALID");
+  return rows;
 }
 
 export async function loadActiveWorkspaceMembers(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeWorkspaceMember[]> {
@@ -161,15 +161,17 @@ export async function sharePrivateKnowledgeNote(knowledgeItemId: string, recipie
   assertKnowledgeItemId(knowledgeItemId);
   assertMemberId(recipientMemberId);
   const data = await apiFetch<{ share?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares`, {
-    requester, signal, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipientMemberId }),
+    requester: statusRequester(requester, 201), signal, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipientMemberId }),
   });
-  return normalizeShare(data.share);
+  const share = normalizeShare(data?.share);
+  if (share.recipientMemberId !== recipientMemberId || share.revokedAt !== null) throw new Error("KNOWLEDGE_NOTE_SHARE_INVALID");
+  return share;
 }
 
 export async function revokePrivateKnowledgeNoteShare(knowledgeItemId: string, recipientMemberId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<void> {
   assertKnowledgeItemId(knowledgeItemId);
   assertMemberId(recipientMemberId);
-  await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares/${encodeURIComponent(recipientMemberId)}`, { requester, signal, method: "DELETE" });
+  await apiFetch<void>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note/shares/${encodeURIComponent(recipientMemberId)}`, { requester: statusRequester(requester, 204), signal, method: "DELETE" });
 }
 
 export async function saveRemotePrivateKnowledgeNote(
@@ -194,10 +196,12 @@ function emptyNote(knowledgeItemId: string): PrivateKnowledgeNote {
   return { v: 1, knowledgeItemId, title: "", body: "", visibility: "private", updatedAt: "" };
 }
 
-function noteRequester(requester: Fetcher): Fetcher {
+function noteRequester(requester: Fetcher): Fetcher { return statusRequester(requester, 200); }
+
+function statusRequester(requester: Fetcher, status: number): Fetcher {
   return async (input, init) => {
     const response = await requester(input, init);
-    if (response.ok && response.status !== 200) throw new Error("KNOWLEDGE_NOTE_RECEIPT_INVALID");
+    if (response.ok && response.status !== status) throw new Error("KNOWLEDGE_NOTE_RECEIPT_INVALID");
     return response;
   };
 }
@@ -243,7 +247,8 @@ function normalizeShare(value: unknown): PrivateKnowledgeNoteShare {
   const record = value as Record<string, unknown>;
   if (typeof record.noteId !== "string" || !ID_PATTERN.test(record.noteId)
     || typeof record.recipientMemberId !== "string" || !ID_PATTERN.test(record.recipientMemberId)
-    || typeof record.createdAt !== "string" || (record.revokedAt !== null && typeof record.revokedAt !== "string")) {
+    || typeof record.createdAt !== "string" || !Number.isFinite(Date.parse(record.createdAt))
+    || (record.revokedAt !== null && (typeof record.revokedAt !== "string" || !Number.isFinite(Date.parse(record.revokedAt))))) {
     throw new Error("KNOWLEDGE_NOTE_SHARE_INVALID");
   }
   return { noteId: record.noteId, recipientMemberId: record.recipientMemberId, createdAt: record.createdAt, revokedAt: record.revokedAt as string | null };

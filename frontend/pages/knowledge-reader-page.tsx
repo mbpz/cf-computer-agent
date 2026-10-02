@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { PageState } from "../components/ui/page-state";
 import { Button } from "../components/ui/button";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
-import { listPrivateKnowledgeNoteShares, loadActiveWorkspaceMembers, revokePrivateKnowledgeNoteShare, sharePrivateKnowledgeNote, type PrivateKnowledgeNoteShare, type PrivateKnowledgeWorkspaceMember } from "../lib/knowledge-note";
+import { useReaderNoteShares } from "../lib/use-reader-note-shares";
 import type { KnowledgeBacklinkItem, KnowledgeRevision, KnowledgeRevisionDiff, KnowledgeSourceLocation, RelatedKnowledgeItem } from "../lib/knowledge-reader-data";
 import { useReaderNote } from "../lib/use-reader-note";
 import { contextDiscussionHref } from "./messages/discussion-model";
@@ -41,7 +41,10 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
     setSelectedChunkId(revision.selectedChunkId ?? null);
     setMobilePanel(revision.selectedChunkId ? "sources" : null);
   }, [revision.id, revision.selectedChunkId]);
-  const note = useReaderNote(memberId, normalizedRevision.knowledgeItemId, locale);
+  const sharingBlock = useRef<() => boolean>(() => false);
+  const note = useReaderNote(memberId, normalizedRevision.knowledgeItemId, locale, () => sharingBlock.current());
+  const sharing = useReaderNoteShares(memberId, normalizedRevision.knowledgeItemId, note, locale);
+  sharingBlock.current = sharing.isBlocking;
   const selectedChunk = normalizedRevision.chunks.find((chunk) => chunk.id === selectedChunkId);
   const saveNote = () => {
     const citationChunk = selectedChunk ?? normalizedRevision.chunks[0];
@@ -51,7 +54,7 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   if (state.kind === "loading") return <PageState kind="loading" title={frontendText(locale, "KNOWLEDGE_READER_LOADING")} />;
   if (state.kind === "error") return <PageState kind="error" title={state.message || frontendText(locale, "KNOWLEDGE_READER_ERROR")}><Button className="mt-4" variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button></PageState>;
   return <article data-reader-layout className="space-y-5">
-    {note.draft.confirmation}
+    {note.draft.confirmation}{sharing.confirmation}
     <div className="flex gap-2 lg:hidden" role="tablist" aria-label={frontendText(locale, "KNOWLEDGE_READER_MOBILE_PANELS")}>
       <button type="button" role="tab" aria-selected={mobilePanel === "outline"} aria-controls="reader-outline-panel" onClick={() => setMobilePanel(mobilePanel === "outline" ? null : "outline")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_OUTLINE")}</button>
       <button type="button" role="tab" aria-selected={mobilePanel === "sources"} aria-controls="reader-sources-panel" onClick={() => setMobilePanel(mobilePanel === "sources" ? null : "sources")} className="rounded-md border px-3 py-2 text-sm font-medium transition hover:bg-accent">{frontendText(locale, "KNOWLEDGE_READER_TAB_SOURCES")}</button>
@@ -66,7 +69,7 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
       </main>
       <aside id="reader-sources-panel" data-reader-sources className={(mobilePanel === "sources" ? "block" : "hidden") + " space-y-5 lg:block"}>
         <SourcePanel locale={locale} revision={normalizedRevision} selectedChunkId={selectedChunkId} selectedChunk={selectedChunk} onSelectChunk={setSelectedChunkId} />
-        <ReaderNotePanel locale={locale} knowledgeItemId={normalizedRevision.knowledgeItemId} access={note.access} title={note.draft.fields.title} body={note.draft.fields.body} status={note.status} onTitleChange={(value) => note.edit("title", value)} onBodyChange={(value) => note.edit("body", value)} onSave={saveNote} locked={note.locked} isLocked={note.isLocked} phase={note.phase} onCheck={() => void note.check()} onRetryLoad={note.retryLoad} />
+        <ReaderNotePanel sharing={sharing} locale={locale} knowledgeItemId={normalizedRevision.knowledgeItemId} access={note.access} title={note.draft.fields.title} body={note.draft.fields.body} status={note.status} onTitleChange={(value) => note.edit("title", value)} onBodyChange={(value) => note.edit("body", value)} onSave={saveNote} locked={note.locked || sharing.isBlocking()} phase={note.phase} onCheck={() => void note.check()} onRetryLoad={note.retryLoad} />
         {backlinkState.kind !== "idle" && <BacklinkPanel locale={locale} state={backlinkState} />}
         {relatedState.kind !== "idle" && <RelatedKnowledgePanel locale={locale} state={relatedState} />}
       </aside>
@@ -74,43 +77,11 @@ function KnowledgeReaderSessionPage({ memberId = "", revision, renderMarkdown, l
   </article>
 }
 
-function ReaderNotePanel({ locale, knowledgeItemId, access, title, body, status, onTitleChange, onBodyChange, onSave, locked, isLocked, phase, onCheck, onRetryLoad }: { locked: boolean; isLocked: () => boolean; phase: string; onCheck: () => void; onRetryLoad: () => void; locale?: LocaleRuntime; knowledgeItemId: string; access: "owner" | "shared"; title: string; body: string; status: "idle" | "saved" | "saving" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
-  const [members, setMembers] = useState<PrivateKnowledgeWorkspaceMember[]>([]);
-  const [shares, setShares] = useState<PrivateKnowledgeNoteShare[]>([]);
-  const [recipientMemberId, setRecipientMemberId] = useState("");
-  const [shareStatus, setShareStatus] = useState<"idle" | "saving" | "error">("idle");
-  useEffect(() => {
-    if (access !== "owner" || !knowledgeItemId) return;
-    let active = true;
-    void Promise.all([loadActiveWorkspaceMembers(), listPrivateKnowledgeNoteShares(knowledgeItemId)]).then(([activeMembers, noteShares]) => {
-      if (!active) return;
-      setMembers(activeMembers);
-      setShares(noteShares.filter((share) => share.revokedAt === null));
-    }).catch(() => { if (active) setShareStatus("error"); });
-    return () => { active = false; };
-  }, [access, knowledgeItemId]);
-  const shareNote = async () => {
-    if (isLocked() || !recipientMemberId) return;
-    setShareStatus("saving");
-    try {
-      const share = await sharePrivateKnowledgeNote(knowledgeItemId, recipientMemberId);
-      setShares((current) => [...current.filter((item) => item.recipientMemberId !== share.recipientMemberId), share]);
-      setRecipientMemberId("");
-      setShareStatus("idle");
-    } catch { setShareStatus("error"); }
-  };
-  const revokeNote = async (memberId: string) => {
-    if (isLocked()) return;
-    setShareStatus("saving");
-    try {
-      await revokePrivateKnowledgeNoteShare(knowledgeItemId, memberId);
-      setShares((current) => current.filter((item) => item.recipientMemberId !== memberId));
-      setShareStatus("idle");
-    } catch { setShareStatus("error"); }
-  };
+function ReaderNotePanel({ sharing, locale, knowledgeItemId, access, title, body, status, onTitleChange, onBodyChange, onSave, locked, phase, onCheck, onRetryLoad }: { sharing: ReturnType<typeof useReaderNoteShares>; locked: boolean; phase: string; onCheck: () => void; onRetryLoad: () => void; locale?: LocaleRuntime; knowledgeItemId: string; access: "owner" | "shared"; title: string; body: string; status: "idle" | "saved" | "saving" | "unsaved" | "error"; onTitleChange: (value: string) => void; onBodyChange: (value: string) => void; onSave: () => void }) {
+  const { members, shares, recipient: recipientMemberId } = sharing;
   const statusLabel = status === "saved" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVED") : status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : status === "unsaved" ? frontendText(locale, "KNOWLEDGE_NOTE_UNSAVED") : status === "error" ? frontendText(locale, "KNOWLEDGE_NOTE_ERROR") : "";
   const shared = access === "shared";
-  return <Card data-reader-note="true" data-note-visibility="private" data-note-save="explicit"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE")}</CardTitle><span className="rounded-full border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">{frontendText(locale, shared ? "KNOWLEDGE_NOTE_SHARED" : "KNOWLEDGE_NOTE_PRIVATE")}</span></div><p className="text-xs text-muted-foreground">{frontendText(locale, shared ? "KNOWLEDGE_NOTE_READ_ONLY" : "KNOWLEDGE_NOTE_DESCRIPTION")}</p></CardHeader><CardContent className="space-y-3">{phase === "unknown" && <div role="alert"><p>{frontendText(locale, "KNOWLEDGE_NOTE_UNKNOWN")}</p><Button data-note-check variant="outline" size="sm" onClick={onCheck}>{frontendText(locale, "KNOWLEDGE_NOTE_CHECK")}</Button></div>}{phase === "load-error" && <div role="alert"><p>{frontendText(locale, "KNOWLEDGE_NOTE_LOAD_ERROR")}</p><Button data-note-load-retry variant="outline" size="sm" onClick={onRetryLoad}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}<div><label htmlFor="reader-note-title" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE_LABEL")}</label><input id="reader-note-title" value={title} readOnly={shared || locked} onChange={(event) => onTitleChange(event.currentTarget.value)} className="mt-1 flex h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60" maxLength={200} /></div><div><label htmlFor="reader-note-body" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_BODY_LABEL")}</label><textarea id="reader-note-body" value={body} readOnly={shared || locked} onChange={(event) => onBodyChange(event.currentTarget.value)} className="mt-1 min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60" maxLength={16000} /></div>{!shared && <><div className="flex items-center justify-between gap-2"><span role="status" aria-live="polite" className="text-xs text-muted-foreground">{statusLabel}</span><Button size="sm" disabled={locked || status === "saving"} onClick={onSave}>{status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : frontendText(locale, "KNOWLEDGE_NOTE_SAVE")}</Button></div><div className="border-t pt-3"><p className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_TITLE")}</p><div className="mt-2 flex gap-2"><select aria-label={frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT")} value={recipientMemberId} onChange={(event) => setRecipientMemberId(event.currentTarget.value)} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"><option value="">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT")}</option>{members.filter((member) => !shares.some((share) => share.recipientMemberId === member.id)).map((member) => <option key={member.id} value={member.id}>{member.email}</option>)}</select><Button size="sm" variant="outline" disabled={locked || !recipientMemberId || shareStatus === "saving"} onClick={() => void shareNote()}>{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ACTION")}</Button></div>{shares.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_EMPTY")}</p> : <ul className="mt-2 space-y-1">{shares.map((share) => <li key={share.recipientMemberId} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{members.find((member) => member.id === share.recipientMemberId)?.email || share.recipientMemberId}</span><button type="button" className="text-primary hover:underline" disabled={locked || shareStatus === "saving"} onClick={() => void revokeNote(share.recipientMemberId)}>{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_REVOKE")}</button></li>)}</ul>}{shareStatus === "error" && <p role="alert" className="mt-2 text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ERROR")}</p>}</div></>}</CardContent></Card>;
+  return <Card data-reader-note="true" data-note-visibility="private" data-note-save="explicit"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE")}</CardTitle><span className="rounded-full border px-2 py-0.5 text-[0.7rem] font-medium text-muted-foreground">{frontendText(locale, shared ? "KNOWLEDGE_NOTE_SHARED" : "KNOWLEDGE_NOTE_PRIVATE")}</span></div><p className="text-xs text-muted-foreground">{frontendText(locale, shared ? "KNOWLEDGE_NOTE_READ_ONLY" : "KNOWLEDGE_NOTE_DESCRIPTION")}</p></CardHeader><CardContent className="space-y-3">{phase === "unknown" && <div role="alert"><p>{frontendText(locale, "KNOWLEDGE_NOTE_UNKNOWN")}</p><Button data-note-check variant="outline" size="sm" onClick={onCheck}>{frontendText(locale, "KNOWLEDGE_NOTE_CHECK")}</Button></div>}{phase === "load-error" && <div role="alert"><p>{frontendText(locale, "KNOWLEDGE_NOTE_LOAD_ERROR")}</p><Button data-note-load-retry variant="outline" size="sm" onClick={onRetryLoad}>{frontendText(locale, "COMMON_RETRY")}</Button></div>}<div><label htmlFor="reader-note-title" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_TITLE_LABEL")}</label><input id="reader-note-title" value={title} readOnly={shared || locked} onChange={(event) => onTitleChange(event.currentTarget.value)} className="mt-1 flex h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60" maxLength={200} /></div><div><label htmlFor="reader-note-body" className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_BODY_LABEL")}</label><textarea id="reader-note-body" value={body} readOnly={shared || locked} onChange={(event) => onBodyChange(event.currentTarget.value)} className="mt-1 min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60" maxLength={16000} /></div>{!shared && <><div className="flex items-center justify-between gap-2"><span role="status" aria-live="polite" className="text-xs text-muted-foreground">{statusLabel}</span><Button size="sm" disabled={locked || status === "saving"} onClick={onSave}>{status === "saving" ? frontendText(locale, "KNOWLEDGE_NOTE_SAVING") : frontendText(locale, "KNOWLEDGE_NOTE_SAVE")}</Button></div><div className="border-t pt-3">{!sharing.available && <p className="text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SAVE_FIRST")}</p>}{sharing.phase === "unknown" && <div role="alert"><p>{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_UNKNOWN")}</p><Button data-note-share-check variant="outline" size="sm" onClick={() => void sharing.check()}>{frontendText(locale, "KNOWLEDGE_NOTE_CHECK")}</Button></div>}{sharing.phase === "load-error" && <Button data-note-share-retry variant="outline" size="sm" onClick={sharing.retryLoad}>{frontendText(locale, "COMMON_RETRY")}</Button>}<p className="text-xs font-medium">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_TITLE")}</p><div className="mt-2 flex gap-2"><select aria-label={frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT")} value={recipientMemberId} disabled={sharing.locked} onChange={(event) => sharing.select(event.currentTarget.value)} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"><option value="">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_SELECT")}</option>{members.filter((member) => !shares.some((share) => share.recipientMemberId === member.id)).map((member) => <option key={member.id} value={member.id}>{member.email}</option>)}</select><Button size="sm" variant="outline" disabled={sharing.locked || !recipientMemberId} onClick={() => sharing.request("share")}>{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ACTION")}</Button></div>{shares.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_EMPTY")}</p> : <ul className="mt-2 space-y-1">{shares.map((share) => <li key={share.recipientMemberId} className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{members.find((member) => member.id === share.recipientMemberId)?.email || share.recipientMemberId}</span><button type="button" className="text-primary hover:underline" disabled={sharing.locked} onClick={() => sharing.request("revoke", share)}>{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_REVOKE")}</button></li>)}</ul>}{sharing.error && <p role="alert" className="mt-2 text-xs text-destructive">{frontendText(locale, "KNOWLEDGE_NOTE_SHARE_ERROR")}</p>}</div></>}</CardContent></Card>;
 }
 
 function ReaderOutlinePanel({ locale, revision, selectedChunkId, onSelectChunk }: { locale?: LocaleRuntime; revision: KnowledgeRevision; selectedChunkId: string | null; onSelectChunk: (id: string) => void }) {
