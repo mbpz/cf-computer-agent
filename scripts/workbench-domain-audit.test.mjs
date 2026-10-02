@@ -35,11 +35,48 @@ test("review replay targets resolve to three bounded decisions alongside detail 
   const facts = runtimeEvidenceSnapshot({ repositoryRoot });
   for (const capability of ["workbench-admin-submissions", "workbench-admin-submission-detail"]) {
     assert.deepEqual(Object.keys(facts.mutations[capability]).sort(), [
-      ...(capability === "workbench-admin-submission-detail" ? ["POST /api/admin/submissions/:id/comments"] : []),
-      "POST /api/admin/submissions/:id/publish",
+            "POST /api/admin/submissions/:id/publish",
       "POST /api/admin/submissions/:id/reject",
       "POST /api/admin/submissions/:id/request-revision",
+      ...(capability === "workbench-admin-submission-detail" ? ["PUT /api/admin/submissions/:id/comments/requests/:id"] : []),
     ]);
+  }
+});
+
+test("environment lifecycle wrapper exposes all three explicit mutation methods", () => {
+  const facts = runtimeEvidenceSnapshot({ repositoryRoot });
+  assert.deepEqual(Object.keys(facts.mutations["workbench-environments"]).sort(), [
+    "DELETE /api/environments/:id", "PATCH /api/environments/:id", "POST /api/environments",
+  ]);
+});
+
+test("bounded conditional methods and non-method spreads preserve comment PUT discovery", () => {
+  for (const replacement of [
+    'method: "GET", ...(write ? {method: "PUT"} : {}),',
+    'method: "PUT", ...(write ? {} : {method: "GET"}),',
+    '...(write ? {method: "DELETE"} : {}), method: write ? "PUT" : "GET",',
+  ]) {
+    withRepositoryProbe("frontend/components/review/review-comments-data.ts", source => source.replace(
+      'method: write ? "PUT" : "GET",', replacement,
+    ), probeRoot => {
+      const facts = runtimeEvidenceSnapshot({ repositoryRoot: probeRoot });
+      assert.ok(facts.mutations["workbench-admin-submission-detail"]["PUT /api/admin/submissions/:id/comments/requests/:id"]);
+    });
+  }
+});
+
+test("conditional options stay fail-closed on an unknown branch or computed method", () => {
+  for (const replacement of [
+    'method: write ? "PUT" : method,',
+    'method: write ? "PUT" : "TRACE",',
+    'method: "PUT", ...(write ? {headers: {}} : options),',
+    'method: "PUT", ...(write ? {} : {method}),',
+    'method: "PUT", ...(write ? {} : {[key]: "GET"}),',
+  ]) {
+    withRepositoryProbe("frontend/components/review/review-comments-data.ts", source => source.replace(
+      'method: write ? "PUT" : "GET",', replacement,
+    ), probeRoot => assert.throws(() => runtimeEvidenceSnapshot({ repositoryRoot: probeRoot }),
+      /workbench-admin-submission-detail: unsupported frontend mutation invocation/u));
   }
 });
 
@@ -69,8 +106,8 @@ test("review path analysis discovers an undeclared conditional endpoint", () => 
 
 test("every maturity capability has one conservative domain audit record", async () => {
   const audit = await loadWorkbenchDomainAudit({ repositoryRoot });
-  assert.equal(audit.length, 33);
-  assert.equal(new Set(audit.map((record) => record.id)).size, 33);
+  assert.equal(audit.length, 34);
+  assert.equal(new Set(audit.map((record) => record.id)).size, 34);
 
   for (const record of audit) {
     for (const path of [

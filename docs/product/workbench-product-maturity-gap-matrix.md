@@ -98,7 +98,7 @@
 | workbench-admin-spaces:query_or_idempotency:update-collection | domain:PATCH /api/admin/collections/:id | workbench-admin-spaces | 集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。 | query_or_idempotency | R6-008 | R2-006 | frontend/lib/admin-spaces-data.ts<br>src/spaces/repository.ts | test/worker/admin-spaces-recovery.test.ts | 刷新或重新进入后精确恢复未知写入，不重复新增、不以新快照覆盖其他管理员修改。 | P1 |
 | workbench-admin-spaces:query_or_idempotency:create-space | domain:POST /api/admin/spaces | workbench-admin-spaces | 创建 Space 缺少稳定幂等键和重放策略。 | query_or_idempotency | R6-008 | R2-006 | src/spaces/repository.ts<br>src/spaces/service.ts | test/worker/spaces.test.ts | 创建响应丢失后同键重试只生成一个 Space，成员可见性保持正确。 | P1 |
 | workbench-knowledge-reader:query_or_idempotency:remove-favorite | domain:DELETE /api/knowledge/:id/favorite | workbench-knowledge-reader | 取消收藏缺少重复请求与响应丢失后的收敛证明。 | query_or_idempotency | R3-011 | R3-007 | src/favorites/repository.ts<br>src/favorites/service.ts | test/unit/frontend-knowledge-reader-data.test.ts | 重复取消收藏后列表与阅读器都显示未收藏，其他成员收藏不受影响。 | P1 |
-| workbench-admin-submission-detail:query_or_idempotency:add-review-comment | domain:POST /api/admin/submissions/:id/comments | workbench-admin-submission-detail | 审核评论缺少稳定客户端键与重复写入抑制证明。 | query_or_idempotency | R6-003 | R2-006 | src/review-comments/repository.ts<br>src/review-comments/service.ts | test/unit/frontend-admin-review-data.test.ts | 评论提交响应丢失后重试只生成一条评论，并保持作者和审核目标一致。 | P1 |
+| workbench-admin-submission-detail:query_or_idempotency:add-review-comment | domain:PUT /api/admin/submissions/:id/comments/requests/:id | workbench-admin-submission-detail | 审核评论唯一编号、同编号重试和精确回执已有本地会话证据；跨刷新恢复及发布验收仍开放。 | query_or_idempotency | R6-003 | R2-006 | src/review-comments/repository.ts<br>src/review-comments/service.ts | test/unit/frontend-review-comment-owner.test.tsx | 评论响应丢失时保留编号和冻结正文，同编号重试仅一条，精确查询原回执；跨刷新及真实身份发布验收另行完成。 | P1 |
 | workbench-admin-submission-detail:query_or_idempotency:publish-submission | domain:POST /api/admin/submissions/:id/publish | workbench-admin-submission-detail | 发布决策缺少不可变 Revision 的重放收敛证明。 | query_or_idempotency | R6-003 | R3-005 | src/publication/repository.ts<br>src/publication/service.ts | test/worker/m1-publication.test.ts | 重复发布只产生一个 Revision，冲突返回当前权威版本且可回到队列。 | P1 |
 | workbench-admin-submission-detail:query_or_idempotency:reject-submission | domain:POST /api/admin/submissions/:id/reject | workbench-admin-submission-detail | 拒绝决策缺少幂等重放与并发冲突策略。 | query_or_idempotency | R6-003 | R2-008 | src/review/repository.ts<br>src/review/service.ts | test/worker/m1-publication.test.ts | 重复拒绝只记录一次终态和审计，已被处理的提交返回明确冲突。 | P1 |
 | workbench-admin-submission-detail:query_or_idempotency:request-revision | domain:POST /api/admin/submissions/:id/request-revision | workbench-admin-submission-detail | 退回修改决策缺少幂等、通知去重与并发策略。 | query_or_idempotency | R6-003 | R5-004 | src/review/repository.ts<br>src/review/service.ts | test/worker/m1-publication.test.ts | 重复退回只改变一次状态并发送一条通知，contributor 可从原提交继续修改。 | P1 |
@@ -118,6 +118,9 @@
 | workbench-graph:query_or_idempotency:start-focus | domain:POST /api/focus | workbench-graph | 图谱启动专注缺少完整动作重放与并发收敛证明。 | query_or_idempotency | R8-005 | R4-002 | frontend/lib/graph-actions.ts<br>src/routes/graph.ts | test/worker/graph-actions.test.ts | 图谱动作响应丢失后重试只产生一次结果，跨成员目标仍被拒绝。 | P1 |
 | workbench-graph:query_or_idempotency:create-timeline-item | domain:POST /api/projects/:id/timeline | workbench-graph | 图谱创建时间线项缺少完整动作重放与重复结果抑制证明。 | query_or_idempotency | R8-005 | R4-002 | frontend/lib/graph-actions.ts<br>src/routes/graph.ts | test/worker/graph-actions.test.ts | 图谱动作响应丢失后重试只产生一次结果，跨成员目标仍被拒绝。 | P1 |
 | workbench-environments:journey:metadata-to-vm-acceptance | manifest:0@56cf51e57da2 | workbench-environments | 环境页已实现私有元数据管理，但不启动 VM；运行时接入、离页草稿保护、跨刷新未知写恢复、发布和真实身份验收仍开放。 | journey | R8-009 | R8-001 | frontend/features/environments/environments-page.tsx<br>frontend/features/environments/environment-manager.ts<br>src/routes/environments.ts | scripts/browser-vm-environments-page.test.mjs | 保留元数据与运行中 VM 的区分，真实身份完成运行时接入、离页与刷新恢复验收后才关闭；本地清单补齐不替代发布验收。 | P1 |
+| workbench-environments:query_or_idempotency:create-environment | domain:POST /api/environments | workbench-environments | 环境创建已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。 | query_or_idempotency | R8-005 | R8-001 | frontend/features/environments/environment-manager.ts<br>src/environments/repository.ts | scripts/browser-vm-environments-page.test.mjs | 环境创建响应丢失后按原编号与原版本重试，冻结目标及请求不变；跨刷新恢复和真实运行时另行验收，不把元数据当成运行中 VM。 | P1 |
+| workbench-environments:query_or_idempotency:rename-environment | domain:PATCH /api/environments/:id | workbench-environments | 环境重命名已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。 | query_or_idempotency | R8-005 | R8-001 | frontend/features/environments/environment-manager.ts<br>src/environments/repository.ts | scripts/browser-vm-environments-page.test.mjs | 环境重命名响应丢失后按原编号与原版本重试，冻结目标及请求不变；跨刷新恢复和真实运行时另行验收，不把元数据当成运行中 VM。 | P1 |
+| workbench-environments:query_or_idempotency:delete-environment | domain:DELETE /api/environments/:id | workbench-environments | 环境删除已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。 | query_or_idempotency | R8-005 | R8-001 | frontend/features/environments/environment-manager.ts<br>src/environments/repository.ts | scripts/browser-vm-environments-page.test.mjs | 环境删除响应丢失后按原编号与原版本重试，冻结目标及请求不变；跨刷新恢复和真实运行时另行验收，不把元数据当成运行中 VM。 | P1 |
 | workbench-submit:evidence:signed-submission-acceptance | manifest:0@edeb39c3614b | workbench-submit | 本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。 | evidence | R8-009 | R3-001<br>R8-001<br>R8-008 | frontend/pages/submit-page.tsx<br>src/submissions/repository.ts | test/worker/submissions.test.ts | 真实 contributor 完成提交并由 admin 看见同一记录，自动化与人工 signed-browser 证据分开保存。 | P2 |
 <!-- gap-matrix:end -->
 
@@ -126,10 +129,10 @@
 | 维度 | 数量 |
 | --- | ---: |
 | manifest 聚合 gap | 34 |
-| domain mutation-safety gap | 68 |
-| 总计 | 102 |
+| domain mutation-safety gap | 71 |
+| 总计 | 105 |
 | P0 | 54 |
-| P1 | 47 |
+| P1 | 50 |
 | P2 | 1 |
 
 阶段主责计数由合同从 `Owner atom` 派生，并与 checklist、ROADMAP 的 R1–R8 映射逐项核对。矩阵只完成历史 R0-012 与本次 M02 的规划与验证，不提升任何 R1–R8 实现、发布或验收状态。
@@ -141,3 +144,5 @@
 2026-09-28 UTC D02 菜单表单增量：新增创建操作归 R6-007；当前实算 **101 gap（54 P0 / 46 P1 / 1 P2）**。字段快照与树 CAS 的本地证明不等于跨会话投影或完整重放；功能父项仍 29/4/25。
 
 2026-10-02 环境入口增量：补齐已可见 `/environments` 的成熟度记录，保守登记为 partial，归属已有 R8-009；当前 102 gap（54 P0 / 47 P1 / 1 P2）。不新增实施原子、不关闭 VM 功能项，历史快照不回填。领域审计的动态请求解析仍单独开放，不把本次入口清单通过当作领域审计通过。
+
+操作协议审计增量：当前领域快照已按显式环境请求与评论PUT requests协议重生成并通过源码一致性检查。矩阵当前105（34 manifest / 71 domain；54 P0 / 50 P1 / 1 P2），环境3条mutation缺口补登记归现有R8-005。此前102与解析阻塞记录是历史状态，不回填；编号/重试的本地通过不关闭跨刷新、运行时或发布验收。

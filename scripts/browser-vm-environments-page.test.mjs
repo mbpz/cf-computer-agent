@@ -27,6 +27,24 @@ test('unknown create preserves exact operation and forbids replacement; explicit
  await assert.rejects(manager.create({name:'Other',type:'personal'}),/WRITE_PENDING/);assert.equal(createManager(owner),manager);
  fail=false;await manager.retry();assert.equal(requests.length,2);assert.equal(requests[0],requests[1]);assert.equal(manager.getSnapshot().pending,null);assert.equal(JSON.parse(requests[0]).memberId,undefined);
 });
+for (const kind of ['rename','delete']) test(`unknown ${kind} retries the frozen target, method, operation ID and complete body`,async()=>{
+ const requests=[];const item={...env};const {manager}=setup(async(path,init)=>{
+  if(init.method==='GET')return Response.json(page());
+  requests.push({path,method:init.method,body:init.body,redirect:init.redirect,cache:init.cache});
+  if(requests.length===1)throw Error('lost response');
+  return kind==='rename' ? Response.json({environment:{...env,name:'Renamed',version:2}})
+   : Response.json({tombstone:{environmentId:env.id,version:2,deletedAt:env.updatedAt}});
+ });
+ await (kind==='rename' ? manager.rename(item,'Renamed') : manager.remove(item));
+ assert.equal(manager.getSnapshot().error,'WRITE_UNKNOWN');
+ item.id='other';item.version=99;
+ await manager.retry();
+ assert.equal(requests.length,2);assert.deepEqual(requests[1],requests[0]);
+ assert.equal(requests[1].path,'/api/environments/env-a');assert.equal(requests[1].method,kind==='rename'?'PATCH':'DELETE');
+ assert.equal(requests[1].redirect,'error');assert.equal(requests[1].cache,'no-store');
+ const body=JSON.parse(requests[1].body);assert.equal(body.version,1);assert.match(body.operationId,/^[0-9a-f-]{36}$/u);
+ assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().error,null);
+});
 test('confirmed deletion closes old network before HTTP and validates the tombstone',async()=>{
  let owner;const x=setup(async(path,init)=>{if(init.method==='GET')return Response.json(page());assert.equal(owner.network('other').state.status,'offline');assert.throws(()=>owner.network('env-a'),/ENVIRONMENT_REMOVED/);return Response.json({tombstone:{environmentId:'wrong',version:2,deletedAt:env.updatedAt}});});owner=x.owner;const network=owner.network('env-a');
  await x.manager.remove(env);assert.equal(network.state.status,'closed');assert.equal(x.manager.getSnapshot().error,'WRITE_UNKNOWN');assert.equal(x.manager.getSnapshot().pending.kind,'delete');

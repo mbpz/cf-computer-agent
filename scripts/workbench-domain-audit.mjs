@@ -33,7 +33,7 @@ const ROUTE_EVIDENCE_CACHE = new Map();
 const symbolBinding = (path, symbol, ...tokens) => ({ path, symbol, tokens });
 const ownerEvidence = (predicate, ...bindings) => ({ predicate, bindings });
 const OWNER_EVIDENCE = Object.freeze(Object.fromEntries([
-  ownerEvidence("routeEnvironmentsApi derives memberId from the authenticated principal; EnvironmentsRepository.list predicates member_id = ? for items and totals.", symbolBinding("src/routes/environments.ts", "routeEnvironmentsApi", "principal.memberId"), symbolBinding("src/environments/repository.ts", "EnvironmentsRepository.list", "member_id = ?", "bind(...bindings")),
+  ownerEvidence("routeEnvironmentsApi derives memberId from authenticated principal.memberId; EnvironmentsRepository.list predicates member_id = ? for items and totals.", symbolBinding("src/routes/environments.ts", "routeEnvironmentsApi", "principal.memberId"), symbolBinding("src/environments/repository.ts", "EnvironmentsRepository.list", "member_id = ?", "bind(...bindings")),
   ownerEvidence("routeGraphApi passes authenticated member.memberId to GraphProjectionService; GraphProjectionRepository.listTasks binds t.member_id = ?.", symbolBinding("src/routes/graph.ts", "routeGraphApi", "member.memberId"), symbolBinding("src/graph/repository.ts", "GraphProjectionRepository.listTasks", "t.member_id = ?")),
   ownerEvidence("routeProjectTimelineApi passes authenticated member.memberId to ProjectTimelineService; ProjectTimelineRepository.listOwned binds member_id = ? and project_id = ?.", symbolBinding("src/routes/project-timeline.ts", "routeProjectTimelineApi", "member.memberId"), symbolBinding("src/project-timeline/repository.ts", "ProjectTimelineRepository.listOwned", "member_id = ?", "project_id = ?")),
   ownerEvidence("routeInboxApi passes authenticated member.memberId to InboxService; InboxRepository.listOwned binds member_id = ?.", symbolBinding("src/routes/inbox.ts", "routeInboxApi", "member.memberId"), symbolBinding("src/inbox/repository.ts", "InboxRepository.listOwned", "member_id = ?")),
@@ -379,15 +379,15 @@ function frontendScope(node, source) {
       const expression = child.expression.getText(source);
       if (expression === "apiFetch") {
         const options = child.arguments[1];
-        const method = frontendCallMethod(options);
+        const methods = frontendCallMethods(options);
         const argument = child.arguments[0]?.getText(source);
-        if (method === null) {
+        if (methods === null) {
           unsupportedMutations.push(options?.getText(source) ?? "<missing options>");
           return;
         }
         const paths = frontendExpressionPaths(child.arguments[0], source, scopeText, parameterValues, bindings);
-        for (const path of paths) calls.push({ path, method });
-        if (method !== "GET" && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
+        for (const path of paths) for (const method of methods) calls.push({ path, method });
+        if (methods.some(method => method !== "GET") && paths.length === 0) unsupportedMutations.push(argument ?? "<missing>");
       } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(expression)) {
         invokedImports.add(expression);
       }
@@ -398,24 +398,54 @@ function frontendScope(node, source) {
   return { calls, invokedImports, unsupportedMutations };
 }
 
-function frontendCallMethod(options) {
-  if (!options) return "GET";
-  const expression = unwrapExpression(options);
+// Deliberately bounded: inline literals/conditionals only. Unknown spreads,
+// computed keys and aliases still fail closed, even if a later field overrides.
+function frontendCallMethods(options) {
+  if (!options) return ["GET"];
+  const overrides = frontendMethodOverrides(options);
+  return overrides === null ? null : [...new Set(overrides.map(method => method ?? "GET"))];
+}
+
+function frontendMethodValues(node, depth = 0) {
+  if (!node || depth > 16) return null;
+  const expression = unwrapExpression(node);
+  if (isStringLiteral(expression)) return ["GET", "POST", "PUT", "PATCH", "DELETE"].includes(expression.text) ? [expression.text] : null;
+  if (!isConditionalExpression(expression)) return null;
+  const yes = frontendMethodValues(expression.whenTrue, depth + 1);
+  const no = frontendMethodValues(expression.whenFalse, depth + 1);
+  return yes === null || no === null ? null : [...new Set([...yes, ...no])];
+}
+
+function frontendMethodOverrides(node, depth = 0) {
+  if (!node || depth > 16) return null;
+  const expression = unwrapExpression(node);
+  if (isConditionalExpression(expression)) {
+    const yes = frontendMethodOverrides(expression.whenTrue, depth + 1);
+    const no = frontendMethodOverrides(expression.whenFalse, depth + 1);
+    return yes === null || no === null ? null : [...new Set([...yes, ...no])];
+  }
   if (!isObjectLiteralExpression(expression)) return null;
-  let method = "GET";
+  // undefined means this branch has no own method field, NOT a GET override.
+  let methods = [undefined];
   for (const property of expression.properties) {
-    if (isSpreadAssignment(property)) return null;
+    if (isSpreadAssignment(property)) {
+      const overrides = frontendMethodOverrides(property.expression, depth + 1);
+      if (overrides === null) return null;
+      methods = [...new Set(methods.flatMap(previous => overrides.map(method => method ?? previous)))];
+      continue;
+    }
     if (isShorthandPropertyAssignment(property)) {
       if (property.name.text === "method") return null;
       continue;
     }
     if (!isPropertyAssignment(property) || (!isIdentifier(property.name) && !isStringLiteral(property.name))) return null;
+    // An object literal's __proto__ setter could inherit an opaque method.
+    if (property.name.text === "__proto__") return null;
     if (property.name.text !== "method") continue;
-    const value = unwrapExpression(property.initializer);
-    if (!isStringLiteral(value) || !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(value.text)) return null;
-    method = value.text;
+    methods = frontendMethodValues(property.initializer, depth + 1);
+    if (methods === null) return null;
   }
-  return method;
+  return methods;
 }
 
 function frontendExpressionPaths(node, source, scopeText, parameterValues, bindings, depth = 0) {
@@ -682,7 +712,7 @@ export function renderWorkbenchDomainAudit(records) {
   return [
     "# Workbench Functional Domain Audit — 2026-09-26",
     "",
-    "Current 33-capability reconciliation including graph and bounded review replay targets; the D02-R1, D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
+    "Current 34-capability reconciliation including environments, graph and exact review comment operations; the D02-R1, D01-B2, D01-B1, D01-A and M02 snapshots are preserved separately. The 2026-08-31 R0 audit remains a separate historical 24-capability snapshot; this artifact does not backdate coverage or promote release/acceptance.",
     "",
     "Generated deterministically by `scripts/workbench-domain-audit.mjs`. Every capability declares explicit frontend operation roots; every manifest operation declaration and capability-owned strategy binding maps bidirectionally to one generated fact. Ordinary GET calls remain excluded unless an independently source- and test-bound side effect declares a stable operation identity. Every API carries its independently bound runtime pagination shape, and mutation status remains conservative.",
     "",

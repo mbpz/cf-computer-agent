@@ -144,7 +144,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 | R5 | 4 | R5 入口门槛：R4 任务事件、知识上下文、条件写入合同。 | R5 退出门槛：通知与上下文消息未读、分页、重试、撤权、深链。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r5-notifications-messages.md |
 | R6 | 31 | R6 入口门槛：R3–R5 业务权威数据、共享治理模式。 | R6 退出门槛：管理摘要、审核、资产、成员、角色、菜单、Space、审计、统计。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r6-administration.md |
 | R7 | 1 | R7 入口门槛：R3–R6 域内旅程、授权收敛合同。 | R7 退出门槛：首页与跨模块计数、链接、事件、权限、缓存权威结果。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r7-cross-module.md |
-| R8 | 6 | R8 入口门槛：R1–R7 本地实现、完整 gate、精确候选树。 | R8 退出门槛：发布、迁移、免费层、smoke、signed acceptance、账本证据。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r8-delivery-acceptance.md |
+| R8 | 9 | R8 入口门槛：R1–R7 本地实现、完整 gate、精确候选树。 | R8 退出门槛：发布、迁移、免费层、smoke、signed acceptance、账本证据。 | docs/superpowers/plans/2026-09-01-workbench-maturity-r8-delivery-acceptance.md |
 <!-- task5-stage-map:end -->
 
 ## R1 — 设计系统与全局 Shell
@@ -447,3 +447,8 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 ### 2026-10-02：环境入口成熟度漏项修复（本地）
 
 基线 `b4592a0`。补登记可见 `/environments` 的能力、领域来源、操作根与交付账本，保持 partial，并将真实 VM、离页/跨刷新恢复及发布验收缺口归属现有 R8-009。成熟度契约由13/14修复为15/15，页面矩阵151/151、环境页/实际本地Worker-D1专用16/16、项目类型与差异检查通过。通知摘要公共夹具补齐，原有权限和重试断言未放宽。矩阵102（54 P0/47 P1/1 P2），领域审计动态请求封装仍fail-closed失败，未伪造快照或宣称全绿。详见 `docs/product/2026-10-02-environments-maturity-inventory-evidence.md`。主功能29范围内/5关闭/24开放不变；D07、A05/R2-008及导航Task 4仍开放。下一允许本地修复审计封装识别、随后讨论页未知写/离页保护，无外部阻塞。未push/部署/远程迁移。
+
+
+### 唯一操作编号与精确查询：复验和领域审计对账（本地）
+
+基线 `a068950`。审核评论协议定向119/119复验通过；请求扫描新增有限条件方法/静态展开解析，未知调用仍fail-closed。环境请求四个显式传输点保留冻结意图与取消语义，专用18/18通过。领域30/30及源码快照check、成熟度15/15、项目类型/UI与静态VM入口隔离通过。领域能力34，矩阵105（34 manifest/71 domain，54 P0/50 P1/1 P2）；环境3条漏登记写操作归现有R8-005，评论旧POST源更正为PUT requests，无新增功能父项。详见 `docs/product/navigation-operation-audit-evidence.md`。主清单原30/范围内29/关闭5/开放24，A05、D07、R2-008及导航Task 4仍开放；内存编号不等于跨刷新恢复。下一允许继续讨论页未知写/离页保护，无本地外部阻塞。未push、部署或远程迁移。

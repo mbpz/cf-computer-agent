@@ -566,7 +566,7 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
     id: "workbench-environments",
     apiPaths: ["/api/environments", "/api/environments/:id"],
     persistencePaths: ["src/environments/repository.ts", "migrations/0047_browser_environments.sql", "migrations/0048_browser_environment_operations.sql"],
-    ownerPredicate: "routeEnvironmentsApi derives memberId from the authenticated principal; EnvironmentsRepository.list predicates member_id = ? for items and totals.",
+    ownerPredicate: "routeEnvironmentsApi derives memberId from authenticated principal.memberId; EnvironmentsRepository.list predicates member_id = ? for items and totals.",
     pagination: "numbered",
     mutations: ["POST /api/environments — gap: full runtime and cross-refresh recovery remain unverified", "PATCH /api/environments/:id — gap: full runtime and cross-refresh recovery remain unverified", "DELETE /api/environments/:id — gap: full runtime and cross-refresh recovery remain unverified"],
     mutationSafety: "mixed",
@@ -708,11 +708,11 @@ export const WORKBENCH_MATURITY_DOMAIN_EVIDENCE = Object.freeze([
   },
   {
     id: "workbench-admin-submission-detail",
-    apiPaths: ["/api/admin/submissions/:id", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject", "/api/admin/submissions/:id/comments"],
+    apiPaths: ["/api/admin/submissions/:id", "/api/admin/submissions/:id/publish", "/api/admin/submissions/:id/request-revision", "/api/admin/submissions/:id/reject", "/api/admin/submissions/:id/comments", "/api/admin/submissions/:id/comments/requests/:id"],
     persistencePaths: ["src/publication/repository.ts", "src/submissions/repository.ts", "src/review-comments/repository.ts", "migrations/0003_m1_knowledge_loop.sql", "migrations/0022_m4_review_comments.sql"],
     ownerPredicate: null,
     pagination: "not_applicable",
-    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/comments — gap: no client idempotency key"],
+    mutations: ["POST /api/admin/submissions/:id/publish — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/request-revision — gap: no client replay key or expected version is supplied", "POST /api/admin/submissions/:id/reject — gap: no client replay key or expected version is supplied", "PUT /api/admin/submissions/:id/comments/requests/:id — gap: session-scoped exact recovery is implemented; cross-refresh recovery and release acceptance remain unverified"],
     mutationSafety: "mixed",
   },
 ] as const satisfies readonly WorkbenchMaturityDomainEvidence[]);

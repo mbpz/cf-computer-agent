@@ -4,7 +4,7 @@ import type { AccountNetworkOwner } from './account-network-owner.mjs';
 
 type Filter = '' | EnvironmentType;
 type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
-type Intent = Readonly<{kind: 'create' | 'rename' | 'delete'; path: string; method: string; body: string; expected: Record<string, unknown>}>;
+type Intent = Readonly<{kind: 'create' | 'rename' | 'delete'; body: string; expected: Record<string, unknown>}>;
 type State = Readonly<{items: readonly EnvironmentMetadata[]; pagination: Pagination; filter: Filter; loading: boolean; writing: boolean; pending: Intent | null; error: string | null; closed: boolean}>;
 const managers = new WeakMap<AccountNetworkOwner, ReturnType<typeof createManager>>();
 /** Keep unknown writes across route unmounts, but never across account lifetimes. */
@@ -35,13 +35,13 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
   const close = () => { read?.abort(); publish({closed: true,items: [],pending: null,loading: false,writing: false,error: 'ACCOUNT_CLOSED'}); };
   owner.signal.addEventListener('abort', close, {once: true});
   if (owner.signal.aborted) close();
-  async function request(path: string, init: RequestInit, cancel?: AbortSignal) {
+  async function request(send: (signal: AbortSignal) => Promise<unknown>, cancel?: AbortSignal) {
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), 10000);
     const signal = AbortSignal.any([owner.signal,deadline.signal,...(cancel ? [cancel] : [])]);
     let abort: () => void = () => {};
     try {
       current();
-      return await Promise.race([apiFetch<unknown>(path, {...init,requester,signal,redirect: 'error',cache: 'no-store'}),new Promise<never>((_,reject) => {
+      return await Promise.race([send(signal),new Promise<never>((_,reject) => {
         abort = () => reject(Error('CANCELLED')); signal.addEventListener('abort',abort,{once: true}); if (signal.aborted) abort();
       })]);
     } finally { clearTimeout(timer); signal.removeEventListener('abort',abort); }
@@ -55,7 +55,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
     read?.abort(); const attempt = new AbortController(); read = attempt;
     publish({items: [],loading: true,filter,error: state.pending ? state.error : null});
     try {
-      const raw = record(await request(`/api/environments?page=${page}&pageSize=20${filter ? `&type=${filter}` : ''}`,{method: 'GET'},attempt.signal));
+      const raw = record(await request(signal => apiFetch<unknown>(`/api/environments?page=${page}&pageSize=20${filter ? `&type=${filter}` : ''}`,{method: 'GET',requester,signal,redirect: 'error',cache: 'no-store'}),attempt.signal));
       current(); if (read !== attempt) return;
       const p = record(raw.pagination);
       if (!Array.isArray(raw.items) || p.page !== page || p.pageSize !== 20 || !integer(p.total) || p.totalPages !== Math.ceil(p.total/20)
@@ -73,7 +73,19 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
     read?.abort(); read = undefined;
     publish({pending: intent,writing: true,loading: false,error: null});
     try {
-      const result = record(await request(intent.path,{method:intent.method,headers:{'content-type':'application/json'},body:intent.body}));
+      const result = record(await request(signal => {
+        // Explicit transports keep the source inventory auditable. The frozen
+        // intent remains the only source of the operation ID, body and target.
+        if (intent.kind === 'create') return apiFetch<unknown>('/api/environments', {
+          method:'POST',headers:{'content-type':'application/json'},body:intent.body,requester,signal,redirect:'error',cache:'no-store',
+        });
+        if (intent.kind === 'rename') return apiFetch<unknown>(`/api/environments/${intent.expected.id}`, {
+          method:'PATCH',headers:{'content-type':'application/json'},body:intent.body,requester,signal,redirect:'error',cache:'no-store',
+        });
+        return apiFetch<unknown>(`/api/environments/${intent.expected.id}`, {
+          method:'DELETE',headers:{'content-type':'application/json'},body:intent.body,requester,signal,redirect:'error',cache:'no-store',
+        });
+      }));
       current();
       if (intent.kind === 'delete') {
         const x = record(result.tombstone);
@@ -93,9 +105,9 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
       else publish({writing:false,error:'WRITE_UNKNOWN'});
     }
   }
-  function begin(kind: Intent['kind'],path: string,method: string,body: Record<string,unknown>,expected: Record<string,unknown>) {
+  function begin(kind: Intent['kind'],body: Record<string,unknown>,expected: Record<string,unknown>) {
     current(); if (state.pending) throw Error('WRITE_PENDING');
-    const intent = Object.freeze({kind,path,method,body:JSON.stringify({operationId:crypto.randomUUID(),...body}),expected:Object.freeze(expected)});
+    const intent = Object.freeze({kind,body:JSON.stringify({operationId:crypto.randomUUID(),...body}),expected:Object.freeze(expected)});
     if (kind === 'delete') owner.removeEnvironment(expected.id as string);
     return execute(intent);
   }
@@ -104,10 +116,10 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
     async create(input: {name:string;type:EnvironmentType;taskId?:string}) {
       const title=name(input.name),taskId=input.taskId?.trim() || null;
       if (!['personal','temporary'].includes(input.type) || taskId !== null && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(taskId)) throw Error('INVALID_INPUT');
-      return begin('create','/api/environments','POST',{name:title,type:input.type,taskId},{name:title,type:input.type,taskId,version:1});
+      return begin('create',{name:title,type:input.type,taskId},{name:title,type:input.type,taskId,version:1});
     },
-    async rename(item: EnvironmentMetadata,title:string) {check(item);const value=name(title);return begin('rename',`/api/environments/${item.id}`,'PATCH',{version:item.version,name:value},{id:item.id,version:item.version+1,name:value,type:item.type,taskId:item.taskId});},
-    async remove(item: EnvironmentMetadata) {check(item);return begin('delete',`/api/environments/${item.id}`,'DELETE',{version:item.version},{id:item.id,version:item.version+1});},
+    async rename(item: EnvironmentMetadata,title:string) {check(item);const value=name(title);return begin('rename',{version:item.version,name:value},{id:item.id,version:item.version+1,name:value,type:item.type,taskId:item.taskId});},
+    async remove(item: EnvironmentMetadata) {check(item);return begin('delete',{version:item.version},{id:item.id,version:item.version+1});},
     async retry() {current();if (!state.pending) throw Error('NO_PENDING_WRITE');return execute(state.pending);},
   });
 }

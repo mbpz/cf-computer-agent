@@ -135,6 +135,9 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-submission-detail": { source: "manifest:0@ec730e821f69", dimension: "journey", slug: "decision-idempotency-and-discovery", symptom: "审核详情恢复、404/权限状态、对象匹配及导航已本地验证；服务端决策幂等和发布、索引、通知收敛仍待实现。", owner: "R6-003" },
 }));
 const DOMAIN_GAP_POLICIES = new Map(Object.entries({
+  "workbench-environments|POST /api/environments": { slug: "create-environment", symptom: "环境创建已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
+  "workbench-environments|PATCH /api/environments/:id": { slug: "rename-environment", symptom: "环境重命名已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
+  "workbench-environments|DELETE /api/environments/:id": { slug: "delete-environment", symptom: "环境删除已有本地编号重试与版本回执证据；跨刷新未知结果恢复和完整运行时验收仍开放。", owner: "R8-005" },
   "workbench-graph|POST /api/tasks": {"slug": "create-task", "symptom": "图谱创建任务缺少完整动作重放与响应丢失收敛证明。", "owner": "R8-005"},
   "workbench-graph|POST /api/focus": {"slug": "start-focus", "symptom": "图谱启动专注缺少完整动作重放与并发收敛证明。", "owner": "R8-005"},
   "workbench-graph|POST /api/projects/:id/timeline": {"slug": "create-timeline-item", "symptom": "图谱创建时间线项缺少完整动作重放与重复结果抑制证明。", "owner": "R8-005"},
@@ -196,7 +199,7 @@ const DOMAIN_GAP_POLICIES = new Map(Object.entries({
   "workbench-admin-spaces|PATCH /api/admin/collections/:id": { slug: "update-collection", symptom: "集合编辑已有本地版本冲突保护；未知意图跨卸载恢复及旧客户端版本必填策略仍缺。", owner: "R6-008" },
   "workbench-admin-spaces|POST /api/admin/spaces": { slug: "create-space", symptom: "创建 Space 缺少稳定幂等键和重放策略。", owner: "R6-008" },
   "workbench-knowledge-reader|DELETE /api/knowledge/:id/favorite": { slug: "remove-favorite", symptom: "取消收藏缺少重复请求与响应丢失后的收敛证明。", owner: "R3-011" },
-  "workbench-admin-submission-detail|POST /api/admin/submissions/:id/comments": { slug: "add-review-comment", symptom: "审核评论缺少稳定客户端键与重复写入抑制证明。", owner: "R6-003" },
+  "workbench-admin-submission-detail|PUT /api/admin/submissions/:id/comments/requests/:id": { slug: "add-review-comment", symptom: "审核评论唯一编号、同编号重试和精确回执已有本地会话证据；跨刷新恢复及发布验收仍开放。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/publish": { slug: "publish-submission", symptom: "发布决策缺少不可变 Revision 的重放收敛证明。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/reject": { slug: "reject-submission", symptom: "拒绝决策缺少幂等重放与并发冲突策略。", owner: "R6-003" },
   "workbench-admin-submission-detail|POST /api/admin/submissions/:id/request-revision": { slug: "request-revision", symptom: "退回修改决策缺少幂等、通知去重与并发策略。", owner: "R6-003" },
