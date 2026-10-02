@@ -63,6 +63,7 @@
 - [x] A04 将本轮账户/导航/品牌修复映射到原 R1 条目，仅提升已有证据的子项。
   - 2026-09-28 将 `937ea87` 的账户/导航/品牌修复逐项映射到 R1-005/006/007/009–014 与 WB-002/WB-SETTINGS；当前 11 文件 95 项回归通过。见[映射表及剩余边界](./2026-09-28-functional-closure-reconciliation.md)。R1 原子整体及交付总账的 release/acceptance 不提升。
 - [ ] A05 逐页核对弹层、危险操作确认、表单 pending/dirty、重复点击和异步状态。
+  - [x] 2026-10-02 刷新保留历史夹具、fallback新epoch回归、dirty/pending/unknown六组原生beforeunload取消保留及刷新后重复Back/确认/Forward实测；5文件179/179与夹具5/5通过。见[document边界证据](./navigation-history-document-evidence.md)。键盘/触控、完整版本、强制离开与逐页其余审计仍开放，父项不关闭。
   - [x] 2026-10-02 共享history运行时、获准位置订阅、失败恢复提示及注销后迟到命令隔离；23文件545/545与类型/UI/双语通过，内置浏览器验证Back取消/确认、Forward、pending/unknown保留。见[运行时证据](./navigation-history-runtime-evidence.md)。刷新后历史/跨document/键盘触控仍开放，A05不关闭。
   - [x] 2026-10-02 任务编辑器关闭/Escape 的 dirty 确认和 beforeunload 提醒；覆盖八类输入、旧决定单次消费、pending/unknown 保持锁定，并修复子表单读回覆盖其他草稿。新增16项，联合167/167及类型/UI构建/双语检查通过。见[本地证据](./2026-10-02-task-editor-dirty-evidence.md)。父项仍开放；全局导航/后退前进保护及原生验收未完成。
   - [x] 2026-10-02 专注完成/放弃确认：精确会话及关联日程影响、默认取消、同步单次消费、旧决定失效、暂停/恢复互斥；新增27项，联合211/211及类型/UI构建/双语检查通过。见[本地证据](./2026-10-02-focus-action-confirmation-evidence.md)。父项仍开放；下一任务编辑器未保存草稿保护。

@@ -58,6 +58,8 @@ Files: shared location/history adapter, its tests, App subscription consumers wh
 - [x] Implement traversal admission using verified entry identity/position; never infer unknown deltas, never silently accept dirty traversal.
 - [x] Re-run all navigation, shell, task/inbox/editor, notifications/messages, query pagination tests; typecheck, build:ui, test:i18n, verify:i18n and checklist audit.
 - [ ] Obtain actual native history/refresh/keyboard evidence or leave that gate explicitly open; update product checklist only to proven scope.
+  - [x] Document-boundary slice: preserve reload history; verify dirty/pending/unknown native beforeunload cancellation; test fallback epoch restart and pending-decision repeated Back.
+  - [ ] Remaining native gates: keyboard/touch, full browser version and forced-leave/identity journeys.
 - [ ] Commit evidence and functional changes; no release operations.
 
 ## Execution evidence
@@ -75,3 +77,7 @@ Task 4能力核验：官方WHATWG正文核验成功；内置浏览器原生探�
 Task 4核心续行（基线57bb774）：两阶段prepare/permit与独立历史状态机已通过RED→GREEN；最终23文件530/530，类型/UI构建/双语/清单验证通过。新增commit卸载与排队重放取消竞态回归，详见 `docs/product/navigation-history-traversal-core-evidence.md`。这只是运行时接入的前置子项；原始popstate订阅未改，Task 4的完整RED覆盖、浏览器适配、原生验收与父项均不勾选。下一步直接执行实际端口及获准位置订阅接入，不重复设计批准。
 
 Task 4运行时续行（基线20b4038）：真实浏览器端口、accepted位置订阅、App查询/hash读取、恢复故障UI、注销迟到命令隔离已接入。行为RED及补充边界后最终23文件545/545、类型/UI/双语门禁通过；内置浏览器真实App夹具验证Back取消/确认、Forward、pending/unknown草稿保留。见 `docs/product/navigation-history-runtime-evidence.md`。完整RED边界与原生门禁仍不勾选：刷新后epoch、跨document、键盘/触控及完整版本未验收。提交步骤待Task 4全部边界完结；本轮允许原子提交运行时与证据，不代表整个Task 4结束。
+
+Task 4 document边界续行（基线1006e58）：夹具无条件重种历史RED4失败→5/5；新增fallback新epoch回归，位置/核心/gate/编辑器/Tasks五文件179/179。内置浏览器真实刷新保留旧历史，六组原生beforeunload取消事件及草稿/锁/写计数保持，待决重复Back令旧决定失效、确认后仅发布一次。见 `docs/product/navigation-history-document-evidence.md`。键盘动作未导致遍历、完整版本工具不支持；未强制离开或冒充通过。父项/完整Task 4仍开放，允许提交已验证切片继续其余任务。
+
+Document切片提交前最终门禁：23文件547/547、项目及独立DOM类型、build:ui/VM隔离、双语13/13与静态校验、清单9/9通过；29/5/24计数不变。本地服务器及临时tab已清理，无发布操作。

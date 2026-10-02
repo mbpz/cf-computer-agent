@@ -1,0 +1,163 @@
+{
+  "scope": "Local synthetic App fixture on 127.0.0.1:61008; native CDP events observed through built-in browser. No production or backend acceptance.",
+  "date": "2026-10-02",
+  "decision": "All six dialogs closed with result=false; no forced-leave or human-visible-dialog acceptance claimed.",
+  "cases": [
+    {
+      "action": "dirty-cross-document-back",
+      "events": [
+        {
+          "sequence": 136,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 138,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    },
+    {
+      "action": "dirty-reload",
+      "events": [
+        {
+          "sequence": 141,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 143,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    },
+    {
+      "action": "pending-reload",
+      "events": [
+        {
+          "sequence": 205,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 207,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    },
+    {
+      "action": "pending-cross-document-back",
+      "events": [
+        {
+          "sequence": 210,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 212,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "48B7BCFAE8844F408CD52F20F32513FF",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    },
+    {
+      "action": "unknown-reload",
+      "events": [
+        {
+          "sequence": 69,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "EA2B9E61E17B9D1E05397E53F15ACC40",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 71,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "EA2B9E61E17B9D1E05397E53F15ACC40",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    },
+    {
+      "action": "unknown-cross-document-back",
+      "events": [
+        {
+          "sequence": 74,
+          "method": "Page.javascriptDialogOpening",
+          "params": {
+            "defaultPrompt": "",
+            "frameId": "EA2B9E61E17B9D1E05397E53F15ACC40",
+            "hasBrowserHandler": true,
+            "message": "",
+            "type": "beforeunload",
+            "url": "http://127.0.0.1:61008/tasks"
+          }
+        },
+        {
+          "sequence": 76,
+          "method": "Page.javascriptDialogClosed",
+          "params": {
+            "frameId": "EA2B9E61E17B9D1E05397E53F15ACC40",
+            "result": false,
+            "userInput": ""
+          }
+        }
+      ]
+    }
+  ]
+}

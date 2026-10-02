@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readWorkspaceHistoryFault, retryWorkspaceHistory, readWorkspaceLocation, registerWorkspaceLeaveGuard, endWorkspaceSession, subscribeWorkspaceLocation, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { createWorkspaceBrowserHistory } from "../../frontend/lib/workspace-browser-history";
+import { createWorkspaceNavigationGate } from "../../frontend/lib/workspace-navigation-gate";
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
@@ -163,7 +165,7 @@ describe("workspace explicit navigation admission", () => {
   it.each([true, false])("retains the accepted route if restoration times out (native=%s)", async native => {
     const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
     const timers: Array<() => void> = [];
-    vi.spyOn(browser, "setTimeout").mockImplementation(((callback: () => void) => { timers.push(callback); return 1; }) as typeof browser.setTimeout);
+    vi.spyOn(browser, "setTimeout").mockImplementation(((callback: () => void) => { timers.push(callback); return 1; }) as unknown as typeof browser.setTimeout);
     writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
     dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
     driver.arrive(1); expect(timers).toHaveLength(1); timers[0]();
@@ -188,7 +190,7 @@ describe("workspace explicit navigation admission", () => {
 
   it("preserves unrelated history state when stamping the fallback anchor", () => {
     browser.history.replaceState({ anotherOwner: "retain" }, "", "/tasks");
-    readWorkspaceLocation(); expect(browser.history.state.anotherOwner).toBe("retain");
+    readWorkspaceLocation(); expect(browser.history.state).toMatchObject({ anotherOwner: "retain" });
   });
 
   it.each([true, false])("does not publish a queued old-session replay after logout (native=%s)", async native => {
@@ -203,6 +205,37 @@ describe("workspace explicit navigation admission", () => {
     expect(browser.location.pathname).toBe("/");
     expect(changed).not.toHaveBeenCalled();
     expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
+  });
+
+  it.each([true, false])("fallback document restart never trusts the preceding epoch (guard present=%s)", async guarded => {
+    const owner = browser as unknown as Window & typeof globalThis;
+    const driver = installWorkspaceHistoryDriver(owner, false);
+    const previous = createWorkspaceBrowserHistory(owner, createWorkspaceNavigationGate(), () => false, vi.fn());
+    previous.write("push", "https://app.test/inbox");
+    previous.write("push", "https://app.test/tasks?page=2");
+    previous.dispose();
+    const published = vi.fn();
+    const gate = createWorkspaceNavigationGate();
+    const prompt = vi.fn();
+    if (guarded) gate.register(() => ({ kind: "confirm", version: "new-document-draft", prompt, dismiss() {} }));
+    const current = createWorkspaceBrowserHistory(owner, gate, () => guarded, published);
+    try {
+      driver.arrive(1);
+      expect(driver.requests).toHaveLength(0); // Never guess a delta across epochs.
+      expect(prompt).not.toHaveBeenCalled();
+      if (guarded) {
+        expect(current.url().href).toBe("https://app.test/tasks?page=2");
+        await Promise.resolve(); await Promise.resolve();
+        expect(current.fault()).toBe("restore-failed");
+        expect(current.busy()).toBe(true);
+        expect(() => current.write("push", "https://app.test/calendar")).toThrow("History is busy");
+        expect(published).not.toHaveBeenCalled();
+      } else {
+        expect(current.url().href).toBe("https://app.test/inbox");
+        expect(current.fault()).toBeNull();
+        expect(published).toHaveBeenCalledOnce();
+      }
+    } finally { current.dispose(); }
   });
 
 });
