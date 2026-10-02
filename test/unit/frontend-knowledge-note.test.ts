@@ -37,7 +37,7 @@ describe("private reader notes", () => {
     const requests: Array<{ path: string; init?: RequestInit }> = [];
     const requester = async (input: string | URL | Request, init?: RequestInit) => {
       requests.push({ path: String(input), init });
-      if (init?.method === "PUT") return new Response(JSON.stringify({ note: { visibility: "private", access: "owner", title: "Saved", body: "Body", updatedAt: "2026-08-26T00:00:00.000Z" } }), { status: 200, headers: { "content-type": "application/json" } });
+      if (init?.method === "PUT") return new Response(JSON.stringify({ note: { id: "note-a", ownerId: "member-a", knowledgeItemId: "knowledge-a", citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 2, endLine: 4 }], visibility: "private", access: "owner", title: "Saved", body: "Body", updatedAt: "2026-08-26T00:00:00.000Z" } }), { status: 200, headers: { "content-type": "application/json" } });
       return new Response(JSON.stringify({ note: null }), { status: 200, headers: { "content-type": "application/json" } });
     };
     await expect(loadRemotePrivateKnowledgeNote("knowledge-a", requester)).resolves.toBeNull();

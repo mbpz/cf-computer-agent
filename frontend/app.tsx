@@ -194,7 +194,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
   switch (kind) {
     case "home": return <HomeRoute key={JSON.stringify([session?.member.id, session?.member.role, session?.permissionMask, [...(session?.capabilities ?? [])].sort()])} locale={locale} />;
     case "knowledge": return <KnowledgeRoute locale={locale} search={search} />;
-    case "knowledge-reader": return <KnowledgeReaderRoute locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
+    case "knowledge-reader": return <KnowledgeReaderRoute memberId={session?.member.id} locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute memberId={session?.member.id} locale={locale} search={search} />;
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
@@ -568,17 +568,17 @@ function decodeRouteId(pathname: string): string {
   try { return decodeURIComponent(value); } catch { return ""; }
 }
 
-export function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRuntime; knowledgeItemId: string }) {
+export function KnowledgeReaderRoute({ locale, knowledgeItemId, memberId = "" }: { locale: LocaleRuntime; knowledgeItemId: string; memberId?: string }) {
   const [citationHash, setCitationHash] = useState(() => readWorkspaceHash());
   useEffect(() => {
     const update = () => setCitationHash(readWorkspaceHash());
     const unsubscribe = subscribeWorkspaceLocation(update);
     return unsubscribe;
   }, []);
-  return <KnowledgeReaderSession key={`${knowledgeItemId}:${citationHash}`} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
+  return <KnowledgeReaderSession key={`${memberId}:${knowledgeItemId}:${citationHash}`} memberId={memberId} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
 }
 
-function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash }: { locale: LocaleRuntime; knowledgeItemId: string; citationHash: string }) {
+function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash, memberId }: { memberId: string; locale: LocaleRuntime; knowledgeItemId: string; citationHash: string }) {
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; revision: KnowledgeRevision } | { kind: "error"; message: string }>({ kind: "loading" });
   const [diffState, setDiffState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; diff: KnowledgeRevisionDiff } | { kind: "error" }>({ kind: "idle" });
   const [relatedState, setRelatedState] = useState<{ kind: "idle" } | { kind: "loading" } | { kind: "ready"; items: readonly RelatedKnowledgeItem[] } | { kind: "error" }>({ kind: "idle" });
@@ -635,7 +635,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash }: { loc
     }
   };
   if (state.kind !== "ready") {
-      return <KnowledgeReaderPage locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
+      return <KnowledgeReaderPage memberId={memberId} locale={locale} state={state.kind === "loading" ? state : { kind: "error", message: state.message }} revision={{ id: "", knowledgeItemId: "", markdown: "", isCurrent: false, previousRevisionId: null, sourceVersionId: "", sourceVersionOrdinal: null, parserSchemaVersion: null, indexStatus: "pending", chunks: [] }} renderMarkdown={renderSafeMarkdown} onRetry={() => setRetry((value) => value + 1)} />;
   }
   const toggleFavorite = async () => {
     if (favorite === null) return;
@@ -643,7 +643,7 @@ function KnowledgeReaderSession({ locale, knowledgeItemId, citationHash }: { loc
     setFavorite(next);
     try { await setKnowledgeFavorite(knowledgeItemId, next); } catch { setFavorite(!next); }
   };
-  return <KnowledgeReaderPage locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} onToggleFavorite={toggleFavorite} />;
+  return <KnowledgeReaderPage memberId={memberId} locale={locale} state={{ kind: "ready" }} revision={state.revision} renderMarkdown={renderSafeMarkdown} diffState={diffState} onCompare={showDiff} relatedState={relatedState} backlinkState={backlinkState} favorite={favorite} onToggleFavorite={toggleFavorite} />;
 }
 
 function NotFoundPage({ locale }: { locale: LocaleRuntime }) {

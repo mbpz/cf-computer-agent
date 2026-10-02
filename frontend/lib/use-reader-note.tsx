@@ -1,0 +1,115 @@
+import { useEffect, useRef, useState } from "react";
+import { ApiRequestError } from "./api";
+import type { LocaleRuntime } from "./i18n";
+import { clearPrivateKnowledgeNote, loadPrivateKnowledgeNote, loadRemotePrivateKnowledgeNote, memberKnowledgeNoteStorage, savePrivateKnowledgeNote, saveRemotePrivateKnowledgeNote, type PrivateKnowledgeNoteCitation, type RemotePrivateKnowledgeNote } from "./knowledge-note";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "./workspace-location";
+import { useCreateDraft } from "./use-create-draft";
+
+type Fields = { title: string; body: string };
+type Intent = { fields: Fields; citations: PrivateKnowledgeNoteCitation[] };
+type Phase = "loading" | "idle" | "saving" | "unknown" | "load-error";
+const blank = { title: "", body: "" };
+
+/** Mounted under a member/item key. No ambiguous PUT is replayed automatically. */
+export function useReaderNote(memberId: string, knowledgeItemId: string, locale?: LocaleRuntime) {
+  const owner = useRef<AbortController | null>(null);
+  const intent = useRef<Intent | null>(null);
+  const cachedDraft = useRef(false);
+  const [phase, setPhase] = useState<Phase>("loading");
+  const phaseRef = useRef<Phase>("loading");
+  const [access, setAccess] = useState<"owner" | "shared">("owner");
+  const accessRef = useRef<"owner" | "shared">("owner");
+  const [status, setStatus] = useState<"idle" | "saved" | "saving" | "unsaved" | "error">("idle");
+  const draft = useCreateDraft(blank, blank, () => intent.current !== null, locale,
+    () => !owner.current || phaseRef.current !== "idle" || accessRef.current !== "owner");
+  function transition(next: Phase) { phaseRef.current = next; setPhase(next); }
+  useEffect(() => {
+    if (!memberId || !knowledgeItemId) { transition("load-error"); return; }
+    const controller = new AbortController(); owner.current = controller;
+    void load(controller);
+    const browser = window;
+    const committed = () => {
+      if (owner.current !== controller || intent.current || !cachedDraft.current) return;
+      try { clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId)); cachedDraft.current = false; }
+      catch { /* Cannot claim persistent deletion if the browser denies storage access. */ }
+    };
+    browser.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed);
+    return () => { browser.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed); controller.abort(); owner.current = null; intent.current = null; };
+  }, []);
+  async function load(controller: AbortController) {
+    transition("loading");
+    try {
+      const note = await loadRemotePrivateKnowledgeNote(knowledgeItemId, fetch, controller.signal);
+      if (owner.current !== controller) return;
+      if (note?.access === "owner" && note.ownerId !== memberId) throw new Error("KNOWLEDGE_NOTE_OWNER_INVALID");
+      const permission = note?.access ?? "owner";
+      accessRef.current = permission; setAccess(permission);
+      const baseline = note ? { title: note.title, body: note.body } : blank;
+      let restored = baseline;
+      if (permission === "owner") {
+        try {
+          const cached = loadPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId));
+          if (cached.updatedAt) { cachedDraft.current = true; restored = { title: cached.title, body: cached.body }; }
+        } catch { /* Cache is optional, never evidence of remote authorization. */ }
+      }
+      draft.set("title", restored.title); draft.set("body", restored.body); draft.checkpoint(baseline);
+      setStatus(JSON.stringify(restored) === JSON.stringify(baseline) ? "idle" : "unsaved"); transition("idle");
+    } catch {
+      if (owner.current === controller) { transition("load-error"); setStatus("error"); }
+    }
+  }
+  function retryLoad() { const controller = owner.current; if (controller && phaseRef.current === "load-error") void load(controller); }
+  function edit(key: keyof Fields, value: string) {
+    const before = draft.current.current;
+    draft.edit(key, value);
+    if (before !== draft.current.current) setStatus("unsaved");
+  }
+  async function save(citations: readonly PrivateKnowledgeNoteCitation[]) {
+    const controller = owner.current;
+    if (!controller || intent.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || draft.isConfirming()) return;
+    const fields = { title: draft.current.current.title.trim(), body: draft.current.current.body.trim() };
+    if (!fields.title || !fields.body || !citations.length || new TextEncoder().encode(fields.title).length > 1024 || new TextEncoder().encode(fields.body).length > 32768) { setStatus("error"); return; }
+    const operation = { fields, citations: citations.map(citation => ({ ...citation })) };
+    intent.current = operation; transition("saving"); setStatus("saving");
+    try {
+      const result = await saveRemotePrivateKnowledgeNote(knowledgeItemId, fields, operation.citations, fetch, controller.signal);
+      if (owner.current !== controller || intent.current !== operation) return;
+      if (!matches(result, operation)) throw new Error("KNOWLEDGE_NOTE_RECEIPT_INVALID");
+      accept(operation);
+    } catch (error) {
+      if (owner.current !== controller || intent.current !== operation) return;
+      if (error instanceof ApiRequestError && error.status === 400 && error.code === "PRIVATE_NOTE_INVALID") {
+        // Service validation precedes the upsert, so this exact response proves no write.
+        try { savePrivateKnowledgeNote(knowledgeItemId, fields, memberKnowledgeNoteStorage(memberId)); cachedDraft.current = true; } catch { /* Visible draft remains. */ }
+        intent.current = null; transition("idle"); setStatus("error");
+      } else { transition("unknown"); setStatus("error"); }
+    }
+  }
+  function matches(note: RemotePrivateKnowledgeNote | null, operation: Intent) {
+    return !!note && note.ownerId === memberId && note.knowledgeItemId === knowledgeItemId && note.access === "owner"
+      && note.title === operation.fields.title && note.body === operation.fields.body
+      && JSON.stringify(note.citations) === JSON.stringify(operation.citations);
+  }
+  function accept(operation: Intent) {
+    // A stale cached draft must not resurrect after a successful save. Keep the
+    // intent locked if cleanup fails; a subsequent read may retry cleanup only.
+    if (cachedDraft.current) { clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId)); cachedDraft.current = false; }
+    draft.set("title", operation.fields.title); draft.set("body", operation.fields.body); draft.checkpoint(operation.fields);
+    intent.current = null; transition("idle"); setStatus("saved");
+  }
+  async function check() {
+    const controller = owner.current; const operation = intent.current;
+    if (!controller || !operation || phaseRef.current !== "unknown") return;
+    transition("saving");
+    try {
+      const note = await loadRemotePrivateKnowledgeNote(knowledgeItemId, fetch, controller.signal);
+      if (owner.current !== controller || intent.current !== operation) return;
+      // This proves the desired current state, not that the original request committed.
+      if (matches(note, operation)) { accept(operation); return; }
+    } catch { /* Absence, failure and different content cannot disprove a pending write. */ }
+    if (owner.current === controller && intent.current === operation) transition("unknown");
+  }
+  return { draft, access, status, phase, edit, save, check, retryLoad,
+    locked: phase !== "idle" || access !== "owner" || draft.confirming,
+    isLocked: () => !owner.current || phaseRef.current !== "idle" || accessRef.current !== "owner" || draft.isConfirming() };
+}

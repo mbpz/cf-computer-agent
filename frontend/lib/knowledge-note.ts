@@ -10,6 +10,20 @@ export interface PrivateKnowledgeNote {
   updatedAt: string;
 }
 
+export interface RemotePrivateKnowledgeNote extends PrivateKnowledgeNote {
+  id: string;
+  ownerId: string;
+  access: "owner" | "shared";
+  citations: PrivateKnowledgeNoteCitation[];
+}
+
+/** Never read or migrate the old item-only cache: its member ownership is unknown. */
+export function memberKnowledgeNoteStorage(memberId: string, storage: NoteStorage = browserStorage()): NoteStorage {
+  assertMemberId(memberId);
+  const key = (value: string) => `memory-garden:member-note:v1:${memberId}:${value}`;
+  return { getItem: value => storage.getItem(key(value)), setItem: (value, data) => storage.setItem(key(value), data), removeItem: value => storage.removeItem(key(value)) };
+}
+
 export interface PrivateKnowledgeNoteListItem extends PrivateKnowledgeNote {
   id: string;
   createdAt: string;
@@ -58,6 +72,11 @@ export function loadPrivateKnowledgeNote(knowledgeItemId: string, storage: NoteS
   }
 }
 
+export function clearPrivateKnowledgeNote(knowledgeItemId: string, storage: NoteStorage = browserStorage()): void {
+  assertKnowledgeItemId(knowledgeItemId);
+  storage.removeItem(noteKey(knowledgeItemId));
+}
+
 export function savePrivateKnowledgeNote(
   knowledgeItemId: string,
   draft: PrivateKnowledgeNoteDraft,
@@ -87,11 +106,11 @@ export function normalizePrivateKnowledgeNote(value: unknown, expectedKnowledgeI
   };
 }
 
-export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNote | null> {
+export async function loadRemotePrivateKnowledgeNote(knowledgeItemId: string, requester: Fetcher = fetch, signal?: AbortSignal): Promise<RemotePrivateKnowledgeNote | null> {
   assertKnowledgeItemId(knowledgeItemId);
-  const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, { requester, signal });
-  if (data.note === null || data.note === undefined) return null;
-  return normalizeRemoteNote(data.note, knowledgeItemId);
+  const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, { requester: noteRequester(requester), signal });
+  if (data?.note === null) return null;
+  return normalizeRemoteNote(data?.note, knowledgeItemId);
 }
 
 export async function loadPrivateKnowledgeNotes(requester: Fetcher = fetch, signal?: AbortSignal): Promise<PrivateKnowledgeNoteListItem[]> {
@@ -159,29 +178,52 @@ export async function saveRemotePrivateKnowledgeNote(
   citations: readonly PrivateKnowledgeNoteCitation[],
   requester: Fetcher = fetch,
   signal?: AbortSignal,
-): Promise<PrivateKnowledgeNote> {
+): Promise<RemotePrivateKnowledgeNote> {
   assertKnowledgeItemId(knowledgeItemId);
   const data = await apiFetch<{ note?: unknown }>(`/api/knowledge/${encodeURIComponent(knowledgeItemId)}/note`, {
-    requester,
+    requester: noteRequester(requester),
     signal,
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ title: draft.title ?? "", body: draft.body ?? "", citations }),
   });
-  return normalizeRemoteNote(data.note, knowledgeItemId);
+  return normalizeRemoteNote(data?.note, knowledgeItemId);
 }
 
 function emptyNote(knowledgeItemId: string): PrivateKnowledgeNote {
   return { v: 1, knowledgeItemId, title: "", body: "", visibility: "private", updatedAt: "" };
 }
 
-function normalizeRemoteNote(value: unknown, expectedKnowledgeItemId: string): PrivateKnowledgeNote {
+function noteRequester(requester: Fetcher): Fetcher {
+  return async (input, init) => {
+    const response = await requester(input, init);
+    if (response.ok && response.status !== 200) throw new Error("KNOWLEDGE_NOTE_RECEIPT_INVALID");
+    return response;
+  };
+}
+
+function normalizeRemoteNote(value: unknown, expectedKnowledgeItemId: string): RemotePrivateKnowledgeNote {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_NOTE_INVALID");
   const record = value as Record<string, unknown>;
-  if (record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string" || typeof record.updatedAt !== "string") throw new Error("KNOWLEDGE_NOTE_INVALID");
-  const note = { v: 1 as const, knowledgeItemId: expectedKnowledgeItemId, title: record.title, body: record.body, visibility: "private" as const, access: record.access === "shared" ? "shared" as const : "owner" as const, updatedAt: record.updatedAt };
-  if (!normalizePrivateKnowledgeNote(note, expectedKnowledgeItemId)) throw new Error("KNOWLEDGE_NOTE_INVALID");
-  return note;
+  if (typeof record.id !== "string" || !ID_PATTERN.test(record.id)
+    || typeof record.ownerId !== "string" || !ID_PATTERN.test(record.ownerId)
+    || record.knowledgeItemId !== expectedKnowledgeItemId
+    || (record.access !== "owner" && record.access !== "shared")
+    || record.visibility !== "private" || typeof record.title !== "string" || typeof record.body !== "string"
+    || typeof record.updatedAt !== "string" || !Number.isFinite(Date.parse(record.updatedAt))
+    || !Array.isArray(record.citations) || record.citations.length < 1 || record.citations.length > 8) throw new Error("KNOWLEDGE_NOTE_INVALID");
+  const citations = record.citations.map((value): PrivateKnowledgeNoteCitation => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("KNOWLEDGE_NOTE_INVALID");
+    const citation = value as Record<string, unknown>;
+    if (typeof citation.revisionId !== "string" || !ID_PATTERN.test(citation.revisionId)
+      || typeof citation.chunkId !== "string" || !ID_PATTERN.test(citation.chunkId)
+      || !Number.isSafeInteger(citation.startLine) || !Number.isSafeInteger(citation.endLine)
+      || (citation.startLine as number) < 1 || (citation.endLine as number) < (citation.startLine as number)) throw new Error("KNOWLEDGE_NOTE_INVALID");
+    return { revisionId: citation.revisionId, chunkId: citation.chunkId, startLine: citation.startLine as number, endLine: citation.endLine as number };
+  });
+  const note = normalizePrivateKnowledgeNote({ ...record, v: 1 }, expectedKnowledgeItemId);
+  if (!note) throw new Error("KNOWLEDGE_NOTE_INVALID");
+  return { ...note, id: record.id, ownerId: record.ownerId, access: record.access, citations };
 }
 
 function normalizeDraftText(value: string | undefined): string {
