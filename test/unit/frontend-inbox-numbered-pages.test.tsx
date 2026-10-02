@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -45,7 +45,7 @@ describe("inbox numbered pages through App", () => {
     await waitForApp(() => main()?.textContent?.includes("Private row") === true);
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
-  async function navigate(search: string) { await act(async () => { window.history.pushState({}, "", `/${kind}${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function navigate(search: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/${kind}${search}`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it.each(["cancel", "accept"] as const)("%s defers inbox invalidation and pagination until admission", async outcome => {
     await mount(); let decision!: WorkspaceLeaveDecision;
@@ -145,7 +145,7 @@ describe("inbox numbered pages through App", () => {
   it("aborts reads on route leave and ignores late results", async () => {
     await mount(); delayPageTwo = true;
     await navigate("?page=2"); await waitForApp(() => !!resolvePageTwo);
-    await act(async () => { window.history.pushState({}, "", "/unknown"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/unknown")).toBe("committed"); });
     expect(delayedSignal?.aborted).toBe(true);
     await act(async () => resolvePageTwo!());
     expect(main().textContent).not.toContain("Private row");

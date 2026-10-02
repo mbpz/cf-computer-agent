@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -66,7 +67,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   it("ignores a conflict readback after leaving the route", async () => {
     await mount(); delay = true; await submitStatus();
     await waitForApp(() => !!resolveRead);
-    await act(async () => { window.history.pushState({}, "", "/settings"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
     await act(async () => resolveRead!());
     expect(main().textContent).not.toContain("Fresh private row");
     expect(main().textContent).not.toContain("Review the latest data before trying again.");

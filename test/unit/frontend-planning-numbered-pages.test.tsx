@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -33,7 +34,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} numbered pa
     await waitForApp(() => !!main()?.querySelector("h2"));
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
-  async function navigate(search: string) { await act(async () => { window.history.pushState({}, "", `/${kind}${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function navigate(search: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/${kind}${search}`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   if (kind === "projects") it("preserves review's active filter across pagination and retry", async () => {
     await mount("?status=active");

@@ -1,3 +1,4 @@
+import { useCreateDraft } from "../lib/use-create-draft";
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
@@ -21,25 +22,24 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
 }) {
   const [stored] = useState<StoredPlanningIntent>(() => createMemberId ? loadPlanningIntent(createMemberId, kind) : { kind: "empty" });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
-  const [title, setTitle] = useState(stored.kind === "ready" ? stored.intent.title : "");
-  const [description, setDescription] = useState(stored.kind === "ready" ? stored.intent.description ?? "" : "");
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<PlanningCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
+  const draft = useCreateDraft<{ title: string; description: string }>(
+    { title: stored.kind === "ready" ? stored.intent.title : "", description: stored.kind === "ready" ? stored.intent.description ?? "" : "" },
+    { title: "", description: "" },
+    () => phaseRef.current !== "editing", locale, () => pending || !!isSubmitBlocked?.());
+  const { title, description } = draft.fields;
+  const setTitle = (value: string) => draft.set("title", value);
+  const setDescription = (value: string) => draft.set("description", value);
+
   const generation = useRef(0);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
     onCreateLock?.(initialPhase !== "editing");
     return () => { active.current = false; generation.current++; };
-  }, []);
-  useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => {
-      if (phaseRef.current !== "editing") { event.preventDefault(); event.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
   }, []);
   const transition = (next: Phase) => { phaseRef.current = next; setPhase(next); onCreateLock?.(next !== "editing"); };
   const clearStored = () => !createMemberId || !intentRef.current || clearPlanningIntent(createMemberId, kind, intentRef.current);
@@ -63,16 +63,17 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; setTitle(""); setDescription(""); setError(false); transition("editing");
+      intentRef.current = null; draft.reset(); setError(false); transition("editing");
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");
     }
   };
   const submit = async () => {
-    if (pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (draft.isConfirming() || pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
+      const { title, description } = draft.current.current;
       if (!title.trim() || [...title.trim()].length > 200 || [...description.trim()].length > 200_000) { setError(true); return; }
       intentRef.current = Object.freeze({ id: crypto.randomUUID(), clientKey: crypto.randomUUID(), title: title.trim(), description: description.trim() || null });
     }
@@ -95,14 +96,15 @@ export function PlanningCreateForm({ locale, kind, createMemberId, pending = fal
       await readback();
     }
   };
-  const locked = pending || phase !== "editing";
+  const locked = draft.confirming || pending || phase !== "editing";
   return <div className="space-y-3" aria-busy={phase === "writing" || phase === "reading"}>
-    <Input aria-label={frontendText(locale, `${kind}_TITLE_FIELD`)} value={title} disabled={locked} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_TITLE_PLACEHOLDER`)} />
-    <Textarea aria-label={frontendText(locale, `${kind}_DESCRIPTION_FIELD`)} value={description} disabled={locked} onChange={(event) => setDescription(event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_DESCRIPTION_PLACEHOLDER`)} rows={3} />
+    <Input aria-label={frontendText(locale, `${kind}_TITLE_FIELD`)} value={title} disabled={locked} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_TITLE_PLACEHOLDER`)} />
+    <Textarea aria-label={frontendText(locale, `${kind}_DESCRIPTION_FIELD`)} value={description} disabled={locked} onChange={(event) => draft.edit("description", event.currentTarget.value)} placeholder={frontendText(locale, `${kind}_DESCRIPTION_PLACEHOLDER`)} rows={3} />
     {phase === "storage-blocked" ? <><p role="alert">{frontendText(locale, "PLANNING_CREATE_STORAGE_BLOCKED")}</p><Button type="button" data-create-storage-retry disabled={pending} onClick={reloadStored}>{frontendText(locale, "PLANNING_CREATE_STORAGE_RETRY")}</Button></>
       : phase === "unknown" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "PLANNING_CREATE_UNKNOWN")}</p><Button type="button" data-create-retry disabled={pending} onClick={() => void submit()}>{frontendText(locale, "PLANNING_CREATE_RETRY")}</Button></>
       : phase === "read-failed" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "PLANNING_CREATE_READ_FAILED")}</p><Button type="button" data-create-read-retry disabled={pending} onClick={() => { if (phaseRef.current === "read-failed") void readback(); }}>{frontendText(locale, "PLANNING_CREATE_READ_RETRY")}</Button></>
       : <Button type="button" disabled={locked || !title.trim() || !onCreate} onClick={() => void submit()}>{frontendText(locale, `${kind}_CREATE`)}</Button>}
     {error && <p role="alert" className="text-sm text-destructive">{frontendText(locale, `${kind}_ACTION_FAILED`)}</p>}
+    {draft.confirmation}
   </div>;
 }

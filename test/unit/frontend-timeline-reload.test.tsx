@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { mountApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const stamp = "2026-09-27T00:00:00.000Z";
@@ -21,7 +22,7 @@ describe("timeline persistent recovery through App", () => {
   const recovery = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(n: HTMLButtonElement) { expect(n).toBeTruthy(); await act(async () => { n.click(); }); }
   async function fill(value: string) { const n = title(); const k = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[k].onChange({ currentTarget: { value } })); }
-  async function navigate(p: string) { await act(async () => { window.history.pushState({}, "", `/projects/${p}/timeline`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); await waitForApp(() => !!title()); }
+  async function navigate(p: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/projects/${p}/timeline`)).toBe("committed"); }); await waitForApp(() => !!title()); }
   async function mount(raw: string | null = null, member = "alice", key = createKey) {
     app = await mountApp({ url: "https://app.test/projects/p/timeline", configureBrowser(w) { if (raw) w.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
@@ -47,10 +48,10 @@ describe("timeline persistent recovery through App", () => {
   }
   beforeEach(() => { failure = 0; readFail = false; rev = 0; writes = []; hold = undefined; detailHold = undefined; detailFailure = 0; detailPatch = {}; });
   afterEach(async () => { await app?.unmount(); app = undefined; vi.restoreAllMocks(); });
-  it("persists before creating and restores the exact unresolved intent on route return", async () => {
+  it("persists before creating and restores the exact unresolved intent after forced remount", async () => {
     await mount(); await fill("Meeting draft"); failure = 503; await click(button("Add to timeline"));
     expect(writes[0].saved).not.toBeNull(); const body = writes[0].body;
-    await navigate("q"); expect(title().value).toBe(""); await navigate("p");
+    await forceRemountAppAt(app!, "/projects/q/timeline"); await waitForApp(() => !!title()); expect(title().value).toBe(""); await forceRemountAppAt(app!, "/projects/p/timeline"); await waitForApp(() => !!title());
     expect(title().value).toBe("Meeting draft"); expect(title().disabled).toBe(true); expect(button("Mark done").disabled).toBe(true); expect(writes).toHaveLength(1);
     failure = 0; await click(button("Retry original creation")); await waitForApp(() => title().value === "");
     expect(writes[1].body).toEqual(body); expect(stored()).toBeNull();
@@ -66,20 +67,21 @@ describe("timeline persistent recovery through App", () => {
     await app!.unmount(); app = undefined; await mount(raw); await click(button("Retry list read"));
     await waitForApp(() => title().value === ""); expect(writes).toHaveLength(1); expect(stored()).toBeNull();
   });
-  it("retains an unresolved creation across browser page navigation and ignores its late receipt", async () => {
+  it("retains an unresolved creation across forced App teardown and page remount and ignores its late receipt", async () => {
     await mount(); await fill("Page-private draft"); let release!: () => void;
     hold = new Promise(r => { release = r; }); await click(button("Add to timeline")); const raw = stored();
-    await act(async () => { window.history.pushState({}, "", "/projects/p/timeline?page=2"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => expect(writeWorkspaceHistory("push", "/projects/p/timeline?page=2")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/projects/p/timeline?page=2");
     await waitForApp(() => !!button("Retry original creation"));
     expect(title().value).toBe("Page-private draft"); expect(title().disabled).toBe(true);
     await act(async () => release()); expect(stored()).toBe(raw); expect(writes).toHaveLength(1);
     expect(main().textContent).not.toContain("Private row");
-    await navigate("p"); expect(title().value).toBe("Page-private draft"); expect(writes).toHaveLength(1);
+    await forceRemountAppAt(app!, "/projects/p/timeline"); await waitForApp(() => !!title()); expect(title().value).toBe("Page-private draft"); expect(writes).toHaveLength(1);
   });
   it("cancels a late detail recovery on page navigation and permits explicit GET review off-page", async () => {
     await mount(barrier(), "alice", statusKey); let release!: () => void; detailHold = new Promise(r => { release = r; });
     await click(recovery());
-    await act(async () => { window.history.pushState({}, "", "/projects/p/timeline?page=2"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/projects/p/timeline?page=2")).toBe("committed"); });
     await waitForApp(() => !!title()); await act(async () => release());
     expect(stored(statusKey)).toBe(barrier()); expect(title().disabled).toBe(true); expect(writes).toHaveLength(0);
     detailHold = undefined; await click(recovery()); await waitForApp(() => !title().disabled);
@@ -96,9 +98,9 @@ describe("timeline persistent recovery through App", () => {
     await mount(); await fill("Draft"); vi.spyOn(app!.browser.sessionStorage, "removeItem").mockImplementation(() => { throw Error("denied"); });
     await click(button("Add to timeline")); expect(stored()).not.toBeNull(); expect(title().disabled).toBe(true); expect(button("Mark done").disabled).toBe(true);
   });
-  it("does not let a late create acknowledgment clear the returned route intent", async () => {
+  it("does not let a late create acknowledgment clear the forced-remounted route intent", async () => {
     await mount(); await fill("Late"); let release!: () => void; hold = new Promise(r => { release = r; }); await click(button("Add to timeline"));
-    const raw = stored(); expect(raw).not.toBeNull(); await navigate("q"); await navigate("p"); await act(async () => release());
+    const raw = stored(); expect(raw).not.toBeNull(); await forceRemountAppAt(app!, "/projects/q/timeline"); await waitForApp(() => !!title()); await forceRemountAppAt(app!, "/projects/p/timeline"); await waitForApp(() => !!title()); await act(async () => release());
     expect(stored()).toBe(raw); expect(title().value).toBe("Late"); expect(writes).toHaveLength(1);
   });
   it.each([401,403,404])("clears denied private UI on creation %s", async status => {

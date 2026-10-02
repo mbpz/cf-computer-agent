@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -35,7 +36,7 @@ describe("timeline numbered pages through App", () => {
     await waitForApp(() => !!main()?.querySelector("h2"));
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
-  async function navigate(search: string) { await act(async () => { window.history.pushState({}, "", `/${kind}${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function navigate(search: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/${kind}${search}`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("restores a numbered deep link and replaces rather than appends rows", async () => {
     await mount("?page=2");

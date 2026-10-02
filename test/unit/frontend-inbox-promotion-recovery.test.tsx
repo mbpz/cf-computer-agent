@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -21,7 +22,7 @@ describe("inbox promotion recovery through App", () => {
     await click(action()); expect(bodies).toHaveLength(before);
     await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
   };
-  const navigate = async (path: string) => { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); };
+  const navigate = async (path: string) => { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); };
   async function mount(raw: string | null = null, member = "alice") {
     app = await mountApp({ url: "https://app.test/inbox?page=2&status=inbox", configureBrowser(browser) {
       vi.stubGlobal("HTMLElement", browser.HTMLElement);

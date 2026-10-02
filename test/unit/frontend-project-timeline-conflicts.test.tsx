@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -57,7 +58,7 @@ describe("timeline status reconciliation through real App", () => {
   });
   it("aborts and ignores conflict reconciliation after leaving the timeline", async () => {
     await mount(); delayed = true; await click(button("Mark done")); await waitForApp(() => !!resolveRead);
-    await act(async () => { window.history.pushState({}, "", "/settings"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
     expect(readSignal?.aborted).toBe(true); await act(async () => resolveRead!());
     expect(main().textContent).not.toContain("Fresh action"); expect(main().textContent).not.toContain("Review the latest data before trying again."); expect(bodies).toHaveLength(1);
   });

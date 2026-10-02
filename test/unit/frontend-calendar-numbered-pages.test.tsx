@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -28,7 +29,7 @@ describe("calendar numbered range through App", () => {
     await waitForApp(()=>main()?.textContent?.includes("Private event")===true);
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async()=>{node.click(); await new Promise(resolve=>setTimeout(resolve,0));}); }
-  async function navigate(search: string) { await act(async()=>{window.history.pushState({},"",`/calendar${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate"));}); }
+  async function navigate(search: string) { await act(async()=>{expect(writeWorkspaceHistory("push", `/calendar${search}`)).toBe("committed");}); }
   async function input(label: string, value: string) { await act(async()=> {const node=main().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; const key=Object.keys(node).find(key=>key.startsWith("__reactProps$"))!; (node as unknown as Record<string, {onChange: (event: {currentTarget: {value: string}}) => void}>)[key]!.onChange({currentTarget:{value}});}); }
   afterEach(async()=>{await app?.unmount(); app=undefined;});
   it("restores range and page deep link, replaces rows, persists absolute range",async()=>{

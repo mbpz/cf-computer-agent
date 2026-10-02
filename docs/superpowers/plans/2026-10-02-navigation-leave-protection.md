@@ -83,3 +83,5 @@ Task 4 document边界续行（基线1006e58）：夹具无条件重种历史RED4
 Document切片提交前最终门禁：23文件547/547、项目及独立DOM类型、build:ui/VM隔离、双语13/13与静态校验、清单9/9通过；29/5/24计数不变。本地服务器及临时tab已清理，无发布操作。
 
 Task 4 注销/合成身份续行（基线439f68e）：真实App双击注销RED 2 POST→同步ref防重，失败才释放以显式重试；原生匿名旧历史不恢复私有UI，B新document使用B合成数据。夹具根back_forward/reload/unknown不重种历史RED3失败→8/8。23文件549/549、项目类型/UI/双语通过；额外严格App类型检查35条与HEAD基线一致，不能记通过。清单与夹具Node17/17、29/5/24不变。见 `docs/product/navigation-logout-identity-evidence.md`。合成身份不是服务端双账号验收；父项完整门禁保持开放，下一允许逐页审计，无需重新批准。
+
+Task 4逐页续行（基线aaa0212）：五个创建入口（四组件）接入useCreateDraft，确认仅在获准导航提交时清草稿，未决创建/读回禁止普通离开；同事件编辑→提交取最新ref。行为RED30失败→30通过→扩充60项，最终41文件1053/1053、受影响严格DOM类型/项目类型/UI/双语通过。见 `docs/product/navigation-create-form-protection-evidence.md`。测试的强制组件重挂载与真实导航分开，不算原生刷新/身份验收。A05/R2-008及Task 4整体不勾选；下一允许核查已有内容编辑和其他页面。

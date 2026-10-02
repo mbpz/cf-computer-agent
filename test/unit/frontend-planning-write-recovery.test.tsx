@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -15,7 +16,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   const complete = () => [...main().querySelectorAll("button")].find(node => node.textContent === "Complete")!;
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
-  async function navigate(path: string) { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function navigate(path: string) { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); }
   async function mount(raw: string | null = null, memberId = "alice") {
     app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"); const path = url.pathname;

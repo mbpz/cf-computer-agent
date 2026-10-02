@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -71,7 +72,7 @@ describe("timeline content editing through real App", () => {
     await click(button("Edit timeline item")); const save = button("Save timeline item"), status = button("Mark done");
     await act(async () => { save.click(); save.click(); status.click(); }); expect(writes).toHaveLength(1); expect(save.disabled).toBe(true);
     expect(field("Timeline title").disabled).toBe(true);
-    await act(async () => { window.history.pushState({}, "", "/settings"); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
     await act(async () => resolve(Response.json({ ...saved, updatedAt: newVersion }))); expect(main().textContent).not.toContain("Stale action"); expect(reads).toBe(1);
   });
   it("keeps the recovery marker across leaving and returning, stores no draft, and recovers with GET only", async () => {
@@ -80,7 +81,7 @@ describe("timeline content editing through real App", () => {
     const key = "memory-garden:planning-write:v1:contributor-route-auditor:TIMELINE:project";
     const raw = app!.browser.sessionStorage.getItem(key)!; expect(raw).toBeTruthy(); expect(raw).not.toContain("SECRET EDIT DRAFT");
     expect(JSON.parse(raw).record).toMatchObject({ id: "row", expectedUpdatedAt: oldVersion });
-    const navigate = async (path: string) => { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); };
+    const navigate = async (path: string) => { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); };
     await navigate("/settings"); await navigate("/projects/project/timeline"); await waitForApp(() => !!button("Edit timeline item"));
     expect(button("Edit timeline item").disabled).toBe(true);
     await act(async () => resolve(Response.json({ ...saved, updatedAt: newVersion })));

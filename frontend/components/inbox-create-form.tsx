@@ -1,3 +1,4 @@
+import { useCreateDraft } from "../lib/use-create-draft";
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
 import { frontendText, type LocaleRuntime } from "../lib/i18n";
@@ -21,27 +22,26 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, isSub
 }) {
   const [stored] = useState<StoredInboxIntent>(() => createMemberId ? loadInboxIntent(createMemberId) : { kind: "blocked" });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
-  const [kind, setKind] = useState<"text" | "link">(stored.kind === "ready" ? stored.intent.kind : "text");
-  const [content, setContent] = useState(stored.kind === "ready" ? stored.intent.content : "");
-  const [sourceUrl, setSourceUrl] = useState(stored.kind === "ready" ? stored.intent.sourceUrl ?? "" : "");
   const acknowledged = useRef(stored.kind === "ready" && stored.acknowledged);
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<InboxCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
+  const draft = useCreateDraft<{ kind: "text" | "link"; content: string; sourceUrl: string }>(
+    { kind: stored.kind === "ready" ? stored.intent.kind : "text", content: stored.kind === "ready" ? stored.intent.content : "", sourceUrl: stored.kind === "ready" ? stored.intent.sourceUrl ?? "" : "" },
+    { kind: "text", content: "", sourceUrl: "" },
+    () => phaseRef.current !== "editing", locale, () => pending || !!isSubmitBlocked?.());
+  const { kind, content, sourceUrl } = draft.fields;
+  const setKind = (value: "text" | "link") => draft.set("kind", value);
+  const setContent = (value: string) => draft.set("content", value);
+  const setSourceUrl = (value: string) => draft.set("sourceUrl", value);
+
   const generation = useRef(0);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
     onCreateLock?.(initialPhase !== "editing");
     return () => { active.current = false; generation.current++; };
-  }, []);
-  useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => {
-      if (phaseRef.current !== "editing") { event.preventDefault(); event.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
   }, []);
   const transition = (next: Phase) => { phaseRef.current = next; setPhase(next); onCreateLock?.(next !== "editing"); };
   const clearStored = () => !createMemberId || !intentRef.current || clearInboxIntent(createMemberId, intentRef.current);
@@ -69,16 +69,17 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, isSub
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; acknowledged.current = false; setContent(""); setSourceUrl(""); setError(false); transition("editing");
+      intentRef.current = null; acknowledged.current = false; draft.reset(); setError(false); transition("editing");
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");
     }
   };
   const submit = async () => {
-    if (pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (draft.isConfirming() || pending || isSubmitBlocked?.() || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
+      const { kind, content, sourceUrl } = draft.current.current;
       const candidate: InboxCreateIntent = { id: crypto.randomUUID(), clientKey: crypto.randomUUID(), kind, content: content.trim(), sourceUrl: kind === "link" ? sourceUrl.trim() : null };
       if (!validInboxIntent(candidate)) { setError(true); return; }
       intentRef.current = Object.freeze(candidate);
@@ -103,14 +104,15 @@ export function InboxCreateForm({ locale, createMemberId, pending = false, isSub
       await readback();
     }
   };
-  const locked = pending || phase !== "editing";
+  const locked = draft.confirming || pending || phase !== "editing";
   return <div className="space-y-3" aria-busy={phase === "writing" || phase === "reading"}>
-    <div className="flex flex-wrap gap-2"><select aria-label={frontendText(locale, "INBOX_KIND")} className="h-10 rounded-md border bg-background px-3 text-sm" value={kind} disabled={locked} onChange={event => setKind(event.currentTarget.value as "text" | "link")}><option value="text">{frontendText(locale, "INBOX_KIND_TEXT")}</option><option value="link">{frontendText(locale, "INBOX_KIND_LINK")}</option></select>{kind === "link" && <Input aria-label={frontendText(locale, "INBOX_SOURCE_URL")} value={sourceUrl} disabled={locked} onChange={event => setSourceUrl(event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_SOURCE_URL")} />}</div>
-    <Textarea aria-label={frontendText(locale, "INBOX_CONTENT")} value={content} disabled={locked} onChange={event => setContent(event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_CONTENT_PLACEHOLDER")} rows={4} />
+    <div className="flex flex-wrap gap-2"><select aria-label={frontendText(locale, "INBOX_KIND")} className="h-10 rounded-md border bg-background px-3 text-sm" value={kind} disabled={locked} onChange={event => draft.edit("kind", event.currentTarget.value as "text" | "link")}><option value="text">{frontendText(locale, "INBOX_KIND_TEXT")}</option><option value="link">{frontendText(locale, "INBOX_KIND_LINK")}</option></select>{kind === "link" && <Input aria-label={frontendText(locale, "INBOX_SOURCE_URL")} value={sourceUrl} disabled={locked} onChange={event => draft.edit("sourceUrl", event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_SOURCE_URL")} />}</div>
+    <Textarea aria-label={frontendText(locale, "INBOX_CONTENT")} value={content} disabled={locked} onChange={event => draft.edit("content", event.currentTarget.value)} placeholder={frontendText(locale, "INBOX_CONTENT_PLACEHOLDER")} rows={4} />
     {phase === "storage-blocked" ? <><p role="alert">{frontendText(locale, "INBOX_CREATE_STORAGE_BLOCKED")}</p><Button type="button" data-create-storage-retry disabled={pending} onClick={reloadStored}>{frontendText(locale, "INBOX_CREATE_STORAGE_RETRY")}</Button></>
       : phase === "unknown" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "INBOX_CREATE_UNKNOWN")}</p><Button type="button" data-create-retry disabled={pending} onClick={() => void submit()}>{frontendText(locale, "INBOX_CREATE_RETRY")}</Button></>
       : phase === "read-failed" ? <><p role="alert" className="text-sm text-destructive">{frontendText(locale, "INBOX_CREATE_READ_FAILED")}</p><Button type="button" data-create-read-retry disabled={pending} onClick={() => { if (phaseRef.current === "read-failed") void readback(); }}>{frontendText(locale, "INBOX_CREATE_READ_RETRY")}</Button></>
       : <Button type="button" disabled={locked || !content.trim() || !onCreate} onClick={() => void submit()}>{frontendText(locale, "INBOX_CAPTURE")}</Button>}
     {error && <p role="alert" className="text-sm text-destructive">{frontendText(locale, "INBOX_ACTION_FAILED")}</p>}
+    {draft.confirmation}
   </div>;
 }

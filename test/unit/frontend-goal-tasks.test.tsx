@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -104,7 +105,7 @@ describe("goal task association journey", () => {
     await act(async () => button("Link", editor()).click());
     const key = Array.from({ length: app!.browser.sessionStorage.length }, (_, i) => app!.browser.sessionStorage.key(i)!).find(key => key.includes("planning-write:"))!;
     const marker = app!.browser.sessionStorage.getItem(key); expect(marker).not.toBeNull();
-    async function navigate(path: string) { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+    async function navigate(path: string) { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); }
     await navigate("/settings"); await act(async () => release()); expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
     await navigate("/goals"); await waitForApp(() => !!main().querySelector("[data-planning-write-recover]"));
     expect(button("Manage task links").disabled).toBe(true); expect(writes).toHaveLength(1);

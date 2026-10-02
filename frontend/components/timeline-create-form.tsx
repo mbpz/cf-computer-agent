@@ -1,3 +1,4 @@
+import { useCreateDraft } from "../lib/use-create-draft";
 import { Plus } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { ApiRequestError } from "../lib/api";
@@ -21,29 +22,28 @@ type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "st
 export function TimelineCreateForm({ locale, createMemberId, createProjectId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: TimelineCreateCallbacks & { locale: LocaleRuntime; pending?: boolean }) {
   const [stored] = useState(() => createMemberId && createProjectId ? loadTimelineIntent(createMemberId, createProjectId) : { kind: "empty" as const });
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
-  const [title, setTitle] = useState(stored.kind === "ready" ? stored.intent.title : "");
-  const [body, setBody] = useState(stored.kind === "ready" ? stored.intent.body : "");
-  const [kind, setKind] = useState<ProjectTimelineKind>(stored.kind === "ready" ? stored.intent.kind : "meeting");
   const localTime = (v: string | null) => v ? new Date(Date.parse(v) - new Date(v).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
-  const [startsAt, setStartsAt] = useState(stored.kind === "ready" ? localTime(stored.intent.startsAt) : "");
-  const [dueAt, setDueAt] = useState(stored.kind === "ready" ? localTime(stored.intent.dueAt) : "");
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<TimelineCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
+  const draft = useCreateDraft<{ title: string; body: string; kind: ProjectTimelineKind; startsAt: string; dueAt: string }>(
+    { title: stored.kind === "ready" ? stored.intent.title : "", body: stored.kind === "ready" ? stored.intent.body : "", kind: stored.kind === "ready" ? stored.intent.kind : "meeting", startsAt: stored.kind === "ready" ? localTime(stored.intent.startsAt) : "", dueAt: stored.kind === "ready" ? localTime(stored.intent.dueAt) : "" },
+    { title: "", body: "", kind: "meeting", startsAt: "", dueAt: "" },
+    () => phaseRef.current !== "editing", locale, () => pending);
+  const { title, body, kind, startsAt, dueAt } = draft.fields;
+  const setTitle = (value: string) => draft.set("title", value);
+  const setBody = (value: string) => draft.set("body", value);
+  const setKind = (value: ProjectTimelineKind) => draft.set("kind", value);
+  const setStartsAt = (value: string) => draft.set("startsAt", value);
+  const setDueAt = (value: string) => draft.set("dueAt", value);
+
   const generation = useRef(0);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
     onCreateLock?.(initialPhase !== "editing");
     return () => { active.current = false; generation.current++; };
-  }, []);
-  useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => {
-      if (phaseRef.current !== "editing") { event.preventDefault(); event.returnValue = ""; }
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
   }, []);
   const transition = (next: Phase) => { phaseRef.current = next; setPhase(next); onCreateLock?.(next !== "editing"); };
   const clearStored = () => !createMemberId || !createProjectId || !intentRef.current || clearTimelineIntent(createMemberId, createProjectId, intentRef.current);
@@ -68,16 +68,17 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       if (!active.current || generation.current !== current) return;
       if (!confirmed) { transition("read-failed"); return; }
       if (!clearStored()) { transition("storage-blocked"); return; }
-      intentRef.current = null; setTitle(""); setBody(""); setStartsAt(""); setDueAt(""); setError(false); transition("editing");
+      intentRef.current = null; draft.reset(); setError(false); transition("editing");
     } catch (cause) {
       if (!active.current || generation.current !== current || denied(cause)) return;
       transition("read-failed");
     }
   };
   const submit = async () => {
-    if (pending || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
+    if (draft.isConfirming() || pending || !onCreate || (phaseRef.current !== "editing" && phaseRef.current !== "unknown")) return;
     const retry = phaseRef.current === "unknown";
     if (!retry) {
+      const { title, body, kind, startsAt, dueAt } = draft.current.current;
       const start = startsAt ? Date.parse(startsAt) : null;
       const due = dueAt ? Date.parse(dueAt) : null;
       if (!title.trim() || title.trim().length > 200 || body.trim().length > 200_000
@@ -104,7 +105,7 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       await readback();
     }
   };
-  const locked = pending || phase !== "editing";
+  const locked = draft.confirming || pending || phase !== "editing";
   const recovery = <div aria-busy={phase === "writing" || phase === "reading"}>
     {phase === "storage-blocked" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_STORAGE_BLOCKED")}</p><Button type="button" disabled={pending} onClick={reloadStored}>{frontendText(locale, "PLANNING_CREATE_STORAGE_RETRY")}</Button></>}
     {phase === "unknown" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_UNKNOWN")}</p><Button type="button" disabled={pending} onClick={() => void submit()}>{frontendText(locale, "PLANNING_CREATE_RETRY")}</Button></>}
@@ -119,26 +120,27 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       <fieldset disabled={locked} className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_KIND")}</span>
-          <select disabled={locked} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={kind} onChange={(event) => setKind(event.currentTarget.value as ProjectTimelineKind)}>
+          <select disabled={locked} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={kind} onChange={(event) => draft.edit("kind", event.currentTarget.value as ProjectTimelineKind)}>
             <option value="meeting">{frontendText(locale, "PROJECT_TIMELINE_KIND_MEETING")}</option>
             <option value="decision">{frontendText(locale, "PROJECT_TIMELINE_KIND_DECISION")}</option>
             <option value="action_item">{frontendText(locale, "PROJECT_TIMELINE_KIND_ACTION")}</option>
             <option value="milestone">{frontendText(locale, "PROJECT_TIMELINE_KIND_MILESTONE")}</option>
           </select>
         </label>
-        <Input disabled={locked} aria-label={frontendText(locale, "PROJECT_TIMELINE_TITLE_FIELD")} value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_TITLE_PLACEHOLDER")} />
-        <Textarea disabled={locked} className="md:col-span-2" aria-label={frontendText(locale, "PROJECT_TIMELINE_BODY_FIELD")} value={body} onChange={(event) => setBody(event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_BODY_PLACEHOLDER")} rows={3} />
+        <Input disabled={locked} aria-label={frontendText(locale, "PROJECT_TIMELINE_TITLE_FIELD")} value={title} onChange={(event) => draft.edit("title", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_TITLE_PLACEHOLDER")} />
+        <Textarea disabled={locked} className="md:col-span-2" aria-label={frontendText(locale, "PROJECT_TIMELINE_BODY_FIELD")} value={body} onChange={(event) => draft.edit("body", event.currentTarget.value)} placeholder={frontendText(locale, "PROJECT_TIMELINE_BODY_PLACEHOLDER")} rows={3} />
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_STARTS_AT")}</span>
-          <Input disabled={locked} type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.currentTarget.value)} />
+          <Input disabled={locked} type="datetime-local" value={startsAt} onChange={(event) => draft.edit("startsAt", event.currentTarget.value)} />
         </label>
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_DUE_AT")}</span>
-          <Input disabled={locked} type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.currentTarget.value)} />
+          <Input disabled={locked} type="datetime-local" value={dueAt} onChange={(event) => draft.edit("dueAt", event.currentTarget.value)} />
         </label>
         <div className="md:col-span-2"><Button type="button" onClick={() => void submit()} disabled={locked || !title.trim() || !onCreate}>{frontendText(locale, "PROJECT_TIMELINE_CREATE")}</Button></div>
       </fieldset>
       {recovery}
     </CardContent>
+    {draft.confirmation}
   </Card>;
 }

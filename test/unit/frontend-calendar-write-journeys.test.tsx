@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -63,7 +64,7 @@ describe("calendar creation and cancellation through App", () => {
     await waitForApp(()=>!main().querySelector("[data-planning-write-recover]"));expect(deletes).toHaveLength(1);expect(main().querySelector('[aria-label="Cancel event"]')).toBeNull();
   });
   const cancelJournal="memory-garden:planning-write:v1:contributor-route-auditor:CALENDAR";
-  async function navigate(path:string) { await act(async()=>{window.history.pushState({},"",path);window.dispatchEvent(new app!.browser.PopStateEvent("popstate"));}); }
+  async function navigate(path:string) { await act(async()=>{expect(writeWorkspaceHistory("push",path)).toBe("committed");}); }
   it("keeps cancellation write-free and journal-free on dismiss and route exit",async()=>{
     posts=[];deletes=[];await mount();await draft();await click(button("Add event"));await waitForApp(()=>!!main().querySelector('[aria-label="Cancel event"]'));
     const trigger=main().querySelector<HTMLElement>('[aria-label="Cancel event"]')!;trigger.focus();await click(trigger);

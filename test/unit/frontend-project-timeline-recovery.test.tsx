@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { mountAuthenticatedApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const stamp = "2026-09-27T00:00:00.000Z";
@@ -40,13 +41,15 @@ describe("parameterized project timeline through real App", () => {
     const node = title(); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
     await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[key].onChange({ currentTarget: { value: text } }));
   }
-  async function navigate(id: string) { await act(async () => { window.history.pushState({}, "", `/projects/${id}/timeline`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function navigate(id: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/projects/${id}/timeline`)).toBe("committed"); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
   it("isolates project navigation, clears the draft and ignores late old-project reads", async () => {
     await mount(); await fill("Private A draft");
     let resolve!: (response: Response) => void;
     override = (url) => url.pathname === "/api/projects/a/timeline" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await click(pageButton());
+    expect(main().querySelector('[role="alertdialog"]')).toBeTruthy();
+    await click(main().querySelector<HTMLButtonElement>('[data-confirm-action]')!);
     const pending = requests.findLast(r => r.url.pathname === "/api/projects/a/timeline")!;
     await navigate("b"); await waitForApp(() => main().textContent!.includes("b first"));
     expect(title().value).toBe(""); expect(pending.init?.signal?.aborted).toBe(true);
@@ -184,11 +187,12 @@ describe("parameterized project timeline through real App", () => {
     await click(button("Add to timeline")); await waitForApp(() => !!button("Try timeline again"));
     expect(title()).toBeNull(); expect(main().textContent).not.toContain("a first"); expect(writes()).toHaveLength(1);
   });
-  it("ignores a late creation receipt after changing projects", async () => {
+  it("blocks project changes during creation and ignores its late receipt after forced teardown", async () => {
     await mount(); await fill("Only for A"); let resolve!: (response: Response) => void;
     override = (_url, init) => init?.method === "POST" ? new Promise<Response>(done => { resolve = done; }) : undefined;
     await click(button("Add to timeline")); const body = JSON.parse(String(writes()[0].init?.body));
-    await navigate("b"); await waitForApp(() => main().textContent!.includes("b first")); const count = requests.length;
+    await act(async () => expect(writeWorkspaceHistory("push", "/projects/b/timeline")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/projects/b/timeline"); await waitForApp(() => main().textContent!.includes("b first")); const count = requests.length;
     await act(async () => resolve(Response.json({ item: { ...item("a"), ...body }, created: true })));
     expect(requests).toHaveLength(count); expect(title().value).toBe(""); expect(main().textContent).toContain("Project b");
   });

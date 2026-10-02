@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { mountApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 describe("inbox stable capture through App", () => {
@@ -22,7 +23,7 @@ describe("inbox stable capture through App", () => {
     });
   }
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
-  async function navigate(path: string) { await act(async () => { window.history.pushState({}, "", path); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
+  async function forceRemount(path: string) { await forceRemountAppAt(app!, path); }
   async function mount(memberId = "contributor-route-auditor", saved?: Record<string, string>) {
     bodies = []; reads = 0; readFailure = false; respond = receipt;
     app = await mountApp({ url: "https://app.test/inbox", configureBrowser: browser => { for (const [key, value] of Object.entries(saved ?? {})) browser.sessionStorage.setItem(key, value); }, fetch: async (input, init) => {
@@ -73,14 +74,14 @@ describe("inbox stable capture through App", () => {
     await mount(); readFailure = true;
     await change("Acknowledged note"); await click(create());
     expect(button("[data-create-read-retry]")).toBeTruthy(); expect(button("[data-create-retry]")).toBeNull();
-    readFailure = false; await navigate("/unknown"); await navigate("/inbox"); await waitForApp(() => !!content());
+    readFailure = false; await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
     expect(content().value).toBe("Acknowledged note"); expect(button("[data-create-read-retry]")).toBeTruthy();
     await click(button("[data-create-read-retry]")); await waitForApp(() => content().value === ""); expect(bodies).toHaveLength(1);
   });
   it("unknown creation survives leaving and never automatically replays", async () => {
     await mount(); respond = () => { throw new TypeError("lost transport"); };
     await change("Surviving intent"); await click(create()); const original = bodies[0];
-    await navigate("/unknown"); await navigate("/inbox"); await waitForApp(() => !!content());
+    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
     expect(content().value).toBe("Surviving intent"); expect(bodies).toHaveLength(1);
     respond = receipt; await click(button("[data-create-retry]")); await waitForApp(() => content().value === ""); expect(bodies).toEqual([original, original]);
   });
@@ -89,11 +90,13 @@ describe("inbox stable capture through App", () => {
     await change("Do not lose"); await click(create());
     expect(bodies).toEqual([]); expect(content().value).toBe("Do not lose"); expect(button("[data-create-storage-retry]")).toBeTruthy();
   });
-  it("late creation after route leave does not read or alter the new route", async () => {
+  it("late creation after forced teardown does not read or alter the new route", async () => {
     await mount(); let resolve!: (response: Response) => void; respond = () => new Promise(done => { resolve = done; });
-    await change("Late intent"); await click(create()); await navigate("/unknown");
+    await change("Late intent"); await click(create());
+    await act(async () => expect(writeWorkspaceHistory("push", "/unknown")).toBe("blocked"));
+    await forceRemount("/unknown");
     const before = reads; await act(async () => resolve(receipt(bodies[0]!))); expect(reads).toBe(before);
-    await navigate("/inbox"); await waitForApp(() => !!content());
+    await forceRemount("/inbox"); await waitForApp(() => !!content());
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
   });
   it("recovers the exact unknown intent in a fresh browser realm, isolated from another member", async () => {

@@ -1,7 +1,8 @@
 // @vitest-environment node
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { mountAuthenticatedApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
@@ -45,15 +46,16 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
   afterEach(async () => { await app?.unmount(); app = undefined; });
 
 
-  async function leaveAndReturn() {
-    await act(async () => { app!.browser.history.pushState(null, "", "/not-a-route"); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
-    await act(async () => { app!.browser.history.pushState(null, "", `/${kind}`); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+  async function forceLeaveAndReturn() {
+    await forceRemountAppAt(app!, "/not-a-route");
+    await forceRemountAppAt(app!, `/${kind}`);
     await waitForApp(() => !!title());
   }
-  it("restores an uncertain creation on route return without automatically writing", async () => {
+
+  it("restores an uncertain creation after forced remount without automatically writing", async () => {
     await mount(); respond = () => apiError(503, "UNAVAILABLE", true);
     await change("Durable original"); await click(create()); const original = bodies[0];
-    await leaveAndReturn();
+    await forceLeaveAndReturn();
     expect(title().value).toBe("Durable original"); expect(title().disabled).toBe(true);
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
     respond = receipt; await click(button("[data-create-retry]"));
@@ -63,7 +65,7 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     await mount(); readFailure = true;
     await change("Already created"); await click(create());
     expect(button("[data-create-read-retry]")).toBeTruthy();
-    readFailure = false; await leaveAndReturn();
+    readFailure = false; await forceLeaveAndReturn();
     expect(button("[data-create-read-retry]")).toBeTruthy(); expect(button("[data-create-retry]")).toBeNull();
     await click(button("[data-create-read-retry]"));
     await waitForApp(() => title().value === ""); expect(bodies).toHaveLength(1);
@@ -74,11 +76,11 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     expect(bodies).toHaveLength(0); expect(title().disabled).toBe(true); expect(button("[data-create-storage-retry]")).toBeTruthy();
   });
 
-  it("keeps a pending intent through route exit and ignores its late acknowledgement", async () => {
+  it("keeps a pending intent through forced teardown and ignores its late acknowledgement", async () => {
     await mount(); let release!: (response: Response) => void;
     respond = () => new Promise(resolve => { release = resolve; });
     await change("Pending across route exit"); await click(create()); const original = bodies[0]!;
-    await leaveAndReturn(); expect(button("[data-create-retry]")).toBeTruthy();
+    await forceLeaveAndReturn(); expect(button("[data-create-retry]")).toBeTruthy();
     await act(async () => release(receipt(original)));
     expect(button("[data-create-retry]")).toBeTruthy(); expect(bodies).toHaveLength(1);
     respond = receipt; await click(button("[data-create-retry]"));
@@ -185,11 +187,12 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} stable crea
     const complete = new app!.browser.Event("beforeunload", { cancelable: true });
     app!.browser.dispatchEvent(complete); expect(complete.defaultPrevented).toBe(false);
   });
-  it("never starts readback for a late creation receipt after route exit", async () => {
+  it("never starts readback for a late creation receipt after forced teardown", async () => {
     await mount(); let resolve!: (value: Response) => void;
     respond = () => new Promise((done) => { resolve = done; });
     await change("Leave pending"); await click(create());
-    await act(async () => { app!.browser.history.pushState(null, "", "/goals-other"); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate")); });
+    await act(async () => expect(writeWorkspaceHistory("push", "/goals-other")).toBe("blocked"));
+    await forceRemountAppAt(app!, "/goals-other");
     const readsBefore = reads;
     await act(async () => { resolve(receipt(bodies[0]!)); await new Promise((done) => setTimeout(done, 0)); });
     expect(reads).toBe(readsBefore); expect(bodies).toHaveLength(1);

@@ -63,6 +63,7 @@
 - [x] A04 将本轮账户/导航/品牌修复映射到原 R1 条目，仅提升已有证据的子项。
   - 2026-09-28 将 `937ea87` 的账户/导航/品牌修复逐项映射到 R1-005/006/007/009–014 与 WB-002/WB-SETTINGS；当前 11 文件 95 项回归通过。见[映射表及剩余边界](./2026-09-28-functional-closure-reconciliation.md)。R1 原子整体及交付总账的 release/acceptance 不提升。
 - [ ] A05 逐页核对弹层、危险操作确认、表单 pending/dirty、重复点击和异步状态。
+  - [x] 2026-10-02 收件箱/目标/项目/日程/项目时间线创建表单接入同步草稿离页确认，未决创建与读回拦截；新增60项、联合41文件1053/1053及受影响类型/UI/双语验证通过。旧测试使用正式导航入口，强制卸载恢复与原生验收明确区分。见[创建表单证据](./navigation-create-form-protection-evidence.md)。父项保持开放，下一核查已有内容编辑与其余逐页边界。
   - [x] 2026-10-02 注销同批双击防重及失败显式重试；本地模拟身份的匿名Back/Forward、B身份旧历史与根入口Forward保留有原生证据。23文件549/549、清单/夹具17/17通过；额外严格App类型检查与基线同为35条既有诊断，未冒充通过。见[注销与身份证据](./navigation-logout-identity-evidence.md)。真实双账号/键盘触控/全页审计仍开放。
   - [x] 2026-10-02 刷新保留历史夹具、fallback新epoch回归、dirty/pending/unknown六组原生beforeunload取消保留及刷新后重复Back/确认/Forward实测；5文件179/179与夹具5/5通过。见[document边界证据](./navigation-history-document-evidence.md)。键盘/触控、完整版本、强制离开与逐页其余审计仍开放，父项不关闭。
   - [x] 2026-10-02 共享history运行时、获准位置订阅、失败恢复提示及注销后迟到命令隔离；23文件545/545与类型/UI/双语通过，内置浏览器验证Back取消/确认、Forward、pending/unknown保留。见[运行时证据](./navigation-history-runtime-evidence.md)。刷新后历史/跨document/键盘触控仍开放，A05不关闭。

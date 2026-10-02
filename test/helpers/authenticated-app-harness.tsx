@@ -1,6 +1,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { App } from "../../frontend/app";
 
 const vmContexts = new WeakSet<object>();
@@ -142,4 +143,15 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     if (predicate()) return;
   }
   throw new Error("authenticated App condition not reached");
+}
+
+/** Simulated forced teardown for recovery/late-response tests, NOT native leave acceptance.
+ * Ordinary navigation tests must use the navigation gate instead of this helper. */
+export async function forceRemountAppAt(app: MountedApp, path: string): Promise<void> {
+  await act(async () => app.root.render(null));
+  await act(async () => {
+    if (writeWorkspaceHistory("push", path) !== "committed") throw new Error("Unmounted App still blocks test remount");
+    app.root.render(<App />);
+  });
+  await waitForApp(() => app.container.querySelector("main") !== null);
 }
