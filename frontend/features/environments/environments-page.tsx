@@ -33,7 +33,18 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
   return <section data-environments-page className="mx-auto max-w-5xl space-y-6">
     <header><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></header>
-    {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p>{state.pending && <Button data-environment-retry className="mt-3" disabled={state.writing} onClick={()=>void run(()=>manager.retry())}>{t('ENV_RETRY_WRITE')}</Button>}</div>}
+    {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
+    {state.pending && <div className="space-y-3 rounded-md border p-4" aria-busy={state.writing}>
+      <p>{t('ENV_OPERATION_ID')}: <code data-environment-operation-id className="break-all">{state.pending.operationId}</code></p>
+      <div className="flex flex-wrap gap-3"><Button data-environment-lookup disabled={state.writing} onClick={()=>void run(()=>manager.lookup())}>{t('ENV_LOOKUP_RESULT')}</Button><Button data-environment-retry variant="outline" disabled={state.writing} onClick={()=>void run(()=>manager.retry())}>{t('ENV_RETRY_WRITE')}</Button></div>
+    </div>}
+    {state.confirmed && <div data-environment-confirmed-result role="status" className="space-y-2 rounded-md border p-4">
+      <p>{t('ENV_CONFIRMED_RESULT')}</p>
+      <p>{t('ENV_OPERATION_ID')}: <code className="break-all">{state.confirmed.operationId}</code></p>
+      <p>{t(state.confirmed.kind === 'create' ? 'ENV_CREATE' : state.confirmed.kind === 'rename' ? 'ENV_RENAME' : 'ENV_DELETE')} · <code className="break-all">{state.confirmed.environmentId}</code> · {t('ENV_VERSION')} {state.confirmed.version}</p>
+      {state.confirmed.name && <p>{t('ENV_NAME')}: {state.confirmed.name}</p>}
+      {state.confirmed.deletedAt && <p>{t('ENV_DELETED_AT')}: {state.confirmed.deletedAt}</p>}
+    </div>}
     <Card><CardHeader><CardTitle>{t('ENV_CREATE')}</CardTitle></CardHeader><CardContent>
       <form data-environment-create className="grid gap-3 sm:grid-cols-2" onSubmit={event=>{event.preventDefault();void run(()=>manager.create({name:title,type,taskId}),()=>{setTitle('');setTaskId('');});}}>
         <label className="space-y-1 text-sm">{t('ENV_NAME')}<Input name="name" required maxLength={120} value={title} disabled={blocked} onChange={event=>setTitle(event.target.value)} /></label>

@@ -42,6 +42,12 @@ export async function routeEnvironmentsApi(
     const page = parseNumberedPageRequest(url, [], "ENVIRONMENT_QUERY_INVALID");
     return jsonResponse(await services.environments.tombstones(memberId, page), 200, context.requestId);
   }
+  const exact = /^\/api\/environments\/operations\/([^/]+)$/u.exec(url.pathname);
+  if (exact) {
+    requireNoQuery(url);
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    return jsonResponse(await services.environments.operationResult(memberId, decodePathId(exact[1]!)), 200, context.requestId);
+  }
   const history = /^\/api\/environments\/([^/]+)\/operations$/u.exec(url.pathname);
   if (history) {
     if (request.method === "POST") {

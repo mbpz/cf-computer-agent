@@ -1,4 +1,4 @@
-import type { EnvironmentCreateResult, EnvironmentDeleteResult, EnvironmentLifecyclePosition, EnvironmentMetadata, EnvironmentOperation, EnvironmentTombstone, EnvironmentType } from "../../shared/environments";
+import type { EnvironmentCreateResult, EnvironmentDeleteResult, EnvironmentLifecyclePosition, EnvironmentMetadata, EnvironmentOperation, EnvironmentOperationResult, EnvironmentTombstone, EnvironmentType } from "../../shared/environments";
 import { recordEnvironmentEvent, type EnvironmentReportAttempt } from "./lifecycle-repository";
 import { AppError } from "../http";
 import { normalizeNumberedPageRequest, pageOffset, type NumberedPage, type NumberedPageRequest } from "../pagination";
@@ -145,6 +145,16 @@ export class EnvironmentsRepository {
     if (row.version !== version) throw new AppError("ENVIRONMENT_VERSION_CONFLICT", "Environment changed; reload before retrying", 409);
     if (taskId && !results[offset + 2]?.results[0]) throw new AppError("ENVIRONMENT_TASK_NOT_FOUND", "Task not found", 404);
     throw new AppError("ENVIRONMENT_WRITE_FAILED", "Environment mutation was not recorded", 500, true);
+  }
+
+  async operationResult(memberId: string, operationId: string): Promise<EnvironmentOperationResult> {
+    // Deliberately independent of the live environment: a successful deletion
+    // must remain queryable. Membership comes only from the authenticated caller.
+    const receipt = await this.db.prepare(`SELECT kind, environment_id, response_json FROM environment_operation_receipts
+      WHERE member_id = ? AND operation_id = ? AND kind IN ('environment.create', 'environment.update', 'environment.delete')`)
+      .bind(memberId, operationId).first<{kind: EnvironmentOperationResult["kind"]; environment_id: string; response_json: string}>();
+    if (!receipt) throw new AppError("ENVIRONMENT_OPERATION_NOT_FOUND", "Operation result not found", 404);
+    return {operationId, kind: receipt.kind, environmentId: receipt.environment_id, result: JSON.parse(receipt.response_json)} as EnvironmentOperationResult;
   }
 
   async operations(memberId: string, id: string, request: NumberedPageRequest): Promise<NumberedPage<EnvironmentOperation>> {

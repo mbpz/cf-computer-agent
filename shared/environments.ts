@@ -46,3 +46,12 @@ export interface EnvironmentOperation {
   source?: "browser_report";
   lifecycle?: EnvironmentLifecyclePosition;
 }
+
+/** Immutable result of one accepted metadata operation, not current VM state. */
+export type EnvironmentOperationResult = {
+  operationId: string;
+  environmentId: string;
+} & (
+  | {kind: "environment.create" | "environment.update"; result: EnvironmentCreateResult}
+  | {kind: "environment.delete"; result: EnvironmentDeleteResult}
+);

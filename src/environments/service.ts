@@ -53,6 +53,10 @@ export class EnvironmentsService {
     });
   }
 
+  operationResult(memberId: string, operationId: string) {
+    return this.repository.operationResult(memberId, boundedId(operationId));
+  }
+
   operations(memberId: string, id: string, page: NumberedPageRequest): Promise<NumberedPage<EnvironmentOperation>> {
     return this.repository.operations(memberId, id, page);
   }

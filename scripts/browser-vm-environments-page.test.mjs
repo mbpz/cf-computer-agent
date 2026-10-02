@@ -174,3 +174,109 @@ test('account cancellation prevents a late mutation response from repopulating d
  let resolve;const {owner,manager}=setup(()=>new Promise(r=>resolve=r));const write=manager.create({name:'Linux',type:'personal'});owner.dispose();
  resolve(Response.json({environment:env}));await write;assert.equal(manager.getSnapshot().closed,true);assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().items.length,0);
 });
+
+for (const kind of ['create','rename','delete']) test(`exact ${kind} lookup resolves only its frozen receipt and sends no second mutation`,async()=>{
+ let intent,writes=0;const reads=[];
+ const result=kind==='delete'?{tombstone:{environmentId:env.id,version:2,deletedAt:env.updatedAt}}:{environment:{...env,name:kind==='rename'?'Renamed':'Linux',version:kind==='rename'?2:1}};
+ const {manager}=setup(async(path,init)=>{
+  if(init.method!=='GET'){writes++;intent=JSON.parse(init.body);throw Error('lost');}
+  reads.push([path,init.cache,init.redirect]);
+  if(path.startsWith('/api/environments/operations/'))return Response.json({operationId:intent.operationId,kind:kind==='rename'?'environment.update':`environment.${kind}`,environmentId:env.id,result});
+  return Response.json(page());
+ });
+ await(kind==='create'?manager.create({name:'Linux',type:'personal'}):kind==='rename'?manager.rename(env,'Renamed'):manager.remove(env));
+ assert.equal(manager.getSnapshot().pending.operationId,intent.operationId);
+ await manager.lookup();assert.equal(writes,1);assert.equal(manager.getSnapshot().pending,null);
+ assert.deepEqual(reads[0],[`/api/environments/operations/${intent.operationId}`,'no-store','error']);
+ assert.equal(manager.getSnapshot().confirmed.operationId,intent.operationId);assert.equal(manager.getSnapshot().confirmed.environmentId,env.id);
+ assert.equal(manager.getSnapshot().confirmed.version,kind==='create'?1:2);
+});
+for(const failure of ['missing','transport','wrong-id','wrong-kind','wrong-target','wrong-member','wrong-payload']) test(`exact lookup ${failure} retains the same pending intent`,async()=>{
+ let op;const {manager}=setup(async(path,init)=>{
+  if(init.method!=='GET'){op=JSON.parse(init.body).operationId;throw Error('lost');}
+  if(failure==='missing')return Response.json({error:{code:'NOT_FOUND',message:'missing'}},{status:404});
+  if(failure==='transport')throw Error('offline');
+  return Response.json({operationId:failure==='wrong-id'?'other':op,kind:failure==='wrong-kind'?'environment.delete':'environment.update',environmentId:failure==='wrong-target'?'other':env.id,result:{environment:{...env,name:failure==='wrong-payload'?'Other':'Renamed',version:2,memberId:failure==='wrong-member'?'other':env.memberId}}});
+ });
+ await manager.rename(env,'Renamed');const pending=manager.getSnapshot().pending;
+ await manager.lookup();assert.equal(manager.getSnapshot().pending,pending);assert.equal(manager.getSnapshot().writing,false);
+ assert.equal(manager.getSnapshot().error,failure==='missing'?'RESULT_NOT_FOUND':'RESULT_UNKNOWN');
+});
+test('lookup and retry are mutually exclusive and an account close rejects late query results',async()=>{
+ let resolve,op,writes=0;const {owner,manager}=setup(async(path,init)=>{
+  if(init.method!=='GET'){writes++;op=JSON.parse(init.body).operationId;throw Error('lost');}
+  return new Promise(r=>resolve=r);
+ });
+ await manager.create({name:'Linux',type:'personal'});const lookup=manager.lookup();
+ await assert.rejects(manager.retry(),/WRITE_PENDING/);await assert.rejects(manager.lookup(),/WRITE_PENDING/);
+ owner.dispose();resolve(Response.json({operationId:op,kind:'environment.create',environmentId:env.id,result:{environment:env}}));await lookup;
+ assert.equal(writes,1);assert.equal(manager.getSnapshot().closed,true);assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().items.length,0);
+});
+test('actual App exposes frozen operation ID and explicit read-only result lookup',async t=>{
+ let op,writes=0,queries=0;const {host,window}=await renderApp(t,async(path,init)=>{
+  if(init.method!=='GET'){writes++;op=JSON.parse(init.body).operationId;throw Error('lost');}
+  if(path.startsWith('/api/environments/operations/')){queries++;return Response.json({operationId:op,kind:'environment.create',environmentId:env.id,result:{environment:env}});}
+  return Response.json(page());
+ });
+ const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Linux');
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(host.querySelector('[data-environment-operation-id]')?.textContent,op);assert.equal(queries,0);
+ await act(async()=>host.querySelector('[data-environment-lookup]').click());
+ assert.equal(queries,1);assert.equal(writes,1);assert.equal(host.querySelector('[data-environment-lookup]'),null);
+ const receipt=host.querySelector('[data-environment-confirmed-result]');assert.ok(receipt);assert.ok(receipt.textContent.includes(op));assert.ok(receipt.textContent.includes(env.id));assert.ok(receipt.textContent.includes('Linux'));
+});
+
+for(const status of [401,403]) test(`exact lookup ${status} revokes account and clears private pending data`,async()=>{
+ const {owner,manager}=setup(async(path,init)=>{
+  if(init.method!=='GET')throw Error('lost');
+  return Response.json({error:{code:'DENIED',message:'denied'}},{status});
+ });
+ await manager.create({name:'Linux',type:'personal'});await manager.lookup();
+ assert.equal(owner.signal.aborted,true);assert.equal(manager.getSnapshot().pending,null);assert.deepEqual(manager.getSnapshot().items,[]);
+});
+test('not-found lookup then explicit retry keeps the identical operation ID and full request',async()=>{
+ const bodies=[];const {manager}=setup(async(path,init)=>{
+  if(path.startsWith('/api/environments/operations/'))return Response.json({error:{code:'NOT_FOUND',message:'missing'}},{status:404});
+  if(init.method==='GET')return Response.json(page());
+  bodies.push(init.body);if(bodies.length===1)throw Error('lost');return Response.json({environment:env});
+ });
+ await manager.create({name:'Linux',type:'personal'});const intent=manager.getSnapshot().pending;
+ await manager.lookup();assert.equal(manager.getSnapshot().pending,intent);assert.equal(bodies.length,1);
+ await manager.retry();assert.equal(bodies.length,2);assert.equal(bodies[1],bodies[0]);assert.equal(manager.getSnapshot().pending,null);
+});
+test('actual Worker/D1 exact lookup recovers committed create rename and delete without replaying writes',async t=>{
+ const {fixture,origin}=await import('./helpers/connector-authority-fixture.mjs');const f=await fixture(t);
+ const owner=createAccountNetworkOwner({origin,memberId:'member-a'});t.after(()=>owner.dispose());
+ let writes=0;const queries=[];
+ const manager=createManager(owner,async(path,init)=>{
+  const response=await f.requester(path,init);
+  if(init.method!=='GET'){writes++;assert.ok(response.ok);await response.body.cancel();throw Error('committed response lost');}
+  if(path.startsWith('/api/environments/operations/'))queries.push(path);
+  return response;
+ });
+ await manager.create({name:'Exact D1',type:'personal'});const first=manager.getSnapshot().pending.operationId;
+ await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,1);
+ let item=manager.getSnapshot().items.find(x=>x.name==='Exact D1');assert.ok(item);assert.equal(item.version,1);
+ await manager.rename(item,'Renamed exact D1');const second=manager.getSnapshot().pending.operationId;
+ await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,2);
+ item=manager.getSnapshot().items.find(x=>x.id===item.id);assert.equal(item.version,2);assert.equal(item.name,'Renamed exact D1');
+ await manager.remove(item);const third=manager.getSnapshot().pending.operationId;
+ await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,3);assert.equal(manager.getSnapshot().pending,null);
+ assert.deepEqual(queries,[first,second,third].map(id=>`/api/environments/operations/${id}`));
+ assert.equal(new Set([first,second,third]).size,3);
+ assert.equal(await f.db.prepare('SELECT COUNT(*) AS n FROM browser_environments WHERE id=?').bind(item.id).first('n'),0);
+ assert.equal(await f.db.prepare('SELECT COUNT(*) AS n FROM environment_operation_receipts WHERE environment_id=?').bind(item.id).first('n'),3);
+ const response=await f.requester(`/api/environments/operations/${first}`,{method:'GET',credentials:'same-origin',redirect:'error',cache:'no-store'});
+ assert.equal(response.status,200);const receipt=await response.json();assert.equal(receipt.result.environment.name,'Exact D1');assert.equal(receipt.result.environment.version,1);
+});
+
+test('verified historical receipt survives a failed list refresh but is cleared when the account closes',async()=>{
+ let op;const {owner,manager}=setup(async(path,init)=>{
+  if(init.method!=='GET'){op=JSON.parse(init.body).operationId;throw Error('lost');}
+  if(path.startsWith('/api/environments/operations/'))return Response.json({operationId:op,kind:'environment.create',environmentId:env.id,result:{environment:env}});
+  return Response.json({error:{code:'UNAVAILABLE',message:'list unavailable'}},{status:503});
+ });
+ await manager.create({name:'Linux',type:'personal'});await manager.lookup();
+ assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().confirmed.operationId,op);assert.equal(manager.getSnapshot().error,'READ_FAILED');
+ owner.dispose();assert.equal(manager.getSnapshot().confirmed,null);assert.deepEqual(manager.getSnapshot().items,[]);
+});

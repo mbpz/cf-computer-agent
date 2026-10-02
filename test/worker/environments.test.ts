@@ -35,6 +35,50 @@ describe("private browser environment metadata HTTP/D1 contract", () => {
     denied = (await sessions.create((await members.findByIdentitySubject("subject-denied"))!)).token;
   });
 
+  it("looks up immutable metadata receipts by member and operation, even after deletion, without writing", async () => {
+    const created = await (await create(a)).json() as Created;
+    const id = created.environment.id;
+    const updated = await (await api(`/api/environments/${id}`, a, {method:"PATCH",body:JSON.stringify({operationId:"rename-1",version:1,name:"Renamed"})})).json();
+    const removed = await (await api(`/api/environments/${id}`, a, {method:"DELETE",body:JSON.stringify({operationId:"delete-1",version:2})})).json();
+    const before = await env.DB.prepare("SELECT * FROM environment_operation_receipts ORDER BY sequence").all();
+    for (const [operationId,kind,result] of [["create-1","environment.create",created],["rename-1","environment.update",updated],["delete-1","environment.delete",removed]]) {
+      const response = await api(`/api/environments/operations/${operationId}`,a);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({operationId,kind,environmentId:id,result});
+    }
+    expect((await env.DB.prepare("SELECT * FROM environment_operation_receipts ORDER BY sequence").all()).results).toEqual(before.results);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM browser_environments").first("n")).toBe(0);
+  });
+
+  it("isolates exact receipt queries by current member and capability", async () => {
+    const left = await (await create(a)).json() as Created;
+    expect((await api("/api/environments/operations/create-1",b)).status).toBe(404);
+    expect((await api("/api/environments/operations/missing",a)).status).toBe(404);
+    const right = await (await create(b)).json() as Created;
+    expect(await (await api("/api/environments/operations/create-1",b)).json()).toMatchObject({environmentId:right.environment.id,result:right});
+    expect(right.environment.id).not.toBe(left.environment.id);
+    expect((await api("/api/environments/operations/create-1",denied)).status).toBe(403);
+    expect((await api("/api/environments/operations/create-1","")).status).toBe(401);
+  });
+
+  it("does not expose lifecycle reports as metadata results and honors a revoked role", async () => {
+    await create(a);
+    await env.DB.prepare(`INSERT INTO environment_operation_receipts
+      (member_id,operation_id,kind,request_hash,environment_id,claim_id,response_json,created_at)
+      SELECT member_id,'lifecycle-only','environment.lifecycle',request_hash,environment_id,'lifecycle-claim','{}',created_at
+      FROM environment_operation_receipts WHERE member_id='member-a' AND operation_id='create-1'`).run();
+    expect((await api("/api/environments/operations/lifecycle-only",a)).status).toBe(404);
+    await env.DB.prepare("DELETE FROM role_members WHERE member_id='member-a'").run();
+    expect((await api("/api/environments/operations/create-1",a)).status).toBe(403);
+  });
+
+  it("rejects query overrides, malformed IDs and mutation methods on the exact read endpoint", async () => {
+    for (const query of ["?memberId=member-b","?page=1","?operationId=other"]) expect((await api(`/api/environments/operations/create-1${query}`,a)).status).toBe(400);
+    expect((await api("/api/environments/operations/bad%20id",a)).status).toBe(400);
+    expect((await api("/api/environments/operations/create-1",a,{method:"POST",body:"{}"})).status).toBe(405);
+  });
+
   it.each(["personal", "temporary"])("creates %s metadata without claiming a Linux runtime is running", async (type) => {
     const response = await create(a, { type });
     expect(response.status).toBe(201);

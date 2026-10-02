@@ -7,7 +7,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 自定义组件回调可能是状态通知而非用户操作；spread、动态菜单数据、跨组件条件传播、门户/第三方控件、createElement/innerHTML 动态生成的控件及 CSS 可见性需人工展开。未求值条件，不承诺列出所有运行时状态组合。
 运行 `npm run audit:frontend-operations` 验证无漂移；只有有意更新证据才运行 `npm run inventory:frontend-operations`。
 
-源码文件：237；操作/转发候选：1024。无候选文件也逐一列出，防止静默遗漏扫描范围。
+源码文件：237；操作/转发候选：1026。无候选文件也逐一列出，防止静默遗漏扫描范围。
 
 | 源文件 | 候选数 |
 | --- | ---: |
@@ -92,7 +92,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | frontend/features/environments/connector-session.mjs | 1 |
 | frontend/features/environments/deletion-reconciler.ts | 0 |
 | frontend/features/environments/environment-manager.ts | 2 |
-| frontend/features/environments/environments-page.tsx | 28 |
+| frontend/features/environments/environments-page.tsx | 30 |
 | frontend/features/environments/files/asset-import-panel.tsx | 23 |
 | frontend/features/environments/files/asset-import.ts | 0 |
 | frontend/features/environments/files/file-manager.mjs | 0 |
@@ -272,7 +272,7 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | /my-submissions | frontend/app.tsx#MySubmissionsRoute | 37 | 无（不代表动态边界已核对） |
 | /tasks | frontend/app.tsx#TasksRoute; frontend/lib/tasks-data.ts#*; frontend/pages/tasks/task-editor.tsx#TaskEditor | 96 | 无（不代表动态边界已核对） |
 | /boards | frontend/app.tsx#BoardsRoute | 38 | 无（不代表动态边界已核对） |
-| /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 40 | 无（不代表动态边界已核对） |
+| /environments | frontend/features/environments/environments-page.tsx#EnvironmentsPage; frontend/features/environments/environment-manager.ts#getEnvironmentManager | 42 | 无（不代表动态边界已核对） |
 | /settings | frontend/pages/settings-page.tsx#SettingsPage | 10 | 无（不代表动态边界已核对） |
 | /admin | frontend/pages/admin/admin-dashboard-route.tsx#AdminDashboardRoute | 12 | 无（不代表动态边界已核对） |
 | /admin/submissions | frontend/app.tsx#ReviewQueueRoute | 69 | 无（不代表动态边界已核对） |
@@ -994,8 +994,8 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 
 | 位置 / 所有者 | 控件 / 事件 / 标签 | handler 或导航 | 状态 / 二级操作上下文 |
 | --- | --- | --- | --- |
-| 36:3 createManager | owner.signal.addEventListener  | 'abort', close, {once: true} |  |
-| 45:51 createManager | signal.addEventListener  | 'abort', abort, {once: true} |  |
+| 37:3 createManager | owner.signal.addEventListener  | 'abort', close, {once: true} |  |
+| 46:51 createManager | signal.addEventListener  | 'abort', abort, {once: true} |  |
 
 ## frontend/features/environments/environments-page.tsx
 
@@ -1004,31 +1004,33 @@ JSON 保留完整属性、handler、条件分支/重复模板、弹层祖先和�
 | 15:96 EnvironmentsPage | p frontendText(locale,'ENV_FORBIDDEN') |  | {"kind":"branch","expression":"!routeAccessAllowed(session,{capability:null,requiredPermission:'workspace.vm'})","branch":"true"} |
 | 33:26 EnvironmentView | section t('ENV_ACCOUNT_CLOSED') |  | {"kind":"branch","expression":"state.closed","branch":"true"} |
 | 36:37 EnvironmentView | div  |  | {"kind":"logical","expression":"(state.error &#124;&#124; localError)","operator":"&&"}; earlier return: state.closed |
-| 36:170 EnvironmentView | Button t('ENV_RETRY_WRITE') | onClick=()=&gt;void run(()=&gt;manager.retry()) | disabled=state.writing; {"kind":"logical","expression":"(state.error &#124;&#124; localError)","operator":"&&"}; {"kind":"logical","expression":"state.pendin… |
-| 38:7 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();void run(()=&gt;manager.create({name:title,type,taskId}),()=&gt;{setTitle('');setTaskId('');});} | earlier return: state.closed |
-| 39:61 EnvironmentView | Input  | onChange=event=&gt;setTitle(event.target.value) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
-| 40:61 EnvironmentView | Select  | onChange=event=&gt;setType(event.target.value as EnvironmentType) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
-| 40:178 EnvironmentView | option t('ENV_PERSONAL') |  | {"kind":"container","tag":"form","attributes":{}}; {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; earlier return: state.closed |
-| 40:231 EnvironmentView | option t('ENV_TEMPORARY') |  | {"kind":"container","tag":"form","attributes":{}}; {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; earlier return: state.closed |
-| 41:61 EnvironmentView | Input  | onChange=event=&gt;setTaskId(event.target.value) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
-| 42:9 EnvironmentView | Button t('ENV_CREATE') | type="submit" | disabled=blocked &#124;&#124; !title.trim(); {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
-| 45:97 EnvironmentView | Select  | onChange=event=&gt;void run(()=&gt;manager.load(1,event.target.value as ''&#124;EnvironmentType)) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
-| 45:286 EnvironmentView | option t('ENV_ALL') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
-| 45:326 EnvironmentView | option t('ENV_PERSONAL') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
-| 45:379 EnvironmentView | option t('ENV_TEMPORARY') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
-| 45:451 EnvironmentView | Button t('ENV_REFRESH') | onClick=()=&gt;void run(()=&gt;manager.load()) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
-| 47:585 EnvironmentView | Button t('ENV_RENAME') | onClick=()=&gt;setEdit({item,name:item.name}) | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; {"kind":"branch","expression":"state.loading","branch":"false"… |
-| 47:725 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;setRemove(item) | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; {"kind":"branch","expression":"state.loading","branch":"false"… |
-| 49:89 EnvironmentView | Button t('ENV_PREVIOUS') | onClick=()=&gt;void run(()=&gt;manager.load(state.pagination.page-1)) | disabled=state.loading &#124;&#124; state.writing &#124;&#124; state.pagination.page&lt;=1; earlier return: state.closed |
-| 49:402 EnvironmentView | Button t('ENV_NEXT') | onClick=()=&gt;void run(()=&gt;manager.load(state.pagination.page+1)) | disabled=state.loading &#124;&#124; state.writing &#124;&#124; state.pagination.page&gt;=state.pagination.totalPages &#124;&#124; state.pagination.page&gt;=5… |
-| 50:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setEdit(null);} | open=!!edit; earlier return: state.closed |
-| 50:215 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();const value=edit;setEdit(null);void run(()=&gt;manager.rename(value.item,value.name));} | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; earlier return: state.closed |
-| 50:397 EnvironmentView | Input  | onChange=event=&gt;setEdit({...edit,name:event.target.value}) | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; {"kind":"container","tag":"form",… |
-| 50:546 EnvironmentView | Button t('ENV_SAVE') | type="submit" | disabled=blocked &#124;&#124; !edit.name.trim(); {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","o… |
-| 50:632 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setEdit(null); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; {"kind":"container","tag":"form",… |
-| 51:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setRemove(null);} | open=!!remove; earlier return: state.closed |
-| 51:345 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{const item=remove;setRemove(null);if(item)void run(()=&gt;manager.remove(item));} | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
-| 51:546 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setRemove(null) | {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
+| 39:45 EnvironmentView | Button t('ENV_LOOKUP_RESULT') | onClick=()=&gt;void run(()=&gt;manager.lookup()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
+| 39:180 EnvironmentView | Button t('ENV_RETRY_WRITE') | onClick=()=&gt;void run(()=&gt;manager.retry()) | disabled=state.writing; {"kind":"logical","expression":"state.pending","operator":"&&"}; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.wri… |
+| 41:25 EnvironmentView | div  |  | {"kind":"logical","expression":"state.confirmed","operator":"&&"}; earlier return: state.closed |
+| 49:7 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();void run(()=&gt;manager.create({name:title,type,taskId}),()=&gt;{setTitle('');setTaskId('');});} | earlier return: state.closed |
+| 50:61 EnvironmentView | Input  | onChange=event=&gt;setTitle(event.target.value) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
+| 51:61 EnvironmentView | Select  | onChange=event=&gt;setType(event.target.value as EnvironmentType) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
+| 51:178 EnvironmentView | option t('ENV_PERSONAL') |  | {"kind":"container","tag":"form","attributes":{}}; {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; earlier return: state.closed |
+| 51:231 EnvironmentView | option t('ENV_TEMPORARY') |  | {"kind":"container","tag":"form","attributes":{}}; {"kind":"container","tag":"Select","attributes":{"disabled":"blocked"}}; earlier return: state.closed |
+| 52:61 EnvironmentView | Input  | onChange=event=&gt;setTaskId(event.target.value) | disabled=blocked; {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
+| 53:9 EnvironmentView | Button t('ENV_CREATE') | type="submit" | disabled=blocked &#124;&#124; !title.trim(); {"kind":"container","tag":"form","attributes":{}}; earlier return: state.closed |
+| 56:97 EnvironmentView | Select  | onChange=event=&gt;void run(()=&gt;manager.load(1,event.target.value as ''&#124;EnvironmentType)) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
+| 56:286 EnvironmentView | option t('ENV_ALL') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
+| 56:326 EnvironmentView | option t('ENV_PERSONAL') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
+| 56:379 EnvironmentView | option t('ENV_TEMPORARY') |  | {"kind":"container","tag":"Select","attributes":{"disabled":"state.loading &#124;&#124; state.writing"}}; earlier return: state.closed |
+| 56:451 EnvironmentView | Button t('ENV_REFRESH') | onClick=()=&gt;void run(()=&gt;manager.load()) | disabled=state.loading &#124;&#124; state.writing; earlier return: state.closed |
+| 58:585 EnvironmentView | Button t('ENV_RENAME') | onClick=()=&gt;setEdit({item,name:item.name}) | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; {"kind":"branch","expression":"state.loading","branch":"false"… |
+| 58:725 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;setRemove(item) | disabled=blocked; {"kind":"container","tag":"div","attributes":{"aria-busy":"state.loading"}}; {"kind":"branch","expression":"state.loading","branch":"false"… |
+| 60:89 EnvironmentView | Button t('ENV_PREVIOUS') | onClick=()=&gt;void run(()=&gt;manager.load(state.pagination.page-1)) | disabled=state.loading &#124;&#124; state.writing &#124;&#124; state.pagination.page&lt;=1; earlier return: state.closed |
+| 60:402 EnvironmentView | Button t('ENV_NEXT') | onClick=()=&gt;void run(()=&gt;manager.load(state.pagination.page+1)) | disabled=state.loading &#124;&#124; state.writing &#124;&#124; state.pagination.page&gt;=state.pagination.totalPages &#124;&#124; state.pagination.page&gt;=5… |
+| 61:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setEdit(null);} | open=!!edit; earlier return: state.closed |
+| 61:215 EnvironmentView | form  | onSubmit=event=&gt;{event.preventDefault();const value=edit;setEdit(null);void run(()=&gt;manager.rename(value.item,value.name));} | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; earlier return: state.closed |
+| 61:397 EnvironmentView | Input  | onChange=event=&gt;setEdit({...edit,name:event.target.value}) | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; {"kind":"container","tag":"form",… |
+| 61:546 EnvironmentView | Button t('ENV_SAVE') | type="submit" | disabled=blocked &#124;&#124; !edit.name.trim(); {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","o… |
+| 61:632 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setEdit(null); type="button" | {"kind":"container","tag":"Dialog","attributes":{"open":"!!edit"}}; {"kind":"logical","expression":"edit","operator":"&&"}; {"kind":"container","tag":"form",… |
+| 62:5 EnvironmentView | Dialog  | onOpenChange=open=&gt;{if(!open)setRemove(null);} | open=!!remove; earlier return: state.closed |
+| 62:345 EnvironmentView | Button t('ENV_DELETE') | onClick=()=&gt;{const item=remove;setRemove(null);if(item)void run(()=&gt;manager.remove(item));} | disabled=blocked; {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
+| 62:546 EnvironmentView | Button t('ENV_CANCEL') | onClick=()=&gt;setRemove(null) | {"kind":"container","tag":"Dialog","attributes":{"open":"!!remove"}}; earlier return: state.closed |
 
 ## frontend/features/environments/files/asset-import-panel.tsx
 

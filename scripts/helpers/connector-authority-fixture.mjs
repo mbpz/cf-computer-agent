@@ -70,7 +70,7 @@ export async function fixture(t, egressTransport, { allowedOrigin = origin, real
   // Browser fetch boundary only: inject the local test cookie and actual browser
   // Origin, route relative product URLs to Workerd; never contact a remote host.
   const requester = (path, init) => {
-    assert.match(path, /^\/api\/environments(?:\?page=\d+&pageSize=20(?:&type=(?:personal|temporary))?|\/[A-Za-z0-9_-]{1,128}(?:\/(?:connector-authority|connector-tickets|connector-renewals))?)?$/);
+    assert.match(path, /^\/api\/environments(?:\?page=\d+&pageSize=20(?:&type=(?:personal|temporary))?|\/operations\/[A-Za-z0-9._:-]{1,128}|\/[A-Za-z0-9_-]{1,128}(?:\/(?:connector-authority|connector-tickets|connector-renewals))?)?$/);
     assert.equal(init.credentials, 'same-origin'); assert.equal(init.redirect, 'error');
     assert.equal(init.cache, 'no-store');
     return mf.dispatchFetch(origin + path, { method: init.method,

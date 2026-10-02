@@ -1604,36 +1604,38 @@
         "frontend/components/ui/focus-scope.tsx:40:5",
         "frontend/components/ui/input.tsx:6:5",
         "frontend/components/ui/select.tsx:5:135",
-        "frontend/features/environments/environment-manager.ts:36:3",
-        "frontend/features/environments/environment-manager.ts:45:51",
+        "frontend/features/environments/environment-manager.ts:37:3",
+        "frontend/features/environments/environment-manager.ts:46:51",
         "frontend/features/environments/environments-page.tsx:15:96",
         "frontend/features/environments/environments-page.tsx:33:26",
         "frontend/features/environments/environments-page.tsx:36:37",
-        "frontend/features/environments/environments-page.tsx:36:170",
-        "frontend/features/environments/environments-page.tsx:38:7",
-        "frontend/features/environments/environments-page.tsx:39:61",
-        "frontend/features/environments/environments-page.tsx:40:61",
-        "frontend/features/environments/environments-page.tsx:40:178",
-        "frontend/features/environments/environments-page.tsx:40:231",
-        "frontend/features/environments/environments-page.tsx:41:61",
-        "frontend/features/environments/environments-page.tsx:42:9",
-        "frontend/features/environments/environments-page.tsx:45:97",
-        "frontend/features/environments/environments-page.tsx:45:286",
-        "frontend/features/environments/environments-page.tsx:45:326",
-        "frontend/features/environments/environments-page.tsx:45:379",
-        "frontend/features/environments/environments-page.tsx:45:451",
-        "frontend/features/environments/environments-page.tsx:47:585",
-        "frontend/features/environments/environments-page.tsx:47:725",
-        "frontend/features/environments/environments-page.tsx:49:89",
-        "frontend/features/environments/environments-page.tsx:49:402",
-        "frontend/features/environments/environments-page.tsx:50:5",
-        "frontend/features/environments/environments-page.tsx:50:215",
-        "frontend/features/environments/environments-page.tsx:50:397",
-        "frontend/features/environments/environments-page.tsx:50:546",
-        "frontend/features/environments/environments-page.tsx:50:632",
-        "frontend/features/environments/environments-page.tsx:51:5",
-        "frontend/features/environments/environments-page.tsx:51:345",
-        "frontend/features/environments/environments-page.tsx:51:546"
+        "frontend/features/environments/environments-page.tsx:39:45",
+        "frontend/features/environments/environments-page.tsx:39:180",
+        "frontend/features/environments/environments-page.tsx:41:25",
+        "frontend/features/environments/environments-page.tsx:49:7",
+        "frontend/features/environments/environments-page.tsx:50:61",
+        "frontend/features/environments/environments-page.tsx:51:61",
+        "frontend/features/environments/environments-page.tsx:51:178",
+        "frontend/features/environments/environments-page.tsx:51:231",
+        "frontend/features/environments/environments-page.tsx:52:61",
+        "frontend/features/environments/environments-page.tsx:53:9",
+        "frontend/features/environments/environments-page.tsx:56:97",
+        "frontend/features/environments/environments-page.tsx:56:286",
+        "frontend/features/environments/environments-page.tsx:56:326",
+        "frontend/features/environments/environments-page.tsx:56:379",
+        "frontend/features/environments/environments-page.tsx:56:451",
+        "frontend/features/environments/environments-page.tsx:58:585",
+        "frontend/features/environments/environments-page.tsx:58:725",
+        "frontend/features/environments/environments-page.tsx:60:89",
+        "frontend/features/environments/environments-page.tsx:60:402",
+        "frontend/features/environments/environments-page.tsx:61:5",
+        "frontend/features/environments/environments-page.tsx:61:215",
+        "frontend/features/environments/environments-page.tsx:61:397",
+        "frontend/features/environments/environments-page.tsx:61:546",
+        "frontend/features/environments/environments-page.tsx:61:632",
+        "frontend/features/environments/environments-page.tsx:62:5",
+        "frontend/features/environments/environments-page.tsx:62:345",
+        "frontend/features/environments/environments-page.tsx:62:546"
       ],
       "unresolvedSymbols": []
     },
@@ -16001,10 +16003,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-manager.ts:36:3",
+      "id": "frontend/features/environments/environment-manager.ts:37:3",
       "path": "frontend/features/environments/environment-manager.ts",
       "owner": "createManager",
-      "line": 36,
+      "line": 37,
       "column": 3,
       "kind": "listener",
       "tag": "owner.signal.addEventListener",
@@ -16022,10 +16024,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/features/environments/environment-manager.ts:45:51",
+      "id": "frontend/features/environments/environment-manager.ts:46:51",
       "path": "frontend/features/environments/environment-manager.ts",
       "owner": "createManager",
-      "line": 45,
+      "line": 46,
       "column": 51,
       "kind": "listener",
       "tag": "signal.addEventListener",
@@ -16124,16 +16126,57 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:36:170",
+      "id": "frontend/features/environments/environments-page.tsx:39:45",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 36,
-      "column": 170,
+      "line": 39,
+      "column": 45,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "data-environment-lookup": "true",
+        "disabled": "state.writing",
+        "onClick": "()=>void run(()=>manager.lookup())"
+      },
+      "handlers": {
+        "onClick": "()=>void run(()=>manager.lookup())"
+      },
+      "spreads": [],
+      "labels": [
+        "t('ENV_LOOKUP_RESULT')"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "state.pending",
+          "operator": "&&"
+        },
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "state.writing"
+          }
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.closed",
+          "source": "if(state.closed)return <section data-environments-closed role=\"alert\">{t('ENV_ACCOUNT_CLOSED')}</section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:39:180",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 39,
+      "column": 180,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "data-environment-retry": "true",
-        "className": "\"mt-3\"",
+        "variant": "\"outline\"",
         "disabled": "state.writing",
         "onClick": "()=>void run(()=>manager.retry())"
       },
@@ -16147,12 +16190,44 @@
       "context": [
         {
           "kind": "logical",
-          "expression": "(state.error || localError)",
+          "expression": "state.pending",
           "operator": "&&"
         },
         {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "state.writing"
+          }
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.closed",
+          "source": "if(state.closed)return <section data-environments-closed role=\"alert\">{t('ENV_ACCOUNT_CLOSED')}</section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/features/environments/environments-page.tsx:41:25",
+      "path": "frontend/features/environments/environments-page.tsx",
+      "owner": "EnvironmentView",
+      "line": 41,
+      "column": 25,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-environment-confirmed-result": "true",
+        "role": "\"status\"",
+        "className": "\"space-y-2 rounded-md border p-4\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
           "kind": "logical",
-          "expression": "state.pending",
+          "expression": "state.confirmed",
           "operator": "&&"
         }
       ],
@@ -16164,10 +16239,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:38:7",
+      "id": "frontend/features/environments/environments-page.tsx:49:7",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 38,
+      "line": 49,
       "column": 7,
       "kind": "jsx",
       "tag": "form",
@@ -16190,10 +16265,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:39:61",
+      "id": "frontend/features/environments/environments-page.tsx:50:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 39,
+      "line": 50,
       "column": 61,
       "kind": "jsx",
       "tag": "Input",
@@ -16225,10 +16300,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:40:61",
+      "id": "frontend/features/environments/environments-page.tsx:51:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 40,
+      "line": 51,
       "column": 61,
       "kind": "jsx",
       "tag": "Select",
@@ -16258,10 +16333,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:40:178",
+      "id": "frontend/features/environments/environments-page.tsx:51:178",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 40,
+      "line": 51,
       "column": 178,
       "kind": "jsx",
       "tag": "option",
@@ -16295,10 +16370,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:40:231",
+      "id": "frontend/features/environments/environments-page.tsx:51:231",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 40,
+      "line": 51,
       "column": 231,
       "kind": "jsx",
       "tag": "option",
@@ -16332,10 +16407,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:41:61",
+      "id": "frontend/features/environments/environments-page.tsx:52:61",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 41,
+      "line": 52,
       "column": 61,
       "kind": "jsx",
       "tag": "Input",
@@ -16366,10 +16441,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:42:9",
+      "id": "frontend/features/environments/environments-page.tsx:53:9",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 42,
+      "line": 53,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -16398,10 +16473,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:45:97",
+      "id": "frontend/features/environments/environments-page.tsx:56:97",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 45,
+      "line": 56,
       "column": 97,
       "kind": "jsx",
       "tag": "Select",
@@ -16425,10 +16500,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:45:286",
+      "id": "frontend/features/environments/environments-page.tsx:56:286",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 45,
+      "line": 56,
       "column": 286,
       "kind": "jsx",
       "tag": "option",
@@ -16457,10 +16532,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:45:326",
+      "id": "frontend/features/environments/environments-page.tsx:56:326",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 45,
+      "line": 56,
       "column": 326,
       "kind": "jsx",
       "tag": "option",
@@ -16489,10 +16564,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:45:379",
+      "id": "frontend/features/environments/environments-page.tsx:56:379",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 45,
+      "line": 56,
       "column": 379,
       "kind": "jsx",
       "tag": "option",
@@ -16521,10 +16596,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:45:451",
+      "id": "frontend/features/environments/environments-page.tsx:56:451",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 45,
+      "line": 56,
       "column": 451,
       "kind": "jsx",
       "tag": "Button",
@@ -16549,10 +16624,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:47:585",
+      "id": "frontend/features/environments/environments-page.tsx:58:585",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 47,
+      "line": 58,
       "column": 585,
       "kind": "jsx",
       "tag": "Button",
@@ -16600,10 +16675,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:47:725",
+      "id": "frontend/features/environments/environments-page.tsx:58:725",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 47,
+      "line": 58,
       "column": 725,
       "kind": "jsx",
       "tag": "Button",
@@ -16651,10 +16726,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:49:89",
+      "id": "frontend/features/environments/environments-page.tsx:60:89",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 49,
+      "line": 60,
       "column": 89,
       "kind": "jsx",
       "tag": "Button",
@@ -16679,10 +16754,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:49:402",
+      "id": "frontend/features/environments/environments-page.tsx:60:402",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 49,
+      "line": 60,
       "column": 402,
       "kind": "jsx",
       "tag": "Button",
@@ -16707,10 +16782,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:50:5",
+      "id": "frontend/features/environments/environments-page.tsx:61:5",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 50,
+      "line": 61,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -16732,10 +16807,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:50:215",
+      "id": "frontend/features/environments/environments-page.tsx:61:215",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 50,
+      "line": 61,
       "column": 215,
       "kind": "jsx",
       "tag": "form",
@@ -16770,10 +16845,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:50:397",
+      "id": "frontend/features/environments/environments-page.tsx:61:397",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 50,
+      "line": 61,
       "column": 397,
       "kind": "jsx",
       "tag": "Input",
@@ -16815,10 +16890,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:50:546",
+      "id": "frontend/features/environments/environments-page.tsx:61:546",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 50,
+      "line": 61,
       "column": 546,
       "kind": "jsx",
       "tag": "Button",
@@ -16858,10 +16933,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:50:632",
+      "id": "frontend/features/environments/environments-page.tsx:61:632",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 50,
+      "line": 61,
       "column": 632,
       "kind": "jsx",
       "tag": "Button",
@@ -16904,10 +16979,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:51:5",
+      "id": "frontend/features/environments/environments-page.tsx:62:5",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 51,
+      "line": 62,
       "column": 5,
       "kind": "jsx",
       "tag": "Dialog",
@@ -16929,10 +17004,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:51:345",
+      "id": "frontend/features/environments/environments-page.tsx:62:345",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 51,
+      "line": 62,
       "column": 345,
       "kind": "jsx",
       "tag": "Button",
@@ -16966,10 +17041,10 @@
       ]
     },
     {
-      "id": "frontend/features/environments/environments-page.tsx:51:546",
+      "id": "frontend/features/environments/environments-page.tsx:62:546",
       "path": "frontend/features/environments/environments-page.tsx",
       "owner": "EnvironmentView",
-      "line": 51,
+      "line": 62,
       "column": 546,
       "kind": "jsx",
       "tag": "Button",
