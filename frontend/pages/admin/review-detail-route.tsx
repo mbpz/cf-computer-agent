@@ -3,7 +3,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
 import { loadReviewDetail, prepareReviewDecision, sendReviewDecision, reviewRecovery, type ReviewDecision, type ReviewDetailData, type ReviewOperation, type ReviewNoteInput } from "../../components/review/review-detail-data";
 import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } from "./review-detail-page";
-import { writeWorkspaceHistory } from "../../lib/workspace-location";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
 import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
 
@@ -21,13 +21,30 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   const readRef = useRef<AbortController | null>(null);
   const decisionRef = useRef<object | null>(null);
   const operationRef = useRef<ReviewOperation | null>(null);
+  const lifetimeRef = useRef<object | null>(null);
+
+  // Read dependencies (locale/requester) are not the lifetime of a submitted write.
+  // Keep this guard above the editor, which permission/error states may unmount.
+  useEffect(() => {
+    lifetimeRef.current = {};
+    const locked = () => Boolean(decisionRef.current || operationRef.current);
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      lifetimeRef.current = null;
+      decisionRef.current = null;
+      operationRef.current = null;
+      unregister(); window.removeEventListener("beforeunload", warn);
+    };
+  }, []);
 
   const read = useCallback(async () => {
     if (readRef.current || decisionRef.current) return;
     const controller = new AbortController();
     readRef.current = controller;
     const current = owner.claim();
-    setState({ kind: "loading" });
+    setState(previous => previous.kind === "ready" ? previous : { kind: "loading" });
     if (!operationRef.current) setDecisionState({ kind: "idle" });
     try {
       const data = await loadReviewDetail(id, requester, controller.signal);
@@ -43,7 +60,7 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
       if (!owner.isCurrent(current) || controller.signal.aborted) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
-        operationRef.current = null; setDecisionState({ kind: "idle" });
+        // Access denial does not prove that an earlier POST failed to commit.
       } else if (error instanceof ApiRequestError && error.status === 404) {
         setState({ kind: "not-found", message: frontendText(locale, "ADMIN_REVIEW_NOT_FOUND") });
       } else {
@@ -60,8 +77,6 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
       owner.invalidate();
       readRef.current?.abort();
       readRef.current = null;
-      decisionRef.current = null;
-      operationRef.current = null;
     };
   }, [owner, read]);
 
@@ -70,19 +85,20 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
     const { action } = operation;
     const decision = {};
     decisionRef.current = decision;
-    const current = owner.claim();
+    const lifetime = lifetimeRef.current;
+    const ownsDecision = () => lifetime !== null && lifetimeRef.current === lifetime && decisionRef.current === decision;
     setDecisionState({ kind: "pending", action });
     try {
       const receipt = await sendReviewDecision(operation, requester);
-      if (!owner.isCurrent(current)) return;
+      if (!ownsDecision()) return;
+      operationRef.current = null;
       setState({ kind: "ready", data: { ...state.data, detail: Object.freeze({ ...state.data.detail, status: receipt.status }) } });
       setDecisionState({ kind: "success", receipt });
     } catch (error) {
-      if (!owner.isCurrent(current)) return;
+      if (!ownsDecision()) return;
       if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
         setState({ kind: "forbidden", message: frontendText(locale, "ADMIN_REVIEW_FORBIDDEN") });
-        setDecisionState({ kind: "idle" });
-        operationRef.current = null;
+        setDecisionState({ kind: "error", action, recovery: "retry" });
       } else {
         const recovery = reviewRecovery(error, previouslyUncertain);
         if (recovery === "edit") operationRef.current = null;
@@ -103,7 +119,7 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   };
 
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
-  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState}
+  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current)}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
     onDecision={decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }

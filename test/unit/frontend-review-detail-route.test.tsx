@@ -4,6 +4,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewDetailRoute } from "../../frontend/pages/admin/review-detail-route";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import type { Fetcher } from "../../frontend/lib/api";
 
 const vmContexts = new WeakSet<object>();
@@ -22,6 +23,105 @@ describe("review detail read recovery", () => {
   function button(label: string) { const found = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }
 
   async function submitDecision(label: string) { await act(async () => button(label).click()); await act(async () => button("Submit decision").click()); }
+
+  function unload() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
+  async function leave() { await act(async () => writeWorkspaceHistory("push", "/home")); }
+
+  it.each([401, 403])("retains unknown navigation protection after POST %s unmounts the editor", async status => {
+    let reads = 0; let posts = 0;
+    await render(withComments(async (_input, init) => {
+      if (init?.method === "POST") { posts++; return new Response(null, { status }); }
+      return preview("sub-1", ++reads > 1 ? "rejected" : "review_pending");
+    }));
+    await submitDecision("Publish"); await flush();
+    expect(container.querySelector("pre")).toBeNull();
+    await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(unload()).toBe(true);
+    await act(async () => button("Try again").click()); await flush();
+    expect(posts).toBe(1); expect(unload()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+  });
+
+  it("keeps an active POST owned across locale replacement and releases only its valid receipt", async () => {
+    const pending = deferred<Response>(); let posts = 0; let reads = 0;
+    const requester = withComments(async (_input, init) => {
+      if (init?.method === "POST") { posts++; return pending.promise; }
+      reads++; return preview("sub-1");
+    });
+    await render(requester); await submitDecision("Publish");
+    await act(async () => root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} requester={requester} />)); await flush();
+    await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(unload()).toBe(true); expect(reads).toBe(1);
+    await act(async () => pending.resolve(published("indexed"))); await flush();
+    expect(posts).toBe(1); expect(container.textContent).toContain("Published and searchable."); expect(unload()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+  });
+
+  it.each(["pending", "denied", "missing", "malformed", "wrong-id"])("keeps unknown ownership through %s readback and recovers with terminal GET only", async outcome => {
+    let reads = 0; let posts = 0;
+    await render(withComments(async (_input, init) => {
+      if (init?.method === "POST") { posts++; return new Response(null, { status: 503 }); }
+      if (++reads === 1) return preview("sub-1");
+      if (reads > 2) return preview("sub-1", "rejected");
+      if (outcome === "denied") return new Response(null, { status: 403 });
+      if (outcome === "missing") return new Response(null, { status: 404 });
+      if (outcome === "malformed") return json({});
+      return preview(outcome === "wrong-id" ? "sub-2" : "sub-1");
+    }));
+    await submitDecision("Publish"); await flush();
+    await act(async () => button("Reload current state").click()); await flush();
+    await leave(); expect(browser.location.pathname).toBe("/admin/submissions/sub-1"); expect(unload()).toBe(true);
+    await act(async () => button(outcome === "pending" ? "Reload current state" : "Try again").click()); await flush();
+    expect(posts).toBe(1); expect(unload()).toBe(false); expect(container.textContent).not.toContain("Published and searchable.");
+    await leave(); expect(browser.location.pathname).toBe("/home");
+  });
+
+  it("blocks same-batch navigation at POST start and coalesces read-only recovery", async () => {
+    const post = deferred<Response>(); const read = deferred<Response>(); let posts = 0; let reads = 0;
+    await render(withComments(async (_input, init) => {
+      if (init?.method === "POST") { posts++; return post.promise; }
+      return ++reads === 1 ? preview("sub-1") : read.promise;
+    }));
+    await act(async () => button("Publish").click());
+    await act(async () => { button("Submit decision").click(); writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/admin/submissions/sub-1");
+    await act(async () => post.resolve(new Response(null, { status: 500 }))); await flush();
+    const reload = button("Reload current state");
+    await act(async () => { reload.click(); reload.click(); }); await flush();
+    expect(reads).toBe(2); expect(unload()).toBe(true);
+    await act(async () => button("Retry same decision").click()); expect(posts).toBe(1);
+    await act(async () => read.resolve(preview("sub-1", "rejected"))); await flush();
+    expect(unload()).toBe(false); expect(posts).toBe(1);
+  });
+
+  it("preserves frozen unknown note and replay after locale replacement", async () => {
+    const bodies: string[] = [];
+    const requester = withComments(async (_input, init) => {
+      if (init?.method !== "POST") return preview("sub-1");
+      bodies.push(String(init.body)); return bodies.length === 1 ? new Response(null, { status: 503 }) : json({ decision: { submissionId: "sub-1", decision: "rejected" } });
+    });
+    await render(requester); await act(async () => button("Reject").click()); await typeNote("Keep exact note"); await submitDecision("Confirm rejection"); await flush();
+    await act(async () => root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} requester={requester} />)); await flush();
+    expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Keep exact note");
+    expect(button("Reject").disabled).toBe(true); expect(unload()).toBe(true);
+    await act(async () => button("Retry same decision").click()); await flush();
+    expect(bodies).toHaveLength(2); expect(bodies[1]).toBe(bodies[0]); expect(unload()).toBe(false);
+  });
+
+  it("preserves an unsent note across a successful same-object locale refresh", async () => {
+    const requester = withComments(async () => preview("sub-1"));
+    await render(requester); await act(async () => button("Reject").click()); await typeNote("Unsent note");
+    await act(async () => root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({ navigatorLanguage: "en" })} requester={requester} />)); await flush();
+    expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Unsent note"); expect(unload()).toBe(true);
+  });
+
+  it("removes only the old session guard after forced identity teardown", async () => {
+    const pending = deferred<Response>();
+    const requester = withComments(async (input, init) => init?.method === "POST" ? pending.promise : preview(String(input).split("/").at(-1)!));
+    await render(requester); await submitDecision("Publish"); expect(unload()).toBe(true);
+    await render(requester, "sub-2"); expect(unload()).toBe(false);
+    await act(async () => pending.resolve(new Response(null, { status: 403 }))); await flush();
+    expect(container.querySelector("h1")?.textContent).toBe("Title sub-2"); expect(button("Publish").disabled).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+  });
 
   it("recovers the same detail after read failure without a decision and deduplicates immediate retry", async () => {
     const pending = deferred<Response>(); const paths: string[] = []; const methods: string[] = [];
