@@ -15,7 +15,8 @@ after(async()=>{if(dir)await rm(dir,{recursive:true,force:true});});
 const owners=[];afterEach(()=>{for(const x of owners.splice(0))x.dispose();});
 const env={id:'env-a',memberId:'member-a',name:'Linux',type:'personal',taskId:null,version:1,createdAt:'2026-09-30T00:00:00.000Z',updatedAt:'2026-09-30T00:00:00.000Z'};
 const page=(items=[env],n=1,total=items.length)=>({items,pagination:{page:n,pageSize:20,total,totalPages:Math.ceil(total/20)}});
-function setup(requester){const owner=createAccountNetworkOwner({origin:'https://workbench.example',memberId:'member-a'});owners.push(owner);return{owner,manager:createManager(owner,requester)};}
+function memoryStorage(){const data=new Map();return {getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key),data};}
+function setup(requester,storage=memoryStorage(),scope={origin:'https://workbench.example',memberId:'member-a'}){const owner=createAccountNetworkOwner(scope);owners.push(owner);return{owner,manager:createManager(owner,requester,storage)};}
 test('member-owned list uses same-origin fixed endpoint; wrong member clears visible data',async()=>{
  let bad=false;const requests=[];const {manager}=setup(async(path,init)=>{requests.push([path,init.credentials]);return Response.json(page([{...env,memberId:bad?'other':'member-a'}]));});
  await manager.load();assert.equal(manager.getSnapshot().items[0].name,'Linux');assert.deepEqual(requests,[['/api/environments?page=1&pageSize=20','same-origin']]);
@@ -74,8 +75,8 @@ async function renderApp(t, requester, permissionMask='0x200000') {
   return requester(path,init);
  }})){originals.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
  const {createRoot}=await import('react-dom/client');
- const root=createRoot(host);t.after(async()=>{await act(async()=>root.unmount());await window.happyDOM.close();for(const [key,descriptor] of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
- await act(async()=>root.render(React.createElement(App)));return{host,window,root};
+ let root=createRoot(host);t.after(async()=>{await act(async()=>root.unmount());await window.happyDOM.close();for(const [key,descriptor] of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
+ await act(async()=>root.render(React.createElement(App)));return{host,window,root,remount:async()=>{await act(async()=>root.unmount());root=createRoot(host);await act(async()=>root.render(React.createElement(App)));}};
 }
 test('actual App exposes member environment list and no fake running or automatic network',async t=>{
  const calls=[];const {host}=await renderApp(t,async(path,init)=>{calls.push(path);return Response.json(page());});
@@ -119,7 +120,7 @@ test('actual Worker/D1 metadata CRUD preserves lost-response idempotency and del
   const result=await f.requester(path,init);
   if(init.method==='POST' && lose){lose=false;assert.equal(result.status,201);await result.body.cancel();throw Error('committed response lost');}
   return result;
- });
+ },memoryStorage());
  await f.db.prepare("INSERT INTO members(id,access_sub,email,role,status,created_at,updated_at) VALUES('member-b','subject-b','b@example.test','contributor','active',?,?)").bind(env.createdAt,env.updatedAt).run();
  await f.db.prepare("INSERT INTO browser_environments(id,member_id,name,type,version,created_at,updated_at) VALUES('env-b','member-b','Private B','personal',1,?,?)").bind(Date.parse(env.createdAt),Date.parse(env.updatedAt)).run();
  await manager.load();assert.equal(manager.getSnapshot().error,null);assert.deepEqual(manager.getSnapshot().items.map(x=>x.name),['A']);
@@ -244,24 +245,27 @@ test('not-found lookup then explicit retry keeps the identical operation ID and 
  await manager.lookup();assert.equal(manager.getSnapshot().pending,intent);assert.equal(bodies.length,1);
  await manager.retry();assert.equal(bodies.length,2);assert.equal(bodies[1],bodies[0]);assert.equal(manager.getSnapshot().pending,null);
 });
-test('actual Worker/D1 exact lookup recovers committed create rename and delete without replaying writes',async t=>{
+test('actual Worker/D1 refresh and exact lookup recover committed create rename and delete without replaying writes',async t=>{
  const {fixture,origin}=await import('./helpers/connector-authority-fixture.mjs');const f=await fixture(t);
- const owner=createAccountNetworkOwner({origin,memberId:'member-a'});t.after(()=>owner.dispose());
+ let owner=createAccountNetworkOwner({origin,memberId:'member-a'});t.after(()=>owner.dispose());
  let writes=0;const queries=[];
- const manager=createManager(owner,async(path,init)=>{
+ const storage=memoryStorage();
+ const requester=async(path,init)=>{
   const response=await f.requester(path,init);
   if(init.method!=='GET'){writes++;assert.ok(response.ok);await response.body.cancel();throw Error('committed response lost');}
   if(path.startsWith('/api/environments/operations/'))queries.push(path);
   return response;
- });
+ };
+ let manager=createManager(owner,requester,storage);
+ const refresh=()=>{owner.dispose();owner=createAccountNetworkOwner({origin,memberId:'member-a'});manager=createManager(owner,requester,storage);};
  await manager.create({name:'Exact D1',type:'personal'});const first=manager.getSnapshot().pending.operationId;
- await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,1);
+ refresh();await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,1);
  let item=manager.getSnapshot().items.find(x=>x.name==='Exact D1');assert.ok(item);assert.equal(item.version,1);
  await manager.rename(item,'Renamed exact D1');const second=manager.getSnapshot().pending.operationId;
- await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,2);
+ refresh();await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,2);
  item=manager.getSnapshot().items.find(x=>x.id===item.id);assert.equal(item.version,2);assert.equal(item.name,'Renamed exact D1');
  await manager.remove(item);const third=manager.getSnapshot().pending.operationId;
- await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,3);assert.equal(manager.getSnapshot().pending,null);
+ refresh();await manager.lookup();assert.equal(manager.getSnapshot().error,null);assert.equal(writes,3);assert.equal(manager.getSnapshot().pending,null);
  assert.deepEqual(queries,[first,second,third].map(id=>`/api/environments/operations/${id}`));
  assert.equal(new Set([first,second,third]).size,3);
  assert.equal(await f.db.prepare('SELECT COUNT(*) AS n FROM browser_environments WHERE id=?').bind(item.id).first('n'),0);
@@ -275,8 +279,128 @@ test('verified historical receipt survives a failed list refresh but is cleared 
   if(init.method!=='GET'){op=JSON.parse(init.body).operationId;throw Error('lost');}
   if(path.startsWith('/api/environments/operations/'))return Response.json({operationId:op,kind:'environment.create',environmentId:env.id,result:{environment:env}});
   return Response.json({error:{code:'UNAVAILABLE',message:'list unavailable'}},{status:503});
- });
+ },memoryStorage());
  await manager.create({name:'Linux',type:'personal'});await manager.lookup();
  assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().confirmed.operationId,op);assert.equal(manager.getSnapshot().error,'READ_FAILED');
  owner.dispose();assert.equal(manager.getSnapshot().confirmed,null);assert.deepEqual(manager.getSnapshot().items,[]);
+});
+
+test('refresh restores the frozen pending operation without automatic query or resend',async()=>{
+ const storage=memoryStorage(), sent=[];
+ const first=setup(async(path,init)=>{sent.push(init.body);throw Error('lost');},storage);
+ await first.manager.create({name:'Refresh',type:'personal'});
+ const pending=first.manager.getSnapshot().pending;first.owner.dispose();
+ const second=setup(async(path,init)=>{sent.push(init.body);throw Error('lost');},storage);
+ assert.deepEqual(second.manager.getSnapshot().pending,pending);
+ assert.equal(sent.length,1);
+ await second.manager.retry();assert.equal(sent.length,2);assert.equal(sent[1],sent[0]);
+});
+
+test('storage quota blocks writes before transport and same-ID retry recovers after repair',async()=>{
+ const storage=memoryStorage();const set=storage.setItem;let calls=0;
+ storage.setItem=()=>{throw Error('quota');};
+ const {manager}=setup(async()=>{calls++;throw Error('lost');},storage);
+ await manager.create({name:'Safe',type:'personal'});
+ const intent=manager.getSnapshot().pending;
+ assert.equal(calls,0);assert.equal(manager.getSnapshot().recoveryBlocked,true);
+ await assert.rejects(manager.create({name:'Replacement',type:'personal'}),/WRITE_PENDING/);
+ storage.setItem=set;await manager.retry();assert.equal(calls,1);
+ assert.deepEqual(manager.getSnapshot().pending,intent);assert.equal(manager.getSnapshot().recoveryBlocked,false);
+});
+test('corrupt journal fails closed, survives list refresh, and only explicit recheck can unlock',async()=>{
+ const storage=memoryStorage();const first=setup(async()=>{throw Error('lost');},storage);
+ await first.manager.create({name:'Safe',type:'personal'});first.owner.dispose();
+ const key=[...storage.data.keys()][0];storage.setItem(key,'{corrupt');let writes=0;
+ const {manager}=setup(async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());},storage);
+ assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().recoveryBlocked,true);
+ await manager.load();assert.equal(manager.getSnapshot().error,'RECOVERY_BLOCKED');
+ await assert.rejects(manager.create({name:'Other',type:'personal'}),/RECOVERY_BLOCKED/);
+ await manager.recheckRecovery();assert.equal(storage.getItem(key),'{corrupt');assert.equal(writes,0);
+ storage.removeItem(key);await manager.recheckRecovery();assert.equal(manager.getSnapshot().recoveryBlocked,false);assert.equal(writes,0);
+});
+for(const mode of ['silent-save','clear-failure'])test(`journal ${mode} does not lose or replace pending identity`,async()=>{
+ const storage=memoryStorage();let calls=0;
+ if(mode==='silent-save')storage.setItem=()=>{};else storage.removeItem=()=>{};
+ const {manager}=setup(async(path,init)=>{calls++;return Response.json({environment:{...env,name:'Safe'}});},storage);
+ await manager.create({name:'Safe',type:'personal'});
+ assert.equal(manager.getSnapshot().recoveryBlocked,true);assert.ok(manager.getSnapshot().pending);
+ assert.equal(calls,mode==='silent-save'?0:1);
+ if(mode==='clear-failure')assert.equal(manager.getSnapshot().confirmed.name,'Safe');
+});
+test('stored operations are isolated by member and origin and malformed bodies never become requests',async()=>{
+ const storage=memoryStorage(),first=setup(async()=>{throw Error('lost');},storage);
+ await first.manager.create({name:'Private',type:'personal'});first.owner.dispose();
+ for(const scope of [{origin:'https://workbench.example',memberId:'member-b'},{origin:'https://other.example',memberId:'member-a'}]){
+  const other=setup(async()=>assert.fail('no request on restore'),storage,scope);
+  assert.equal(other.manager.getSnapshot().pending,null);assert.equal(other.manager.getSnapshot().recoveryBlocked,false);
+ }
+ const key=[...storage.data.keys()][0],saved=JSON.parse(storage.getItem(key));
+ saved.intent.body=JSON.stringify({...JSON.parse(saved.intent.body),memberId:'member-b'});storage.setItem(key,JSON.stringify(saved));
+ const restored=setup(async()=>assert.fail('no request on restore'),storage);
+ assert.equal(restored.manager.getSnapshot().pending,null);assert.equal(restored.manager.getSnapshot().recoveryBlocked,true);
+});
+test('restored delete closes network and exact lookup clears journal only after validated receipt',async()=>{
+ const storage=memoryStorage(),first=setup(async()=>{throw Error('lost');},storage);
+ await first.manager.remove(env);const intent=first.manager.getSnapshot().pending;first.owner.dispose();const calls=[];
+ const second=setup(async(path,init)=>{calls.push([path,init.method]);return Response.json(path.includes('/operations/')
+  ? {operationId:intent.operationId,kind:'environment.delete',environmentId:env.id,result:{tombstone:{environmentId:env.id,version:2,deletedAt:env.updatedAt}}}:page([]));},storage);
+ assert.throws(()=>second.owner.network(env.id),/ENVIRONMENT_REMOVED/);assert.equal(calls.length,0);
+ await second.manager.lookup();assert.equal(second.manager.getSnapshot().pending,null);assert.equal(storage.data.size,0);
+ assert.ok(calls.every(([,method])=>method==='GET'));
+ const third=setup(async()=>assert.fail('no automatic request'),storage);assert.equal(third.manager.getSnapshot().pending,null);
+});
+test('late old-account response cannot clear the restored operation',async()=>{
+ const storage=memoryStorage();let resolve;
+ const first=setup(()=>new Promise(r=>{resolve=r;}),storage);
+ const write=first.manager.create({name:'Safe',type:'personal'});first.owner.dispose();
+ const second=setup(async()=>assert.fail('no automatic request'),storage),intent=second.manager.getSnapshot().pending;
+ resolve(Response.json({environment:{...env,name:'Safe'}}));await write;
+ assert.deepEqual(second.manager.getSnapshot().pending,intent);assert.equal(storage.data.size,1);
+ assert.equal(first.manager.getSnapshot().pending,null);
+});
+
+test('actual App remount restores operation ID without resend and exposes blocked recovery controls',async t=>{
+ const calls=[];const app=await renderApp(t,async(path,init)=>{calls.push(init.method);if(init.method==='GET')return Response.json(page());throw Error('lost');});
+ const form=app.host.querySelector('[data-environment-create]');await fill(app.window,form.querySelector('[name=name]'),'Refresh UI');
+ await act(async()=>form.dispatchEvent(new app.window.Event('submit',{bubbles:true,cancelable:true})));
+ const id=app.host.querySelector('[data-environment-operation-id]').textContent;
+ await app.remount();assert.equal(app.host.querySelector('[data-environment-operation-id]').textContent,id);assert.equal(calls.filter(m=>m==='POST').length,1);
+ const key=app.window.sessionStorage.key(0);assert.ok(key.startsWith('memory-garden:environment-operation:'));app.window.sessionStorage.setItem(key,'bad');
+ await app.remount();assert.equal(app.host.querySelector('[data-environment-operation-id]'),null);
+ assert.equal(app.host.querySelector('[data-environment-create] [name=name]').disabled,true);
+ const recheck=app.host.querySelector('[data-environment-recheck-recovery]');assert.ok(recheck);
+ app.window.sessionStorage.removeItem(key);await act(async()=>recheck.click());
+ assert.equal(app.host.querySelector('[data-environment-create] [name=name]').disabled,false);assert.equal(calls.filter(m=>m==='POST').length,1);
+});
+
+test('verified lookup retains its pending ID on clear failure and a second explicit lookup can finish',async()=>{
+ const storage=memoryStorage(),remove=storage.removeItem;let intent,queries=0;
+ const {manager}=setup(async(path,init)=>{
+  if(init.method!=='GET')throw Error('lost');
+  if(!path.includes('/operations/'))return Response.json(page());
+  queries++;return Response.json({operationId:intent.operationId,kind:'environment.create',environmentId:env.id,result:{environment:{...env,name:'Safe'}}});
+ },storage);
+ await manager.create({name:'Safe',type:'personal'});intent=manager.getSnapshot().pending;storage.removeItem=()=>{throw Error('denied');};
+ await manager.lookup();assert.equal(manager.getSnapshot().pending.operationId,intent.operationId);assert.equal(manager.getSnapshot().recoveryBlocked,true);
+ storage.removeItem=remove;await manager.lookup();assert.equal(manager.getSnapshot().pending,null);assert.equal(manager.getSnapshot().recoveryBlocked,false);assert.equal(queries,2);assert.equal(storage.data.size,0);
+});
+test('a conflicting stored intent is neither overwritten by retry nor cleared by another receipt',async()=>{
+ const storage=memoryStorage();let intent,calls=0;
+ const {manager}=setup(async(path,init)=>{calls++;if(init.method!=='GET')throw Error('lost');return Response.json({operationId:intent.operationId,kind:'environment.create',environmentId:env.id,result:{environment:{...env,name:'Safe'}}});},storage);
+ await manager.create({name:'Safe',type:'personal'});intent=manager.getSnapshot().pending;
+ const key=[...storage.data.keys()][0],saved=JSON.parse(storage.getItem(key));
+ const replacement=crypto.randomUUID();saved.intent.operationId=replacement;saved.intent.body=JSON.stringify({...JSON.parse(saved.intent.body),operationId:replacement});
+ const raw=JSON.stringify(saved);storage.setItem(key,raw);
+ await manager.retry();assert.equal(calls,1);assert.equal(storage.getItem(key),raw);
+ await manager.lookup();assert.equal(calls,2);assert.equal(storage.getItem(key),raw);assert.equal(manager.getSnapshot().recoveryBlocked,true);
+ await manager.recheckRecovery();assert.equal(manager.getSnapshot().pending.operationId,intent.operationId);
+});
+for(const [label,mutate] of [
+ ['scope',x=>{x.memberId='member-b';}],['version',x=>{x.version=2;}],['extra-envelope',x=>{x.token='forbidden';}],
+ ['expected',x=>{x.intent.expected.version=8;}],['body',x=>{x.intent.body='not json';}],['kind',x=>{x.intent.kind='start';}],
+])test(`invalid journal ${label} is not trusted or silently deleted`,async()=>{
+ const storage=memoryStorage(),first=setup(async()=>{throw Error('lost');},storage);
+ await first.manager.create({name:'Safe',type:'personal'});first.owner.dispose();
+ const key=[...storage.data.keys()][0],saved=JSON.parse(storage.getItem(key));mutate(saved);const raw=JSON.stringify(saved);storage.setItem(key,raw);
+ const second=setup(async()=>assert.fail('no transport'),storage);assert.equal(second.manager.getSnapshot().recoveryBlocked,true);assert.equal(second.manager.getSnapshot().pending,null);assert.equal(storage.getItem(key),raw);
 });

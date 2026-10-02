@@ -2,16 +2,17 @@ import type { EnvironmentMetadata, EnvironmentType } from '../../../shared/envir
 import { apiFetch, ApiRequestError, type Fetcher } from '../../lib/api';
 import type { AccountNetworkOwner } from './account-network-owner.mjs';
 
+import { createEnvironmentOperationJournal, sameEnvironmentOperation, type EnvironmentOperationIntent as Intent, type EnvironmentOperationStorage } from './environment-operation-journal';
+
 type Filter = '' | EnvironmentType;
 type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
-type Intent = Readonly<{operationId: string; kind: 'create' | 'rename' | 'delete'; body: string; expected: Record<string, unknown>}>;
 type Confirmed = Readonly<{operationId:string;kind:Intent['kind'];environmentId:string;version:number;name?:string;deletedAt?:string}>;
-type State = Readonly<{items: readonly EnvironmentMetadata[]; pagination: Pagination; filter: Filter; loading: boolean; writing: boolean; pending: Intent | null; confirmed: Confirmed | null; error: string | null; closed: boolean}>;
+type State = Readonly<{items: readonly EnvironmentMetadata[]; pagination: Pagination; filter: Filter; loading: boolean; writing: boolean; pending: Intent | null; confirmed: Confirmed | null; error: string | null; closed: boolean; recoveryBlocked: boolean}>;
 const managers = new WeakMap<AccountNetworkOwner, ReturnType<typeof createManager>>();
-/** Keep unknown writes across route unmounts, but never across account lifetimes. */
-export function getEnvironmentManager(owner: AccountNetworkOwner, requester?: Fetcher) {
+/** In-memory ownership is account-scoped; validated same-tab intent survives refresh. */
+export function getEnvironmentManager(owner: AccountNetworkOwner, requester?: Fetcher, storage?: EnvironmentOperationStorage) {
   let manager = managers.get(owner);
-  if (!manager) { manager = createManager(owner, requester); managers.set(owner, manager); }
+  if (!manager) { manager = createManager(owner, requester, storage); managers.set(owner, manager); }
   return manager;
 }
 const invalid = () => { throw new Error('INVALID_RESPONSE'); };
@@ -27,8 +28,11 @@ export function parseEnvironmentMetadata(value: unknown, memberId: string): Envi
     || !integer(x.version) || x.version < 1 || !date(x.createdAt) || !date(x.updatedAt)) return invalid();
   return Object.freeze({...x}) as unknown as EnvironmentMetadata;
 }
-function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
-  let state: State = Object.freeze({items: [], pagination: {page: 1,pageSize: 20,total: 0,totalPages: 0},filter: '',loading: false,writing: false,pending: null,confirmed:null,error: null,closed: false});
+function createManager(owner: AccountNetworkOwner, requester?: Fetcher, storage?: EnvironmentOperationStorage) {
+  const journal=createEnvironmentOperationJournal(owner.scope,storage), restored=journal.load();
+  const pending=restored.status === 'ready' ? restored.intent : null;
+  if (pending?.kind === 'delete' && !owner.signal.aborted) owner.removeEnvironment(pending.expected.id as string);
+  let state: State = Object.freeze({items: [], pagination: {page: 1,pageSize: 20,total: 0,totalPages: 0},filter: '',loading: false,writing: false,pending,confirmed:null,error: restored.status === 'blocked' ? 'RECOVERY_BLOCKED' : pending ? 'WRITE_UNKNOWN' : null,closed: false,recoveryBlocked:restored.status === 'blocked'});
   let read: AbortController | undefined;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<State>) => { state = Object.freeze({...state,...patch}); for (const listener of listeners) listener(); };
@@ -54,7 +58,7 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
     current();
     if (!integer(page) || page < 1 || page > 500 || !['','personal','temporary'].includes(filter)) throw Error('INVALID_INPUT');
     read?.abort(); const attempt = new AbortController(); read = attempt;
-    publish({items: [],loading: true,filter,error: state.pending ? state.error : null});
+    publish({items: [],loading: true,filter,error: state.pending || state.recoveryBlocked ? state.error : null});
     try {
       const raw = record(await request(signal => apiFetch<unknown>(`/api/environments?page=${page}&pageSize=20${filter ? `&type=${filter}` : ''}`,{method: 'GET',requester,signal,redirect: 'error',cache: 'no-store'}),attempt.signal));
       current(); if (read !== attempt) return;
@@ -107,7 +111,8 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
       const target = intent.kind === 'delete' ? record(result.tombstone).environmentId : record(result.environment).id;
       if (receipt.environmentId !== target || intent.expected.id !== undefined && receipt.environmentId !== intent.expected.id) invalid();
       validateResult(intent,result);
-      publish({pending:null,writing:false,confirmed:confirmedResult(intent,result)});
+      if (!journal.clear(intent)) { publish({writing:false,recoveryBlocked:true,error:'RECOVERY_BLOCKED',confirmed:confirmedResult(intent,result)}); return; }
+      publish({pending:null,writing:false,recoveryBlocked:false,error:null,confirmed:confirmedResult(intent,result)});
       await load();
     } catch (error) {
       if (owner.signal.aborted || unauthorized(error)) return;
@@ -118,8 +123,10 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
   }
   async function execute(intent: Intent) {
     current(); if (state.writing) throw Error('WRITE_PENDING');
+    if (!journal.save(intent)) { publish({pending:intent,recoveryBlocked:true,error:'RECOVERY_BLOCKED'}); return; }
+    if (intent.kind === 'delete') owner.removeEnvironment(intent.expected.id as string);
     read?.abort(); read = undefined;
-    publish({pending: intent,confirmed:null,writing: true,loading: false,error: null});
+    publish({recoveryBlocked:false,pending: intent,confirmed:null,writing: true,loading: false,error: null});
     try {
       const result = record(await request(signal => {
         // Explicit transports keep the source inventory auditable. The frozen
@@ -136,26 +143,40 @@ function createManager(owner: AccountNetworkOwner, requester?: Fetcher) {
       }));
       current();
       validateResult(intent,result);
-      publish({pending:null,writing:false,confirmed:confirmedResult(intent,result)});
+      if (!journal.clear(intent)) { publish({writing:false,recoveryBlocked:true,error:'RECOVERY_BLOCKED',confirmed:confirmedResult(intent,result)}); return; }
+      publish({pending:null,writing:false,recoveryBlocked:false,error:null,confirmed:confirmedResult(intent,result)});
       await load();
     } catch (error) {
       if (owner.signal.aborted) return;
       if (unauthorized(error)) return;
       // Explicit server rejection is not an unknown transport outcome. A stale
       // version must be re-read and confirmed again, never silently rebased.
-      if (error instanceof ApiRequestError && [400,404,409,422].includes(error.status)) publish({pending:null,writing:false,items:[],error:'WRITE_REJECTED'});
+      if (error instanceof ApiRequestError && [400,404,409,422].includes(error.status)) {
+        const cleared=journal.clear(intent);
+        publish({pending:cleared ? null : intent,writing:false,items:[],recoveryBlocked:!cleared,error:cleared ? 'WRITE_REJECTED' : 'RECOVERY_BLOCKED'});
+      }
       else publish({writing:false,error:'WRITE_UNKNOWN'});
     }
   }
   function begin(kind: Intent['kind'],body: Record<string,unknown>,expected: Record<string,unknown>) {
     current(); if (state.pending) throw Error('WRITE_PENDING');
+    if (state.recoveryBlocked) throw Error('RECOVERY_BLOCKED');
     const operationId=crypto.randomUUID();
     const intent = Object.freeze({operationId,kind,body:JSON.stringify({operationId,...body}),expected:Object.freeze(expected)});
-    if (kind === 'delete') owner.removeEnvironment(expected.id as string);
     return execute(intent);
   }
   const check = (item: EnvironmentMetadata) => { current(); if (!id(item.id) || item.memberId !== owner.scope.memberId || !integer(item.version) || item.version < 1 || item.version >= Number.MAX_SAFE_INTEGER) throw Error('INVALID_INPUT'); };
   return Object.freeze({getSnapshot: () => state,subscribe: (listener: () => void) => {listeners.add(listener);return () => {listeners.delete(listener);};},load,lookup,
+    async recheckRecovery() {
+      current();if(state.writing)throw Error('WRITE_PENDING');
+      const saved=journal.load();
+      if(saved.status === 'blocked' || saved.status === 'ready' && state.pending && !sameEnvironmentOperation(saved.intent,state.pending)) {
+        publish({recoveryBlocked:true,error:'RECOVERY_BLOCKED'});return;
+      }
+      const pending=state.pending ?? (saved.status === 'ready' ? saved.intent : null);
+      if(pending?.kind === 'delete')owner.removeEnvironment(pending.expected.id as string);
+      publish({pending,recoveryBlocked:false,error:pending ? 'WRITE_UNKNOWN' : null});
+    },
     async create(input: {name:string;type:EnvironmentType;taskId?:string}) {
       const title=name(input.name),taskId=input.taskId?.trim() || null;
       if (!['personal','temporary'].includes(input.type) || taskId !== null && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(taskId)) throw Error('INVALID_INPUT');

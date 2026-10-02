@@ -27,13 +27,17 @@ function EnvironmentView({manager,locale}:{manager:EnvironmentManager;locale:Loc
   const [title,setTitle]=useState(''),[type,setType]=useState<EnvironmentType>('personal'),[taskId,setTaskId]=useState('');
   const [edit,setEdit]=useState<{item:EnvironmentMetadata;name:string}|null>(null),[remove,setRemove]=useState<EnvironmentMetadata|null>(null);
   const [localError,setLocalError]=useState(false);
-  const blocked=state.closed || state.writing || !!state.pending;
+  const blocked=state.closed || state.writing || state.recoveryBlocked || !!state.pending;
   useEffect(()=>{if(state.closed){setEdit(null);setRemove(null);setTitle('');setTaskId('');}},[state.closed]);
   const run=async(action:()=>Promise<void>,after?:()=>void)=>{setLocalError(false);try{await action();if(!manager.getSnapshot().pending && !manager.getSnapshot().error)after?.();}catch{setLocalError(true);}};
   if(state.closed)return <section data-environments-closed role="alert">{t('ENV_ACCOUNT_CLOSED')}</section>;
   return <section data-environments-page className="mx-auto max-w-5xl space-y-6">
     <header><h1 className="text-2xl font-semibold">{t('NAV_ENVIRONMENTS')}</h1><p className="mt-2 text-sm text-muted-foreground">{t('ENV_METADATA_ONLY')}</p></header>
     {(state.error || localError) && <div role="alert" className="rounded-md border p-4"><p>{t(localError?'ENV_INVALID_INPUT':`ENV_${state.error}`)}</p></div>}
+    {state.recoveryBlocked && <div className="space-y-3 rounded-md border p-4" role="alert">
+      <p>{t('ENV_RECOVERY_BLOCKED')}</p>
+      <Button data-environment-recheck-recovery disabled={state.writing} onClick={()=>void run(()=>manager.recheckRecovery())}>{t('ENV_RECHECK_RECOVERY')}</Button>
+    </div>}
     {state.pending && <div className="space-y-3 rounded-md border p-4" aria-busy={state.writing}>
       <p>{t('ENV_OPERATION_ID')}: <code data-environment-operation-id className="break-all">{state.pending.operationId}</code></p>
       <div className="flex flex-wrap gap-3"><Button data-environment-lookup disabled={state.writing} onClick={()=>void run(()=>manager.lookup())}>{t('ENV_LOOKUP_RESULT')}</Button><Button data-environment-retry variant="outline" disabled={state.writing} onClick={()=>void run(()=>manager.retry())}>{t('ENV_RETRY_WRITE')}</Button></div>
