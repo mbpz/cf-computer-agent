@@ -55,8 +55,8 @@ Files: shared location/history adapter, its tests, App subscription consumers wh
 
 - [x] Verify official browser history/navigation semantics and supported runtime capabilities; record compatibility evidence before choosing adapter details.
 - [ ] Write RED covering accepted-position subscription, back/forward cancel/confirm, repeated traversal, unknown entries, reload/session boundaries and event deduplication.
-- [ ] Implement traversal admission using verified entry identity/position; never infer unknown deltas, never silently accept dirty traversal.
-- [ ] Re-run all navigation, shell, task/inbox/editor, notifications/messages, query pagination tests; typecheck, build:ui, test:i18n, verify:i18n and checklist audit.
+- [x] Implement traversal admission using verified entry identity/position; never infer unknown deltas, never silently accept dirty traversal.
+- [x] Re-run all navigation, shell, task/inbox/editor, notifications/messages, query pagination tests; typecheck, build:ui, test:i18n, verify:i18n and checklist audit.
 - [ ] Obtain actual native history/refresh/keyboard evidence or leave that gate explicitly open; update product checklist only to proven scope.
 - [ ] Commit evidence and functional changes; no release operations.
 
@@ -73,3 +73,5 @@ Task 3后续修正：同事件输入→保存的五类写入口统一读取同�
 Task 4能力核验：官方WHATWG正文核验成功；内置浏览器原生探针复现cancelable=false时precommitHandler抛错并移动URL，验证traverseTo真实key恢复原条目，见 `docs/product/navigation-history-capability-evidence.md`。仅能力子项完成；运行时适配/未知边界/完整版本/刷新与集成验收仍开放。
 
 Task 4核心续行（基线57bb774）：两阶段prepare/permit与独立历史状态机已通过RED→GREEN；最终23文件530/530，类型/UI构建/双语/清单验证通过。新增commit卸载与排队重放取消竞态回归，详见 `docs/product/navigation-history-traversal-core-evidence.md`。这只是运行时接入的前置子项；原始popstate订阅未改，Task 4的完整RED覆盖、浏览器适配、原生验收与父项均不勾选。下一步直接执行实际端口及获准位置订阅接入，不重复设计批准。
+
+Task 4运行时续行（基线20b4038）：真实浏览器端口、accepted位置订阅、App查询/hash读取、恢复故障UI、注销迟到命令隔离已接入。行为RED及补充边界后最终23文件545/545、类型/UI/双语门禁通过；内置浏览器真实App夹具验证Back取消/确认、Forward、pending/unknown草稿保留。见 `docs/product/navigation-history-runtime-evidence.md`。完整RED边界与原生门禁仍不勾选：刷新后epoch、跨document、键盘/触控及完整版本未验收。提交步骤待Task 4全部边界完结；本轮允许原子提交运行时与证据，不代表整个Task 4结束。

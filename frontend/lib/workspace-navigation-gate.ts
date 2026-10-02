@@ -15,6 +15,7 @@ type Attempt = {
   registrations: Registration[];
   approved: Map<Registration, string>;
   commit?: () => void;
+  available?: () => boolean;
   ready?: (permit: WorkspaceNavigationPermit) => void;
   canceled?: () => void;
   prepared?: boolean;
@@ -72,6 +73,7 @@ export function createWorkspaceNavigationGate() {
       const states = attempt.registrations.map(registration => ({ registration, state: registration.read() }));
       // A guard read may synchronously trigger scope cleanup or replacement.
       if (pending !== attempt) return;
+      if (attempt.available && !attempt.available()) { invalidate(); return; }
       if (states.some(({ state }) => state.kind === "block")) { invalidate(); return; }
       for (const { registration, state } of states) {
         if (state.kind === "confirm" && attempt.approved.has(registration)
@@ -119,9 +121,9 @@ export function createWorkspaceNavigationGate() {
       registrations.add(registration);
       return () => { if (registrations.delete(registration)) invalidate(); };
     },
-    request(commit: () => void): WorkspaceNavigationResult {
+    request(commit: () => void, available?: () => boolean): WorkspaceNavigationResult {
       if (pending || callbackDepth) return "blocked";
-      const attempt: Attempt = { registrations: [...registrations], approved: new Map(), commit, result: "deferred" };
+      const attempt: Attempt = { registrations: [...registrations], approved: new Map(), commit, available, result: "deferred" };
       pending = attempt;
       advance(attempt);
       return attempt.result;

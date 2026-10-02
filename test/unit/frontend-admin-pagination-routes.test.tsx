@@ -1,3 +1,4 @@
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -14,8 +15,8 @@ const { Window } = await import("happy-dom");
 
 describe("numbered admin routes", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/admin/members" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
-  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/admin/members" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it("restores member status and pagination from URL and aborts stale requests", async () => {
     browser.history.replaceState({}, "", "/admin/members?status=disabled&page=2&pageSize=20");
@@ -187,8 +188,8 @@ describe("numbered admin routes", () => {
   it("backs up exactly one page and retries once when the filtered page becomes empty", async () => {
     browser.history.replaceState({}, "", "/admin/members?status=disabled");
     browser.history.pushState({}, "", "/admin/members?status=disabled&page=2");
-    const pushState = vi.spyOn(browser.history, "pushState");
-    const replaceState = vi.spyOn(browser.history, "replaceState");
+    const pushState = vi.spyOn(browser.history, "pushState").mockClear();
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear();
     const inputs: LoadAdminMembersInput[] = [];
     const load = async (input: LoadAdminMembersInput) => { inputs.push(input); if (inputs.length === 1) return memberPage(2, 20, 21, [member("last", "disabled")]); if (inputs.length === 2) return memberPage(2, 20, 20, []); return memberPage(1, 20, 20, Array.from({ length: 20 }, (_, index) => member(`m${index}`, "disabled"))); };
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} load={load} update={async () => member("last", "active")} />)); await flush();
@@ -306,7 +307,7 @@ describe("numbered admin routes", () => {
     await waitFor(() => container.querySelector('[role="alert"]') !== null);
     expect(container.textContent).toContain("m1@example.test");
     expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
-    const replace = vi.spyOn(browser.history, "replaceState");
+    const replace = vi.spyOn(browser.history, "replaceState").mockClear();
     expect(container.querySelector('[role="alert"] button')).not.toBeNull();
     await click('[role="alert"] button');
     requests[3]!.pending.resolve(Response.json(memberPage(2, 20, 20, [])));

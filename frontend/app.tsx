@@ -14,6 +14,7 @@ import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Button } from "./components/ui/button";
 import { PageState } from "./components/ui/page-state";
+import { HistoryNavigationNotice } from "./components/history-navigation-notice";
 import { AppShell } from "./components/shell/app-shell";
 import { AdminDashboardRoute } from "./pages/admin/admin-dashboard-route";
 import { AdminAnalyticsPage, type AdminAnalyticsState } from "./pages/admin/analytics-page";
@@ -105,7 +106,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -180,7 +181,7 @@ export function App() {
   };
   const kind = pageKindForPath(pathname);
   const page = renderPage(kind, pathname, locale, location.search, session);
-  return <AccountNetworkBoundary memberId={session.member.id}>{(owner) => <AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={() => logout(owner)} logoutPending={logoutPending} logoutError={logoutError}>{page}</AppShell>}</AccountNetworkBoundary>;
+  return <AccountNetworkBoundary memberId={session.member.id}>{(owner) => <AppShell session={session} pathname={pathname} contentScrollKey={canonicalWorkspaceLocationKey(location)} locale={locale} onNavigate={navigate} onLogout={() => logout(owner)} logoutPending={logoutPending} logoutError={logoutError}><HistoryNavigationNotice locale={locale} />{page}</AppShell>}</AccountNetworkBoundary>;
 }
 
 function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, locale: LocaleRuntime, search = "", session?: SessionSnapshot) {
@@ -292,7 +293,7 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
 
   useEffect(() => {
     const onPopState = () => {
-      const next = analyticsUrlState(window.location.search);
+      const next = analyticsUrlState(readWorkspaceLocation().search);
       queryRef.current = next;
       setDays(next.days);
       setPage(next.page);
@@ -334,10 +335,10 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
   }, [load, days, page, pageSize, refresh]);
 
   const navigateState = (next: { days: number; page: number; pageSize: SupportedPageSize }) => {
-    const params = new URLSearchParams(writePageSearch(window.location.search, next));
+    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
     params.set("days", String(next.days));
     const nextSearch = params.toString();
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
       queryRef.current = next;
       setDays(next.days); setPage(next.page); setPageSize(next.pageSize);
     });
@@ -345,7 +346,7 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
 
   return <AdminAnalyticsPage locale={locale} state={state} days={days} pending={pending} localError={localError}
     onDaysChange={(nextDays) => navigateState({ days: nextDays, page: 1, pageSize })}
-    onPageChange={(nextPage) => navigateState({ ...analyticsUrlState(window.location.search), page: nextPage })}
+    onPageChange={(nextPage) => navigateState({ ...analyticsUrlState(readWorkspaceLocation().search), page: nextPage })}
     onPageSizeChange={(nextPageSize) => navigateState({ days, page: 1, pageSize: nextPageSize })}
     onRefresh={() => {
       if (pendingRef.current) return;
@@ -562,12 +563,11 @@ function decodeRouteId(pathname: string): string {
 }
 
 export function KnowledgeReaderRoute({ locale, knowledgeItemId }: { locale: LocaleRuntime; knowledgeItemId: string }) {
-  const [citationHash, setCitationHash] = useState(() => window.location.hash);
+  const [citationHash, setCitationHash] = useState(() => readWorkspaceHash());
   useEffect(() => {
-    const update = () => setCitationHash(window.location.hash);
+    const update = () => setCitationHash(readWorkspaceHash());
     const unsubscribe = subscribeWorkspaceLocation(update);
-    window.addEventListener("hashchange", update);
-    return () => { unsubscribe(); window.removeEventListener("hashchange", update); };
+    return unsubscribe;
   }, []);
   return <KnowledgeReaderSession key={`${knowledgeItemId}:${citationHash}`} locale={locale} knowledgeItemId={knowledgeItemId} citationHash={citationHash} />;
 }
@@ -687,21 +687,21 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
       setActivityNextCursor(page.nextCursor);
     }).catch(() => setActivityNextCursor(cursor));
   };
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
+  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
   useEffect(() => {
     const controller = createKnowledgeRequestController(); controllerRef.current = controller;
     const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const request = controller.request({ ...snapshot, ...knowledgeFilters(window.location.search) });
+    const request = controller.request({ ...snapshot, ...knowledgeFilters(readWorkspaceLocation().search) });
     void request.promise.then((result) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
 export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
-  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");
+  const [query, setQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
   const [activeQuery, setActiveQuery] = useState(query);
   const [page, setPage] = useState(initialPage.page); const [pageSize, setPageSize] = useState(initialPage.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
@@ -733,8 +733,8 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
 
   useEffect(() => {
     const onPopState = () => {
-      const next = new URLSearchParams(window.location.search).get("q") ?? "";
-      const pagination = parsePageSearch(window.location.search);
+      const next = new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "";
+      const pagination = parsePageSearch(readWorkspaceLocation().search);
       setQuery(next);
       setActiveQuery(next);
       queryRef.current = { query: next, ...pagination }; setPage(pagination.page); setPageSize(pagination.pageSize); setUrlVersion((value) => value + 1);
@@ -751,7 +751,7 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
       return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
     }
     const snapshot = { query: normalized, page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const request = controller.request({ ...snapshot, ...searchFilters(window.location.search) });
+    const request = controller.request({ ...snapshot, ...searchFilters(readWorkspaceLocation().search) });
     void request.promise.then((result) => {
       if (controller.isCurrent(request.generation) && sameSearchQuery(snapshot, queryRef.current)) { setState({ kind: "ready", query: normalized, degraded: result.degraded, results: result.items, pagination: result.pagination }); setPending(false); }
     }).catch((error: unknown) => {
@@ -764,14 +764,14 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
 
   const submit = () => {
     const normalized = query.trim();
-    const params = new URLSearchParams(window.location.search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
+    const params = new URLSearchParams(readWorkspaceLocation().search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
     const nextUrl = params.size ? `/search?${params.toString()}` : "/search";
     writeWorkspaceHistory("push", nextUrl, () => {
       setActiveQuery(normalized);
       setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
   const saveView = async (name: string) => {
     if (savedViewPending) return;
     setSavedViewPending(true);
@@ -1001,12 +1001,12 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
   const [pending, setPending] = useState(false); const [localError, setLocalError] = useState<string | undefined>();
   const controllerRef = useRef<ReturnType<typeof createMySubmissionsRequestController> | null>(null);
   const queryRef = useRef({ page, pageSize });
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
+  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); setUrlVersion((value) => value + 1); }), []);
   useEffect(() => {
     const controller = createMySubmissionsRequestController();
     controllerRef.current = controller;
     const snapshot = { page, pageSize }; queryRef.current = snapshot; setPending(true); setLocalError(undefined);
-    const status = new URLSearchParams(window.location.search).get("status") ?? undefined;
+    const status = new URLSearchParams(readWorkspaceLocation().search).get("status") ?? undefined;
     const request = controller.request({ ...snapshot, ...(status ? { status } : {}) });
     void request.promise.then((result) => {
       if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); }
@@ -1015,7 +1015,7 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
     });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
@@ -1054,8 +1054,8 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   useEffect(() => {
     const onPopState = () => {
       setActionError(undefined);
-      const pagination = parsePageSearch(window.location.search);
-      const nextFilters = taskFiltersFromSearch(window.location.search);
+      const pagination = parsePageSearch(readWorkspaceLocation().search);
+      const nextFilters = taskFiltersFromSearch(readWorkspaceLocation().search);
       if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
       queryRef.current = { ...pagination, filters: nextFilters };
       setPage(pagination.page); setPageSize(pagination.pageSize); setFilters(nextFilters); setDraftFilters(nextFilters); setRetryVersion((value) => value + 1);
@@ -1148,7 +1148,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     pendingRef.current = true; setPending(true); setState({ kind: "loading" }); setActionError(undefined);
   }, []);
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parseInboxSearch(window.location.search);
+    const next = parseInboxSearch(readWorkspaceLocation().search);
     const current = queryRef.current;
     if (next.page !== current.page || next.pageSize !== current.pageSize || next.status !== current.status) {
       queryRef.current = next; invalidate();
@@ -1156,7 +1156,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   }), [invalidate]);
   useEffect(() => {
     const canonical = writeInboxSearch(search, { page, pageSize, status });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
   }, [search, page, pageSize, status]);
   const clearReadFailure = useCallback(() => {
     setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
@@ -1189,9 +1189,9 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
   }, [refresh, retryVersion]);
   const navigate = (next: InboxPageRequest) => {
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
-    const nextSearch = writeInboxSearch(window.location.search, next);
-    if (nextSearch === window.location.search) return;
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`, invalidate);
+    const nextSearch = writeInboxSearch(readWorkspaceLocation().search, next);
+    if (nextSearch === readWorkspaceLocation().search) return;
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch}`, invalidate);
   };
   const changeItem = async (item: InboxItem, operation: "status" | "task") => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
@@ -1262,7 +1262,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
   }, [search, requestedPage, pageSize]);
   const [relationGoal, setRelationGoal] = useState<Goal | null>(null);
   const relationGoalRef = useRef<Goal | null>(null);
@@ -1358,7 +1358,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
   const changePage = (page: number, size = pageSize) => {
     if (relationGoalRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
       pendingRef.current = true; setPending(true);
     });
   };
@@ -1398,7 +1398,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
   }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectsPageState>({ kind: "loading" });
   const [relationProject, setRelationProject] = useState<Project>();
@@ -1525,7 +1525,7 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
 
   const changePage = (page: number, size = pageSize) => {
     if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
       pendingRef.current = true; setPending(true);
     });
   };
@@ -1571,7 +1571,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
   const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, `${projectId}:${requestedPage}:${pageSize}`);
   useEffect(() => {
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
   }, [search, requestedPage, pageSize]);
   const [state, setState] = useState<ProjectTimelinePageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
@@ -1673,7 +1673,7 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
   };
   const changePage = (page: number, size = pageSize) => {
     if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
       pendingRef.current = true; setPending(true);
     });
   };
@@ -1710,7 +1710,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
     setPending(true); setState({ kind: "loading" }); setActionError(undefined);
   }, []);
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parseCalendarSearch(window.location.search, defaultRange);
+    const next = parseCalendarSearch(readWorkspaceLocation().search, defaultRange);
     const current = queryRef.current;
     if (next.page !== current.page || next.pageSize !== current.pageSize || next.from !== current.from || next.to !== current.to || next.status !== current.status) {
       queryRef.current = next; invalidate();
@@ -1718,7 +1718,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   }), [defaultRange, invalidate]);
   useEffect(() => {
     const canonical = writeCalendarSearch(search, { page, pageSize, from, to, status });
-    if (canonical !== search) writeWorkspaceHistory("replace", `${window.location.pathname}${canonical}`);
+    if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
   }, [search, page, pageSize, from, to, status]);
   const clearReadFailure = useCallback(() => setState({ kind: "error", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") }), [locale]);
   const clearDenied = useCallback((error: unknown) => {
@@ -1746,9 +1746,9 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
   }, [refresh, retryVersion]);
   const navigate = (next: CalendarQuery) => {
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
-    const nextSearch = writeCalendarSearch(window.location.search, next);
-    if (nextSearch === window.location.search) return;
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`, invalidate);
+    const nextSearch = writeCalendarSearch(readWorkspaceLocation().search, next);
+    if (nextSearch === readWorkspaceLocation().search) return;
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch}`, invalidate);
   };
   const cancel = async (event: CalendarEvent) => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
@@ -2061,7 +2061,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       const lastPage = Math.max(1, page.pagination.totalPages);
       if (snapshot.page > lastPage) {
         const next = { ...snapshot, page: lastPage };
-        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(window.location.search, next)}`, () => {
+        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
           queryRef.current = next; setQuery(next);
         });
         return;
@@ -2084,7 +2084,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     const onPopState = () => {
       locationEpochRef.current += 1;
       readyRef.current = false;
-      const next = parseNotificationSearch(window.location.search);
+      const next = parseNotificationSearch(readWorkspaceLocation().search);
       setActionError(undefined);
       queryRef.current = next; setQuery(next);
     };
@@ -2104,7 +2104,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   }, []);
 
   const navigate = (next: NotificationQuery, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`, () => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
       readyRef.current = false; setActionError(undefined);
       queryRef.current = next; setQuery(next);
     });
@@ -2116,14 +2116,14 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
-      if (activeRef.current && window.location.pathname === "/notifications") {
+      if (activeRef.current && readWorkspaceLocation().pathname === "/notifications") {
         invalidateSnapshot({ kind: "loading" });
         setRetryVersion((value) => value + 1);
       }
     } catch (error: unknown) {
       if (activeRef.current) {
         if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearRestrictedState();
-        else if (window.location.pathname === "/notifications") {
+        else if (readWorkspaceLocation().pathname === "/notifications") {
           setActionError(undefined);
           invalidateSnapshot({ kind: "recovery" });
         }
@@ -2202,8 +2202,8 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
 
   useEffect(() => {
     const onLocationChange = () => {
-      if (window.location.pathname !== "/messages") return;
-      const next = parseDiscussionSearch(window.location.search);
+      if (readWorkspaceLocation().pathname !== "/messages") return;
+      const next = parseDiscussionSearch(readWorkspaceLocation().search);
       if (sameDiscussionSearch(queryRef.current, next)) return;
       queryRef.current = next;
       setQuery(next);
@@ -2213,7 +2213,7 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
   useEffect(() => () => { controllerRef.current?.dispose(); controllerRef.current = null; }, []);
 
   const navigate = (next: DiscussionSearch) => {
-    writeWorkspaceHistory("push", `/messages${writeDiscussionSearch(window.location.search, next)}`, () => {
+    writeWorkspaceHistory("push", `/messages${writeDiscussionSearch(readWorkspaceLocation().search, next)}`, () => {
       queryRef.current = next; setQuery(next);
     });
   };
@@ -2278,13 +2278,13 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
 
   useEffect(() => {
     activeRef.current = true;
-    const onPopState = () => { const next = parseDiscussionSearch(window.location.search); queryRef.current = next; setQuery(next); };
+    const onPopState = () => { const next = parseDiscussionSearch(readWorkspaceLocation().search); queryRef.current = next; setQuery(next); };
     const unsubscribe = subscribeWorkspaceLocation(onPopState);
     return () => { activeRef.current = false; unsubscribe(); controllerRef.current?.dispose(); controllerRef.current = null; };
   }, []);
 
   const navigate = (next: DiscussionSearch, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `/messages/${encodeURIComponent(threadId)}${writeDiscussionSearch(window.location.search, next)}`, () => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `/messages/${encodeURIComponent(threadId)}${writeDiscussionSearch(readWorkspaceLocation().search, next)}`, () => {
       queryRef.current = next; setQuery(next);
     });
   };
@@ -2372,7 +2372,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
 
   useEffect(() => {
     const onPopState = () => {
-      const next = parseBoardSearch(window.location.search);
+      const next = parseBoardSearch(readWorkspaceLocation().search);
       queriesRef.current = next; setActionError(undefined); setQueries(next);
     };
     return subscribeWorkspaceLocation(onPopState);
@@ -2384,7 +2384,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   }, []);
 
   const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
-    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(window.location.search, status, next)}`, () => {
+    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, next)}`, () => {
       setActionError(undefined);
       const nextQueries = { ...queriesRef.current, [status]: next };
       queriesRef.current = nextQueries; setQueries(nextQueries);
@@ -2500,7 +2500,7 @@ function useBoardColumnRequest(
       const lastPage = Math.max(1, data.pagination.totalPages);
       if (querySnapshot.page > lastPage) {
         const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
-        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(window.location.search, status, nextQuery)}`, () => {
+        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, nextQuery)}`, () => {
           const nextQueries = { ...queriesRef.current, [status]: nextQuery };
           queriesRef.current = nextQueries; setQueries(nextQueries);
         });
@@ -2635,7 +2635,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
   const operationRef = useRef<ReviewOperation | null>(null);
   const needsClampRef = useRef(false);
   const queryRef = useRef({ page, pageSize }); const sameQuery = (value: { page: number; pageSize: SupportedPageSize }) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize;
-  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(window.location.search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
+  useEffect(() => subscribeWorkspaceLocation(() => { const next = parsePageSearch(readWorkspaceLocation().search); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }), []);
   const read = async (controller: ReturnType<typeof createReviewQueueRequestController>, snapshot: { page: number; pageSize: SupportedPageSize }, afterDecision = false) => {
     if (readRef.current || controllerRef.current !== controller) return;
     const token = {}; readRef.current = token;
@@ -2675,7 +2675,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
     setPendingId(null); setDecisionState((old) => old.kind === "success" ? old : { kind: "idle" }); void read(controller, snapshot);
     return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; decisionRef.current = null; operationRef.current = null; } };
   }, [locale, page, pageSize]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { const url = `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   const review = async (id: string, action: ReviewDecision, details?: ReviewNoteInput, retryOperation?: ReviewOperation) => {
     if (decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
     const actionController = controllerRef.current; if (!actionController) return;
@@ -2766,7 +2766,7 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => {
       invalidateQuery(); queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize);
     });
@@ -2803,7 +2803,7 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parsePageSearch(window.location.search);
+    const next = parsePageSearch(readWorkspaceLocation().search);
     if (sameQuery(next)) return;
     invalidateQuery(); queryRef.current = next; setPage(next.page); setPageSize(next.pageSize);
   }), []);
@@ -2868,10 +2868,10 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    const params = new URLSearchParams(writePageSearch(window.location.search, next));
+    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`, () => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
       invalidateQuery(); queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
     });
@@ -2910,7 +2910,7 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = { ...parsePageSearch(window.location.search), status: memberStatusSearch(window.location.search) };
+    const next = { ...parsePageSearch(readWorkspaceLocation().search), status: memberStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
     invalidateQuery(); queryRef.current = next;
     setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
@@ -3045,8 +3045,8 @@ export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; sea
   const queryRef = useRef({ page, pageSize, action });
 
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = parsePageSearch(window.location.search);
-    const nextAction = new URLSearchParams(window.location.search).get("action") || undefined;
+    const next = parsePageSearch(readWorkspaceLocation().search);
+    const nextAction = new URLSearchParams(readWorkspaceLocation().search).get("action") || undefined;
     // Invalidate the old query immediately, before React cleans up its effect.
     queryRef.current = { ...next, action: nextAction };
     setPage(next.page); setPageSize(next.pageSize); setAction(nextAction);
@@ -3076,15 +3076,15 @@ export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; sea
   }, [action, locale, page, pageSize, retryVersion]);
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => {
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => {
       queryRef.current = { ...next, action }; setPage(next.page); setPageSize(next.pageSize);
     });
   };
   const changeFilter = (nextAction: string) => {
-    const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize }));
+    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, { page: 1, pageSize }));
     if (nextAction) params.set("action", nextAction); else params.delete("action");
     const nextSearch = params.toString();
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
+    writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
       queryRef.current = { page: 1, pageSize, action: nextAction || undefined };
       setAction(nextAction || undefined); setPage(1);
     });
@@ -3140,10 +3140,10 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    const params = new URLSearchParams(writePageSearch(window.location.search, next));
+    const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`, () => {
+    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
       invalidateQuery(); queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
     });
@@ -3177,7 +3177,7 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     else { readRef.current = {}; setReadVersion((version) => version + 1); }
   };
   useEffect(() => subscribeWorkspaceLocation(() => {
-    const next = { ...parsePageSearch(window.location.search), status: assetStatusSearch(window.location.search) };
+    const next = { ...parsePageSearch(readWorkspaceLocation().search), status: assetStatusSearch(readWorkspaceLocation().search) };
     if (sameQuery(next)) return;
     invalidateQuery(); queryRef.current = next;
     setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);

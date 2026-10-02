@@ -176,6 +176,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 - [ ] `R2-006` 建立 `EntityForm` 字段校验、dirty、pending 和离开确认。
 - [ ] `R2-007` 建立 `EntitySheet` 查看、编辑、保存和并发错误反馈。
 - [ ] `R2-008` 建立危险操作 `ConfirmAction` 和不可逆影响说明。
+  - 2026-10-02 Task 4运行时接入：accepted订阅及history恢复/准入/重放、双语故障UI、注销迟到命令隔离；23文件545/545与类型/UI/双语通过，内置浏览器Back/Forward及pending/unknown保留有局部证据。[运行时证据](./navigation-history-runtime-evidence.md)。刷新/跨document/键盘触控门禁和父项保持开放。
   - 续行Task 3：TaskEditor两个实际入口及侧栏显式导航已有dirty/写入锁保护，22文件490/490与类型/UI/双语/清单通过。[本地证据](./navigation-task-editor-bridge-evidence.md)。history与原生验收尚未完成，R2-008不关闭。
   - 2026-10-02 已确认的共享导航方案进入实现：独立准入核心24/24、联合3文件87/87及类型/UI构建通过；尚未接入页面或history，R2-008不关闭。见[核心证据](./2026-10-02-navigation-gate-core-evidence.md)。
   - 续行：共享导航已接入每window准入与25处获准回调，真实任务/收件箱取消无查询漂移、确认注销清私有状态；20文件437/437及位置追加异常测试15/15通过。[本地证据](./navigation-atomic-route-commits-evidence.md)。TaskEditor与history尚未接入；R2-008不关闭。

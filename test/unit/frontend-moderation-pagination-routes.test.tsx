@@ -1,3 +1,4 @@
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
@@ -15,8 +16,8 @@ const { Window } = await import("happy-dom");
 
 describe("moderation numbered routes", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
-  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions?page=2" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   const queues = [
     { name: "review", path: "/admin/submissions", render: (search: string) => <ReviewQueueRoute locale={locale()} search={search} />, item: (id: string) => ({ id, title: id, submitterId: "m1", status: "review_pending" }) },
@@ -38,7 +39,7 @@ describe("moderation numbered routes", () => {
   });
 
   it.each(queues)("resets $name to page one with one history write when pageSize changes", async ({ path, render, item }) => {
-    browser.history.replaceState({}, "", `${path}?page=2`); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState");
+    browser.history.replaceState({}, "", `${path}?page=2`); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, item); });
     await act(async () => root.render(render(browser.location.search))); await flush(); push.mockClear();
     await changeSelect('select[aria-label="Rows per page"]', "50");
@@ -47,7 +48,7 @@ describe("moderation numbered routes", () => {
   });
 
   it("resets asset status to page one with one history write", async () => {
-    browser.history.replaceState({}, "", "/admin/assets?page=2&status=queued"); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState");
+    browser.history.replaceState({}, "", "/admin/assets?page=2&status=queued"); const gets: string[] = []; const push = vi.spyOn(browser.history, "pushState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); gets.push(url); return pageResponse(url, (id) => ({ asset: { id, originalName: id }, job: { status: "failed_retryable" } })); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush(); push.mockClear();
     await changeSelect('select[aria-label="Asset status"]', "failed_retryable");
@@ -56,7 +57,7 @@ describe("moderation numbered routes", () => {
   });
 
   it("refreshes review actions through the current generation and replaces an empty page", async () => {
-    const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState");
+    const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return rejected("review-1"); gets.push(url); return gets.length === 1 ? numbered([{ id: "review-1", title: "Review", submitterId: "m1", status: "review_pending" }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Reject"); await submitReview("Confirm rejection"); await flush();
@@ -65,7 +66,7 @@ describe("moderation numbered routes", () => {
   });
 
   it("preserves the asset filter while retry refresh backs up once", async () => {
-    browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable&page=2"); const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState");
+    browser.history.replaceState({}, "", "/admin/assets?status=failed_retryable&page=2"); const gets: string[] = []; const replace = vi.spyOn(browser.history, "replaceState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { const url = String(input); if (init?.method === "POST") return json({}); gets.push(url); return gets.length === 1 ? numbered([{ asset: { id: "asset-1", originalName: "broken.pdf" }, job: { status: "failed_retryable" } }], 2, 21) : numbered([], url.includes("page=2") ? 2 : 1, 0); });
     await act(async () => root.render(<AdminAssetsRoute locale={locale()} search={browser.location.search} />)); await flush();
     await retryAsset(); await flush();

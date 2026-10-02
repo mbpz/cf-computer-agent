@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerWorkspaceLeaveGuard, endWorkspaceSession, subscribeWorkspaceLocation, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { readWorkspaceHistoryFault, retryWorkspaceHistory, readWorkspaceLocation, registerWorkspaceLeaveGuard, endWorkspaceSession, subscribeWorkspaceLocation, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
+
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -106,4 +108,101 @@ describe("workspace explicit navigation admission", () => {
     writeWorkspaceHistory("push", "/calendar"); const clear = vi.fn();
     expect(() => endWorkspaceSession(clear)).toThrow("dismiss failed"); expect(clear).toHaveBeenCalledOnce(); expect(browser.location.pathname).toBe("/");
   });
+  it.each([true, false])("publishes only an admitted history arrival (Navigation API=%s)", native => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks?page=2");
+    const guard = dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.arrive(1);
+    expect(readWorkspaceLocation()).toMatchObject({ pathname: "/tasks", search: "?page=2" });
+    expect(changed).not.toHaveBeenCalled(); expect(driver.requests[0].index).toBe(2);
+    expect(writeWorkspaceHistory("push", "/calendar")).toBe("blocked");
+    driver.arrive(2); guard.decision.cancel();
+    expect(browser.location.pathname).toBe("/tasks"); expect(changed).not.toHaveBeenCalled();
+    driver.arrive(1); driver.arrive(2); guard.decision.accept();
+    expect(driver.requests.at(-1)?.index).toBe(1); expect(changed).not.toHaveBeenCalled();
+    driver.arrive(1); driver.arrive(1);
+    expect(changed).toHaveBeenCalledOnce(); expect(readWorkspaceLocation().pathname).toBe("/inbox");
+  });
+  it("does not use the transient raw URL to resolve explicit navigation", () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks?page=2");
+    dirty(); driver.arrive(1); const mutation = vi.fn();
+    expect(writeWorkspaceHistory("replace", "?page=3", mutation)).toBe("blocked");
+    expect(mutation).not.toHaveBeenCalled(); expect(readWorkspaceLocation().search).toBe("?page=2");
+  });
+  it("successful logout disposes the history reservation and old consent", () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    const guard = dirty(); driver.arrive(1); driver.arrive(2); const old = guard.decision;
+    const changed = vi.fn(); subscribeWorkspaceLocation(changed); endWorkspaceSession(vi.fn());
+    old.accept(); expect(browser.location.pathname).toBe("/"); expect(readWorkspaceLocation().pathname).toBe("/");
+    expect(changed).toHaveBeenCalledOnce(); expect(writeWorkspaceHistory("push", "/calendar")).toBe("committed");
+  });
+
+  it("an older explicit prompt cannot commit during browser restoration", () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    const guard = dirty(); const commit = vi.fn(); writeWorkspaceHistory("push", "/calendar", commit);
+    const old = guard.decision; driver.arrive(1);
+    expect(() => old.accept()).not.toThrow(); expect(commit).not.toHaveBeenCalled();
+    expect(readWorkspaceLocation().pathname).toBe("/tasks"); driver.arrive(2); guard.decision.cancel();
+  });
+
+  it("fails closed on an untracked fallback position and can retry once the exact original entry returns", async () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, false);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.corruptState(1); driver.arrive(1); await Promise.resolve(); await Promise.resolve();
+    expect(driver.requests).toEqual([]); expect(readWorkspaceHistoryFault()).toBe("restore-failed");
+    expect(readWorkspaceLocation().pathname).toBe("/tasks"); expect(changed).not.toHaveBeenCalled();
+    expect(writeWorkspaceHistory("push", "/calendar")).toBe("blocked");
+    driver.arrive(2); expect(await retryWorkspaceHistory()).toBe(true);
+    expect(readWorkspaceHistoryFault()).toBeNull(); expect(changed).not.toHaveBeenCalled();
+    expect(writeWorkspaceHistory("push", "/calendar")).toBe("deferred");
+  });
+  it.each([true, false])("retains the accepted route if restoration times out (native=%s)", async native => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+    const timers: Array<() => void> = [];
+    vi.spyOn(browser, "setTimeout").mockImplementation(((callback: () => void) => { timers.push(callback); return 1; }) as typeof browser.setTimeout);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.arrive(1); expect(timers).toHaveLength(1); timers[0]();
+    await Promise.resolve(); await Promise.resolve();
+    expect(readWorkspaceHistoryFault()).toBe("restore-failed");
+    expect(readWorkspaceLocation().pathname).toBe("/tasks"); expect(changed).not.toHaveBeenCalled();
+    expect(writeWorkspaceHistory("push", "/calendar")).toBe("blocked");
+    driver.arrive(2); expect(changed).not.toHaveBeenCalled();
+    const retried = retryWorkspaceHistory();
+    if (native) driver.requests.at(-1)!.resolve();
+    expect(await retried).toBe(true); expect(readWorkspaceHistoryFault()).toBeNull();
+  });
+  it("does not traverse a native anchor whose identity was replaced", async () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.forget(2); driver.arrive(1); await Promise.resolve(); await Promise.resolve();
+    expect(driver.requests).toEqual([]); expect(readWorkspaceHistoryFault()).toBe("restore-failed");
+    expect(readWorkspaceLocation().pathname).toBe("/tasks"); expect(changed).not.toHaveBeenCalled();
+    expect(await retryWorkspaceHistory()).toBe(false);
+  });
+
+  it("preserves unrelated history state when stamping the fallback anchor", () => {
+    browser.history.replaceState({ anotherOwner: "retain" }, "", "/tasks");
+    readWorkspaceLocation(); expect(browser.history.state.anotherOwner).toBe("retain");
+  });
+
+  it.each([true, false])("does not publish a queued old-session replay after logout (native=%s)", async native => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    const guard = dirty(); const changed = vi.fn(); subscribeWorkspaceLocation(changed);
+    driver.arrive(1); driver.arrive(2); await Promise.resolve();
+    guard.decision.accept(); expect(driver.requests.at(-1)?.index).toBe(1);
+    endWorkspaceSession(() => {}); changed.mockClear();
+    driver.arrive(1); await Promise.resolve(); await Promise.resolve();
+    expect(readWorkspaceLocation().pathname).toBe("/");
+    expect(browser.location.pathname).toBe("/");
+    expect(changed).not.toHaveBeenCalled();
+    expect(writeWorkspaceHistory("push", "/home")).toBe("committed");
+  });
+
 });

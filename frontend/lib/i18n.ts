@@ -11,6 +11,8 @@ export interface LocaleRuntime {
 
 const catalogs: Record<FrontendLocale, Record<string, string>> = {
   en: {
+    HISTORY_UNVERIFIED: "Navigation could not be verified. Your current view and draft are retained. Return to the original location and retry; do not refresh while a save is pending or unconfirmed.",
+    HISTORY_RETRY: "Retry original location",
     NAV_ENVIRONMENTS: "Linux environments",
     ENV_FORBIDDEN: "You do not have permission to use environments.",
     ENV_METADATA_ONLY: "Manage your environment records. VM startup, terminal and local storage are not connected yet; this page never starts a VM or a network connection.",
@@ -1259,6 +1261,8 @@ const catalogs: Record<FrontendLocale, Record<string, string>> = {
     ADMIN_REVIEW_COMMENT_AUTHOR_OWNER: "Submitter",
   },
   "zh-CN": {
+    HISTORY_UNVERIFIED: "无法验证导航位置。当前页面和草稿已保留。请返回原位置后重试；保存仍在进行或结果未确认时，请勿刷新。",
+    HISTORY_RETRY: "重试原位置",
     NAV_ENVIRONMENTS: "Linux 环境",
     ENV_FORBIDDEN: "你没有使用环境的权限。",
     ENV_METADATA_ONLY: "管理你的环境记录。VM 启动、终端和本地存储尚未接入；本页不会启动 VM 或自动联网。",

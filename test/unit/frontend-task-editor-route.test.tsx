@@ -6,6 +6,7 @@ import type { TaskItem } from "../../frontend/lib/tasks-data";
 import { TasksRoute, InboxRoute, App } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 import { currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 import { writeWorkspaceHistory, registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
 
@@ -120,6 +121,49 @@ describe("task editor through the real route", () => {
     await act(async () => oldClick());
     expect(browser.location.pathname).toBe("/tasks");
     await act(async () => { expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"); });
+  });
+
+  it.each([true, false])("retains a real App task draft across raw Back then discards only after admitted arrival (native=%s)", async native => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, native);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    let inboxReads = 0;
+    responder = url => {
+      if (url === "/api/session") return Response.json({ member: { id: "alice", email: "alice@app.test", role: "contributor" }, capabilities: ["tasks:use"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
+      if (url === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
+      if (url.startsWith("/api/inbox?")) { inboxReads++; return Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }); }
+      if (url === "/api/notifications/summary") return Response.json({ unread: 0 });
+      if (url.startsWith("/api/telemetry/")) return new Response(null, { status: 204 });
+    };
+    await act(async () => root.render(<App />)); await flush(); await flush();
+    await click("New task"); await change("Task title", "Browser history draft");
+    await act(async () => driver.arrive(1)); await flush();
+    expect(container.querySelector('[aria-label="Task title"]')).not.toBeNull(); expect(inboxReads).toBe(0);
+    await act(async () => driver.arrive(2)); await click("Keep editing");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Browser history draft");
+    await act(async () => { driver.arrive(1); driver.arrive(2); }); await click("Discard changes");
+    expect(container.querySelector('[aria-label="Task title"]')).not.toBeNull(); expect(inboxReads).toBe(0);
+    await act(async () => driver.arrive(1)); await flush();
+    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(container.querySelector("main")?.textContent).toContain("Inbox");
+    expect(inboxReads).toBe(1); expect(writes.filter(write => write.url === "/api/tasks")).toEqual([]);
+  });
+
+  it("keeps the editor and shows recoverable history failure instead of a silent URL/view mismatch", async () => {
+    const driver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis, false);
+    writeWorkspaceHistory("push", "/inbox"); writeWorkspaceHistory("push", "/tasks");
+    responder = url => {
+      if (url === "/api/session") return Response.json({ member: { id: "alice", email: "alice@app.test", role: "contributor" }, capabilities: ["tasks:use"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
+      if (url === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
+      if (url === "/api/notifications/summary") return Response.json({ unread: 0 });
+      if (url.startsWith("/api/telemetry/")) return new Response(null, { status: 204 });
+    };
+    await act(async () => root.render(<App />)); await flush(); await flush();
+    await click("New task"); await change("Task title", "Keep on unknown history");
+    driver.corruptState(1); await act(async () => driver.arrive(1)); await flush();
+    expect(container.textContent).toContain("Navigation could not be verified");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Keep on unknown history");
+    await act(async () => driver.arrive(2)); await click("Retry original location");
+    expect(container.textContent).not.toContain("Navigation could not be verified");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Keep on unknown history");
   });
   it.each([
     ["Task title", "Draft"], ["Task notes", "Draft notes"], ["Task priority", "high"],

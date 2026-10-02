@@ -1,3 +1,5 @@
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,8 +17,8 @@ const { Window } = await import("happy-dom");
 
 describe("private task numbered route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
-  afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it.each(["cancel", "accept"] as const)("%s leaves task query side effects inside admitted navigation", async outcome => {
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];
@@ -100,7 +102,7 @@ describe("private task numbered route", () => {
 
   it("resets page for pageSize with one history transition", async () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => taskPage(String(input)));
-    const pushState = vi.spyOn(browser.history, "pushState");
+    const pushState = vi.spyOn(browser.history, "pushState").mockClear();
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await change(container.querySelector('[aria-label="Rows per page"]') as HTMLSelectElement, "50"); await flush();
     expect(browser.location.search).toBe("?status=doing&pageSize=50");
@@ -109,7 +111,7 @@ describe("private task numbered route", () => {
 
   it.each([["Search tasks", "q"], ["Tag", "tag"]])("debounces rapid %s changes into one replace transition and one request", async (label, key) => {
     let gets = 0;
-    const replaceState = vi.spyOn(browser.history, "replaceState"); const pushState = vi.spyOn(browser.history, "pushState");
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); const pushState = vi.spyOn(browser.history, "pushState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { gets += 1; return taskPage(String(input)); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush(); vi.useFakeTimers();
     const input = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
@@ -124,7 +126,7 @@ describe("private task numbered route", () => {
 
   it("cancels a pending text filter timer on unmount", async () => {
     let gets = 0;
-    const replaceState = vi.spyOn(browser.history, "replaceState");
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear();
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { gets += 1; return taskPage(String(input)); });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush(); vi.useFakeTimers();
     await change(container.querySelector('[aria-label="Tag"]') as HTMLInputElement, "urgent");
@@ -217,7 +219,7 @@ describe("private task numbered route", () => {
     });
     await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
     await clickButton("Complete: Alpha (task-alpha)");
-    await act(async () => browser.dispatchEvent(new browser.PopStateEvent("popstate"))); await flush();
+    await act(async () => { writeWorkspaceHistory("replace", browser.location.href); }); await flush();
     expect(gets).toBe(2);
     await act(async () => resolveMutation(Response.json({ error: { code: "DENIED" } }, { status: 403 }))); await flush();
     expect(container.textContent).not.toContain("Alpha");

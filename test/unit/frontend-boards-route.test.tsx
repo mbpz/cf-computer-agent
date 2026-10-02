@@ -1,3 +1,4 @@
+import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -18,11 +19,11 @@ describe("task-backed boards route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(() => {
     browser = new Window({ url: "https://app.test/boards" });
-    vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document);
+    vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document);
     vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div"); browser.document.body.append(container as unknown as Node); root = createRoot(container);
   });
-  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+  afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it("loads four bounded status pages and paginates only the selected column", async () => {
     const requests: string[] = [];
@@ -353,7 +354,7 @@ describe("task-backed boards route", () => {
 
   it("converges a contracted last source page with replace while preserving every other column query", async () => {
     browser.history.replaceState({}, "", "/boards?todoPage=2&doingPageSize=50&blockedPage=2&donePageSize=100");
-    const replaceState = vi.spyOn(browser.history, "replaceState"); const pushState = vi.spyOn(browser.history, "pushState");
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); const pushState = vi.spyOn(browser.history, "pushState").mockClear();
     const requests: string[] = []; let succeeded = false; let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -384,7 +385,7 @@ describe("task-backed boards route", () => {
 
   it("keeps page two and exact totals when its only-item move fails", async () => {
     browser.history.replaceState({}, "", "/boards?todoPage=2&donePageSize=100");
-    const replaceState = vi.spyOn(browser.history, "replaceState"); let resolveMutation!: (response: Response) => void;
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); let resolveMutation!: (response: Response) => void;
     const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST"
       ? mutation
@@ -405,7 +406,7 @@ describe("task-backed boards route", () => {
   });
 
   it("converges an empty out-of-range popstate once without dropping other column keys", async () => {
-    const replaceState = vi.spyOn(browser.history, "replaceState"); const requests: string[] = [];
+    const replaceState = vi.spyOn(browser.history, "replaceState").mockClear(); const requests: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input); requests.push(url);
       return statusFromUrl(url) === "todo" ? pageResponseFor(url, 20, "Todo") : pageResponseFor(url, 0, "Empty");
