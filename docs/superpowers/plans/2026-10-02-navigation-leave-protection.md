@@ -53,7 +53,7 @@ Files: modify `frontend/pages/tasks/task-editor.tsx`, `frontend/lib/i18n.ts`; te
 
 Files: shared location/history adapter, its tests, App subscription consumers where necessary, native evidence report.
 
-- [ ] Verify official browser history/navigation semantics and supported runtime capabilities; record compatibility evidence before choosing adapter details.
+- [x] Verify official browser history/navigation semantics and supported runtime capabilities; record compatibility evidence before choosing adapter details.
 - [ ] Write RED covering accepted-position subscription, back/forward cancel/confirm, repeated traversal, unknown entries, reload/session boundaries and event deduplication.
 - [ ] Implement traversal admission using verified entry identity/position; never infer unknown deltas, never silently accept dirty traversal.
 - [ ] Re-run all navigation, shell, task/inbox/editor, notifications/messages, query pagination tests; typecheck, build:ui, test:i18n, verify:i18n and checklist audit.
@@ -69,3 +69,5 @@ Task 2续行（基线4478d21）：共享window准入和25处导航副作用迁�
 Task 3（基线9d126ca）：编辑器双入口与真实App侧栏接入同步draft/intent保护，RED6失败/31通过→GREEN37/37；扩展后22文件490/490、项目与严格DOM类型/UI构建/双语/清单通过。复用现有i18n文案，未改i18n.ts。见 `docs/product/navigation-task-editor-bridge-evidence.md`；Task 4及父项仍开放。
 
 Task 3后续修正：同事件输入→保存的五类写入口统一读取同步draft，RED4行为失败→编辑器54/54，完整22文件495/495；类型/构建/双语/清单通过。详见桥接证据附录，父项仍开放。
+
+Task 4能力核验：官方WHATWG正文核验成功；内置浏览器原生探针复现cancelable=false时precommitHandler抛错并移动URL，验证traverseTo真实key恢复原条目，见 `docs/product/navigation-history-capability-evidence.md`。仅能力子项完成；运行时适配/未知边界/完整版本/刷新与集成验收仍开放。
