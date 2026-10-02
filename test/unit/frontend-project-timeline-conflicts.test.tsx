@@ -2,7 +2,7 @@
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { mountAuthenticatedApp, waitForApp, forceRemountAppAt, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const oldVersion = "2026-09-27T00:00:00.000Z", newVersion = "2026-09-27T00:00:00.001Z";
@@ -56,9 +56,10 @@ describe("timeline status reconciliation through real App", () => {
     expect((main().querySelector('input[aria-label="Timeline title"]') as HTMLInputElement).disabled).toBe(true);
     await act(async () => resolveRead!()); await waitForApp(() => !button("Mark done").disabled);
   });
-  it("aborts and ignores conflict reconciliation after leaving the timeline", async () => {
+  it("aborts and ignores conflict reconciliation after forced timeline teardown", async () => {
     await mount(); delayed = true; await click(button("Mark done")); await waitForApp(() => !!resolveRead);
-    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    await forceRemountAppAt(app!, "/settings");
     expect(readSignal?.aborted).toBe(true); await act(async () => resolveRead!());
     expect(main().textContent).not.toContain("Fresh action"); expect(main().textContent).not.toContain("Review the latest data before trying again."); expect(bodies).toHaveLength(1);
   });

@@ -23,6 +23,7 @@ export function usePlanningWriteRecovery(memberId: string | undefined, module: P
     active.current = true; busy.current = false; setReading(false);
     return () => { active.current = false; generation.current++; controller.current?.abort(); };
   }, [locationKey]);
+  const isLocked = useCallback(() => current.current.kind !== "empty", []);
   const begin = useCallback((id: string, expectedUpdatedAt: string) => {
     if (current.current.kind !== "empty" || busy.current) return null;
     const record = Object.freeze({ token: crypto.randomUUID(), id, expectedUpdatedAt });
@@ -65,7 +66,7 @@ export function usePlanningWriteRecovery(memberId: string | undefined, module: P
       onReadFailure?.(); setFailed(true);
     } finally { if (live()) { busy.current = false; setReading(false); } }
   };
-  return { locked: state.kind !== "empty", blocked: state.kind === "blocked", reading, reviewed, failed, begin, finish, deny, recover };
+  return { isLocked, locked: state.kind !== "empty", blocked: state.kind === "blocked", reading, reviewed, failed, begin, finish, deny, recover };
 }
 export function PlanningWriteRecovery({ recovery, locale, pending, refresh, onDenied, onReadFailure }: {
   recovery: ReturnType<typeof usePlanningWriteRecovery>; locale: LocaleRuntime; pending: boolean;

@@ -109,10 +109,12 @@ describe("parameterized project timeline through real App", () => {
     await act(async () => resolve(Response.json({ ...item("a"), status: "done" })));
     await waitForApp(() => !title().disabled);
   });
-  it("ignores a completed write after switching projects and never reloads the old project", async () => {
+  it("ignores a completed write after forced project remount and never reloads the old project", async () => {
     await mount(); let resolve!: (response: Response) => void;
     override = (_url, init) => init?.method === "POST" ? new Promise<Response>(done => { resolve = done; }) : undefined;
-    await click(button("Mark done")); await navigate("b"); await waitForApp(() => main().textContent!.includes("b first"));
+    await click(button("Mark done"));
+    await act(async () => { expect(writeWorkspaceHistory("push", "/projects/b/timeline")).toBe("blocked"); });
+    await forceRemountAppAt(app!, "/projects/b/timeline"); await waitForApp(() => main().textContent!.includes("b first"));
     const count = requests.length;
     await act(async () => resolve(Response.json({ ...item("a"), status: "done" })));
     expect(requests).toHaveLength(count); expect(main().textContent).toContain("Project b");

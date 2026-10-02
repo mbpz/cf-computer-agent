@@ -22,7 +22,7 @@ describe("timeline persistent recovery through App", () => {
   const recovery = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(n: HTMLButtonElement) { expect(n).toBeTruthy(); await act(async () => { n.click(); }); }
   async function fill(value: string) { const n = title(); const k = Object.keys(n).find(k => k.startsWith("__reactProps$"))!; await act(async () => (n as any)[k].onChange({ currentTarget: { value } })); }
-  async function navigate(p: string) { await act(async () => { expect(writeWorkspaceHistory("push", `/projects/${p}/timeline`)).toBe("committed"); }); await waitForApp(() => !!title()); }
+  async function forcedRemount(p: string) { await forceRemountAppAt(app!, `/projects/${p}/timeline`); await waitForApp(() => !!title()); }
   async function mount(raw: string | null = null, member = "alice", key = createKey) {
     app = await mountApp({ url: "https://app.test/projects/p/timeline", configureBrowser(w) { if (raw) w.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
@@ -78,10 +78,11 @@ describe("timeline persistent recovery through App", () => {
     expect(main().textContent).not.toContain("Private row");
     await forceRemountAppAt(app!, "/projects/p/timeline"); await waitForApp(() => !!title()); expect(title().value).toBe("Page-private draft"); expect(writes).toHaveLength(1);
   });
-  it("cancels a late detail recovery on page navigation and permits explicit GET review off-page", async () => {
+  it("cancels a late detail recovery on forced page remount and permits explicit GET review off-page", async () => {
     await mount(barrier(), "alice", statusKey); let release!: () => void; detailHold = new Promise(r => { release = r; });
     await click(recovery());
-    await act(async () => { expect(writeWorkspaceHistory("push", "/projects/p/timeline?page=2")).toBe("committed"); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/projects/p/timeline?page=2")).toBe("blocked"); });
+    await forceRemountAppAt(app!, "/projects/p/timeline?page=2");
     await waitForApp(() => !!title()); await act(async () => release());
     expect(stored(statusKey)).toBe(barrier()); expect(title().disabled).toBe(true); expect(writes).toHaveLength(0);
     detailHold = undefined; await click(recovery()); await waitForApp(() => !title().disabled);
@@ -107,10 +108,10 @@ describe("timeline persistent recovery through App", () => {
     await mount(); await fill("Secret"); failure = status; await click(button("Add to timeline")); await waitForApp(() => !!button("Try timeline again"));
     expect(main().textContent).not.toContain("Private row"); expect(title()).toBeNull(); if (status !== 404) expect(stored()).toBeNull(); else expect(stored()).not.toBeNull();
   });
-  it("persists a status barrier across route return and only releases by GET review", async () => {
+  it("persists a status barrier across forced remount and only releases by GET review", async () => {
     await mount(); let release!: () => void; hold = new Promise(r => { release = r; }); await click(button("Mark done"));
     const raw = stored(statusKey); expect(raw).not.toBeNull(); expect(raw).not.toContain("Private row");
-    await navigate("q"); expect(button("Mark done").disabled).toBe(false); await navigate("p"); expect(button("Mark done").disabled).toBe(true);
+    await act(async () => { expect(writeWorkspaceHistory("push", "/projects/q/timeline")).toBe("blocked"); }); await forcedRemount("q"); expect(button("Mark done").disabled).toBe(false); await forcedRemount("p"); expect(button("Mark done").disabled).toBe(true);
     await act(async () => release()); expect(stored(statusKey)).toBe(raw); await click(recovery()); await waitForApp(() => !button("Mark done").disabled);
     expect(writes).toHaveLength(1); expect(stored(statusKey)).toBeNull(); expect(main().textContent).toContain("does not prove");
   });
@@ -142,9 +143,9 @@ describe("timeline persistent recovery through App", () => {
     expect(button("Mark done").disabled).toBe(true); expect(stored(statusKey)).toBe(barrier()); expect(writes).toHaveLength(0);
     remove.mockRestore(); await click(recovery()); await waitForApp(() => !button("Mark done").disabled); expect(stored(statusKey)).toBeNull();
   });
-  it("ignores a late recovery detail after leaving and returning", async () => {
+  it("ignores a late recovery detail after forced remount", async () => {
     await mount(barrier(), "alice", statusKey); let release!: () => void; detailHold = new Promise(r => { release = r; });
-    await click(recovery()); await navigate("q"); await navigate("p"); await act(async () => release());
+    await click(recovery()); await act(async () => { expect(writeWorkspaceHistory("push", "/projects/q/timeline")).toBe("blocked"); }); await forcedRemount("q"); await forcedRemount("p"); await act(async () => release());
     expect(stored(statusKey)).toBe(barrier()); expect(button("Mark done").disabled).toBe(true); expect(writes).toHaveLength(0);
     detailHold = undefined; await click(recovery()); await waitForApp(() => !button("Mark done").disabled);
   });

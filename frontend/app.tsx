@@ -106,7 +106,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, registerWorkspaceLeaveGuard, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -1573,6 +1573,14 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
 export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" }: { locale: LocaleRuntime; projectId: string; memberId?: string; search?: string }) {
   const { page: requestedPage, pageSize } = useMemo(() => parsePageSearch(search), [search]);
   const writeRecovery = usePlanningWriteRecovery(memberId, `TIMELINE:${projectId}`, `${projectId}:${requestedPage}:${pageSize}`);
+  // This guard outlives the editor/error subtree and reads the synchronous marker.
+  useEffect(() => {
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: writeRecovery.isLocked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (writeRecovery.isLocked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, [writeRecovery.isLocked]);
   useEffect(() => {
     const canonical = writePageSearch(search, { page: requestedPage, pageSize });
     if (canonical !== search) writeWorkspaceHistory("replace", `${readWorkspaceLocation().pathname}${canonical}`);
