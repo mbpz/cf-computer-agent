@@ -1262,6 +1262,14 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
 export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
   const writeRecovery = usePlanningWriteRecovery(memberId, "GOALS", search);
+  // Keep unresolved writes protected even when the relation/error subtree closes.
+  useEffect(() => {
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: writeRecovery.isLocked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (writeRecovery.isLocked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, [writeRecovery.isLocked]);
   const query = parsePageSearch(search);
   const { page: requestedPage, pageSize } = query;
   useEffect(() => {
@@ -1390,7 +1398,7 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
     onStatusChange={(goal: Goal, status) => void mutate(goal, () => setGoalStatus(goal.id, status, goal.updatedAt))}
     onProgressChange={(goal: Goal, progress) => void mutate(goal, () => setGoalProgress(goal.id, progress, goal.updatedAt))}
     onPageChange={page => changePage(page)} onPageSizeChange={size => changePage(1, size)} />
-    {relationGoal && <GoalTasksEditor key={relationGoal.id} goalId={relationGoal.id} locale={locale} onDenied={clearDeniedGoals} onReadFailure={relationReadFailed} onClose={() => void closeRelations()} onBeginWrite={writeRecovery.begin} onFinishWrite={writeRecovery.finish} writeBlocked={writeRecovery.blocked} />}
+    {relationGoal && <GoalTasksEditor key={relationGoal.id} goalId={relationGoal.id} title={relationGoal.title} locale={locale} onDenied={clearDeniedGoals} onReadFailure={relationReadFailed} onClose={() => void closeRelations()} onBeginWrite={writeRecovery.begin} onFinishWrite={writeRecovery.finish} writeBlocked={writeRecovery.blocked} />}
   </>;
 }
 

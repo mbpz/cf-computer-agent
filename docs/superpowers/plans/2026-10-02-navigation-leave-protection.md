@@ -89,3 +89,8 @@ Task 4逐页续行（基线aaa0212）：五个创建入口（四组件）接入u
 Task 4逐页时间线编辑续行（基线b66f757）：已有内容编辑支持dirty取消/Escape/离页确认，最新同步草稿与提交锁，路由级未决恢复标记保护错误卸载边界。12项行为RED→GREEN，补充4项后最终41文件1069/1069及受影响严格DOM类型/项目类型/UI/双语/清单通过。见`docs/product/navigation-timeline-editor-protection-evidence.md`。A05/R2-008与Task 4整体不勾选；29/5/24不变，下一允许核查项目关联及其他逐页边界。无原生验收、push、发布或远端迁移。
 
 Task 4逐页项目关联续行（基线5776cf0）：项目目标/任务关联/解除有精确影响确认、默认取消及同步单次消费；旧确认/取消/行回调隔离，ProjectsRoute未决标记守卫覆盖编辑器关闭/错误卸载。8项行为RED→GREEN，再补4项后最终43文件1110/1110；类型/UI/双语/清单通过。见`docs/product/navigation-project-relations-protection-evidence.md`。A05/R2-008与Task 4整体不勾选，29/5/24不变；下一允许核查目标任务关联和其余逐页边界，无原生验收、push、发布或远端迁移。
+
+
+## 2026-10-02 目标任务关联保护续行
+
+基线 `7f88cd4`：目标任务关联/解除精确确认、同步写锁、旧决定与旧行隔离，GoalsRoute 持有跨编辑器关闭的未决写入导航/beforeunload 保护。9项行为 RED→GREEN；44文件1135/1135、独立严格 DOM 类型、项目类型、UI构建与双语通过。证据：`docs/product/navigation-goal-tasks-protection-evidence.md`。A05/R2-008 与 Task 4 整体仍开放，29/5/24不变；下一允许核查收件箱/日程/专注及其余逐页未决写入边界。强制组件重挂载不算原生验收；未 push、发布或远端迁移。

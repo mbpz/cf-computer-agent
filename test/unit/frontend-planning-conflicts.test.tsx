@@ -67,8 +67,8 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
   it("ignores a conflict readback after leaving or forced teardown of a guarded route", async () => {
     await mount(); delay = true; await submitStatus();
     await waitForApp(() => !!resolveRead);
-    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe(kind === "projects" ? "blocked" : "committed"); });
-    if (kind === "projects") await forceRemountAppAt(app!, "/settings");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    await forceRemountAppAt(app!, "/settings");
     await act(async () => resolveRead!());
     expect(main().textContent).not.toContain("Fresh private row");
     expect(main().textContent).not.toContain("Review the latest data before trying again.");

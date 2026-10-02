@@ -17,13 +17,11 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(path: string) { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); }
-  // PROJECTS now blocks normal navigation until reconciliation; forced teardown
+  // Both planning routes block normal navigation until reconciliation; forced teardown
   // keeps the independent late-callback/remount recovery contract under test.
   async function leavePending(path: string) {
-    if (module === "projects") {
-      await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("blocked"); });
-      await forceRemountAppAt(app!, path);
-    } else await navigate(path);
+    await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("blocked"); });
+    await forceRemountAppAt(app!, path);
   }
   async function mount(raw: string | null = null, memberId = "alice") {
     app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
