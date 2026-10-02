@@ -4,6 +4,8 @@
 
 2026-09-13 增量：main 已含 B01 `6bb04ac`；D02 审计页本地修复见[独立证据](./2026-09-13-admin-audit-recovery-evidence.md)。下方历史基线测试不替代本批门禁。
 
+最新源码候选清点见[前端操作索引](./frontend-operation-inventory.md)：当前成熟度清单有 34 个业务入口；下文 32 个页面为历史基线，不作为当前总数。源码候选不替代可见性与功能验收。
+
 ## 范围与判定
 
 权威入口：`shared/workspace-route-capabilities.ts` 的 28 个静态路由，及 `frontend/app-routes.ts` 的 4 个参数化路由，共 32 个登录后页面模式。实际接线在 `frontend/app.tsx`。未登录 `/` 是公共展示页，其他受保护路径由登录/授权控制；not-found、forbidden 和通用 coming-soon 是状态，不另算业务模块。
