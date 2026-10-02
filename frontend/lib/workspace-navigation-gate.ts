@@ -121,9 +121,13 @@ export function createWorkspaceNavigationGate() {
       registrations.add(registration);
       return () => { if (registrations.delete(registration)) invalidate(); };
     },
-    request(commit: () => void, available?: () => boolean): WorkspaceNavigationResult {
-      if (pending || callbackDepth) return "blocked";
-      const attempt: Attempt = { registrations: [...registrations], approved: new Map(), commit, available, result: "deferred" };
+    request(commit: () => void, available?: () => boolean, canceled?: () => void): WorkspaceNavigationResult {
+      if (pending || callbackDepth) {
+        callbackDepth++;
+        try { canceled?.(); } finally { callbackDepth--; }
+        return "blocked";
+      }
+      const attempt: Attempt = { registrations: [...registrations], approved: new Map(), commit, available, canceled, result: "deferred" };
       pending = attempt;
       advance(attempt);
       return attempt.result;

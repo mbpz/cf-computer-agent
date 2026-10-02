@@ -364,6 +364,108 @@ describe("agent request cancellation route", () => {
     await act(async () => expect(leave()).toBe("deferred")); await decision(false); expect(questionInput().value).toBe("New unsent");
   });
 
+  function changeSource(selector: string, value: string) {
+    const input = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector)!;
+    input.value = value;
+    if (input.tagName === "SELECT") {input.dispatchEvent(new browser.Event("change", {bubbles: true}) as unknown as Event); return;}
+    const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
+    (input as unknown as Record<string, {onChange: (event: {currentTarget: typeof input}) => void}>)[key]!.onChange({currentTarget: input});
+  }
+  async function sourceDraft() {
+    await act(async () => changeSource("#agent-scope-kind", "space"));
+    await act(async () => changeSource("#agent-scope-ids", "space-a"));
+  }
+  function button(label: string) {return [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent === label)!;}
+  function sourceIds() {return container.querySelector<HTMLInputElement>("#agent-scope-ids")!.value;}
+
+  it("protects unapplied source selection and preserves it on cancel", async () => {
+    await render(); await sourceDraft();
+    await act(async () => expect(leave()).toBe("deferred"));
+    expect(unloadBlocked()).toBe(true); await decision(false);
+    expect(sourceIds()).toBe("space-a"); expect(browser.location.search).toBe("");
+  });
+  it("reserves a source discard decision against stale edits and apply", async () => {
+    await render(); await sourceDraft();
+    await act(async () => {expect(leave()).toBe("deferred"); changeSource("#agent-scope-ids", "late"); button("Start with these sources").click();});
+    await decision(false); expect(sourceIds()).toBe("space-a");
+    await act(async () => expect(leave()).toBe("deferred")); await decision(true);
+    expect(browser.location.pathname).toBe("/tasks"); expect(unloadBlocked()).toBe(false);
+  });
+  it("applies synchronous latest source selection without a discard prompt", async () => {
+    await render(); await sourceDraft();
+    await act(async () => {changeSource("#agent-scope-ids", "space-b"); button("Start with these sources").click();});
+    expect(new URLSearchParams(browser.location.search).get("spaceId")).toBe("space-b");
+    expect(container.querySelector("[data-confirm-action]")).toBeNull(); expect(sourceIds()).toBe("space-b"); expect(unloadBlocked()).toBe(false);
+  });
+  it("keeps both drafts when source application is canceled then permits a fresh apply", async () => {
+    await render(); await question("Unsent question"); await sourceDraft();
+    await click("Start with these sources"); await decision(false);
+    expect(sourceIds()).toBe("space-a"); expect(questionInput().value).toBe("Unsent question"); expect(unloadBlocked()).toBe(true);
+    await click("Start with these sources"); await decision(true);
+    expect(new URLSearchParams(browser.location.search).get("spaceId")).toBe("space-a");
+    expect(questionInput().value).toBe(""); expect(sourceIds()).toBe("space-a"); expect(unloadBlocked()).toBe(false);
+  });
+  it("retains source protection after another guard rejects application", async () => {
+    await render(); await sourceDraft();
+    const remove = registerWorkspaceLeaveGuard(() => ({kind: "block"}));
+    await click("Start with these sources"); expect(browser.location.search).toBe(""); remove();
+    expect(sourceIds()).toBe("space-a"); expect(unloadBlocked()).toBe(true);
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false);
+  });
+  it("freezes source selection while question discard confirmation admits application", async () => {
+    await render(); await question("Unsent question"); await sourceDraft();
+    await act(async () => {button("Start with these sources").click(); changeSource("#agent-scope-ids", "late");});
+    await decision(true); expect(new URLSearchParams(browser.location.search).get("spaceId")).toBe("space-a");
+    expect(sourceIds()).toBe("space-a"); expect(unloadBlocked()).toBe(false);
+  });
+  it("invalid source drafts remain guarded without navigating or clearing input", async () => {
+    await render(); await sourceDraft(); await act(async () => changeSource("#agent-scope-ids", "bad id"));
+    await click("Start with these sources"); expect(browser.location.search).toBe(""); expect(sourceIds()).toBe("bad id"); expect(unloadBlocked()).toBe(true);
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false);
+  });
+
+  it("does not submit or edit a question through a pending source discard decision", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await render(); await sourceDraft();
+    await act(async () => {expect(leave()).toBe("deferred"); changeQuestion("Late question"); sendForm();});
+    expect(fetcher).not.toHaveBeenCalled(); await decision(false); expect(questionInput().value).toBe("");
+  });
+  it("uses committed source scope for a question submitted in the same event", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {bodies.push(JSON.parse(String(init?.body))); return answer("Answer", "conv-new");});
+    await render(); await sourceDraft();
+    await act(async () => {button("Start with these sources").click(); changeQuestion("Scoped question"); sendForm();}); await flush();
+    expect(bodies).toEqual([{question: "Scoped question", scope: {kind: "space", spaceId: "space-a"}}]);
+  });
+  it("retains unapplied sources across question recovery error and explicit abandonment", async () => {
+    await act(async () => root.render(<AgentRoute locale={language} memberId="source-owner" />)); await sourceDraft(); await question("Question");
+    vi.stubGlobal("fetch", async () => {throw new TypeError("offline");}); await submit();
+    expect(container.textContent).toContain("Unconfirmed question");
+    await click("Abandon unconfirmed question"); expect(sourceIds()).toBe("space-a"); expect(unloadBlocked()).toBe(true);
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false);
+  });
+
+  it("keeps both drafts if ordinary navigation is canceled at the second confirmation", async () => {
+    await render(); await question("Unsent question"); await sourceDraft();
+    await act(async () => expect(leave()).toBe("deferred")); await decision(true);
+    expect(browser.location.pathname).toBe("/agent"); await decision(false);
+    expect(questionInput().value).toBe("Unsent question"); expect(sourceIds()).toBe("space-a");
+    await act(async () => expect(leave()).toBe("deferred")); await decision(true); await decision(true);
+    expect(browser.location.pathname).toBe("/tasks"); expect(unloadBlocked()).toBe(false);
+  });
+  it("ignores captured source edits and application after member replacement", async () => {
+    await act(async () => root.render(<AgentRoute locale={language} memberId="source-old" />)); await sourceDraft();
+    const input = container.querySelector<HTMLInputElement>("#agent-scope-ids")!;
+    const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
+    const oldEdit = (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange;
+    const applyButton = button("Start with these sources");
+    const buttonKey = Object.keys(applyButton).find(name => name.startsWith("__reactProps$"))!;
+    const oldApply = (applyButton as unknown as Record<string, {onClick: () => void}>)[buttonKey]!.onClick;
+    await act(async () => root.render(<AgentRoute locale={language} memberId="source-new" />));
+    await act(async () => {input.value = "late"; oldEdit({currentTarget: input}); oldApply();});
+    expect(browser.location.search).toBe(""); expect(container.querySelector("#agent-scope-ids")).toBeNull(); expect(unloadBlocked()).toBe(false);
+  });
+
   function unloadBlocked() {
     const event = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(event); return event.defaultPrevented;
   }

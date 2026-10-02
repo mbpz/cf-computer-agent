@@ -28,7 +28,7 @@ import { MembersPage } from "./pages/admin/members-page";
 import { SpacesPage } from "./pages/admin/spaces-page";
 import { AuditPage } from "./pages/admin/audit-page";
 import { DuplicateQueuePage } from "./pages/admin/duplicate-queue-page";
-import { AgentPage } from "./pages/agent-page";
+import { AgentPage, agentSourceFields } from "./pages/agent-page";
 import { HomePage, type WorkbenchHomeState } from "./pages/home-page";
 import { KnowledgePage } from "./pages/knowledge-page";
 import { KnowledgeReaderPage } from "./pages/knowledge-reader-page";
@@ -828,6 +828,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const [unconfirmed, setUnconfirmed] = useState(stored.kind === "ready");
   const [storageBlocked, setStorageBlocked] = useState(stored.kind === "blocked");
   const [scope, setScope] = useState<AgentScope>(initialScope ?? { kind: "all" });
+  const scopeRef = useRef(scope);
   const [history, setHistory] = useState<AgentConversation["messages"]>([]);
   const [recovery, setRecovery] = useState<"loading" | "ready" | "error">(restoreId ? "loading" : "ready");
   const [recoveryVersion, setRecoveryVersion] = useState(0);
@@ -837,7 +838,8 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     setRecovery("loading");
     void loadAgentConversation(restoreId, { signal: abort.signal }).then((conversation) => {
       if (!current) return;
-      setScope(conversation.scope); setHistory(conversation.messages);
+      scopeRef.current = conversation.scope; setScope(conversation.scope);
+      sourceDraft.checkpoint(agentSourceFields(conversation.scope)); sourceDraft.reset(); setHistory(conversation.messages);
       conversationIdRef.current = conversation.id; setRecovery("ready");
     }).catch(() => { if (current) setRecovery("error"); });
     return () => { current = false; abort.abort(); };
@@ -852,16 +854,19 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const locked = () => pendingRef.current || intentRef.current !== null
     || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
   const questionDraft = useCreateDraft({question: ""}, {question: ""}, locked, locale,
-    () => !alive.current || recovery !== "ready" || storageBlocked || unconfirmed);
+    (): boolean => !alive.current || sourceDraft.isConfirming() || recovery !== "ready" || storageBlocked || unconfirmed);
+  const sourceInitial = agentSourceFields(initialScope ?? {kind: "all"});
+  const sourceDraft = useCreateDraft(sourceInitial, sourceInitial, locked, locale,
+    (): boolean => !alive.current || questionDraft.isConfirming() || recovery !== "ready" || storageBlocked || unconfirmed);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
   useEffect(() => {alive.current = true; return () => {alive.current = false; controllerRef.current?.cancel(conversationIdRef.current);};}, []);
   const submit = (nextQuestion = questionDraft.current.current.question) => {
     const normalized = nextQuestion.trim();
-    if (!alive.current || questionDraft.isConfirming() || !normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
+    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || !normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
     let intent = intentRef.current;
     if (memberId) {
       try {
-        if (!intent) intent = createAgentIntent(memberId, normalized, scope, conversationIdRef.current);
+        if (!intent) intent = createAgentIntent(memberId, normalized, scopeRef.current, conversationIdRef.current);
         if (!saveAgentIntent(intent)) { setStorageBlocked(true); return; }
         intentRef.current = intent;
       } catch { setStorageBlocked(true); return; }
@@ -875,13 +880,13 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     questionDraft.checkpoint({question: sentQuestion});
     setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
-    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scope, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
+    const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scopeRef.current, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
     void request.promise.then(({ generation, answer }) => {
       if (controllerRef.current?.isCurrent(generation)) {
         pendingRef.current = false;
         if (memberId && intent && !clearAgentIntent(memberId, intent.key)) { setStorageBlocked(true); return; }
         intentRef.current = null;
-        if (intent) setScope(intent.scope);
+        if (intent) {scopeRef.current = intent.scope; setScope(intent.scope);}
         setRecovery("ready");
         conversationIdRef.current = answer.conversationId;
         setState({ kind: "ready", ...answer });
@@ -895,7 +900,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     });
   };
   const cancel = () => {
-    if (!alive.current || questionDraft.isConfirming() || !pendingRef.current) return;
+    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || !pendingRef.current) return;
     controllerRef.current?.cancel(conversationIdRef.current);
     // A delayed conversation-level cancellation must not target a subsequent turn.
     conversationIdRef.current = undefined;
@@ -904,20 +909,21 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     intentRef.current = null; setUnconfirmed(false); setRecovery("ready");
     setState({ kind: "cancelled" });
   };
-  const startScope = (nextScope: AgentScope) => {
-    if (!alive.current || questionDraft.isConfirming() || pendingRef.current || recovery !== "ready") return;
+  const startScope = (nextScope: AgentScope, onCommit: () => void, onSettled: () => void) => {
+    if (!alive.current || questionDraft.isConfirming() || locked() || recovery !== "ready") {onSettled(); return;}
     writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`, () => {
+      onCommit();
       controllerRef.current?.cancel(); conversationIdRef.current = undefined;
-      setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
+      scopeRef.current = nextScope; setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
       setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
-    });
+    }, onSettled);
   };
   const abandon = () => {
-    if (!alive.current || questionDraft.isConfirming() || pendingRef.current) return;
+    if (!alive.current || questionDraft.isConfirming() || sourceDraft.isConfirming() || pendingRef.current) return;
     if (memberId && !clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
     controllerRef.current?.cancel(); intentRef.current = null; conversationIdRef.current = undefined;
     setStorageBlocked(false); setUnconfirmed(false); setRecovery("ready");
-    setScope(initialScope ?? { kind: "all" }); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
+    scopeRef.current = initialScope ?? { kind: "all" }; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
     setState({ kind: "cancelled" });
   };
   const content = () => {
@@ -928,11 +934,11 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     return <div className="space-y-6">
       {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
       {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
-      <AgentPage locale={locale} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} />
+      <AgentPage locale={locale} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} isWriteBlocked={locked} sourceDraft={sourceDraft} />
       <AgentHistoryList locale={locale} />
     </div>;
   };
-  return <><div inert={questionDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}</>;
+  return <><div inert={questionDraft.confirming || sourceDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}{sourceDraft.confirmation}</>;
 }
 
 export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {

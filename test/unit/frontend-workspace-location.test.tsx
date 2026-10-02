@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readWorkspaceHistoryFault, retryWorkspaceHistory, readWorkspaceLocation, registerWorkspaceLeaveGuard, endWorkspaceSession, subscribeWorkspaceLocation, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { WORKSPACE_LOCATION_CHANGE_EVENT, readWorkspaceHistoryFault, retryWorkspaceHistory, readWorkspaceLocation, registerWorkspaceLeaveGuard, endWorkspaceSession, subscribeWorkspaceLocation, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createWorkspaceBrowserHistory } from "../../frontend/lib/workspace-browser-history";
 import { createWorkspaceNavigationGate } from "../../frontend/lib/workspace-navigation-gate";
 import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
@@ -24,6 +24,37 @@ describe("workspace explicit navigation admission", () => {
     return { get decision() { return decision; }, dismiss, unregister };
   }
 
+  it("settles admitted writes once after commit and location listeners", () => {
+    const order: string[] = [];
+    browser.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, () => order.push("event"));
+    expect(writeWorkspaceHistory("push", "/tasks", () => order.push("commit"), () => order.push("settled"))).toBe("committed");
+    expect(order).toEqual(["commit", "event", "settled"]);
+  });
+  it("settles cancellation once without commit even with stale decisions", () => {
+    const guard = dirty(); const settled = vi.fn(); const commit = vi.fn();
+    expect(writeWorkspaceHistory("push", "/tasks", commit, settled)).toBe("deferred");
+    const old = guard.decision; old.cancel(); old.accept(); old.cancel();
+    expect(commit).not.toHaveBeenCalled(); expect(settled).toHaveBeenCalledTimes(1);
+  });
+  it("settles rejected concurrent writes without canceling the first attempt", () => {
+    const guard = dirty(); const first = vi.fn(); const second = vi.fn();
+    writeWorkspaceHistory("push", "/tasks", undefined, first);
+    expect(writeWorkspaceHistory("push", "/agent", undefined, second)).toBe("blocked");
+    expect(second).toHaveBeenCalledTimes(1); expect(first).not.toHaveBeenCalled();
+    guard.decision.accept(); expect(first).toHaveBeenCalledTimes(1);
+  });
+  it("settles rejected and throwing writes exactly once", () => {
+    const settled = vi.fn(); const remove = registerWorkspaceLeaveGuard(() => ({kind: "block"}));
+    expect(writeWorkspaceHistory("push", "/tasks", undefined, settled)).toBe("blocked"); expect(settled).toHaveBeenCalledTimes(1); remove();
+    const failure = vi.fn(); expect(() => writeWorkspaceHistory("push", "/tasks", () => {throw new Error("commit failed");}, failure)).toThrow("commit failed");
+    expect(failure).toHaveBeenCalledTimes(1);
+    expect(writeWorkspaceHistory("push", "/agent")).toBe("committed");
+  });
+  it("settles writes invalidated by guard cleanup", () => {
+    const guard = dirty(); const settled = vi.fn();
+    writeWorkspaceHistory("push", "/tasks", undefined, settled); guard.unregister();
+    expect(settled).toHaveBeenCalledTimes(1);
+  });
   it("commits history, query state, then one notification in order", () => {
     const seen: string[] = [];
     let query = "old";

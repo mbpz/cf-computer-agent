@@ -76,13 +76,19 @@ function commitLocation(owner: typeof window, context: NavigationContext, mode: 
   finally { owner.dispatchEvent(new owner.Event(WORKSPACE_LOCATION_CHANGE_EVENT)); }
 }
 
-export function writeWorkspaceHistory(mode: "push" | "replace", url: string, onCommit?: () => void): WorkspaceNavigationResult {
+export function writeWorkspaceHistory(mode: "push" | "replace", url: string, onCommit?: () => void, onSettled?: () => void): WorkspaceNavigationResult {
   const owner = window;
   const context = navigationContext(owner);
-  if (context.browser.busy()) return "blocked";
-  const target = new URL(url, context.browser.url()).href;
-  // Recheck after a deferred prompt too: a browser traversal may now be restoring.
-  return context.gate.request(() => commitLocation(owner, context, mode, target, onCommit), () => !context.browser.busy());
+  let settled = false;
+  const settle = () => { if (!settled) { settled = true; onSettled?.(); } };
+  try {
+    if (context.browser.busy()) { settle(); return "blocked"; }
+    const target = new URL(url, context.browser.url()).href;
+    // Recheck after a deferred prompt too: a browser traversal may now be restoring.
+    return context.gate.request(() => {
+      try { commitLocation(owner, context, mode, target, onCommit); } finally { settle(); }
+    }, () => !context.browser.busy(), settle);
+  } catch (error) { settle(); throw error; }
 }
 
 /** Only for a confirmed session end, never for ordinary navigation or logout failure. */
