@@ -106,7 +106,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -1827,6 +1827,17 @@ export function FocusRoute({ locale, memberId = "" }: { locale: LocaleRuntime; m
   const epochRef = useRef(0);
   const busyRef = useRef(false);
   const readRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    // Journals, not the running timer or preflight GET, own the leave lock.
+    // Read refs/storage synchronously: a write and navigation can share one event.
+    const locked = () => intentRef.current !== null || transitionRef.current !== null
+      || loadFocusIntent(memberId).kind !== "empty" || loadFocusTransition(memberId).kind !== "empty";
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => ({kind: locked() ? "block" : "allow"}));
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) {event.preventDefault(); event.returnValue = "";} };
+    owner.addEventListener("beforeunload", warn);
+    return () => {unregister(); owner.removeEventListener("beforeunload", warn);};
+  }, [memberId]);
   const clearDenied = useCallback(() => {
     epochRef.current += 1;
     readRef.current?.abort();

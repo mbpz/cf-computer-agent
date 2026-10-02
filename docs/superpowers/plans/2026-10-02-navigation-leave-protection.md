@@ -99,3 +99,8 @@ Task 4逐页项目关联续行（基线5776cf0）：项目目标/任务关联/�
 ## 2026-10-02 共享未决写入保护续行
 
 基线 `126fd7a`：守卫归属 usePlanningWriteRecovery，补齐收件箱状态/转任务与日程取消，删除目标/项目/时间线重复注册。9项行为RED→GREEN，最终44文件1144/1144、独立严格DOM类型、项目类型、UI/VM隔离、双语通过；详见 `docs/product/navigation-shared-write-protection-evidence.md`。29/5/24不变，A05/R2-008与Task 4整体开放。下一允许本地推进FocusRoute独立创建/转换恢复记录的离页准入；已确认的运行会话不应被误锁。未push/发布/远端迁移，强制组件重挂载不是原生验收。
+
+
+## 2026-10-02 专注未决写入离页保护续行
+
+基线 `507e594`：FocusRoute 当前成员的开始/转换恢复记录及同步引用持有导航/beforeunload锁，回执和当前状态验证后释放；确认的运行会话/纯GET不误锁。正式导航6项行为RED→GREEN；专注156/156、扩大50文件1246/1246、项目类型/UI/VM隔离/双语通过，清单29/5/24不变。详见 `docs/product/navigation-focus-write-protection-evidence.md`。A05/R2-008与Task 4整体开放；下一允许补齐FocusPage未提交标题/任务选择草稿离页确认，其余逐页与原生/身份门禁仍须实证。未push/发布/远程迁移，强制组件重挂载不是原生验收。

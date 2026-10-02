@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { act } from "react";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 const stamp = "2026-09-28T00:00:00.000Z";
@@ -66,6 +67,51 @@ describe("Focus owned task selection through App", () => {
   async function open() { await click(button("Choose task")); await waitForApp(() => !!button("Owned task 1") || !!main().querySelector('[role="alert"]') || main().textContent!.includes("No matching tasks")); }
   async function select() { await open(); await click(button("Owned task 1")); }
   afterEach(async () => {await app?.unmount(); app = undefined; calls = []; current = null; receipt = null; receiptStatus = 0; seedStorage = []; delayedTransition = undefined; transitionStatus = 0; listStatus = detailStatus = postStatus = 0; wrongPage = wrongTarget = empty = false; delayed = delayedCurrent = delayedDetail = delayedPost = undefined; vi.unstubAllGlobals(); vi.restoreAllMocks();});
+  const unload = () => { const event = new app!.browser.Event("beforeunload", {cancelable: true}); app!.browser.dispatchEvent(event); return event.defaultPrevented; };
+  async function assertLocked() { await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/focus"); expect(unload()).toBe(true); }
+  it("blocks leaving an unresolved start until its receipt and current readback are verified", async () => {
+    await mount(); await select(); let resolve!: (value: Response) => void;
+    delayedPost = () => new Promise(done => {resolve = done;});
+    await click(button("Start focus")); await waitForApp(() => !!resolve); await assertLocked();
+    const body = calls.find(c => c.path === "/api/focus")!.body;
+    current = {...body, startTitle: body.title, status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0};
+    await act(async () => resolve(Response.json({session: current})));
+    await waitForApp(() => !!button("Pause")); expect(unload()).toBe(false);
+    await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/settings");
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+  });
+  it("blocks a same-event transition exit and retains protection after an unknown result", async () => {
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
+    transitionStatus = 500;
+    await act(async () => { button("Pause").click(); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    expect(app!.browser.location.pathname).toBe("/focus");
+    await waitForApp(() => !!button("Try focus again")); await assertLocked();
+    receipt = current = {...current, status: "paused", updatedAt: "2026-09-28T00:00:00.001Z"};
+    await click(button("Try focus again")); await waitForApp(() => !!button("Resume"));
+    expect(unload()).toBe(false); await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/settings");
+    expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
+  });
+  it.each(["start", "transition"])("blocks leaving a corrupt restored %s journal without replay", async kind => {
+    seedStorage = [[kind === "start" ? journalKey : transitionKey, "broken"]];
+    await mount(false); await waitForApp(() => !!main().querySelector('[role="alert"]')); await assertLocked();
+    expect(calls.filter(c => c.method === "POST" && c.path.startsWith("/api/focus"))).toHaveLength(0);
+  });
+  it("does not confuse another member's journal with this member's pending write", async () => {
+    seedStorage = [["memory-garden:focus-create:v1:another-member", "broken"]];
+    await mount(); expect(unload()).toBe(false); await navigate("/settings");
+    expect(app!.browser.location.pathname).toBe("/settings");
+  });
+  it("retains the in-memory lock when storage disappears after an unknown start", async () => {
+    await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
+    await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
+    app!.browser.sessionStorage.removeItem(journalKey); await assertLocked();
+    expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
+  });
+  it("fails closed if storage cannot be inspected at navigation time", async () => {
+    await mount(); const read = vi.spyOn(app!.browser.sessionStorage, "getItem").mockImplementation(() => {throw new Error("unavailable");});
+    await assertLocked(); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
+    read.mockRestore(); expect(unload()).toBe(false); await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/settings");
+  });
   it.each(["Complete", "Abandon"])("keeps %s confirmation, cancel and route exit free of writes and journals",async label=>{
     await mount();await select();await click(button("Start focus"));await waitForApp(()=>!!button("Pause"));
     const trigger=button(label);trigger.focus();await click(trigger);expect(document.activeElement?.textContent).toBe("Cancel");
@@ -178,11 +224,11 @@ describe("Focus owned task selection through App", () => {
     await click(button("Retry saved transition")); await waitForApp(() => !!button("Choose task"));
     expect(main().textContent).toContain("Abandoned"); expect(calls.filter(c => c.path.endsWith("/pause"))).toHaveLength(1);
   });
-  it("keeps the journal on route exit and ignores a late transition receipt until reentry GET", async () => {
+  it("blocks route exit, keeps the journal after forced teardown and ignores a late transition receipt until reentry GET", async () => {
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!button("Pause"));
     const original = {...current}; let resolve!: (response: Response) => void;
     delayedTransition = () => new Promise(done => {resolve = done;});
-    await finish("Complete"); await waitForApp(() => !!resolve); await navigate("/settings");
+    await finish("Complete"); await waitForApp(() => !!resolve); await assertLocked(); await forceRemountAppAt(app!, "/settings");
     const reads = calls.filter(c => c.path === "/api/focus/current").length;
     receipt = {...original, status: "completed", updatedAt: "2026-09-28T00:00:00.001Z"}; current = null;
     await act(async () => resolve(Response.json(receipt)));
@@ -214,9 +260,9 @@ describe("Focus owned task selection through App", () => {
   it.each([401, 403])("hides recovery actions after receipt read denies access with %i", async status => {
     await mount(); await select(); delayedPost = async () => {throw new Error("lost");};
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
-    receiptStatus = status; await navigate("/settings"); await navigate("/focus");
+    receiptStatus = status; await assertLocked(); await forceRemountAppAt(app!, "/focus");
     await waitForApp(() => main().textContent!.includes("Unable to load"));
-    expect(button("Retry saved start")).toBeUndefined(); expect(button("Choose task")).toBeUndefined();
+    expect(button("Retry saved start")).toBeUndefined(); expect(button("Choose task")).toBeUndefined(); await assertLocked();
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
     expect(app!.browser.sessionStorage.getItem(journalKey)).not.toBeNull();
   });
@@ -231,7 +277,7 @@ describe("Focus owned task selection through App", () => {
     await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
     expect(button("Retry saved start")).toBeUndefined();
     expect(JSON.parse(app!.browser.sessionStorage.getItem(journalKey)!).acknowledged).toBe(true);
-    delayedCurrent = undefined; await click(button("Try focus again")); await waitForApp(() => !!button("Pause"));
+    await assertLocked(); delayedCurrent = undefined; await click(button("Try focus again")); await waitForApp(() => !!button("Pause"));
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
     expect(app!.browser.sessionStorage.getItem(journalKey)).toBeNull();
   });
@@ -248,7 +294,7 @@ describe("Focus owned task selection through App", () => {
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
     const original = calls.find(c => c.path === "/api/focus")!.body;
     expect(button("Choose task")).toBeUndefined();
-    await navigate("/settings"); await navigate("/focus");
+    await assertLocked(); await forceRemountAppAt(app!, "/focus");
     await waitForApp(() => !!button("Retry saved start"));
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
     delayedPost = undefined; await click(button("Retry saved start"));
@@ -264,7 +310,7 @@ describe("Focus owned task selection through App", () => {
     };
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
     const saved = app!.browser.sessionStorage.getItem(journalKey);
-    await navigate("/settings"); await navigate("/focus");
+    await assertLocked(); await forceRemountAppAt(app!, "/focus");
     await waitForApp(() => !!button("Try focus again"));
     expect(button("Choose task")).toBeUndefined();
     expect(app!.browser.sessionStorage.getItem(journalKey)).toBe(saved);
@@ -275,7 +321,7 @@ describe("Focus owned task selection through App", () => {
     await mount(); await select();
     delayedPost = async () => {const body = calls.at(-1)!.body; receipt = {...body, startTitle: body.title, status: "completed", startedAt: stamp, updatedAt: stamp, elapsedMs: 1000, endedAt: stamp}; throw new Error("lost");};
     await click(button("Start focus")); await waitForApp(() => !!button("Retry saved start"));
-    await navigate("/settings"); await navigate("/focus");
+    await assertLocked(); await forceRemountAppAt(app!, "/focus");
     await waitForApp(() => !!button("Choose task"));
     expect(main().textContent).toContain("Completed");
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
@@ -324,7 +370,7 @@ describe("Focus owned task selection through App", () => {
     expect(button("Owned task 1")).toBeUndefined(); expect(main().textContent).toContain("No matching tasks");
   });
   async function navigate(path: string) {
-    await act(async () => {app!.browser.history.pushState({}, "", path); app!.browser.dispatchEvent(new app!.browser.PopStateEvent("popstate"));});
+    await act(async () => {writeWorkspaceHistory("push", path);});
   }
   it("aborts an initial session read on route exit and ignores its late result after reentry", async () => {
     let resolve!: (response: Response) => void; delayedCurrent = () => new Promise(done => {resolve = done;});
@@ -337,14 +383,14 @@ describe("Focus owned task selection through App", () => {
   it("never starts after leaving while the target preflight is pending", async () => {
     let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve);
-    const request = calls.find(c => c.path === "/api/tasks/task-1")!; await navigate("/settings");
+    const request = calls.find(c => c.path === "/api/tasks/task-1")!; expect(unload()).toBe(false); await navigate("/settings");
     expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({task: task(1), tags: [], links: []})));
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
   });
-  it("ignores a late write receipt without starting a new read after route exit", async () => {
+  it("blocks exit and ignores a late write receipt after forced teardown", async () => {
     let resolve!: (response: Response) => void; delayedPost = () => new Promise(done => {resolve = done;});
-    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve); await navigate("/settings");
+    await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve); await assertLocked(); await forceRemountAppAt(app!, "/settings");
     const reads = calls.filter(c => c.path === "/api/focus/current").length;
     await act(async () => resolve(Response.json({session: {id: "late", clientKey: "late", taskId: "task-1", status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0}})));
     await act(async () => {await new Promise(done => setTimeout(done, 20));});
@@ -358,10 +404,11 @@ describe("Focus owned task selection through App", () => {
     await act(async () => resolve(Response.json({task: task(1), tags: [], links: []})));
     await waitForApp(() => main().textContent!.includes("Current session")); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(1);
   });
-  it("aborts the post-write reconciliation read on exit", async () => {
+  it("blocks exit during post-write reconciliation and aborts on forced teardown", async () => {
     let resolve!: (response: Response) => void; await mount(); await select(); delayedCurrent = () => new Promise(done => {resolve = done;});
     await click(button("Start focus")); await waitForApp(() => !!resolve); const request = calls.filter(c => c.path === "/api/focus/current").at(-1)!;
-    await navigate("/settings"); expect(request.signal?.aborted).toBe(true);
+    await assertLocked(); expect(request.signal?.aborted).toBe(false);
+    await forceRemountAppAt(app!, "/settings"); expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({session: current})));
     expect(main().textContent).not.toContain("Current session");
   });
