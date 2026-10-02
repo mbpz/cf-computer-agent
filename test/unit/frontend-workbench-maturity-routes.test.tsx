@@ -42,6 +42,7 @@ const ROUTE_STATE_MATRIX = Object.freeze({
   "my-submissions": listWithRetry,
   tasks: listWithRetry,
   boards: listWithRetry,
+  environments: listWithRetry,
   settings: staticReady("Settings"),
   admin: listWithRetry,
   "admin-submissions": listWithRetry,
@@ -66,6 +67,7 @@ const PERMISSION_MASK_BY_ROUTE = Object.freeze({
   inbox: "0x100000", goals: "0x100000", projects: "0x100000", calendar: "0x100000",
   today: "0x100000", focus: "0x100000", review: "0x100000",
   home: "0x0", submit: "0x0", knowledge: "0x0", search: "0x0", agent: "0x0", "my-submissions": "0x0",
+  environments: "0x200000",
   tasks: "0x100000", boards: "0x100000", settings: "0x0", admin: "0x0", "admin-submissions": "0x0",
   "admin-duplicates": "0x0", "admin-assets": "0x0", "admin-members": "0x0", "admin-roles": "0x0",
   "admin-menus": "0x0", "admin-spaces": "0x0", "admin-audit": "0x0", "admin-analytics": "0x0",
@@ -335,14 +337,18 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
   }
   if (state === "loading") {
     const selector = routeId === "submit" ? 'main form[aria-busy="true"]'
-      : routeId === "admin-submissions" || routeId === "admin-analytics" || routeId === "admin-audit" || routeId === "admin-submission-detail" ? 'main [aria-busy="true"]'
+      : routeId === "environments" || routeId === "admin-submissions" || routeId === "admin-analytics" || routeId === "admin-audit" || routeId === "admin-submission-detail" ? 'main [aria-busy="true"]'
       : 'main [data-page-state="loading"]';
     await waitForApp(() => journey.container.querySelector(selector) !== null);
     expect(journey.container.querySelector(selector)).not.toBeNull();
     return;
   }
   if (state === "empty") {
-    if (routeId === "focus") {
+    if (routeId === "environments") {
+      await waitForApp(() => journey.container.querySelector("main")?.textContent?.includes("No environments on this page.") === true);
+      expect(journey.container.querySelector('main [data-environment-id]')).toBeNull();
+      expect(journey.container.querySelector('main [role="alert"]')).toBeNull();
+    } else if (routeId === "focus") {
       await waitForApp(() => [...journey.container.querySelectorAll("main button")].some(button => button.textContent === "Choose task"));
       expect([...journey.container.querySelectorAll("main button")].find((button) => button.textContent === "Start focus")?.hasAttribute("disabled")).toBe(true);
       expect(journey.container.querySelector('main [data-page-state="empty"]')).toBeNull();
@@ -367,6 +373,10 @@ async function assertSupportedState(journey: MountedApp, routeId: MaturityRouteI
   if (routeId === "submit") {
     expect(journey.container.querySelector("main [data-submission-retry]:not([disabled])")).not.toBeNull();
     expect(journey.container.querySelector("main form button[type=submit][disabled]")).not.toBeNull();
+  }
+  else if (routeId === "environments") {
+    // This route keeps its read-recovery control outside the alert, unlike writes.
+    expect([...journey.container.querySelectorAll("main button")].some(button => button.textContent === "Refresh records" && !button.hasAttribute("disabled"))).toBe(true);
   }
   else expect(journey.container.querySelector('main [role="alert"] button')).not.toBeNull();
 }

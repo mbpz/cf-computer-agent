@@ -24,6 +24,7 @@ export const READY_MARKER_BY_ROUTE = {
   "my-submissions": "READY::my-submissions",
   tasks: "READY::tasks",
   boards: "READY::boards",
+  environments: "READY::environments",
   settings: "contributor@app.test",
   admin: "[data-dashboard-metric=\"pending\"] [data-page-state=\"ready\"] [data-metric-value]",
   "admin-submissions": "READY::admin-submissions",
@@ -100,6 +101,7 @@ export function currentNavigationFixture(role: "contributor" | "admin", permissi
       navLeaf("tasks", "NAV_TASKS", "/tasks", "workspace"),
       navLeaf("boards", "NAV_BOARDS", "/boards", "workspace"),
     ] : []),
+    ...(permissionMask === "0x200000" ? [navLeaf("environments", "NAV_ENVIRONMENTS", "/environments", "workspace")] : []),
     navLeaf("notifications", "NAV_NOTIFICATIONS", "/notifications", "workspace"),
     navLeaf("messages", "NAV_MESSAGES", "/messages", "workspace"),
   ];
@@ -168,6 +170,11 @@ function routeFamilyResponse(routeId: MaturityRouteId, state: MaturityProbeState
       if (routeId === "projects" && path === "/api/projects/projects-first/summary") return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
       return null;
     }
+    case "environments":
+      if (path === "/api/environments?page=1&pageSize=20") return probeResponse(state,
+        { items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } },
+        { items: [{ id: "environment-route-audit", memberId: "contributor-route-auditor", name: "READY::environments", type: "personal", taskId: null, version: 1, createdAt: NOW, updatedAt: NOW }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
+      return null;
     case "home":
       if (path === "/api/knowledge/recent?limit=8") return probeResponse(state, { items: [] }, { items: [{ knowledgeItemId: "ready-home", title: "READY::home", lastVisitedAt: NOW, visitCount: 1 }] });
       return null;

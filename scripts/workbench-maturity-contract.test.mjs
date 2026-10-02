@@ -116,6 +116,7 @@ const MANIFEST_GAP_POLICIES = new Map(Object.entries({
   "workbench-my-submissions": { source: "manifest:0@7f29b6446786", dimension: "journey", slug: "resubmission-and-status-recovery", symptom: "我的提交缺少退回后的重提和完整状态恢复旅程。", owner: "R3-001" },
   "workbench-tasks": { source: "manifest:0@f69e69f87dec", dimension: "isolation", slug: "revocation-and-mutation-convergence", symptom: "撤权路径虽有探针，但 mutation、删除恢复及并发收敛尚未形成完整私有任务旅程。", owner: "R4-012" },
   "workbench-boards": { source: "manifest:0@0f01e0145a2e", dimension: "query_or_idempotency", slug: "move-concurrency-and-rollback", symptom: "看板移动缺少键盘操作、并发冲突与精确乐观回滚的完整旅程。", owner: "R4-012" },
+  "workbench-environments": {"source": "manifest:0@56cf51e57da2", "dimension": "journey", "slug": "metadata-to-vm-acceptance", "symptom": "环境页已实现私有元数据管理，但不启动 VM；运行时接入、离页草稿保护、跨刷新未知写恢复、发布和真实身份验收仍开放。", "owner": "R8-009"},
   "workbench-settings": { source: "manifest:0@5e57e601f4cd", dimension: "states", slug: "persisted-settings-boundary", symptom: "设置页没有路由级异步状态、持久化或保存 pending 边界。", owner: "R1-012" },
   "workbench-admin": { source: "manifest:0@87a1d186875c", dimension: "api", slug: "real-dashboard-summary", symptom: "管理概览权威总数与独立状态已本地验证；跨页写后对账、站点统计日期一致性及发布验收仍缺失。", owner: "R6-001" },
   "workbench-admin-submissions": { source: "manifest:0@44b459ad5dc5", dimension: "journey", slug: "queue-to-decision-recovery", symptom: "审核队列读取恢复与详情导航已本地验证；发布、索引、通知的决策闭环和服务端幂等仍待实现。", owner: "R6-003" },
@@ -223,6 +224,18 @@ test("every visible ready route has one maturity capability record", () => {
     parameterizedMaturity.map((item) => ({ routeId: item.routeId, routePattern: item.routePattern })).sort(byRouteId),
     parameterizedRoutes.map((route) => ({ routeId: route.routeId, routePattern: route.routePattern })).sort(byRouteId),
   );
+});
+
+test("environment inventory does not promote metadata management to VM acceptance", () => {
+  const { maturity } = loadContracts();
+  const record = maturity.find(item => item.id === "workbench-environments");
+  assert.ok(record, "the visible environments entry must be inventoried");
+  assert.equal(record.classification, "partial");
+  assert.equal(record.dimensions.get("journey"), "gap");
+  assert.equal(record.dimensions.get("evidence"), "gap");
+  assert.ok(record.gaps.some(gap => gap.includes("does not start a VM")));
+  assert.ok(record.gaps.some(gap => gap.includes("cross-refresh uncertain-write recovery")));
+  assert.ok(record.testEvidence.includes("scripts/browser-vm-environments-page.test.mjs"));
 });
 
 test("maturity records are structural, complete, and evidence-backed", () => {

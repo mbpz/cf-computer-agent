@@ -52,6 +52,7 @@ async function renderApp(t, requester, permissionMask='0x200000') {
   if(path==='/api/session')return Response.json({member:{id:'member-a',email:'a@example.test',role:'contributor'},capabilities:[],permissionMask,logoutUrl:'/auth/logout'});
   if(path==='/api/navigation')return Response.json({tree:[]});
   if(path==='/api/telemetry/pageview')return new Response(null,{status:204});
+  if(path==='/api/notifications/summary'){assert.ok(!init.method || init.method==='GET');return Response.json({unread:0});}
   return requester(path,init);
  }})){originals.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});}
  const {createRoot}=await import('react-dom/client');

@@ -117,6 +117,7 @@
 | workbench-graph:query_or_idempotency:create-task | domain:POST /api/tasks | workbench-graph | 图谱创建任务缺少完整动作重放与响应丢失收敛证明。 | query_or_idempotency | R8-005 | R4-002 | frontend/lib/graph-actions.ts<br>src/routes/graph.ts | test/worker/graph-actions.test.ts | 图谱动作响应丢失后重试只产生一次结果，跨成员目标仍被拒绝。 | P1 |
 | workbench-graph:query_or_idempotency:start-focus | domain:POST /api/focus | workbench-graph | 图谱启动专注缺少完整动作重放与并发收敛证明。 | query_or_idempotency | R8-005 | R4-002 | frontend/lib/graph-actions.ts<br>src/routes/graph.ts | test/worker/graph-actions.test.ts | 图谱动作响应丢失后重试只产生一次结果，跨成员目标仍被拒绝。 | P1 |
 | workbench-graph:query_or_idempotency:create-timeline-item | domain:POST /api/projects/:id/timeline | workbench-graph | 图谱创建时间线项缺少完整动作重放与重复结果抑制证明。 | query_or_idempotency | R8-005 | R4-002 | frontend/lib/graph-actions.ts<br>src/routes/graph.ts | test/worker/graph-actions.test.ts | 图谱动作响应丢失后重试只产生一次结果，跨成员目标仍被拒绝。 | P1 |
+| workbench-environments:journey:metadata-to-vm-acceptance | manifest:0@56cf51e57da2 | workbench-environments | 环境页已实现私有元数据管理，但不启动 VM；运行时接入、离页草稿保护、跨刷新未知写恢复、发布和真实身份验收仍开放。 | journey | R8-009 | R8-001 | frontend/features/environments/environments-page.tsx<br>frontend/features/environments/environment-manager.ts<br>src/routes/environments.ts | scripts/browser-vm-environments-page.test.mjs | 保留元数据与运行中 VM 的区分，真实身份完成运行时接入、离页与刷新恢复验收后才关闭；本地清单补齐不替代发布验收。 | P1 |
 | workbench-submit:evidence:signed-submission-acceptance | manifest:0@edeb39c3614b | workbench-submit | 本地提交、pending、失败重试、成功及 submitter 幂等已证明，但发布与 signed-browser 验收仍缺失。 | evidence | R8-009 | R3-001<br>R8-001<br>R8-008 | frontend/pages/submit-page.tsx<br>src/submissions/repository.ts | test/worker/submissions.test.ts | 真实 contributor 完成提交并由 admin 看见同一记录，自动化与人工 signed-browser 证据分开保存。 | P2 |
 <!-- gap-matrix:end -->
 
@@ -124,11 +125,11 @@
 
 | 维度 | 数量 |
 | --- | ---: |
-| manifest 聚合 gap | 33 |
+| manifest 聚合 gap | 34 |
 | domain mutation-safety gap | 68 |
-| 总计 | 101 |
+| 总计 | 102 |
 | P0 | 54 |
-| P1 | 46 |
+| P1 | 47 |
 | P2 | 1 |
 
 阶段主责计数由合同从 `Owner atom` 派生，并与 checklist、ROADMAP 的 R1–R8 映射逐项核对。矩阵只完成历史 R0-012 与本次 M02 的规划与验证，不提升任何 R1–R8 实现、发布或验收状态。
@@ -138,3 +139,5 @@
 2026-09-28 UTC D02 增量：空间编辑、集合创建与集合编辑三个可达操作纳入 R6-008，局部重放/CAS 证据不冒称跨刷新意图恢复。当前实算 100 gap（53 P0 / 46 P1 / 1 P2），历史快照不回填，原有检查断言未放宽。
 
 2026-09-28 UTC D02 菜单表单增量：新增创建操作归 R6-007；当前实算 **101 gap（54 P0 / 46 P1 / 1 P2）**。字段快照与树 CAS 的本地证明不等于跨会话投影或完整重放；功能父项仍 29/4/25。
+
+2026-10-02 环境入口增量：补齐已可见 `/environments` 的成熟度记录，保守登记为 partial，归属已有 R8-009；当前 102 gap（54 P0 / 47 P1 / 1 P2）。不新增实施原子、不关闭 VM 功能项，历史快照不回填。领域审计的动态请求解析仍单独开放，不把本次入口清单通过当作领域审计通过。
