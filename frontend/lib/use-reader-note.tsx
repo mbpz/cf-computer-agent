@@ -37,8 +37,10 @@ export function useReaderNote(memberId: string, knowledgeItemId: string, locale?
     return () => { controller.abort(); owner.current = null; intent.current = null; };
   }, []);
   function discardCache() {
-    if (!owner.current || recovering.current || intent.current || actionBlocked()) return false;
+    if (recovering.current || intent.current || actionBlocked()) return false;
+    // Loading/error placeholders own no cached draft and must not trap navigation.
     if (!cachedDraft.current) return true;
+    if (!owner.current) return false;
     try {
       clearPrivateKnowledgeNote(knowledgeItemId, memberKnowledgeNoteStorage(memberId));
       cachedDraft.current = false; setDiscardError(false); return true;

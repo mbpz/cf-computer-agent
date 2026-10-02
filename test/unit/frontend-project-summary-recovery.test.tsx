@@ -35,6 +35,10 @@ describe("project summary per-row recovery", () => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
+      if (url.pathname === "/api/notifications/summary") {
+        expect(init?.method ?? "GET").toBe("GET");
+        return Response.json({ unread: 0 });
+      }
       requests.push(url.pathname + url.search);
       return respond(url, init);
     } });
@@ -110,6 +114,10 @@ describe("project summary per-row recovery", () => {
     await waitForApp(() => card("a") !== null);
     await act(async () => retry("a").click());
     await act(async () => ([...card("b").querySelectorAll("button")].find((button) => button.textContent === "Complete") as HTMLButtonElement).click());
+    expect(mutated).toBe(false);
+    const dialog = main().querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Project b (b)");
+    await act(async () => ([...dialog.querySelectorAll("button")].find(button => button.textContent === "Complete") as HTMLButtonElement).click());
     await waitForApp(() => card("a").textContent?.includes("2/9") === true);
     expect(oldSignal?.aborted).toBe(true);
     await act(async () => resolveOld(Response.json(validSummary)));

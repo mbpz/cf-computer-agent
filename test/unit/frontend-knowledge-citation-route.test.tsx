@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeReaderRoute } from "../../frontend/app";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 const vmContexts = new WeakSet<object>();
@@ -33,7 +34,7 @@ describe("reader exact citation route", () => {
     let denied = true; const urls: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => { const url = String(input); urls.push(url); if (url.endsWith("/citation-next") && denied) return new Response(null, { status: 403 }); return fixture(url); });
     await render();
-    await act(async () => { browser.history.pushState({}, "", "#citation-next"); browser.dispatchEvent(new browser.HashChangeEvent("hashchange")); }); await flush();
+    await act(async () => { expect(writeWorkspaceHistory("push", "#citation-next")).toBe("committed"); }); await flush();
     expect(container.textContent).not.toContain("Historical body");
     denied = false;
     const retry = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Try again")) as HTMLButtonElement;
@@ -51,13 +52,22 @@ describe("reader exact citation route", () => {
       return fixture(url);
     });
     await render();
-    await act(async () => { browser.history.pushState({}, "", "#citation-next"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { expect(writeWorkspaceHistory("push", "#citation-next")).toBe("committed"); }); await flush();
     expect(oldSignal?.aborted).toBe(true);
     await act(async () => late.resolve(fixture("/api/knowledge/knowledge-1/revisions/revision-old"))); await flush();
     expect(container.querySelector("[data-test-markdown]")?.textContent).toBe("Next historical body");
   });
 
-  async function render() { await act(async () => root.render(<KnowledgeReaderRoute locale={language} knowledgeItemId="knowledge-1" />)); await flush(); }
+  it("allows leaving a failed initial reader without a note draft or unresolved write", async () => {
+    vi.stubGlobal("fetch", async () => new Response(null, { status: 503 }));
+    await render();
+    expect(container.querySelector('[data-page-state="error"]')).not.toBeNull();
+    await act(async () => { expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"); });
+    await flush();
+    expect(browser.location.pathname).toBe("/knowledge");
+  });
+
+  async function render() { await act(async () => root.render(<KnowledgeReaderRoute memberId="member-a" locale={language} knowledgeItemId="knowledge-1" />)); await flush(); }
 });
 function fixture(url: string): Response {
   if (url.includes("/citations/")) {

@@ -2,13 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { loadRecentKnowledge, loadRecentResearch } from "../../frontend/lib/knowledge-data";
 
 describe("frontend recent visits boundary", () => {
-  it("loads a small private list and drops malformed rows", async () => {
+  it("loads a valid small private list", async () => {
     const requester = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [
       { knowledgeItemId: "knowledge-1", title: "Guide", lastVisitedAt: "2026-08-26T00:00:00.000Z", visitCount: 3 },
-      { knowledgeItemId: "broken", title: 42, lastVisitedAt: "", visitCount: "bad" },
     ] }), { status: 200 }));
     await expect(loadRecentKnowledge(requester)).resolves.toEqual([{ id: "knowledge-1", title: "Guide", lastVisitedAt: "2026-08-26T00:00:00.000Z", visitCount: 3 }]);
     expect(requester).toHaveBeenCalledWith("/api/knowledge/recent?limit=8", expect.objectContaining({ credentials: "same-origin" }));
+  });
+});
+
+describe("frontend recent visits fail-closed validation", () => {
+  it.each([null, [], {}, { knowledgeItemId: "broken", title: 42, lastVisitedAt: "" }])("rejects a malformed row rather than presenting a partial list: %j", async (invalid) => {
+    const valid = { knowledgeItemId: "knowledge-1", title: "Guide", lastVisitedAt: "2026-08-26T00:00:00.000Z", visitCount: 3 };
+    await expect(loadRecentKnowledge(async () => Response.json({ items: [valid, invalid] }))).rejects.toThrow("RECENT_KNOWLEDGE_INVALID");
   });
 });
 

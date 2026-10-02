@@ -25,6 +25,8 @@ function routeFetch(route: Route, requests: URL[], respond: (url: URL) => Respon
     }
     if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
     expect(init?.method ?? "GET").toBe("GET");
+    // Shared notification summary is independently permitted; no workspace-domain read is allowed on denial.
+    if (url.pathname === "/api/notifications/summary") return Response.json({ unread: 0 });
     requests.push(url);
     if (url.pathname === endpoint[route]) return respond(url);
     if (route === "projects" && /^\/api\/projects\/projects-(first|second)\/summary$/.test(url.pathname)) return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
