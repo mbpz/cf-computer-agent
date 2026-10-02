@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminSpacesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -41,6 +42,22 @@ describe("space write recovery", () => {
       return json(String(url).includes("collections") ? { collection: item } : { space: item });
     });
   }
+  it.each(["initial","page","dirty-page"])("does not trap navigation after a read-only %s failure",async kind=>{
+    vi.stubGlobal("fetch",async(url:unknown)=>kind==="initial"||String(url).includes("cursor=")?new Response(null,{status:503}):String(url).includes("/collections")?json({items:[]}):json({items:[space()],nextCursor:"next"}));
+    await render();if(kind!=="initial"){if(kind==="dirty-page")await draft();await click("Load more");}
+    if(kind!=="dirty-page"){const event=new browser.Event("beforeunload",{cancelable:true});browser.dispatchEvent(event);expect(event.defaultPrevented).toBe(false);}
+    await act(async()=>{writeWorkspaceHistory("push","/home");});if(kind==="dirty-page"){expect(browser.location.pathname).toBe("/admin/spaces");const confirm=container.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(confirm).not.toBeNull();await act(async()=>confirm.click());}expect(browser.location.pathname).toBe("/home");
+  });
+  it.each(["create-pending","create-unknown","create-denied","edit-pending","edit-unknown","edit-denied"])("retains route leave lock through %s and only recovers by reading",async kind=>{
+    let resolve!:(value:Response)=>void;const response=new Promise<Response>(done=>{resolve=done;});const methods:string[]=[];
+    vi.stubGlobal("fetch",async(url:unknown,init?:RequestInit)=>{methods.push(init?.method||"GET");return init?.method?response:reads(url);});
+    await render();if(kind.startsWith("create"))await draft();else{await click("Edit space: Private space");await input("admin-record-name","New name");await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});}
+    await act(async()=>{if(kind.startsWith("create"))container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));else button("Confirm changes").click();writeWorkspaceHistory("push", "/home");});expect(browser.location.pathname).toBe("/admin/spaces");
+    if(!kind.endsWith("pending")){resolve(new Response(null,{status:kind.endsWith("denied")?403:503}));await flush();}
+    await act(async()=>{writeWorkspaceHistory("push", "/home");});expect(browser.location.pathname).toBe("/admin/spaces");const event=new browser.Event("beforeunload",{cancelable:true});browser.dispatchEvent(event);expect(event.defaultPrevented).toBe(true);
+    if(kind.endsWith("pending")){resolve(new Response(null,{status:503}));await flush();}
+    await click("Try again");await act(async()=>{writeWorkspaceHistory("push", "/home");});const discard=container.querySelector("[data-confirm-action]") as HTMLButtonElement|null;if(discard)await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(methods.filter(x=>x!=="GET")).toEqual([kind.startsWith("create")?"POST":"PATCH"]);
+  });
   it.each(["Edit space: Private space", "Edit collection: Private collection"])("canceling %s confirmation sends no PATCH and keeps the draft", async label => {
     const writes: {url:string;body:Record<string,unknown>}[] = []; managementFetch(writes);
     await render();await click(label);await input("admin-record-name","Unsaved");

@@ -3039,6 +3039,18 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
   const scope = useRef(0);
   const write = useRef<object | null>(null);
   const blocked = useRef(false);
+  const unresolvedWrite = useRef(false);
+  useEffect(() => {
+    // Keep the unresolved-write guard mounted even when denied reads hide editors.
+    const owner = window;
+    const locked = () => write.current !== null || unresolvedWrite.current;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: locked() ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => {
+      if (locked()) { event.preventDefault(); event.returnValue = ""; }
+    };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, []);
   const readController = useRef<AbortController | null>(null);
   const requireRead = () => { blocked.current = true; setNeedsRead(true); };
   const deny = (error: unknown) => {
@@ -3072,7 +3084,7 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
       if (epoch !== scope.current || controller.signal.aborted) return false;
       setState({ kind: "ready", spaces, nextCursor });
       // A GET started before a write settled is not post-write evidence.
-      if (!activeWrite && !write.current) { blocked.current = false; setNeedsRead(false); }
+      if (!activeWrite && !write.current) { unresolvedWrite.current = false; blocked.current = false; setNeedsRead(false); }
       return true;
     } catch (error) {
       if (epoch !== scope.current || controller.signal.aborted) return false;
@@ -3089,7 +3101,7 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
   }, [locale]);
   const create = async (input: { slug: string; name: string }) => {
     if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
-    const token = {}; const epoch = scope.current; write.current = token; requireRead();
+    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead();
     try {
       await createAdminSpace(input);
       if (epoch !== scope.current) return false;
@@ -3104,7 +3116,7 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
     if (write.current || readController.current || blocked.current || state.kind !== "ready") return false;
     const current = state.spaces.find(item => item.id === command.spaceId);
     if (!current || current.readOnly || current.kind === "legacy") return false;
-    const token = {}; const epoch = scope.current; write.current = token; requireRead();
+    const token = {}; const epoch = scope.current; write.current = token; unresolvedWrite.current = true; requireRead();
     try {
       await manageAdminSpace(command, current);
       if (epoch !== scope.current) return false;
@@ -3118,7 +3130,7 @@ export function AdminSpacesRoute({ locale }: { locale: LocaleRuntime }) {
       return false;
     } finally { if (write.current === token) write.current = null; }
   };
-  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} needsRead={needsRead} onCreate={create} onManage={manage} />;
+  return <SpacesPage onLoadRetry={() => void read()} locale={locale} loading={state.kind === "loading"} error={state.kind === "error" ? state.message : undefined} spaces={state.kind === "ready" ? state.spaces : []} nextCursor={state.kind === "ready" ? state.nextCursor : undefined} onLoadMore={() => void read("spaces")} onLoadCollections={id => void read("collections", id)} pending={pending} blocked={needsRead} navigationBlocked={unresolvedWrite.current} needsRead={needsRead} onCreate={create} onManage={manage} />;
 }
 
 export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {

@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { SpacesPage } from "../../frontend/pages/admin/spaces-page";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -30,6 +31,29 @@ describe("space and collection confirmation", () => {
   async function input(id:string,value:string){const el=container.querySelector(`#${id}`) as HTMLInputElement;await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,value);el.dispatchEvent(new browser.Event("input",{bubbles:true}));});}
   async function submit(){await act(async()=>{container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});}
   const dialog=()=>container.querySelector('[role="alertdialog"]');
+  async function leave() { await act(async()=>{writeWorkspaceHistory("push", "/home");}); }
+  function unload() { const event=new browser.Event("beforeunload",{cancelable:true});browser.dispatchEvent(event);return event.defaultPrevented; }
+  it.each(["Create space","Edit space: Space","Create collection: Space","Edit collection: Collection"])("protects %s draft through canceled and committed navigation",async label=>{
+    await mount();await click(label);expect(unload()).toBe(false);const id=label==="Create space"?"admin-space-name":"admin-record-name";await input(id,"Local draft");expect(unload()).toBe(true);
+    await leave();expect(browser.location.pathname).toBe("/admin/spaces");expect(dialog()).not.toBeNull();await act(async()=>{(dialog()!.querySelector("[data-cancel-action]") as HTMLButtonElement).click();});
+    expect((container.querySelector("#"+id) as HTMLInputElement).value).toBe("Local draft");await leave();await click("Discard changes");expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);expect(onCreate).not.toHaveBeenCalled();expect(onManage).not.toHaveBeenCalled();
+  });
+  it.each(["Create space","Edit space: Space","Create collection: Space","Edit collection: Collection"])("retains %s input when final navigation admission fails",async label=>{
+    await mount();await click(label);const id=label==="Create space"?"admin-space-name":"admin-record-name";await input(id,"Keep");const unregister=registerWorkspaceLeaveGuard(()=>({kind:"allow",beforeCommit:()=>false}));
+    await leave();expect(dialog()).not.toBeNull();await click("Discard changes");expect(browser.location.pathname).toBe("/admin/spaces");expect((container.querySelector("#"+id) as HTMLInputElement).value).toBe("Keep");expect(unload()).toBe(true);unregister();
+  });
+  it.each(["space","collection"])("blocks navigation during a %s action confirmation",async kind=>{
+    await mount();await click(kind==="space"?"Edit space: Space":"Edit collection: Collection");await submit();await leave();expect(browser.location.pathname).toBe("/admin/spaces");expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);expect(unload()).toBe(true);
+    await act(async()=>{(dialog()!.querySelector("[data-cancel-action]") as HTMLButtonElement).click();});await leave();expect(browser.location.pathname).toBe("/home");
+  });
+  it.each(["Create space","Create collection: Space"])("submits synchronous latest %s fields once",async label=>{
+    await mount();await click(label);if(label==="Create space")await input("admin-space-slug","new-space");const id=label==="Create space"?"admin-space-name":"admin-record-name";
+    await act(async()=>{const el=container.querySelector("#"+id) as HTMLInputElement;Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype,"value")!.set!.call(el,"Latest");el.dispatchEvent(new browser.Event("input",{bubbles:true}));for(let i=0;i<2;i++)container.querySelector("form")!.dispatchEvent(new browser.Event("submit",{bubbles:true,cancelable:true}));});
+    const calls=label==="Create space"?onCreate.mock.calls:onManage.mock.calls;expect(calls).toHaveLength(1);expect(label==="Create space"?calls[0][0].name:calls[0][0].input.name).toBe("Latest");
+  });
+  it.each(["Create space","Edit space: Space","Create collection: Space"])("rejects %s submit and cancel while leave confirmation is open",async label=>{
+    await mount();await click(label);const id=label==="Create space"?"admin-space-name":"admin-record-name";await input(id,"Keep");if(label==="Create space")await input("admin-space-slug","new-space");await leave();expect(dialog()).not.toBeNull();await submit();await click("Cancel");expect(onCreate).not.toHaveBeenCalled();expect(onManage).not.toHaveBeenCalled();expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
+  });
   it.each(["space","collection"])("confirms exact %s target, changes and one write",async kind=>{
     await mount();await click(kind==="space"?"Edit space: Space":"Edit collection: Collection");await input("admin-record-name","Renamed");await submit();
     expect(onManage).not.toHaveBeenCalled();expect(dialog()?.textContent).toContain(kind+"-1");expect(dialog()?.textContent).toContain("Renamed");expect(dialog()?.textContent).toContain(kind==="space"?"Space → Renamed":"Collection → Renamed");expect(browser.document.activeElement?.textContent).toBe("Cancel");
