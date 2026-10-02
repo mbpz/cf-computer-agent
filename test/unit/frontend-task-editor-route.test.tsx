@@ -169,6 +169,26 @@ describe("task editor through the real route", () => {
     expect(browser.location.pathname).toBe("/inbox"); expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(container.querySelector("main")?.textContent).toContain("Inbox"); expect(writes.filter(write => write.url === "/api/tasks")).toHaveLength(0);
   });
+  it.each([
+    ["Task title", "Fresh title", "Save task", "title"],
+    ["Task tags (comma-separated)", "fresh", "Save tags", "tags"],
+    ["Task progress", "40", "Save progress", "progress"],
+    ["Task status", "doing", "Save status", "status"],
+    ["Knowledge item ID", "fresh-knowledge", "Link knowledge", "knowledgeItemId"],
+  ])("submits the same fresh %s snapshot used by navigation admission", async (label, value, submit, key) => {
+    await mount(); await click("Edit: Alpha (task-alpha)");
+    const node = container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement;
+    const propKey = Object.keys(node).find(value => value.startsWith("__reactProps$"))!;
+    const button = [...container.querySelectorAll("button")].find(node => node.textContent === submit)!;
+    await act(async () => {
+      node.value = value;
+      if (node.tagName === "SELECT") node.dispatchEvent(new browser.Event("change", { bubbles: true }) as unknown as Event);
+      else (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[propKey]!.onChange({ currentTarget: node });
+      button.click();
+    }); await flush();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.body[key]).toEqual(key === "tags" ? ["fresh"] : key === "progress" ? 40 : value);
+  });
   it("creates from the task list and refreshes only after confirmed success", async () => {
     await mount(); await click("New task"); await change("Task title", "New work"); await click("Create task");
     expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ method: "POST", body: { title: "New work" } });

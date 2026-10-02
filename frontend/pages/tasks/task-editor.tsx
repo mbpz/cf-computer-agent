@@ -157,6 +157,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
   }
   function save() {
     if (locked) return;
+    const fields = currentDraft.current.fields;
     const title = fields.title.trim(); const notes = fields.notes.trim();
     if (!title || [...title].length > 200 || [...notes].length > 5000 || /[\u0000-\u001f\u007f-\u009f]/u.test(title + notes)) { setError(true); return; }
     const date = fields.dueAt ? new Date(fields.dueAt) : null;
@@ -169,7 +170,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
   }
   function saveTags() {
     if (!taskId || locked) return;
-    const next = [...new Set(tags.split(",").map((tag) => tag.trim()).filter(Boolean))];
+    const next = [...new Set(currentDraft.current.tags.split(",").map((tag) => tag.trim()).filter(Boolean))];
     if (next.length > 10 || next.some((tag) => [...tag].length > 32 || /[\u0000-\u001f\u007f-\u009f]/u.test(tag))) { setError(true); return; }
     void perform({ clean: ["tags"], write: () => replaceTaskTags(taskId, next) });
   }
@@ -198,11 +199,11 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
         <Button type="submit" disabled={locked}>{t(taskId ? "TASKS_SAVE" : "TASKS_CREATE")}</Button>
       </form>
       {taskId && detail && <>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = status; void perform({ clean: ["status"], write: () => setTaskStatus(taskId, next) }); } }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = currentDraft.current.status; void perform({ clean: ["status"], write: () => setTaskStatus(taskId, next) }); } }}>
           <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => edit("status", event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_STATUS")}</Button>
         </form>
-        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], write: () => setTaskProgress(taskId, next) }); }}>
+        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], write: () => setTaskProgress(taskId, next) }); }}>
           <label>{t("TASKS_FIELD_PROGRESS")}<Input type="number" min={0} max={100} step={1} required aria-label={t("TASKS_FIELD_PROGRESS")} value={progress} disabled={locked || ["done", "canceled"].includes(detail.task.status)} onChange={(event) => edit("progress", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || ["done", "canceled"].includes(detail.task.status)}>{t("TASKS_SAVE_PROGRESS")}</Button>
         </form>
@@ -210,7 +211,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
           <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => edit("tags", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_TAGS")}</Button>
         </form>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], write: () => addTaskLink(taskId, id) }); }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], write: () => addTaskLink(taskId, id) }); }}>
           <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => edit("knowledgeId", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
