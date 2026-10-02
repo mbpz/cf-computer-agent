@@ -71,3 +71,5 @@ Task 3（基线9d126ca）：编辑器双入口与真实App侧栏接入同步draf
 Task 3后续修正：同事件输入→保存的五类写入口统一读取同步draft，RED4行为失败→编辑器54/54，完整22文件495/495；类型/构建/双语/清单通过。详见桥接证据附录，父项仍开放。
 
 Task 4能力核验：官方WHATWG正文核验成功；内置浏览器原生探针复现cancelable=false时precommitHandler抛错并移动URL，验证traverseTo真实key恢复原条目，见 `docs/product/navigation-history-capability-evidence.md`。仅能力子项完成；运行时适配/未知边界/完整版本/刷新与集成验收仍开放。
+
+Task 4核心续行（基线57bb774）：两阶段prepare/permit与独立历史状态机已通过RED→GREEN；最终23文件530/530，类型/UI构建/双语/清单验证通过。新增commit卸载与排队重放取消竞态回归，详见 `docs/product/navigation-history-traversal-core-evidence.md`。这只是运行时接入的前置子项；原始popstate订阅未改，Task 4的完整RED覆盖、浏览器适配、原生验收与父项均不勾选。下一步直接执行实际端口及获准位置订阅接入，不重复设计批准。

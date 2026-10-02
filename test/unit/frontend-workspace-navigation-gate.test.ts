@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { createWorkspaceNavigationGate, type WorkspaceLeaveDecision, type WorkspaceLeaveState } from "../../frontend/lib/workspace-navigation-gate";
+import { createWorkspaceNavigationGate, type WorkspaceNavigationPermit, type WorkspaceLeaveDecision, type WorkspaceLeaveState } from "../../frontend/lib/workspace-navigation-gate";
 
 function draft() {
   let version = "draft-1";
@@ -131,5 +131,75 @@ describe("workspace navigation admission", () => {
     const gate = createWorkspaceNavigationGate(); const owner = draft(); const second = vi.fn(); gate.register(owner.read); gate.request(vi.fn());
     owner.dismiss.mockImplementation(() => { expect(gate.request(second)).toBe("blocked"); });
     owner.decisions[0].cancel(); expect(second).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("two-phase history admission", () => {
+  it("reserves a clean traversal until its real entry commits, then consumes the permit once", () => {
+    const gate = createWorkspaceNavigationGate(); let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit; const action = vi.fn();
+    expect(gate.prepare(value => { permit = value; }, vi.fn())).toBe("deferred");
+    expect(gate.request(action)).toBe("blocked"); expect(action).not.toHaveBeenCalled();
+    expect(permit.commit(action)).toBe(true); expect(permit.commit(action)).toBe(false); expect(action).toHaveBeenCalledOnce();
+    expect(gate.request(vi.fn())).toBe("committed");
+  });
+  it("does not start traversal until every dirty owner approves", () => {
+    const gate = createWorkspaceNavigationGate(); const a = draft(); const b = draft(); const ready = vi.fn();
+    gate.register(a.read); gate.register(b.read); expect(gate.prepare(ready, vi.fn())).toBe("deferred");
+    a.decisions[0].accept(); expect(ready).not.toHaveBeenCalled(); b.decisions[0].accept(); expect(ready).toHaveBeenCalledOnce();
+  });
+  it.each(["edit", "block"] as const)("rejects a %s after approval but before browser arrival", change => {
+    const gate = createWorkspaceNavigationGate(); const owner = draft(); let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit;
+    const canceled = vi.fn(); const action = vi.fn(); gate.register(owner.read); gate.prepare(value => { permit = value; }, canceled);
+    owner.decisions[0].accept(); if (change === "edit") owner.edit(); else owner.state("block");
+    expect(permit.commit(action)).toBe(false); expect(action).not.toHaveBeenCalled(); expect(canceled).toHaveBeenCalledOnce();
+  });
+  it("rejects an originally clean guard that becomes dirty while the browser moves", () => {
+    const gate = createWorkspaceNavigationGate(); const owner = draft(); owner.state("allow"); gate.register(owner.read);
+    let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit; const canceled = vi.fn(); gate.prepare(value => { permit = value; }, canceled);
+    owner.state("confirm"); expect(permit.commit(vi.fn())).toBe(false); expect(owner.prompt).not.toHaveBeenCalled(); expect(canceled).toHaveBeenCalledOnce();
+  });
+  it("notifies cancellation once for keep, even when dismissal throws", () => {
+    const gate = createWorkspaceNavigationGate(); const owner = draft(); const canceled = vi.fn(); gate.register(owner.read);
+    gate.prepare(vi.fn(), canceled); owner.dismiss.mockImplementation(() => { throw new Error("dismiss"); });
+    expect(() => owner.decisions[0].cancel()).toThrow("dismiss"); gate.invalidate(); expect(canceled).toHaveBeenCalledOnce();
+  });
+  it("registration replacement invalidates a prepared permit and its stale cancel cannot cancel a new request", () => {
+    const gate = createWorkspaceNavigationGate(); let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit; const canceled = vi.fn();
+    gate.prepare(value => { permit = value; }, canceled); const owner = draft(); gate.register(owner.read);
+    gate.request(vi.fn()); permit.cancel(); expect(permit.commit(vi.fn())).toBe(false);
+    expect(canceled).toHaveBeenCalledOnce(); expect(owner.dismiss).not.toHaveBeenCalled(); owner.decisions[0].cancel();
+  });
+  it("keeps reservation while cancellation cleanup runs", () => {
+    const gate = createWorkspaceNavigationGate(); let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit;
+    gate.prepare(value => { permit = value; }, () => expect(gate.request(vi.fn())).toBe("blocked")); permit.cancel();
+    expect(gate.request(vi.fn())).toBe("committed");
+  });
+  it("reports immediate rejection and a busy rejection without stealing the first permit", () => {
+    const gate = createWorkspaceNavigationGate(); let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit; const canceled = vi.fn();
+    gate.prepare(value => { permit = value; }, vi.fn()); expect(gate.prepare(vi.fn(), canceled)).toBe("blocked");
+    expect(canceled).toHaveBeenCalledOnce(); expect(permit.commit(vi.fn())).toBe(true);
+    gate.register(() => ({ kind: "block" })); expect(gate.prepare(vi.fn(), canceled)).toBe("blocked"); expect(canceled).toHaveBeenCalledTimes(2);
+  });
+  it("releases admission and reports failure if preparing the native traversal throws", () => {
+    const gate = createWorkspaceNavigationGate(); const canceled = vi.fn();
+    expect(() => gate.prepare(() => { throw new Error("native failure"); }, canceled)).toThrow("native failure");
+    expect(canceled).toHaveBeenCalledOnce(); expect(gate.request(vi.fn())).toBe("committed");
+  });
+});
+
+
+describe("prepared commit boundary", () => {
+  it("guard cleanup after arrival commit starts is not a canceled traversal", () => {
+    const gate = createWorkspaceNavigationGate(); const canceled = vi.fn();
+    const remove = gate.register(() => ({ kind: "allow" }));
+    let permit!: import("../../frontend/lib/workspace-navigation-gate").WorkspaceNavigationPermit;
+    gate.prepare(value => { permit = value; }, canceled);
+    expect(permit.commit(() => {
+      remove();
+      expect(gate.request(vi.fn())).toBe("blocked");
+    })).toBe(true);
+    expect(canceled).not.toHaveBeenCalled();
+    expect(gate.request(vi.fn())).toBe("committed");
   });
 });

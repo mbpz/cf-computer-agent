@@ -5,6 +5,7 @@ export type WorkspaceLeaveState =
   | { kind: "block" }
   | { kind: "confirm"; version: string; prompt(decision: WorkspaceLeaveDecision): void; dismiss(): void };
 export type WorkspaceLeaveGuard = () => WorkspaceLeaveState;
+export interface WorkspaceNavigationPermit { commit(action: () => void): boolean; cancel(): void }
 export type WorkspaceNavigationResult = "committed" | "deferred" | "blocked";
 
 type Registration = { read: WorkspaceLeaveGuard };
@@ -13,7 +14,11 @@ type Prompt = { registration: Registration; state: Confirmation };
 type Attempt = {
   registrations: Registration[];
   approved: Map<Registration, string>;
-  commit: () => void;
+  commit?: () => void;
+  ready?: (permit: WorkspaceNavigationPermit) => void;
+  canceled?: () => void;
+  prepared?: boolean;
+  committing?: boolean;
   result: WorkspaceNavigationResult;
   prompt?: Prompt;
 };
@@ -37,8 +42,28 @@ export function createWorkspaceNavigationGate() {
     if (!attempt) return;
     // Invalidate identity before invoking user cleanup; even captured callbacks are dead.
     pending = null;
-    attempt.result = "blocked";
-    dismiss(attempt);
+    if (!attempt.committing) attempt.result = "blocked";
+    callbackDepth++;
+    try { dismiss(attempt); }
+    finally { try { if (!attempt.committing) attempt.canceled?.(); } finally { callbackDepth--; } }
+  }
+
+  function completePrepared(attempt: Attempt, action: () => void): boolean {
+    if (pending !== attempt || !attempt.prepared) return false;
+    // Consume before reading guards: a reentrant/stale permit is never usable twice.
+    attempt.prepared = false;
+    try {
+      const states = attempt.registrations.map(registration => ({ registration, state: registration.read() }));
+      if (pending !== attempt) return false;
+      if (states.some(({ registration, state }) => state.kind === "block"
+        || (state.kind === "confirm" && attempt.approved.get(registration) !== state.version))) {
+        invalidate(); return false;
+      }
+    } catch (cause) { if (pending === attempt) invalidate(); throw cause; }
+    attempt.committing = true;
+    callbackDepth++;
+    try { action(); attempt.result = "committed"; return true; }
+    finally { callbackDepth--; if (pending === attempt) pending = null; }
   }
 
   function advance(attempt: Attempt): void {
@@ -68,10 +93,18 @@ export function createWorkspaceNavigationGate() {
         prompt.state.prompt(decision);
         return;
       }
+      if (attempt.ready) {
+        attempt.prepared = true;
+        attempt.ready({
+          commit: action => completePrepared(attempt, action),
+          cancel: () => { if (pending === attempt) invalidate(); },
+        });
+        return;
+      }
       // Keep the synchronous reservation through commit: a route callback cannot
       // recursively navigate, even if it unmounts its guard during the commit.
       callbackDepth++;
-      try { attempt.commit(); attempt.result = "committed"; }
+      try { attempt.commit!(); attempt.result = "committed"; }
       finally { callbackDepth--; if (pending === attempt) pending = null; }
     } catch (cause) {
       if (pending === attempt) invalidate();
@@ -89,6 +122,19 @@ export function createWorkspaceNavigationGate() {
     request(commit: () => void): WorkspaceNavigationResult {
       if (pending || callbackDepth) return "blocked";
       const attempt: Attempt = { registrations: [...registrations], approved: new Map(), commit, result: "deferred" };
+      pending = attempt;
+      advance(attempt);
+      return attempt.result;
+    },
+    // A history traversal is asynchronous. Approval reserves the gate, but only
+    // arrival at the requested entry may consume this revalidated permit.
+    prepare(ready: (permit: WorkspaceNavigationPermit) => void, canceled: () => void): WorkspaceNavigationResult {
+      if (pending || callbackDepth) {
+        callbackDepth++;
+        try { canceled(); } finally { callbackDepth--; }
+        return "blocked";
+      }
+      const attempt: Attempt = { registrations: [...registrations], approved: new Map(), ready, canceled, result: "deferred" };
       pending = attempt;
       advance(attempt);
       return attempt.result;
