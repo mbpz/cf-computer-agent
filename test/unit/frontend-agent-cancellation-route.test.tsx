@@ -161,6 +161,127 @@ describe("agent request cancellation route", () => {
     expect(container.textContent).not.toContain("Feedback saved");
   });
 
+  it("reserves feedback navigation synchronously and releases only on its verified receipt", async () => {
+    const late = deferred<Response>();
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/feedback") ? late.promise : answer("Answer", "conv-1"));
+    await render(); await question("Question"); await submit();
+    expect(unloadBlocked()).toBe(false);
+    await act(async () => { button("Useful").click(); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true); });
+    await act(async () => late.resolve(Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}}))); await flush();
+    expect(container.textContent).toContain("Feedback saved"); expect(unloadBlocked()).toBe(false);
+    await act(async () => expect(leave()).toBe("committed"));
+  });
+
+  it.each([503, 401, 403, "network", "mismatch"])("retains feedback lock after %s and retries only the exact intent", async (failure) => {
+    const writes: string[] = []; let calls = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).endsWith("/feedback")) return answer("Answer", "conv-1");
+      writes.push(String(init?.body));
+      if (++calls === 1) {
+        if (failure === "network") throw new TypeError("Failed to fetch");
+        if (failure === "mismatch") return Response.json({feedback: {conversationId: "other", rating: "useful", citationIds: []}});
+        return new Response(null, {status: failure});
+      }
+      return Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}});
+    });
+    await render(); await question("Question"); await submit(); await click("Useful");
+    expect(container.textContent).toContain("Feedback delivery is not confirmed");
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+    await click("Retry the same feedback");
+    expect(writes).toEqual(Array(2).fill(JSON.stringify({rating: "useful", citationIds: []})));
+    expect(container.textContent).toContain("Feedback saved"); expect(unloadBlocked()).toBe(false);
+  });
+
+  it.each(["pending", "unknown"])("prevents question and source replacement while feedback is %s", async (phase) => {
+    let questions = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/feedback")) return phase === "pending" ? new Promise<Response>(() => undefined) : new Response(null, {status: 503});
+      questions++; return answer("Answer", "conv-1");
+    });
+    await render(); await question("Question"); await submit(); await sourceDraft();
+    await click("Useful"); await submit(); await click("Start with these sources");
+    expect(questions).toBe(1); expect(sourceIds()).toBe("space-a");
+    expect(container.textContent).toContain(phase === "pending" ? "Sending feedback" : "Feedback delivery is not confirmed");
+    expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
+  });
+
+  it.each(["question", "source"])("rejects captured feedback clicks during a %s discard decision", async (draft) => {
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {if (String(input).endsWith("/feedback")) {writes++; return new Promise<Response>(() => undefined);} return answer("Answer", "conv-1");});
+    await render(); await question("Question"); await submit();
+    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
+    if (draft === "question") await question("Draft"); else await sourceDraft();
+    await act(async () => {expect(leave()).toBe("deferred"); send();});
+    expect(writes).toBe(0); await decision(false);
+    await click("Useful"); expect(writes).toBe(1); expect(leave()).toBe("blocked");
+  });
+
+  it.each(["saved", "unmounted"])("rejects captured feedback callbacks after %s", async (phase) => {
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/feedback")) {writes++; return Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}});}
+      return answer("Answer", "conv-1");
+    });
+    await render(); await question("Question"); await submit();
+    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
+    if (phase === "saved") await click("Useful");
+    else await act(async () => root.render(<AgentRoute locale={language} memberId="other-member" />));
+    await act(async () => send()); await flush();
+    expect(writes).toBe(phase === "saved" ? 1 : 0);
+    expect(unloadBlocked()).toBe(false);
+  });
+
+  it("keeps unsent drafts dirty after feedback settles", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => String(input).endsWith("/feedback")
+      ? Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}}) : answer("Answer", "conv-1"));
+    await render(); await question("Question"); await submit(); await question("Follow up draft");
+    await click("Useful"); expect(container.textContent).toContain("Feedback saved");
+    expect(unloadBlocked()).toBe(true); await act(async () => expect(leave()).toBe("deferred"));
+    await decision(false); expect(container.querySelector<HTMLInputElement>("#agent-question")!.value).toBe("Follow up draft");
+  });
+
+  it("rejects a feedback callback when a question starts in the same event", async () => {
+    let questions = 0; let feedback = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/feedback")) {feedback++; return new Response(null, {status: 503});}
+      if (++questions > 1) return new Promise<Response>(() => undefined);
+      return answer("Answer", "conv-1");
+    });
+    await render(); await question("Question"); await submit();
+    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
+    await act(async () => {sendForm(); send();}); await flush();
+    expect(questions).toBe(2); expect(feedback).toBe(0); expect(leave()).toBe("blocked");
+  });
+
+  it("rejects captured feedback after a source restart commits in the same event", async () => {
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {if (String(input).endsWith("/feedback")) {writes++; return new Promise<Response>(() => undefined);} return answer("Answer", "conv-1");});
+    await render(); await question("Question"); await submit(); await sourceDraft();
+    const node = button("Useful"); const key = Object.keys(node).find(key => key.startsWith("__reactProps$"))!;
+    const send = (node as unknown as Record<string, {onClick: () => void}>)[key].onClick;
+    await act(async () => {button("Start with these sources").click(); send();}); await flush();
+    expect(browser.location.search).toBe("?scope=space&spaceId=space-a");
+    expect(writes).toBe(0); expect(unloadBlocked()).toBe(false);
+  });
+
+  it("keeps a new member feedback lock when the old member receipt arrives", async () => {
+    const old = deferred<Response>(); const current = deferred<Response>(); let feedback = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/feedback")) return ++feedback === 1 ? old.promise : current.promise;
+      return Response.json({answer: "Answer", conversationId: "conv-1", citations: [], idempotencyKey: new Headers(init?.headers).get("idempotency-key")});
+    });
+    await render(); await question("Question"); await submit(); await click("Useful");
+    await act(async () => root.render(<AgentRoute locale={language} memberId="new-member" />));
+    await question("New member question"); await submit(); await click("Useful");
+    await act(async () => old.resolve(Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}}))); await flush();
+    expect(container.textContent).not.toContain("Feedback saved"); expect(leave()).toBe("blocked");
+    await act(async () => current.resolve(Response.json({feedback: {conversationId: "conv-1", rating: "useful", citationIds: []}}))); await flush();
+    expect(unloadBlocked()).toBe(false); expect(container.textContent).toContain("Feedback saved");
+  });
+
   it("opens history explicitly, pages and retries the same read without asking", async () => {
     const urls: string[] = []; let fail = true;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -3,21 +3,28 @@ import { submitAgentFeedback, type AgentFeedbackRating } from "../../lib/agent-d
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { Button } from "../ui/button";
 
+export interface AgentFeedbackAdmission {
+  begin: (conversationId: string) => boolean;
+  settled: (conversationId: string) => void;
+}
+
 // Feedback belongs to the conversation, not an individual immutable answer.
-export function AgentFeedback({ conversationId, citationIds, locale }: { conversationId: string; citationIds: readonly string[]; locale?: LocaleRuntime }) {
+export function AgentFeedback({ conversationId, citationIds, locale, admission }: { conversationId: string; citationIds: readonly string[]; locale?: LocaleRuntime; admission?: AgentFeedbackAdmission }) {
   const [state, setState] = useState<"idle" | "pending" | "unknown" | "saved">("idle");
   const pending = useRef(false);
+  const saved = useRef(false);
+  const admissionRef = useRef(admission); admissionRef.current = admission;
   const mounted = useRef(true);
   const intent = useRef<{ rating: AgentFeedbackRating; citationIds: string[] } | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const send = (rating?: AgentFeedbackRating) => {
-    if (pending.current || state === "saved") return;
-    if (!intent.current && rating) intent.current = { rating, citationIds: [...citationIds] };
-    const current = intent.current;
-    if (!current) return;
+    if (!mounted.current || pending.current || saved.current) return;
+    const current = intent.current ?? (rating ? { rating, citationIds: [...citationIds] } : null);
+    if (!current || (admissionRef.current && !admissionRef.current.begin(conversationId))) return;
+    intent.current = current;
     pending.current = true; setState("pending");
     void submitAgentFeedback(conversationId, current.rating, current.citationIds).then(() => {
-      if (mounted.current) setState("saved");
+      if (mounted.current) { saved.current = true; setState("saved"); admissionRef.current?.settled(conversationId); }
     }).catch(() => { if (mounted.current) setState("unknown"); }).finally(() => { pending.current = false; });
   };
   return <section className="space-y-3 rounded-md border p-4" aria-label={frontendText(locale, "AGENT_FEEDBACK_TITLE")}>
