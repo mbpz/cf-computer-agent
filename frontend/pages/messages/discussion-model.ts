@@ -70,23 +70,27 @@ export function mentionIdsFromBody(body: string): string[] {
 
 export function createDiscussionSubmitController(keyFactory: () => string = () => crypto.randomUUID()) {
   let pending = false;
-  let attempt: { fingerprint: string; clientKey: string } | null = null;
+  let attempt: { fingerprint: string; input: DiscussionSendInput } | null = null;
   return {
-    observe(input: Omit<DiscussionSendInput, "clientKey"> | null): void {
-      const fingerprint = input ? discussionSendFingerprint(input) : null;
-      if (attempt && attempt.fingerprint !== fingerprint) attempt = null;
-    },
+    hasUnresolved: () => attempt !== null,
     async submit(
       input: Omit<DiscussionSendInput, "clientKey">,
       sender: (input: DiscussionSendInput) => Promise<unknown>,
     ): Promise<boolean> {
       if (pending) return false;
       const fingerprint = discussionSendFingerprint(input);
-      if (attempt?.fingerprint !== fingerprint) attempt = { fingerprint, clientKey: keyFactory() };
+      if (attempt && attempt.fingerprint !== fingerprint) throw new Error("DISCUSSION_WRITE_UNRESOLVED");
+      if (!attempt) attempt = {
+        fingerprint,
+        input: { ...input, context: { ...input.context }, body: input.body.trim(),
+          mentionMemberIds: [...(input.mentionMemberIds ?? [])], clientKey: keyFactory() },
+      };
       const currentAttempt = attempt;
       pending = true;
       try {
-        await sender({ ...input, clientKey: currentAttempt.clientKey });
+        // Neither caller edits nor a transport mutating its argument may change a retry.
+        await sender({ ...currentAttempt.input, context: { ...currentAttempt.input.context },
+          mentionMemberIds: [...(currentAttempt.input.mentionMemberIds ?? [])] });
         if (attempt !== currentAttempt) return false;
         attempt = null;
         return true;

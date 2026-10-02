@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, DiscussionThreadRoute, MessagesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createDiscussionSubmitController } from "../../frontend/pages/messages/discussion-model";
 
 const vmContexts = new WeakSet<object>();
@@ -108,7 +109,7 @@ describe("discussion routes", () => {
       if (init?.method === "POST") {
         const payload = JSON.parse(String(init.body)); sent.push(payload);
         if (sent.length === 1) return uncertain;
-        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ id: "message-2", sequence: 2, body: payload.body, clientKey: payload.clientKey, replyToMessageId: payload.replyToMessageId }), created: false });
+        return Response.json({ thread: thread({ lastSequence: 2 }), message: message({ id: "message-2", sequence: 2, body: payload.body, clientKey: payload.clientKey, replyToMessageId: payload.replyToMessageId ?? null }), created: false });
       }
       if (failRead) return Response.json({ error: { code: "READ_FAILED", message: "Unavailable", retryable: true } }, { status: 503 });
       return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
@@ -141,7 +142,7 @@ describe("discussion routes", () => {
       expect(sent).toHaveLength(1);
       expect(recovered.disabled).toBe(true);
       rejectSend(new Error("response lost"));
-      await waitFor(() => recovered.disabled === false);
+      await waitFor(() => container.querySelector("[role='alert']") !== null);
     }
     await submit();
     await waitFor(() => recovered.value === "");
@@ -150,7 +151,7 @@ describe("discussion routes", () => {
     expect(container.textContent).not.toContain("Replying to member-1");
   });
 
-  it.each([401, 403, 404])("discards draft, reply and retry identity on a %s read denial", async (status) => {
+  it.each([401, 403, 404])("hides private content on a %s read denial without forgetting the uncertain operation", async (status) => {
     let denied = false;
     const keys: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -171,14 +172,14 @@ describe("discussion routes", () => {
     denied = false;
     await act(async () => { container.querySelector("button")!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
-    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
-    expect(container.textContent).not.toContain("Replying to member-1");
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Secret draft");
+    expect(container.textContent).toContain("Replying to member-1");
     expect(keys).toHaveLength(1);
     await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Secret draft");
     await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); });
     await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
     await waitFor(() => keys.length === 2);
-    expect(keys[1]).not.toBe(keys[0]);
+    expect(keys[1]).toBe(keys[0]);
   });
 
   it.each([201, 401, 403, 404])("ignores a late %s send receipt after read revocation and explicit recovery", async (status) => {
@@ -204,7 +205,7 @@ describe("discussion routes", () => {
     await act(async () => { container.querySelector("button")!.click(); });
     await waitFor(() => container.querySelector("#discussion-composer") !== null);
     const recovered = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
-    expect(recovered.value).toBe("");
+    expect(recovered.value).toBe("Old attempt");
     await changeReactTextarea(recovered, "New private draft");
     const readsBeforeReceipt = reads;
     await act(async () => {
@@ -214,8 +215,8 @@ describe("discussion routes", () => {
       for (let i = 0; i < 30; i += 1) await Promise.resolve();
     });
     expect(container.querySelector("#discussion-composer")).toBe(recovered);
-    expect(recovered.value).toBe("New private draft");
-    expect(recovered.disabled).toBe(false);
+    expect(recovered.value).toBe("Old attempt");
+    expect(recovered.disabled).toBe(true);
     expect(container.querySelector("[data-page-state='error']")).toBeNull();
     expect(reads).toBe(readsBeforeReceipt);
   });
@@ -276,6 +277,75 @@ describe("discussion routes", () => {
     expect(writes).toBe(1);
   });
 
+  it("confirms dirty navigation and blocks writes while discard confirmation is open", async () => {
+    let writes = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { writes++; throw new Error("unexpected write"); }
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+    await changeReactTextarea(textarea, "Keep draft");
+    await act(async () => { writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/messages/thread-1");
+    expect(container.querySelector("[role='alertdialog']")).not.toBeNull();
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    expect(writes).toBe(0);
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Keep editing")!.click(); });
+    expect(textarea.value).toBe("Keep draft");
+    await act(async () => { writeWorkspaceHistory("push", "/home"); });
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Discard changes")!.click(); });
+    expect(browser.location.pathname).toBe("/home");
+    expect(textarea.value).toBe("");
+  });
+
+  it("blocks edits, reply changes, leaving and unload until a same-key retry is acknowledged", async () => {
+    const sent: Array<{ body: string; clientKey: string; replyToMessageId?: string }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        const payload = JSON.parse(String(init.body)); sent.push(payload);
+        if (sent.length === 1) throw new Error("response lost");
+        return Response.json({ thread: thread(), message: message({ body: payload.body, clientKey: payload.clientKey, replyToMessageId: payload.replyToMessageId ?? null }), created: false });
+      }
+      return Response.json(String(input).endsWith("thread-1") ? thread() : { items: [message()] });
+    });
+    browser.history.replaceState({}, "", "/messages/thread-1");
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime()} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
+    await changeReactTextarea(textarea, "Original");
+    const submit = () => act(async () => { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })); });
+    await act(async () => {
+      for (let i = 0; i < 2; i++) container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+      writeWorkspaceHistory("push", "/home");
+    });
+    await waitFor(() => container.querySelector("[role='alert']") !== null);
+    expect(sent).toHaveLength(1);
+    expect(textarea.disabled).toBe(true);
+    await changeReactTextarea(textarea, "Changed");
+    // A stale handler must also fail closed, not just the button's disabled DOM.
+    const reply = container.querySelector("[data-message-id] button")!;
+    const propsKey = Object.keys(reply).find((key) => key.startsWith("__reactProps$"))!;
+    await act(async () => { (reply as unknown as Record<string, { onClick: () => void }>)[propsKey]!.onClick(); });
+    await act(async () => { (container.querySelector("[data-message-id] button") as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/messages/thread-1");
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    const unload = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    await submit();
+    await waitFor(() => textarea.value === "");
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual(sent[0]);
+    expect(sent[1]).toMatchObject({ body: "Original" });
+    expect(sent[1]!.replyToMessageId).toBeUndefined();
+    const after = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(after);
+    expect(after.defaultPrevented).toBe(false);
+    await act(async () => { writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/home");
+  });
+
   it("prevents duplicate submit and retries an uncertain send with the same client key", async () => {
     const inputs: Array<{ clientKey: string; body: string }> = [];
     let rejectFirst!: (error: Error) => void;
@@ -298,7 +368,7 @@ describe("discussion routes", () => {
     expect(inputs[1]).toMatchObject({ body: "Retry me", clientKey: "stable-key" });
   });
 
-  it("binds an uncertain client key to normalized send semantics and rotates it after every semantic edit", async () => {
+  it("locks an uncertain client key to the frozen intent and rejects semantic edits", async () => {
     const keys = ["key-1", "key-2", "key-3", "key-4", "key-5", "key-6"];
     const sent: Array<{ clientKey: string; body: string }> = [];
     const controller = createDiscussionSubmitController(() => keys.shift()!);
@@ -310,41 +380,32 @@ describe("discussion routes", () => {
 
     await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
     await expect(controller.submit({ ...original, body: "Original" }, sender)).rejects.toThrow("response lost");
-    await expect(controller.submit({ ...original, body: "Edited" }, sender)).rejects.toThrow("response lost");
-    await expect(controller.submit({ ...original, body: "Edited", replyToMessageId: "message-1" }, sender)).rejects.toThrow("response lost");
-    await expect(controller.submit({ ...original, body: "Edited", replyToMessageId: "message-1", mentionMemberIds: ["member-3"] }, sender)).rejects.toThrow("response lost");
-    await expect(controller.submit({ ...original, context: { kind: "knowledge", id: "knowledge-1" }, body: "Edited", replyToMessageId: "message-1" }, sender)).rejects.toThrow("response lost");
+    for (const edited of [
+      { ...original, body: "Edited" },
+      { ...original, replyToMessageId: "message-1" },
+      { ...original, mentionMemberIds: ["member-3"] },
+      { ...original, context: { kind: "knowledge" as const, id: "knowledge-1" } },
+    ]) await expect(controller.submit(edited, sender)).rejects.toThrow("DISCUSSION_WRITE_UNRESOLVED");
     await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
-
-    expect(sent.map(({ clientKey }) => clientKey)).toEqual([
-      "key-1", "key-1", "key-2", "key-3", "key-4", "key-5", "key-6",
-    ]);
+    expect(sent.map(({ clientKey }) => clientKey)).toEqual(["key-1", "key-1", "key-1"]);
+    expect(sent.map(({ body }) => body)).toEqual(["Original", "Original", "Original"]);
   });
 
-  it("permanently invalidates a failed attempt after body, reply, or mention semantics leave and return", async () => {
-    const keys = ["key-1", "key-2", "key-3", "key-4"];
-    const sent: string[] = [];
-    const controller = createDiscussionSubmitController(() => keys.shift()!);
-    const sender = async (input: { clientKey: string }) => {
-      sent.push(input.clientKey);
-      throw new Error("response lost");
-    };
+  it("isolates the frozen intent from caller and transport mutation", async () => {
+    const controller = createDiscussionSubmitController(() => "key-1");
     const original = { context: { kind: "task" as const, id: "task-1" }, body: "Original", mentionMemberIds: ["member-2"] };
-
-    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
-    controller.observe({ ...original, body: "Edited" });
-    controller.observe(original);
-    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
-
-    controller.observe({ ...original, replyToMessageId: "message-1" });
-    controller.observe(original);
-    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
-
-    controller.observe({ ...original, mentionMemberIds: ["member-3"] });
-    controller.observe(original);
-    await expect(controller.submit(original, sender)).rejects.toThrow("response lost");
-
-    expect(sent).toEqual(["key-1", "key-2", "key-3", "key-4"]);
+    await expect(controller.submit(original, async (input) => {
+      input.context.id = "mutated-transport";
+      input.mentionMemberIds!.push("member-3");
+      throw new Error("response lost");
+    })).rejects.toThrow("response lost");
+    original.context.id = "mutated-caller";
+    original.mentionMemberIds.push("member-4");
+    expect(controller.hasUnresolved()).toBe(true);
+    let received: unknown;
+    await expect(controller.submit({ context: { kind: "task", id: "task-1" }, body: "Original", mentionMemberIds: ["member-2"] }, async (input) => { received = input; })).resolves.toBe(true);
+    expect(received).toEqual({ context: { kind: "task", id: "task-1" }, body: "Original", mentionMemberIds: ["member-2"], clientKey: "key-1" });
+    expect(controller.hasUnresolved()).toBe(false);
   });
 
   it("rotates the client key after a successful send even when the next message has identical semantics", async () => {
@@ -412,9 +473,9 @@ describe("discussion routes", () => {
     await waitFor(() => container.textContent?.includes("Page 2") ?? false);
     expect(calls.slice(beforeRetry).some((url) => url.endsWith("limit=20&cursor=cursor_2"))).toBe(true);
     expect((container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).disabled).toBe(true);
-    // Model a browser back/forward location event without claiming native history coverage.
+    // Model admitted location changes; native traversal policy has its own suite.
     for (const [search, expected] of [["?unknown=kept", "Page 1"], ["?unknown=kept&page=2&cursor=cursor_2", "Page 2"]]) {
-      await act(async () => { browser.history.replaceState({}, "", `${path}${search}`); browser.dispatchEvent(new browser.Event("popstate")); });
+      await act(async () => { writeWorkspaceHistory("replace", `${path}${search}`); });
       await waitFor(() => (container.textContent?.includes(expected) ?? false) && container.querySelector("[aria-busy='true']") === null);
     }
     const select = container.querySelector("select") as HTMLSelectElement;
@@ -444,7 +505,7 @@ describe("discussion routes", () => {
     await act(async () => { (container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).click(); });
     await waitFor(() => pageSignal !== undefined);
     expect((container.querySelector("button[aria-label='Next page']") as HTMLButtonElement).disabled).toBe(true);
-    await act(async () => { browser.history.replaceState({}, "", path); browser.dispatchEvent(new browser.Event("popstate")); });
+    await act(async () => { writeWorkspaceHistory("replace", path); });
     await waitFor(() => container.querySelector("[aria-busy='true']") === null);
     expect(pageSignal?.aborted).toBe(true);
     await act(async () => {
@@ -556,7 +617,7 @@ describe("discussion routes", () => {
     expect(container.querySelector("[data-message-id='message-2']")).not.toBeNull();
   });
 
-  it("does not clear a draft whose reply semantics changed while an earlier send was pending", async () => {
+  it("blocks changing reply semantics while sending and clears only the acknowledged draft", async () => {
     let resolveSend!: (response: Response) => void;
     let sentKey = "";
     const delayedSend = new Promise<Response>((resolve) => { resolveSend = resolve; });
@@ -580,12 +641,12 @@ describe("discussion routes", () => {
     }, { status: 201 }));
     await waitFor(() => (container.querySelector("#discussion-composer") as HTMLTextAreaElement).disabled === false);
 
-    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Keep this draft");
-    expect(container.textContent).toContain("Replying to member-1");
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+    expect(container.textContent).not.toContain("Replying to member-1");
     expect(container.querySelector("[role='alert']")).toBeNull();
   });
 
-  it("does not clear a restored draft after reply semantics leave and return while send is pending", async () => {
+  it("blocks canceling a frozen reply until its exact acknowledgment", async () => {
     let resolveSend!: (response: Response) => void;
     let sentKey = "";
     const delayedSend = new Promise<Response>((resolve) => { resolveSend = resolve; });
@@ -600,23 +661,25 @@ describe("discussion routes", () => {
     await waitFor(() => container.querySelector("[data-message-id='message-1']") !== null);
     const textarea = container.querySelector("#discussion-composer") as HTMLTextAreaElement;
     await changeReactTextarea(textarea, "Keep restored draft");
+    await act(async () => (container.querySelector("[data-message-id='message-1'] button") as HTMLButtonElement).click());
     await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
     await act(async () => (container.querySelector("[data-message-id='message-1'] button") as HTMLButtonElement).click());
     await act(async () => (container.querySelector("form button[type='button']") as HTMLButtonElement).click());
 
+    expect(container.textContent).toContain("Replying to member-1");
     resolveSend(Response.json({
       thread: thread({ lastSequence: 2 }),
-      message: message({ id: "message-2", sequence: 2, body: "Keep restored draft", clientKey: sentKey }),
+      message: message({ id: "message-2", sequence: 2, body: "Keep restored draft", clientKey: sentKey, replyToMessageId: "message-1" }),
       created: true,
     }, { status: 201 }));
     await waitFor(() => textarea.disabled === false);
 
     expect(container.querySelector("[role='alert']")).toBeNull();
-    expect(textarea.value).toBe("Keep restored draft");
+    expect(textarea.value).toBe("");
     expect(container.textContent).not.toContain("Replying to member-1");
   });
 
-  it("uses a new client key after a failed send is edited and then restored in the real composer", async () => {
+  it("ignores edit attempts after an unknown send and retries the frozen client key", async () => {
     const sent: Array<{ body: string; clientKey: string }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -639,14 +702,14 @@ describe("discussion routes", () => {
 
     await changeReactTextarea(textarea, "Original");
     await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
-    await waitFor(() => sent.length === 1 && textarea.disabled === false);
+    await waitFor(() => sent.length === 1 && container.querySelector("[role='alert']") !== null);
     await changeReactTextarea(textarea, "Edited");
     await changeReactTextarea(textarea, "Original");
     await act(async () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true })));
     await waitFor(() => sent.length === 2 && textarea.value === "");
 
     expect(sent.map(({ body }) => body)).toEqual(["Original", "Original"]);
-    expect(sent[1]!.clientKey).not.toBe(sent[0]!.clientKey);
+    expect(sent[1]!.clientKey).toBe(sent[0]!.clientKey);
   });
 
   it("synchronizes internal cursor state when the global Messages link re-enters canonically without accepting the stale response", async () => {

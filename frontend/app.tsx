@@ -2320,9 +2320,7 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   const [state, setState] = useState<ThreadPageState>({ kind: "loading" });
   const [pending, setPending] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
-  // Ordinary read errors preserve an uncertain attempt; access denial remounts
-  // the entire draft owner and invalidates callbacks from the old access epoch.
-  const [draftEpoch, setDraftEpoch] = useState(0);
+  // Denial hides private content and invalidates callbacks, not unresolved identity.
   const accessEpochRef = useRef(0);
   const queryRef = useRef(query);
   queryRef.current = query;
@@ -2356,7 +2354,6 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
       if (!controller.isCurrent(request.generation) || !sameDiscussionSearch(queryRef.current, snapshot) || isAbort(error)) return;
       if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
         accessEpochRef.current += 1;
-        setDraftEpoch((value) => value + 1);
       }
       setState({ kind: "error" }); setPending(false);
     });
@@ -2390,23 +2387,24 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
         // restore the private transcript or the composer after access is denied.
         controllerRef.current?.dispose(); controllerRef.current = null;
         accessEpochRef.current += 1;
-        setDraftEpoch((value) => value + 1);
         setState({ kind: "error" }); setPending(false);
       }
       throw error;
     }
-    if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId || accessEpochRef.current !== sendingEpoch) return;
+    if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId || accessEpochRef.current !== sendingEpoch) throw new Error("DISCUSSION_ACCESS_CHANGED");
+  };
+  const sent = () => {
     if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
     else setRetryVersion((value) => value + 1);
   };
   const visibleState: ThreadPageState = state.kind === "ready" && state.thread.id !== threadId ? { kind: "loading" } : state;
-  return <ThreadPage key={`${threadId}:${draftEpoch}`} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
+  return <ThreadPage key={threadId} locale={locale} state={visibleState} page={query.page} limit={query.limit} pending={pending}
     onRetry={() => setRetryVersion((value) => value + 1)}
     onRefresh={() => setRetryVersion((value) => value + 1)}
     onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
     onPrevious={() => window.history.back()}
     onLimitChange={(limit) => navigate({ page: 1, limit })}
-    onSend={send} />;
+    onSend={send} onSent={sent} />;
 }
 
 function sameDiscussionSearch(left: DiscussionSearch, right: DiscussionSearch): boolean {

@@ -114,10 +114,12 @@ describe("discussion client contract", () => {
       { ...valid, message: message({ body: "New message", replyToMessageId: "message-0" }) },
       { ...valid, message: message({ body: "New message", mentionMemberIds: [] }) },
       { ...valid, thread: thread({ lastSequence: 0 }) },
-    ]) await expect(sendDiscussionMessage(input, jsonRequester(receipt))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
-    // The backend's existing first-write-wins contract returns the original payload on replay.
+    ]) for (const created of [true, false]) await expect(sendDiscussionMessage(input, jsonRequester({ ...receipt, created }))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    // A first-write-wins replay is not confirmation of a different frozen intent.
     await expect(sendDiscussionMessage(input, jsonRequester({ ...valid, message: message(), created: false })))
-      .resolves.toMatchObject({ created: false, message: { body: "Hello @member-2" } });
+      .rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    await expect(sendDiscussionMessage(input, jsonRequester({ ...valid, created: false })))
+      .resolves.toEqual({ ...valid, created: false });
     await expect(sendDiscussionMessage(input, jsonRequester({ ...valid, message: message({ clientKey: "another-key" }), created: false })))
       .rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
   });

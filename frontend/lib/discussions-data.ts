@@ -125,11 +125,11 @@ export async function sendDiscussionMessage(
   }));
   assertThreadContext(result.thread, input.context);
   if (result.message.clientKey !== input.clientKey.trim()) invalidResponse();
-  // Replays return the original first write. Only a newly created receipt must
-  // echo this payload; the server excludes the author from explicit mentions.
-  if (result.created && (result.message.body !== body
+  // A replay confirms only this frozen intent, not another payload under its key.
+  // The server excludes the author from explicit mentions.
+  if (result.message.body !== body
     || result.message.replyToMessageId !== (input.replyToMessageId ?? null)
-    || JSON.stringify(result.message.mentionMemberIds) !== JSON.stringify((mentions ?? []).filter((id) => id !== result.message.authorMemberId)))) invalidResponse();
+    || JSON.stringify(result.message.mentionMemberIds) !== JSON.stringify((mentions ?? []).filter((id) => id !== result.message.authorMemberId))) invalidResponse();
   return result;
 }
 

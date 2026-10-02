@@ -379,8 +379,11 @@ describe("discussion HTTP contract", () => {
     const page2 = await loadDiscussionMessages(created.thread.id, { limit: 20, cursor: page1.nextCursor }, asA);
     expect(page2.items).toEqual([first.message]);
     expect(page2.nextCursor).toBeUndefined();
-    // Existing author/key first-write-wins semantics are not a second message.
-    const replay = await sendDiscussionMessage({ context, body: "Changed retry body", clientKey: "original-key" }, asA);
+    // The server remains first-write-wins, but a mismatching receipt cannot unlock
+    // a different client intent. Exact retries still return the original row.
+    await expect(sendDiscussionMessage({ context, body: "Changed retry body", clientKey: "original-key" }, asA))
+      .rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+    const replay = await sendDiscussionMessage({ context, body: "Hello @member-a @member-b", clientKey: "original-key", mentionMemberIds: ["member-a", "member-b"] }, asA);
     expect(replay.created).toBe(false);
     expect(replay.message).toEqual(first.message);
     await expect(loadDiscussionThread(created.thread.id, asB)).resolves.toMatchObject({ lastSequence: 22 });
