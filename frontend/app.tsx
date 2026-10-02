@@ -10,6 +10,7 @@ import { canonicalPlanningVersion, type PlanningWriteRecord } from "./lib/planni
 import { PlanningWriteRecovery, usePlanningWriteRecovery } from "./components/planning-write-recovery";
 import { loadPlanningIntent, clearPlanningIntent } from "./lib/planning-create-intent";
 import { ProjectRelationsEditor } from "./components/project-relations-editor";
+import { useCreateDraft } from "./lib/use-create-draft";
 import { AgentHistoryList } from "./components/agent/agent-history-list";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Button } from "./components/ui/button";
@@ -841,28 +842,22 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     }).catch(() => { if (current) setRecovery("error"); });
     return () => { current = false; abort.abort(); };
   }, [restoreId, recoveryVersion]);
-  const [question, setQuestion] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
   const [state, setState] = useState<{ kind: "loading" } | { kind: "cancelled" } | ({ kind: "ready" } & AgentAnswer) | { kind: "error"; message: string }>({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [], conflicts: [] });
   const controllerRef = useRef<ReturnType<typeof createAgentRequestController> | null>(null);
   const pendingRef = useRef(false);
   const conversationIdRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    // A verified receipt or explicit Stop/abandon owns release, not a route change.
-    // Include synchronous refs so submit + navigation in one event cannot escape.
-    const locked = () => pendingRef.current || intentRef.current !== null
-      || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
-    const owner = window;
-    const unregister = registerWorkspaceLeaveGuard(() => ({kind: locked() ? "block" : "allow"}));
-    const warn = (event: BeforeUnloadEvent) => { if (locked()) {event.preventDefault(); event.returnValue = "";} };
-    owner.addEventListener("beforeunload", warn);
-    return () => {unregister(); owner.removeEventListener("beforeunload", warn);};
-  }, [memberId]);
+  const alive = useRef(true);
+  // Submitted turns and unsent input share admission, but have distinct lifetimes.
+  const locked = () => pendingRef.current || intentRef.current !== null
+    || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
+  const questionDraft = useCreateDraft({question: ""}, {question: ""}, locked, locale,
+    () => !alive.current || recovery !== "ready" || storageBlocked || unconfirmed);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
-  useEffect(() => () => { controllerRef.current?.cancel(conversationIdRef.current); }, []);
-  const submit = (nextQuestion = question) => {
+  useEffect(() => {alive.current = true; return () => {alive.current = false; controllerRef.current?.cancel(conversationIdRef.current);};}, []);
+  const submit = (nextQuestion = questionDraft.current.current.question) => {
     const normalized = nextQuestion.trim();
-    if (!normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
+    if (!alive.current || questionDraft.isConfirming() || !normalized || !controllerRef.current || pendingRef.current || (recovery !== "ready" && !unconfirmed) || storageBlocked) return;
     let intent = intentRef.current;
     if (memberId) {
       try {
@@ -874,7 +869,10 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     const sentQuestion = intent?.question ?? normalized;
     pendingRef.current = true;
     setUnconfirmed(false);
-    setQuestion(sentQuestion);
+    // Retry uses its original question without overwriting a newer unsent follow-up.
+    const displayed = questionDraft.current.current.question.trim();
+    if (!displayed || displayed === sentQuestion) questionDraft.set("question", sentQuestion);
+    questionDraft.checkpoint({question: sentQuestion});
     setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
     const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scope, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
@@ -897,7 +895,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     });
   };
   const cancel = () => {
-    if (!pendingRef.current) return;
+    if (!alive.current || questionDraft.isConfirming() || !pendingRef.current) return;
     controllerRef.current?.cancel(conversationIdRef.current);
     // A delayed conversation-level cancellation must not target a subsequent turn.
     conversationIdRef.current = undefined;
@@ -907,31 +905,34 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     setState({ kind: "cancelled" });
   };
   const startScope = (nextScope: AgentScope) => {
-    if (pendingRef.current || recovery !== "ready") return;
+    if (!alive.current || questionDraft.isConfirming() || pendingRef.current || recovery !== "ready") return;
     writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`, () => {
       controllerRef.current?.cancel(); conversationIdRef.current = undefined;
-      setScope(nextScope); setHistory([]); setQuestion(""); setLastQuestion("");
+      setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
       setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
     });
   };
   const abandon = () => {
-    if (pendingRef.current) return;
+    if (!alive.current || questionDraft.isConfirming() || pendingRef.current) return;
     if (memberId && !clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
     controllerRef.current?.cancel(); intentRef.current = null; conversationIdRef.current = undefined;
     setStorageBlocked(false); setUnconfirmed(false); setRecovery("ready");
-    setScope(initialScope ?? { kind: "all" }); setHistory([]); setQuestion(""); setLastQuestion("");
+    setScope(initialScope ?? { kind: "all" }); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
     setState({ kind: "cancelled" });
   };
-  if (storageBlocked) return <PageState kind="error" title={frontendText(locale, "AGENT_INTENT_STORAGE_BLOCKED")} description={frontendText(locale, "AGENT_INTENT_STORAGE_DETAIL")}><Button onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
-  if (unconfirmed && intentRef.current) return <PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p><Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
-  if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
-  if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
-  return <div className="space-y-6">
-    {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
-    {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
-    <AgentPage locale={locale} scope={scope} state={state} question={question} onQuestionChange={setQuestion} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} />
-    <AgentHistoryList locale={locale} />
-  </div>;
+  const content = () => {
+    if (storageBlocked) return <PageState kind="error" title={frontendText(locale, "AGENT_INTENT_STORAGE_BLOCKED")} description={frontendText(locale, "AGENT_INTENT_STORAGE_DETAIL")}><Button onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
+    if (unconfirmed && intentRef.current) return <PageState kind="degraded" title={frontendText(locale, "AGENT_INTENT_UNKNOWN")} description={frontendText(locale, "AGENT_INTENT_UNKNOWN_DETAIL")}><p className="whitespace-pre-wrap">{intentRef.current.question}</p><p><code>{JSON.stringify(intentRef.current.scope)}</code></p><Button onClick={() => submit(intentRef.current!.question)}>{frontendText(locale, "AGENT_INTENT_RETRY")}</Button><Button variant="outline" onClick={abandon}>{frontendText(locale, "AGENT_INTENT_ABANDON")}</Button></PageState>;
+    if (recovery === "loading" && state.kind !== "loading") return <PageState kind="loading" title={frontendText(locale, "AGENT_RESTORING")} />;
+    if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
+    return <div className="space-y-6">
+      {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
+      {conversationIdRef.current && <a className="underline" href={`/agent?conversationId=${encodeURIComponent(conversationIdRef.current)}`}>{frontendText(locale, "AGENT_RESTORE_LINK")}</a>}
+      <AgentPage locale={locale} scope={scope} state={state} question={questionDraft.fields.question} onQuestionChange={value => questionDraft.edit("question", value)} onSubmit={() => submit()} onCancel={cancel} onRetry={() => submit(lastQuestion)} onStartScope={startScope} />
+      <AgentHistoryList locale={locale} />
+    </div>;
+  };
+  return <><div inert={questionDraft.confirming ? true : undefined}>{content()}</div>{questionDraft.confirmation}</>;
 }
 
 export function SubmitRoute({ locale, memberId }: { locale: LocaleRuntime; memberId: string }) {

@@ -21,6 +21,8 @@ export function useCreateDraft<T extends Record<string, string>>(initial: T, bla
   function set<K extends keyof T>(key: K, value: T[K]) {
     current.current = { ...current.current, [key]: value }; setFields(current.current);
   }
+  // Accepted submissions may stay visible; do not erase a newer local draft.
+  function checkpoint(accepted: T) { baseline.current = { ...accepted }; }
   function reset() { current.current = { ...baseline.current }; setFields(current.current); }
   function edit<K extends keyof T>(key: K, value: T[K]) {
     if (!alive.current || isBlocked.current() || isEditBlocked.current() || decisionRef.current) return;
@@ -57,7 +59,7 @@ export function useCreateDraft<T extends Record<string, string>>(initial: T, bla
     if (isBlocked.current() || decision.version !== version()) { cancel(); return; }
     decision.navigation.accept();
   };
-  return { fields, current, set, edit, reset, confirming: decision !== null,
+  return { fields, current, set, edit, reset, checkpoint, confirming: decision !== null,
     isConfirming: () => decisionRef.current !== null,
     confirmation: <ConfirmAction open={decision !== null} title={frontendText(locale, "CREATE_DISCARD_TITLE")}
       description={frontendText(locale, "CREATE_DISCARD_IMPACT")}

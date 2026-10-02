@@ -2,7 +2,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createAgentIntent, saveAgentIntent } from "../../frontend/lib/agent-turn-intent";
 import { AgentRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
@@ -18,7 +18,7 @@ vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (te
 describe("agent request cancellation route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const language = createLocaleRuntime({ navigatorLanguage: "en" });
-  beforeEach(() => { browser = new Window({ url: "https://app.test/agent" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  beforeEach(() => { browser = new Window({ url: "https://app.test/agent" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
   it("leaves loading on Stop without claiming server cancellation and ignores a late answer", async () => {
@@ -265,6 +265,105 @@ describe("agent request cancellation route", () => {
     expect(JSON.parse(String(requests[1]?.body))).toEqual({ question: "Second", scope: { kind: "all" }, conversationId: "conv-stable" });
   });
 
+  function questionInput() { return container.querySelector<HTMLInputElement>("#agent-question")!; }
+  function changeQuestion(value: string) {
+    const input = questionInput(); input.value = value;
+    const key = Object.keys(input).find(name => name.startsWith("__reactProps$"))!;
+    (input as unknown as Record<string, {onChange: (event: {currentTarget: HTMLInputElement}) => void}>)[key]!.onChange({currentTarget: input});
+  }
+  function sendForm() { container.querySelector("form")!.dispatchEvent(new browser.Event("submit", {bubbles: true, cancelable: true}) as unknown as Event); }
+  async function decision(accept: boolean) { await act(async () => container.querySelector<HTMLButtonElement>(accept ? "[data-confirm-action]" : "[data-cancel-action]")!.click()); await flush(); }
+
+  it("protects an unsent question edited in the same event and preserves it on cancellation", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render();
+    await act(async () => {changeQuestion("Unsent draft"); expect(leave()).toBe("deferred");});
+    expect(browser.location.pathname).toBe("/agent"); expect(unloadBlocked()).toBe(true);
+    expect(browser.document.activeElement?.textContent).toBe("Keep editing");
+    await decision(false); expect(questionInput().value).toBe("Unsent draft"); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("discards an unsent question only on one committed navigation", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render(); await question("Unsent draft");
+    const before = browser.history.length;
+    await act(async () => expect(leave()).toBe("deferred"));
+    const approve = container.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await act(async () => {approve.click(); approve.click();});
+    expect(browser.location.pathname).toBe("/tasks"); expect(browser.history.length).toBe(before + 1);
+    expect(questionInput().value).toBe(""); expect(unloadBlocked()).toBe(false); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("reserves question confirmation synchronously against late edits and submit", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render(); await question("Unsent draft");
+    await act(async () => {expect(leave()).toBe("deferred"); changeQuestion("Late mutation"); sendForm();});
+    expect(fetcher).not.toHaveBeenCalled(); await decision(false); expect(questionInput().value).toBe("Unsent draft");
+  });
+
+  it("submits the synchronous latest question instead of the previous render value", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {bodies.push(JSON.parse(String(init?.body))); return answer("Verified", "conv-nav");});
+    await render(); await question("Previous");
+    await act(async () => {changeQuestion("Latest"); sendForm();}); await flush();
+    expect(bodies).toEqual([{question: "Latest", scope: {kind: "all"}}]);
+    expect(questionInput().value).toBe("Latest"); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
+  });
+
+  it("distinguishes a displayed submitted question from an unsent follow-up", async () => {
+    vi.stubGlobal("fetch", async () => answer("Verified", "conv-nav")); await render(); await question("Submitted"); await submit();
+    expect(questionInput().value).toBe("Submitted"); expect(unloadBlocked()).toBe(false);
+    await question("New follow-up"); expect(unloadBlocked()).toBe(true);
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false);
+    expect(questionInput().value).toBe("New follow-up");
+  });
+
+  it("does not let same-event edits replace a question after submission began", async () => {
+    const late = deferred<Response>(); vi.stubGlobal("fetch", () => late.promise);
+    await render(); await question("Submitted");
+    await act(async () => {sendForm(); changeQuestion("Late mutation");});
+    expect(questionInput().value).toBe("Submitted"); expect(questionInput().disabled).toBe(true);
+    await act(async () => late.resolve(answer("Verified", "conv-nav"))); await flush();
+    expect(questionInput().value).toBe("Submitted"); expect(unloadBlocked()).toBe(false);
+  });
+
+  it("preserves the unsent question if a later guard rejects the approved discard", async () => {
+    await render(); await question("Unsent draft"); let blocked = false;
+    const unregister = registerWorkspaceLeaveGuard(() => ({kind: blocked ? "block" : "allow"}));
+    try {
+      await act(async () => expect(leave()).toBe("deferred")); blocked = true; await decision(true);
+      expect(browser.location.pathname).toBe("/agent"); expect(questionInput().value).toBe("Unsent draft"); expect(unloadBlocked()).toBe(true);
+    } finally {unregister();}
+  });
+
+  it("asks before a source restart discards an unsent question and clears only on commit", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher); await render(); await question("Unsent draft");
+    await click("Start with these sources"); expect(browser.location.search).toBe("");
+    await decision(false); expect(questionInput().value).toBe("Unsent draft");
+    await click("Start with these sources"); await decision(true);
+    expect(browser.location.search).toBe("?scope=all"); expect(questionInput().value).toBe(""); expect(unloadBlocked()).toBe(false); expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("keeps unsent question confirmation available when saving its intent fails", async () => {
+    const storage = browser.sessionStorage;
+    Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: (key: string) => storage.getItem(key), setItem: () => {throw new Error("quota");}, removeItem: (key: string) => storage.removeItem(key)}});
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    try {
+      await act(async () => root.render(<AgentRoute locale={language} memberId="storage-failure" />)); await question("Unsent draft"); await submit();
+      expect(container.textContent).toContain("Question recovery storage is unavailable or invalid");
+      await act(async () => expect(leave()).toBe("deferred")); await decision(false); expect(unloadBlocked()).toBe(true);
+      await act(async () => expect(leave()).toBe("deferred")); await decision(true); expect(browser.location.pathname).toBe("/tasks"); expect(fetcher).not.toHaveBeenCalled();
+    } finally {Object.defineProperty(browser, "sessionStorage", {configurable: true, value: storage});}
+  });
+
+  it("retains a new unsent question while explicitly retrying the previous failed question", async () => {
+    let calls = 0; const questions: string[] = [];
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {
+      questions.push(JSON.parse(String(init?.body)).question);
+      return ++calls === 1 ? new Response(null, {status: 503}) : answer("Verified", "conv-nav");
+    });
+    await render(); await question("Previous"); await submit(); await question("New unsent"); await click("Try again");
+    expect(questions).toEqual(["Previous", "Previous"]); expect(questionInput().value).toBe("New unsent"); expect(unloadBlocked()).toBe(true);
+    await act(async () => expect(leave()).toBe("deferred")); await decision(false); expect(questionInput().value).toBe("New unsent");
+  });
+
   function unloadBlocked() {
     const event = new browser.Event("beforeunload", {cancelable: true}); browser.dispatchEvent(event); return event.defaultPrevented;
   }
@@ -281,7 +380,7 @@ describe("agent request cancellation route", () => {
     });
     expect(browser.location.pathname).toBe("/agent"); expect(init?.signal?.aborted).toBe(false);
     await act(async () => late.resolve(Response.json({answer: "Verified", conversationId: "conv-nav", idempotencyKey: new Headers(init?.headers).get("idempotency-key"), citations: []})));
-    await flush(); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    await flush(); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("retains the leave lock for an uncertain question until explicit abandonment", async () => {
@@ -289,7 +388,7 @@ describe("agent request cancellation route", () => {
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     await question("Unknown question"); await submit();
     expect(container.textContent).toContain("Unconfirmed question"); expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
-    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("blocks restored unconfirmed questions without replaying and partitions navigation locks by member", async () => {
@@ -298,7 +397,7 @@ describe("agent request cancellation route", () => {
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true); expect(fetcher).not.toHaveBeenCalled();
     await act(async () => root.render(<AgentRoute locale={language} memberId="other-member" />));
-    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed"); expect(fetcher).not.toHaveBeenCalled();
+    expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed")); expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("blocks unreadable stored questions and releases only after explicit successful clearing", async () => {
@@ -306,7 +405,7 @@ describe("agent request cancellation route", () => {
     const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
-    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed"); expect(fetcher).not.toHaveBeenCalled();
+    await click("Abandon unconfirmed question"); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed")); expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("does not release pending navigation if the stored question disappears before its receipt", async () => {
@@ -314,7 +413,7 @@ describe("agent request cancellation route", () => {
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     await question("Pending"); await submit(); browser.sessionStorage.clear();
     expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
-    await click("Stop"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    await click("Stop"); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("keeps the navigation lock when a verified receipt cannot clear its journal", async () => {
@@ -330,14 +429,14 @@ describe("agent request cancellation route", () => {
       expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
       await click("Abandon unconfirmed question"); expect(leave()).toBe("blocked");
     } finally {Object.defineProperty(browser, "sessionStorage", {configurable: true, value: storage});}
-    await click("Abandon unconfirmed question"); expect(leave()).toBe("committed");
+    await click("Abandon unconfirmed question"); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("blocks an anonymous preview pending request but allows leaving after explicit Stop", async () => {
     vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
     await render(); await question("Preview"); await submit();
     expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
-    await click("Stop"); expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    await click("Stop"); expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it.each([401, 403])("keeps an unconfirmed question locked after denied receipt %s", async (status) => {
@@ -345,7 +444,7 @@ describe("agent request cancellation route", () => {
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" />));
     await question("Denied"); await submit();
     expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);
-    await click("Abandon unconfirmed question"); expect(leave()).toBe("committed");
+    await click("Abandon unconfirmed question"); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("does not release navigation for a mismatched receipt", async () => {
@@ -361,13 +460,13 @@ describe("agent request cancellation route", () => {
     Object.defineProperty(browser, "sessionStorage", {configurable: true, value: {getItem: () => {throw new Error("denied");}}});
     try {expect(leave()).toBe("blocked"); expect(unloadBlocked()).toBe(true);}
     finally {Object.defineProperty(browser, "sessionStorage", {configurable: true, value: storage});}
-    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   it("does not lock navigation for a read-only conversation restore", async () => {
     vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" search="?conversationId=conv-read" />));
-    expect(unloadBlocked()).toBe(false); expect(leave()).toBe("committed");
+    expect(unloadBlocked()).toBe(false); await act(async () => expect(leave()).toBe("committed"));
   });
 
   async function render() { await act(async () => root.render(<AgentRoute locale={language} />)); await flush(); }
