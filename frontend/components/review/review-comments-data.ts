@@ -13,7 +13,8 @@ export interface ReviewCommentItem {
 export async function loadReviewComments(submissionId: string, requester: Fetcher = fetch): Promise<ReviewCommentItem[]> {
   const id = assertId(submissionId);
   const payload = await apiFetch<{ comments?: unknown }>(`/api/admin/submissions/${encodeURIComponent(id)}/comments`, { requester });
-  return Array.isArray(payload.comments) ? payload.comments.map(normalizeComment).filter((item): item is ReviewCommentItem => item !== null) : [];
+  if (!Array.isArray(payload?.comments)) throw new Error("REVIEW_COMMENTS_INVALID");
+  return payload.comments.map(normalizeComment).filter((item): item is ReviewCommentItem => item !== null && item.submissionId === id);
 }
 
 export async function createReviewComment(submissionId: string, body: string, requester: Fetcher = fetch): Promise<ReviewCommentItem> {
@@ -21,8 +22,8 @@ export async function createReviewComment(submissionId: string, body: string, re
   const payload = await apiFetch<{ comment?: unknown }>(`/api/admin/submissions/${encodeURIComponent(id)}/comments`, {
     requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ body }),
   });
-  const comment = normalizeComment(payload.comment);
-  if (!comment) throw new Error("REVIEW_COMMENT_INVALID");
+  const comment = normalizeComment(payload?.comment);
+  if (!comment || comment.submissionId !== id || comment.body !== body.trim() || comment.supersedesCommentId) throw new Error("REVIEW_COMMENT_INVALID");
   return comment;
 }
 

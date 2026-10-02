@@ -1,3 +1,4 @@
+import { ReviewCommentsProvider, useReviewCommentsOwner } from "../../components/review/review-comments-owner";
 import { ReviewDraftProvider, useReviewDrafts } from "../../components/review/review-drafts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
@@ -12,11 +13,12 @@ export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data
 
 export function ReviewDetailRoute({ id, locale, requester = fetch }: { id: string; locale?: LocaleRuntime; requester?: Fetcher }) {
   // A newly selected object must never render the previous object's actions.
-  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewDetailSession id={id} locale={locale} requester={requester} /></ReviewDraftProvider>;
+  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider submissionId={id} locale={locale} requester={requester}><ReviewDetailSession id={id} locale={locale} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
 }
 
 function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: LocaleRuntime; requester: Fetcher }) {
   const drafts = useReviewDrafts()!;
+  const commentsOwner = useReviewCommentsOwner()!;
   const { clear: clearDraft } = drafts;
   const [state, setState] = useState<ReviewDetailRouteState>({ kind: "loading" });
   const [decisionState, setDecisionState] = useState<ReviewDecisionState>({ kind: "idle" });
@@ -122,7 +124,7 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   };
 
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
-  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current)} retainedDraft={Boolean(drafts.get(id))}
+  return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current) || commentsOwner.unresolved} retainedDraft={Boolean(drafts.get(id)) || commentsOwner.hasDraft}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
     onDecision={decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }

@@ -25,3 +25,19 @@ describe("frontend review comments", () => {
     await expect(createReviewComment("submission-1", "A note", requester)).resolves.toMatchObject({ id: "comment-1", body: "A note" });
   });
 });
+
+ describe("comment receipt ownership", () => {
+  it.each(["wrong-target", "wrong-body", "edit", "missing"])("rejects %s receipts", async kind => {
+    const comment = { id: "comment-1", submissionId: kind === "wrong-target" ? "other" : "submission-1", authorRole: "admin", body: kind === "wrong-body" ? "other" : "A note", createdAt: "2026-10-02T00:00:00Z", ...(kind === "edit" ? { supersedesCommentId: "previous" } : {}) };
+    await expect(createReviewComment("submission-1", " A note ", async () => new Response(JSON.stringify(kind === "missing" ? {} : { comment })))).rejects.toThrow();
+  });
+  it("does not expose comment rows for a different target", async () => {
+    await expect(loadReviewComments("submission-1", async () => new Response(JSON.stringify({ comments: [{ id: "c1", submissionId: "other", authorRole: "admin", body: "private", createdAt: "today" }] })))).resolves.toEqual([]);
+  });
+});
+
+describe("comment list read authority", () => {
+  it.each([{}, { comments: null }, { comments: {} }, null])("rejects malformed list envelopes: %j", async payload => {
+    await expect(loadReviewComments("submission-1", async () => new Response(JSON.stringify(payload)))).rejects.toThrow();
+  });
+});
