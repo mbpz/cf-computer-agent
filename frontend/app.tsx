@@ -116,6 +116,7 @@ export function App() {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
+  const logoutInFlight = useRef(false);
   const [localeTick, setLocaleTick] = useState(0);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: navigator.language, storage: window.localStorage }), []);
   useEffect(() => locale.subscribe(() => setLocaleTick((tick) => tick + 1)), [locale]);
@@ -162,7 +163,9 @@ export function App() {
 
   const navigate = (path: string) => writeWorkspaceHistory("push", path);
   const logout = async (owner: AccountNetworkOwner) => {
-    if (logoutPending) return;
+    // React state does not reserve the action until the next render.
+    if (logoutInFlight.current) return;
+    logoutInFlight.current = true;
     setLogoutPending(true);
     setLogoutError(null);
     try {
@@ -175,6 +178,7 @@ export function App() {
         setLogoutPending(false);
       });
     } catch {
+      logoutInFlight.current = false;
       setLogoutError(frontendText(locale, "SHELL_LOGOUT_FAILED"));
       setLogoutPending(false);
     }

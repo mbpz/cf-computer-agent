@@ -81,3 +81,5 @@ Task 4运行时续行（基线20b4038）：真实浏览器端口、accepted位�
 Task 4 document边界续行（基线1006e58）：夹具无条件重种历史RED4失败→5/5；新增fallback新epoch回归，位置/核心/gate/编辑器/Tasks五文件179/179。内置浏览器真实刷新保留旧历史，六组原生beforeunload取消事件及草稿/锁/写计数保持，待决重复Back令旧决定失效、确认后仅发布一次。见 `docs/product/navigation-history-document-evidence.md`。键盘动作未导致遍历、完整版本工具不支持；未强制离开或冒充通过。父项/完整Task 4仍开放，允许提交已验证切片继续其余任务。
 
 Document切片提交前最终门禁：23文件547/547、项目及独立DOM类型、build:ui/VM隔离、双语13/13与静态校验、清单9/9通过；29/5/24计数不变。本地服务器及临时tab已清理，无发布操作。
+
+Task 4 注销/合成身份续行（基线439f68e）：真实App双击注销RED 2 POST→同步ref防重，失败才释放以显式重试；原生匿名旧历史不恢复私有UI，B新document使用B合成数据。夹具根back_forward/reload/unknown不重种历史RED3失败→8/8。23文件549/549、项目类型/UI/双语通过；额外严格App类型检查35条与HEAD基线一致，不能记通过。清单与夹具Node17/17、29/5/24不变。见 `docs/product/navigation-logout-identity-evidence.md`。合成身份不是服务端双账号验收；父项完整门禁保持开放，下一允许逐页审计，无需重新批准。

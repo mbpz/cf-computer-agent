@@ -176,6 +176,7 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 - [ ] `R2-006` 建立 `EntityForm` 字段校验、dirty、pending 和离开确认。
 - [ ] `R2-007` 建立 `EntitySheet` 查看、编辑、保存和并发错误反馈。
 - [ ] `R2-008` 建立危险操作 `ConfirmAction` 和不可逆影响说明。
+  - 2026-10-02 注销同步防重与本地合成身份历史验收：23文件549/549；根入口不重种历史、Forward条目保留。额外严格App类型检查仍有35条基线诊断，真实身份与其余页面未验收，父项不关闭。[本地证据](./navigation-logout-identity-evidence.md)。
   - 2026-10-02 document边界续行：刷新不重种历史；dirty/pending/unknown各自刷新与跨文档Back捕获原生beforeunload取消事件且草稿保留，刷新后再次Back与精确重放有证据。5文件179/179、夹具5/5通过。[边界证据](./navigation-history-document-evidence.md)。不是强制离开或全浏览器验收，父项保持开放。
   - 2026-10-02 Task 4运行时接入：accepted订阅及history恢复/准入/重放、双语故障UI、注销迟到命令隔离；23文件545/545与类型/UI/双语通过，内置浏览器Back/Forward及pending/unknown保留有局部证据。[运行时证据](./navigation-history-runtime-evidence.md)。刷新/跨document/键盘触控门禁和父项保持开放。
   - 续行Task 3：TaskEditor两个实际入口及侧栏显式导航已有dirty/写入锁保护，22文件490/490与类型/UI/双语/清单通过。[本地证据](./navigation-task-editor-bridge-evidence.md)。history与原生验收尚未完成，R2-008不关闭。

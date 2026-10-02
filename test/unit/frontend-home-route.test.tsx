@@ -66,6 +66,53 @@ describe("home summary real route", () => {
     } finally { unregister(); }
   });
 
+  it("reserves logout synchronously across duplicate clicks and permits an explicit retry only after failure", async () => {
+    await render(); await answer(0, taskSummary); await answer(1, knowledge); await answer(2, { items: [] });
+    const signOut = async () => {
+      if (!container.querySelector('[data-account-logout]')) await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
+      const button = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+      expect(button).not.toBeNull();
+      await act(async () => { button.click(); button.click(); });
+    };
+    await signOut();
+    expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(1);
+    expect(container.textContent).toContain("Private guide");
+    await answer(3, { error: { code: "UNAVAILABLE", message: "Unavailable" } }, 503);
+    expect(container.textContent).toContain("Sign out failed");
+    await signOut();
+    expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(2);
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/session"
+      ? Promise.resolve(Response.json({ error: { code: "AUTH_REQUIRED", message: "Signed out", retryable: false } }, { status: 401 }))
+      : baseFetch(input, init));
+    await act(async () => requests[4].resolve(new Response(null, { status: 204 }))); await flush();
+    expect(container.textContent).not.toContain("Private guide");
+    expect(container.textContent).not.toContain("one@test.example");
+    expect(browser.location.pathname).toBe("/");
+    expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(2);
+    expect(requests.slice(0, 3).every(r => r.signal?.aborted)).toBe(true);
+  });
+
+  it("keeps logout reserved while the post-logout session check is unresolved", async () => {
+    await render(); await answer(0, taskSummary); await answer(1, knowledge); await answer(2, { items: [] });
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!;
+    let finishCheck!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/session"
+      ? new Promise<Response>(resolve => { finishCheck = resolve; }) : baseFetch(input, init));
+    await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
+    const button = container.querySelector('[data-account-logout]') as HTMLButtonElement;
+    await act(async () => button.click());
+    await act(async () => requests[3].resolve(new Response(null, { status: 204 }))); await flush();
+    expect(finishCheck).toBeTypeOf("function");
+    expect(container.textContent).toContain("Private guide");
+    expect((container.querySelector('[data-account-logout]') as HTMLButtonElement).disabled).toBe(true);
+    expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(1);
+    await act(async () => finishCheck(Response.json({ error: { code: "AUTH_REQUIRED", message: "Signed out", retryable: false } }, { status: 401 }))); await flush();
+    expect(container.textContent).not.toContain("Private guide");
+    expect(container.querySelector('[data-account-trigger]')).toBeNull();
+    expect(requests.filter(r => r.path === "/auth/logout")).toHaveLength(1);
+  });
+
   it.each(["tasks", "knowledge", "activity"])("shows %s failure instead of zero or empty while preserving successful sections", async name => {
     await render();
     await answer(0, taskSummary, name === "tasks" ? 500 : 200);

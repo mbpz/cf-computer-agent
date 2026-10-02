@@ -1,0 +1,271 @@
+{
+  "scope": "Local synthetic identities and API replies; native browser navigation; not OAuth or server authorization acceptance",
+  "date": "2026-10-02",
+  "observations": [
+    {
+      "step": "member-a",
+      "evidence": {
+        "accepted": {
+          "pathname": "/tasks",
+          "search": ""
+        },
+        "arrivalType": "navigate",
+        "documentId": "4f08c988-d52e-4f19-8f7f-ae3dfde04bb2",
+        "historyLength": 3,
+        "identity": "native-fixture",
+        "inboxReads": 0,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 0,
+        "raw": "/tasks",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture@example.test\n成员\n首页\n/\n任务\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n任务\n\n管理仅属于你的工作事项。\n\n新建任务\n状态\ntodo\ndoing\nblocked\ndone\ncanceled\n优先级\nlow\nmedium\nhigh\n截止时间\ntoday\noverdue\nnone\n\nNative fixture task\n\n编辑\n待办\n中\n讨论\n完成\n删除\n\n总计 1 · 当前显示 1–1\n\n每页行数\n20\n50\n100\n‹\n上一页\n1\n›\n下一页"
+    },
+    {
+      "step": "signed-out",
+      "evidence": {
+        "accepted": {
+          "pathname": "/",
+          "search": ""
+        },
+        "arrivalType": "navigate",
+        "documentId": "4f08c988-d52e-4f19-8f7f-ae3dfde04bb2",
+        "historyLength": 3,
+        "identity": "anonymous",
+        "inboxReads": 0,
+        "logoutRequests": 1,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 1,
+        "raw": "/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "个人工作台\nEnglish\n简体中文\n登录工作台\n让你的知识，成为每天的行动力。\n\n以 AI 知识库为核心的个人工作台。收集资料、整理知识、追问答案，用任务与看板连接知识和行动。\n\n体验知识之旅\n探索工作台\n\n3D 场景加载失败，可以使用静态演示，或准备好后重试。\n\n重试加载 3D\n使用静态模式\n暂停动画\n示例演示 · 不读取你的个人数据\n\n这里的资料、回答、引用、任务及消息均为人工编写的虚构样例。\n\n工作台采用邀请制，请使用已获准的 GitHub 账号登录。\n\n收集资料\n阅读整理\n基于来源提问\n管理行动\n让通知和讨论留在上下文中\n概览\n收集资料\n阅读整理\n基于来源提问\n管理行动\n体验完成\n\n按自己的节奏体验这段简短流程。准备好后再继续，也可随时探索任意功能。\n\n从收集资料，到下一步行动\n\n保留来源，阅读整理知识，核对回答引用，再人工创建并跟进下一步任务。\n\n你的数据不参与这场演示\n\n演示不读取个人数据、不上传文件，也不发送 AI 请求。演示操作只保留在内存中，刷新即重置，不写入你的工作台。\n\n这里的资料、回答、引用、任务及消息均为人工编写的虚构样例。\n\n准备好连接你的知识与行动了吗？\n登录工作台\n\n工作台采用邀请制，请使用已获准的 GitHub 账号登录。"
+    },
+    {
+      "step": "anonymous-back",
+      "evidence": {
+        "accepted": {
+          "pathname": "/inbox",
+          "search": ""
+        },
+        "arrivalType": "navigate",
+        "documentId": "4f08c988-d52e-4f19-8f7f-ae3dfde04bb2",
+        "historyLength": 3,
+        "identity": "anonymous",
+        "inboxReads": 0,
+        "logoutRequests": 1,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 2,
+        "raw": "/inbox",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "个人工作台\n\n让知识与日常工作，在这里连接\n\n以 AI 知识库为核心的个人工作台。整理资料、追问知识，通过任务与看板跟进每一步行动。\n\n私有工作区 · 仅允许名单成员访问\n登录个人工作台\n\n选择你平时使用的身份提供商继续。\n\n使用 GitHub 登录\n\n仅已批准的工作区成员可以进入。"
+    },
+    {
+      "step": "anonymous-forward",
+      "evidence": {
+        "accepted": {
+          "pathname": "/",
+          "search": ""
+        },
+        "arrivalType": "navigate",
+        "documentId": "4f08c988-d52e-4f19-8f7f-ae3dfde04bb2",
+        "historyLength": 3,
+        "identity": "anonymous",
+        "inboxReads": 0,
+        "logoutRequests": 1,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 3,
+        "raw": "/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "个人工作台\nEnglish\n简体中文\n登录工作台\n让你的知识，成为每天的行动力。\n\n以 AI 知识库为核心的个人工作台。收集资料、整理知识、追问答案，用任务与看板连接知识和行动。\n\n体验知识之旅\n探索工作台\n\n静态预览已就绪，可由你选择加载 3D。\n\n加载 3D\n使用静态模式\n暂停动画\n示例演示 · 不读取你的个人数据\n\n这里的资料、回答、引用、任务及消息均为人工编写的虚构样例。\n\n工作台采用邀请制，请使用已获准的 GitHub 账号登录。\n\n收集资料\n阅读整理\n基于来源提问\n管理行动\n让通知和讨论留在上下文中\n概览\n收集资料\n阅读整理\n基于来源提问\n管理行动\n体验完成\n\n按自己的节奏体验这段简短流程。准备好后再继续，也可随时探索任意功能。\n\n从收集资料，到下一步行动\n\n保留来源，阅读整理知识，核对回答引用，再人工创建并跟进下一步任务。\n\n你的数据不参与这场演示\n\n演示不读取个人数据、不上传文件，也不发送 AI 请求。演示操作只保留在内存中，刷新即重置，不写入你的工作台。\n\n这里的资料、回答、引用、任务及消息均为人工编写的虚构样例。\n\n准备好连接你的知识与行动了吗？\n登录工作台\n\n工作台采用邀请制，请使用已获准的 GitHub 账号登录。"
+    },
+    {
+      "step": "member-b",
+      "evidence": {
+        "accepted": {
+          "pathname": "/tasks",
+          "search": ""
+        },
+        "arrivalType": "navigate",
+        "documentId": "19815a73-a382-48e5-9295-6ef75b6a59b5",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 0,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture-b",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 0,
+        "raw": "/tasks",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n/\n任务\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n任务\n\n管理仅属于你的工作事项。\n\n新建任务\n状态\ntodo\ndoing\nblocked\ndone\ncanceled\n优先级\nlow\nmedium\nhigh\n截止时间\ntoday\noverdue\nnone\n\nMember B private task\n\n编辑\n待办\n中\n讨论\n完成\n删除\n\n总计 1 · 当前显示 1–1\n\n每页行数\n20\n50\n100\n‹\n上一页\n1\n›\n下一页"
+    },
+    {
+      "step": "member-b-back-to-old-root",
+      "evidence": {
+        "accepted": {
+          "pathname": "/",
+          "search": ""
+        },
+        "arrivalType": "back_forward",
+        "documentId": "7088c696-d7b0-4f50-a31a-758ea981f8a1",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 0,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [],
+        "publications": 0,
+        "raw": "/",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n无法加载页面。\n重试"
+    },
+    {
+      "step": "member-b-back-to-old-inbox",
+      "evidence": {
+        "accepted": {
+          "pathname": "/inbox",
+          "search": ""
+        },
+        "arrivalType": "back_forward",
+        "documentId": "7088c696-d7b0-4f50-a31a-758ea981f8a1",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 1,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture-b",
+            "path": "/api/inbox?page=1&pageSize=20"
+          }
+        ],
+        "publications": 1,
+        "raw": "/inbox",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n/\n收集箱\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n无法加载页面。\n重试"
+    },
+    {
+      "step": "member-b-forward-task",
+      "evidence": {
+        "accepted": {
+          "pathname": "/tasks",
+          "search": ""
+        },
+        "arrivalType": "back_forward",
+        "documentId": "1b27ff68-cbae-4f60-911d-b84283fdf217",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 0,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture-b",
+            "path": "/api/tasks?page=1&pageSize=20"
+          }
+        ],
+        "publications": 0,
+        "raw": "/tasks",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n/\n任务\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n任务\n\n管理仅属于你的工作事项。\n\n新建任务\n状态\ntodo\ndoing\nblocked\ndone\ncanceled\n优先级\nlow\nmedium\nhigh\n截止时间\ntoday\noverdue\nnone\n\nMember B private task\n\n编辑\n待办\n中\n讨论\n完成\n删除\n\n总计 1 · 当前显示 1–1\n\n每页行数\n20\n50\n100\n‹\n上一页\n1\n›\n下一页"
+    },
+    {
+      "step": "member-b-inbox-corrected-pagination",
+      "evidence": {
+        "accepted": {
+          "pathname": "/inbox",
+          "search": ""
+        },
+        "arrivalType": "back_forward",
+        "documentId": "2ecdfbb6-6e73-4fc2-936d-ff5091769cf8",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 1,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture-b",
+            "path": "/api/inbox?page=1&pageSize=20"
+          }
+        ],
+        "publications": 1,
+        "raw": "/inbox",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n/\n收集箱\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n无法加载页面。\n重试"
+    },
+    {
+      "step": "member-b-inbox-reload-current-fixture",
+      "evidence": {
+        "accepted": {
+          "pathname": "/inbox",
+          "search": ""
+        },
+        "arrivalType": "reload",
+        "documentId": "d6681220-9862-4007-b7f0-da858d43aa7b",
+        "historyLength": 4,
+        "identity": "native-fixture-b",
+        "inboxReads": 1,
+        "logoutRequests": 0,
+        "nativeNavigation": true,
+        "privateReads": [
+          {
+            "identity": "native-fixture-b",
+            "path": "/api/inbox?page=1&pageSize=20"
+          }
+        ],
+        "publications": 0,
+        "raw": "/inbox",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+        "writes": 0
+      },
+      "ui": "跳到主要内容\n\n个人工作台\n\nAI 知识库\n\n工作区\n\n首页\nAI 知识库\n提交\n我的提交\n收集箱\n目标\n项目\n日历\n今日\n专注\n复盘\n工作图\nNF\nnative-fixture-b@example.test\n成员\n首页\n/\n收集箱\n命令面板\n⌘ / Ctrl K\n任务\n看板\n通知\n0\n消息\n中\n收集箱\n\n先收集零散想法、链接和参考内容，再把它们变成可执行工作。\n\n仅自己可见\n快速收集\n文本\n链接\n加入收集箱\n收集状态\n全部状态\n待整理\n已归档\n已转化\n\n收集箱已清空\n\n总计 0 · 当前显示 0–0\n\n每页行数\n20\n50\n100"
+    }
+  ]
+}
