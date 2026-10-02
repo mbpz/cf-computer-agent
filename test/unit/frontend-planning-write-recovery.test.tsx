@@ -2,7 +2,7 @@
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 for (const module of ["goals", "projects"] as const) describe(`${module} persistent write recovery through real App`, () => {
@@ -17,6 +17,14 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   const recover = () => main().querySelector<HTMLButtonElement>("[data-planning-write-recover]")!;
   async function click(node: HTMLButtonElement) { await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(path: string) { await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("committed"); }); }
+  // PROJECTS now blocks normal navigation until reconciliation; forced teardown
+  // keeps the independent late-callback/remount recovery contract under test.
+  async function leavePending(path: string) {
+    if (module === "projects") {
+      await act(async () => { expect(writeWorkspaceHistory("push", path)).toBe("blocked"); });
+      await forceRemountAppAt(app!, path);
+    } else await navigate(path);
+  }
   async function mount(raw: string | null = null, memberId = "alice") {
     app = await mountApp({ url: `https://app.test/${module}`, configureBrowser(browser) { vi.stubGlobal("HTMLElement", browser.HTMLElement); if (raw !== null) browser.sessionStorage.setItem(key, raw); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test"); const path = url.pathname;
@@ -54,7 +62,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
     await mount(); await submitStatus(); expect(writes).toEqual([{ status: "completed", expectedUpdatedAt: version }]);
     expect(complete().disabled).toBe(true); expect(recover()).toBeTruthy();
     const raw = app!.browser.sessionStorage.getItem(key); expect(raw).toContain('"id":"row"');
-    await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
+    await leavePending("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
     expect(complete().disabled).toBe(true); expect(writes).toHaveLength(1);
     await click(recover()); await waitForApp(() => !complete().disabled);
     expect(reads).toContain(`/api/${module}/row`); expect(writes).toHaveLength(1);
@@ -93,7 +101,7 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   });
   it("ignores a late success from the old mount and never clears its new recovery barrier", async () => {
     await mount(); delayed = true; await submitStatus(); await waitForApp(() => !!defer);
-    const raw = app!.browser.sessionStorage.getItem(key); await navigate("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
+    const raw = app!.browser.sessionStorage.getItem(key); await leavePending("/settings"); await navigate(`/${module}`); await waitForApp(() => !!complete());
     await act(async () => defer!(Response.json({ ...row(), status: "completed", updatedAt: "2026-09-27T00:00:00.001Z" })));
     expect(app!.browser.sessionStorage.getItem(key)).toBe(raw); expect(complete().disabled).toBe(true); expect(writes).toHaveLength(1);
   });
@@ -113,12 +121,12 @@ for (const module of ["goals", "projects"] as const) describe(`${module} persist
   });
   it("does not clear after a late recovery GET following a route exit", async () => {
     await mount(marker); delayDetail = true; await click(recover()); await waitForApp(() => !!resolveDetail);
-    await navigate("/settings"); await act(async () => resolveDetail!()); expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
+    await leavePending("/settings"); await act(async () => resolveDetail!()); expect(app!.browser.sessionStorage.getItem(key)).toBe(marker);
     delayDetail = false; await navigate(`/${module}`); await waitForApp(() => !!complete()); expect(complete().disabled).toBe(true); expect(writes).toEqual([]);
   });
   it("invalidates pending recovery when the page query changes, without clearing the barrier", async () => {
     await mount(marker); delayDetail = true; await click(recover()); await waitForApp(() => !!resolveDetail);
-    await navigate(`/${module}?page=1&pageSize=50`);
+    await leavePending(`/${module}?page=1&pageSize=50`);
     await act(async () => resolveDetail!());
     await waitForApp(() => !!recover() && !recover().disabled);
     expect(app!.browser.sessionStorage.getItem(key)).toBe(marker); expect(writes).toEqual([]);

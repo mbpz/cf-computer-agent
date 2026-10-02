@@ -49,17 +49,18 @@ describe("project relation editing and readback", () => {
     await act(async () => button("Manage links").click());
     await waitForApp(() => editor()?.textContent?.includes("Goal 0") === true);
   }
+  async function confirm() { const n = main().querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(n).toBeTruthy(); await act(async () => n!.click()); }
   async function next() { await act(async () => (editor().querySelector('button[aria-label="Next page"]') as HTMLButtonElement).click()); await waitForApp(() => editor().textContent?.includes("Goal 22") === true); }
   it("pages beyond previews, links/unlinks once, and reads fresh counts without changing manual progress", async () => {
     await mount(); await next();
     expect(editor().textContent).not.toContain("Goal 0");
-    await act(async () => { [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); });
+    await act(async () => { [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); [...editor().querySelectorAll("button")].filter(b => b.textContent === "Link").at(-1)!.click(); }); await confirm();
     await waitForApp(() => writes.length === 1 && !!button("Unlink", editor()));
     expect(writes).toHaveLength(1);
     expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z"]);
     expect(main().textContent).toContain("37%");
     expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("Goal 22");
-    await act(async () => button("Unlink", editor()).click());
+    await act(async () => button("Unlink", editor()).click()); await confirm();
     await waitForApp(() => writes.length === 2 && !button("Unlink", editor()));
     expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z", "2026-09-01T00:00:00.001Z"]);
     expect(reads.filter(p => p.includes("page=2"))).toHaveLength(3);
@@ -76,7 +77,7 @@ describe("project relation editing and readback", () => {
   });
   it("reconciles uncertain writes using GET only, retains the warning through failed readback and retry", async () => {
     await mount(); await next(); failure = 503; readFailure = true;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button("Retry links", editor()));
     expect(editor().textContent).toContain("not confirmed");
     expect(editor().textContent).not.toContain("Goal 22");
@@ -90,12 +91,12 @@ describe("project relation editing and readback", () => {
     await mount();
     await act(async () => button("Tasks", editor()).click());
     await waitForApp(() => editor().textContent?.includes("Task 0") === true);
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button("Unlink", editor()));
     expect(writes).toEqual(["POST /api/projects/a/tasks"]);
     expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("0/1");
     expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("37%");
-    await act(async () => button("Unlink", editor()).click());
+    await act(async () => button("Unlink", editor()).click()); await confirm();
     await waitForApp(() => !button("Unlink", editor()));
     expect(writes.at(-1)).toBe("DELETE /api/projects/a/tasks/task-0");
     expect(main().querySelector("[data-project-id=a]")!.textContent).toContain("0/0");
@@ -103,7 +104,7 @@ describe("project relation editing and readback", () => {
   it("holds the write lock across slow acknowledgement and readback", async () => {
     await mount(); let release!: () => void;
     holdWrite = new Promise<void>(resolve => { release = resolve; });
-    await act(async () => { button("Link", editor()).click(); button("Link", editor()).click(); });
+    await act(async () => { button("Link", editor()).click(); button("Link", editor()).click(); }); await confirm();
     expect(writes).toHaveLength(1); expect(button("Close links", editor()).disabled).toBe(true);
     expect(button("Tasks", editor()).disabled).toBe(true); expect(button("Manage links").disabled).toBe(true);
     await act(async () => release());
@@ -141,32 +142,32 @@ describe("project relation editing and readback", () => {
   it.each([409, 408, 500, "malformed"])("only reads after uncertain response %s", async result => {
     await mount(); await next();
     if (typeof result === "number") failure = result; else malformedReceipt = true;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button(result === 409 ? "Link" : "Unlink", editor()) && !button(result === 409 ? "Link" : "Unlink", editor()).disabled);
     expect(editor().textContent).toContain(result === 409 ? "record changed" : "not confirmed"); expect(writes).toHaveLength(1);
     expect(reads).toHaveLength(3);
   });
   it("keeps a definite validation rejection editable without automatic replay", async () => {
     await mount(); failure = 400;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !button("Link", editor()).disabled);
     expect(writes).toHaveLength(1); expect(reads).toHaveLength(1);
     expect(editor().textContent).not.toContain("not confirmed");
   });
   it.each([401, 403, 404])("clears private project state after denied mutation %s", async status => {
     await mount(); failure = status; const readsBefore = reads.length;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !main().textContent?.includes("Project a"));
     expect(editor()).toBeNull(); expect(writes).toHaveLength(1); expect(reads).toHaveLength(readsBefore);
   });
   it("uses the conflict readback version only for a new explicit user action", async () => {
     await mount(); failure = 409;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button("Link", editor()) && !button("Link", editor()).disabled);
     expect(editor().textContent).toContain("record changed");
     expect(writes).toHaveLength(1); expect(button("Unlink", editor())).toBeUndefined();
     failure = 0;
-    await act(async () => button("Link", editor()).click());
+    await act(async () => button("Link", editor()).click()); await confirm();
     await waitForApp(() => !!button("Unlink", editor()));
     expect(sentVersions).toEqual(["2026-09-01T00:00:00.000Z", "2026-09-01T00:00:00.001Z"]);
     expect(writes).toHaveLength(2);

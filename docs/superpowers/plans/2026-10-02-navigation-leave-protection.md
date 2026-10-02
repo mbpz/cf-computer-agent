@@ -87,3 +87,5 @@ Task 4 注销/合成身份续行（基线439f68e）：真实App双击注销RED 2
 Task 4逐页续行（基线aaa0212）：五个创建入口（四组件）接入useCreateDraft，确认仅在获准导航提交时清草稿，未决创建/读回禁止普通离开；同事件编辑→提交取最新ref。行为RED30失败→30通过→扩充60项，最终41文件1053/1053、受影响严格DOM类型/项目类型/UI/双语通过。见 `docs/product/navigation-create-form-protection-evidence.md`。测试的强制组件重挂载与真实导航分开，不算原生刷新/身份验收。A05/R2-008及Task 4整体不勾选；下一允许核查已有内容编辑和其他页面。
 
 Task 4逐页时间线编辑续行（基线b66f757）：已有内容编辑支持dirty取消/Escape/离页确认，最新同步草稿与提交锁，路由级未决恢复标记保护错误卸载边界。12项行为RED→GREEN，补充4项后最终41文件1069/1069及受影响严格DOM类型/项目类型/UI/双语/清单通过。见`docs/product/navigation-timeline-editor-protection-evidence.md`。A05/R2-008与Task 4整体不勾选；29/5/24不变，下一允许核查项目关联及其他逐页边界。无原生验收、push、发布或远端迁移。
+
+Task 4逐页项目关联续行（基线5776cf0）：项目目标/任务关联/解除有精确影响确认、默认取消及同步单次消费；旧确认/取消/行回调隔离，ProjectsRoute未决标记守卫覆盖编辑器关闭/错误卸载。8项行为RED→GREEN，再补4项后最终43文件1110/1110；类型/UI/双语/清单通过。见`docs/product/navigation-project-relations-protection-evidence.md`。A05/R2-008与Task 4整体不勾选，29/5/24不变；下一允许核查目标任务关联和其余逐页边界，无原生验收、push、发布或远端迁移。

@@ -2,7 +2,7 @@
 import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
+import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
 vi.mock("dompurify", () => ({ default: { sanitize: (html: string) => html } }));
 for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict recovery through App`, () => {
@@ -64,10 +64,11 @@ for (const kind of ["goals", "projects"] as const) describe(`${kind} conflict re
     await waitForApp(() => main().textContent!.includes("Fresh private row"));
     expect(complete().disabled).toBe(false);
   });
-  it("ignores a conflict readback after leaving the route", async () => {
+  it("ignores a conflict readback after leaving or forced teardown of a guarded route", async () => {
     await mount(); delay = true; await submitStatus();
     await waitForApp(() => !!resolveRead);
-    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"); });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe(kind === "projects" ? "blocked" : "committed"); });
+    if (kind === "projects") await forceRemountAppAt(app!, "/settings");
     await act(async () => resolveRead!());
     expect(main().textContent).not.toContain("Fresh private row");
     expect(main().textContent).not.toContain("Review the latest data before trying again.");
