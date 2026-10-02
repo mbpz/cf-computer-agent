@@ -1,3 +1,4 @@
+import { ReviewDraftProvider, useReviewDrafts } from "./components/review/review-drafts";
 import { SnapshotTargetDetail } from "./components/snapshot-target-detail";
 import type { ReviewTarget } from "./pages/workbench-review-page";
 import { acknowledgeFocusTransition, clearFocusTransition, loadFocusTransition, saveFocusTransition, type FocusTransitionIntent, type StoredFocusTransition } from "./lib/focus-transition-intent";
@@ -2711,7 +2712,11 @@ function needsBoardReplacement(
     || column.kind !== "ready" || column.pending || Boolean(column.loadError);
 }
 
-export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
+export function ReviewQueueRoute(props: { locale: LocaleRuntime; search: string }) {
+  return <ReviewDraftProvider locale={props.locale} preserveUnsent><ReviewQueueSession {...props} /></ReviewDraftProvider>;
+}
+function ReviewQueueSession({ locale, search }: { locale: LocaleRuntime; search: string }) {
+  const drafts = useReviewDrafts()!;
   const initial = parsePageSearch(search); const [page, setPage] = useState(initial.page); const [pageSize, setPageSize] = useState(initial.pageSize);
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewQueuePageResult } | { kind: "error" | "forbidden"; message: string }>({ kind: "loading" });
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -2756,7 +2761,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
         const status = row?.status ?? (await loadReviewDetail(operation.id)).detail.status;
         if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
         if (["published", "rejected", "revision_requested"].includes(status)) {
-          operationRef.current = null; setDecisionState({ kind: "idle" }); setCompletedId(operation.id);
+          drafts.clear(operation.id); operationRef.current = null; setDecisionState({ kind: "idle" }); setCompletedId(operation.id);
         }
       }
       deniedRef.current = false;
@@ -2815,7 +2820,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
         operationRef.current = operation;
         const receipt = await sendReviewDecision(operation);
         if (!ownsDecision()) return;
-        operationRef.current = null; token.settled = true;
+        drafts.clear(id); operationRef.current = null; token.settled = true;
         setDecisionState({ kind: "success", receipt }); setCompletedId(id); needsClampRef.current = true;
       } catch (error: unknown) {
         if (ownsDecision()) {

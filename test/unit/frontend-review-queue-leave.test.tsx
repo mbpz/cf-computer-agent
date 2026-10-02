@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewQueueRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
-import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 
 const vmContexts = new WeakSet<object>();
@@ -30,6 +30,57 @@ describe("review queue leave ownership", () => {
   async function decide() {await click("Reject"); await click("Confirm rejection"); const final=container.querySelector("[data-confirm-action]") as HTMLButtonElement; expect(final).toBeTruthy(); await act(async () => final.click()); await flush();}
   async function leave() {await act(async () => writeWorkspaceHistory("push", "/home"));}
   function unload() {const e = new browser.Event("beforeunload", {cancelable:true}); browser.dispatchEvent(e); return e.defaultPrevented;}
+  async function typeNote(value:string, index=0) { const input=container.querySelectorAll("textarea[data-review-note]")[index] as HTMLTextAreaElement; expect(input).toBeTruthy(); await act(async()=>{Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype,"value")!.set!.call(input,value);input.dispatchEvent(new browser.Event("input",{bubbles:true}));input.dispatchEvent(new browser.Event("change",{bubbles:true}));}); }
+  async function dismissLeave(confirm=false) {const button=container.querySelector(confirm ? "[data-confirm-action]" : "[data-cancel-action]") as HTMLButtonElement;expect(button).toBeTruthy();await act(async()=>button.click());await flush();}
+  it.each(["missing", "denied"])("retains an independent note after a %s refresh and restores it only to its own row", async outcome=>{
+    let reads=0; let posts=0;
+    vi.stubGlobal("fetch",async (_:unknown,init?:RequestInit)=>{if(init?.method==="POST") {posts++;return json({});} reads++;return reads===2 ? (outcome==="denied" ? new Response(null,{status:403}) : queue([{id:"review-2",title:"Other",status:"review_pending"}])) : queue();});
+    await mount();await click("Reject");await typeNote("Private unsent note");await mount();
+    expect(container.textContent).not.toContain("Private unsent note");expect(unload()).toBe(true);
+    await leave();expect(browser.location.pathname).toBe("/admin/submissions");expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
+    await mount();const note=container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement;expect(note?.value).toBe("Private unsent note");expect(posts).toBe(0);
+    await leave();await dismissLeave(true);expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);
+  });
+  it("does not silently erase an unsent note when another reviewer makes its row terminal", async()=>{
+    let reads=0;
+    vi.stubGlobal("fetch",async()=>++reads===1 ? queue() : queue([{id:"review-1",title:"Review",status:"rejected"}]));
+    await mount();await click("Reject");await typeNote("Independent draft");await mount();expect(unload()).toBe(true);
+    await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();expect(browser.location.pathname).toBe("/admin/submissions");
+  });
+  it("keeps another row's unsent note when a submitted row completes and the next list omits both", async()=>{
+    let reads=0;let posts=0;
+    vi.stubGlobal("fetch",async(_:unknown,init?:RequestInit)=>{if(init?.method==="POST"){posts++;return json({decision:{submissionId:"review-1",decision:"rejected"}});}return ++reads===1 ? queue([{id:"review-1",title:"One",status:"review_pending"},{id:"review-2",title:"Two",status:"review_pending"}]) : queue([]);});
+    await mount();const rejects=[...container.querySelectorAll("button")].filter(b=>b.textContent==="Reject");await act(async()=>rejects[1]!.click());await typeNote("Other row note");await decide();
+    expect(posts).toBe(1);expect(unload()).toBe(true);await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();await dismissLeave();
+  });
+  it("preserves a hidden draft when final navigation admission refuses, then clears only on actual commit", async()=>{
+    let reads=0;
+    vi.stubGlobal("fetch",async()=>++reads===2 ? queue([]) : queue());
+    await mount();await click("Request changes");await typeNote("Retained revision request");await mount();
+    const unregister=registerWorkspaceLeaveGuard(()=>({kind:"allow",beforeCommit:()=>false}));
+    try {await leave();await dismissLeave(true);expect(browser.location.pathname).toBe("/admin/submissions");expect(unload()).toBe(true);} finally {unregister();}
+    await mount();expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("Retained revision request");
+    expect([...container.querySelectorAll("button")].some(b=>b.textContent==="Confirm request for changes")).toBe(true);
+    await leave();await dismissLeave(true);expect(unload()).toBe(false);
+    await act(async()=>writeWorkspaceHistory("push","/admin/submissions"));await mount();expect(container.querySelector("textarea[data-review-note]")?.textContent ?? "").not.toContain("Retained revision request");expect(unload()).toBe(false);
+  });
+  it("cannot discard a submitted unknown note after its row vanishes", async()=>{
+    let reads=0;let posts=0;
+    vi.stubGlobal("fetch",async(input:unknown,init?:RequestInit)=>{
+      if(init?.method==="POST"){posts++;return new Response(null,{status:503});}
+      if(String(input).endsWith("/review-1")) return preview("review_pending");
+      return ++reads===1 ? queue() : queue([]);
+    });
+    await mount();await click("Reject");await typeNote("Unknown submission note");await click("Confirm rejection");await dismissLeave(true);await click("Reload current state");
+    await leave();expect(container.querySelector('[role="alertdialog"]')).toBeNull();expect(browser.location.pathname).toBe("/admin/submissions");expect(unload()).toBe(true);expect(posts).toBe(1);
+  });
+  it("starts a fresh draft owner after forced session teardown", async()=>{
+    vi.stubGlobal("fetch",async()=>queue());await mount();await click("Reject");await typeNote("Previous session note");
+    await act(async()=>root.render(null));await mount();expect(container.querySelector("textarea[data-review-note]")).toBeNull();expect(unload()).toBe(false);
+  });
+  it("does not treat an empty revision form as a dirty draft", async()=>{
+    vi.stubGlobal("fetch",async()=>queue());await mount();await click("Request changes");expect(unload()).toBe(false);await leave();expect(browser.location.pathname).toBe("/home");
+  });
   it("blocks pending and unknown navigation, then resolves terminal detail with GET only", async () => {
     const post = deferred<Response>(); let posts=0; let reads=0; const details:string[]=[];
     vi.stubGlobal("fetch", async (input:unknown, init?:RequestInit) => {

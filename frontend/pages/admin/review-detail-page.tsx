@@ -12,16 +12,16 @@ import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, t
 export type { ReviewDecisionState } from "../../components/review/review-decision-controls";
 export type ReviewDetailState = { kind: "loading" } | { kind: "ready"; detail: ReviewDetailModel } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
-export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false }: {
+export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false, retainedDraft = false }: {
   state: ReviewDetailState; onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void;
   onRetry?: () => void; onRetryDecision?: () => void; onBack?: () => void;
-  decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode; unresolvedDecision?: boolean;
+  decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode; unresolvedDecision?: boolean; retainedDraft?: boolean;
 }) {
   if (state.kind === "loading") return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10" /><Skeleton className="h-64" /></div>;
   if (state.kind !== "ready") return <section className="space-y-4" data-page-state={state.kind}>
     <Alert variant={state.kind === "not-found" ? "default" : "destructive"}><AlertDescription>{state.message}
       <div className="flex flex-wrap gap-2">
-        {(state.kind !== "not-found" || unresolvedDecision) && onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
+        {(state.kind !== "not-found" || unresolvedDecision || retainedDraft) && onRetry && <Button variant="outline" onClick={onRetry}>{frontendText(locale, "COMMON_RETRY")}</Button>}
         <a className={buttonVariants({ variant: "outline" })} href="/admin/submissions" onClick={(event) => {
           if (!onBack || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); onBack();

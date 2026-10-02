@@ -123,6 +123,29 @@ describe("review detail read recovery", () => {
     await leave(); expect(browser.location.pathname).toBe("/home");
   });
 
+  it.each([403,404,500])("retains an unsent detail note behind a %s read error and restores it after recovery", async status=>{
+    let reads=0;let posts=0;
+    const requester=withComments(async(_input,init)=>{if(init?.method==="POST"){posts++;return json({});}return ++reads===2 ? new Response(null,{status}) : preview("sub-1");});
+    await render(requester);await act(async()=>button("Reject").click());await typeNote("Private detail draft");
+    await act(async()=>root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({navigatorLanguage:"en"})} requester={requester}/>));await flush();
+    expect(container.querySelector("textarea")).toBeNull();expect(container.textContent).not.toContain("Private detail draft");expect(unload()).toBe(true);
+    await leave();expect(browser.location.pathname).toBe("/admin/submissions/sub-1");const cancel=container.querySelector("[data-cancel-action]") as HTMLButtonElement;expect(cancel).toBeTruthy();await act(async()=>cancel.click());
+    await act(async()=>button("Try again").click());await flush();expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement)?.value).toBe("Private detail draft");expect(posts).toBe(0);
+  });
+
+  it("does not erase an independent detail draft on another reviewer's terminal read", async()=>{
+    let reads=0;const requester=withComments(async()=>preview("sub-1",++reads===1 ? "review_pending" : "rejected"));
+    await render(requester);await act(async()=>button("Reject").click());await typeNote("My independent note");
+    await act(async()=>root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({navigatorLanguage:"en"})} requester={requester}/>));await flush();
+    expect(button("Reject").disabled).toBe(true);expect(unload()).toBe(true);await leave();expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();
+    const discard=container.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async()=>discard.click());expect(browser.location.pathname).toBe("/home");expect(unload()).toBe(false);
+  });
+  it("does not transfer a hidden detail draft to a newly keyed submission", async()=>{
+    let reads=0;const requester=withComments(async(input)=>++reads===2 ? new Response(null,{status:403}) : preview(String(input).split("/").at(-1)!));
+    await render(requester);await act(async()=>button("Reject").click());await typeNote("Other object's private note");
+    await act(async()=>root.render(<ReviewDetailRoute id="sub-1" locale={createLocaleRuntime({navigatorLanguage:"en"})} requester={requester}/>));await flush();expect(unload()).toBe(true);
+    await render(requester,"sub-2");expect(unload()).toBe(false);await act(async()=>button("Reject").click());expect((container.querySelector("textarea[data-review-note]") as HTMLTextAreaElement).value).toBe("");
+  });
   it("recovers the same detail after read failure without a decision and deduplicates immediate retry", async () => {
     const pending = deferred<Response>(); const paths: string[] = []; const methods: string[] = [];
     const requester = withComments(async (input, init) => { paths.push(String(input)); methods.push(init?.method ?? "GET"); return paths.length === 1 ? new Response(null, { status: 500 }) : pending.promise; });
