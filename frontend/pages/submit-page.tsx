@@ -15,7 +15,7 @@ type Recovery = { title?: string; storageUnavailable: boolean; invalid: boolean;
 
 export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, recovery, memberId }: {
   memberId?: string; draft: SubmissionDraft; state: SubmissionState; locale?: LocaleRuntime;
-  onSubmit?: (draft: SubmissionDraft) => void; onDraftChange?: (draft: SubmissionDraft) => void; recovery?: Recovery;
+  onSubmit?: (draft: SubmissionDraft) => void; onDraftChange?: (patch: Partial<SubmissionDraft>) => void; recovery?: Recovery;
 }) {
   const pending = state.kind === "pending";
   const unresolved = recovery?.title !== undefined;
@@ -34,11 +34,11 @@ export function SubmitPage({ draft, state, locale, onSubmit, onDraftChange, reco
     {similarCandidates.length > 0 && <Alert><AlertDescription><p className="font-medium">{frontendText(locale, "SUBMIT_SIMILAR_NOTICE")}</p><ul className="mt-2 list-disc pl-5">{similarCandidates.map((candidate) => <li key={candidate.sourceVersionId}>{candidate.title}</li>)}</ul></AlertDescription></Alert>}
     <form aria-describedby="submission-description" aria-busy={pending ? "true" : undefined} onSubmit={(event) => { event.preventDefault(); if (!pending && !recovery?.invalid) onSubmit?.(draft); }}>
       <Card><CardHeader><CardTitle>{frontendText(locale, "SUBMIT_NEW")}</CardTitle></CardHeader><CardContent className="space-y-5">
-        <div><Label htmlFor="submission-title">{frontendText(locale, "SUBMIT_TITLE_LABEL")}</Label><Input id="submission-title" value={draft.title} onChange={(event) => onDraftChange?.({ ...draft, title: event.currentTarget.value })} /></div>
-        <div><Label htmlFor="submission-mode">{frontendText(locale, "SUBMIT_MODE_LABEL")}</Label><select id="submission-mode" value={draft.mode} onChange={(event) => onDraftChange?.({ ...draft, mode: event.currentTarget.value as SubmissionDraft["mode"] })} className="mt-2 flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm">
+        <div><Label htmlFor="submission-title">{frontendText(locale, "SUBMIT_TITLE_LABEL")}</Label><Input id="submission-title" value={draft.title} onChange={(event) => onDraftChange?.({ title: event.currentTarget.value })} /></div>
+        <div><Label htmlFor="submission-mode">{frontendText(locale, "SUBMIT_MODE_LABEL")}</Label><select id="submission-mode" value={draft.mode} onChange={(event) => onDraftChange?.({ mode: event.currentTarget.value as SubmissionDraft["mode"] })} className="mt-2 flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm">
           <option value="text">{frontendText(locale, "SUBMIT_CONTENT_LABEL")}</option><option value="markdown">{frontendText(locale, "SUBMIT_MARKDOWN_LABEL")}</option><option value="code">{frontendText(locale, "SUBMIT_CODE_LABEL")}</option>
         </select></div>
-        <div><Label htmlFor="submission-content">{frontendText(locale, draft.mode === "code" ? "SUBMIT_CODE_LABEL" : draft.mode === "markdown" ? "SUBMIT_MARKDOWN_LABEL" : "SUBMIT_CONTENT_LABEL")}</Label><Textarea id="submission-content" value={draft.content} onChange={(event) => onDraftChange?.({ ...draft, content: event.currentTarget.value })} className="min-h-64 font-mono" /></div>
+        <div><Label htmlFor="submission-content">{frontendText(locale, draft.mode === "code" ? "SUBMIT_CODE_LABEL" : draft.mode === "markdown" ? "SUBMIT_MARKDOWN_LABEL" : "SUBMIT_CONTENT_LABEL")}</Label><Textarea id="submission-content" value={draft.content} onChange={(event) => onDraftChange?.({ content: event.currentTarget.value })} className="min-h-64 font-mono" /></div>
         <AssetAvailabilityPanel locale={locale} memberId={memberId} title={draft.title} />
         <Button type="submit" disabled={pending || unresolved || recovery?.invalid}>{frontendText(locale, pending ? "SUBMIT_BUTTON_PENDING" : "SUBMIT_BUTTON")}</Button>
       </CardContent></Card>

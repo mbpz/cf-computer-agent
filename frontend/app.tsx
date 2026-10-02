@@ -969,20 +969,34 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
   const intentRef = useRef(intent);
   const [storageUnavailable, setStorageUnavailable] = useState(restored.kind === "unavailable");
   const [invalidIntent, setInvalidIntent] = useState(restored.kind === "invalid");
-  const [draft, setDraft] = useState<SubmissionDraft>(() => loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown", title: "", content: "" });
+  const [initialDraft] = useState(() => loadOfflineSubmissionDraft(memberId) ?? { mode: "markdown" as const, title: "", content: "" });
   const [state, setState] = useState<{ kind: "idle" } | { kind: "pending" } | { kind: "validation"; message: string } | { kind: "error"; message: string } | { kind: "success"; message: string; similarCandidates: SimilarSubmissionCandidate[] }>({ kind: "idle" });
-  const draftRef = useRef(draft);
   const requestRef = useRef<AbortController | null>(null);
-  const changeDraft = (nextDraft: SubmissionDraft) => {
-    draftRef.current = nextDraft;
-    setDraft(nextDraft);
+  const alive = useRef(true);
+  const protectedDraft = useCreateDraft<{ mode: SubmissionDraft["mode"]; title: string; content: string }>(
+    initialDraft, { mode: "markdown", title: "", content: "" },
+    () => requestRef.current !== null || intentRef.current !== null || invalidIntent, locale, () => false,
+  );
+  const draft = protectedDraft.fields;
+  const draftRef = protectedDraft.current;
+  const changeDraft = (patch: Partial<SubmissionDraft>) => {
+    if (!alive.current || protectedDraft.isConfirming()) return;
+    const nextDraft = { ...draftRef.current, ...patch };
+    // A newer draft remains editable while the previous immutable intent is pending.
+    protectedDraft.set("mode", nextDraft.mode);
+    protectedDraft.set("title", nextDraft.title);
+    protectedDraft.set("content", nextDraft.content);
   };
-  useEffect(() => () => {
-    requestRef.current?.abort();
-    requestRef.current = null;
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
   }, []);
   const submit = async (nextDraft: SubmissionDraft) => {
-    if (requestRef.current || invalidIntent) return;
+    if (!alive.current || protectedDraft.isConfirming() || requestRef.current || invalidIntent) return;
     const controller = new AbortController();
     requestRef.current = controller;
     const draftAtStart = draftRef.current;
@@ -1009,9 +1023,15 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       setIntent(active);
       const result = await createSubmission(active.draft, active.key, fetch, controller.signal);
       if (controller.signal.aborted || requestRef.current !== controller) return;
-      if (!clearSubmissionIntent(memberId, active.key)) setStorageUnavailable(true);
-      intentRef.current = null;
-      setIntent(null);
+      if (clearSubmissionIntent(memberId, active.key)) {
+        intentRef.current = null;
+        setIntent(null);
+      } else {
+        // A receipt confirms the write, not removal of the recovery record.
+        // Keep its identity until an explicit retry can safely clear it.
+        setStorageUnavailable(true);
+      }
+      protectedDraft.checkpoint({ mode: active.draft.mode, title: "", content: "" });
       // A successful older submission must not erase edits made while it was pending.
       if (draftRef.current === draftAtStart && draftAtStart.mode === active.draft.mode && draftAtStart.title.trim() === active.draft.title && draftAtStart.content === active.draft.content) {
         clearOfflineSubmissionDraft(memberId);
@@ -1028,8 +1048,15 @@ function MemberSubmitForm({ locale, memberId }: { locale: LocaleRuntime; memberI
       if (requestRef.current === controller) requestRef.current = null;
     }
   };
+  // The shared draft guard resets its ref on committed navigation. Persist that
+  // reset synchronously: the App may unmount this form before a state effect runs.
+  useEffect(() => subscribeWorkspaceLocation(() => {
+    if (alive.current && !requestRef.current && !intentRef.current) {
+      saveOfflineSubmissionDraft(memberId, draftRef.current);
+    }
+  }), [memberId, draftRef]);
   useEffect(() => { saveOfflineSubmissionDraft(memberId, draft); }, [memberId, draft]);
-  return <SubmitPage memberId={memberId} locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={submit} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} />;
+  return <>{protectedDraft.confirmation}<SubmitPage memberId={memberId} locale={locale} draft={draft} state={state} onDraftChange={changeDraft} onSubmit={() => submit(draftRef.current)} recovery={{ title: intent?.draft.title, storageUnavailable, invalid: invalidIntent, onRetry: () => { if (intentRef.current) void submit(intentRef.current.draft); } }} /></>;
 }
 
 export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
