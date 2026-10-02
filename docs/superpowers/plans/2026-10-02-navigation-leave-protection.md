@@ -44,10 +44,10 @@ Interface: writeWorkspaceHistory retains existing callers but accepts admitted s
 
 Files: modify `frontend/pages/tasks/task-editor.tsx`, `frontend/lib/i18n.ts`; test real TasksRoute and InboxRoute task opening.
 
-- [ ] Write RED for dirty navigation, default keep, discard once, pending/unknown rejection, same-event write/leave, old confirmation and unmount.
-- [ ] Register synchronous draft/write-lock reads; reuse ConfirmAction and existing close protection; invalidate on denied access and cleanup.
-- [ ] Run both actual route entry tests and prior 31 task-editor tests, task APIs and dirty tests; preserve partial-form baselines.
-- [ ] Commit verified explicit-navigation bridge. Keep history traversal open until Task 4.
+- [x] Write RED for dirty navigation, default keep, discard once, pending/unknown rejection, same-event write/leave, old confirmation and unmount.
+- [x] Register synchronous draft/write-lock reads; reuse ConfirmAction and existing close protection; invalidate on denied access and cleanup.
+- [x] Run both actual route entry tests and prior 31 task-editor tests, task APIs and dirty tests; preserve partial-form baselines.
+- [x] Commit verified explicit-navigation bridge. Keep history traversal open until Task 4.
 
 ### Task 4: History adapter and full local acceptance
 
@@ -65,3 +65,5 @@ Files: shared location/history adapter, its tests, App subscription consumers wh
 2026-10-02 Task 1: behavior RED21/24 failed; GREEN24/24; combined3files87/87, strict core types, project typecheck, build:ui and checklist tests9/9 passed. Runtime wiring and native navigation remain unimplemented; see `docs/product/2026-10-02-navigation-gate-core-evidence.md`.
 
 Task 2续行（基线4478d21）：共享window准入和25处导航副作用迁移；原40个writer变为39个受保护writer+1个确认会话结束入口。真实TasksRoute新增2项先失败（被拦URL但仍多发读取）后通过；20文件437/437，追加异常/重入后共享位置15/15，类型/UI构建/清单测试通过。DOM测试使用.tsx避免被Worker-only tsconfig纳入，另独立严格DOM类型检查；见 `docs/product/navigation-atomic-route-commits-evidence.md`。尚无TaskEditor注册或history拦截，不关闭A05。
+
+Task 3（基线9d126ca）：编辑器双入口与真实App侧栏接入同步draft/intent保护，RED6失败/31通过→GREEN37/37；扩展后22文件490/490、项目与严格DOM类型/UI构建/双语/清单通过。复用现有i18n文案，未改i18n.ts。见 `docs/product/navigation-task-editor-bridge-evidence.md`；Task 4及父项仍开放。

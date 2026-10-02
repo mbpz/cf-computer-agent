@@ -7,6 +7,8 @@ import { Input } from "../../components/ui/input";
 import { ApiRequestError } from "../../lib/api";
 import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { addTaskLink, createTask, loadTaskDetail, removeTaskLink, replaceTaskTags, setTaskProgress, setTaskStatus, updateTask, type TaskDetail, type TaskItem } from "../../lib/tasks-data";
+import { registerWorkspaceLeaveGuard, WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
+import type { WorkspaceLeaveDecision } from "../../lib/workspace-navigation-gate";
 import { taskPriorityKey, taskStatusKey } from "./tasks-model";
 
 type Fields = { title: string; notes: string; priority: string; dueAt: string };
@@ -40,22 +42,66 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
   const active = useRef(true); const gate = useRef(false); const intent = useRef<Intent | null>(null);
   const readController = useRef<AbortController | null>(null); const generation = useRef(0);
   const callbacks = useRef({ onChanged, onDenied, onClose }); callbacks.current = { onChanged, onDenied, onClose };
-  const [discardDecision, setDiscardDecision] = useState<{ snapshot: string } | null>(null);
+  const [discardDecision, setDiscardDecision] = useState<{ snapshot: string; navigation?: WorkspaceLeaveDecision } | null>(null);
   const discardRef = useRef<typeof discardDecision>(null);
   const baseline = useRef<Draft>({ fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "" });
   const currentDraft = useRef<Draft>(baseline.current);
-  currentDraft.current = { fields, tags, status, progress, knowledgeId };
+  // Input handlers update this ref before React flushes, so same-event navigation
+  // cannot observe the previous render's draft.
+  function edit<K extends keyof Draft>(key: K, value: Draft[K]) {
+    if (gate.current || intent.current || discardRef.current) return;
+    currentDraft.current = { ...currentDraft.current, [key]: value };
+    const next = currentDraft.current;
+    setFields(next.fields); setTags(next.tags); setStatus(next.status); setProgress(next.progress); setKnowledgeId(next.knowledgeId);
+  }
   const snapshot = JSON.stringify([taskId, currentDraft.current]);
-  const dirty = JSON.stringify(currentDraft.current) !== JSON.stringify(baseline.current);
   const confirmingDiscard = discardDecision !== null && discardDecision.snapshot === snapshot && !busy && !unknown;
   const locked = busy || unknown || confirmingDiscard;
-  const cancelDiscard = () => { discardRef.current = null; setDiscardDecision(null); };
+  const clearDiscard = () => { discardRef.current = null; setDiscardDecision(null); };
+  const cancelDiscard = () => {
+    const navigation = discardRef.current?.navigation;
+    clearDiscard(); navigation?.cancel();
+  };
+  const unregisterLeave = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    const owner = window;
+    const unregister = registerWorkspaceLeaveGuard(() => {
+      if (!active.current) return { kind: "allow" };
+      if (gate.current || intent.current || (discardRef.current && !discardRef.current.navigation)) return { kind: "block" };
+      if (JSON.stringify(currentDraft.current) === JSON.stringify(baseline.current)) return { kind: "allow" };
+      const version = JSON.stringify([taskId, currentDraft.current]);
+      return { kind: "confirm", version,
+        prompt(navigation) { const decision = { snapshot: version, navigation }; discardRef.current = decision; setDiscardDecision(decision); },
+        dismiss: clearDiscard,
+      };
+    });
+    unregisterLeave.current = unregister;
+    // A decision is not a commit: retain drafts if final revalidation fails.
+    // This event is published only after an admitted explicit route write.
+    const committed = () => { if (active.current) callbacks.current.onClose(); };
+    owner.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed);
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      if (gate.current || intent.current || JSON.stringify(currentDraft.current) !== JSON.stringify(baseline.current)) {
+        event.preventDefault(); event.returnValue = "";
+      }
+    };
+    owner.addEventListener("beforeunload", preventUnload);
+    return () => {
+      unregister(); if (unregisterLeave.current === unregister) unregisterLeave.current = null;
+      owner.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, committed);
+      owner.removeEventListener("beforeunload", preventUnload);
+    };
+  }, [taskId]);
   useEffect(() => { if (discardDecision !== null && !confirmingDiscard) cancelDiscard(); }, [discardDecision, confirmingDiscard]);
   useEffect(() => () => { discardRef.current = null; }, []);
   const denied = (cause: unknown) => {
     if (!(cause instanceof ApiRequestError) || (cause.status !== 401 && cause.status !== 403)) return false;
     readController.current?.abort(); generation.current += 1;
-    setDetail(null); setFields(blank); callbacks.current.onDenied(cause); return true;
+    unregisterLeave.current?.(); unregisterLeave.current = null;
+    currentDraft.current = { fields: blank, tags: "", status: "todo", progress: "0", knowledgeId: "" };
+    baseline.current = currentDraft.current;
+    clearDiscard(); setDetail(null); setFields(blank); setTags(""); setKnowledgeId(""); setStatus("todo"); setProgress("0");
+    callbacks.current.onDenied(cause); return true;
   };
   async function read() {
     if (!taskId) return;
@@ -82,12 +128,6 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     return () => { active.current = false; generation.current += 1; readController.current?.abort(); };
     // The route keys this component by member and task, so each mount has one target.
   }, [taskId]);
-  useEffect(() => {
-    if (!locked && !dirty) return;
-    const preventUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
-    window.addEventListener("beforeunload", preventUnload);
-    return () => window.removeEventListener("beforeunload", preventUnload);
-  }, [locked, dirty]);
 
   async function perform(next: Intent, retry = false) {
     if (discardRef.current !== null || gate.current || (intent.current && !retry)) return;
@@ -135,11 +175,13 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
   }
   const close = () => {
     if (gate.current || intent.current || discardRef.current !== null) return;
-    if (!dirty) { callbacks.current.onClose(); return; }
-    const decision = { snapshot }; discardRef.current = decision; setDiscardDecision(decision);
+    if (JSON.stringify(currentDraft.current) === JSON.stringify(baseline.current)) { callbacks.current.onClose(); return; }
+    const decision = { snapshot: JSON.stringify([taskId, currentDraft.current]) }; discardRef.current = decision; setDiscardDecision(decision);
   };
   const discard = () => {
     if (!active.current || !confirmingDiscard || discardRef.current !== discardDecision || gate.current || intent.current) return;
+    if (discardDecision.snapshot !== JSON.stringify([taskId, currentDraft.current])) { cancelDiscard(); return; }
+    if (discardDecision.navigation) { discardDecision.navigation.accept(); return; }
     cancelDiscard(); callbacks.current.onClose();
   };
   const content = <div className="space-y-4" aria-busy={busy || reading}>
@@ -148,28 +190,28 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied }: {
     {error && <p role="alert">{t("TASKS_ACTION_FAILED")} {t("TASKS_INVALID_FORM")}</p>}
     {reading ? <p role="status">{t("TASKS_LOADING")}</p> : readError ? <div role="alert"><p>{t("COMMON_UNABLE_TO_LOAD")}</p><Button onClick={() => void read()}>{t("TASKS_RELOAD_DETAIL")}</Button></div> : <>
       <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); save(); }}>
-        <label className="block">{t("TASKS_FIELD_TITLE")}<Input aria-label={t("TASKS_FIELD_TITLE")} value={fields.title} maxLength={400} required disabled={locked} onChange={(event) => setFields({ ...fields, title: event.currentTarget.value })} /></label>
-        <label className="block">{t("TASKS_FIELD_NOTES")}<Input aria-label={t("TASKS_FIELD_NOTES")} value={fields.notes} maxLength={10000} disabled={locked} onChange={(event) => setFields({ ...fields, notes: event.currentTarget.value })} /></label>
-        <label className="block">{t("TASKS_FIELD_PRIORITY")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_PRIORITY")} value={fields.priority} disabled={locked} onChange={(event) => setFields({ ...fields, priority: event.currentTarget.value })}>{(["low", "medium", "high"] as const).map((priority) => <option key={priority} value={priority}>{t(taskPriorityKey(priority))}</option>)}</select></label>
-        <label className="block">{t("TASKS_FIELD_DUE")}<Input type="datetime-local" step="1" aria-label={t("TASKS_FIELD_DUE")} value={fields.dueAt} disabled={locked} onChange={(event) => setFields({ ...fields, dueAt: event.currentTarget.value })} /></label>
+        <label className="block">{t("TASKS_FIELD_TITLE")}<Input aria-label={t("TASKS_FIELD_TITLE")} value={fields.title} maxLength={400} required disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, title: event.currentTarget.value })} /></label>
+        <label className="block">{t("TASKS_FIELD_NOTES")}<Input aria-label={t("TASKS_FIELD_NOTES")} value={fields.notes} maxLength={10000} disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, notes: event.currentTarget.value })} /></label>
+        <label className="block">{t("TASKS_FIELD_PRIORITY")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_PRIORITY")} value={fields.priority} disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, priority: event.currentTarget.value })}>{(["low", "medium", "high"] as const).map((priority) => <option key={priority} value={priority}>{t(taskPriorityKey(priority))}</option>)}</select></label>
+        <label className="block">{t("TASKS_FIELD_DUE")}<Input type="datetime-local" step="1" aria-label={t("TASKS_FIELD_DUE")} value={fields.dueAt} disabled={locked} onChange={(event) => edit("fields", { ...currentDraft.current.fields, dueAt: event.currentTarget.value })} /></label>
         <p className="text-sm text-muted-foreground">{t("TASKS_DUE_HINT")}</p>
         <Button type="submit" disabled={locked}>{t(taskId ? "TASKS_SAVE" : "TASKS_CREATE")}</Button>
       </form>
       {taskId && detail && <>
         <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); if (!locked) { const next = status; void perform({ clean: ["status"], write: () => setTaskStatus(taskId, next) }); } }}>
-          <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => setStatus(event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
+          <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => edit("status", event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_STATUS")}</Button>
         </form>
         <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], write: () => setTaskProgress(taskId, next) }); }}>
-          <label>{t("TASKS_FIELD_PROGRESS")}<Input type="number" min={0} max={100} step={1} required aria-label={t("TASKS_FIELD_PROGRESS")} value={progress} disabled={locked || ["done", "canceled"].includes(detail.task.status)} onChange={(event) => setProgress(event.currentTarget.value)} /></label>
+          <label>{t("TASKS_FIELD_PROGRESS")}<Input type="number" min={0} max={100} step={1} required aria-label={t("TASKS_FIELD_PROGRESS")} value={progress} disabled={locked || ["done", "canceled"].includes(detail.task.status)} onChange={(event) => edit("progress", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || ["done", "canceled"].includes(detail.task.status)}>{t("TASKS_SAVE_PROGRESS")}</Button>
         </form>
         <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); saveTags(); }}>
-          <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => setTags(event.currentTarget.value)} /></label>
+          <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => edit("tags", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_TAGS")}</Button>
         </form>
         <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], write: () => addTaskLink(taskId, id) }); }}>
-          <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => setKnowledgeId(event.currentTarget.value)} /></label>
+          <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => edit("knowledgeId", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
         <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ write: () => removeTaskLink(taskId, link.id) })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>

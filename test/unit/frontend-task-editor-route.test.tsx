@@ -3,8 +3,11 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskItem } from "../../frontend/lib/tasks-data";
-import { TasksRoute } from "../../frontend/app";
+import { TasksRoute, InboxRoute, App } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+
+import { currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
+import { writeWorkspaceHistory, registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -55,6 +58,117 @@ describe("task editor through the real route", () => {
       }
     });
   }
+  it.each(["tasks", "inbox"])("guards dirty navigation from the %s editor, keeping by default and discarding once", async (entry) => {
+    if (entry === "inbox") {
+      browser.history.replaceState({}, "", "/inbox");
+      responder = url => url.startsWith("/api/inbox?") ? Response.json({ items: [{ id: "inbox-one", clientKey: "capture-one", kind: "text", content: "Captured", sourceUrl: null, promotedSubmissionId: null, status: "promoted", promotedTaskId: task.id, createdAt: task.createdAt, updatedAt: task.updatedAt }], pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) : undefined;
+      await act(async () => root.render(<InboxRoute locale={createLocaleRuntime()} search="" memberId="alice" />)); await flush();
+      await click("Open task");
+    } else { await mount(); await click("Edit: Alpha (task-alpha)"); }
+    await change("Task title", "Unsaved navigation draft");
+    const original = browser.location.href, length = browser.history.length;
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); });
+    expect(browser.location.href).toBe(original); expect(browser.history.length).toBe(length);
+    expect(browser.document.activeElement?.textContent).toBe("Keep editing");
+    await click("Keep editing");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Unsaved navigation draft");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); });
+    const confirm = container.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    await act(async () => { confirm.click(); confirm.click(); });
+    expect(browser.location.pathname).toBe("/settings"); expect(browser.history.length).toBe(length + 1);
+    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(writes).toHaveLength(0);
+  });
+  it("reads input synchronously before React flushes the same event", async () => {
+    await mount(); await click("New task");
+    const node = container.querySelector('[aria-label="Task title"]') as HTMLInputElement;
+    const key = Object.keys(node).find(value => value.startsWith("__reactProps$"))!;
+    await act(async () => {
+      node.value = "Synchronous draft";
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[key]!.onChange({ currentTarget: node });
+      expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred");
+    });
+    expect(browser.location.pathname).toBe("/tasks"); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+  });
+  it("blocks same-event pending writes and unknown outcomes without a discard dialog", async () => {
+    let reject!: (cause: unknown) => void;
+    responder = (_url, init) => init?.method === "PATCH" ? new Promise<Response>((_resolve, no) => { reject = no; }) : undefined;
+    await mount(); await click("Edit: Alpha (task-alpha)");
+    const save = [...container.querySelectorAll("button")].find(node => node.textContent === "Save task")!;
+    await act(async () => { save.click(); expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    await act(async () => reject(new TypeError("offline"))); await flush();
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    expect(browser.location.pathname).toBe("/tasks"); expect(writes).toHaveLength(1);
+  });
+  it("does not discard when another guard prevents the final commit", async () => {
+    await mount(); await click("New task"); await change("Task title", "Retain me");
+    let blocked = false;
+    const unregister = registerWorkspaceLeaveGuard(() => blocked ? { kind: "block" } : { kind: "allow" });
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); });
+    blocked = true; await click("Discard changes");
+    expect(browser.location.pathname).toBe("/tasks");
+    expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Retain me");
+    unregister();
+  });
+  it("invalidates old navigation consent on editor unmount", async () => {
+    await mount(); await click("New task"); await change("Task title", "Old draft");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); });
+    const node = container.querySelector<HTMLButtonElement>("[data-confirm-action]")!;
+    const key = Object.keys(node).find(value => value.startsWith("__reactProps$"))!;
+    const oldClick = (node as unknown as Record<string, { onClick: () => void }>)[key]!.onClick;
+    await act(async () => root.render(<p>New owner</p>));
+    await act(async () => oldClick());
+    expect(browser.location.pathname).toBe("/tasks");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/knowledge")).toBe("committed"); });
+  });
+  it.each([
+    ["Task title", "Draft"], ["Task notes", "Draft notes"], ["Task priority", "high"],
+    ["Task due date", "2026-10-02T12:30"], ["Task status", "doing"], ["Task progress", "40"],
+    ["Task tags (comma-separated)", "draft"], ["Knowledge item ID", "knowledge-draft"],
+  ])("protects %s from explicit replace and Escape keeps the draft", async (label, value) => {
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change(label, value);
+    await act(async () => { expect(writeWorkspaceHistory("replace", "/tasks?page=2")).toBe("deferred"); });
+    await act(async () => container.querySelector('[role="alertdialog"]')!.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as Event));
+    expect(browser.location.search).toBe("");
+    expect((container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement).value).toBe(value);
+    expect(writes).toHaveLength(0);
+  });
+  it("allows clean navigation and closes the editor only on the admitted location event", async () => {
+    await mount(); await click("Edit: Alpha (task-alpha)");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/tasks?page=2")).toBe("committed"); });
+    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(browser.location.search).toBe("?page=2");
+  });
+  it("blocks competing navigation during local close confirmation", async () => {
+    await mount(); await click("New task"); await change("Task title", "Local close draft"); await click("Close task editor");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("blocked"); });
+    await click("Keep editing"); expect(browser.location.pathname).toBe("/tasks");
+  });
+  it("retains dirty sibling subforms after an acknowledged field write", async () => {
+    await mount(); await click("Edit: Alpha (task-alpha)"); await change("Task tags (comma-separated)", "Unsaved tag");
+    await change("Task title", "Saved title"); await click("Save task");
+    await act(async () => { expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); });
+    await click("Keep editing");
+    expect((container.querySelector('[aria-label="Task tags (comma-separated)"]') as HTMLInputElement).value).toBe("Unsaved tag");
+    expect(writes).toHaveLength(1);
+  });
+  it("protects an actual App sidebar navigation and renders the destination only after consent", async () => {
+    responder = url => {
+      if (url === "/api/session") return Response.json({ member: { id: "alice", email: "alice@app.test", role: "contributor" }, capabilities: ["tasks:use"], permissionMask: "0x100000", logoutUrl: "/auth/logout" });
+      if (url === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
+      if (url.startsWith("/api/inbox?")) return Response.json({ items: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+      if (url === "/api/notifications/summary") return Response.json({ unread: 0 });
+      if (url.startsWith("/api/telemetry/")) return new Response(null, { status: 204 });
+    };
+    await act(async () => root.render(<App />)); await flush(); await flush();
+    await click("New task"); await change("Task title", "Sidebar draft");
+    const link = container.querySelector<HTMLAnchorElement>('a[href="/inbox"]'); expect(link).toBeTruthy();
+    await act(async () => link!.click()); await flush();
+    expect(browser.location.pathname).toBe("/tasks"); expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click("Keep editing"); expect((container.querySelector('[aria-label="Task title"]') as HTMLInputElement).value).toBe("Sidebar draft");
+    await act(async () => link!.click()); await click("Discard changes");
+    expect(browser.location.pathname).toBe("/inbox"); expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector("main")?.textContent).toContain("Inbox"); expect(writes.filter(write => write.url === "/api/tasks")).toHaveLength(0);
+  });
   it("creates from the task list and refreshes only after confirmed success", async () => {
     await mount(); await click("New task"); await change("Task title", "New work"); await click("Create task");
     expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ method: "POST", body: { title: "New work" } });
