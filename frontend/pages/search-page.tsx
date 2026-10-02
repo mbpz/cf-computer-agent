@@ -13,10 +13,10 @@ export type SearchState =
   | { kind: "ready"; query?: string; degraded: boolean; results: readonly SearchResultItem[]; pagination: { page: number; pageSize: 20 | 50 | 100; total: number; totalPages: number } }
   | { kind: "error"; message: string };
 
-export function SearchPage({ state, locale, query = "", pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView }: {
+export function SearchPage({ state, locale, query, queryLocked = false, pending = false, localError, onQueryChange, onSubmit, onPageChange, onPageSizeChange, onRetry, savedViews, onSaveView, onApplyView, onDeleteView, savedViewPending = false, savedViewError, savedViewName: controlledName, onSavedViewNameChange, savedViewConfirmation, savedViewUnknown = false, onCheckSavedView }: {
   state: SearchState;
   locale: LocaleRuntime;
-  query?: string;
+  query?: string; queryLocked?: boolean;
   onQueryChange?: (query: string) => void;
   onSubmit?: () => void;
   pending?: boolean; localError?: string; onPageChange?: (page: number) => void; onPageSizeChange?: (pageSize: 20 | 50 | 100) => void;
@@ -33,13 +33,13 @@ export function SearchPage({ state, locale, query = "", pending = false, localEr
   const [localName, setLocalName] = useState("");
   const savedViewName = controlledName ?? localName;
   const setSavedViewName = onSavedViewNameChange ?? setLocalName;
-  const resultQuery = state.kind === "ready" && state.query !== undefined ? state.query : query;
+  const inputQuery = query ?? (state.kind === "ready" ? state.query ?? "" : "");
   return <section className="space-y-5">
     {savedViewConfirmation}
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "SEARCH_TITLE")}</h1></div>
     <form className="flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
-      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={resultQuery} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>
-      <Button type="submit" disabled={!onSubmit}>{frontendText(locale, "SEARCH_SUBMIT")}</Button>
+      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="knowledge-search">{frontendText(locale, "SEARCH_QUERY_LABEL")}</Label><Input id="knowledge-search" name="q" value={inputQuery} disabled={queryLocked} onChange={(event) => onQueryChange?.(event.currentTarget.value)} placeholder={frontendText(locale, "SEARCH_QUERY_PLACEHOLDER")} autoComplete="off" /></div>
+      <Button type="submit" disabled={!onSubmit || queryLocked}>{frontendText(locale, "SEARCH_SUBMIT")}</Button>
     </form>
     {(savedViews || onSaveView) && <div className="rounded-lg border bg-card p-4" data-saved-view-controls>
       {savedViewError && <p role="alert" className="mb-3 text-sm text-destructive">{savedViewError}</p>}

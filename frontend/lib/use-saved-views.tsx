@@ -8,7 +8,7 @@ import { useCreateDraft } from "./use-create-draft";
 type Intent = { kind: "create"; name: string; filters: Partial<SavedViewFilters> } | { kind: "delete"; view: SavedViewItem };
 
 /** One member-keyed owner. A transport error is not evidence that a write failed. */
-export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>) {
+export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<SavedViewFilters>, actionBlocked: () => boolean = () => false) {
   const [items, setItems] = useState<SavedViewItem[]>([]);
   const [phase, setPhase] = useState<"idle" | "pending" | "unknown">("idle");
   const phaseRef = useRef(phase);
@@ -20,7 +20,7 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
   const itemsRef = useRef(items); itemsRef.current = items;
   const owner = useRef<AbortController | null>(null);
   const generation = useRef(0);
-  const draft = useCreateDraft({ name: "" }, { name: "" }, () => intent.current !== null || deleteRef.current !== null, locale, () => false);
+  const draft = useCreateDraft({ name: "" }, { name: "" }, () => intent.current !== null || deleteRef.current !== null, locale, actionBlocked);
   useEffect(() => {
     const controller = new AbortController(); owner.current = controller;
     const revision = generation.current;
@@ -33,20 +33,20 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
   }, []);
   async function save() {
     const controller = owner.current;
-    if (!controller || intent.current || deleteRef.current || draft.isConfirming()) return;
+    if (!controller || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
     const name = draft.current.current.name.trim(); if (!name) return;
     const operation: Intent = { kind: "create", name, filters: filters() };
     await run(operation, controller);
   }
   function requestDelete(id: string) {
-    if (!owner.current || intent.current || deleteRef.current || draft.isConfirming()) return;
+    if (!owner.current || intent.current || deleteRef.current || draft.isConfirming() || actionBlocked()) return;
     const view = itemsRef.current.find(item => item.id === id); if (!view) return;
     const decision = { view }; deleteRef.current = decision; setDeletion(decision);
   }
   function cancelDelete() { if (!owner.current || deleteRef.current !== deletion) return; deleteRef.current = null; setDeletion(null); }
   function confirmDelete() {
     const controller = owner.current;
-    if (!controller || !deletion || deleteRef.current !== deletion || intent.current || draft.isConfirming()) return;
+    if (!controller || !deletion || deleteRef.current !== deletion || intent.current || draft.isConfirming() || actionBlocked()) return;
     if (!itemsRef.current.some(item => item === deletion.view)) { cancelDelete(); return; }
     const operation: Intent = { kind: "delete", view: deletion.view };
     cancelDelete(); void run(operation, controller);
@@ -90,9 +90,9 @@ export function useSavedViews(locale: LocaleRuntime, filters: () => Partial<Save
     }
   }
   function mayApply(view: SavedViewItem) {
-    return !!owner.current && !intent.current && !deleteRef.current && !draft.isConfirming() && itemsRef.current.includes(view);
+    return !!owner.current && !intent.current && !deleteRef.current && !draft.isConfirming() && !actionBlocked() && itemsRef.current.includes(view);
   }
-  return { mayApply, items, phase, error, draft, save, check, requestDelete, locked: phase !== "idle" || deletion !== null || draft.confirming,
+  return { isBlocking: () => intent.current !== null || deleteRef.current !== null, mayApply, items, phase, error, draft, save, check, requestDelete, locked: phase !== "idle" || deletion !== null || draft.confirming,
     confirmation: <>{draft.confirmation}<ConfirmAction open={deletion !== null}
       title={frontendText(locale, "SEARCH_DELETE_VIEW")} description={`${deletion?.view.name ?? ""} — ${frontendText(locale, "SEARCH_DELETE_VIEW_IMPACT")}`}
       cancelLabel={frontendText(locale, "COMMON_CANCEL")} confirmLabel={frontendText(locale, "SEARCH_DELETE_VIEW")} destructive

@@ -711,8 +711,8 @@ export function SearchRoute({ locale, search, memberId }: { locale: LocaleRuntim
 
 function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: string }) {
   const initialPage = useMemo(() => parsePageSearch(search), [search]);
-  const [query, setQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
-  const [activeQuery, setActiveQuery] = useState(query);
+  const [initialQuery] = useState(() => new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "");
+  const [activeQuery, setActiveQuery] = useState(initialQuery);
   const [page, setPage] = useState(initialPage.page); const [pageSize, setPageSize] = useState(initialPage.pageSize);
   const [retryVersion, setRetryVersion] = useState(0);
   const [urlVersion, setUrlVersion] = useState(0);
@@ -735,12 +735,14 @@ function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: 
     const params = new URLSearchParams(readWorkspaceLocation().search);
     return { q: params.get("q") ?? "", spaceId: params.get("spaceId"), collectionId: params.get("collectionId"),
       tagIds: params.getAll("tagId"), tagMode: params.get("tagMode") === "and" ? "and" : "or" };
-  });
+  }, (): boolean => queryDraft.isConfirming());
+  const queryDraft = useCreateDraft({ query: initialQuery }, { query: initialQuery },
+    saved.isBlocking, locale, (): boolean => saved.draft.isConfirming());
   useEffect(() => {
     const onPopState = () => {
       const next = new URLSearchParams(readWorkspaceLocation().search).get("q") ?? "";
       const pagination = parsePageSearch(readWorkspaceLocation().search);
-      setQuery(next);
+      queryDraft.set("query", next); queryDraft.checkpoint({ query: next });
       setActiveQuery(next);
       queryRef.current = { query: next, ...pagination }; setPage(pagination.page); setPageSize(pagination.pageSize); setUrlVersion((value) => value + 1);
     };
@@ -768,12 +770,17 @@ function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: 
   }, [activeQuery, locale, page, pageSize, retryVersion, urlVersion]);
 
   const submit = () => {
-    const normalized = query.trim();
+    const normalized = queryDraft.current.current.query.trim();
     const params = new URLSearchParams(readWorkspaceLocation().search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
     const nextUrl = params.size ? `/search?${params.toString()}` : "/search";
-    writeWorkspaceHistory("push", nextUrl, () => {
-      setActiveQuery(normalized);
-      setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+    queryDraft.applyNavigation((onCommit, onSettled) => {
+      const current = readWorkspaceLocation();
+      const mode = `${current.pathname}${current.search}` === nextUrl ? "replace" : "push";
+      writeWorkspaceHistory(mode, nextUrl, () => {
+        onCommit();
+        setActiveQuery(normalized);
+        setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+      }, onSettled);
     });
   };
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${readWorkspaceLocation().pathname}${writePageSearch(readWorkspaceLocation().search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
@@ -787,11 +794,11 @@ function MemberSearchRoute({ locale, search }: { locale: LocaleRuntime; search: 
     params.set("tagMode", view.filters.tagMode);
     const nextUrl = `/search?${params.toString()}`;
     writeWorkspaceHistory("push", nextUrl, () => {
-      setQuery(normalized); setActiveQuery(normalized);
+      setActiveQuery(normalized);
       setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
     });
   };
-  return <SearchPage locale={locale} query={query} state={state} pending={pending} localError={localError} onQueryChange={setQuery} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={saved.confirmation} savedViews={saved.items} savedViewPending={saved.locked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
+  return <SearchPage locale={locale} query={queryDraft.fields.query} queryLocked={saved.locked || queryDraft.confirming || queryDraft.applicationPending} state={state} pending={pending} localError={localError} onQueryChange={(value) => queryDraft.edit("query", value)} onSubmit={submit} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} onRetry={() => setRetryVersion((value) => value + 1)} savedViewName={saved.draft.fields.name} onSavedViewNameChange={(value) => saved.draft.edit("name", value)} savedViewConfirmation={<>{saved.confirmation}{queryDraft.confirmation}</>} savedViews={saved.items} savedViewPending={saved.locked} savedViewError={saved.error} savedViewUnknown={saved.phase === "unknown"} onCheckSavedView={() => { void saved.check(); }} onSaveView={() => { void saved.save(); }} onApplyView={applyView} onDeleteView={saved.requestDelete} />;
 }
 
 export function AgentRoute({ locale, search = "", memberId }: { locale: LocaleRuntime; search?: string; memberId?: string }) {
