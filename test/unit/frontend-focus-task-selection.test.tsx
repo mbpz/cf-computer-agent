@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { act } from "react";
-import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { forceRemountAppAt, mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
 import { apiError, currentNavigationFixture } from "../helpers/workbench-maturity-route-fixtures";
@@ -111,6 +111,79 @@ describe("Focus owned task selection through App", () => {
     await mount(); const read = vi.spyOn(app!.browser.sessionStorage, "getItem").mockImplementation(() => {throw new Error("unavailable");});
     await assertLocked(); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
     read.mockRestore(); expect(unload()).toBe(false); await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/settings");
+  });
+  function changeTitle(value: string) {
+    const node = main().querySelector<HTMLInputElement>('input[placeholder]')!;
+    const key = Object.keys(node).find(k => k.startsWith("__reactProps$"))!;
+    (node as any)[key].onChange({currentTarget: {value}});
+  }
+  it("protects a same-event focus title edit and keeps it on cancel", async () => {
+    await mount();
+    await act(async () => {changeTitle("Private focus draft"); expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred");});
+    expect(document.activeElement?.textContent).toBe("Keep editing"); expect(unload()).toBe(true);
+    await click(main().querySelector<HTMLButtonElement>('[data-cancel-action]')!);
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Private focus draft");
+    expect(app!.browser.location.pathname).toBe("/focus"); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
+  });
+  it("protects task selection alone and discards only on admitted navigation", async () => {
+    await mount(); await select(); await navigate("/settings");
+    expect(app!.browser.location.pathname).toBe("/focus"); expect(main().querySelector('[role="alertdialog"]')).not.toBeNull();
+    const approve = main().querySelector<HTMLButtonElement>('[data-confirm-action]')!;
+    await act(async () => {approve.click(); approve.click();});
+    expect(app!.browser.location.pathname).toBe("/settings"); expect(unload()).toBe(false);
+    await navigate("/focus"); await waitForApp(() => !!button("Start focus"));
+    expect(main().querySelector('[data-focus-selected]')).toBeNull(); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
+  });
+  it("reserves draft confirmation before same-event start or edits", async () => {
+    await mount(); await select(); const start = button("Start focus");
+    await act(async () => {changeTitle("Keep me"); expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"); start.click(); changeTitle("Must not replace");});
+    expect(calls.filter(c => c.path === "/api/tasks/task-1" || c.path === "/api/focus")).toHaveLength(0);
+    await click(main().querySelector<HTMLButtonElement>('[data-cancel-action]')!);
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Keep me");
+  });
+  it("uses the synchronous latest title when edit and start share one event", async () => {
+    await mount(); await select();
+    await act(async () => {changeTitle("Newest title"); button("Start focus").click();});
+    await waitForApp(() => !!button("Pause")); expect(calls.find(c => c.path === "/api/focus")!.body.title).toBe("Newest title");
+    expect(unload()).toBe(false); await navigate("/settings"); expect(app!.browser.location.pathname).toBe("/settings");
+  });
+  it("keeps the title and selection if another guard rejects final discard", async () => {
+    await mount(); await select(); await act(async () => changeTitle("Keep across rejection"));
+    let blocked = false; const unregister = registerWorkspaceLeaveGuard(() => ({kind: blocked ? "block" : "allow"}));
+    try {
+      await navigate("/settings"); blocked = true; await click(main().querySelector<HTMLButtonElement>('[data-confirm-action]')!);
+      expect(app!.browser.location.pathname).toBe("/focus"); expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Keep across rejection");
+      expect(main().querySelector('[data-focus-selected]')?.textContent).toContain("Owned task 1");
+    } finally {unregister();}
+  });
+  it("does not honor an old draft decision once a preflight has produced a pending write", async () => {
+    let resolveDetail!: (response: Response) => void, resolvePost!: (response: Response) => void;
+    await mount(); await select(); delayedDetail = () => new Promise(done => {resolveDetail = done;}); delayedPost = () => new Promise(done => {resolvePost = done;});
+    await click(button("Start focus")); await waitForApp(() => !!resolveDetail); await navigate("/settings");
+    const approve = main().querySelector<HTMLButtonElement>('[data-confirm-action]')!; expect(approve).not.toBeNull();
+    await act(async () => resolveDetail(Response.json({task: task(1), tags: [], links: []}))); await waitForApp(() => !!resolvePost);
+    await click(approve); await assertLocked(); expect(main().querySelector('[data-focus-selected]')).not.toBeNull();
+    const body = calls.find(c => c.path === "/api/focus")!.body; current = {...body, startTitle: body.title, status: "active", startedAt: stamp, updatedAt: stamp, elapsedMs: 0};
+    await act(async () => resolvePost(Response.json({session: current}))); await waitForApp(() => !!button("Pause"));
+    await click(approve); expect(app!.browser.location.pathname).toBe("/focus"); expect(unload()).toBe(false);
+  });
+  it("freezes the submitted title against an edit immediately after starting", async () => {
+    await mount(); await select(); await act(async () => changeTitle("Submitted title"));
+    let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
+    await act(async () => {button("Start focus").click(); changeTitle("Late edit");});
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Submitted title");
+    await act(async () => resolve(Response.json({task: task(1), tags: [], links: []}))); await waitForApp(() => !!button("Pause"));
+    expect(calls.find(c => c.path === "/api/focus")!.body.title).toBe("Submitted title");
+    await finish("Complete"); await waitForApp(() => !!button("Start focus"));
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe(""); expect(unload()).toBe(false);
+  });
+  it("preserves the editable title after a rejected task preflight", async () => {
+    await mount(); await select(); await act(async () => changeTitle("Retry title")); detailStatus = 404;
+    await click(button("Start focus")); await waitForApp(() => !!main().querySelector('[role="alert"]'));
+    expect(main().querySelector('[data-focus-selected]')).toBeNull();
+    expect(main().querySelector<HTMLInputElement>('input[placeholder]')!.value).toBe("Retry title");
+    await navigate("/settings"); expect(main().querySelector('[role="alertdialog"]')).not.toBeNull();
+    await click(main().querySelector<HTMLButtonElement>('[data-cancel-action]')!); expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
   });
   it.each(["Complete", "Abandon"])("keeps %s confirmation, cancel and route exit free of writes and journals",async label=>{
     await mount();await select();await click(button("Start focus"));await waitForApp(()=>!!button("Pause"));
@@ -383,7 +456,8 @@ describe("Focus owned task selection through App", () => {
   it("never starts after leaving while the target preflight is pending", async () => {
     let resolve!: (response: Response) => void; delayedDetail = () => new Promise(done => {resolve = done;});
     await mount(); await select(); await click(button("Start focus")); await waitForApp(() => !!resolve);
-    const request = calls.find(c => c.path === "/api/tasks/task-1")!; expect(unload()).toBe(false); await navigate("/settings");
+    const request = calls.find(c => c.path === "/api/tasks/task-1")!; expect(unload()).toBe(true); await navigate("/settings");
+    expect(request.signal?.aborted).toBe(false); await click(main().querySelector<HTMLButtonElement>('[data-confirm-action]')!);
     expect(request.signal?.aborted).toBe(true);
     await act(async () => resolve(Response.json({task: task(1), tags: [], links: []})));
     expect(calls.filter(c => c.path === "/api/focus")).toHaveLength(0);
