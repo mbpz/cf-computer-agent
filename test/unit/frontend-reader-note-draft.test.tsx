@@ -34,6 +34,101 @@ describe("private reader note draft ownership", () => {
   function save() { return Array.from(container.querySelectorAll<HTMLButtonElement>("[data-reader-note] button")).find(button => /^(Save note|Saving)/.test(button.textContent ?? ""))!; }
   function unloadWarns() { const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented; }
   async function click(selector: string) { await act(async () => { (container.querySelector(selector) as HTMLButtonElement).click(); }); await settle(); }
+  async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); }
+  it("recovers an unresolved save after remount without replaying PUT", async () => {
+    let writes = 0; let applied = false;
+    await mount(async init => { if (init?.method === "PUT") { writes++; throw new Error("lost response"); } return Response.json({ note: applied ? receipt() : null }); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    await remount(); expect(body().value).toBe("Body"); expect(save().disabled).toBe(true); expect(unloadWarns()).toBe(true);
+    await click("[data-note-check]"); expect(save().disabled).toBe(true); expect(writes).toBe(1);
+    applied = true; await click("[data-note-check]"); expect(save().disabled).toBe(false); expect(writes).toBe(1);
+    await remount(); expect(container.querySelector("[data-note-check]")).toBeNull();
+  });
+  it.each(["throw", "ignore"])("sends no save when intent persistence %s fails", async mode => {
+    let writes = 0; await mount(async init => { if (init?.method === "PUT") writes++; return Response.json({ note: null }); });
+    const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { if (mode === "throw") throw new Error("denied"); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    expect(writes).toBe(0); expect(body().value).toBe("Body"); expect(save().disabled).toBe(true); set.mockRestore();
+  });
+  it("keeps pending save isolated by member and item", async () => {
+    await mount(async init => { if (init?.method === "PUT") throw new Error("lost"); return Response.json({ note: null }); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    await render("member-b"); expect(body().value).toBe(""); expect(save().disabled).toBe(false);
+    await render("member-a", "knowledge-b"); expect(body().value).toBe(""); expect(save().disabled).toBe(false);
+    await render(); expect(body().value).toBe("Body"); expect(save().disabled).toBe(true);
+  });
+  it("retains known rejection across cleanup failure and remount", async () => {
+    let writes = 0;
+    await mount(async init => { if (init?.method === "PUT") { writes++; return Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }); } return Response.json({ note: null }); });
+    const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("denied"); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    await remount(); expect(body().value).toBe("Body"); expect(save().disabled).toBe(true); remove.mockRestore();
+    await click("[data-note-check]"); expect(save().disabled).toBe(false); expect(body().value).toBe("Body"); expect(writes).toBe(1);
+  });
+  it("recovers rejection when removal succeeds but readback throws", async () => {
+    await mount(async init => init?.method === "PUT" ? Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }) : Response.json({ note: null }));
+    const removeItem = browser.sessionStorage.removeItem.bind(browser.sessionStorage);
+    let get: ReturnType<typeof vi.spyOn> | undefined;
+    const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(key => { removeItem(key); get = vi.spyOn(browser.sessionStorage, "getItem").mockImplementation(() => { throw new Error("read denied"); }); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    expect(save().disabled).toBe(true); remove.mockRestore(); get?.mockRestore();
+    await click("[data-note-check]"); expect(save().disabled).toBe(false); expect(body().value).toBe("Body");
+  });
+  it("recovers applied receipt across cleanup failure without overwriting a newer remote note", async () => {
+    let writes = 0; let current: ReturnType<typeof receipt> | null = null;
+    await mount(async init => { if (init?.method === "PUT") { writes++; current = receipt(); } return Response.json({ note: current }); });
+    const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("denied"); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    current = receipt({ body: "Newer body" }); await remount(); expect(save().disabled).toBe(true); remove.mockRestore();
+    await click("[data-note-check]"); expect(body().value).toBe("Newer body"); expect(save().disabled).toBe(false); expect(writes).toBe(1);
+  });
+  it("keeps storage retry read-only and preserves the unsent draft", async () => {
+    let writes = 0; await mount(async init => { if (init?.method === "PUT") writes++; return Response.json({ note: null }); });
+    const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); set.mockRestore();
+    await click("[data-note-storage-retry]"); expect(body().value).toBe("Body"); expect(save().disabled).toBe(false); expect(writes).toBe(0);
+  });
+  it("treats a persisted-but-unverified preparation as unknown, never auto-sends it", async () => {
+    let writes = 0; await mount(async init => { if (init?.method === "PUT") writes++; return Response.json({ note: null }); });
+    const setItem = browser.sessionStorage.setItem.bind(browser.sessionStorage); let get: ReturnType<typeof vi.spyOn> | undefined;
+    const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation((key, value) => { setItem(key, value); get = vi.spyOn(browser.sessionStorage, "getItem").mockImplementation(() => { throw new Error("denied"); }); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); set.mockRestore(); get?.mockRestore();
+    await click("[data-note-storage-retry]"); expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(writes).toBe(0);
+  });
+  it("blocks corrupt recovery without deleting it or exposing stored private input", async () => {
+    await mount(async init => { if (init?.method === "PUT") throw new Error("lost"); return Response.json({ note: null }); });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    const key = browser.sessionStorage.key(0)!; browser.sessionStorage.setItem(key, "{"); await remount();
+    expect(container.querySelector("[data-note-storage-error]")).not.toBeNull(); expect(save().disabled).toBe(true); expect(body().value).toBe(""); expect(browser.sessionStorage.getItem(key)).toBe("{");
+  });
+  it("ignores an old receipt after remount without clearing the recovered intent", async () => {
+    let finish!: (response: Response) => void;
+    await mount(init => init?.method === "PUT" ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(Response.json({ note: null })));
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle(); await remount();
+    await act(async () => finish(Response.json({ note: receipt() }))); await settle();
+    expect(save().disabled).toBe(true); expect(container.querySelector("[data-note-check]")).not.toBeNull(); expect(browser.sessionStorage.length).toBe(1);
+  });
+  it("guards recovered pending intent while the permission read is still pending", async () => {
+    let recovering = false; let finish!: (response: Response) => void;
+    await mount(init => {
+      if (init?.method === "PUT") return Promise.reject(new Error("lost"));
+      return recovering ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(Response.json({ note: null }));
+    });
+    await act(async () => { edit("title", "Title"); edit("body", "Body"); save().click(); }); await settle();
+    recovering = true; await remount(); expect(body().value).toBe(""); expect(unloadWarns()).toBe(true);
+    await act(async () => finish(Response.json({ note: null }))); await settle(); expect(body().value).toBe("Body");
+  });
+  it("clears stale cache after recovery even when the optional cache read failed at mount", async () => {
+    let writes = 0;
+    await mount(async init => {
+      if (init?.method === "PUT") { writes++; if (writes === 1) return Response.json({ error: { code: "PRIVATE_NOTE_INVALID", message: "Invalid", retryable: false } }, { status: 400 }); throw new Error("lost"); }
+      return Response.json({ note: writes > 1 ? receipt() : null });
+    });
+    await act(async () => { edit("title", "Title"); edit("body", "Old cached"); save().click(); }); await settle();
+    await act(async () => { edit("body", "Body"); save().click(); }); await settle();
+    const get = vi.spyOn(browser.localStorage, "getItem").mockImplementation(() => { throw new Error("denied"); }); await remount(); get.mockRestore();
+    await click("[data-note-check]"); await remount(); expect(body().value).toBe("Body"); expect(writes).toBe(2);
+  });
   it("requires a successful permission read before accepting edits or saves", async () => {
     let finish!: (value: Response) => void; let writes = 0;
     await mount(init => init?.method === "PUT" ? (writes++, Promise.resolve(Response.json({ note: receipt() }))) : new Promise(resolve => { finish = resolve; }));

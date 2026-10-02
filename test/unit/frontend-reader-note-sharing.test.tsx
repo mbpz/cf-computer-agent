@@ -39,6 +39,37 @@ describe("private note sharing decisions", () => {
   async function choose() { await act(async () => { select().value = "member-b"; select().dispatchEvent(new browser.Event("change", { bubbles: true })); }); }
   async function openShare() { await choose(); await act(async () => button("Share").click()); }
   async function confirm() { const b = container.querySelector<HTMLButtonElement>("[data-confirm-action]"); expect(b).not.toBeNull(); await act(async () => b!.click()); await settle(); }
+  async function remount() { await act(async () => root.unmount()); root = createRoot(container); await render(); await settle(); }
+  it.each(["share", "revoke"] as const)("recovers pending %s after remount and checks without repeating a write", async kind => {
+    rows = kind === "revoke" ? [share] : [];
+    await mount(async () => { throw new Error("lost response"); });
+    if (kind === "share") await openShare(); else await act(async () => button("Revoke").click());
+    await confirm(); await settle(); await remount();
+    expect(container.querySelector("[data-note-share-check]")).not.toBeNull(); expect(select().disabled).toBe(true); expect(unload()).toBe(true);
+    rows = kind === "share" ? [share] : [];
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-check]")!.click()); await settle();
+    expect(select().disabled).toBe(false); expect(writes).toEqual([kind === "share" ? "POST" : "DELETE"]);
+    await remount(); expect(container.querySelector("[data-note-share-check]")).toBeNull();
+  });
+  it("does not POST when tab intent storage is unavailable", async () => {
+    await mount(); await openShare();
+    const set = vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    await confirm(); await settle(); expect(writes).toEqual([]); expect(select().disabled).toBe(true); set.mockRestore();
+  });
+  it.each(["applied", "rejected"] as const)("recovers known %s share result after cleanup failure without POST replay", async outcome => {
+    await mount(async () => outcome === "applied" ? Response.json({ share }, { status: 201 }) : Response.json({ error: { code: "PRIVATE_NOTE_SHARE_TARGET_INVALID", message: "Invalid", retryable: false } }, { status: 404 }));
+    const remove = vi.spyOn(browser.sessionStorage, "removeItem").mockImplementation(() => { throw new Error("denied"); });
+    await openShare(); await confirm(); await settle(); await remount(); expect(select().disabled).toBe(true); remove.mockRestore();
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-check]")!.click()); await settle();
+    if (outcome === "rejected") { await act(async () => container.querySelector<HTMLButtonElement>("[data-note-share-retry]")!.click()); await settle(); }
+    expect(select().disabled).toBe(false); expect(writes).toEqual(["POST"]);
+  });
+  it("restores the unsaved draft alongside a pending share", async () => {
+    await mount(async () => { throw new Error("lost"); });
+    await act(async () => { props<{ onChange: (event: unknown) => void }>(body()).onChange({ currentTarget: { value: "Unsaved body" } }); });
+    await openShare(); await confirm(); await settle(); await remount();
+    expect(body().value).toBe("Unsaved body"); expect(body().readOnly).toBe(true); expect(writes).toEqual(["POST"]);
+  });
   it("requires exact recipient and saved-note confirmation, with cancellation doing no write", async () => {
     await mount(); await openShare(); expect(writes).toEqual([]); const dialog = container.querySelector("[role=alertdialog]"); expect(dialog?.textContent).toContain("recipient@test.dev"); expect(dialog?.textContent).toContain("Saved title"); expect(unload()).toBe(true);
     await act(async () => (container.querySelector("[data-cancel-action]") as HTMLButtonElement).click()); expect(writes).toEqual([]); expect(unload()).toBe(false);
