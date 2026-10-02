@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { AdminRolesRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -29,6 +30,25 @@ describe("role write recovery", () => {
   }
   async function input(label: string, value: string) { const el = container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement; expect(el).toBeTruthy(); await act(async () => { const setter = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!; setter.call(el, value); el.dispatchEvent(new browser.Event("input", {bubbles: true})); }); }
 
+  it.each(["pending", "unknown", "forbidden"])("keeps %s writes route-locked, including when the editor disappears", async outcome => {
+    const response = deferred<Response>(); let reads = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "PATCH") return response.promise;
+      reads++; return json({ items: [role()] });
+    });
+    await render(); await click("Save permissions");
+    await act(async () => { button("Confirm change").click(); writeWorkspaceHistory("push", "/tasks"); });
+    expect(browser.location.pathname).toBe("/admin/submissions");
+    if (outcome === "unknown") { response.reject(new TypeError("Failed to fetch")); await flush(); }
+    if (outcome === "forbidden") { response.resolve(json({}, 403)); await flush(); }
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); });
+    expect(browser.location.pathname).toBe("/admin/submissions");
+    const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); expect(e.defaultPrevented).toBe(true);
+    if (outcome !== "pending") {
+      await click("Try again"); expect(reads).toBe(2);
+      await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); expect(browser.location.pathname).toBe("/tasks");
+    } else { response.resolve(json({ role: role() })); await flush(); }
+  });
   it.each(["Save permissions", "Assign member", "Remove"])("canceling %s never sends a mutation", async (label) => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
@@ -154,7 +174,7 @@ describe("role write recovery", () => {
 
 });
 function role(overrides: Record<string,unknown>={}) { return {id:"role-editor",key:"editor",name:"Editor",description:"Private role",allowBits:"0x1",memberCount:1,assignedMemberIds:["member-secret"],status:"active",isSystem:false,...overrides}; }
-function json(value:unknown){return new Response(JSON.stringify(value),{headers:{"content-type":"application/json"}});}
+function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json"}});}
 function locale(){return createLocaleRuntime({navigatorLanguage:"en"});}
 async function flush(){await act(async()=>{await new Promise(resolve=>setTimeout(resolve,0));for(let i=0;i<12;i++)await Promise.resolve();});}
-function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(yes=>{resolve=yes;});return {promise,resolve};}
+function deferred<T>(){let resolve!:(value:T)=>void;let reject!:(error:unknown)=>void;const promise=new Promise<T>((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}

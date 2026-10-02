@@ -4,6 +4,7 @@ import type { Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminRolesPage } from "../../frontend/pages/admin/roles-page";
 import type { AdminRole } from "../../frontend/lib/admin-roles-data";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
 const vmContexts = new WeakSet<object>();
@@ -42,6 +43,93 @@ describe("role permission and membership confirmation", () => {
     if (operation === "assign") await input("member-new");
     await click(operationLabel[operation]);
   }
+  function edit(label: string, value: string) {
+    const el = container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value);
+    el.dispatchEvent(new browser.Event("input", { bubbles: true }));
+  }
+  function unloadWarns() { const e = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(e); return e.defaultPrevented; }
+  it.each(["Role key", "Role name", "Permission mask", "Assigned members", "permissions"])("protects %s from navigation and unload until committed discard", async label => {
+    await mount(); expect(unloadWarns()).toBe(false);
+    await act(async () => {
+      if (label === "permissions") (container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).click();
+      else edit(label, "draft");
+      writeWorkspaceHistory("push", "/tasks");
+    });
+    expect(browser.location.pathname).toBe("/admin/roles"); expect(unloadWarns()).toBe(true);
+    expect(dialog()).not.toBeNull(); await press('[data-cancel-action]');
+    expect(unloadWarns()).toBe(true);
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await press('[data-confirm-action]');
+    expect(browser.location.pathname).toBe("/tasks"); expect(unloadWarns()).toBe(false);
+    for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled();
+  });
+  it("does not discard a role draft when another final guard denies leaving", async () => {
+    await mount(); await input("member-new"); let deny = false;
+    const stop = registerWorkspaceLeaveGuard(() => ({ kind: deny ? "block" : "allow" }));
+    try {
+      await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); deny = true; await press('[data-confirm-action]');
+      expect(browser.location.pathname).toBe("/admin/roles");
+      expect((container.querySelector('input[aria-label="Assigned members"]') as HTMLInputElement).value).toBe("member-new");
+      expect(unloadWarns()).toBe(true);
+    } finally { stop(); }
+  });
+  it("blocks navigation while an action confirmation is open", async () => {
+    await prepare("save"); await act(async () => { writeWorkspaceHistory("push", "/tasks"); });
+    expect(browser.location.pathname).toBe("/admin/roles");
+    expect(container.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
+    await click("Cancel"); expect(unloadWarns()).toBe(true);
+  });
+  it("blocks actions during a leave decision and keeps creation draft on role switch", async () => {
+    const create = vi.fn(); await mount({ onCreate: create });
+    await act(async () => { edit("Role key", "custom"); edit("Role name", "Custom"); writeWorkspaceHistory("push", "/tasks"); button("Create role").click(); });
+    expect(create).not.toHaveBeenCalled(); await press('[data-cancel-action]');
+    const reviewer = [...container.querySelectorAll("button")].find(el => el.textContent?.startsWith("Reviewer")) as HTMLButtonElement;
+    await act(async () => reviewer.click()); expect(callbacks.onSelect).toHaveBeenCalledWith("reviewer");
+    expect((container.querySelector('input[aria-label="Role key"]') as HTMLInputElement).value).toBe("custom"); expect(unloadWarns()).toBe(true);
+  });
+  it("preserves a newer creation draft after a late successful response", async () => {
+    let finish!: (ok: boolean) => void;
+    const create = vi.fn(() => new Promise<boolean>(resolve => { finish = resolve; })); await mount({ onCreate: create });
+    await act(async () => { edit("Role key", "custom"); edit("Role name", "Custom"); }); await click("Create role");
+    await act(async () => { edit("Role name", "Newer name"); }); await act(async () => finish(true));
+    expect((container.querySelector('input[aria-label="Role name"]') as HTMLInputElement).value).toBe("Newer name"); expect(unloadWarns()).toBe(true);
+  });
+  it("submits the latest creation snapshot once and keeps independent member input dirty", async () => {
+    let finish!: (ok: boolean) => void;
+    const create = vi.fn(() => new Promise<boolean>(resolve => { finish = resolve; })); await mount({ onCreate: create });
+    await act(async () => { edit("Role key", "custom"); edit("Role name", "Custom"); });
+    await act(async () => { edit("Role name", "Latest"); edit("Assigned members", "other-member"); button("Create role").click(); button("Create role").click(); });
+    expect(create).toHaveBeenCalledTimes(1); expect(create).toHaveBeenCalledWith({ key: "custom", name: "Latest", allowBits: "0x0" });
+    await act(async () => finish(true));
+    expect((container.querySelector('input[aria-label="Role key"]') as HTMLInputElement).value).toBe("");
+    expect((container.querySelector('input[aria-label="Assigned members"]') as HTMLInputElement).value).toBe("other-member"); expect(unloadWarns()).toBe(true);
+  });
+  it("keeps a creation draft dirty after authoritative permission refresh", async () => {
+    await mount(); await act(async () => { edit("Role key", "custom"); edit("Role name", "Custom"); });
+    await press('input[aria-label="Use workspace tasks"]');
+    await mount({ state: { kind: "ready", roles: roles.map(role => role.id === "editor" ? { ...role, allowBits: "0x100001" } : role) } });
+    expect((container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(true);
+    expect(unloadWarns()).toBe(true);
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await press('[data-confirm-action]');
+    expect((container.querySelector('input[aria-label="Role key"]') as HTMLInputElement).value).toBe("");
+    expect((container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(true); expect(unloadWarns()).toBe(false);
+  });
+  it("preserves independent unsaved permissions when role creation refreshes the list", async () => {
+    await mount(); await press('input[aria-label="Use workspace tasks"]');
+    await mount({ state: { kind: "ready", roles: roles.map(role => ({ ...role })) } });
+    expect((container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(true);
+    expect(unloadWarns()).toBe(true);
+    await act(async () => { writeWorkspaceHistory("push", "/tasks"); }); await press('[data-confirm-action]');
+    expect((container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement).checked).toBe(false); expect(unloadWarns()).toBe(false);
+  });
+  it("does not restore an old creation result into a newly mounted editor", async () => {
+    let finish!: (ok: boolean) => void;
+    await mount({ onCreate: () => new Promise<boolean>(resolve => { finish = resolve; }) });
+    await act(async () => { edit("Role key", "custom"); edit("Role name", "Custom"); }); await click("Create role");
+    await mount({ state: { kind: "forbidden" } }); await mount();
+    await act(async () => { edit("Role name", "New scope"); finish(true); });
+    expect((container.querySelector('input[aria-label="Role name"]') as HTMLInputElement).value).toBe("New scope"); expect(unloadWarns()).toBe(true);
+  });
   it.each(["save", "assign", "unassign"] as const)("confirms %s once with the exact target and impact", async operation => {
     await prepare(operation);
     for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled();
