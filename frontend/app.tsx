@@ -81,7 +81,7 @@ import type { TaskFilterState, TaskStatus } from "./pages/tasks/task-types";
 import { BOARD_STATUSES, parseBoardSearch, writeBoardColumnSearch, type BoardColumnStates, type BoardPagination, type BoardStatus, type BoardTargetStatus } from "./pages/boards/board-model";
 import { createNotificationsRequestController, markNotificationRead, markVisibleNotificationsRead, type NotificationFilters, type NotificationSummary } from "./lib/notifications-data";
 import { notificationTargetHref, parseNotificationSearch, writeNotificationSearch, type NotificationQuery } from "./pages/notifications/notification-model";
-import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
+import { createDiscussionRequestController, ensureDiscussionThread, loadDiscussionMessageResult, loadDiscussionMessages, loadDiscussionThread, loadDiscussionThreads, sendDiscussionMessage } from "./lib/discussions-data";
 import { parseDiscussionSearch, writeDiscussionSearch, type DiscussionSearch } from "./pages/messages/discussion-model";
 import { createReviewQueueRequestController, type ReviewQueuePageResult } from "./lib/admin-review-data";
 import { loadAdminMembers, updateMemberStatus, type AdminMember, type AdminMembersPage, type LoadAdminMembersInput } from "./lib/admin-members-data";
@@ -2375,11 +2375,12 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
       queryRef.current = next; setQuery(next);
     });
   };
-  const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
+  const withCurrentAccess = async <T,>(operation: () => Promise<T>): Promise<T> => {
     const sendingThreadId = threadId;
     const sendingEpoch = accessEpochRef.current;
+    let result: T;
     try {
-      await sendDiscussionMessage(input);
+      result = await operation();
     } catch (error) {
       if (activeRef.current && currentThreadIdRef.current === sendingThreadId && accessEpochRef.current === sendingEpoch
         && error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
@@ -2392,7 +2393,10 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
       throw error;
     }
     if (!activeRef.current || currentThreadIdRef.current !== sendingThreadId || accessEpochRef.current !== sendingEpoch) throw new Error("DISCUSSION_ACCESS_CHANGED");
+    return result;
   };
+  const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => { await withCurrentAccess(() => sendDiscussionMessage(input)); };
+  const lookup = async (input: Parameters<typeof loadDiscussionMessageResult>[0]) => (await withCurrentAccess(() => loadDiscussionMessageResult(input))) !== null;
   const sent = () => {
     if (queryRef.current.page !== 1 || queryRef.current.cursor) navigate({ page: 1, limit: queryRef.current.limit }, true);
     else setRetryVersion((value) => value + 1);
@@ -2404,7 +2408,7 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
     onNext={(cursor) => navigate({ page: query.page + 1, limit: query.limit, cursor })}
     onPrevious={() => window.history.back()}
     onLimitChange={(limit) => navigate({ page: 1, limit })}
-    onSend={send} onSent={sent} />;
+    onSend={send} onLookup={lookup} onSent={sent} />;
 }
 
 function sameDiscussionSearch(left: DiscussionSearch, right: DiscussionSearch): boolean {

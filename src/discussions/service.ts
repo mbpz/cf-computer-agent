@@ -100,6 +100,19 @@ export class DiscussionsService {
     return this.repository.listMessages(thread.id, parsePageRequest(request.limit, request.cursor));
   }
 
+  async getMessageResult(memberId: string, context: unknown, clientKey: unknown): Promise<SendDiscussionMessageResult | null> {
+    const actorMemberId = normalizeMemberId(memberId);
+    const normalizedContext = normalizeContext(context);
+    const key = normalizeClientKey(clientKey);
+    if (!await this.authorization.canReadContext(actorMemberId, normalizedContext)) throw notFound();
+    const message = await this.repository.findMessageByAuthorClientKey(actorMemberId, key);
+    if (!message) return null;
+    const thread = await this.authorization.findAuthorizedThread(actorMemberId, message.threadId);
+    if (!thread || thread.contextKind !== normalizedContext.kind || thread.contextId !== normalizedContext.id) throw notFound();
+    // A read receipt proves message persistence only; never run replay side effects.
+    return { thread, message, created: false };
+  }
+
   async sendMessage(memberId: string, input: SendDiscussionMessageInput): Promise<SendDiscussionMessageResult> {
     const actorMemberId = normalizeMemberId(memberId);
     const normalized = normalizeSendInput(input, actorMemberId);

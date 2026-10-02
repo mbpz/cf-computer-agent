@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DiscussionsService,
   type DiscussionAuthorizationPort,
@@ -21,6 +21,30 @@ const NOW = new Date("2026-08-30T08:00:00.000Z");
 const TASK_CONTEXT: DiscussionContext = { kind: "task", id: "task-a" };
 
 describe("DiscussionsService", () => {
+  it("queries only the actor's exact operation without repairing participants or notifications", async () => {
+    const repository = new FakeDiscussionsRepository();
+    const authorization = new FakeDiscussionAuthorization(repository);
+    authorization.allow("member-a", TASK_CONTEXT);
+    authorization.allow("member-b", TASK_CONTEXT);
+    const notifications = new FakeNotificationSink();
+    const service = createService(repository, authorization, notifications);
+    await expect(service.getMessageResult("member-a", TASK_CONTEXT, "absent")).resolves.toBeNull();
+    expect(repository.threads).toHaveLength(0);
+    const sent = await service.sendMessage("member-a", { context: TASK_CONTEXT, body: "Exact", clientKey: "op-1" });
+    const sync = vi.spyOn(repository, "syncParticipants");
+    const emit = vi.spyOn(notifications, "emit");
+    const list = vi.spyOn(repository, "listMessages");
+    await expect(service.getMessageResult("member-a", TASK_CONTEXT, "op-1")).resolves.toEqual({ ...sent, created: false });
+    await expect(service.getMessageResult("member-b", TASK_CONTEXT, "op-1")).resolves.toBeNull();
+    expect(sync).not.toHaveBeenCalled(); expect(emit).not.toHaveBeenCalled(); expect(list).not.toHaveBeenCalled();
+    expect(repository.messageInsertAttempts).toBe(1);
+    const other = { kind: "task" as const, id: "task-other" };
+    authorization.allow("member-a", other);
+    await expect(service.getMessageResult("member-a", other, "op-1")).rejects.toMatchObject({ status: 404 });
+    authorization.revoke("member-a", TASK_CONTEXT);
+    for (const key of ["op-1", "absent"]) await expect(service.getMessageResult("member-a", TASK_CONTEXT, key)).rejects.toMatchObject({ status: 404 });
+  });
+
   it("rechecks canonical target authorization for every list, read, history, and send operation", async () => {
     const repository = new FakeDiscussionsRepository();
     const authorization = new FakeDiscussionAuthorization(repository);

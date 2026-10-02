@@ -47,6 +47,14 @@ export async function routeDiscussionsApi(
     return jsonResponse(result, result.created ? 201 : 200, context.requestId);
   }
 
+  if (url.pathname === "/api/discussions/messages/requests") {
+    if (request.method !== "GET") return methodNotAllowed("GET", context);
+    requireExactQuery(url, ["kind", "id", "clientKey"]);
+    const target = contextRecord({ kind: url.searchParams.get("kind"), id: url.searchParams.get("id") });
+    const result = await services.discussions.getMessageResult(member.memberId, target, url.searchParams.get("clientKey"));
+    return jsonResponse({ result }, 200, context.requestId);
+  }
+
   if (url.pathname === "/api/discussions/messages") {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);

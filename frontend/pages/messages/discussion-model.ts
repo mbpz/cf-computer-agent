@@ -73,6 +73,19 @@ export function createDiscussionSubmitController(keyFactory: () => string = () =
   let attempt: { fingerprint: string; input: DiscussionSendInput } | null = null;
   return {
     hasUnresolved: () => attempt !== null,
+    operationKey: () => attempt?.input.clientKey ?? null,
+    async reconcile(lookup: (input: DiscussionSendInput) => Promise<boolean>): Promise<boolean> {
+      if (pending || !attempt) return false;
+      const currentAttempt = attempt;
+      pending = true;
+      try {
+        const found = await lookup({ ...currentAttempt.input, context: { ...currentAttempt.input.context },
+          mentionMemberIds: [...(currentAttempt.input.mentionMemberIds ?? [])] });
+        if (found !== true || attempt !== currentAttempt) return false;
+        attempt = null;
+        return true;
+      } finally { pending = false; }
+    },
     async submit(
       input: Omit<DiscussionSendInput, "clientKey">,
       sender: (input: DiscussionSendInput) => Promise<unknown>,

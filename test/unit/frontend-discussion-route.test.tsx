@@ -679,6 +679,104 @@ describe("discussion routes", () => {
     expect(container.textContent).not.toContain("Replying to member-1");
   });
 
+
+  it("does not let a late exact read from a revoked access epoch erase the unresolved operation", async () => {
+    let key = ""; let denied = false; let lookups = 0; let writes = 0;
+    let resolveLookup!: (response: Response) => void;
+    const late = new Promise<Response>(resolve => { resolveLookup = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.startsWith("/api/discussions/messages/requests?")) { lookups++; return late; }
+      if (path === "/api/discussions/messages" && init?.method === "POST") {
+        writes++; const received = JSON.parse(String(init.body)).clientKey;
+        if (key) expect(received).toBe(key); else key = received;
+        throw new Error("unknown");
+      }
+      if (path === "/api/discussions/thread-1") return denied ? new Response(null, { status: 403 }) : Response.json(thread());
+      return Response.json({ items: [message()] });
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Original");
+    const submit = () => container.querySelector("form")!.dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+    const click = (text: string) => [...container.querySelectorAll("button")].find(b => b.textContent === text)!.click();
+    await act(async () => { submit(); });
+    await waitFor(() => container.querySelector("[role=alert]") !== null);
+    await act(async () => { click("Check exact result"); });
+    await waitFor(() => lookups === 1);
+    denied = true;
+    await act(async () => { click("Refresh"); });
+    await waitFor(() => container.querySelector("#discussion-composer") === null);
+    denied = false;
+    await act(async () => { click("Try discussions again"); });
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await act(async () => resolveLookup(Response.json({ result: { thread: thread(), message: message({ body: "Original", clientKey: key }), created: false } })));
+    await flush();
+    expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Original");
+    expect(container.textContent).toContain(key);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    await act(async () => { submit(); }); await flush();
+    expect(writes).toBe(2); expect(lookups).toBe(1);
+  });
+
+  it.each(["found", "absent", "mismatch", "offline", "denied"])("checks an unknown operation by exact read only: %s", async (outcome) => {
+    let key = ""; let writes = 0; let reads = 0; let resolveLookup!: (response: Response) => void;
+    const lookup = new Promise<Response>(resolve => { resolveLookup = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/discussions/thread-1") return Response.json(thread());
+      if (path === "/api/discussions/thread-1/messages?limit=20") return Response.json({ items: [message()] });
+      if (path === "/api/discussions/messages" && init?.method === "POST") {
+        writes++; const payload = JSON.parse(String(init.body));
+        if (key) expect(payload.clientKey).toBe(key); else key = payload.clientKey;
+        throw new Error("response lost");
+      }
+      if (path.startsWith("/api/discussions/messages/requests?")) {
+        reads++; expect(init?.method).toBe("GET");
+        const url = new URL(path, "https://app.test");
+        expect(url.searchParams.get("clientKey")).toBe(key);
+        expect(url.searchParams.get("kind")).toBe("task"); expect(url.searchParams.get("id")).toBe("task-1");
+        if (outcome === "offline") throw new Error("offline");
+        return lookup;
+      }
+      throw new Error(`unexpected request: ${path}`);
+    });
+    await act(async () => root.render(<DiscussionThreadRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} threadId="thread-1" search="" />));
+    await waitFor(() => container.querySelector("#discussion-composer") !== null);
+    await changeReactTextarea(container.querySelector("#discussion-composer") as HTMLTextAreaElement, "Original");
+    const submit = () => (container.querySelector("form") as HTMLFormElement).dispatchEvent(new browser.Event("submit", { bubbles: true, cancelable: true }));
+    await act(async () => { submit(); });
+    await waitFor(() => container.querySelector("[role=alert]") !== null);
+    expect(container.textContent).toContain(key);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    const check = [...container.querySelectorAll("button")].find(b => b.textContent === "Check exact result")!;
+    expect(check).toBeTruthy();
+    await act(async () => { check.click(); check.click(); });
+    if (outcome !== "offline") {
+      expect(check.disabled).toBe(true);
+      await act(async () => { submit(); });
+      await act(async () => resolveLookup(outcome === "denied" ? new Response(null, { status: 403 }) : Response.json({ result: outcome === "absent" ? null : {
+        thread: thread(), message: message({ body: outcome === "mismatch" ? "Wrong" : "Original", clientKey: key }), created: false,
+      } })));
+    }
+    await flush(); expect(writes).toBe(1); expect(reads).toBe(1);
+    if (outcome === "found") {
+      expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("");
+      expect(container.textContent).not.toContain(key);
+      await act(async () => { expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed"); });
+    } else {
+      if (outcome === "denied") {
+        expect(container.textContent).not.toContain("Original"); expect(container.textContent).not.toContain(key);
+        await act(async () => ([...container.querySelectorAll("button")].find(b => b.textContent === "Try discussions again")!).click());
+        await waitFor(() => container.querySelector("#discussion-composer") !== null);
+      }
+      expect((container.querySelector("#discussion-composer") as HTMLTextAreaElement).value).toBe("Original");
+      expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+      await act(async () => { submit(); }); await flush(); expect(writes).toBe(2); expect(reads).toBe(1);
+    }
+    await flush();
+  });
+
   it("ignores edit attempts after an unknown send and retries the frozen client key", async () => {
     const sent: Array<{ body: string; clientKey: string }> = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -761,6 +859,7 @@ function thread(overrides: Record<string, unknown> = {}) {
 function message(overrides: Record<string, unknown> = {}) {
   return { id: "message-1", threadId: "thread-1", sequence: 1, authorMemberId: "member-1", body: "Thread A", replyToMessageId: null, mentionMemberIds: [], clientKey: "client-1", createdAt: "2026-08-30T00:01:00.000Z", ...overrides };
 }
+async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); for (let i = 0; i < 12; i++) await Promise.resolve(); }); }
 async function waitFor(predicate: () => boolean) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); for (let index = 0; index < 10; index += 1) await Promise.resolve(); });
@@ -774,3 +873,34 @@ async function changeReactTextarea(textarea: HTMLTextAreaElement, value: string)
   const props = (textarea as unknown as Record<string, { onChange?: (event: { currentTarget: { value: string } }) => void }>)[propsKey]!;
   await act(async () => props.onChange?.({ currentTarget: { value } }));
 }
+
+
+describe("discussion exact operation reconciliation", () => {
+  it("serializes exact reads with retries and clones the unresolved input", async () => {
+    const controller = createDiscussionSubmitController(() => "op-1");
+    const input = { context: { kind: "task" as const, id: "task-1" }, body: "Original" };
+    await expect(controller.submit(input, async () => { throw new Error("unknown"); })).rejects.toThrow();
+    let release!: (found: boolean) => void;
+    const active = controller.reconcile(async () => new Promise<boolean>(resolve => { release = resolve; }));
+    const second = vi.fn();
+    await expect(controller.reconcile(second)).resolves.toBe(false);
+    await expect(controller.submit(input, second)).resolves.toBe(false);
+    expect(second).not.toHaveBeenCalled();
+    release(false); await expect(active).resolves.toBe(false);
+    expect(controller.hasUnresolved()).toBe(true); expect(controller.operationKey()).toBe("op-1");
+  });
+
+  it("keeps the frozen number across absence and query failure, and allocates again only after exact success", async () => {
+    let issued = 0;
+    const controller = createDiscussionSubmitController(() => `op-${++issued}`);
+    const input = { context: { kind: "task" as const, id: "task-1" }, body: "Original" };
+    await expect(controller.submit(input, async () => { throw new Error("unknown"); })).rejects.toThrow("unknown");
+    expect(controller.operationKey()).toBe("op-1");
+    await expect(controller.reconcile(async frozen => { expect(frozen.clientKey).toBe("op-1"); frozen.body = "mutated"; return false; })).resolves.toBe(false);
+    await expect(controller.reconcile(async () => { throw new Error("offline"); })).rejects.toThrow("offline");
+    expect(controller.hasUnresolved()).toBe(true);
+    await expect(controller.reconcile(async frozen => { expect(frozen.body).toBe("Original"); expect(frozen.clientKey).toBe("op-1"); return true; })).resolves.toBe(true);
+    expect(controller.hasUnresolved()).toBe(false);
+    await controller.submit(input, async frozen => { expect(frozen.clientKey).toBe("op-2"); });
+  });
+});

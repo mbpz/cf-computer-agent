@@ -2,7 +2,7 @@
 
 import { applyD1Migrations, createExecutionContext, env, reset, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ensureDiscussionThread, loadContextDiscussionThread, loadDiscussionThread, loadDiscussionThreads, loadDiscussionMessages, sendDiscussionMessage } from "../../frontend/lib/discussions-data";
+import { loadDiscussionMessageResult, ensureDiscussionThread, loadContextDiscussionThread, loadDiscussionThread, loadDiscussionThreads, loadDiscussionMessages, sendDiscussionMessage } from "../../frontend/lib/discussions-data";
 import { createApp } from "../../src/app";
 import {
   buildDiscussionThreadListQueries,
@@ -357,6 +357,26 @@ describe("discussion HTTP contract", () => {
     });
     sessionA = (await sessions.create((await members.findByIdentitySubject("subject-a"))!)).token;
     sessionB = (await sessions.create((await members.findByIdentitySubject("subject-b"))!)).token;
+  });
+
+
+  it("queries an original operation outside the latest page with actor isolation and strict read-only HTTP", async () => {
+    const asA = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionA, init)) as typeof fetch;
+    const asB = ((path: string | URL | Request, init?: RequestInit) => api(String(path), sessionB, init)) as typeof fetch;
+    const input = { context: { kind: "knowledge" as const, id: "knowledge-a" }, body: "Original", clientKey: "exact-operation" };
+    await expect(loadDiscussionMessageResult(input, asA)).resolves.toBeNull();
+    const sent = await sendDiscussionMessage(input, asA);
+    for (let i = 0; i < 21; i++) await sendDiscussionMessage({ ...input, body: `Later ${i}`, clientKey: `later-${i}` }, asA);
+    expect((await loadDiscussionMessages(sent.thread.id, { limit: 20 }, asA)).items.some(item => item.id === sent.message.id)).toBe(false);
+    await expect(loadDiscussionMessageResult(input, asA)).resolves.toMatchObject({ message: sent.message, created: false });
+    await expect(loadDiscussionMessageResult(input, asB)).resolves.toBeNull();
+    expect((await loadDiscussionThread(sent.thread.id, asA)).lastSequence).toBe(22);
+    const path = "/api/discussions/messages/requests?kind=knowledge&id=knowledge-a&clientKey=exact-operation";
+    for (const suffix of ["&clientKey=other", "&memberId=member-b", "&cursor=cursor_2"]) expect((await api(path + suffix, sessionA)).status).toBe(400);
+    expect((await api(path, sessionA, { method: "POST" })).status).toBe(405);
+    expect((await api(path, sessionA)).headers.get("cache-control")).toContain("no-store");
+    await env.DB.prepare("UPDATE revisions SET visibility = 'admin_only' WHERE id = 'discussion-revision'").run();
+    expect((await api(path, sessionA)).status).toBe(404);
   });
 
   it("consumes real HTTP receipts and opaque pages through the frontend client across replay, insertion and revocation", async () => {

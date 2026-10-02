@@ -105,32 +105,55 @@ export async function sendDiscussionMessage(
   input: DiscussionSendInput,
   requester: Fetcher = fetch,
 ): Promise<DiscussionSendResult> {
-  assertContext(input.context);
-  const body = input.body.trim();
-  if (!body || [...body].length > 5_000 || !isClientKey(input.clientKey)) throw new Error("DISCUSSION_MESSAGE_INVALID");
-  if (input.replyToMessageId !== undefined) assertId(input.replyToMessageId, "DISCUSSION_MESSAGE_INVALID");
-  const mentions = input.mentionMemberIds === undefined ? undefined : normalizeMentionIds(input.mentionMemberIds);
-  const payload = {
-    context: input.context,
-    body,
-    clientKey: input.clientKey,
-    ...(input.replyToMessageId !== undefined ? { replyToMessageId: input.replyToMessageId } : {}),
-    ...(mentions !== undefined ? { mentionMemberIds: mentions } : {}),
-  };
+  const payload = snapshotDiscussionInput(input);
   const result = normalizeSendResult(await apiFetch<unknown>("/api/discussions/messages", {
     requester,
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   }));
+  assertMessageReceipt(result, payload);
+  return result;
+}
+
+export async function loadDiscussionMessageResult(
+  input: DiscussionSendInput,
+  requester: Fetcher = fetch,
+  signal?: AbortSignal,
+): Promise<DiscussionSendResult | null> {
+  const frozen = snapshotDiscussionInput(input);
+  const params = new URLSearchParams({ kind: frozen.context.kind, id: frozen.context.id, clientKey: frozen.clientKey.trim() });
+  const response = await apiFetch<unknown>(`/api/discussions/messages/requests?${params.toString()}`, { requester, method: "GET", signal, cache: "no-store" });
+  if (!isRecord(response) || Object.keys(response).join("\0") !== "result") invalidResponse();
+  if (response.result === null) return null;
+  const result = normalizeSendResult(response.result);
+  if (result.created) invalidResponse();
+  assertMessageReceipt(result, frozen);
+  return result;
+}
+
+function snapshotDiscussionInput(input: DiscussionSendInput): DiscussionSendInput {
+  assertContext(input.context);
+  const body = input.body.trim();
+  if (!body || [...body].length > 5_000 || !isClientKey(input.clientKey)) throw new Error("DISCUSSION_MESSAGE_INVALID");
+  if (input.replyToMessageId !== undefined) assertId(input.replyToMessageId, "DISCUSSION_MESSAGE_INVALID");
+  const mentions = input.mentionMemberIds === undefined ? undefined : normalizeMentionIds(input.mentionMemberIds);
+  return {
+    context: { ...input.context },
+    body,
+    clientKey: input.clientKey,
+    ...(input.replyToMessageId !== undefined ? { replyToMessageId: input.replyToMessageId } : {}),
+    ...(mentions !== undefined ? { mentionMemberIds: mentions } : {}),
+  };
+}
+
+function assertMessageReceipt(result: DiscussionSendResult, input: DiscussionSendInput): void {
   assertThreadContext(result.thread, input.context);
   if (result.message.clientKey !== input.clientKey.trim()) invalidResponse();
-  // A replay confirms only this frozen intent, not another payload under its key.
-  // The server excludes the author from explicit mentions.
-  if (result.message.body !== body
+  // Both retry and read-only lookup must prove this frozen intent, not another payload.
+  if (result.message.body !== input.body.trim()
     || result.message.replyToMessageId !== (input.replyToMessageId ?? null)
-    || JSON.stringify(result.message.mentionMemberIds) !== JSON.stringify((mentions ?? []).filter((id) => id !== result.message.authorMemberId))) invalidResponse();
-  return result;
+    || JSON.stringify(result.message.mentionMemberIds) !== JSON.stringify((input.mentionMemberIds ?? []).filter((id) => id !== result.message.authorMemberId))) invalidResponse();
 }
 
 export function createDiscussionRequestController<TInput, TResult>(

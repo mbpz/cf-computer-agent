@@ -5,12 +5,44 @@ import {
   ensureDiscussionThread,
   loadContextDiscussionThread,
   loadDiscussionMessages,
+  loadDiscussionMessageResult,
   loadDiscussionThread,
   loadDiscussionThreads,
   sendDiscussionMessage,
 } from "../../frontend/lib/discussions-data";
 
 describe("discussion client contract", () => {
+  it.each(["send", "lookup"])("validates the frozen %s payload even if the caller mutates its input during transport", async mode => {
+    const input = { context: { kind: "task" as const, id: "task-1" }, body: "Hello @member-2", clientKey: "stable-client-key", mentionMemberIds: ["member-2"] };
+    let release!: (response: Response) => void;
+    const requester = async () => new Promise<Response>(resolve => { release = resolve; });
+    const result = { thread: thread(), message: message(), created: mode === "send" };
+    const pending = mode === "send" ? sendDiscussionMessage(input, requester) : loadDiscussionMessageResult(input, requester);
+    input.context.id = "mutated"; input.body = "mutated"; input.clientKey = "mutated"; input.mentionMemberIds.push("other");
+    release(Response.json(mode === "send" ? result : { result }));
+    await expect(pending).resolves.toEqual(result);
+  });
+
+  it("queries a frozen operation with GET only and validates an exact receipt or explicit absence", async () => {
+    const input = { context: { kind: "task" as const, id: "task-1" }, body: "Hello @member-2", clientKey: "stable-client-key", mentionMemberIds: ["member-2"] };
+    const result = { thread: thread(), message: message(), created: false };
+    const calls: Array<[string, RequestInit | undefined]> = [];
+    const controller = new AbortController();
+    await expect(loadDiscussionMessageResult(input, async (path, init) => { calls.push([String(path), init]); return Response.json({ result }); }, controller.signal)).resolves.toEqual(result);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0]).toBe("/api/discussions/messages/requests?kind=task&id=task-1&clientKey=stable-client-key");
+    expect(calls[0]![1]).toMatchObject({ method: "GET", signal: controller.signal, credentials: "same-origin", cache: "no-store" });
+    expect(calls[0]![1]?.body).toBeUndefined();
+    await expect(loadDiscussionMessageResult(input, jsonRequester({ result: null }))).resolves.toBeNull();
+    for (const payload of [null, {}, { result, extra: true }, { result: { ...result, created: true } },
+      { result: { ...result, message: message({ clientKey: "wrong" }) } },
+      { result: { ...result, message: message({ body: "wrong" }) } },
+      { result: { ...result, message: message({ replyToMessageId: "wrong" }) } },
+      { result: { ...result, message: message({ mentionMemberIds: [] }) } },
+      { result: { ...result, thread: thread({ contextId: "wrong" }) } },
+    ]) await expect(loadDiscussionMessageResult(input, jsonRequester(payload))).rejects.toThrow("DISCUSSION_RESPONSE_INVALID");
+  });
+
   it("parses strict thread and message cursor pages from canonical endpoints", async () => {
     const calls: string[] = [];
     const requester = (async (input: RequestInfo | URL) => {
