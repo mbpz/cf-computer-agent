@@ -2,6 +2,8 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
+import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { App } from "../../frontend/app";
 
 
@@ -21,6 +23,7 @@ describe("home summary real route", () => {
   beforeEach(() => {
     browser = new Window({ url: "https://app.test/" });
     vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator);
+    vi.stubGlobal("MutationObserver", browser.MutationObserver);
     vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); requests = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -37,6 +40,32 @@ describe("home summary real route", () => {
   async function render() { await act(async () => root.render(<App />)); for (let n = 0; n < 20 && requests.length < 3; n++) await flush(); expect(requests).toHaveLength(3); }
   async function answer(index: number, body: unknown, status = 200) { await act(async () => { requests[index].resolve(Response.json(body, { status })); }); await flush(); }
   const section = (name: string) => Array.from(container.querySelectorAll("h3")).find(h => h.textContent === ({ tasks: "My tasks", knowledge: "Recent knowledge", activity: "Activity" } as Record<string,string>)[name])?.closest(".bg-card");
+  it.each([true, false])("logout confirmed=%s respects the security boundary rather than ordinary leave consent", async confirmed => {
+    await render(); await answer(0, taskSummary); await answer(1, knowledge); await answer(2, { items: [] });
+    const baseFetch = vi.mocked(fetch).getMockImplementation()!; let loggedOut = false;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      if (String(input) === "/auth/logout") { loggedOut = confirmed; return Promise.resolve(new Response(null, { status: confirmed ? 204 : 503 })); }
+      if (String(input) === "/api/session" && loggedOut) return Promise.resolve(Response.json({ error: { code: "AUTH_REQUIRED", message: "Signed out", retryable: false } }, { status: 401 }));
+      return baseFetch(input, init);
+    });
+    let decision!: WorkspaceLeaveDecision; const dismiss = vi.fn(); const oldCommit = vi.fn();
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "confirm", version: "draft", prompt(value) { decision = value; }, dismiss }));
+    try {
+      writeWorkspaceHistory("push", "/settings", oldCommit);
+      await act(async () => (container.querySelector('[data-account-trigger]') as HTMLButtonElement).click());
+      await act(async () => (container.querySelector('[data-account-logout]') as HTMLButtonElement).click()); await flush();
+      expect(vi.mocked(fetch).mock.calls.some(([path, init]) => path === "/auth/logout" && init?.method === "POST")).toBe(true);
+      if (confirmed) {
+        expect(container.textContent).not.toContain("Private guide"); expect(container.textContent).not.toContain("one@test.example");
+        expect(requests.slice(0, 3).every(r => r.signal?.aborted)).toBe(true); expect(dismiss).toHaveBeenCalledOnce();
+        await act(async () => decision.accept()); expect(oldCommit).not.toHaveBeenCalled(); expect(browser.location.pathname).toBe("/");
+      } else {
+        expect(container.textContent).toContain("Private guide"); expect(container.textContent).toContain("Sign out failed"); expect(dismiss).not.toHaveBeenCalled();
+        await act(async () => decision.cancel()); expect(browser.location.pathname).toBe("/"); expect(oldCommit).not.toHaveBeenCalled();
+      }
+    } finally { unregister(); }
+  });
+
   it.each(["tasks", "knowledge", "activity"])("shows %s failure instead of zero or empty while preserving successful sections", async name => {
     await render();
     await answer(0, taskSummary, name === "tasks" ? 500 : 200);

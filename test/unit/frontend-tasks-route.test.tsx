@@ -2,6 +2,8 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
+import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { TasksRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
 
@@ -15,6 +17,24 @@ describe("private task numbered route", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(() => { browser = new Window({ url: "https://app.test/tasks?status=doing&page=2" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { vi.useRealTimers(); await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
+
+  it.each(["cancel", "accept"] as const)("%s leaves task query side effects inside admitted navigation", async outcome => {
+    const requests: Array<{ url: string; signal?: AbortSignal }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { requests.push({ url: String(input), signal: init?.signal ?? undefined }); return taskPage(String(input)); });
+    await act(async () => root.render(<TasksRoute locale={createLocaleRuntime()} search={browser.location.search} />)); await flush();
+    let decision!: WorkspaceLeaveDecision;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "confirm", version: "other-draft", prompt(value) { decision = value; }, dismiss() {} }));
+    try {
+      const count = requests.length;
+      await change(container.querySelector('[aria-label="Priority"]') as HTMLSelectElement, "high"); await flush();
+      expect(browser.location.search).toBe("?status=doing&page=2");
+      expect(requests).toHaveLength(count); expect(requests[0]?.signal?.aborted).toBe(false);
+      expect((container.querySelector('[aria-label="Priority"]') as HTMLSelectElement).value).not.toBe("high");
+      await act(async () => decision[outcome]()); await flush();
+      if (outcome === "cancel") { expect(requests).toHaveLength(count); expect(browser.location.search).toBe("?status=doing&page=2"); }
+      else { expect(requests).toHaveLength(count + 1); expect(requests.at(-1)?.url).toContain("priority=high"); expect(requests[0]?.signal?.aborted).toBe(true); }
+    } finally { unregister(); }
+  });
 
   it("restores filters and page on popstate while aborting the stale request", async () => {
     const requests: Array<{ url: string; signal?: AbortSignal }> = [];

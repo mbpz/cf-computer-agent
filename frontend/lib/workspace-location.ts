@@ -1,3 +1,5 @@
+import { createWorkspaceNavigationGate, type WorkspaceLeaveGuard, type WorkspaceNavigationResult } from "./workspace-navigation-gate";
+
 export const WORKSPACE_LOCATION_CHANGE_EVENT = "workbench:location-change";
 
 export interface WorkspaceLocation {
@@ -35,16 +37,53 @@ export function canonicalWorkspaceLocationKey({ pathname, search }: WorkspaceLoc
   return JSON.stringify([pathname, primaryEntries]);
 }
 
-export function writeWorkspaceHistory(mode: "push" | "replace", url: string): void {
-  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", url);
-  window.dispatchEvent(new window.Event(WORKSPACE_LOCATION_CHANGE_EVENT));
+// Each browser window owns its gate. Cleanup closures retain that owner even if
+// a different window/session becomes current before an old component unmounts.
+const navigationGates = new WeakMap<Window, ReturnType<typeof createWorkspaceNavigationGate>>();
+function navigationGate(owner: Window) {
+  let gate = navigationGates.get(owner);
+  if (!gate) { gate = createWorkspaceNavigationGate(); navigationGates.set(owner, gate); }
+  return gate;
+}
+
+export function registerWorkspaceLeaveGuard(guard: WorkspaceLeaveGuard): () => void {
+  return navigationGate(window).register(guard);
+}
+
+function commitLocation(owner: typeof window, mode: "push" | "replace", url: string, onCommit?: () => void): void {
+  // A rejected history write must not run route mutations. Subscribers see the
+  // admitted route state, not an intermediate URL/query mismatch.
+  owner.history[mode === "push" ? "pushState" : "replaceState"]({}, "", url);
+  try { onCommit?.(); }
+  finally { owner.dispatchEvent(new owner.Event(WORKSPACE_LOCATION_CHANGE_EVENT)); }
+}
+
+export function writeWorkspaceHistory(mode: "push" | "replace", url: string, onCommit?: () => void): WorkspaceNavigationResult {
+  const owner = window;
+  const target = new URL(url, owner.location.href).href;
+  return navigationGate(owner).request(() => commitLocation(owner, mode, target, onCommit));
+}
+
+/** Only for a confirmed session end, never for ordinary navigation or logout failure. */
+export function endWorkspaceSession(clearPrivateState: () => void): void {
+  const owner = window;
+  const oldGate = navigationGates.get(owner);
+  navigationGates.delete(owner);
+  // Security cleanup cannot wait for dirty consent, nor can a broken dialog keep
+  // private state mounted. Old registrations and callbacks belong to the old gate.
+  try { oldGate?.invalidate(); }
+  finally {
+    clearPrivateState();
+    commitLocation(owner, "replace", "/");
+  }
 }
 
 export function subscribeWorkspaceLocation(listener: () => void): () => void {
-  window.addEventListener("popstate", listener);
-  window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
+  const owner = window;
+  owner.addEventListener("popstate", listener);
+  owner.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
   return () => {
-    window.removeEventListener("popstate", listener);
-    window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
+    owner.removeEventListener("popstate", listener);
+    owner.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, listener);
   };
 }

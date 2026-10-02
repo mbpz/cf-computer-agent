@@ -31,14 +31,14 @@ Interface: createWorkspaceNavigationGate() returns register(guard), request(comm
 
 ### Task 2: Atomic route commits
 
-Files: modify `frontend/lib/workspace-location.ts`, `frontend/app.tsx` and audited writer consumers; add `test/unit/frontend-workspace-location.test.ts`.
+Files: modify `frontend/lib/workspace-location.ts`, `frontend/app.tsx` and audited writer consumers; add `test/unit/frontend-workspace-location.test.tsx`.
 
 Interface: writeWorkspaceHistory retains existing callers but accepts admitted side-effect callbacks. registerWorkspaceLeaveGuard is per-window. Security session-end invalidates pending decisions explicitly.
 
-- [ ] Write RED tests proving canceled navigation leaves URL/events/query side effects untouched.
-- [ ] Bind coordinator to window; migrate all writer call sites whose query refs/invalidation/state updates occur outside the admitted commit.
-- [ ] Test canonical replace, same-page pagination and successful logout separately; regression-test affected routes.
-- [ ] Commit verified atomic routing changes with coverage inventory.
+- [x] Write RED tests proving canceled navigation leaves URL/events/query side effects untouched.
+- [x] Bind coordinator to window; migrate all writer call sites whose query refs/invalidation/state updates occur outside the admitted commit.
+- [x] Test canonical replace, same-page pagination and successful logout separately; regression-test affected routes.
+- [x] Commit verified atomic routing changes with coverage inventory.
 
 ### Task 3: Task editor bridge
 
@@ -63,3 +63,5 @@ Files: shared location/history adapter, its tests, App subscription consumers wh
 ## Execution evidence
 
 2026-10-02 Task 1: behavior RED21/24 failed; GREEN24/24; combined3files87/87, strict core types, project typecheck, build:ui and checklist tests9/9 passed. Runtime wiring and native navigation remain unimplemented; see `docs/product/2026-10-02-navigation-gate-core-evidence.md`.
+
+Task 2续行（基线4478d21）：共享window准入和25处导航副作用迁移；原40个writer变为39个受保护writer+1个确认会话结束入口。真实TasksRoute新增2项先失败（被拦URL但仍多发读取）后通过；20文件437/437，追加异常/重入后共享位置15/15，类型/UI构建/清单测试通过。DOM测试使用.tsx避免被Worker-only tsconfig纳入，另独立严格DOM类型检查；见 `docs/product/navigation-atomic-route-commits-evidence.md`。尚无TaskEditor注册或history拦截，不关闭A05。

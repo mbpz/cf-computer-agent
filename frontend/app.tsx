@@ -105,7 +105,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceLocation, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -168,10 +168,11 @@ export function App() {
       await logoutAccount(owner, session.logoutUrl);
       // Return to the anonymous shell. Starting OAuth here would immediately
       // sign the user back in when GitHub still has an active browser session.
-      setSession(null);
-      setAnonymous(true);
-      setLogoutPending(false);
-      writeWorkspaceHistory("replace", "/");
+      endWorkspaceSession(() => {
+        setSession(null);
+        setAnonymous(true);
+        setLogoutPending(false);
+      });
     } catch {
       setLogoutError(frontendText(locale, "SHELL_LOGOUT_FAILED"));
       setLogoutPending(false);
@@ -333,14 +334,13 @@ export function AdminAnalyticsRoute({ locale, search, load = loadAdminAnalytics 
   }, [load, days, page, pageSize, refresh]);
 
   const navigateState = (next: { days: number; page: number; pageSize: SupportedPageSize }) => {
-    queryRef.current = next;
     const params = new URLSearchParams(writePageSearch(window.location.search, next));
     params.set("days", String(next.days));
     const nextSearch = params.toString();
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`);
-    setDays(next.days);
-    setPage(next.page);
-    setPageSize(next.pageSize);
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
+      queryRef.current = next;
+      setDays(next.days); setPage(next.page); setPageSize(next.pageSize);
+    });
   };
 
   return <AdminAnalyticsPage locale={locale} state={state} days={days} pending={pending} localError={localError}
@@ -695,7 +695,7 @@ export function KnowledgeRoute({ locale, search }: { locale: LocaleRuntime; sear
     void request.promise.then((result) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current)) { setState({ kind: "ready", items: result.items, pagination: result.pagination }); setPending(false); } }).catch((error: unknown) => { if (controller.isCurrent(request.generation) && samePageQuery(snapshot, queryRef.current) && !isAbort(error)) { setState((old) => old.kind === "ready" ? old : { kind: "error", message: frontendText(locale, "KNOWLEDGE_ERROR") }); setLocalError(frontendText(locale, "KNOWLEDGE_ERROR")); setPending(false); } });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   return <KnowledgePage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} recent={recent} favorites={favorites} recentResearch={recentResearch} notes={notes} activity={activity} activityNextCursor={activityNextCursor} onLoadMoreActivity={loadMoreActivity} review={review} reviewPeriod={reviewPeriod} onReviewPeriodChange={setReviewPeriod} />;
 }
 
@@ -766,11 +766,12 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
     const normalized = query.trim();
     const params = new URLSearchParams(window.location.search); if (normalized) params.set("q", normalized); else params.delete("q"); params.delete("page");
     const nextUrl = params.size ? `/search?${params.toString()}` : "/search";
-    writeWorkspaceHistory("push", nextUrl);
-    setActiveQuery(normalized);
-    setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+    writeWorkspaceHistory("push", nextUrl, () => {
+      setActiveQuery(normalized);
+      setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+    });
   };
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = { query: activeQuery, ...next }; writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = { query: activeQuery, ...next }; setPage(next.page); setPageSize(next.pageSize); }); };
   const saveView = async (name: string) => {
     if (savedViewPending) return;
     setSavedViewPending(true);
@@ -786,11 +787,11 @@ export function SearchRoute({ locale, search }: { locale: LocaleRuntime; search:
   };
   const applyView = (view: SavedViewItem) => {
     const normalized = view.filters.q.trim();
-    setQuery(normalized);
     const nextUrl = normalized ? `/search?q=${encodeURIComponent(normalized)}` : "/search";
-    writeWorkspaceHistory("push", nextUrl);
-    setActiveQuery(normalized);
-    setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+    writeWorkspaceHistory("push", nextUrl, () => {
+      setQuery(normalized); setActiveQuery(normalized);
+      setPage(1); queryRef.current = { query: normalized, page: 1, pageSize };
+    });
   };
   const removeView = async (id: string) => {
     if (savedViewPending) return;
@@ -892,10 +893,11 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   };
   const startScope = (nextScope: AgentScope) => {
     if (pendingRef.current || recovery !== "ready") return;
-    controllerRef.current?.cancel(); conversationIdRef.current = undefined;
-    setScope(nextScope); setHistory([]); setQuestion(""); setLastQuestion("");
-    writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`);
-    setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
+    writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`, () => {
+      controllerRef.current?.cancel(); conversationIdRef.current = undefined;
+      setScope(nextScope); setHistory([]); setQuestion(""); setLastQuestion("");
+      setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
+    });
   };
   const abandon = () => {
     if (pendingRef.current) return;
@@ -1013,7 +1015,7 @@ export function MySubmissionsRoute({ locale, search }: { locale: LocaleRuntime; 
     });
     return () => { controller.dispose(); if (controllerRef.current === controller) controllerRef.current = null; };
   }, [locale, page, pageSize, retryVersion, urlVersion]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { queryRef.current = next; writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`); setPage(next.page); setPageSize(next.pageSize); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }) => { writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   return <MySubmissionsPage locale={locale} state={state} pending={pending} localError={localError} onRetry={() => setRetryVersion((value) => value + 1)} onPageChange={(next) => navigate({ page: next, pageSize })} onPageSizeChange={(next) => navigate({ page: 1, pageSize: next })} />;
 }
 
@@ -1080,12 +1082,13 @@ export function TasksRoute({ locale, search }: { locale: LocaleRuntime; search: 
   }, [filters, locale, page, pageSize, retryVersion]);
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize; filters: TaskFilterState }, replace = false) => {
-    setActionError(undefined);
-    if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
-    queryRef.current = next;
     const url = taskSearch(next);
-    writeWorkspaceHistory(replace ? "replace" : "push", `/tasks${url}`);
-    setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters); setDraftFilters(next.filters);
+    writeWorkspaceHistory(replace ? "replace" : "push", `/tasks${url}`, () => {
+      setActionError(undefined);
+      if (textFilterTimerRef.current) { clearTimeout(textFilterTimerRef.current); textFilterTimerRef.current = null; }
+      queryRef.current = next;
+      setPage(next.page); setPageSize(next.pageSize); setFilters(next.filters); setDraftFilters(next.filters);
+    });
   };
   const changeTextFilters = (nextFilters: TaskFilterState) => {
     setDraftFilters(nextFilters);
@@ -1188,8 +1191,7 @@ export function InboxRoute({ locale, search = "", memberId }: { locale: LocaleRu
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
     const nextSearch = writeInboxSearch(window.location.search, next);
     if (nextSearch === window.location.search) return;
-    invalidate();
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`, invalidate);
   };
   const changeItem = async (item: InboxItem, operation: "status" | "task") => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
@@ -1356,8 +1358,9 @@ export function GoalsRoute({ locale, search = "", memberId }: { locale: LocaleRu
 
   const changePage = (page: number, size = pageSize) => {
     if (relationGoalRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    pendingRef.current = true; setPending(true);
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+      pendingRef.current = true; setPending(true);
+    });
   };
 
   const relationReadFailed = useCallback(() => {
@@ -1522,8 +1525,9 @@ export function ProjectsRoute({ locale, search = "", memberId }: { locale: Local
 
   const changePage = (page: number, size = pageSize) => {
     if (relationProjectRef.current || pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    pendingRef.current = true; setPending(true);
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+      pendingRef.current = true; setPending(true);
+    });
   };
 
   const updateRelationSummary = useCallback((projectId: string, summary: ProjectSummary | undefined) => {
@@ -1669,8 +1673,9 @@ export function ProjectTimelineRoute({ locale, projectId, memberId, search = "" 
   };
   const changePage = (page: number, size = pageSize) => {
     if (pendingRef.current || createLockedRef.current || writeRecovery.locked || (page - 1) * size >= 10_000 || (page === requestedPage && size === pageSize)) return;
-    pendingRef.current = true; setPending(true);
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(search, { page, pageSize: size })}`, () => {
+      pendingRef.current = true; setPending(true);
+    });
   };
   return <><PlanningWriteRecovery recovery={writeRecovery} locale={locale} pending={pending || createLocked} refresh={() => refresh(true)} onDenied={clearDenied} /><ProjectTimelinePage createMemberId={memberId} createProjectId={projectId} locale={locale} state={state} pending={pending || writeRecovery.locked} createLocked={createLocked} actionError={actionError}
     onRetry={() => setRetryVersion(value => value + 1)}
@@ -1743,7 +1748,7 @@ export function CalendarRoute({ locale, search = "", memberId }: { locale: Local
     if (pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
     const nextSearch = writeCalendarSearch(window.location.search, next);
     if (nextSearch === window.location.search) return;
-    invalidate(); writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`);
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch}`, invalidate);
   };
   const cancel = async (event: CalendarEvent) => {
     if (!memberId || pendingRef.current || writingRef.current || captureLockedRef.current || writeRecovery.locked) return;
@@ -2056,8 +2061,9 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       const lastPage = Math.max(1, page.pagination.totalPages);
       if (snapshot.page > lastPage) {
         const next = { ...snapshot, page: lastPage };
-        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(window.location.search, next)}`);
-        queryRef.current = next; setQuery(next);
+        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(window.location.search, next)}`, () => {
+          queryRef.current = next; setQuery(next);
+        });
         return;
       }
       readyRef.current = true;
@@ -2098,10 +2104,10 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   }, []);
 
   const navigate = (next: NotificationQuery, replace = false) => {
-    readyRef.current = false;
-    setActionError(undefined);
-    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`);
-    queryRef.current = next; setQuery(next);
+    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(window.location.search, next)}`, () => {
+      readyRef.current = false; setActionError(undefined);
+      queryRef.current = next; setQuery(next);
+    });
   };
 
   const mutate = async (operation: () => Promise<unknown>) => {
@@ -2207,8 +2213,9 @@ export function MessagesRoute({ locale, search }: { locale: LocaleRuntime; searc
   useEffect(() => () => { controllerRef.current?.dispose(); controllerRef.current = null; }, []);
 
   const navigate = (next: DiscussionSearch) => {
-    writeWorkspaceHistory("push", `/messages${writeDiscussionSearch(window.location.search, next)}`);
-    queryRef.current = next; setQuery(next);
+    writeWorkspaceHistory("push", `/messages${writeDiscussionSearch(window.location.search, next)}`, () => {
+      queryRef.current = next; setQuery(next);
+    });
   };
   return <MessagesPage locale={locale} state={state} page={query.page} limit={query.limit} pending={pending}
     onRetry={() => setRetryVersion((value) => value + 1)}
@@ -2277,8 +2284,9 @@ export function DiscussionThreadRoute({ locale, threadId, search }: { locale: Lo
   }, []);
 
   const navigate = (next: DiscussionSearch, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `/messages/${encodeURIComponent(threadId)}${writeDiscussionSearch(window.location.search, next)}`);
-    queryRef.current = next; setQuery(next);
+    writeWorkspaceHistory(replace ? "replace" : "push", `/messages/${encodeURIComponent(threadId)}${writeDiscussionSearch(window.location.search, next)}`, () => {
+      queryRef.current = next; setQuery(next);
+    });
   };
   const send = async (input: Parameters<typeof sendDiscussionMessage>[0]) => {
     const sendingThreadId = threadId;
@@ -2376,10 +2384,11 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   }, []);
 
   const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
-    setActionError(undefined);
-    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(window.location.search, status, next)}`);
-    const nextQueries = { ...queriesRef.current, [status]: next };
-    queriesRef.current = nextQueries; setQueries(nextQueries);
+    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(window.location.search, status, next)}`, () => {
+      setActionError(undefined);
+      const nextQueries = { ...queriesRef.current, [status]: next };
+      queriesRef.current = nextQueries; setQueries(nextQueries);
+    });
   };
 
   const move = async (task: TaskItem, target: BoardTargetStatus) => {
@@ -2491,9 +2500,10 @@ function useBoardColumnRequest(
       const lastPage = Math.max(1, data.pagination.totalPages);
       if (querySnapshot.page > lastPage) {
         const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
-        const nextQueries = { ...queriesRef.current, [status]: nextQuery };
-        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(window.location.search, status, nextQuery)}`);
-        queriesRef.current = nextQueries; setQueries(nextQueries);
+        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(window.location.search, status, nextQuery)}`, () => {
+          const nextQueries = { ...queriesRef.current, [status]: nextQuery };
+          queriesRef.current = nextQueries; setQueries(nextQueries);
+        });
         return;
       }
       setColumns((current) => ({ ...current, [status]: { kind: "ready", items: data.items, pagination: data.pagination, pending: false } }));
@@ -2665,7 +2675,7 @@ export function ReviewQueueRoute({ locale, search }: { locale: LocaleRuntime; se
     setPendingId(null); setDecisionState((old) => old.kind === "success" ? old : { kind: "idle" }); void read(controller, snapshot);
     return () => { controller.dispose(); if (controllerRef.current === controller) { controllerRef.current = null; readRef.current = null; decisionRef.current = null; operationRef.current = null; } };
   }, [locale, page, pageSize]);
-  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { queryRef.current = next; const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url); setPage(next.page); setPageSize(next.pageSize); };
+  const navigate = (next: { page: number; pageSize: SupportedPageSize }, replace = false) => { const url = `${window.location.pathname}${writePageSearch(window.location.search, next)}`; writeWorkspaceHistory(replace ? "replace" : "push", url, () => { queryRef.current = next; setPage(next.page); setPageSize(next.pageSize); }); };
   const review = async (id: string, action: ReviewDecision, details?: ReviewNoteInput, retryOperation?: ReviewOperation) => {
     if (decisionRef.current || readRef.current || state.kind !== "ready" || localError || completedId === id || (operationRef.current && operationRef.current !== retryOperation)) return;
     const actionController = controllerRef.current; if (!actionController) return;
@@ -2756,9 +2766,10 @@ export function AdminDuplicateRoute({ locale, search }: { locale: LocaleRuntime;
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    invalidateQuery(); queryRef.current = next;
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`);
-    setPage(next.page); setPageSize(next.pageSize);
+    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => {
+      invalidateQuery(); queryRef.current = next;
+      setPage(next.page); setPageSize(next.pageSize);
+    });
   };
   const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
     if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
@@ -2857,12 +2868,13 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    invalidateQuery(); queryRef.current = next;
     const params = new URLSearchParams(writePageSearch(window.location.search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`);
-    setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`, () => {
+      invalidateQuery(); queryRef.current = next;
+      setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    });
   };
   const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
     if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
@@ -3064,17 +3076,18 @@ export function AdminAuditRoute({ locale, search }: { locale: LocaleRuntime; sea
   }, [action, locale, page, pageSize, retryVersion]);
 
   const navigate = (next: { page: number; pageSize: SupportedPageSize }) => {
-    queryRef.current = { ...next, action };
-    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`);
-    setPage(next.page); setPageSize(next.pageSize);
+    writeWorkspaceHistory("push", `${window.location.pathname}${writePageSearch(window.location.search, next)}`, () => {
+      queryRef.current = { ...next, action }; setPage(next.page); setPageSize(next.pageSize);
+    });
   };
   const changeFilter = (nextAction: string) => {
-    queryRef.current = { page: 1, pageSize, action: nextAction || undefined };
     const params = new URLSearchParams(writePageSearch(window.location.search, { page: 1, pageSize }));
     if (nextAction) params.set("action", nextAction); else params.delete("action");
     const nextSearch = params.toString();
-    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`);
-    setAction(nextAction || undefined); setPage(1);
+    writeWorkspaceHistory("push", `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, () => {
+      queryRef.current = { page: 1, pageSize, action: nextAction || undefined };
+      setAction(nextAction || undefined); setPage(1);
+    });
   };
   const retry = () => {
     if (pendingRef.current) return;
@@ -3127,12 +3140,13 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
-    invalidateQuery(); queryRef.current = next;
     const params = new URLSearchParams(writePageSearch(window.location.search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`);
-    setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    writeWorkspaceHistory(replace ? "replace" : "push", `${window.location.pathname}${serialized ? `?${serialized}` : ""}`, () => {
+      invalidateQuery(); queryRef.current = next;
+      setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
+    });
   };
   const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterRetry = false) => {
     if ((!afterRetry && readRef.current) || controllerRef.current !== controller) return;

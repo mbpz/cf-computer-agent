@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { registerWorkspaceLeaveGuard } from "../../frontend/lib/workspace-location";
+import type { WorkspaceLeaveDecision } from "../../frontend/lib/workspace-navigation-gate";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountAuthenticatedApp, waitForApp, type MountedApp } from "../helpers/authenticated-app-harness";
@@ -45,6 +47,21 @@ describe("inbox numbered pages through App", () => {
   async function click(node: HTMLButtonElement) { expect(node).toBeTruthy(); await act(async () => { node.click(); await new Promise(resolve => setTimeout(resolve, 0)); }); }
   async function navigate(search: string) { await act(async () => { window.history.pushState({}, "", `/${kind}${search}`); window.dispatchEvent(new app!.browser.PopStateEvent("popstate")); }); }
   afterEach(async () => { await app?.unmount(); app = undefined; });
+  it.each(["cancel", "accept"] as const)("%s defers inbox invalidation and pagination until admission", async outcome => {
+    await mount(); let decision!: WorkspaceLeaveDecision;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind: "confirm", version: "draft", prompt(next) { decision = next; }, dismiss() {} }));
+    try {
+      const count = requests.length; await click(button("Page 2"));
+      expect(window.location.search).toBe(""); expect(requests).toHaveLength(count);
+      expect(main().textContent).toContain("Private row 0"); expect(button("Page 1").getAttribute("aria-current")).toBe("page");
+      // Invalidation used to discard current rows even when history was deferred.
+      expect(main().textContent).not.toContain("Loading");
+      await act(async () => decision[outcome]());
+      if (outcome === "accept") { await waitForApp(() => main().textContent!.includes("Private row 20")); expect(requests).toHaveLength(count + 1); }
+      else { expect(requests).toHaveLength(count); expect(main().textContent).toContain("Private row 0"); }
+    } finally { unregister(); }
+  });
+
   it("restores a numbered deep link and replaces rather than appends rows", async () => {
     await mount("?page=2");
     expect(requests[0]?.searchParams.get("page")).toBe("2");
