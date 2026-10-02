@@ -220,11 +220,13 @@ function GraphCanvasView(
       tapHandler = null;
     };
     const createInstance = async () => {
-      if (!canInitialize() || localInstance) return;
+      if (!container || !canInitialize() || localInstance) return;
       try {
         const module = await cytoscapeLoader();
         if (!active || !canInitialize() || !containerRef.current) return;
-        const cytoscape = (module.default ?? module) as unknown as CytoscapeFactory;
+        const candidate = module !== null && typeof module === "object" && "default" in module ? module.default : module;
+        if (typeof candidate !== "function") return;
+        const cytoscape = candidate as CytoscapeFactory;
         tapHandler = (event) => {
           const target = event.target;
           if (target?.isNode && !target.isNode()) return;

@@ -5,7 +5,7 @@ import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { AssetUploadPanel } from "./asset-upload-panel";
 import { AssetDropzone } from "./asset-dropzone";
 
-type State = { kind: "loading" | "error" } | { kind: "ready"; value: AssetAvailability };
+type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; value: AssetAvailability };
 
 export function AssetAvailabilityPanel({ locale, memberId, title = "" }: { locale?: LocaleRuntime; memberId?: string; title?: string }) {
   const [state, setState] = useState<State>({ kind: "loading" });

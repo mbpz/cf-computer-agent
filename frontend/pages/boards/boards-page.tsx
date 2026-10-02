@@ -75,7 +75,7 @@ function TaskCard({ task, status, locale, disabled, optimistic, onStatusChange }
   locale: LocaleRuntime;
   disabled: boolean;
   optimistic: boolean;
-  onStatusChange: (task: TaskItem, status: BoardStatus) => void;
+  onStatusChange: (task: TaskItem, status: BoardTargetStatus) => void;
 }) {
   const title = task.title.trim() || task.id;
   const actionLabel = frontendText(locale, "BOARDS_MOVE_TASK")

@@ -107,6 +107,26 @@ async function flushEffects() {
 }
 
 describe("GraphCanvas", () => {
+  it("accepts a directly exported factory with the captured live container", async () => {
+    const instance = makeCytoscapeInstance();
+    cytoscapeMock.mockReturnValue(instance);
+    act(() => root.render(<GraphCanvas snapshot={snapshot} selectedId={null} onSelect={vi.fn()} loadCytoscape={() => Promise.resolve(cytoscapeMock)} />));
+    await flushEffects();
+    expect(cytoscapeMock).toHaveBeenCalledOnce();
+    expect(cytoscapeMock.mock.calls[0]?.[0].container).toBe(host.querySelector(".graph-canvas__viewport"));
+  });
+
+  it.each([null, {}, { default: 42 }])("retains the semantic fallback for invalid module %j", async (module) => {
+    const onSelect = vi.fn();
+    act(() => root.render(<GraphCanvas snapshot={snapshot} selectedId={null} onSelect={onSelect} loadCytoscape={() => Promise.resolve(module)} />));
+    await flushEffects();
+    expect(cytoscapeMock).not.toHaveBeenCalled();
+    const button = host.querySelector<HTMLButtonElement>("[data-graph-node-id]")!;
+    expect(button).not.toBeNull();
+    act(() => button.click());
+    expect(onSelect).toHaveBeenCalledWith(snapshot.nodes[0]!.id);
+  });
+
   it("renders a semantic fallback and exposes no undefined text", () => {
     const html = renderToStaticMarkup(<GraphCanvas snapshot={snapshot} selectedId={null} onSelect={vi.fn()} layout="concentric" />);
 

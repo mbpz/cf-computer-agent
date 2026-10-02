@@ -55,10 +55,10 @@ import { PublicWorkbenchPage } from "./pages/workbench-landing/public-workbench-
 import { SettingsPage } from "./pages/settings-page";
 import { GraphRoute } from "./pages/graph-page";
 import { ComingSoonPage } from "./pages/coming-soon-page";
-import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
+import { createKnowledgeRequestController, loadFavoriteKnowledge, loadRecentKnowledge, loadRecentResearch, type FavoriteKnowledgeItem, type LoadKnowledgePageInput, type KnowledgePageResult, type RecentKnowledgeItem, type RecentResearchItem } from "./lib/knowledge-data";
 import { createKnowledgeReaderRequestController, loadKnowledgeBacklinks, loadKnowledgeFavorite, loadKnowledgeRevisionDiff, loadRelatedKnowledge, setKnowledgeFavorite, type KnowledgeBacklinkItem, type KnowledgeRevision, type KnowledgeRevisionDiff, type RelatedKnowledgeItem } from "./lib/knowledge-reader-data";
 import { renderSafeMarkdown } from "./lib/markdown-renderer";
-import { createSearchRequestController, type SearchPageResult } from "./lib/search-data";
+import { createSearchRequestController, type LoadSearchPageInput, type SearchPageResult } from "./lib/search-data";
 import { type SavedViewItem } from "./lib/saved-views-data";
 import { useSavedViews } from "./lib/use-saved-views";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
@@ -122,7 +122,7 @@ export function App() {
   const logoutInFlight = useRef(false);
   const [localeTick, setLocaleTick] = useState(0);
   const locale = useMemo(() => createLocaleRuntime({ navigatorLanguage: navigator.language, storage: window.localStorage }), []);
-  useEffect(() => locale.subscribe(() => setLocaleTick((tick) => tick + 1)), [locale]);
+  useEffect(() => { const unsubscribe = locale.subscribe(() => setLocaleTick((tick) => tick + 1)); return () => { unsubscribe(); }; }, [locale]);
   void localeTick;
 
   useEffect(() => {
@@ -198,7 +198,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "knowledge-reader": return <KnowledgeReaderRoute memberId={session?.member.id} locale={locale} knowledgeItemId={decodeRouteId(pathname)} />;
     case "search": return <SearchRoute memberId={session?.member.id} locale={locale} search={search} />;
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
-    case "submit": return <SubmitRoute locale={locale} memberId={session.member.id} />;
+    case "submit": return session ? <SubmitRoute locale={locale} memberId={session.member.id} /> : <NotFoundPage locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
     case "graph": return <GraphRoute locale={locale} />;
     case "tasks": return <TasksRoute key={session?.member.id} locale={locale} search={search} />;
@@ -2527,7 +2527,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
         const sourceMatches = sameBoardQuery(queriesRef.current[source], delta.sourceQuery)
           && requestStatesRef.current[source].revision === delta.sourceRequestRevision
           && mutationOwnersRef.current[source] === delta.owner;
-        const targetMatches = delta.target !== undefined && delta.targetChanged
+        const targetMatches = delta.target !== undefined && delta.targetChanged === true
           && sameBoardQuery(queriesRef.current[delta.target], delta.targetQuery!)
           && requestStatesRef.current[delta.target].revision === delta.targetRequestRevision
           && mutationOwnersRef.current[delta.target] === delta.owner;
@@ -3412,12 +3412,12 @@ export function AdminAssetsRoute({ locale, search }: { locale: LocaleRuntime; se
 function assetStatusSearch(search: string): AdminAssetStatus | undefined { const value = new URLSearchParams(search).get("status"); return value === "queued" || value === "processing" || value === "succeeded" || value === "failed_retryable" || value === "failed_terminal" ? value : undefined; }
 function samePageQuery(left: { page: number; pageSize: SupportedPageSize }, right: { page: number; pageSize: SupportedPageSize }): boolean { return left.page === right.page && left.pageSize === right.pageSize; }
 function sameSearchQuery(left: { query: string; page: number; pageSize: SupportedPageSize }, right: { query: string; page: number; pageSize: SupportedPageSize }): boolean { return left.query === right.query && samePageQuery(left, right); }
-function knowledgeFilters(search: string) {
+function knowledgeFilters(search: string): Omit<LoadKnowledgePageInput, "page" | "pageSize" | "signal"> {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined;
   const kind = value("kind");
   return { spaceId: value("spaceId"), collectionId: value("collectionId"), tagId: value("tagId"), ...(kind === "text" || kind === "markdown" || kind === "code" ? { kind } : {}), authorId: value("authorId"), publishedFrom: value("publishedFrom"), publishedTo: value("publishedTo") };
 }
-function searchFilters(search: string) {
+function searchFilters(search: string): Omit<LoadSearchPageInput, "query" | "page" | "pageSize" | "signal"> {
   const params = new URLSearchParams(search); const value = (key: string) => params.get(key) || undefined; const { tagId: _tagId, ...base } = knowledgeFilters(search); const tagIds = params.getAll("tagId"); const tagMode = value("tagMode");
   return { ...base, tagIds, ...(tagMode === "and" || tagMode === "or" ? { tagMode } : {}) };
 }

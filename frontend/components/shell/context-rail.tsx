@@ -10,7 +10,7 @@ import { Button } from "../ui/button";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { cn } from "../../lib/utils";
 
-export function ContextRail({ pathname, locale, collapsed = false, onClose, session }: {
+export function ContextRail({ pathname, locale, collapsed = false, onClose, onNavigate, session }: {
   pathname: string;
   locale: LocaleRuntime;
   collapsed?: boolean;

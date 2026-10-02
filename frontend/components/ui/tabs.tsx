@@ -25,7 +25,7 @@ export function Tabs({ className, value: controlledValue, defaultValue, onValueC
   orientation?: TabsOrientation;
 }) {
   const [internalValue, setInternalValue] = React.useState(defaultValue);
-  const firstValue = React.useRef<string>();
+  const firstValue = React.useRef<string | undefined>(undefined);
   const baseId = React.useId().replace(/:/gu, "");
   const value = controlledValue ?? internalValue;
   const setValue = (next: string) => {
