@@ -1,3 +1,4 @@
+import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 import { installWorkspaceHistoryDriver } from "../helpers/workspace-history-driver";
 // @vitest-environment node
 import React, { act } from "react";
@@ -14,8 +15,8 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 const { Window } = await import("happy-dom");
 
 describe("numbered admin routes", () => {
-  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
-  beforeEach(() => { browser = new Window({ url: "https://app.test/admin/members" }); vi.stubGlobal("window", browser); installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let historyDriver: ReturnType<typeof installWorkspaceHistoryDriver>;
+  beforeEach(() => { browser = new Window({ url: "https://app.test/admin/members" }); vi.stubGlobal("window", browser); historyDriver = installWorkspaceHistoryDriver(browser as unknown as Window & typeof globalThis); vi.stubGlobal("document", browser.document); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it("restores member status and pagination from URL and aborts stale requests", async () => {
@@ -24,7 +25,7 @@ describe("numbered admin routes", () => {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { requests.push({ url: String(input), signal: init?.signal || undefined }); return response("member", 2, 20, 21); });
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect(requests.at(-1)?.url).toContain("status=disabled"); expect(requests.at(-1)?.url).toContain("page=2");
-    await act(async () => { browser.history.pushState({}, "", "/admin/members?status=active&pageSize=50"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await locationChange("?status=active&pageSize=50");
     expect(requests[0]?.signal?.aborted).toBe(true); expect(requests.at(-1)?.url).toContain("status=active"); expect(requests.at(-1)?.url).toContain("pageSize=50");
   });
 
@@ -236,13 +237,14 @@ describe("numbered admin routes", () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("drops unconfirmed member actions when query navigation invalidates the list", async () => {
+  it("requires canceling an unconfirmed member action before query navigation", async () => {
     const requests = memberRequests(); await renderMember(requests);
     await click('button[aria-label="Enable m1@example.test"]');
     const oldConfirm = container.querySelector('[data-confirm-action]') as HTMLButtonElement;
-    expect(oldConfirm).not.toBeNull();
     await locationChange("?status=active");
-    expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull(); expect(requests).toHaveLength(1);
+    expect(browser.location.search).toBe("");
+    await click('[data-cancel-action]'); await locationChange("?status=active");
     await act(async () => oldConfirm.click());
     expect(requests.map(request => request.method)).toEqual(["GET", "GET"]);
     requests[1]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
@@ -343,22 +345,20 @@ describe("numbered admin routes", () => {
     expect(requests).toHaveLength(3);
   });
 
-  it.each([200, 403])("ignores a late PATCH %s after leaving and returning to the same member query", async (status) => {
+  it.each([200, 403])("ignores a late PATCH %s after forced session unmount and remount", async (status) => {
     const requests = memberRequests(); await renderMember(requests);
     await confirmMemberChange('button[aria-label="Enable m1@example.test"]');
-    await locationChange("?status=active");
-    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m2", "active")])));
-    await waitFor(() => container.textContent?.includes("m2@example.test") === true);
-    await locationChange("");
-    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await locationChange("?status=active"); expect(requests).toHaveLength(2);
+    // Ordinary leave is now blocked. Forced identity teardown still invalidates callbacks.
+    await act(async () => root.render(<div>Session ended</div>));
+    await act(async () => root.render(<AdminMembersRoute locale={locale()} search="" />));
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
     await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
     requests[1]!.pending.resolve(status === 200 ? Response.json({ member: member("m1", "active") }) : new Response(null, { status }));
-    await waitFor(() => container.querySelector('[role="alert"] button') !== null);
-    expect(requests).toHaveLength(4);
-    expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
-    // The newer GET began before the old PATCH settled: it cannot release its read lock.
-    expect((container.querySelector('button[aria-label="Disable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
-    expect(container.querySelector('[role="alert"] button')).not.toBeNull();
+    await flush();
+    expect(requests).toHaveLength(3); expect(container.querySelector('[data-page-state="forbidden"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect((container.querySelector('button[aria-label="Disable m1@example.test"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("never leaves old member actions available after navigation read failure", async () => {
@@ -384,20 +384,22 @@ describe("numbered admin routes", () => {
     expect(container.querySelector('button[aria-label^="Enable "]')).toBeNull();
   });
 
-  it("does not release a member lock from a GET that started before an old PATCH settled", async () => {
-    const requests = memberRequests(); await renderMember(requests);
+  it("does not release a member action lock from a GET started before an older PATCH settled", async () => {
+    const requests = memberRequests(); await renderMember(requests, memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")]));
     await confirmMemberChange('button[aria-label="Enable m1@example.test"]');
-    await locationChange("?status=disabled");
-    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
-    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
+    await confirmMemberChange('button[aria-label="Enable m2@example.test"]');
+    requests[2]!.pending.resolve(new Response(null, { status: 403 }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    await click('button'); expect(requests).toHaveLength(4);
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") })); await flush();
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")])));
     await waitFor(() => container.querySelector('button[aria-label="Enable m1@example.test"]') !== null);
     expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(true);
     await click('[role="alert"] button');
-    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "disabled")])));
+    requests[4]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "active"), member("m2", "disabled")])));
     await waitFor(() => container.querySelector('[role="alert"]') === null);
-    expect((container.querySelector('button[aria-label="Enable m1@example.test"]') as HTMLButtonElement).disabled).toBe(false);
-    expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH", "GET", "GET"]);
+    expect((container.querySelector('button[aria-label="Disable m1@example.test"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(requests.map(request => request.method)).toEqual(["GET", "PATCH", "PATCH", "GET", "GET"]);
   });
 
   it("a denied concurrent member PATCH invalidates an already running read and hides every row", async () => {
@@ -462,13 +464,108 @@ describe("numbered admin routes", () => {
     expect(requests).toHaveLength(1);
   });
 
+  it("restores native history arrival without publishing a destination during a pending PATCH", async () => {
+    browser.history.replaceState({}, "", "/home"); browser.history.pushState({}, "", "/admin/members");
+    const requests = memberRequests(); await renderMember(requests);
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]');
+    await act(async () => historyDriver.arrive(0));
+    expect(historyDriver.requests).toHaveLength(1); expect(historyDriver.requests[0]!.index).toBe(1);
+    await act(async () => { historyDriver.arrive(1); historyDriver.requests[0]!.resolve(); });
+    expect(browser.location.pathname).toBe("/admin/members"); expect(requests).toHaveLength(2);
+    expect(unloadWarns()).toBe(true); expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+  it("does not let owned recovery queries bypass another guard or erase an uncertain write", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); requests[1]!.pending.reject(new Error("offline"));
+    await waitFor(() => container.querySelector('[role="alert"] button') !== null);
+    const remove = registerWorkspaceLeaveGuard(() => ({ kind: "block" }));
+    try { await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(2); expect(browser.location.search).toBe(""); }
+    finally { remove(); }
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(3);
+    requests[2]!.pending.reject(new Error("read offline"));
+    await waitFor(() => container.querySelector('[data-page-state="error"]') !== null);
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    expect(requests.map(r => r.method)).toEqual(["GET", "PATCH", "GET"]);
+  });
+  function unloadWarns() {
+    const event = new browser.Event("beforeunload", { cancelable: true }); browser.dispatchEvent(event); return event.defaultPrevented;
+  }
+  async function tryLeaveMembers() {
+    await act(async () => writeWorkspaceHistory("push", "/home"));
+  }
+  it("keeps pending PATCH synchronous navigation locked but releases on its validated receipt", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await click('button[aria-label="Enable m1@example.test"]');
+    await act(async () => { (container.querySelector('[data-confirm-action]') as HTMLButtonElement).click(); writeWorkspaceHistory("push", "/home"); });
+    expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(2);
+    requests[1]!.pending.resolve(Response.json({ member: member("m1", "active") }));
+    await waitFor(() => requests.length === 3);
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
+    await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
+    // A validated receipt resolves the outcome even when filtering omits the row.
+    expect(unloadWarns()).toBe(false); await tryLeaveMembers(); expect(browser.location.pathname).toBe("/home");
+    expect(requests.map(r => r.method)).toEqual(["GET", "PATCH", "GET"]);
+  });
+  it.each(["offline", "malformed", "401", "403"])("keeps %s outcomes locked across denied views until a fresh row read", async outcome => {
+    const requests = memberRequests(); await renderMember(requests);
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]');
+    if (outcome === "offline") requests[1]!.pending.reject(new Error("offline"));
+    else requests[1]!.pending.resolve(outcome === "malformed" ? Response.json({ member: member("other", "active") }) : new Response(null, { status: Number(outcome) }));
+    await waitFor(() => container.querySelector('[role="alert"] button, [data-page-state="forbidden"] button') !== null);
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    await click('[role="alert"] button, [data-page-state="forbidden"] button');
+    requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
+    expect(unloadWarns()).toBe(false); await tryLeaveMembers(); expect(browser.location.pathname).toBe("/home");
+    expect(requests.map(r => r.method)).toEqual(["GET", "PATCH", "GET"]);
+  });
+  it("keeps an absent uncertain row locked while allowing only owned query reads to recover it", async () => {
+    const requests = memberRequests(); await renderMember(requests);
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); requests[1]!.pending.reject(new Error("offline"));
+    await waitFor(() => container.querySelector('[role="alert"] button') !== null);
+    await click('[role="alert"] button'); requests[2]!.pending.resolve(Response.json(memberPage(1, 20, 0, [])));
+    await waitFor(() => container.querySelector('[data-page-state="empty"]') !== null);
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    await changeSelect('select[aria-label="Member status"]', "active"); expect(requests).toHaveLength(4);
+    expect(requests[3]!.url).toBe("/api/admin/members?page=1&pageSize=20&status=active");
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members");
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 1, [member("m1", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m1@example.test"]') !== null);
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/home"); expect(unloadWarns()).toBe(false);
+    expect(requests.filter(r => r.method === "PATCH")).toHaveLength(1);
+  });
+  it("does not forget a concurrent in-flight PATCH when another PATCH denies access", async () => {
+    const requests = memberRequests(); await renderMember(requests, memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")]));
+    await confirmMemberChange('button[aria-label="Enable m1@example.test"]'); await confirmMemberChange('button[aria-label="Enable m2@example.test"]');
+    requests[1]!.pending.resolve(new Response(null, { status: 403 }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"]') !== null);
+    await click('button');
+    requests[3]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "disabled")])));
+    await waitFor(() => container.querySelector('button[aria-label="Enable m2@example.test"]') !== null);
+    expect((container.querySelector('button[aria-label="Enable m2@example.test"]') as HTMLButtonElement).disabled).toBe(true);
+    await tryLeaveMembers(); expect(browser.location.pathname).toBe("/admin/members"); expect(unloadWarns()).toBe(true);
+    requests[2]!.pending.reject(new Error("late unknown")); await flush();
+    await click('[role="alert"] button'); requests[4]!.pending.resolve(Response.json(memberPage(1, 20, 2, [member("m1", "disabled"), member("m2", "active")])));
+    await waitFor(() => container.querySelector('button[aria-label="Disable m2@example.test"]') !== null);
+    expect(unloadWarns()).toBe(false); await tryLeaveMembers(); expect(browser.location.pathname).toBe("/home");
+    expect(requests.map(r => r.method)).toEqual(["GET", "PATCH", "PATCH", "GET", "GET"]);
+  });
+  it.each([401, 403, 500])("does not turn a read-only %s failure into an unresolved write", async status => {
+    const requests = memberRequests(); await act(async () => root.render(<AdminMembersRoute locale={locale()} search="" />));
+    requests[0]!.pending.resolve(new Response(null, { status }));
+    await waitFor(() => container.querySelector('[data-page-state="forbidden"], [data-page-state="error"]') !== null);
+    expect(unloadWarns()).toBe(false); await tryLeaveMembers(); expect(browser.location.pathname).toBe("/home");
+    expect(requests.map(r => r.method)).toEqual(["GET"]);
+  });
   async function renderMember(requests: ReturnType<typeof memberRequests>, data = memberPage(1, 20, 1, [member("m1", "disabled")])) {
     await act(async () => root.render(<AdminMembersRoute locale={locale()} search={browser.location.search} />));
     requests[0]!.pending.resolve(Response.json(data));
     await waitFor(() => container.querySelector('select[aria-label="Member status"]') !== null);
   }
   async function locationChange(search: string) {
-    await act(async () => { browser.history.pushState({}, "", `/admin/members${search}`); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
+    await act(async () => writeWorkspaceHistory("push", `/admin/members${search}`));
     await flush();
   }
 

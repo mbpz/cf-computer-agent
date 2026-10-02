@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useCreateDraft } from "../../lib/use-create-draft";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { DataPagination } from "../../components/data-pagination";
 import { Badge } from "../../components/ui/badge";
@@ -15,6 +16,9 @@ export function MembersPage({ onLoadRetry, members, pagination, status = "", pen
   };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
+  // The action confirmation must be explicitly resolved, never discarded by navigation.
+  useCreateDraft({}, {}, () => confirmationRef.current !== null, locale, () => false);
+  useEffect(() => () => { confirmationRef.current = null; }, []);
   const currentMember = confirmation && members.find((member) => member.id === confirmation.id);
   const validConfirmation = !!(confirmation && currentMember && confirmation.list === members
     && confirmation.filter === status && confirmation.page === pagination?.page && confirmation.pageSize === pagination?.pageSize

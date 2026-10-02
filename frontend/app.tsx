@@ -2942,6 +2942,19 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
   // In-memory safety only: an uncertain PATCH is not replayed. A later GET must
   // expose this row before another explicit change; absence is not proof of success.
   const needsReadRef = useRef(new Set<string>());
+  // A validated PATCH receipt resolves its outcome; row readiness is separate.
+  // Without a receipt, only a post-settlement GET containing that row unlocks leave.
+  const unresolvedWrites = useRef(new Set<string>());
+  const ownedQueryNavigation = useRef(false);
+  useEffect(() => {
+    const owner = window;
+    const locked = () => mutationsRef.current.size > 0 || unresolvedWrites.current.size > 0;
+    const unregister = registerWorkspaceLeaveGuard(() => ({ kind:
+      mutationsRef.current.size > 0 || (unresolvedWrites.current.size > 0 && !ownedQueryNavigation.current) ? "block" : "allow" }));
+    const warn = (event: BeforeUnloadEvent) => { if (locked()) { event.preventDefault(); event.returnValue = ""; } };
+    owner.addEventListener("beforeunload", warn);
+    return () => { unregister(); owner.removeEventListener("beforeunload", warn); };
+  }, []);
   const needsClampRef = useRef(false);
   const sameQuery = (value: typeof queryRef.current) => value.page === queryRef.current.page && value.pageSize === queryRef.current.pageSize && value.status === queryRef.current.status;
   const syncPendingIds = () => setPendingIds([...new Set([...mutationsRef.current.keys(), ...needsReadRef.current])]);
@@ -2952,18 +2965,23 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
   };
   const deny = (error: unknown) => {
     if (!(error instanceof ApiRequestError) || (error.status !== 401 && error.status !== 403)) return false;
-    invalidateQuery(); mutationsRef.current.clear(); needsReadRef.current.clear(); syncPendingIds();
+    // Denial hides private rows, but must not erase another in-flight PATCH.
+    invalidateQuery(); syncPendingIds();
     setState({ kind: "forbidden", message: frontendText(locale, "COMMON_UNABLE_TO_LOAD") });
     return true;
   };
   const navigate = (next: typeof queryRef.current, replace = false) => {
+    if (mutationsRef.current.size > 0) return;
     const params = new URLSearchParams(writePageSearch(readWorkspaceLocation().search, next));
     if (next.status) params.set("status", next.status); else params.delete("status");
     const serialized = params.toString();
-    writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
+    // This synchronous allowance is only for this route's read-only query change.
+    // It neither clears unresolved intents nor permits a later/deferred leave.
+    ownedQueryNavigation.current = true;
+    try { writeWorkspaceHistory(replace ? "replace" : "push", `${readWorkspaceLocation().pathname}${serialized ? `?${serialized}` : ""}`, () => {
       invalidateQuery(); queryRef.current = next;
       setPage(next.page); setPageSize(next.pageSize); setStatus(next.status);
-    });
+    }); } finally { ownedQueryNavigation.current = false; }
   };
   const read = async (controller: NonNullable<typeof controllerRef.current>, snapshot: typeof queryRef.current, afterWrite = false) => {
     if ((!afterWrite && readRef.current) || controllerRef.current !== controller) return;
@@ -2977,7 +2995,9 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
       const data = await request.promise;
       if (!controller.isCurrent(request.generation) || !sameQuery(snapshot)) return;
       for (const row of data.items) {
-        if (!activeAtStart.has(row.id) && !mutationsRef.current.has(row.id)) needsReadRef.current.delete(row.id);
+        if (!activeAtStart.has(row.id) && !mutationsRef.current.has(row.id)) {
+          needsReadRef.current.delete(row.id); unresolvedWrites.current.delete(row.id);
+        }
       }
       syncPendingIds();
       if ((afterWrite || needsClampRef.current) && data.items.length === 0 && snapshot.page > 1) navigate({ ...snapshot, page: Math.max(1, Math.min(snapshot.page - 1, data.pagination.totalPages)) }, true);
@@ -3016,9 +3036,10 @@ export function AdminMembersRoute({ locale, search, load = loadAdminMembers, upd
     const member = state.kind === "ready" ? state.data.items.find((item) => item.id === id) : undefined;
     if (member?.role !== "contributor" || (member.status !== "active" && member.status !== "disabled") || member.status === nextStatus) return;
     const token = {}; const scope = scopeRef.current; const actionQuery = { ...queryRef.current };
-    mutationsRef.current.set(id, token); needsReadRef.current.add(id); syncPendingIds(); setActionError(undefined);
+    mutationsRef.current.set(id, token); needsReadRef.current.add(id); unresolvedWrites.current.add(id); syncPendingIds(); setActionError(undefined);
     try {
       await update(id, nextStatus);
+      unresolvedWrites.current.delete(id);
       if (scopeRef.current !== scope || !sameQuery(actionQuery)) return;
       mutationsRef.current.delete(id); syncPendingIds(); needsClampRef.current = true;
       const controller = controllerRef.current;
