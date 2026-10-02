@@ -27,6 +27,40 @@ export async function createReviewComment(submissionId: string, body: string, re
   return comment;
 }
 
+/** A separate endpoint prevents an older server from silently ignoring keys. */
+export async function writeReviewCommentOperation(submissionId: string, operationId: string, body: string, requester: Fetcher = fetch): Promise<ReviewCommentItem> {
+  const comment = await commentOperation(submissionId, operationId, body, true, requester);
+  if (!comment) throw new Error("REVIEW_COMMENT_RECEIPT_INVALID");
+  return comment;
+}
+
+export function readReviewCommentOperation(submissionId: string, operationId: string, body: string, requester: Fetcher = fetch): Promise<ReviewCommentItem | null> {
+  return commentOperation(submissionId, operationId, body, false, requester);
+}
+
+async function commentOperation(submissionId: string, operationId: string, body: string, write: boolean, requester: Fetcher): Promise<ReviewCommentItem | null> {
+  const id = assertId(submissionId);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(operationId)) throw new Error("REVIEW_COMMENT_OPERATION_INVALID");
+  const payload = await apiFetch<{ operation?: { version?: unknown; operationId?: unknown; submissionId?: unknown; comment?: unknown } }>(
+    `/api/admin/submissions/${encodeURIComponent(id)}/comments/requests/${operationId}`, {
+      requester: async (path, init) => {
+        const response = await requester(path, init);
+        if (response.ok && response.status !== 200) throw new Error("REVIEW_COMMENT_RECEIPT_INVALID");
+        return response;
+      },
+      method: write ? "PUT" : "GET",
+      cache: "no-store",
+      ...(write ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ body }) } : {}),
+    });
+  const receipt = payload?.operation;
+  if (!receipt || receipt.version !== 1 || receipt.operationId !== operationId || receipt.submissionId !== id) throw new Error("REVIEW_COMMENT_RECEIPT_INVALID");
+  if (!write && receipt.comment === null) return null;
+  const comment = normalizeComment(receipt.comment);
+  const raw = receipt.comment as Record<string, unknown> | undefined;
+  if (!comment || comment.submissionId !== id || comment.body !== body.trim() || raw?.supersedesCommentId != null || !Number.isFinite(Date.parse(comment.createdAt))) throw new Error("REVIEW_COMMENT_RECEIPT_INVALID");
+  return comment;
+}
+
 function normalizeComment(value: unknown): ReviewCommentItem | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;

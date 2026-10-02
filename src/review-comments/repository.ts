@@ -14,6 +14,7 @@ export interface ReviewCommentsRepositoryPort {
   list(submissionId: string): Promise<ReviewCommentRecord[]>;
   find(commentId: string): Promise<ReviewCommentRecord | null>;
   create(input: ReviewCommentCreate): Promise<ReviewCommentRecord>;
+  createOnce(input: ReviewCommentCreate): Promise<ReviewCommentRecord>;
 }
 
 type ReviewCommentRow = {
@@ -58,6 +59,17 @@ export class ReviewCommentsRepository implements ReviewCommentsRepositoryPort {
        WHERE rc.id = ? LIMIT 1`,
     ).bind(commentId).first<ReviewCommentRow>();
     return row ? mapRow(row) : null;
+  }
+
+  /** The primary key is the atomic claim. Never overwrite the winning receipt. */
+  async createOnce(input: ReviewCommentCreate): Promise<ReviewCommentRecord> {
+    await this.db.prepare(`INSERT INTO review_comments
+      (id, submission_id, author_id, body, created_at, supersedes_comment_id)
+      VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT(id) DO NOTHING`)
+      .bind(input.id, input.submissionId, input.authorId, input.body, input.createdAt).run();
+    const receipt = await this.find(input.id);
+    if (!receipt) throw new Error("Review comment operation receipt unavailable");
+    return receipt;
   }
 
   async create(input: ReviewCommentCreate): Promise<ReviewCommentRecord> {

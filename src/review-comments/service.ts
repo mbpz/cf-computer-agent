@@ -1,5 +1,5 @@
 import { AppError } from "../http";
-import type { ReviewCommentCreate, ReviewCommentsRepositoryPort } from "./repository";
+import type { ReviewCommentsRepositoryPort } from "./repository";
 import type { ReviewComment, ReviewCommentRecord, ReviewCommentViewer } from "./types";
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -35,6 +35,35 @@ export class ReviewCommentsService {
       id: this.id(), submissionId: id, authorId: viewer.memberId, body: input, createdAt: this.now().toISOString(),
     });
     return toPublic(created, viewer);
+  }
+
+  async findOperation(viewer: ReviewCommentViewer, submissionId: string, operationId: string) {
+    const id = await this.operationRecordId(viewer, submissionId, operationId);
+    const comment = await this.repository.find(id);
+    if (comment) assertOperationScope(comment, viewer, submissionId);
+    return { version: 1 as const, operationId, submissionId, comment: comment ? toPublic(comment, viewer) : null };
+  }
+
+  async createOperation(viewer: ReviewCommentViewer, submissionId: string, operationId: string, body: unknown) {
+    const id = await this.operationRecordId(viewer, submissionId, operationId);
+    const input = normalizeBody(body);
+    // Match SQLite's code-point length constraint before attempting a write.
+    if ([...input].length > 4000) throw invalid();
+    const comment = await this.repository.createOnce({ id, submissionId, authorId: viewer.memberId, body: input, createdAt: this.now().toISOString() });
+    assertOperationScope(comment, viewer, submissionId);
+    if (comment.body !== input) throw operationConflict();
+    return { version: 1 as const, operationId, submissionId, comment: toPublic(comment, viewer) };
+  }
+
+  private async operationRecordId(viewer: ReviewCommentViewer, submissionId: string, operationId: string): Promise<string> {
+    const ownerId = await this.repository.findSubmissionOwner(assertId(submissionId));
+    requireAccess(viewer, ownerId);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(operationId)) throw invalid();
+    // Separate actors and targets even when they supply the same UUID. Existing
+    // random legacy IDs cannot collide with this versioned namespace.
+    const bytes = new TextEncoder().encode(JSON.stringify(["review-comment-v1", viewer.memberId, submissionId, operationId]));
+    const hash = await crypto.subtle.digest("SHA-256", bytes);
+    return "rc1_" + Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
   }
 
   async edit(viewer: ReviewCommentViewer, commentId: string, body: unknown): Promise<ReviewComment> {
@@ -81,3 +110,8 @@ function normalizeBody(value: unknown): string {
 
 function invalid(): AppError { return new AppError("REVIEW_COMMENT_INVALID", "Review comment is invalid", 400); }
 function notFound(): AppError { return new AppError("REVIEW_COMMENT_NOT_FOUND", "Review comment is unavailable", 404); }
+
+function assertOperationScope(comment: ReviewCommentRecord, viewer: ReviewCommentViewer, submissionId: string): void {
+  if (comment.authorId !== viewer.memberId || comment.submissionId !== submissionId || comment.supersedesCommentId) throw operationConflict();
+}
+function operationConflict(): AppError { return new AppError("REVIEW_COMMENT_OPERATION_CONFLICT", "Comment operation does not match its original request", 409); }

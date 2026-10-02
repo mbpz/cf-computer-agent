@@ -35,6 +35,24 @@ export async function routeAdminReviewApi(
 
   requireCapability(principal, "knowledge:review");
 
+  // Dedicated versioned receipts: never fall back to the legacy POST on retry.
+  const commentOperation = /^\/api\/admin\/submissions\/([^/]+)\/comments\/requests\/([^/]+)$/.exec(url.pathname);
+  if (commentOperation) {
+    const reviewer = requireAdminMember(principal);
+    requireNoQuery(url);
+    const submissionId = decodePathId(commentOperation[1]!);
+    const operationId = decodePathId(commentOperation[2]!);
+    const viewer = { memberId: reviewer.memberId, role: "admin" as const };
+    if (request.method === "GET") {
+      return jsonResponse({ operation: await services.reviewComments.findOperation(viewer, submissionId, operationId) }, 200, context.requestId);
+    }
+    if (request.method === "PUT") {
+      const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["body"], "REVIEW_COMMENT_REQUEST_INVALID");
+      return jsonResponse({ operation: await services.reviewComments.createOperation(viewer, submissionId, operationId, input.body) }, 200, context.requestId);
+    }
+    return methodNotAllowed("GET, PUT", context);
+  }
+
   const adminComments = /^\/api\/admin\/submissions\/([^/]+)\/comments(?:\/([^/]+))?$/.exec(url.pathname);
   if (adminComments) {
     const reviewer = requireAdminMember(principal);

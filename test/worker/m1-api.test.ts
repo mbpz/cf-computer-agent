@@ -1094,6 +1094,74 @@ describe("M1 trusted knowledge HTTP journey", () => {
     const otherComments = await memberApi("other", `/api/submissions/${submissionId}/comments`);
     await expectApiError(Promise.resolve(otherComments), 404, "REVIEW_COMMENT_NOT_FOUND");
   });
+  it("replays concurrent comment operations once and recovers the exact original receipt", async () => {
+    const created = await createSubmission("contributor", { requestedSpaceId: "default", kind: "text", title: "Operation", content: "Body" }, "comment-operation-01");
+    const id = created.body.submission.id;
+    const operationId = "11111111-1111-4111-8111-111111111111";
+    const path = `/api/admin/submissions/${id}/comments/requests/${operationId}`;
+    const missing = await memberApi("admin", path);
+    expect(missing.status).toBe(200);
+    await expect(missing.json()).resolves.toMatchObject({ operation: { version: 1, operationId, submissionId: id, comment: null } });
+    const responses = await Promise.all(Array.from({ length: 4 }, () => memberApi("admin", path, { method: "PUT", body: JSON.stringify({ body: "Frozen note" }) })));
+    expect(responses.map(r => r.status)).toEqual([200, 200, 200, 200]);
+    const receipts = await Promise.all(responses.map(r => r.json<{ operation: { comment: { id: string; body: string } } }>()));
+    const comment = receipts[0]!.operation.comment;
+    expect(new Set(receipts.map(r => r.operation.comment.id)).size).toBe(1);
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM review_comments WHERE submission_id = ?").bind(id).first()).toEqual({ n: 1 });
+    await expectApiError(memberApi("admin", path, { method: "PUT", body: JSON.stringify({ body: "Changed note" }) }), 409, "REVIEW_COMMENT_OPERATION_CONFLICT");
+    // Recovery returns the original append-only record, even after an edit.
+    expect((await memberApi("admin", `/api/admin/submissions/${id}/comments/${comment.id}`, { method: "PATCH", body: JSON.stringify({ body: "Edited note" }) })).status).toBe(200);
+    const recovered = await memberApi("admin", path);
+    await expect(recovered.json()).resolves.toMatchObject({ operation: { version: 1, operationId, submissionId: id, comment } });
+    const another = await memberApi("admin", path.replace(operationId, "22222222-2222-4222-8222-222222222222"), { method: "PUT", body: JSON.stringify({ body: "Frozen note" }) });
+    expect(another.status).toBe(200);
+    expect((await another.json<{ operation: { comment: { id: string } } }>()).operation.comment.id).not.toBe(comment.id);
+  });
+
+  it("isolates exact comment receipts by actor and target beyond the list window", async () => {
+    const first = await createSubmission("contributor", { requestedSpaceId: "default", kind: "text", title: "First", content: "First body" }, "comment-operation-03");
+    const second = await createSubmission("contributor", { requestedSpaceId: "default", kind: "text", title: "Second", content: "Second body" }, "comment-operation-04");
+    const id = first.body.submission.id; const otherId = second.body.submission.id;
+    const key = "11111111-1111-4111-8111-111111111111";
+    const path = `/api/admin/submissions/${id}/comments/requests/${key}`;
+    const write = { method: "PUT", body: JSON.stringify({ body: "Exact receipt" }) };
+    const original = (await (await memberApi("admin", path, write)).json<{ operation: { comment: { id: string } } }>()).operation.comment;
+    // Transfer the single admin role rather than bypassing its unique constraint.
+    await env.DB.prepare("UPDATE members SET role = 'contributor' WHERE id = 'member-admin'").run();
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-other'").run();
+    await expect((await memberApi("other", path)).json()).resolves.toMatchObject({ operation: { comment: null } });
+    const actorReceipt = (await (await memberApi("other", path, write)).json<{ operation: { comment: { id: string } } }>()).operation.comment;
+    expect(actorReceipt.id).not.toBe(original.id);
+    await env.DB.prepare("UPDATE members SET role = 'contributor' WHERE id = 'member-other'").run();
+    await env.DB.prepare("UPDATE members SET role = 'admin' WHERE id = 'member-admin'").run();
+    await expect((await memberApi("admin", path.replace(id, otherId))).json()).resolves.toMatchObject({ operation: { comment: null } });
+    const targetReceipt = (await (await memberApi("admin", path.replace(id, otherId), write)).json<{ operation: { comment: { id: string } } }>()).operation.comment;
+    expect(targetReceipt.id).not.toBe(original.id);
+    await env.DB.batch(Array.from({ length: 101 }, (_, i) => env.DB.prepare("INSERT INTO review_comments (id, submission_id, author_id, body, created_at) VALUES (?, ?, 'member-admin', 'older', '2000-01-01T00:00:00Z')").bind(`older-${i}`, id)));
+    const list = await (await memberApi("admin", `/api/admin/submissions/${id}/comments`)).json<{ comments: { id: string }[] }>();
+    expect(list.comments).toHaveLength(100); expect(list.comments.some(row => row.id === original.id)).toBe(false);
+    const exact = await memberApi("admin", path);
+    expectSecurityHeaders(exact);
+    await expect(exact.json()).resolves.toMatchObject({ operation: { comment: original } });
+    await env.DB.prepare("UPDATE members SET status = 'disabled' WHERE id = 'member-admin'").run();
+    expect((await memberApi("admin", path)).status).toBe(403);
+  });
+
+  it("checks comment operation authorization and rejects invalid protocol inputs without writes", async () => {
+    const created = await createSubmission("contributor", { requestedSpaceId: "default", kind: "text", title: "Operation access", content: "Body" }, "comment-operation-02");
+    const path = `/api/admin/submissions/${created.body.submission.id}/comments/requests/11111111-1111-4111-8111-111111111111`;
+    for (const method of ["GET", "PUT"]) {
+      const denied = await memberApi("contributor", path, { method, ...(method === "PUT" ? { body: JSON.stringify({ body: "denied" }) } : {}) });
+      expect(denied.status).toBe(403);
+    }
+    expect((await memberApi("admin", path + "?extra=1")).status).toBe(400);
+    expect((await memberApi("admin", path, { method: "POST", body: JSON.stringify({ body: "unsupported" }) })).status).toBe(405);
+    expect((await memberApi("admin", path, { method: "PUT", body: JSON.stringify({ body: "forged", authorId: "member-other" }) })).status).toBe(400);
+    expect((await memberApi("admin", path.replace(/[^/]+$/, "invalid"))).status).toBe(400);
+    expect((await memberApi("admin", path, { method: "PUT", body: JSON.stringify({ body: "x".repeat(4001) }) })).status).toBe(400);
+    expect(await env.DB.prepare("SELECT count(*) AS n FROM review_comments").first()).toEqual({ n: 0 });
+  });
+
   it("uses only the Idempotency-Key header and replays without duplicate writes", async () => {
     const input = {
       requestedSpaceId: "default" as const,
