@@ -141,7 +141,7 @@ describe("moderation numbered routes", () => {
     let gets = 0;
     vi.stubGlobal("fetch", async () => ++gets === 1 ? numbered([{ id: "private-review", title: "Private review" }], 2, 21) : new Response(null, { status }));
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
-    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { writeWorkspaceHistory("push", "/admin/submissions"); }); await flush();
     expect(container.textContent).not.toContain("Private review");
     expect(container.querySelector('[data-page-state="forbidden"]')).toBeTruthy();
     expect(buttonNames().some((name) => name?.startsWith("Reject"))).toBe(false);
@@ -171,15 +171,19 @@ describe("moderation numbered routes", () => {
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await clickButton("Try again");
-    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => { writeWorkspaceHistory("push", "/admin/submissions"); }); await flush();
     expect(signal?.aborted).toBe(true);
     await act(async () => retry.resolve(numbered([{ id: "late", title: "Late stale retry" }], 2, 21))); await flush();
     expect(container.textContent).toContain("item-1-0"); expect(container.textContent).not.toContain("Late stale retry");
     await act(async () => browser.history.back()); await flush();
+    for (let delivered = 0; delivered < historyDriver.requests.length; delivered++) {
+      expect(delivered).toBeLessThan(5); const request = historyDriver.requests[delivered]!;
+      await act(async () => { historyDriver.arrive(request.index); request.resolve(); }); await flush();
+    }
     expect(queryOf(gets.at(-1)!, "page")).toBe("2"); expect(container.textContent).toContain("item-2-0");
   });
 
-  it("does not leave the new query locked or refresh it when an old decision finishes", async () => {
+  it("ignores a late decision after forced session teardown and remount", async () => {
     const decision = deferred<Response>(); let gets = 0; let posts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => { if (init?.method === "POST") { posts++; return decision.promise; } gets++; return pageResponse(String(input), (id) => ({ id, title: id })); });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
@@ -188,13 +192,15 @@ describe("moderation numbered routes", () => {
     const confirm = [...container.querySelectorAll("button")].find((item) => item.textContent === "Confirm rejection")!;
     await act(async () => { confirm.click(); confirm.click(); }); expect(posts).toBe(0);
     const final = container.querySelector("[data-confirm-action]") as HTMLButtonElement;await act(async () => {final.click();final.click();});expect(posts).toBe(1);
-    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => root.render(null));
+    await act(async () => writeWorkspaceHistory("push", "/admin/submissions"));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     expect((container.querySelector('button[aria-label="Reject item-1-0"]') as HTMLButtonElement).disabled).toBe(false);
     await act(async () => decision.resolve(rejected("item-2-0"))); await flush();
     expect(gets).toBe(2); expect(container.textContent).toContain("item-1-0");
   });
 
-  it("does not publish after navigating away while its preview is still loading", async () => {
+  it("does not publish after forced teardown while its preview is still loading", async () => {
     const preview = deferred<Response>(); let posts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") { posts++; return json({}); }
@@ -202,7 +208,9 @@ describe("moderation numbered routes", () => {
     });
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await submitReview("Publish");
-    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => root.render(null));
+    await act(async () => writeWorkspaceHistory("push", "/admin/submissions"));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await act(async () => preview.resolve(json({ preview: { submissionId: "item-2-0", title: "Old item", status: "review_pending", requestedSpaceId: "default" } }))); await flush();
     expect(posts).toBe(0); expect(container.textContent).toContain("item-1-0");
   });
@@ -353,7 +361,7 @@ describe("moderation numbered routes", () => {
     else { expect(container.textContent).not.toContain("Reload current state"); expect(container.querySelector('button[aria-label="Publish Review"]')).toBeNull(); }
   });
 
-  it("ignores a missing-row detail read arriving after navigation", async () => {
+  it("ignores a missing-row detail read arriving after forced teardown", async () => {
     const late = deferred<Response>(); let detailReads = 0; let reads = 0; let posts = 0;
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return new Response(null, { status: ++posts === 1 ? 503 : 400 });
@@ -365,7 +373,9 @@ describe("moderation numbered routes", () => {
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await submitReview("Publish"); await flush(); await clickButton("Retry same decision"); await flush();
     await clickButton("Reload current state"); await flush(); expect(detailReads).toBe(2);
-    await act(async () => { browser.history.pushState({}, "", "/admin/submissions"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await act(async () => root.render(null));
+    await act(async () => writeWorkspaceHistory("push", "/admin/submissions"));
+    await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search} />)); await flush();
     await act(async () => late.resolve(new Response(null, { status: 403 }))); await flush();
     expect(container.textContent).toContain("New page");
     expect((container.querySelector('button[aria-label="Publish New page"]') as HTMLButtonElement).disabled).toBe(false);
@@ -615,12 +625,15 @@ describe("moderation numbered routes", () => {
     expect(paths).toHaveLength(1);expect(posts).toBe(0);await clickButton("Cancel");expect(paths).toHaveLength(1);expect(posts).toBe(0);
   });
 
-  it("page navigation invalidates an unsubmitted review confirmation",async () => {
+  it("page navigation remains blocked until an unsubmitted review confirmation is canceled",async () => {
     let posts=0;
     vi.stubGlobal("fetch",async (input:RequestInfo|URL,init?:RequestInit) => {if(init?.method === "POST") {posts++;return json({});}return pageResponse(String(input),id=>({id,title:id,status:"review_pending"}));});
     await act(async () => root.render(<ReviewQueueRoute locale={locale()} search={browser.location.search}/>));await flush();await clickButton("Publish");
     const old=container.querySelector("[data-confirm-action]") as HTMLButtonElement;expect(old).toBeTruthy();
-    await act(async () => {browser.history.pushState({},"","/admin/submissions");browser.dispatchEvent(new browser.PopStateEvent("popstate"));});await flush();
+    await act(async () => writeWorkspaceHistory("push", "/admin/submissions")); await flush();
+    expect(browser.location.search).toBe("?page=2"); expect(container.querySelector('[role="alertdialog"]')).toBeTruthy();
+    await act(async () => (container.querySelector("[data-cancel-action]") as HTMLButtonElement).click());
+    await act(async () => writeWorkspaceHistory("push", "/admin/submissions")); await flush();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();await act(async () => old.click());expect(posts).toBe(0);
   });
 

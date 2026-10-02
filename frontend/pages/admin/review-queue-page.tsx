@@ -27,7 +27,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
     <div><h1 className="text-2xl font-semibold">{frontendText(locale, "ADMIN_REVIEW_QUEUE_TITLE")}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{frontendText(locale, "ADMIN_REVIEW_QUEUE_DESCRIPTION")}</p>
     </div>
-    <ReviewDecisionFeedback state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
+    <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onReloadDecision} />
     {localError && <><p role="alert" className="text-sm text-destructive">{localError}</p>{retry}</>}
     {state.data.items.length ? state.data.items.map((item) => {
       const disabled = Boolean(pending || pendingId || localError || locked);
@@ -41,7 +41,7 @@ export function ReviewQueuePage({ state, onReview, onRetry, onRetryDecision, onR
         </h2><p className="mt-1 text-xs text-muted-foreground">{item.submitter || frontendText(locale, "ADMIN_REVIEW_SUBMITTER_UNAVAILABLE")}</p></div>
           <Badge variant="outline">{item.status || frontendText(locale, "ADMIN_REVIEW_STATUS_UNAVAILABLE")}</Badge>
         </div>
-        <ReviewDecisionControls confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
+        <ReviewDecisionControls decisionUnresolved={locked} confirmationLock={confirmationLock} disabled={disabled} terminal={completedId === item.id || Boolean(item.status && item.status !== "review_pending")}
           pendingAction={pendingId === item.id && decisionState.kind === "pending" ? decisionState.action : undefined}
           targetId={item.id} snapshot={state.data} targetLabel={target} locale={locale} onDecision={onReview ? (action, details) => onReview(item.id, action, details) : undefined} />
       </CardContent></Card>;

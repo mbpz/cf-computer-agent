@@ -44,7 +44,7 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
     {comments}
     <ReviewDecisionFeedback state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onRetry} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_DECISION")}</CardTitle></CardHeader><CardContent>
-      <ReviewDecisionControls key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={detail.status !== "review_pending"}
+      <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={detail.status !== "review_pending"}
         pendingAction={decisionState.kind === "pending" ? decisionState.action : undefined} onDecision={onDecision} locale={locale} />
     </CardContent></Card>
   </section>;

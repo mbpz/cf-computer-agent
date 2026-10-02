@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useCreateDraft } from "../../lib/use-create-draft";
 import { ConfirmAction } from "../ui/confirm-action";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
@@ -22,24 +23,28 @@ type NoteAction = "reject" | "request_changes";
 const initialDetails = (action: NoteAction): ReviewNoteInput => ({ reasonCode: action === "reject" ? "not_relevant" : "needs_revision", note: "" });
 const decisionLabel = (action: ReviewDecision) => action === "publish" ? "ADMIN_REVIEW_PUBLISH" : action === "reject" ? "ADMIN_REVIEW_REJECT" : "ADMIN_REVIEW_REQUEST_CHANGES";
 
-export function ReviewDecisionControls({ disabled, terminal, pendingAction, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock }: {
-  disabled?: boolean; terminal?: boolean; pendingAction?: ReviewDecision;
+export function ReviewDecisionControls({ disabled, terminal, pendingAction, decisionUnresolved, onDecision, locale, targetLabel, targetId, snapshot, confirmationLock }: {
+  disabled?: boolean; terminal?: boolean; pendingAction?: ReviewDecision; decisionUnresolved?: boolean;
   onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void; locale?: LocaleRuntime; targetLabel: string; targetId: string; snapshot: unknown; confirmationLock?: { current: object | null };
 }) {
   type Confirmation = { kind: "decision"; action: ReviewDecision; details?: ReviewNoteInput; snapshot: unknown; targetId: string; targetLabel: string }
     | { kind: "discard"; next: ReviewDecision | null; snapshot: unknown; targetId: string; targetLabel: string };
   const [selected, setSelected] = useState<NoteAction | null>(null);
-  const [details, setDetails] = useState<ReviewNoteInput>(initialDetails("reject"));
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const confirmationRef = useRef<Confirmation | null>(null);
   const owner = useRef({});
   const ownedElsewhere = () => Boolean(confirmationLock?.current && confirmationLock.current !== owner.current);
   const locked = Boolean(disabled || terminal || pendingAction || !onDecision);
+  const draft = useCreateDraft({ ...initialDetails("reject") }, { ...initialDetails("reject") },
+    () => confirmationRef.current !== null || Boolean(pendingAction || decisionUnresolved), locale, () => locked);
+  const details = draft.fields;
+  const setDetails = (next: ReviewNoteInput) => { draft.edit("reasonCode", next.reasonCode); draft.edit("note", next.note); };
+  const resetDetails = (action: NoteAction = "reject") => { draft.checkpoint({ ...initialDetails(action) }); draft.reset(); };
   const valid = Boolean(confirmation && !locked && confirmation.snapshot === snapshot && confirmation.targetId === targetId && confirmation.targetLabel === targetLabel);
   const release = () => { if (confirmationLock?.current === owner.current) confirmationLock.current = null; };
   const cancel = () => { confirmationRef.current = null; setConfirmation(null); release(); };
   useEffect(() => { if (confirmation && !valid) cancel(); }, [confirmation, valid]);
-  useEffect(() => { setSelected(null); setDetails(initialDetails("reject")); }, [snapshot, targetId]);
+  useEffect(() => { setSelected(null); resetDetails(); }, [targetId, terminal]);
   useEffect(() => () => { confirmationRef.current = null; release(); }, [confirmationLock]);
   const open = (next: Confirmation) => {
     if (ownedElsewhere()) return;
@@ -47,20 +52,21 @@ export function ReviewDecisionControls({ disabled, terminal, pendingAction, onDe
     confirmationRef.current = next; setConfirmation(next);
   };
   const capture = { snapshot, targetId, targetLabel };
-  const dirty = selected !== null && (details.note !== "" || details.reasonCode !== initialDetails(selected).reasonCode);
+  const dirty = () => selected !== null && (draft.current.current.note !== "" || draft.current.current.reasonCode !== initialDetails(selected).reasonCode);
   const choose = (next: ReviewDecision | null) => {
     setSelected(next === "publish" ? null : next);
     if (next === "publish") open({ kind: "decision", action: "publish", ...capture });
-    else if (next) setDetails(initialDetails(next));
+    else if (next) resetDetails(next);
+    if (!next || next === "publish") resetDetails();
   };
   const requestChoice = (next: ReviewDecision | null) => {
-    if (locked || ownedElsewhere() || confirmationRef.current || (next !== null && next === selected)) return;
-    if (dirty) open({ kind: "discard", next, ...capture });
+    if (locked || ownedElsewhere() || confirmationRef.current || draft.isConfirming() || (next !== null && next === selected)) return;
+    if (dirty()) open({ kind: "discard", next, ...capture });
     else choose(next);
   };
   const submit = () => {
-    if (locked || ownedElsewhere() || confirmationRef.current || !selected || !validReviewNote(details.note)) return;
-    open({ kind: "decision", action: selected, details: { ...details }, ...capture });
+    if (locked || ownedElsewhere() || confirmationRef.current || draft.isConfirming() || !selected || !validReviewNote(draft.current.current.note)) return;
+    open({ kind: "decision", action: selected, details: { ...draft.current.current }, ...capture });
   };
   const confirm = () => {
     if (!valid || !confirmation || confirmationRef.current !== confirmation) return;
@@ -83,9 +89,10 @@ export function ReviewDecisionControls({ disabled, terminal, pendingAction, onDe
           </Button>;
         })}
       </div>
-      {selected && !terminal && <ReviewDecisionForm action={selected} details={details} onChange={setDetails} disabled={locked || valid} locale={locale}
+      {selected && !terminal && <ReviewDecisionForm action={selected} details={details} onChange={setDetails} disabled={locked || valid || draft.confirming} locale={locale}
         onCancel={() => requestChoice(null)} onSubmit={submit} />}
     </div>
+    {draft.confirmation}
     <ConfirmAction key={confirmation?.kind === "decision" ? confirmation.action : "discard"} open={valid} title={frontendText(locale, confirmation?.kind === "discard" ? "ADMIN_RECORD_DISCARD_TITLE" : "ADMIN_REVIEW_CONFIRM_TITLE")}
       description={description} cancelLabel={frontendText(locale, "ADMIN_REVIEW_CANCEL")}
       confirmLabel={frontendText(locale, confirmation?.kind === "discard" ? "ADMIN_RECORD_DISCARD_CONFIRM" : "ADMIN_REVIEW_CONFIRM_DECISION")}
@@ -126,8 +133,8 @@ export function ReviewDecisionForm({ action, details, onChange, disabled, locale
   </form>;
 }
 
-export function ReviewDecisionFeedback({ state, locale, onRetry, onReload }: {
-  state: ReviewDecisionState; locale?: LocaleRuntime; onRetry?: () => void; onReload?: () => void;
+export function ReviewDecisionFeedback({ state, locale, onRetry, onReload, allowUnknownReload }: {
+  state: ReviewDecisionState; locale?: LocaleRuntime; onRetry?: () => void; onReload?: () => void; allowUnknownReload?: boolean;
 }) {
   if (state.kind === "success") {
     const { receipt } = state;
@@ -145,6 +152,6 @@ export function ReviewDecisionFeedback({ state, locale, onRetry, onReload }: {
   return <Alert variant="destructive"><AlertDescription className="space-y-2">
     <p>{frontendText(locale, key)}</p>
     {state.recovery === "retry" && <Button type="button" variant="outline" onClick={onRetry}>{frontendText(locale, "ADMIN_REVIEW_RETRY_SAME")}</Button>}
-    {state.recovery === "reload" && <Button type="button" variant="outline" onClick={onReload}>{frontendText(locale, "ADMIN_REVIEW_RELOAD")}</Button>}
+    {(state.recovery === "reload" || (state.recovery === "retry" && allowUnknownReload && onReload)) && <Button type="button" variant="outline" onClick={onReload}>{frontendText(locale, "ADMIN_REVIEW_RELOAD")}</Button>}
   </AlertDescription></Alert>;
 }
