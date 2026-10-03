@@ -46,7 +46,8 @@ import { CalendarPage, type CalendarPageState } from "./pages/calendar-page";
 import { TodayPage, type TodayPageState } from "./pages/today-page";
 import { FocusPage, type FocusPageState } from "./pages/focus-page";
 import { WorkbenchReviewPage, type WorkbenchReviewPageState } from "./pages/workbench-review-page";
-import { BoardsPage } from "./pages/boards/boards-page";
+import { BoardsPage, type BoardUnknownMove } from "./pages/boards/boards-page";
+import { taskStatusKey } from "./pages/tasks/tasks-model";
 import { NotificationsPage, type NotificationsPageState } from "./pages/notifications/notifications-page";
 import { MessagesPage, type MessagesPageState } from "./pages/messages/messages-page";
 import { ThreadPage, type ThreadPageState } from "./pages/messages/thread-page";
@@ -2433,6 +2434,9 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const [retryVersions, setRetryVersions] = useState<Record<BoardStatus, number>>(() => ({ todo: 0, doing: 0, blocked: 0, done: 0 }));
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | undefined>();
+  const [actionNotice, setActionNotice] = useState<string | undefined>();
+  const [unknownMove, setUnknownMove] = useState<BoardUnknownMove | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
   const queriesRef = useRef(queries);
@@ -2442,6 +2446,21 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   const actionPendingRef = useRef(false);
   const actionGenerationRef = useRef(0);
   const activeRef = useRef(true);
+  // A move whose write outcome is unknown stays here until an explicit GET or same-target retry settles it.
+  const unknownMoveRef = useRef<BoardUnknownMove | null>(null);
+  const recoveringRef = useRef(false);
+  const ownedQueryNavigationRef = useRef(false);
+  const leaveGuardRef = useRef<(() => void) | null>(null);
+  // Registered only while locked: an idle board keeps ordinary browser history behaviour.
+  // Call synchronously at every lock transition so a same-event leave cannot pass.
+  const syncLeaveGuard = useCallback(() => {
+    const locked = () => actionPendingRef.current || recoveringRef.current || unknownMoveRef.current !== null;
+    if (locked() && !leaveGuardRef.current) {
+      leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({ kind: locked() && !ownedQueryNavigationRef.current ? "block" : "allow" }));
+    } else if (!locked() && leaveGuardRef.current) {
+      leaveGuardRef.current(); leaveGuardRef.current = null;
+    }
+  }, []);
 
   const deniedRef = useRef(false);
   const controllersRef = useRef<Partial<Record<BoardStatus, ReturnType<typeof createTasksRequestController>>>>({});
@@ -2456,16 +2475,34 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     }
     actionGenerationRef.current += 1;
     actionPendingRef.current = false;
-    setActionPendingId(null); setActionError(undefined);
+    unknownMoveRef.current = null; recoveringRef.current = false; syncLeaveGuard();
+    setActionPendingId(null); setActionError(undefined); setActionNotice(undefined); setUnknownMove(null); setRecovering(false);
     const cleared: BoardColumnStates = { todo: { kind: "error" }, doing: { kind: "error" }, blocked: { kind: "error" }, done: { kind: "error" } };
     columnsRef.current = cleared; setColumns(cleared);
     return true;
+  }, [syncLeaveGuard]);
+  // Only this route's read-only column query changes may pass while a move is unresolved.
+  const writeOwnBoardHistory = useCallback((mode: "push" | "replace", url: string, onCommit: () => void) => {
+    ownedQueryNavigationRef.current = true;
+    try { writeWorkspaceHistory(mode, url, onCommit); } finally { ownedQueryNavigationRef.current = false; }
   }, []);
 
-  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
-  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
-  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
-  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, setQueries, setColumns);
+  useEffect(() => {
+    const owner = window;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (actionPendingRef.current || recoveringRef.current || unknownMoveRef.current !== null) { event.preventDefault(); event.returnValue = ""; }
+    };
+    owner.addEventListener("beforeunload", warn);
+    return () => {
+      unknownMoveRef.current = null; recoveringRef.current = false; actionPendingRef.current = false; syncLeaveGuard();
+      owner.removeEventListener("beforeunload", warn);
+    };
+  }, [syncLeaveGuard]);
+
+  useBoardColumnRequest("todo", queries.todo, retryVersions.todo, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
+  useBoardColumnRequest("doing", queries.doing, retryVersions.doing, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
+  useBoardColumnRequest("blocked", queries.blocked, retryVersions.blocked, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
+  useBoardColumnRequest("done", queries.done, retryVersions.done, queriesRef, requestStatesRef, mutationOwnersRef, deniedRef, controllersRef, clearDeniedBoard, writeOwnBoardHistory, setQueries, setColumns);
 
   useEffect(() => {
     const onPopState = () => {
@@ -2481,15 +2518,49 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
   }, []);
 
   const navigate = (status: BoardStatus, next: { page: number; pageSize: SupportedPageSize }) => {
-    writeWorkspaceHistory("push", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, next)}`, () => {
+    writeOwnBoardHistory("push", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, next)}`, () => {
       setActionError(undefined);
       const nextQueries = { ...queriesRef.current, [status]: next };
       queriesRef.current = nextQueries; setQueries(nextQueries);
     });
   };
 
+  const refreshAllColumns = () => setRetryVersions((current) => ({ todo: current.todo + 1, doing: current.doing + 1, blocked: current.blocked + 1, done: current.done + 1 }));
+  const statusText = (status: TaskItem["status"]) => frontendText(locale, taskStatusKey(status));
+  const settleUnknownMove = (pending: BoardUnknownMove, notice: string | undefined, error?: string) => {
+    if (unknownMoveRef.current !== pending) return;
+    unknownMoveRef.current = null; recoveringRef.current = false; syncLeaveGuard();
+    setUnknownMove(null); setRecovering(false); setActionNotice(notice); setActionError(error);
+    refreshAllColumns();
+  };
+  const outcomeNotice = (pending: BoardUnknownMove, current: TaskItem["status"]) =>
+    current === pending.target ? frontendText(locale, "BOARDS_MOVE_APPLIED").replace("{status}", statusText(pending.target))
+      : current === pending.source ? frontendText(locale, "BOARDS_MOVE_NOT_APPLIED").replace("{status}", statusText(pending.source))
+        : frontendText(locale, "BOARDS_MOVE_CHANGED").replace("{status}", statusText(current));
+  const resolveUnknownMove = async (mode: "check" | "retry") => {
+    const pending = unknownMoveRef.current;
+    if (!pending || recoveringRef.current || actionPendingRef.current || deniedRef.current) return;
+    recoveringRef.current = true; syncLeaveGuard(); setRecovering(true); setActionError(undefined); setActionNotice(undefined);
+    const generation = actionGenerationRef.current;
+    const live = () => activeRef.current && generation === actionGenerationRef.current && unknownMoveRef.current === pending;
+    try {
+      const current = mode === "check"
+        ? (await loadTaskDetail(pending.task.id)).task.status
+        : (await setTaskStatus(pending.task.id, pending.target)).status;
+      if (live()) settleUnknownMove(pending, outcomeNotice(pending, current));
+    } catch (error: unknown) {
+      if (!live() || clearDeniedBoard(error)) return;
+      if (mode === "check" && error instanceof ApiRequestError && error.status === 404) settleUnknownMove(pending, frontendText(locale, "BOARDS_MOVE_MISSING"));
+      else if (mode === "retry" && isDefiniteBoardMoveRejection(error)) settleUnknownMove(pending, undefined, frontendText(locale, "BOARDS_ACTION_FAILED"));
+      else setActionError(frontendText(locale, mode === "check" ? "BOARDS_MOVE_CHECK_FAILED" : "BOARDS_MOVE_STILL_UNKNOWN"));
+    } finally {
+      if (live()) { recoveringRef.current = false; syncLeaveGuard(); setRecovering(false); }
+    }
+  };
+
   const move = async (task: TaskItem, target: BoardTargetStatus) => {
-    if (deniedRef.current || actionPendingRef.current || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
+    if (deniedRef.current || actionPendingRef.current || unknownMoveRef.current || recoveringRef.current
+      || task.status === target || !BOARD_STATUSES.includes(task.status as BoardStatus)) return;
     const source = task.status as BoardStatus;
     const before = columnsRef.current;
     const optimistic = moveTaskBetweenColumns(before, task, source, target);
@@ -2501,7 +2572,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
     const targetEvicted = targetChanged && targetBefore?.kind === "ready" && targetBefore.pagination.page === 1
       && targetBefore.items.length === targetBefore.pagination.pageSize ? targetBefore.items.at(-1) : undefined;
     const targetEvictedIndex = targetEvicted && targetBefore?.kind === "ready" ? targetBefore.items.length - 1 : undefined;
-    actionPendingRef.current = true;
+    actionPendingRef.current = true; syncLeaveGuard();
     actionGenerationRef.current += 1;
     const generation = actionGenerationRef.current;
     mutationOwnersRef.current[source] = generation;
@@ -2516,7 +2587,7 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
         ...(targetEvicted ? { targetEvicted, targetEvictedIndex } : {}),
       } : {}),
     };
-    setActionPendingId(task.id); setActionError(undefined); setColumns(optimistic); columnsRef.current = optimistic;
+    setActionPendingId(task.id); setActionError(undefined); setActionNotice(undefined); setColumns(optimistic); columnsRef.current = optimistic;
     try {
       await setTaskStatus(task.id, target);
       if (!activeRef.current || generation !== actionGenerationRef.current) return;
@@ -2543,16 +2614,23 @@ export function BoardsRoute({ locale, search }: { locale: LocaleRuntime; search:
           if (delta.target && targetMatches && (requestStatesRef.current[delta.target].pending || requestStatesRef.current[delta.target].superseded)) next[delta.target] += 1;
           return next;
         });
-        setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+        if (isDefiniteBoardMoveRejection(error)) setActionError(frontendText(locale, "BOARDS_ACTION_FAILED"));
+        else {
+          // The server may have applied the move; the rolled-back cards are not proof that it did not.
+          const pending: BoardUnknownMove = { task, source, target };
+          unknownMoveRef.current = pending; syncLeaveGuard(); setUnknownMove(pending);
+        }
       }
     } finally {
       if (activeRef.current && generation === actionGenerationRef.current) {
-        actionPendingRef.current = false; setActionPendingId(null);
+        actionPendingRef.current = false; syncLeaveGuard(); setActionPendingId(null);
       }
     }
   };
 
-  return <BoardsPage locale={locale} columns={columns} actionError={actionError} actionPendingId={actionPendingId}
+  return <BoardsPage locale={locale} columns={columns} actionError={actionError} actionNotice={actionNotice} actionPendingId={actionPendingId}
+    unknownMove={unknownMove} recovering={recovering}
+    onCheckMove={() => void resolveUnknownMove("check")} onRetryMove={() => void resolveUnknownMove("retry")}
     onRetry={(status) => {
       if (deniedRef.current) {
         deniedRef.current = false;
@@ -2574,6 +2652,7 @@ function useBoardColumnRequest(
   deniedRef: { current: boolean },
   controllersRef: { current: Partial<Record<BoardStatus, ReturnType<typeof createTasksRequestController>>> },
   clearDeniedBoard: (error: unknown) => boolean,
+  writeOwnBoardHistory: (mode: "push" | "replace", url: string, onCommit: () => void) => void,
   setQueries: Dispatch<SetStateAction<BoardPagination>>,
   setColumns: Dispatch<SetStateAction<BoardColumnStates>>,
 ) {
@@ -2597,7 +2676,7 @@ function useBoardColumnRequest(
       const lastPage = Math.max(1, data.pagination.totalPages);
       if (querySnapshot.page > lastPage) {
         const nextQuery = { page: lastPage, pageSize: querySnapshot.pageSize };
-        writeWorkspaceHistory("replace", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, nextQuery)}`, () => {
+        writeOwnBoardHistory("replace", `/boards${writeBoardColumnSearch(readWorkspaceLocation().search, status, nextQuery)}`, () => {
           const nextQueries = { ...queriesRef.current, [status]: nextQuery };
           queriesRef.current = nextQueries; setQueries(nextQueries);
         });
@@ -2617,7 +2696,12 @@ function useBoardColumnRequest(
       controller.dispose();
       if (controllersRef.current[status] === controller) delete controllersRef.current[status];
     };
-  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status, clearDeniedBoard]);
+  }, [query.page, query.pageSize, retryVersion, setColumns, setQueries, status, clearDeniedBoard, writeOwnBoardHistory]);
+}
+
+// Status writes reject 4xx before committing; transport failures, 5xx, 408/429 and malformed receipts are unknown.
+function isDefiniteBoardMoveRejection(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
 }
 
 function initialBoardColumns(): BoardColumnStates {

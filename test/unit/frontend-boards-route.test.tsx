@@ -70,10 +70,199 @@ describe("task-backed boards route", () => {
     expect(column("doing").textContent).toContain("Alpha");
     expect(mutations).toEqual([{ url: "/api/tasks/todo-task/status", body: JSON.stringify({ status: "doing" }) }]);
 
-    await act(async () => resolveMutation(errorResponse())); await flush();
+    await act(async () => resolveMutation(rejectedResponse())); await flush();
     expect(column("todo").textContent).toContain("Alpha");
     expect(column("doing").textContent).not.toContain("Alpha");
     expect(container.textContent).toContain("Unable to move the task.");
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(false);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("blocks leaving during an in-flight move while keeping its own column pagination", async () => {
+    let resolveMutation!: (response: Response) => void;
+    const mutation = new Promise<Response>((resolve) => { resolveMutation = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => init?.method === "POST"
+      ? mutation : boardPage(String(input), { todoTitle: "Alpha", todoTotal: 41 }));
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing");
+
+    let result: string | undefined;
+    await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
+    expect(result).toBe("blocked");
+    expect(browser.location.pathname).toBe("/boards");
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+
+    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    expect(browser.location.search).toBe("?todoPage=2");
+
+    await act(async () => resolveMutation(Response.json(task("doing", "Alpha", "todo-task")))); await flush();
+    await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
+    expect(result).toBe("committed");
+  });
+
+  it.each([
+    ["a server error", () => errorResponse()],
+    ["a network failure", () => { throw new TypeError("network down"); }],
+    ["a malformed receipt", () => Response.json({ id: "other" })],
+  ] as const)("keeps an unknown move locked after %s until its exact result is checked", async (_label, failure) => {
+    const gets: string[] = []; let posts = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") { posts += 1; return failure(); }
+      gets.push(url);
+      if (url === "/api/tasks/todo-task") return detailResponse(task("doing", "Alpha", "todo-task"));
+      return boardPage(url, { todoTitle: "Alpha", todoTotal: 21 });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+
+    const alert = container.querySelector("[data-board-move-unknown]") as HTMLElement;
+    expect(alert.textContent).toContain("result of moving Alpha to Doing is unknown");
+    expect(container.textContent).not.toContain("Unable to move the task.");
+    expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(true);
+    expect(gets).not.toContain("/api/tasks/todo-task");
+    let result: string | undefined;
+    await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
+    expect(result).toBe("blocked");
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    await act(async () => (column("todo").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
+    expect(browser.location.search).toBe("?todoPage=2");
+
+    const before = gets.length;
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(posts).toBe(1);
+    expect(gets.slice(before)).toContain("/api/tasks/todo-task");
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).toContain("The move to Doing was saved.");
+    for (const status of ["todo", "doing", "blocked", "done"]) expect(gets.slice(before).filter((url) => statusFromUrl(url) === status).length).toBe(1);
+    await act(async () => { result = writeWorkspaceHistory("push", "/tasks"); });
+    expect(result).toBe("committed");
+  });
+
+  it("reports a not-saved move and keeps the lock when the check itself fails", async () => {
+    let detailFails = true;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return errorResponse();
+      if (url === "/api/tasks/todo-task") return detailFails ? errorResponse() : detailResponse(task("todo", "Alpha", "todo-task"));
+      return boardPage(url, { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "done"); await flush();
+
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(container.querySelector("[data-board-move-unknown]")).toBeTruthy();
+    expect(container.textContent).toContain("Unable to check the result.");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+
+    detailFails = false;
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).toContain("The move was not saved. The task is still in To do.");
+    await flush();
+    expect((column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement).disabled).toBe(false);
+  });
+
+  it("reports a task changed elsewhere or removed when checking an unknown move", async () => {
+    let detail: () => Response = () => detailResponse(task("blocked", "Alpha", "todo-task"));
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return errorResponse();
+      if (url === "/api/tasks/todo-task") return detail();
+      return boardPage(url, { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(container.textContent).toContain("The task is now in Blocked because it changed elsewhere.");
+
+    detail = () => Response.json({ error: { code: "TASK_NOT_FOUND", message: "missing", retryable: false } }, { status: 404 });
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).toContain("The task is no longer available.");
+  });
+
+  it("retries exactly the same unknown move and releases only after a matching receipt", async () => {
+    const posts: Array<{ url: string; body: string }> = []; let attempt = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        posts.push({ url, body: String(init.body) }); attempt += 1;
+        if (attempt === 1) throw new TypeError("network down");
+        if (attempt === 2) return errorResponse();
+        return Response.json(task("doing", "Alpha", "todo-task"));
+      }
+      return boardPage(url, { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+
+    await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
+    expect(container.querySelector("[data-board-move-unknown]")).toBeTruthy();
+    expect(container.textContent).toContain("The result is still unknown.");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+
+    await act(async () => {
+      buttonByText(container, "Retry the same move").click();
+      buttonByText(container, "Retry the same move").click();
+    }); await flush();
+    expect(posts).toHaveLength(3);
+    expect(new Set(posts.map((post) => `${post.url} ${post.body}`))).toEqual(new Set([`/api/tasks/todo-task/status ${JSON.stringify({ status: "doing" })}`]));
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).toContain("The move to Doing was saved.");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("releases an unknown move when the retry is definitively rejected", async () => {
+    let attempt = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") { attempt += 1; return attempt === 1 ? errorResponse() : rejectedResponse(); }
+      return boardPage(String(input), { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await act(async () => buttonByText(container, "Retry the same move").click()); await flush();
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).toContain("Unable to move the task.");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it.each([401, 403])("clears the board and the unknown move when checking is denied with %s", async (status) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return errorResponse();
+      if (url === "/api/tasks/todo-task") return deniedResponse(status);
+      return boardPage(url, { todoTitle: "Private" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await act(async () => buttonByText(container, "Check the result").click()); await flush();
+    expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
+    expect(container.querySelector("[data-board-move-unknown]")).toBeNull();
+    expect(container.textContent).not.toContain("Private");
+  });
+
+  it("ignores a late unknown-move check after the route unmounts", async () => {
+    let resolveDetail!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return errorResponse();
+      if (url === "/api/tasks/todo-task") return new Promise<Response>((resolve) => { resolveDetail = resolve; });
+      return boardPage(url, { todoTitle: "Alpha" });
+    });
+    await renderBoard();
+    await change(column("todo").querySelector('select[aria-label="Move Alpha from To do"]') as HTMLSelectElement, "doing"); await flush();
+    await act(async () => buttonByText(container, "Check the result").click());
+    await act(async () => root.unmount());
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    await act(async () => resolveDetail(detailResponse(task("doing", "Alpha", "todo-task")))); await flush();
+    root = createRoot(container);
   });
 
   it("restores the exact evicted item and order when a full target page move fails", async () => {
@@ -558,7 +747,7 @@ describe("task-backed boards route", () => {
     await renderBoard();
     await change(column("todo").querySelector('select[aria-label="Move Private from To do"]') as HTMLSelectElement, "doing");
     deny = true;
-    await act(async () => writeWorkspaceHistory("push", "/boards?blockedPage=2")); await flush();
+    await act(async () => (column("blocked").querySelector('[aria-label="Page 2"]') as HTMLButtonElement).click()); await flush();
     expect(container.querySelectorAll("[data-board-task]")).toHaveLength(0);
     deny = false;
     await act(async () => buttonByText(column("todo"), "Try this column again").click()); await flush();
@@ -625,6 +814,8 @@ function pageFromUrl(url: string): number { return Number(new URL(url, "https://
 function boardTaskIds(column: HTMLElement): string[] { return [...column.querySelectorAll("[data-board-task]")].map((element) => element.getAttribute("data-board-task")!); }
 function buttonByText(column: HTMLElement, text: string): HTMLButtonElement { return [...column.querySelectorAll("button")].find((button) => button.textContent?.includes(text)) as HTMLButtonElement; }
 function errorResponse(): Response { return Response.json({ error: { code: "TEST_ERROR", message: "failed", retryable: true } }, { status: 500 }); }
+function rejectedResponse(): Response { return Response.json({ error: { code: "TASK_TRANSITION_INVALID", message: "invalid", retryable: false } }, { status: 422 }); }
+function detailResponse(item: TaskItem): Response { return Response.json({ task: item, tags: [], links: [] }); }
 async function change(select: HTMLSelectElement, value: string) { await act(async () => { select.value = value; select.dispatchEvent(new window.Event("change", { bubbles: true })); }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
 async function settle() { await act(async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); }); }
