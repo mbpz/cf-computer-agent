@@ -5,11 +5,11 @@ import {build} from 'esbuild';
 import {createAccountNetworkOwner} from '../frontend/features/environments/account-network-owner.mjs';
 import React,{act} from 'react';
 import {Window} from 'happy-dom';
-let dir,createManager,App;
+let dir,createManager,App,navigate;
 before(async()=>{
  dir=await mkdtemp(new URL('./.environment-page-',import.meta.url).pathname);
- await build({stdin:{contents:`export {getEnvironmentManager} from './frontend/features/environments/environment-manager'; export {App} from './frontend/app';`,resolveDir:process.cwd(),loader:'ts'},outfile:dir+'/module.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',define:{'import.meta.env.DEV':'false'}});
- const m=await import(dir+'/module.mjs');createManager=m.getEnvironmentManager;App=m.App;
+ await build({stdin:{contents:`export {getEnvironmentManager} from './frontend/features/environments/environment-manager'; export {App} from './frontend/app'; export {writeWorkspaceHistory} from './frontend/lib/workspace-location';`,resolveDir:process.cwd(),loader:'ts'},outfile:dir+'/module.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',define:{'import.meta.env.DEV':'false'}});
+ const m=await import(dir+'/module.mjs');createManager=m.getEnvironmentManager;App=m.App;navigate=m.writeWorkspaceHistory;
 });
 after(async()=>{if(dir)await rm(dir,{recursive:true,force:true});});
 const owners=[];afterEach(()=>{for(const x of owners.splice(0))x.dispose();});
@@ -135,7 +135,7 @@ test('actual Worker/D1 metadata CRUD preserves lost-response idempotency and del
  assert.equal(await f.db.prepare('SELECT COUNT(*) AS n FROM browser_environments WHERE id=?').bind(item.id).first('n'),0);
  assert.equal(await f.db.prepare('SELECT version FROM environment_tombstones WHERE environment_id=?').bind(item.id).first('version'),3);
 });
-test('actual App keeps unknown operation across route changes and explicitly retries the same body',async t=>{
+test('actual App blocks leaving an unknown operation and explicitly retries the same body',async t=>{
  const bodies=[];let lost=true,rows=[];
  const {host,window}=await renderApp(t,async(path,init)=>{
   if(init.method==='GET')return Response.json(page(rows));
@@ -145,9 +145,9 @@ test('actual App keeps unknown operation across route changes and explicitly ret
  const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Keep intent');
  await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
  assert.ok(host.querySelector('[data-environment-retry]'));assert.equal(bodies.length,1);
- await act(async()=>{window.history.pushState({},'', '/not-found');window.dispatchEvent(new window.PopStateEvent('popstate'));});
- assert.equal(host.querySelector('[data-environments-page]'),null);
- await act(async()=>{window.history.pushState({},'', '/environments');window.dispatchEvent(new window.PopStateEvent('popstate'));});
+ await act(async()=>navigate('push','/not-found'));
+ assert.equal(window.location.pathname,'/environments');
+ assert.ok(host.querySelector('[data-environments-page]'));
  assert.ok(host.querySelector('[data-environment-retry]'));assert.equal(bodies.length,1);
  await act(async()=>host.querySelector('[data-environment-retry]').click());
  assert.equal(bodies.length,2);assert.equal(bodies[0],bodies[1]);assert.equal(host.querySelector('[data-environment-retry]'),null);
@@ -403,4 +403,81 @@ for(const [label,mutate] of [
  await first.manager.create({name:'Safe',type:'personal'});first.owner.dispose();
  const key=[...storage.data.keys()][0],saved=JSON.parse(storage.getItem(key));mutate(saved);const raw=JSON.stringify(saved);storage.setItem(key,raw);
  const second=setup(async()=>assert.fail('no transport'),storage);assert.equal(second.manager.getSnapshot().recoveryBlocked,true);assert.equal(second.manager.getSnapshot().pending,null);assert.equal(storage.getItem(key),raw);
+});
+
+test('environment create draft requires explicit discard and unload warns without sending writes',async t=>{
+ let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});
+ await fill(window,host.querySelector('[data-environment-create] [name=name]'),'Unsent environment');
+ const unload=new window.Event('beforeunload',{cancelable:true});window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+ await act(async()=>{assert.equal(navigate('push','/not-found'),'deferred');});
+ assert.equal(window.location.pathname,'/environments');assert.ok(host.querySelector('[role=alertdialog]'));
+ await act(async()=>host.querySelector('[data-cancel-action]').click());assert.equal(host.querySelector('[data-environment-create] [name=name]').value,'Unsent environment');
+ await act(async()=>navigate('push','/not-found'));await act(async()=>host.querySelector('[data-confirm-action]').click());
+ assert.equal(window.location.pathname,'/not-found');assert.equal(writes,0);
+});
+
+for(const exit of ['cancel','escape','route'])test(`environment rename ${exit} preserves dirty input until explicit discard`,async t=>{
+ let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method!=='GET')writes++;return Response.json(page());});
+ await act(async()=>host.querySelector('[data-environment-rename]').click());
+ await fill(window,host.querySelector('[role=dialog] input'),'Unsent rename');
+ const unload=new window.Event('beforeunload',{cancelable:true});window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+ const leave=async()=>act(async()=>{if(exit==='route')navigate('push','/not-found');else if(exit==='escape')host.querySelector('[role=dialog]').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));else host.querySelector('[role=dialog] button[type=button]').click();});
+ await leave();assert.ok(host.querySelector('[role=alertdialog]'));assert.equal(host.querySelector('[role=dialog] input').value,'Unsent rename');
+ await act(async()=>host.querySelector('[data-cancel-action]').click());assert.equal(host.querySelector('[role=dialog] input').value,'Unsent rename');
+ await leave();await act(async()=>host.querySelector('[data-confirm-action]').click());
+ assert.equal(host.querySelector('[role=dialog]'),null);assert.equal(window.location.pathname,exit==='route'?'/not-found':'/environments');assert.equal(writes,0);
+});
+
+test('environment delete confirmation blocks navigation and stale double confirmation sends one delete',async t=>{
+ let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method==='GET')return Response.json(page());writes++;throw Error('lost');});
+ await act(async()=>host.querySelector('[data-environment-delete]').click());
+ const unload=new window.Event('beforeunload',{cancelable:true});window.dispatchEvent(unload);assert.equal(unload.defaultPrevented,true);
+ await act(async()=>{assert.equal(navigate('push','/not-found'),'blocked');});assert.equal(window.location.pathname,'/environments');
+ const confirm=host.querySelector('[data-environment-confirm-delete]');await act(async()=>{confirm.click();confirm.click();});
+ assert.equal(writes,1);assert.ok(host.querySelector('[data-environment-operation-id]'));
+ await act(async()=>{assert.equal(navigate('push','/not-found'),'blocked');});
+});
+test('resolved unknown create clears its submitted draft and permits clean navigation',async t=>{
+ let id,writes=0;const {host,window}=await renderApp(t,async(path,init)=>{
+  if(path.includes('/operations/'))return Response.json({operationId:id,kind:'environment.create',environmentId:env.id,result:{environment:{...env,name:'Accepted'}}});
+  if(init.method==='GET')return Response.json(page());writes++;id=JSON.parse(init.body).operationId;throw Error('lost');
+ });
+ const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'Accepted');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ await act(async()=>host.querySelector('[data-environment-lookup]').click());assert.equal(form.querySelector('[name=name]').value,'');
+ await act(async()=>{assert.equal(navigate('push','/not-found'),'committed');});assert.equal(writes,1);
+});
+test('a late create list refresh cannot erase a newer local draft',async t=>{
+ let refresh,created=false;const {host,window}=await renderApp(t,async(path,init)=>{
+  if(init.method==='GET'){if(created)return new Promise(resolve=>{refresh=resolve;});return Response.json(page());}
+  created=true;return Response.json({environment:{...env,name:'First'}});
+ });
+ const form=host.querySelector('[data-environment-create]');await fill(window,form.querySelector('[name=name]'),'First');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.ok(refresh);await fill(window,form.querySelector('[name=name]'),'New local draft');await act(async()=>refresh(Response.json(page())));
+ assert.equal(form.querySelector('[name=name]').value,'New local draft');
+});
+
+test('rename invalid input keeps editor and dirty discard cannot submit a hidden write',async t=>{
+ let writes=0;const {host,window}=await renderApp(t,async(path,init)=>{if(init.method==='GET')return Response.json(page([env]));writes++;throw Error('unexpected');});
+ await act(async()=>host.querySelector('[data-environment-rename]').click());
+ const form=host.querySelector('[role=dialog] form'),input=form.querySelector('input');
+ await fill(window,input,'   ');await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.ok(host.querySelector('[role=dialog] form'));assert.equal(input.value,'   ');assert.equal(writes,0);
+ await fill(window,input,'Unsaved');await act(async()=>form.querySelector('button[type=button]').click());
+ assert.ok(host.querySelector('[role=alertdialog]'));
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));assert.equal(writes,0);
+ await act(async()=>host.querySelector('[data-cancel-action]').click());assert.equal(input.value,'Unsaved');
+});
+
+test('rename retains its original version after a list refresh and hands unknown result to the same-ID owner',async t=>{
+ let reads=0;const writes=[];const {host,window}=await renderApp(t,async(path,init)=>{if(init.method==='GET')return Response.json(page([{...env,version:++reads}]));writes.push(JSON.parse(init.body));throw Error('lost');});
+ await act(async()=>host.querySelector('[data-environment-rename]').click());
+ const form=host.querySelector('[role=dialog] form');await fill(window,form.querySelector('input'),'Frozen rename');
+ // The row can be refreshed independently; the mounted editor retains version 1.
+ const refresh=[...host.querySelectorAll('button')].find(button=>button.textContent.includes('刷新') || button.textContent.includes('Refresh'));
+ assert.ok(refresh);await act(async()=>refresh.click());assert.equal(reads,2);
+ await act(async()=>form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(writes.length,1);assert.equal(writes[0].version,1);assert.equal(writes[0].name,'Frozen rename');
+ assert.equal(host.querySelector('[role=dialog] form'),null);
+ await act(async()=>navigate('push','/not-found'));assert.equal(window.location.pathname,'/environments');
+ await act(async()=>host.querySelector('[data-environment-retry]').click());assert.deepEqual(writes[1],writes[0]);
 });
