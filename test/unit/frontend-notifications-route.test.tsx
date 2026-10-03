@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, NotificationsRoute } from "../../frontend/app";
 import { createLocaleRuntime } from "../../frontend/lib/i18n";
+import { writeWorkspaceHistory } from "../../frontend/lib/workspace-location";
 
 const vmContexts = new WeakSet<object>();
 class InertVmScript { runInContext(context: Record<string, unknown>) { for (const name of ["Array", "Boolean", "Date", "Error", "Function", "JSON", "Map", "Math", "Number", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "WeakMap", "WeakSet"]) context[name] = (globalThis as unknown as Record<string, unknown>)[name]; } }
@@ -196,7 +197,7 @@ describe("notification inbox route", () => {
       return String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Initial");
     });
     await renderRoute(); await click("Open");
-    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); });
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
     await act(async () => resolveRead(Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" })))); await flush();
     expect(browser.location.pathname + browser.location.search).toBe("/notifications?read=read");
   });
@@ -214,7 +215,7 @@ describe("notification inbox route", () => {
       return pageResponse(path, "Protected notification");
     });
     await renderRoute(); await click("Open");
-    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await settle();
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await settle();
     await act(async () => resolveRead(Response.json({ error: { code: status === 401 ? "AUTH_REQUIRED" : "FORBIDDEN", message: "Denied", retryable: false } }, { status }))); await flush();
     expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
     expect(container.querySelector("[data-notification-id]")).toBeNull();
@@ -235,7 +236,7 @@ describe("notification inbox route", () => {
       listRequests += 1; return pageResponse(String(input), "Current view");
     });
     await renderRoute(); await click("Open");
-    await act(async () => { browser.history.pushState({}, "", "/notifications?read=read"); browser.dispatchEvent(new browser.PopStateEvent("popstate")); }); await flush();
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read"); await flush();
     const before = listRequests;
     await act(async () => resolveRead(Response.json({ error: { code: "API_ERROR", message: "Failed", retryable: true } }, { status: 500 }))); await flush();
     expect(container.textContent).toContain("Check the current notification state");
@@ -388,6 +389,71 @@ describe("notification inbox route", () => {
     expect(container.querySelectorAll("[data-notification-id]")).toHaveLength(20);
     expect(container.querySelector('[data-notification-id="notification-last"]')).toBeNull();
     expect(posts).toBe(1);
+  });
+
+  it("blocks leaving while a notification update is in flight, keeps its own filter, and releases after the update reconciles", async () => {
+    let resolveRead!: (response: Response) => void;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return new Promise<Response>((resolve) => { resolveRead = resolve; });
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 1 });
+      return pageResponse(String(input), "Current");
+    });
+    await renderRoute();
+    await click("Mark as read");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    expect(browser.location.pathname).toBe("/notifications");
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+
+    await change(container.querySelector('[aria-label="Read status"]') as HTMLSelectElement, "read");
+    await flush();
+    expect(browser.location.search).toContain("read=read");
+
+    await act(async () => resolveRead(Response.json(notification({ readAt: "2026-08-30T01:00:00.000Z" }))));
+    await flush();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("keeps leave blocked after an unknown update until a reload shows the current list", async () => {
+    let failRead = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new TypeError("lost response");
+      if (failRead) throw new TypeError("read unavailable");
+      if (String(input).endsWith("/summary")) return Response.json({ unread: 0 });
+      return pageResponse(String(input), "Checked");
+    });
+    await renderRoute();
+    await click("Mark as read");
+    await flush();
+    expect(container.textContent).toContain("Check the current notification state");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    const unload = new browser.Event("beforeunload", { cancelable: true });
+    browser.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+
+    failRead = true;
+    await click("Try notifications again");
+    await flush();
+    expect(container.querySelector("[data-page-state='error']")).not.toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+
+    failRead = false;
+    await click("Try notifications again");
+    await waitForText("Checked");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it.each([401, 403])("releases the leave lock when an in-flight update is denied with %s", async (status) => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Response.json({ error: { code: "FORBIDDEN", message: "Denied", retryable: false } }, { status });
+      return String(input).endsWith("/summary") ? Response.json({ unread: 1 }) : pageResponse(String(input), "Protected");
+    });
+    await renderRoute();
+    await click("Mark as read");
+    await flush();
+    expect(container.querySelector("[data-page-state='forbidden']")).not.toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
   async function renderRoute() {

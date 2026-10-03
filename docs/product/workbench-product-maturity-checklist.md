@@ -502,3 +502,8 @@ R0 与全局标记语义一致：checkbox 只表达本地 implementation/verific
 ### 看板移动未决写入离页保护与未知结果核对（本地）
 
 基线 `2385f04`。看板在途/未知移动阻止普通离页及 beforeunload，仅放行本列只读分页；明确 4xx 拒绝回滚，传输失败/5xx/408/429/畸形回执保留冻结记录，仅显式只读核对或同目标原样重试后解锁，撤权清空、卸载迟到隔离。11 项 RED→GREEN，扩大 318 文件 4500/4500 及类型/UI/双语/清单/领域/成熟度通过。详见 `docs/product/navigation-board-move-protection-evidence.md`。主清单原30/范围内29/关闭5/开放24；C02、A05/R2-008、导航 Task 4 仍开放，未决记录不跨刷新。未push/部署/远程迁移。
+
+
+### 通知更新进行中与未知结果的离页保护（本地）
+
+基线 `8571747`。通知更新进行中和未知结果阻止普通离页及 beforeunload，本页只读查询变更仍放行；授权失败解除锁定，其余失败直到列表和摘要读回才解除。详见 `docs/product/navigation-notification-update-leave-evidence.md`。主清单原30/范围内29/关闭5/开放24；C05 与导航 Task 4 仍开放。未push/部署/远程迁移。

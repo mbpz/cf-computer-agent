@@ -2124,6 +2124,26 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   const activeRef = useRef(true);
   const readyRef = useRef(false);
   const locationEpochRef = useRef(0);
+  // An update whose response was lost stays locked until a later read shows the current list.
+  const unknownRef = useRef(false);
+  const ownedNavigationRef = useRef(false);
+  const leaveGuardRef = useRef<(() => void) | null>(null);
+  const syncLeaveGuard = useCallback(() => {
+    const locked = actionPendingRef.current || unknownRef.current;
+    if (locked && !leaveGuardRef.current) {
+      leaveGuardRef.current = registerWorkspaceLeaveGuard(() => ({
+        kind: (actionPendingRef.current || unknownRef.current) && !ownedNavigationRef.current ? "block" : "allow",
+      }));
+    } else if (!locked && leaveGuardRef.current) {
+      leaveGuardRef.current();
+      leaveGuardRef.current = null;
+    }
+  }, []);
+  const writeOwned = useCallback((mode: "push" | "replace", url: string, onCommit?: () => void) => {
+    ownedNavigationRef.current = true;
+    try { return writeWorkspaceHistory(mode, url, onCommit); }
+    finally { ownedNavigationRef.current = false; }
+  }, []);
 
   const invalidateSnapshot = (next: NotificationsPageState) => {
     readyRef.current = false;
@@ -2135,8 +2155,10 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   };
 
   const clearRestrictedState = () => {
+    unknownRef.current = false;
     setActionError(undefined);
     invalidateSnapshot({ kind: "forbidden" });
+    syncLeaveGuard();
   };
 
   useEffect(() => {
@@ -2152,11 +2174,13 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       const lastPage = Math.max(1, page.pagination.totalPages);
       if (snapshot.page > lastPage) {
         const next = { ...snapshot, page: lastPage };
-        writeWorkspaceHistory("replace", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
+        writeOwned("replace", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
           queryRef.current = next; setQuery(next);
         });
         return;
       }
+      unknownRef.current = false;
+      syncLeaveGuard();
       readyRef.current = true;
       setState({ kind: "ready", items: page.items, pagination: page.pagination });
       setSummary(nextSummary);
@@ -2169,7 +2193,7 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       setSummary(null);
       setState({ kind: "error" }); setPending(false);
     });
-  }, [query, retryVersion]);
+  }, [query, retryVersion, syncLeaveGuard, writeOwned]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -2183,27 +2207,38 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
   }, []);
 
   useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (actionPendingRef.current || unknownRef.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  useEffect(() => {
     activeRef.current = true;
     return () => {
       activeRef.current = false;
       readyRef.current = false;
       locationEpochRef.current += 1;
       actionPendingRef.current = false;
+      unknownRef.current = false;
+      syncLeaveGuard();
       controllerRef.current?.dispose();
       controllerRef.current = null;
     };
-  }, []);
+  }, [syncLeaveGuard]);
 
   const navigate = (next: NotificationQuery, replace = false) => {
-    writeWorkspaceHistory(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
+    writeOwned(replace ? "replace" : "push", `/notifications${writeNotificationSearch(readWorkspaceLocation().search, next)}`, () => {
       readyRef.current = false; setActionError(undefined);
       queryRef.current = next; setQuery(next);
     });
   };
 
   const mutate = async (operation: () => Promise<unknown>) => {
-    if (actionPendingRef.current || !readyRef.current) return;
+    if (actionPendingRef.current || unknownRef.current || !readyRef.current) return;
     actionPendingRef.current = true;
+    syncLeaveGuard();
     setActionPending(true); setActionError(undefined);
     try {
       await operation();
@@ -2215,12 +2250,14 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
       if (activeRef.current) {
         if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) clearRestrictedState();
         else if (readWorkspaceLocation().pathname === "/notifications") {
+          unknownRef.current = true;
           setActionError(undefined);
           invalidateSnapshot({ kind: "recovery" });
         }
       }
     } finally {
       actionPendingRef.current = false;
+      syncLeaveGuard();
       if (activeRef.current) setActionPending(false);
     }
   };
@@ -2245,7 +2282,11 @@ export function NotificationsRoute({ locale, search, isAdmin = false }: { locale
         const current = await markNotificationRead(id);
         if (!activeRef.current || epoch !== locationEpochRef.current) return;
         const href = notificationTargetHref(current, isAdmin);
-        if (href) writeWorkspaceHistory("push", href);
+        if (href) {
+          actionPendingRef.current = false;
+          syncLeaveGuard();
+          writeWorkspaceHistory("push", href);
+        }
         else setActionError(frontendText(locale, "NOTIFICATIONS_TARGET_UNAVAILABLE"));
       });
     }}

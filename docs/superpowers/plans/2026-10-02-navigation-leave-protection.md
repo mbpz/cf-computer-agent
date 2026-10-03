@@ -259,3 +259,8 @@ Task 4逐页项目关联续行（基线5776cf0）：项目目标/任务关联/�
 ### 看板移动未决写入续行（基线2385f04）
 
 BoardsRoute 在途/未知移动接共享离页守卫（仅锁定期间注册，本列只读分页以同步 owned 标记放行），明确 4xx 拒绝与未知结果分流；未知仅显式只读核对或同目标原样重试解锁。11 项行为 RED→GREEN，扩大 318 文件 4500/4500。见 `docs/product/navigation-board-move-protection-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续其余逐页所有者核对（图谱动作、通知批量操作等）。
+
+
+### 通知更新离页续行（基线8571747）
+
+NotificationsRoute 在更新进行中和未知结果期间注册共享离页守卫；本页筛选、分页和越界收敛以同步 owned 标记放行。401/403 解锁，其余失败直到读回成功才解锁。见 `docs/product/navigation-notification-update-leave-evidence.md`。Task 4 整体及原生门禁仍开放；下一允许继续图谱动作进行中/未确认结果的离页边界。
