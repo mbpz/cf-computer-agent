@@ -6,3 +6,8 @@ dist/
 .worktrees/
 .superpowers/
 SECRETS_FILE
+scripts/.environment-page-*/
+scripts/.account-boundary-*/
+scripts/.vm-import-*/
+scripts/.vm-asset-*/
+scripts/.vm-files-*/
