@@ -76,7 +76,7 @@ function fixture(url: string): Response {
   }
   if (url.includes("/revisions/")) {
     const next = url.endsWith("revision-next");
-    return json({ revision: { id: next ? "revision-next" : "revision-old", knowledgeItemId: "knowledge-1", title: "History", markdown: next ? "Next historical body" : "Historical body", isCurrent: false, publishedAt: "2026-09-01", chunks: [{ id: next ? "chunk-next" : "chunk-old", citationId: next ? "citation-next" : "citation-old", text: "Source excerpt", startLine: 1, endLine: 2 }] } });
+    return json({ revision: { id: next ? "revision-next" : "revision-old", knowledgeItemId: "knowledge-1", title: "History", markdown: next ? "Next historical body" : "Historical body", isCurrent: false, publishedAt: "2026-09-01", sourceVersionId: "source-old", indexStatus: "indexed", chunks: [{ id: next ? "chunk-next" : "chunk-old", citationId: next ? "citation-next" : "citation-old", text: "Source excerpt", startLine: 1, endLine: 2 }] } });
   }
   if (url.endsWith("/related")) return json({ related: { items: [] } });
   if (url.endsWith("/backlinks")) return json({ backlinks: { items: [] } });

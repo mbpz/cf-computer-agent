@@ -18,7 +18,7 @@ describe("private reader note draft ownership", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
   const citations = [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 1, endLine: 2 }];
-  const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", markdown: "Hello", chunks: [{ id: "chunk-a", startLine: 1, endLine: 2, text: "Hello", ordinal: 0, headingPath: [] }] };
+  const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", markdown: "Hello", sourceVersionId: "source-a", indexStatus: "indexed", chunks: [{ id: "chunk-a", startLine: 1, endLine: 2, text: "Hello", ordinal: 0, headingPath: [] }] };
   const receipt = (extra = {}) => ({ id: "note-a", ownerId: "member-a", knowledgeItemId: "knowledge-a", title: "Title", body: "Body", visibility: "private", access: "owner", citations, createdAt: "2026-10-02T00:00:00.000Z", updatedAt: "2026-10-02T00:00:01.000Z", ...extra });
   beforeEach(() => { browser = new Window({ url: "https://app.test/knowledge/knowledge-a" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });

@@ -16,7 +16,7 @@ import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../fronte
 describe("private note sharing decisions", () => {
   let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   const locale = createLocaleRuntime({ navigatorLanguage: "en" });
-  const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", markdown: "Hello", chunks: [{ id: "chunk-a", startLine: 1, endLine: 2, text: "Hello", ordinal: 0, headingPath: [] }] };
+  const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", markdown: "Hello", sourceVersionId: "source-a", indexStatus: "indexed", chunks: [{ id: "chunk-a", startLine: 1, endLine: 2, text: "Hello", ordinal: 0, headingPath: [] }] };
   const note = { id: "note-a", ownerId: "member-a", knowledgeItemId: "knowledge-a", title: "Saved title", body: "Saved body", visibility: "private", access: "owner", citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 1, endLine: 2 }], updatedAt: "2026-10-02T00:00:00Z" };
   const share = { noteId: "note-a", recipientMemberId: "member-b", createdAt: "2026-10-02T00:00:00Z", revokedAt: null };
   let rows: unknown[]; let writes: string[];

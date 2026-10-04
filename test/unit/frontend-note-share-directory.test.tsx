@@ -12,7 +12,7 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const { Window } = await import("happy-dom");
 
-const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", chunks: [{ id: "chunk-a", startLine: 1, endLine: 1, text: "Hello", ordinal: 0, headingPath: [] }] };
+const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", sourceVersionId: "source-a", indexStatus: "indexed", chunks: [{ id: "chunk-a", startLine: 1, endLine: 1, text: "Hello", ordinal: 0, headingPath: [] }] };
 const note = { id: "note-a", ownerId: "member-a", knowledgeItemId: "knowledge-a", title: "Title", body: "Body", visibility: "private", access: "owner", citations: [{ revisionId: "revision-a", chunkId: "chunk-a", startLine: 1, endLine: 1 }], createdAt: "2026-10-04T00:00:00.000Z", updatedAt: "2026-10-04T00:00:01.000Z" };
 
 describe("note share member directory", () => {

@@ -12,36 +12,60 @@ vi.mock("vm", () => ({ default: { Script: InertVmScript, createContext(value: ob
 vi.mock("../../frontend/lib/markdown-renderer", () => ({ renderSafeMarkdown: (text: string) => <div data-test-markdown>{text}</div> }));
 const { Window } = await import("happy-dom");
 
-const revision = { id: "revision-a", knowledgeItemId: "knowledge-a", title: "Readable entry", markdown: "Hello", sourceVersionId: "source-a", indexStatus: "indexed" };
+const revision = {
+  id: "revision-a",
+  knowledgeItemId: "knowledge-a",
+  title: "Readable entry",
+  markdown: "Hello",
+  chunks: [] as unknown[],
+  sourceVersionId: "source-a",
+  indexStatus: "indexed" as string | undefined,
+};
 
-describe("knowledge revision chunks", () => {
-  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root; let chunks: unknown;
+describe("knowledge revision status", () => {
+  let browser: InstanceType<typeof Window>; let container: HTMLElement; let root: Root;
   beforeEach(() => {
-    chunks = undefined;
+    revision.sourceVersionId = "source-a";
+    revision.indexStatus = "indexed";
     browser = new Window({ url: "https://app.test/knowledge/knowledge-a" });
     vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("history", browser.history); vi.stubGlobal("location", browser.location); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
 
-  it("does not treat a missing chunk list as no source locations", async () => {
+  it("does not show a missing index status as pending", async () => {
+    revision.indexStatus = undefined;
     await mount();
     expect(container.textContent).toContain("Unable to load this knowledge entry.");
-    expect(container.textContent).not.toContain("No source locations available.");
+    expect(container.textContent).not.toContain("Parser / index");
+    expect(container.textContent).not.toContain("Readable entry");
   });
 
-  it("shows an explicit empty chunk list as no source locations", async () => {
-    chunks = [];
+  it("does not invent a source version id", async () => {
+    revision.sourceVersionId = "";
+    await mount();
+    expect(container.textContent).toContain("Unable to load this knowledge entry.");
+    expect(container.textContent).not.toContain("unknown-source");
+    expect(container.textContent).not.toContain("Readable entry");
+  });
+
+  it("shows an explicit pending index and the real source version", async () => {
+    revision.indexStatus = "pending";
     await mount();
     expect(container.textContent).toContain("Readable entry");
-    expect(container.textContent).toContain("No source locations available.");
+    expect(container.textContent).toContain("Parser / index");
+    expect(container.textContent).toContain("pending");
+    expect(container.textContent).toContain("source-a");
     expect(container.textContent).not.toContain("Unable to load this knowledge entry.");
   });
 
   async function mount() {
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/knowledge/knowledge-a") return Response.json({ knowledge: { currentRevision: { ...revision, ...(chunks === undefined ? {} : { chunks }) } } });
+      const body = { ...revision };
+      if (!body.indexStatus) delete body.indexStatus;
+      if (!body.sourceVersionId) delete body.sourceVersionId;
+      if (url === "/api/knowledge/knowledge-a") return Response.json({ knowledge: { currentRevision: body } });
       if (url.endsWith("/favorite")) return Response.json({ favorite: false });
       if (url.endsWith("/related")) return Response.json({ related: { items: [] } });
       if (url.endsWith("/backlinks")) return Response.json({ backlinks: { items: [] } });
@@ -51,7 +75,7 @@ describe("knowledge revision chunks", () => {
     await act(async () => root.render(<KnowledgeReaderRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} memberId="member-a" knowledgeItemId="knowledge-a" />));
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const text = container.textContent ?? "";
-      if (text.includes("Unable to load this knowledge entry.") || text.includes("No source locations available.")) break;
+      if (text.includes("Unable to load this knowledge entry.") || text.includes("Readable entry")) break;
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     }
   }

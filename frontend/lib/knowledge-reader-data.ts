@@ -91,6 +91,10 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
   const record = value as Record<string, unknown>;
   if (typeof record.id !== "string" || !record.id || typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) return null;
   if (typeof record.markdown !== "string" || !Array.isArray(record.chunks)) return null;
+  const sourceVersionId = record.sourceVersionId;
+  const indexStatus = record.indexStatus;
+  if (typeof sourceVersionId !== "string" || sourceVersionId.length === 0) return null;
+  if (indexStatus !== "pending" && indexStatus !== "indexed" && indexStatus !== "search_degraded" && indexStatus !== "failed") return null;
   const chunks = record.chunks.flatMap((chunk) => {
     if (!chunk || typeof chunk !== "object" || Array.isArray(chunk)) return [];
     const item = chunk as Record<string, unknown>;
@@ -117,10 +121,10 @@ function normalizeRevision(value: unknown): KnowledgeRevision | null {
     publishedAt: typeof record.publishedAt === "string" ? record.publishedAt : undefined,
     isCurrent: record.isCurrent === true,
     previousRevisionId: typeof record.previousRevisionId === "string" && record.previousRevisionId ? record.previousRevisionId : null,
-    sourceVersionId: typeof record.sourceVersionId === "string" && record.sourceVersionId ? record.sourceVersionId : "unknown-source",
+    sourceVersionId,
     sourceVersionOrdinal: Number.isSafeInteger(record.sourceVersionOrdinal) && (record.sourceVersionOrdinal as number) >= 0 ? record.sourceVersionOrdinal as number : null,
     parserSchemaVersion: typeof record.parserSchemaVersion === "string" && record.parserSchemaVersion ? record.parserSchemaVersion : null,
-    indexStatus: record.indexStatus === "indexed" || record.indexStatus === "search_degraded" || record.indexStatus === "failed" ? record.indexStatus : "pending",
+    indexStatus,
     visibility: typeof record.visibility === "string" ? record.visibility : undefined,
     chunks,
   };
