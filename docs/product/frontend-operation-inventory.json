@@ -2078,24 +2078,24 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/admin/roles-page.tsx:25:157",
-        "frontend/pages/admin/roles-page.tsx:27:12",
-        "frontend/pages/admin/roles-page.tsx:27:311",
-        "frontend/pages/admin/roles-page.tsx:27:383",
-        "frontend/pages/admin/roles-page.tsx:137:183",
-        "frontend/pages/admin/roles-page.tsx:137:874",
-        "frontend/pages/admin/roles-page.tsx:137:1103",
-        "frontend/pages/admin/roles-page.tsx:137:1336",
-        "frontend/pages/admin/roles-page.tsx:137:1520",
-        "frontend/pages/admin/roles-page.tsx:138:1099",
-        "frontend/pages/admin/roles-page.tsx:138:1573",
-        "frontend/pages/admin/roles-page.tsx:138:1817",
-        "frontend/pages/admin/roles-page.tsx:138:2177",
-        "frontend/pages/admin/roles-page.tsx:138:2646",
-        "frontend/pages/admin/roles-page.tsx:138:2882",
-        "frontend/pages/admin/roles-page.tsx:138:3203",
-        "frontend/pages/admin/roles-page.tsx:138:3272",
-        "frontend/pages/admin/roles-page.tsx:140:13"
+        "frontend/pages/admin/roles-page.tsx:27:157",
+        "frontend/pages/admin/roles-page.tsx:29:12",
+        "frontend/pages/admin/roles-page.tsx:29:311",
+        "frontend/pages/admin/roles-page.tsx:29:383",
+        "frontend/pages/admin/roles-page.tsx:143:183",
+        "frontend/pages/admin/roles-page.tsx:143:874",
+        "frontend/pages/admin/roles-page.tsx:143:1103",
+        "frontend/pages/admin/roles-page.tsx:143:1336",
+        "frontend/pages/admin/roles-page.tsx:143:1520",
+        "frontend/pages/admin/roles-page.tsx:144:1099",
+        "frontend/pages/admin/roles-page.tsx:144:1602",
+        "frontend/pages/admin/roles-page.tsx:144:1846",
+        "frontend/pages/admin/roles-page.tsx:144:2206",
+        "frontend/pages/admin/roles-page.tsx:144:2675",
+        "frontend/pages/admin/roles-page.tsx:144:2911",
+        "frontend/pages/admin/roles-page.tsx:144:3232",
+        "frontend/pages/admin/roles-page.tsx:144:3301",
+        "frontend/pages/admin/roles-page.tsx:146:13"
       ],
       "unresolvedSymbols": []
     },
@@ -23978,10 +23978,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:25:157",
+      "id": "frontend/pages/admin/roles-page.tsx:27:157",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "AdminRolesPage",
-      "line": 25,
+      "line": 27,
       "column": 157,
       "kind": "jsx",
       "tag": "Button",
@@ -24017,10 +24017,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:27:12",
+      "id": "frontend/pages/admin/roles-page.tsx:29:12",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "AdminRolesPage",
-      "line": 27,
+      "line": 29,
       "column": 12,
       "kind": "jsx",
       "tag": "RoleEditor",
@@ -24062,10 +24062,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:27:311",
+      "id": "frontend/pages/admin/roles-page.tsx:29:311",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "AdminRolesPage",
-      "line": 27,
+      "line": 29,
       "column": 311,
       "kind": "jsx",
       "tag": "p",
@@ -24100,10 +24100,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:27:383",
+      "id": "frontend/pages/admin/roles-page.tsx:29:383",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "AdminRolesPage",
-      "line": 27,
+      "line": 29,
       "column": 383,
       "kind": "jsx",
       "tag": "Button",
@@ -24143,10 +24143,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:137:183",
+      "id": "frontend/pages/admin/roles-page.tsx:143:183",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 137,
+      "line": 143,
       "column": 183,
       "kind": "jsx",
       "tag": "button",
@@ -24178,10 +24178,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:137:874",
+      "id": "frontend/pages/admin/roles-page.tsx:143:874",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 137,
+      "line": 143,
       "column": 874,
       "kind": "jsx",
       "tag": "Input",
@@ -24210,10 +24210,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:137:1103",
+      "id": "frontend/pages/admin/roles-page.tsx:143:1103",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 137,
+      "line": 143,
       "column": 1103,
       "kind": "jsx",
       "tag": "Input",
@@ -24242,10 +24242,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:137:1336",
+      "id": "frontend/pages/admin/roles-page.tsx:143:1336",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 137,
+      "line": 143,
       "column": 1336,
       "kind": "jsx",
       "tag": "Input",
@@ -24274,10 +24274,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:137:1520",
+      "id": "frontend/pages/admin/roles-page.tsx:143:1520",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 137,
+      "line": 143,
       "column": 1520,
       "kind": "jsx",
       "tag": "Button",
@@ -24306,17 +24306,17 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:1099",
+      "id": "frontend/pages/admin/roles-page.tsx:144:1099",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
+      "line": 144,
       "column": 1099,
       "kind": "jsx",
       "tag": "Checkbox",
       "attributes": {
         "checked": "hasPermission(mask, PERMISSION_BITS[key])",
         "onChange": "() => toggle(key)",
-        "disabled": "selected.isSystem || locked",
+        "disabled": "(selected.isSystem && !canGrantWorkbench(key)) || locked",
         "aria-label": "frontendText(locale, permissionLabelKey(key))"
       },
       "handlers": {
@@ -24344,11 +24344,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:1573",
+      "id": "frontend/pages/admin/roles-page.tsx:144:1602",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 1573,
+      "line": 144,
+      "column": 1602,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -24377,11 +24377,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:1817",
+      "id": "frontend/pages/admin/roles-page.tsx:144:1846",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 1817,
+      "line": 144,
+      "column": 1846,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -24410,11 +24410,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:2177",
+      "id": "frontend/pages/admin/roles-page.tsx:144:2206",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 2177,
+      "line": 144,
+      "column": 2206,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -24458,11 +24458,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:2646",
+      "id": "frontend/pages/admin/roles-page.tsx:144:2675",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 2646,
+      "line": 144,
+      "column": 2675,
       "kind": "jsx",
       "tag": "Input",
       "attributes": {
@@ -24494,11 +24494,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:2882",
+      "id": "frontend/pages/admin/roles-page.tsx:144:2911",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 2882,
+      "line": 144,
+      "column": 2911,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
@@ -24530,11 +24530,11 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:3203",
+      "id": "frontend/pages/admin/roles-page.tsx:144:3232",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 3203,
+      "line": 144,
+      "column": 3232,
       "kind": "jsx",
       "tag": "p",
       "attributes": {
@@ -24563,16 +24563,16 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:138:3272",
+      "id": "frontend/pages/admin/roles-page.tsx:144:3301",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 138,
-      "column": 3272,
+      "line": 144,
+      "column": 3301,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "type": "\"button\"",
-        "disabled": "selected.isSystem || locked || !onSave",
+        "disabled": "(selected.isSystem && !systemWorkbenchGrant) || locked || !onSave",
         "onClick": "() => requestConfirmation({ kind: \"save\" })"
       },
       "handlers": {
@@ -24594,10 +24594,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/roles-page.tsx:140:13",
+      "id": "frontend/pages/admin/roles-page.tsx:146:13",
       "path": "frontend/pages/admin/roles-page.tsx",
       "owner": "RoleEditor",
-      "line": 140,
+      "line": 146,
       "column": 13,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -35772,10 +35772,10 @@
       "tag": "form",
       "attributes": {
         "className": "\"space-y-2\"",
-        "onSubmit": "(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== \"\" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: [\"progress\"], op: { op: \"progress\", taskId, progress: next } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== \"\" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: [\"progress\"], op: { op: \"progress\", taskId, progress: next, expectedUpdatedAt: detail.task.updatedAt } }); }"
       },
       "handlers": {
-        "onSubmit": "(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== \"\" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: [\"progress\"], op: { op: \"progress\", taskId, progress: next } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== \"\" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: [\"progress\"], op: { op: \"progress\", taskId, progress: next, expectedUpdatedAt: detail.task.updatedAt } }); }"
       },
       "spreads": [],
       "labels": [],
@@ -36059,10 +36059,10 @@
       "tag": "form",
       "attributes": {
         "className": "\"space-y-2 border-t pt-3\"",
-        "onSubmit": "(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: [\"knowledgeId\"], op: { op: \"link\", taskId, knowledgeItemId: id } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: [\"knowledgeId\"], op: { op: \"link\", taskId, knowledgeItemId: id, expectedUpdatedAt: detail.task.updatedAt } }); }"
       },
       "handlers": {
-        "onSubmit": "(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: [\"knowledgeId\"], op: { op: \"link\", taskId, knowledgeItemId: id } }); }"
+        "onSubmit": "(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: [\"knowledgeId\"], op: { op: \"link\", taskId, knowledgeItemId: id, expectedUpdatedAt: detail.task.updatedAt } }); }"
       },
       "spreads": [],
       "labels": [],
@@ -36204,10 +36204,10 @@
         "variant": "\"outline\"",
         "disabled": "locked",
         "aria-label": "`${t(\"TASKS_LINK_REMOVE\")}: ${link.id}`",
-        "onClick": "() => void perform({ op: { op: \"unlink\", taskId, linkId: link.id } })"
+        "onClick": "() => void perform({ op: { op: \"unlink\", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })"
       },
       "handlers": {
-        "onClick": "() => void perform({ op: { op: \"unlink\", taskId, linkId: link.id } })"
+        "onClick": "() => void perform({ op: { op: \"unlink\", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })"
       },
       "spreads": [],
       "labels": [

@@ -224,7 +224,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
     if (!taskId || locked) return;
     const next = [...new Set(currentDraft.current.tags.split(",").map((tag) => tag.trim()).filter(Boolean))];
     if (next.length > 10 || next.some((tag) => [...tag].length > 32 || /[\u0000-\u001f\u007f-\u009f]/u.test(tag))) { setError(true); return; }
-    void perform({ clean: ["tags"], op: { op: "tags", taskId, tags: next } });
+    void perform({ clean: ["tags"], op: { op: "tags", taskId, tags: next, ...(detail ? { expectedUpdatedAt: detail.task.updatedAt } : {}) } });
   }
   const close = () => {
     if (gate.current || intent.current || discardRef.current !== null) return;
@@ -259,7 +259,7 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
           <label>{t("TASKS_FIELD_STATUS")}<select className="block w-full rounded border bg-background p-2" aria-label={t("TASKS_FIELD_STATUS")} disabled={locked} value={status} onChange={(event) => edit("status", event.currentTarget.value as TaskItem["status"])}>{transitions[detail.task.status].map((value) => <option key={value} value={value}>{t(taskStatusKey(value))}</option>)}</select></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_STATUS")}</Button>
         </form>
-        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], op: { op: "progress", taskId, progress: next } }); }}>
+        <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); const progress = currentDraft.current.progress; const next = Number(progress); if (!locked && progress !== "" && Number.isInteger(next) && next >= 0 && next <= 100) void perform({ clean: ["progress"], op: { op: "progress", taskId, progress: next, expectedUpdatedAt: detail.task.updatedAt } }); }}>
           <label>{t("TASKS_FIELD_PROGRESS")}<Input type="number" min={0} max={100} step={1} required aria-label={t("TASKS_FIELD_PROGRESS")} value={progress} disabled={locked || ["done", "canceled"].includes(detail.task.status)} onChange={(event) => edit("progress", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || ["done", "canceled"].includes(detail.task.status)}>{t("TASKS_SAVE_PROGRESS")}</Button>
         </form>
@@ -267,11 +267,11 @@ export function TaskEditor({ taskId, locale, onClose, onChanged, onDenied, membe
           <label>{t("TASKS_FIELD_TAGS")}<Input aria-label={t("TASKS_FIELD_TAGS")} value={tags} disabled={locked} onChange={(event) => edit("tags", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked}>{t("TASKS_SAVE_TAGS")}</Button>
         </form>
-        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], op: { op: "link", taskId, knowledgeItemId: id } }); }}>
+        <form className="space-y-2 border-t pt-3" onSubmit={(event) => { event.preventDefault(); const id = currentDraft.current.knowledgeId.trim(); if (!locked && id) void perform({ clean: ["knowledgeId"], op: { op: "link", taskId, knowledgeItemId: id, expectedUpdatedAt: detail.task.updatedAt } }); }}>
           <label>{t("TASKS_LINK_ID")}<Input aria-label={t("TASKS_LINK_ID")} value={knowledgeId} required maxLength={128} disabled={locked} onChange={(event) => edit("knowledgeId", event.currentTarget.value)} /></label>
           <Button type="submit" disabled={locked || detail.links.length >= 5}>{t("TASKS_LINK_ADD")}</Button>
         </form>
-        <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
+        <ul className="space-y-2">{detail.links.map((link) => <li key={link.id} className="break-words rounded border p-2"><p>{link.knowledgeTitle ?? t("TASKS_LINK_UNAVAILABLE")}</p><p className="text-xs text-muted-foreground">{link.knowledgeItemId}</p><Button variant="outline" disabled={locked} aria-label={`${t("TASKS_LINK_REMOVE")}: ${link.id}`} onClick={() => void perform({ op: { op: "unlink", taskId, linkId: link.id, expectedUpdatedAt: detail.task.updatedAt } })}>{t("TASKS_LINK_REMOVE")}</Button></li>)}</ul>
       </>}
     </>}
     <Button variant="outline" disabled={locked} onClick={close}>{t("TASKS_CLOSE")}</Button>

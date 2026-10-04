@@ -17,7 +17,8 @@ export interface TasksRepositoryPort {
   compareAndSetStatus(memberId: string, id: string, expectedStatus: TaskStatus, status: TaskStatus, completedAt: number | null, progress: number, updatedAt: number): Promise<boolean>;
   listPendingStatusNotifications(memberId: string, taskId: string, limit: number): Promise<TaskStatusNotificationIntent[]>;
   markStatusNotificationDelivered(memberId: string, intentId: string, deliveredAt: number): Promise<boolean>;
-  updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Task | null>;
+  updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt?: number): Promise<Task | null>;
+  touch(memberId: string, id: string, updatedAt: number, expectedUpdatedAt?: number): Promise<boolean>;
   delete(memberId: string, id: string): Promise<boolean>;
   countByMember(memberId: string): Promise<number>;
   summary(memberId: string, now: Date): Promise<TaskSummary>;
@@ -140,11 +141,20 @@ export class TasksRepository implements TasksRepositoryPort {
     return result.meta.changes === 1;
   }
 
-  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number): Promise<Task | null> {
+  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt?: number): Promise<Task | null> {
+    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
     const result = await this.db.prepare(
-      `UPDATE tasks SET progress = ?, updated_at = ? WHERE member_id = ? AND id = ?`,
-    ).bind(progress, updatedAt, memberId, id).run();
+      `UPDATE tasks SET progress = ?, updated_at = ? WHERE member_id = ? AND id = ?${condition}`,
+    ).bind(progress, updatedAt, memberId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
     return result.meta.changes === 1 ? this.findOwned(memberId, id) : null;
+  }
+
+  async touch(memberId: string, id: string, updatedAt: number, expectedUpdatedAt?: number): Promise<boolean> {
+    const condition = expectedUpdatedAt === undefined ? "" : " AND updated_at = ?";
+    const result = await this.db.prepare(
+      `UPDATE tasks SET updated_at = ? WHERE member_id = ? AND id = ?${condition}`,
+    ).bind(updatedAt, memberId, id, ...(expectedUpdatedAt === undefined ? [] : [expectedUpdatedAt])).run();
+    return result.meta.changes === 1;
   }
 
   async delete(memberId: string, id: string): Promise<boolean> {

@@ -1,6 +1,6 @@
 import { requireCapability } from "../authorization/policy";
 import { APP_CONFIG } from "../config";
-import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, requireNoQuery, type RequestContext } from "../http";
+import { AppError, decodePathId, jsonResponse, methodNotAllowed, parseJsonRequest, readBoundedBodyBytes, requireNoQuery, type RequestContext } from "../http";
 import type { Principal } from "../identity/principal";
 import { parseNumberedPageRequest } from "../pagination";
 import type { TasksService } from "../tasks/service";
@@ -55,24 +55,24 @@ export async function routeTasksApi(
   if (progress) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["progress"], "TASK_INVALID");
-    return jsonResponse(await services.tasks.setProgress(member.memberId, decodePathId(progress[1]!), input.progress), 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["progress", "expectedUpdatedAt"], "TASK_INVALID");
+    return jsonResponse(await services.tasks.setProgress(member.memberId, decodePathId(progress[1]!), input.progress, input.expectedUpdatedAt), 200, context.requestId);
   }
 
   const tags = /^\/api\/tasks\/([^/]+)\/tags$/u.exec(url.pathname);
   if (tags) {
     if (request.method !== "PUT") return methodNotAllowed("PUT", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["tags"], "TASK_INVALID");
-    return jsonResponse({ tags: await services.tasks.replaceTags(member.memberId, decodePathId(tags[1]!), input.tags) }, 200, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["tags", "expectedUpdatedAt"], "TASK_INVALID");
+    return jsonResponse({ tags: await services.tasks.replaceTags(member.memberId, decodePathId(tags[1]!), input.tags, input.expectedUpdatedAt) }, 200, context.requestId);
   }
 
   const links = /^\/api\/tasks\/([^/]+)\/links$/u.exec(url.pathname);
   if (links) {
     if (request.method !== "POST") return methodNotAllowed("POST", context);
     requireNoQuery(url);
-    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["knowledgeItemId"], "TASK_INVALID");
-    return jsonResponse({ link: await services.tasks.addLink(member.memberId, decodePathId(links[1]!), input.knowledgeItemId) }, 201, context.requestId);
+    const input = strictRecord(await parseJsonRequest(request, APP_CONFIG.maxJsonRequestBytes), ["knowledgeItemId", "expectedUpdatedAt"], "TASK_INVALID");
+    return jsonResponse({ link: await services.tasks.addLink(member.memberId, decodePathId(links[1]!), input.knowledgeItemId, input.expectedUpdatedAt) }, 201, context.requestId);
   }
 
   const subtasks = /^\/api\/tasks\/([^/]+)\/subtasks$/u.exec(url.pathname);
@@ -125,7 +125,8 @@ export async function routeTasksApi(
   if (link) {
     if (request.method !== "DELETE") return methodNotAllowed("DELETE", context);
     requireNoQuery(url);
-    await services.tasks.removeLink(member.memberId, decodePathId(link[1]!), decodePathId(link[2]!));
+    const input = await optionalJsonBody(request, ["expectedUpdatedAt"]);
+    await services.tasks.removeLink(member.memberId, decodePathId(link[1]!), decodePathId(link[2]!), input.expectedUpdatedAt);
     return noContent(context.requestId);
   }
 
@@ -173,6 +174,20 @@ function requireExactQuery(url: URL, allowedKeys: readonly string[]): void {
     if (!allowedKeys.includes(key) || url.searchParams.getAll(key).length !== 1) {
       throw new AppError("TASK_PAGE_INVALID", "Task query parameters are invalid", 400);
     }
+  }
+}
+
+async function optionalJsonBody(request: Request, allowedKeys: readonly string[]): Promise<Record<string, unknown>> {
+  const mediaType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  const json = mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
+  const text = new TextDecoder().decode(await readBoundedBodyBytes(request, APP_CONFIG.maxJsonRequestBytes));
+  if (!text.trim()) return {};
+  if (!json) throw new AppError("UNSUPPORTED_MEDIA_TYPE", "Content type must be application/json", 415);
+  try {
+    return strictRecord(JSON.parse(text) as unknown, allowedKeys, "TASK_INVALID");
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new AppError("INVALID_JSON", "Request body must be valid JSON", 400);
+    throw error;
   }
 }
 

@@ -90,24 +90,30 @@ export async function setTaskStatus(id: string, status: string, requester: Fetch
   return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/status`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), id);
 }
 
-export async function setTaskProgress(id: string, progress: number, requester: Fetcher = fetch): Promise<TaskItem> {
-  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ progress }) }), id);
+export async function setTaskProgress(id: string, progress: number, requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<TaskItem> {
+  const body = expectedUpdatedAt === undefined ? { progress } : { progress, expectedUpdatedAt };
+  return taskReceipt(await apiFetch<TaskItem>(`/api/tasks/${encodeURIComponent(id)}/progress`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), id);
 }
 
-export async function replaceTaskTags(id: string, tags: string[], requester: Fetcher = fetch): Promise<string[]> {
-  const data = await apiFetch<{ tags?: unknown }>(`/api/tasks/${encodeURIComponent(id)}/tags`, { requester, method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tags }) });
+export async function replaceTaskTags(id: string, tags: string[], requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<string[]> {
+  const body = expectedUpdatedAt === undefined ? { tags } : { tags, expectedUpdatedAt };
+  const data = await apiFetch<{ tags?: unknown }>(`/api/tasks/${encodeURIComponent(id)}/tags`, { requester, method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!Array.isArray(data?.tags) || !data.tags.every((tag) => typeof tag === "string")) throw new Error("TASK_TAGS_INVALID");
   return data.tags;
 }
 
-export async function addTaskLink(taskId: string, knowledgeItemId: string, requester: Fetcher = fetch): Promise<TaskLinkItem> {
-  const data = await apiFetch<{ link?: unknown }>(`/api/tasks/${encodeURIComponent(taskId)}/links`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ knowledgeItemId }) });
+export async function addTaskLink(taskId: string, knowledgeItemId: string, requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<TaskLinkItem> {
+  const body = expectedUpdatedAt === undefined ? { knowledgeItemId } : { knowledgeItemId, expectedUpdatedAt };
+  const data = await apiFetch<{ link?: unknown }>(`/api/tasks/${encodeURIComponent(taskId)}/links`, { requester, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   return linkReceipt(data?.link, taskId, knowledgeItemId);
 }
 
-export async function removeTaskLink(taskId: string, linkId: string, requester: Fetcher = fetch): Promise<void> {
+export async function removeTaskLink(taskId: string, linkId: string, requester: Fetcher = fetch, expectedUpdatedAt?: string): Promise<void> {
   try {
-    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, { requester, method: "DELETE" });
+    const init = expectedUpdatedAt === undefined
+      ? { requester, method: "DELETE" }
+      : { requester, method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt }) };
+    await apiFetch<void>(`/api/tasks/${encodeURIComponent(taskId)}/links/${encodeURIComponent(linkId)}`, init);
   } catch (error) {
     if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
   }

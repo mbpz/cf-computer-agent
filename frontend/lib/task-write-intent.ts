@@ -6,10 +6,10 @@ export type TaskWriteIntent =
   | { op: "create"; taskId: string; fields: TaskFields }
   | { op: "update"; taskId: string; fields: TaskFields; expectedUpdatedAt?: string }
   | { op: "status"; taskId: string; status: TaskItem["status"]; expectedStatus?: TaskItem["status"] }
-  | { op: "progress"; taskId: string; progress: number }
-  | { op: "tags"; taskId: string; tags: string[] }
-  | { op: "link"; taskId: string; knowledgeItemId: string }
-  | { op: "unlink"; taskId: string; linkId: string }
+  | { op: "progress"; taskId: string; progress: number; expectedUpdatedAt?: string }
+  | { op: "tags"; taskId: string; tags: string[]; expectedUpdatedAt?: string }
+  | { op: "link"; taskId: string; knowledgeItemId: string; expectedUpdatedAt?: string }
+  | { op: "unlink"; taskId: string; linkId: string; expectedUpdatedAt?: string }
   | { op: "delete"; taskId: string };
 export type StoredTaskWrite = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; intent: TaskWriteIntent };
 
@@ -19,10 +19,10 @@ export function runTaskWrite(intent: TaskWriteIntent): Promise<unknown> {
     case "create": return createTask({ id: intent.taskId, ...intent.fields });
     case "update": return updateTask(intent.taskId, intent.expectedUpdatedAt === undefined ? intent.fields : { ...intent.fields, expectedUpdatedAt: intent.expectedUpdatedAt });
     case "status": return setTaskStatus(intent.taskId, intent.status, fetch, intent.expectedStatus);
-    case "progress": return setTaskProgress(intent.taskId, intent.progress);
-    case "tags": return replaceTaskTags(intent.taskId, intent.tags);
-    case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId);
-    case "unlink": return removeTaskLink(intent.taskId, intent.linkId);
+    case "progress": return setTaskProgress(intent.taskId, intent.progress, fetch, intent.expectedUpdatedAt);
+    case "tags": return replaceTaskTags(intent.taskId, intent.tags, fetch, intent.expectedUpdatedAt);
+    case "link": return addTaskLink(intent.taskId, intent.knowledgeItemId, fetch, intent.expectedUpdatedAt);
+    case "unlink": return removeTaskLink(intent.taskId, intent.linkId, fetch, intent.expectedUpdatedAt);
     case "delete": return deleteTask(intent.taskId);
   }
 }
@@ -62,6 +62,10 @@ export async function checkTaskWrite(intent: TaskWriteIntent): Promise<"applied"
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const statuses: readonly string[] = ["todo", "doing", "blocked", "done", "canceled"];
 const exactKeys = (value: object, keys: readonly string[]) => Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
+function optionalVersion(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  if (exactKeys(value, keys)) return true;
+  return exactKeys(value, [...keys, "expectedUpdatedAt"]) && typeof value.expectedUpdatedAt === "string" && Number.isFinite(Date.parse(value.expectedUpdatedAt));
+}
 function validFields(value: unknown): value is TaskFields {
   if (!value || typeof value !== "object" || Array.isArray(value) || !exactKeys(value, ["title", "notes", "priority", "dueAt"])) return false;
   const v = value as TaskFields;
@@ -78,11 +82,11 @@ export function validTaskWrite(value: unknown): value is TaskWriteIntent {
       && typeof v.expectedUpdatedAt === "string" && Number.isFinite(Date.parse(v.expectedUpdatedAt)))) && validFields(v.fields);
     case "status": return (exactKeys(v, ["op", "taskId", "status"]) || (exactKeys(v, ["op", "taskId", "status", "expectedStatus"])
       && typeof v.expectedStatus === "string" && statuses.includes(v.expectedStatus))) && typeof v.status === "string" && statuses.includes(v.status);
-    case "progress": return exactKeys(v, ["op", "taskId", "progress"]) && Number.isInteger(v.progress) && (v.progress as number) >= 0 && (v.progress as number) <= 100;
-    case "tags": return exactKeys(v, ["op", "taskId", "tags"]) && Array.isArray(v.tags) && v.tags.length <= 10
+    case "progress": return optionalVersion(v, ["op", "taskId", "progress"]) && Number.isInteger(v.progress) && (v.progress as number) >= 0 && (v.progress as number) <= 100;
+    case "tags": return optionalVersion(v, ["op", "taskId", "tags"]) && Array.isArray(v.tags) && v.tags.length <= 10
       && v.tags.every((tag) => typeof tag === "string" && !!tag.trim() && [...tag].length <= 32);
-    case "link": return exactKeys(v, ["op", "taskId", "knowledgeItemId"]) && typeof v.knowledgeItemId === "string" && ID.test(v.knowledgeItemId);
-    case "unlink": return exactKeys(v, ["op", "taskId", "linkId"]) && typeof v.linkId === "string" && ID.test(v.linkId);
+    case "link": return optionalVersion(v, ["op", "taskId", "knowledgeItemId"]) && typeof v.knowledgeItemId === "string" && ID.test(v.knowledgeItemId);
+    case "unlink": return optionalVersion(v, ["op", "taskId", "linkId"]) && typeof v.linkId === "string" && ID.test(v.linkId);
     case "delete": return exactKeys(v, ["op", "taskId"]);
     default: return false;
   }

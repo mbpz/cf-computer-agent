@@ -136,7 +136,7 @@ export class TasksService {
     // Absolute-value semantics: a re-send that already matches succeeds without a second write.
     if (task.title === normalized.title && task.notes === normalized.notes && task.priority === normalized.priority
       && (task.dueAt === null ? null : Date.parse(task.dueAt)) === normalized.dueAt) return task;
-    const conflict = () => new AppError("TASK_VERSION_CONFLICT", "Task changed since it was read", 409);
+    const conflict = versionConflict;
     if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw conflict();
     // Strictly increasing, so two writes in the same millisecond still produce distinct versions.
     const updatedAt = Math.max(this.now().getTime(), Date.parse(task.updatedAt) + 1);
@@ -186,7 +186,7 @@ export class TasksService {
     return current;
   }
 
-  async setProgress(memberId: string, id: string, progress: unknown): Promise<Task> {
+  async setProgress(memberId: string, id: string, progress: unknown, expectedUpdatedAt?: unknown): Promise<Task> {
     const task = await this.requireOwned(memberId, id);
     if (task.status === "done" || task.status === "canceled") {
       throw new AppError("TASK_PROGRESS_INVALID", "Task progress is not editable in a terminal status", 400);
@@ -194,14 +194,20 @@ export class TasksService {
     if (typeof progress !== "number" || !Number.isSafeInteger(progress) || progress < 0 || progress > 100) {
       throw new AppError("TASK_PROGRESS_INVALID", "Task progress must be an integer from 0 to 100", 400);
     }
-    if (task.progress === progress) return task; // 幂等
-    const updated = await this.repository.updateProgress(memberId, id, progress, this.now().getTime());
-    if (!updated) throw notFound();
+    const expected = parseExpectedVersion(expectedUpdatedAt);
+    if (task.progress === progress) return task; // 绝对值重放:已是该进度则成功,不再写一次
+    const updatedAt = this.nextVersion(task);
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    const updated = await this.repository.updateProgress(memberId, id, progress, updatedAt, expected);
+    if (!updated) {
+      if (expected !== undefined && await this.repository.findOwned(memberId, id)) throw versionConflict();
+      throw notFound();
+    }
     await this.emitAudit("task.progress_changed", memberId, updated.id, { progress });
     return updated;
   }
 
-  async replaceTags(memberId: string, id: string, tags: unknown): Promise<string[]> {
+  async replaceTags(memberId: string, id: string, tags: unknown, expectedUpdatedAt?: unknown): Promise<string[]> {
     const task = await this.requireOwned(memberId, id);
     if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string")) {
       throw invalid("TASK_INVALID", "Task fields are invalid");
@@ -213,31 +219,47 @@ export class TasksService {
     if (normalized.some((tag) => [...tag].length > APP_CONFIG.maxTaskTagChars || /[\u0000-\u001f\u007f-\u009f]/u.test(tag))) {
       throw invalid("TASK_INVALID", "Task fields are invalid");
     }
+    const expected = parseExpectedVersion(expectedUpdatedAt);
     const current = await this.repository.listTags(memberId, task.id);
     if (current.length === normalized.length && current.every((tag, index) => tag === normalized[index])) return current;
+    await this.claimVersion(memberId, task, expected);
     await this.repository.replaceTags(memberId, task.id, normalized);
     await this.emitAudit("task.tags_replaced", memberId, task.id, { count: normalized.length });
     return normalized;
   }
 
-  async addLink(memberId: string, taskId: string, knowledgeItemId: unknown): Promise<TaskLink> {
+  async addLink(memberId: string, taskId: string, knowledgeItemId: unknown, expectedUpdatedAt?: unknown): Promise<TaskLink> {
     const task = await this.requireOwned(memberId, taskId);
     if (typeof knowledgeItemId !== "string" || !validId(knowledgeItemId)) {
       throw invalid("TASK_INVALID", "Task fields are invalid");
     }
-    return (await this.linkKnowledge(memberId, task, knowledgeItemId)).link;
+    return (await this.linkKnowledge(memberId, task, knowledgeItemId, { expectedUpdatedAt })).link;
   }
 
-  async removeLink(memberId: string, taskId: string, linkId: string): Promise<void> {
-    await this.requireOwned(memberId, taskId);
+  async removeLink(memberId: string, taskId: string, linkId: string, expectedUpdatedAt?: unknown): Promise<void> {
+    const task = await this.requireOwned(memberId, taskId);
     const links = await this.repository.listLinks(memberId, taskId);
     const target = links.find((item) => item.id === linkId);
     if (!target) throw notFound();
+    await this.claimVersion(memberId, task, parseExpectedVersion(expectedUpdatedAt));
     if (!await this.repository.deleteLink(memberId, taskId, linkId)) throw notFound();
     await this.emitAudit("task.unlinked", memberId, taskId, { knowledgeItemId: target.knowledgeItemId });
   }
 
-  private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string): Promise<{ link: TaskLink; created: boolean }> {
+  private nextVersion(task: Task): number {
+    return Math.max(this.now().getTime(), Date.parse(task.updatedAt) + 1);
+  }
+
+  private async claimVersion(memberId: string, task: Task, expected: number | undefined): Promise<void> {
+    if (expected !== undefined && Date.parse(task.updatedAt) !== expected) throw versionConflict();
+    const claimed = await this.repository.touch(memberId, task.id, this.nextVersion(task), expected);
+    if (!claimed) {
+      if (expected !== undefined && await this.repository.findOwned(memberId, task.id)) throw versionConflict();
+      throw notFound();
+    }
+  }
+
+  private async linkKnowledge(memberId: string, task: Task, knowledgeItemId: string, version?: { expectedUpdatedAt: unknown }): Promise<{ link: TaskLink; created: boolean }> {
     // Replays must authorize the current target, not rely on a past association.
     if (!await this.repository.isKnowledgeVisible(memberId, knowledgeItemId)) {
       throw new AppError("TASK_KNOWLEDGE_NOT_FOUND", "Knowledge item is not visible", 404);
@@ -247,6 +269,7 @@ export class TasksService {
     if (await this.repository.countLinks(memberId, task.id) >= APP_CONFIG.maxTaskLinksPerTask) {
       throw new AppError("TASK_LINK_LIMIT", "Task link limit reached", 409);
     }
+    if (version) await this.claimVersion(memberId, task, parseExpectedVersion(version.expectedUpdatedAt));
     const inserted = await this.repository.insertLink({
       id: this.id(), taskId: task.id, memberId, knowledgeItemId, createdAt: this.now().getTime(),
     });
@@ -321,6 +344,10 @@ export function normalizeTaskCreate(input: TaskCreateInput): {
     id, title, notes, priority: priority as Task["priority"], dueAt: dueAtMs,
     knowledgeItemId: knowledgeItemId as string | null,
   };
+}
+
+function versionConflict(): AppError {
+  return new AppError("TASK_VERSION_CONFLICT", "Task changed since it was read", 409);
 }
 
 function parseExpectedVersion(value: unknown): number | undefined {

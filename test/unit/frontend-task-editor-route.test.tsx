@@ -232,6 +232,8 @@ describe("task editor through the real route", () => {
     }); await flush();
     expect(writes).toHaveLength(1);
     expect(writes[0]!.body[key]).toEqual(key === "tags" ? ["fresh"] : key === "progress" ? 40 : value);
+    if (key === "status") expect(writes[0]!.body.expectedStatus).toBe(task.status);
+    else expect(writes[0]!.body.expectedUpdatedAt).toBe(task.updatedAt);
   });
   it("creates from the task list and refreshes only after confirmed success", async () => {
     await mount(); await click("New task"); await change("Task title", "New work"); await click("Create task");
@@ -253,7 +255,7 @@ describe("task editor through the real route", () => {
     expect(writes[0]).toMatchObject({ method: "PATCH", body: { title: "Edited", notes: "Note", dueAt: new Date("2026-09-28T12:30").toISOString() } });
     await change("Task due date", ""); await click("Save task"); expect(writes[1]!.body.dueAt).toBeNull();
     await change("Task tags (comma-separated)", "urgent, review"); await click("Save tags"); expect(writes.at(-1)!.body.tags).toEqual(["urgent", "review"]);
-    await change("Knowledge item ID", "knowledge-one"); await click("Link knowledge"); expect(writes.at(-1)!.body).toEqual({ knowledgeItemId: "knowledge-one" });
+    await change("Knowledge item ID", "knowledge-one"); await click("Link knowledge"); expect(writes.at(-1)!.body).toEqual({ knowledgeItemId: "knowledge-one", expectedUpdatedAt: task.updatedAt });
   });
   it("does not repeat a successful write when detail readback fails", async () => {
     let failRead = false;
@@ -304,7 +306,7 @@ describe("task editor through the real route", () => {
     };
     await mount(); await click("Edit: Alpha (task-alpha)");
     await change("Task status", "doing"); await click("Save status"); expect(writes.at(-1)!.body).toEqual({ status: "doing", expectedStatus: "todo" });
-    await change("Task progress", "40"); await click("Save progress"); expect(writes.at(-1)!.body).toEqual({ progress: 40 });
+    await change("Task progress", "40"); await click("Save progress"); expect(writes.at(-1)!.body).toEqual({ progress: 40, expectedUpdatedAt: task.updatedAt });
     await change("Task status", "done"); await click("Save status"); expect((container.querySelector('[aria-label="Task progress"]') as HTMLInputElement).disabled).toBe(true);
   });
   it("preserves an unchanged due instant including milliseconds", async () => {

@@ -300,6 +300,37 @@ describe("tasks HTTP contract", () => {
     await expect((await api("/api/tasks/task-1", sessionA)).json()).resolves.toMatchObject({ links: [{ id: linkId }] });
   });
 
+  it("rejects stale progress, tag, and link writes over HTTP while identical re-sends still succeed", async () => {
+    const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-side", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
+    const read = created.task.updatedAt;
+    expect((await api("/api/tasks/task-side/progress", sessionA, { method: "POST", body: JSON.stringify({ progress: 40, expectedUpdatedAt: read }) })).status).toBe(200);
+    const staleProgress = await api("/api/tasks/task-side/progress", sessionA, { method: "POST", body: JSON.stringify({ progress: 80, expectedUpdatedAt: read }) });
+    expect(staleProgress.status).toBe(409);
+    await expect(staleProgress.json()).resolves.toMatchObject({ error: { code: "TASK_VERSION_CONFLICT" } });
+    expect((await api("/api/tasks/task-side/progress", sessionA, { method: "POST", body: JSON.stringify({ progress: 40, expectedUpdatedAt: read }) })).status).toBe(200);
+    await expect((await api("/api/tasks/task-side", sessionA)).json()).resolves.toMatchObject({ task: { progress: 40 } });
+
+    const taggedAt = ((await (await api("/api/tasks/task-side", sessionA)).json()) as { task: { updatedAt: string } }).task.updatedAt;
+    expect((await api("/api/tasks/task-side/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["a"], expectedUpdatedAt: taggedAt }) })).status).toBe(200);
+    const staleTags = await api("/api/tasks/task-side/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["b"], expectedUpdatedAt: taggedAt }) });
+    expect(staleTags.status).toBe(409);
+    expect((await api("/api/tasks/task-side/tags", sessionA, { method: "PUT", body: JSON.stringify({ tags: ["a"], expectedUpdatedAt: taggedAt }) })).status).toBe(200);
+    await expect((await api("/api/tasks/task-side", sessionA)).json()).resolves.toMatchObject({ tags: ["a"] });
+
+    const linkedAt = ((await (await api("/api/tasks/task-side", sessionA)).json()) as { task: { updatedAt: string } }).task.updatedAt;
+    const linked = await api("/api/tasks/task-side/links", sessionA, { method: "POST", body: JSON.stringify({ knowledgeItemId: "knowledge-a", expectedUpdatedAt: linkedAt }) });
+    expect(linked.status).toBe(201);
+    const linkId = ((await linked.json()) as { link: { id: string } }).link.id;
+    const staleRemove = await api(`/api/tasks/task-side/links/${linkId}`, sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: linkedAt }) });
+    expect(staleRemove.status).toBe(409);
+    const current = ((await (await api("/api/tasks/task-side", sessionA)).json()) as { task: { updatedAt: string }; links: Array<{ id: string }> });
+    expect(current.links.map((item) => item.id)).toEqual([linkId]);
+    expect((await api(`/api/tasks/task-side/links/${linkId}`, sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: current.task.updatedAt }) })).status).toBe(204);
+    expect((await api(`/api/tasks/task-side/links/${linkId}`, sessionA, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedUpdatedAt: current.task.updatedAt }) })).status).toBe(404);
+    const audits = await env.DB.prepare("SELECT action FROM audit_events WHERE resource_id = 'task-side' AND action LIKE 'task.%' ORDER BY created_at, id").all<{ action: string }>();
+    expect(audits.results.map((row) => row.action)).toEqual(["task.created", "task.progress_changed", "task.tags_replaced", "task.linked", "task.unlinked"]);
+  });
+
   it("rejects stale cross-tab field and status writes over HTTP while matching re-sends still succeed", async () => {
     const created = await (await api("/api/tasks", sessionA, { method: "POST", body: JSON.stringify({ id: "task-tabs", title: "Alpha" }) })).json() as { task: { updatedAt: string } };
     const read = created.task.updatedAt;

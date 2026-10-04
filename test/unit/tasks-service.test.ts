@@ -166,6 +166,40 @@ describe("TasksService", () => {
     });
   });
 
+  it("rejects a stale progress, tag, or link write and still accepts an identical replay", async () => {
+    const repository = new FakeTasksRepository();
+    repository.visibleKnowledge.add("knowledge-b");
+    const audit = new FakeAudit();
+    const service = createService(repository, audit);
+    const created = await service.create("member-a", { id: "task-1", title: "Alpha" });
+    const read = created.task.updatedAt;
+    await service.setProgress("member-a", "task-1", 40, read);
+    await expect(service.setProgress("member-a", "task-1", 80, read)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.get("member-a", "task-1")).task.progress).toBe(40);
+    const progressAudits = audit.events.filter((event) => event.action === "task.progress_changed").length;
+    await expect(service.setProgress("member-a", "task-1", 40, read)).resolves.toMatchObject({ progress: 40 });
+    expect(audit.events.filter((event) => event.action === "task.progress_changed")).toHaveLength(progressAudits);
+
+    const tagged = (await service.get("member-a", "task-1")).task.updatedAt;
+    await expect(service.replaceTags("member-a", "task-1", ["a"], tagged)).resolves.toEqual(["a"]);
+    await expect(service.replaceTags("member-a", "task-1", ["b"], tagged)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.get("member-a", "task-1")).tags).toEqual(["a"]);
+    const tagAudits = audit.events.filter((event) => event.action === "task.tags_replaced").length;
+    await expect(service.replaceTags("member-a", "task-1", ["a"], tagged)).resolves.toEqual(["a"]);
+    expect(audit.events.filter((event) => event.action === "task.tags_replaced")).toHaveLength(tagAudits);
+
+    const linked = (await service.get("member-a", "task-1")).task.updatedAt;
+    const link = await service.addLink("member-a", "task-1", "knowledge-a", linked);
+    await expect(service.addLink("member-a", "task-1", "knowledge-b", linked)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    await expect(service.addLink("member-a", "task-1", "knowledge-a", linked)).resolves.toMatchObject({ id: link.id });
+    await expect(service.removeLink("member-a", "task-1", link.id, linked)).rejects.toMatchObject({ code: "TASK_VERSION_CONFLICT", status: 409 });
+    expect((await service.get("member-a", "task-1")).links.map((item) => item.id)).toEqual([link.id]);
+    const current = (await service.get("member-a", "task-1")).task.updatedAt;
+    await service.removeLink("member-a", "task-1", link.id, current);
+    await expect(service.removeLink("member-a", "task-1", link.id, current)).rejects.toMatchObject({ code: "TASK_NOT_FOUND", status: 404 });
+    await expect(service.setProgress("member-a", "task-1", 10, "yesterday")).rejects.toMatchObject({ code: "TASK_INVALID", status: 400 });
+  });
+
   it("validates progress bounds, non-terminal states, and idempotent updates", async () => {
     const service = createService(new FakeTasksRepository());
     await service.create("member-a", { id: "task-1", title: "Alpha" });
@@ -351,11 +385,17 @@ class FakeTasksRepository implements TasksRepositoryPort {
     const intent = this.pendingStatusNotifications.get(intentId);
     return intent?.recipientMemberId === memberId ? this.pendingStatusNotifications.delete(intentId) : false;
   }
-  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number) {
+  async updateProgress(memberId: string, id: string, progress: number, updatedAt: number, expectedUpdatedAt?: number) {
     const task = await this.findOwned(memberId, id);
-    if (!task) return null;
+    if (!task || (expectedUpdatedAt !== undefined && Date.parse(task.updatedAt) !== expectedUpdatedAt)) return null;
     Object.assign(task, { progress, updatedAt: new Date(updatedAt).toISOString() });
     return task;
+  }
+  async touch(memberId: string, id: string, updatedAt: number, expectedUpdatedAt?: number) {
+    const task = await this.findOwned(memberId, id);
+    if (!task || (expectedUpdatedAt !== undefined && Date.parse(task.updatedAt) !== expectedUpdatedAt)) return false;
+    task.updatedAt = new Date(updatedAt).toISOString();
+    return true;
   }
   async delete(memberId: string, id: string) {
     return (await this.findOwned(memberId, id)) !== null && this.tasks.delete(id);
