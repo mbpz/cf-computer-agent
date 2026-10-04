@@ -12,10 +12,11 @@ import { ReviewDecisionControls, ReviewDecisionFeedback, reviewDecisionLocked, t
 export type { ReviewDecisionState } from "../../components/review/review-decision-controls";
 export type ReviewDetailState = { kind: "loading" } | { kind: "ready"; detail: ReviewDetailModel } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
-export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false, retainedDraft = false }: {
+export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, onBack, decisionState = { kind: "idle" }, locale, comments, unresolvedDecision = false, retainedDraft = false, decisionRecordBlocked = false, decisionRecordNotice, onDiscardDecisionRecord }: {
   state: ReviewDetailState; onDecision?: (action: ReviewDecision, details?: ReviewNoteInput) => void;
   onRetry?: () => void; onRetryDecision?: () => void; onBack?: () => void;
   decisionState?: ReviewDecisionState; locale?: LocaleRuntime; comments?: ReactNode; unresolvedDecision?: boolean; retainedDraft?: boolean;
+  decisionRecordBlocked?: boolean; decisionRecordNotice?: string; onDiscardDecisionRecord?: () => void;
 }) {
   if (state.kind === "loading") return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10" /><Skeleton className="h-64" /></div>;
   if (state.kind !== "ready") return <section className="space-y-4" data-page-state={state.kind}>
@@ -42,6 +43,8 @@ export function ReviewDetailPage({ state, onDecision, onRetry, onRetryDecision, 
     </CardContent></Card>
     {detail.warnings.length ? <Alert><AlertDescription><strong>{frontendText(locale, "ADMIN_REVIEW_WARNINGS")}:</strong> {detail.warnings.join(" · ")}</AlertDescription></Alert> : null}
     {comments}
+    {decisionRecordBlocked && <div role="alert" data-review-decision-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={onDiscardDecisionRecord}>{frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_DISCARD")}</Button></div>}
+    {decisionRecordNotice && <p role="alert" className="text-sm text-destructive">{decisionRecordNotice}</p>}
     <ReviewDecisionFeedback allowUnknownReload state={decisionState} locale={locale} onRetry={onRetryDecision} onReload={onRetry} />
     <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_REVIEW_DECISION")}</CardTitle></CardHeader><CardContent>
       <ReviewDecisionControls decisionUnresolved={reviewDecisionLocked(decisionState)} key={detail.id} targetId={detail.id} targetLabel={detail.title || detail.id} snapshot={detail} disabled={reviewDecisionLocked(decisionState)} terminal={detail.status !== "review_pending"}

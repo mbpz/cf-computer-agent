@@ -161,6 +161,7 @@
     "frontend/lib/responsive-contract.ts",
     "frontend/lib/review-comment-intent.ts",
     "frontend/lib/review-data.ts",
+    "frontend/lib/review-decision-intent.ts",
     "frontend/lib/route-access.ts",
     "frontend/lib/router.ts",
     "frontend/lib/saved-view-intent.ts",
@@ -2683,12 +2684,15 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/admin/review-detail-page.tsx:24:92",
-        "frontend/pages/admin/review-detail-page.tsx:25:9",
-        "frontend/pages/admin/review-detail-page.tsx:45:5",
-        "frontend/pages/admin/review-detail-page.tsx:47:7",
-        "frontend/pages/admin/review-detail-route.tsx:38:5",
-        "frontend/pages/admin/review-detail-route.tsx:127:10"
+        "frontend/pages/admin/review-detail-page.tsx:25:92",
+        "frontend/pages/admin/review-detail-page.tsx:26:9",
+        "frontend/pages/admin/review-detail-page.tsx:46:31",
+        "frontend/pages/admin/review-detail-page.tsx:46:201",
+        "frontend/pages/admin/review-detail-page.tsx:47:30",
+        "frontend/pages/admin/review-detail-page.tsx:48:5",
+        "frontend/pages/admin/review-detail-page.tsx:50:7",
+        "frontend/pages/admin/review-detail-route.tsx:43:5",
+        "frontend/pages/admin/review-detail-route.tsx:156:10"
       ],
       "unresolvedSymbols": [],
       "routePattern": "/^\\/admin\\/submissions\\/[A-Za-z0-9_-]+$/u"
@@ -23669,10 +23673,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:24:92",
+      "id": "frontend/pages/admin/review-detail-page.tsx:25:92",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 24,
+      "line": 25,
       "column": 92,
       "kind": "jsx",
       "tag": "Button",
@@ -23707,10 +23711,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:25:9",
+      "id": "frontend/pages/admin/review-detail-page.tsx:26:9",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 25,
+      "line": 26,
       "column": 9,
       "kind": "jsx",
       "tag": "a",
@@ -23741,10 +23745,117 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:45:5",
+      "id": "frontend/pages/admin/review-detail-page.tsx:46:31",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 45,
+      "line": 46,
+      "column": 31,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-review-decision-record-blocked": "true",
+        "className": "\"space-y-2 text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "decisionRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <div aria-busy=\"true\" className=\"space-y-4\"><Skeleton className=\"h-10\" /><Skeleton className=\"h-64\" /></div>;"
+        },
+        {
+          "condition": "state.kind !== \"ready\"",
+          "source": "if (state.kind !== \"ready\") return <section className=\"space-y-4\" data-page-state={state.kind}>\n    <Alert variant={state.kind === \"not-found\" ? \"default\" : \"destructive\"}><AlertDescription>{state.message}\n      <div className=\"flex flex-wrap gap-2\">\n        {(state.kind !== \"not-found\" || unresolvedDecision || retainedDraft) && onRetry && <Button variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}\n        <a className={buttonVariants({ variant: \"outline\" })} href=\"/admin/submissions\" onClick={(event) => {\n          if (!onBack || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;\n          event.preventDefault(); onBack();\n        }}>{frontendText(locale, \"ADMIN_REVIEW_BACK\")}</a>\n      </div>\n    </AlertDescription></Alert>\n  </section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/admin/review-detail-page.tsx:46:201",
+      "path": "frontend/pages/admin/review-detail-page.tsx",
+      "owner": "ReviewDetailPage",
+      "line": 46,
+      "column": 201,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "onDiscardDecisionRecord"
+      },
+      "handlers": {
+        "onClick": "onDiscardDecisionRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_REVIEW_DECISION_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "decisionRecordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <div aria-busy=\"true\" className=\"space-y-4\"><Skeleton className=\"h-10\" /><Skeleton className=\"h-64\" /></div>;"
+        },
+        {
+          "condition": "state.kind !== \"ready\"",
+          "source": "if (state.kind !== \"ready\") return <section className=\"space-y-4\" data-page-state={state.kind}>\n    <Alert variant={state.kind === \"not-found\" ? \"default\" : \"destructive\"}><AlertDescription>{state.message}\n      <div className=\"flex flex-wrap gap-2\">\n        {(state.kind !== \"not-found\" || unresolvedDecision || retainedDraft) && onRetry && <Button variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}\n        <a className={buttonVariants({ variant: \"outline\" })} href=\"/admin/submissions\" onClick={(event) => {\n          if (!onBack || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;\n          event.preventDefault(); onBack();\n        }}>{frontendText(locale, \"ADMIN_REVIEW_BACK\")}</a>\n      </div>\n    </AlertDescription></Alert>\n  </section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/admin/review-detail-page.tsx:47:30",
+      "path": "frontend/pages/admin/review-detail-page.tsx",
+      "owner": "ReviewDetailPage",
+      "line": 47,
+      "column": 30,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "decisionRecordNotice"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "decisionRecordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <div aria-busy=\"true\" className=\"space-y-4\"><Skeleton className=\"h-10\" /><Skeleton className=\"h-64\" /></div>;"
+        },
+        {
+          "condition": "state.kind !== \"ready\"",
+          "source": "if (state.kind !== \"ready\") return <section className=\"space-y-4\" data-page-state={state.kind}>\n    <Alert variant={state.kind === \"not-found\" ? \"default\" : \"destructive\"}><AlertDescription>{state.message}\n      <div className=\"flex flex-wrap gap-2\">\n        {(state.kind !== \"not-found\" || unresolvedDecision || retainedDraft) && onRetry && <Button variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"COMMON_RETRY\")}</Button>}\n        <a className={buttonVariants({ variant: \"outline\" })} href=\"/admin/submissions\" onClick={(event) => {\n          if (!onBack || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;\n          event.preventDefault(); onBack();\n        }}>{frontendText(locale, \"ADMIN_REVIEW_BACK\")}</a>\n      </div>\n    </AlertDescription></Alert>\n  </section>;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/admin/review-detail-page.tsx:48:5",
+      "path": "frontend/pages/admin/review-detail-page.tsx",
+      "owner": "ReviewDetailPage",
+      "line": 48,
       "column": 5,
       "kind": "jsx",
       "tag": "ReviewDecisionFeedback",
@@ -23774,10 +23885,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-page.tsx:47:7",
+      "id": "frontend/pages/admin/review-detail-page.tsx:50:7",
       "path": "frontend/pages/admin/review-detail-page.tsx",
       "owner": "ReviewDetailPage",
-      "line": 47,
+      "line": 50,
       "column": 7,
       "kind": "jsx",
       "tag": "ReviewDecisionControls",
@@ -23811,10 +23922,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/review-detail-route.tsx:38:5",
+      "id": "frontend/pages/admin/review-detail-route.tsx:43:5",
       "path": "frontend/pages/admin/review-detail-route.tsx",
       "owner": "ReviewDetailSession",
-      "line": 38,
+      "line": 43,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -23831,10 +23942,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/review-detail-route.tsx:127:10",
+      "id": "frontend/pages/admin/review-detail-route.tsx:156:10",
       "path": "frontend/pages/admin/review-detail-route.tsx",
       "owner": "ReviewDetailSession",
-      "line": 127,
+      "line": 156,
       "column": 10,
       "kind": "jsx",
       "tag": "ReviewDetailPage",
@@ -23847,14 +23958,18 @@
         "retainedDraft": "Boolean(drafts.get(id)) || commentsOwner.hasDraft",
         "onRetry": "() => { void read(); }",
         "onRetryDecision": "() => { if (decisionState.kind === \"error\" && decisionState.recovery === \"retry\" && operationRef.current) void send(operationRef.current, true); }",
-        "onDecision": "decide",
+        "decisionRecordBlocked": "recordBlocked",
+        "decisionRecordNotice": "recordNotice",
+        "onDiscardDecisionRecord": "discardRecord",
+        "onDecision": "recordBlocked ? undefined : decide",
         "comments": "<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />"
       },
       "handlers": {
         "onBack": "() => writeWorkspaceHistory(\"push\", \"/admin/submissions\")",
         "onRetry": "() => { void read(); }",
         "onRetryDecision": "() => { if (decisionState.kind === \"error\" && decisionState.recovery === \"retry\" && operationRef.current) void send(operationRef.current, true); }",
-        "onDecision": "decide"
+        "onDiscardDecisionRecord": "discardRecord",
+        "onDecision": "recordBlocked ? undefined : decide"
       },
       "spreads": [],
       "labels": [],

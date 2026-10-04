@@ -20,6 +20,7 @@ describe("review detail read recovery", () => {
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   const withComments = (requester: Fetcher): Fetcher => (input, init) => String(input).endsWith("/comments") ? Promise.resolve(json({ comments: [] })) : requester(input, init);
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
+  async function renderMember(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} memberId="member-a" locale={locale} requester={requester} />)); await flush(); }
   function button(label: string) { const found = [...container.querySelectorAll("button")].find((item) => item.textContent === label) as HTMLButtonElement; expect(found).toBeTruthy(); return found; }
 
   async function submitDecision(label: string) { await act(async () => button(label).click()); await act(async () => button("Submit decision").click()); }
@@ -348,6 +349,61 @@ describe("review detail read recovery", () => {
     await submitDecision("Publish"); await flush();
     expect(container.textContent).toContain(message); expect(container.textContent).toContain("rev-1"); expect(container.textContent).toContain("ki-1");
     expect(button("Publish").disabled).toBe(true);
+  });
+
+  it("keeps an unknown decision after refresh and retries the same body", async () => {
+    const bodies: string[] = [];
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") { bodies.push(String(init.body)); throw new TypeError("lost"); }
+      return preview("sub-1");
+    }));
+    await submitDecision("Publish"); await flush();
+    const stored = browser.sessionStorage.getItem("memory-garden:review-decision:v1:member-a:sub-1");
+    expect(stored).toContain("/publish");
+    const body = (JSON.parse(stored!) as { intent: { body: string } }).intent.body;
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client");
+    root = createRoot(container);
+    let retries = 0;
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") { retries++; expect(String(init.body)).toBe(body); return published("indexed"); }
+      return preview("sub-1");
+    }));
+    expect(retries).toBe(0);
+    expect(container.textContent).toContain("The result is unknown");
+    expect(unload()).toBe(true);
+    await act(async () => button("Retry same decision").click()); await flush();
+    expect(retries).toBe(1); expect(bodies).toHaveLength(1);
+    expect(browser.sessionStorage.getItem("memory-garden:review-decision:v1:member-a:sub-1")).toBeNull();
+  });
+
+  it("does not send a decision when the tab cannot record it", async () => {
+    let posts = 0;
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") posts++;
+      return preview("sub-1");
+    }));
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await submitDecision("Publish"); await flush();
+    expect(posts).toBe(0);
+    expect(container.textContent).toContain("could not record");
+  });
+
+  it("blocks a decision when its record cannot be read, and allows leave until it is discarded", async () => {
+    let posts = 0;
+    browser.sessionStorage.setItem("memory-garden:review-decision:v1:member-a:sub-1", "{");
+    await renderMember(withComments(async (_input, init) => {
+      if (init?.method === "POST") posts++;
+      return init?.method === "POST" ? published("indexed") : preview("sub-1");
+    }));
+    expect(container.textContent).toContain("can't be read");
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/submissions/sub-1");
+    await act(async () => button("Publish").click()); await flush();
+    expect(posts).toBe(0);
+    await act(async () => button("Discard record").click());
+    await submitDecision("Publish"); await flush();
+    expect(posts).toBe(1);
   });
 });
 

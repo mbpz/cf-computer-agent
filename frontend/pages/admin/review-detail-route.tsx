@@ -8,24 +8,29 @@ import { ReviewDetailPage, type ReviewDecisionState, type ReviewDetailState } fr
 import { registerWorkspaceLeaveGuard, writeWorkspaceHistory } from "../../lib/workspace-location";
 import { createAsyncOwner } from "../../lib/async-owner";
 import { ReviewCommentsPanel } from "../../components/review/review-comments-panel";
+import { clearReviewDecision, discardBlockedReviewDecision, loadReviewDecision, saveReviewDecision } from "../../lib/review-decision-intent";
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
 export function ReviewDetailRoute({ id, locale, memberId, requester = fetch }: { id: string; locale?: LocaleRuntime; memberId?: string; requester?: Fetcher }) {
   // A newly selected object must never render the previous object's actions.
-  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
+  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} memberId={memberId} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
 }
 
-function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: LocaleRuntime; requester: Fetcher }) {
+function ReviewDetailSession({ id, locale, memberId, requester }: { id: string; locale?: LocaleRuntime; memberId?: string; requester: Fetcher }) {
   const drafts = useReviewDrafts()!;
   const commentsOwner = useReviewCommentsOwner()!;
   const { clear: clearDraft } = drafts;
+  const [stored] = useState(() => memberId ? loadReviewDecision(memberId, id) : { kind: "empty" as const });
+  const blockedRef = useRef(stored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string>();
   const [state, setState] = useState<ReviewDetailRouteState>({ kind: "loading" });
-  const [decisionState, setDecisionState] = useState<ReviewDecisionState>({ kind: "idle" });
+  const [decisionState, setDecisionState] = useState<ReviewDecisionState>(stored.kind === "ready" ? { kind: "error", action: stored.intent.action, recovery: "retry" } : { kind: "idle" });
   const owner = useMemo(() => createAsyncOwner(), []);
   const readRef = useRef<AbortController | null>(null);
   const decisionRef = useRef<object | null>(null);
-  const operationRef = useRef<ReviewOperation | null>(null);
+  const operationRef = useRef<ReviewOperation | null>(stored.kind === "ready" ? stored.intent : null);
   const lifetimeRef = useRef<object | null>(null);
 
   // Read dependencies (locale/requester) are not the lifetime of a submitted write.
@@ -57,8 +62,13 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
         setState({ kind: "ready", data });
         // Pending (or an unrecognized status) cannot disprove an in-flight commit.
         if (operationRef.current && ["published", "rejected", "revision_requested"].includes(data.detail.status)) {
-          clearDraft(id); operationRef.current = null;
-          setDecisionState({ kind: "idle" });
+          if (memberId && !clearReviewDecision(memberId, id, operationRef.current)) {
+            setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+            setDecisionState({ kind: "error", action: operationRef.current.action, recovery: "retry" });
+          } else {
+            clearDraft(id); operationRef.current = null; setRecordNotice(undefined);
+            setDecisionState({ kind: "idle" });
+          }
         }
       }
     } catch (error) {
@@ -96,7 +106,12 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
     try {
       const receipt = await sendReviewDecision(operation, requester);
       if (!ownsDecision()) return;
-      clearDraft(id); operationRef.current = null;
+      if (memberId && !clearReviewDecision(memberId, id, operation)) {
+        setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+        setDecisionState({ kind: "error", action, recovery: "retry" });
+        return;
+      }
+      clearDraft(id); operationRef.current = null; setRecordNotice(undefined);
       setState({ kind: "ready", data: { ...state.data, detail: Object.freeze({ ...state.data.detail, status: receipt.status }) } });
       setDecisionState({ kind: "success", receipt });
     } catch (error) {
@@ -106,7 +121,14 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
         setDecisionState({ kind: "error", action, recovery: "retry" });
       } else {
         const recovery = reviewRecovery(error, previouslyUncertain);
-        if (recovery === "edit") operationRef.current = null;
+        if (recovery === "edit") {
+          if (memberId && !clearReviewDecision(memberId, id, operation)) {
+            setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_RECORD_STUCK"));
+            setDecisionState({ kind: "error", action, recovery: "retry" });
+            return;
+          }
+          operationRef.current = null; setRecordNotice(undefined);
+        }
         setDecisionState({ kind: "error", action, recovery });
       }
     } finally {
@@ -114,10 +136,17 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
     }
   };
 
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedReviewDecision(memberId, id)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
   const decide = (action: ReviewDecision, details?: ReviewNoteInput) => {
-    if (readRef.current || decisionRef.current || operationRef.current || state.kind !== "ready" || state.data.detail.status !== "review_pending") return;
+    if (blockedRef.current || readRef.current || decisionRef.current || operationRef.current || state.kind !== "ready" || state.data.detail.status !== "review_pending") return;
     try {
       const operation = prepareReviewDecision(id, action, state.data.publish, details);
+      if (memberId && !saveReviewDecision(memberId, id, operation)) {
+        setRecordNotice(frontendText(locale, "ADMIN_REVIEW_DECISION_NOT_RECORDED")); return;
+      }
       operationRef.current = operation;
       void send(operation);
     } catch { setDecisionState({ kind: "error", action, recovery: "edit" }); }
@@ -126,5 +155,6 @@ function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: L
   const pageState: ReviewDetailState = state.kind === "ready" ? { kind: "ready", detail: state.data.detail } : state;
   return <ReviewDetailPage onBack={() => writeWorkspaceHistory("push", "/admin/submissions")} locale={locale} state={pageState} decisionState={decisionState} unresolvedDecision={Boolean(operationRef.current) || commentsOwner.unresolved} retainedDraft={Boolean(drafts.get(id)) || commentsOwner.hasDraft}
     onRetry={() => { void read(); }} onRetryDecision={() => { if (decisionState.kind === "error" && decisionState.recovery === "retry" && operationRef.current) void send(operationRef.current, true); }}
-    onDecision={decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
+    decisionRecordBlocked={recordBlocked} decisionRecordNotice={recordNotice} onDiscardDecisionRecord={discardRecord}
+    onDecision={recordBlocked ? undefined : decide} comments={<ReviewCommentsPanel submissionId={id} locale={locale} requester={requester} />} />;
 }
