@@ -32,14 +32,15 @@ function normalizeSearchItem(value: unknown): SearchResultItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("SEARCH_RESPONSE_INVALID");
   const record = value as Record<string, unknown>;
   if (typeof record.knowledgeItemId !== "string" || !record.knowledgeItemId) throw new Error("SEARCH_RESPONSE_INVALID");
+  if (typeof record.title !== "string" || typeof record.excerpt !== "string") throw new Error("SEARCH_RESPONSE_INVALID");
   const citation = typeof record.citationId === "string" && record.citationId ? record.citationId : undefined;
   if (!Array.isArray(record.matchedFields)) throw new Error("SEARCH_RESPONSE_INVALID");
   const matchedFields = record.matchedFields.filter((field): field is string => typeof field === "string" && MATCHED_FIELDS.has(field));
   return {
     id: citation || record.knowledgeItemId,
     knowledgeItemId: record.knowledgeItemId,
-    title: typeof record.title === "string" ? record.title : undefined,
-    snippet: typeof record.excerpt === "string" ? record.excerpt : undefined,
+    title: record.title,
+    snippet: record.excerpt,
     href: `/knowledge/${encodeURIComponent(record.knowledgeItemId)}${citation ? `#${encodeURIComponent(citation)}` : ""}`,
     matchedFields,
   };
