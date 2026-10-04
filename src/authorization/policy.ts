@@ -58,7 +58,7 @@ export function permissionMaskForPrincipal(principal: Principal): string {
       "knowledge:read", "knowledge:create", "knowledge:edit", "knowledge:review", "knowledge:publish", "knowledge:delete",
       "submission:create", "submission:read-own", "submission:read-all", "member:manage", "role:manage", "menu:manage",
       "space:manage", "audit:read", "analytics:read", "asset:manage", "duplicate:review", "agent:use", "search:use",
-      "workspace.tasks",
+      "workspace.tasks", "workspace.vm",
     ]));
   }
   return serializePermissionMask(permissionMaskFor([

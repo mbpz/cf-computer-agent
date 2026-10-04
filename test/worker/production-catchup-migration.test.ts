@@ -22,7 +22,7 @@ describe("production 0032 catch-up rehearsal (synthetic data only)", () => {
 
     await applyD1Migrations(env.DB, MIGRATIONS);
     expect((await env.DB.prepare("SELECT * FROM members ORDER BY id").all()).results).toEqual(members);
-    expect((await env.DB.prepare("SELECT * FROM roles ORDER BY id").all()).results).toEqual(roles);
+    expect((await env.DB.prepare("SELECT * FROM roles ORDER BY id").all()).results).toEqual(roles.map((row) => row.id === "role-admin" ? { ...row, allow_bits: "0x37ffff" } : row));
     expect((await env.DB.prepare("SELECT * FROM task_tags ORDER BY task_id, tag").all()).results).toEqual(tags);
     expect(await env.DB.prepare("SELECT * FROM tasks WHERE id = 'catchup-task'").first()).toEqual({ ...task, status_version: 0 });
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM notifications").first()).toEqual({ count: 0 });

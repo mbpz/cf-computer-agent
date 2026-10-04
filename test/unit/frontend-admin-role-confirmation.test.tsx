@@ -182,6 +182,21 @@ describe("role permission and membership confirmation", () => {
     expect(button("Assign member").disabled).toBe(true); expect(button("Remove").disabled).toBe(true);
     expect(container.textContent).toContain("Save or revert permission changes");
   });
+  it("lets the default administrator add a missing workbench permission without dropping menu permissions", async () => {
+    const adminRole: AdminRole = { id: "role-admin", key: "admin", name: "Administrator", description: "Full workspace governance", allowBits: "0x17ffff", memberCount: 1, assignedMemberIds: ["me"], status: "active", isSystem: true };
+    await mount({ state: { kind: "ready", roles: [adminRole] } });
+    const vm = container.querySelector('input[aria-label="Use workspace VM"]') as HTMLInputElement;
+    const read = container.querySelector('input[aria-label="Read knowledge"]') as HTMLInputElement;
+    const tasks = container.querySelector('input[aria-label="Use workspace tasks"]') as HTMLInputElement;
+    expect(vm.disabled).toBe(false); expect(vm.checked).toBe(false);
+    expect(tasks.disabled).toBe(true); expect(tasks.checked).toBe(true);
+    expect(read.disabled).toBe(true);
+    expect(button("Save permissions").disabled).toBe(true);
+    await act(async () => vm.click());
+    expect(button("Save permissions").disabled).toBe(false);
+    await click("Save permissions"); await press('[data-confirm-action]');
+    expect(callbacks.onSave).toHaveBeenCalledWith(adminRole, "0x37ffff");
+  });
   it("blocks role switching during a pending write", async () => {
     await mount({ saving: true }); const reviewer = [...container.querySelectorAll("button")].find(el => el.textContent?.startsWith("Reviewer")) as HTMLButtonElement;
     expect(reviewer.disabled).toBe(true); await act(async () => reviewer.click()); expect(callbacks.onSelect).not.toHaveBeenCalled();

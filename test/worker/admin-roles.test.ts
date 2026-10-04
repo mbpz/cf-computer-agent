@@ -32,7 +32,7 @@ describe("admin roles API", () => {
     const allowed = await api("/api/admin/roles", admin);
     expect(allowed.status).toBe(200);
     const payload = await allowed.json() as { items: Array<{ key: string; allowBits: string }> };
-    expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x17ffff")).toBe(true);
+    expect(payload.items.some((item) => item.key === "admin" && item.allowBits === "0x37ffff")).toBe(true);
     expect(payload.items.some((item) => item.key === "editor" && item.allowBits === "0x4003")).toBe(true);
     const denied = await api("/api/admin/roles", contributor);
     expect(denied.status).toBe(403);
@@ -118,6 +118,17 @@ describe("admin roles API", () => {
     let previous="0x4003";
     for(const event of events.results){const metadata=JSON.parse(event.metadata);expect(metadata.previousAllowBits).toBe(previous);previous=metadata.allowBits;}
     expect(await env.DB.prepare("SELECT allow_bits FROM roles WHERE id='role-editor'").first()).toEqual({allow_bits:previous});
+  });
+
+  it("lets the default administrator add a missing workbench permission and nothing else", async () => {
+    await env.DB.prepare("UPDATE roles SET allow_bits = '0x17ffff' WHERE id = 'role-admin'").run();
+    const granted = await api("/api/admin/roles/role-admin", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x37ffff" }) });
+    expect(granted.status).toBe(200);
+    await expect(granted.json()).resolves.toMatchObject({ role: { key: "admin", allowBits: "0x37ffff", isSystem: true } });
+    expect((await (await api("/api/session", admin)).json() as { permissionMask: string }).permissionMask).toBe("0x37ffff");
+    expect((await api("/api/admin/roles/role-admin", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x17ffff" }) })).status).toBe(409);
+    expect((await api("/api/admin/roles/role-admin", admin, { method: "PATCH", body: JSON.stringify({ allowBits: "0x1fffff", name: "Renamed" }) })).status).toBe(409);
+    expect(await env.DB.prepare("SELECT allow_bits, name FROM roles WHERE id = 'role-admin'").first()).toEqual({ allow_bits: "0x37ffff", name: "Administrator" });
   });
 
   it("rejects writes by contributors, revoked admins, malformed and immutable role targets without audit",async()=>{

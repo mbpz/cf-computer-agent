@@ -51,13 +51,16 @@ export class RolesRepository {
   async update(id: string, input: { name?: string; description?: string; allowBits: string }, actorId: string): Promise<RoleRecord> {
     const current = await this.find(id);
     if (!current) throw new AppError("ROLE_NOT_FOUND", "Role not found", 404);
-    if (current.isSystem) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
     const mask = serializePermissionMask(parsePermissionMask(input.allowBits));
+    // The default administrator cannot drop or rename its system role. It can
+    // only gain workbench bits that were missing, which is how that account
+    // grants workbench access to itself.
+    if (current.isSystem && !isAdminWorkbenchGrant(current, input, mask)) throw new AppError("ROLE_SYSTEM_IMMUTABLE", "System roles cannot be changed", 409);
     const name = input.name === undefined ? current.name : boundedText(input.name, "ROLE_NAME_INVALID");
     const description = input.description === undefined ? current.description : boundedText(input.description, "ROLE_DESCRIPTION_INVALID");
     const result = await this.writeWithAudit(this.db.prepare(
-      "UPDATE roles SET name = ?, description = ?, allow_bits = ?, updated_at = ? WHERE id = ? AND is_system = 0 AND allow_bits = ? AND name = ? AND description = ?",
-    ).bind(name, description, mask, new Date().toISOString(), id, current.allowBits, current.name, current.description), actorId, id, { action: "role.updated", metadata: { previousAllowBits: current.allowBits, allowBits: mask } });
+      `UPDATE roles SET name = ?, description = ?, allow_bits = ?, updated_at = ? WHERE id = ? AND is_system = ? AND allow_bits = ? AND name = ? AND description = ?`,
+    ).bind(name, description, mask, new Date().toISOString(), id, current.isSystem ? 1 : 0, current.allowBits, current.name, current.description), actorId, id, { action: "role.updated", metadata: { previousAllowBits: current.allowBits, allowBits: mask } });
     if (result.meta.changes !== 1) throw new AppError("ROLE_UPDATE_CONFLICT", "Role update conflict", 409);
     return (await this.find(id))!;
   }
@@ -150,8 +153,27 @@ export class RolesRepository {
 
 }
 
+const adminWorkbenchBits = ["workspace.tasks", "workspace.vm"] as const;
+
+function isAdminWorkbenchGrant(current: RoleRecord, input: { name?: string; description?: string; allowBits: string }, mask: string): boolean {
+  if (current.key !== "admin") return false;
+  if (input.name !== undefined && input.name !== current.name) return false;
+  if (input.description !== undefined && input.description !== current.description) return false;
+  const next = parsePermissionMask(mask);
+  const previous = parsePermissionMask(current.allowBits);
+  const added = next & ~previous;
+  const removed = previous & ~next;
+  const workbench = permissionMaskFor(adminWorkbenchBits);
+  return removed === 0n && added !== 0n && (added & ~workbench) === 0n;
+}
+
 function permissionMaskForRole(role: MemberRole): bigint {
-  if (role === "admin") return ((1n << 19n) - 1n) | (1n << 20n);
+  if (role === "admin") return permissionMaskFor([
+    "knowledge:read", "knowledge:create", "knowledge:edit", "knowledge:review", "knowledge:publish", "knowledge:delete",
+    "submission:create", "submission:read-own", "submission:read-all", "member:manage", "role:manage", "menu:manage",
+    "space:manage", "audit:read", "analytics:read", "asset:manage", "duplicate:review", "agent:use", "search:use",
+    ...adminWorkbenchBits,
+  ]);
   return permissionMaskFor(["knowledge:read", "knowledge:create", "submission:create", "submission:read-own", "agent:use", "search:use", "workspace.tasks"]);
 }
 
