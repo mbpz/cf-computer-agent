@@ -149,6 +149,7 @@
     "frontend/lib/i18n.ts",
     "frontend/lib/inbox-create-intent.ts",
     "frontend/lib/inbox-data.ts",
+    "frontend/lib/inbox-draft.ts",
     "frontend/lib/knowledge-data.ts",
     "frontend/lib/knowledge-note.ts",
     "frontend/lib/knowledge-reader-data.ts",
@@ -468,19 +469,23 @@
         "frontend/components/data-pagination.tsx:45:9",
         "frontend/components/data-pagination.tsx:47:9",
         "frontend/components/inbox-action-confirmation.tsx:39:13",
-        "frontend/components/inbox-create-form.tsx:109:43",
-        "frontend/components/inbox-create-form.tsx:109:277",
-        "frontend/components/inbox-create-form.tsx:109:348",
-        "frontend/components/inbox-create-form.tsx:109:448",
-        "frontend/components/inbox-create-form.tsx:110:5",
-        "frontend/components/inbox-create-form.tsx:111:38",
-        "frontend/components/inbox-create-form.tsx:111:112",
-        "frontend/components/inbox-create-form.tsx:112:33",
-        "frontend/components/inbox-create-form.tsx:112:136",
-        "frontend/components/inbox-create-form.tsx:113:37",
-        "frontend/components/inbox-create-form.tsx:113:144",
-        "frontend/components/inbox-create-form.tsx:114:9",
-        "frontend/components/inbox-create-form.tsx:115:15",
+        "frontend/components/inbox-create-form.tsx:47:5",
+        "frontend/components/inbox-create-form.tsx:127:23",
+        "frontend/components/inbox-create-form.tsx:127:155",
+        "frontend/components/inbox-create-form.tsx:128:22",
+        "frontend/components/inbox-create-form.tsx:129:43",
+        "frontend/components/inbox-create-form.tsx:129:277",
+        "frontend/components/inbox-create-form.tsx:129:348",
+        "frontend/components/inbox-create-form.tsx:129:448",
+        "frontend/components/inbox-create-form.tsx:130:5",
+        "frontend/components/inbox-create-form.tsx:131:38",
+        "frontend/components/inbox-create-form.tsx:131:112",
+        "frontend/components/inbox-create-form.tsx:132:33",
+        "frontend/components/inbox-create-form.tsx:132:136",
+        "frontend/components/inbox-create-form.tsx:133:37",
+        "frontend/components/inbox-create-form.tsx:133:144",
+        "frontend/components/inbox-create-form.tsx:134:9",
+        "frontend/components/inbox-create-form.tsx:135:15",
         "frontend/components/planning-write-recovery.tsx:34:5",
         "frontend/components/planning-write-recovery.tsx:85:52",
         "frontend/components/planning-write-recovery.tsx:86:10",
@@ -8413,10 +8418,130 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:109:43",
+      "id": "frontend/components/inbox-create-form.tsx:47:5",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 109,
+      "line": 47,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "WORKSPACE_LOCATION_CHANGE_EVENT",
+      "arguments": [
+        "WORKSPACE_LOCATION_CHANGE_EVENT",
+        "clearOnLeave"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/inbox-create-form.tsx:127:23",
+      "path": "frontend/components/inbox-create-form.tsx",
+      "owner": "InboxCreateForm",
+      "line": 127,
+      "column": 23,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-inbox-draft-blocked": "true",
+        "className": "\"space-y-2 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/inbox-create-form.tsx:127:155",
+      "path": "frontend/components/inbox-create-form.tsx",
+      "owner": "InboxCreateForm",
+      "line": 127,
+      "column": 155,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"INBOX_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/inbox-create-form.tsx:128:22",
+      "path": "frontend/components/inbox-create-form.tsx",
+      "owner": "InboxCreateForm",
+      "line": 128,
+      "column": 22,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/inbox-create-form.tsx:129:43",
+      "path": "frontend/components/inbox-create-form.tsx",
+      "owner": "InboxCreateForm",
+      "line": 129,
       "column": 43,
       "kind": "jsx",
       "tag": "select",
@@ -8444,10 +8569,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:109:277",
+      "id": "frontend/components/inbox-create-form.tsx:129:277",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 109,
+      "line": 129,
       "column": 277,
       "kind": "jsx",
       "tag": "option",
@@ -8478,10 +8603,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:109:348",
+      "id": "frontend/components/inbox-create-form.tsx:129:348",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 109,
+      "line": 129,
       "column": 348,
       "kind": "jsx",
       "tag": "option",
@@ -8512,10 +8637,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:109:448",
+      "id": "frontend/components/inbox-create-form.tsx:129:448",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 109,
+      "line": 129,
       "column": 448,
       "kind": "jsx",
       "tag": "Input",
@@ -8548,10 +8673,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:110:5",
+      "id": "frontend/components/inbox-create-form.tsx:130:5",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 110,
+      "line": 130,
       "column": 5,
       "kind": "jsx",
       "tag": "Textarea",
@@ -8580,10 +8705,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:111:38",
+      "id": "frontend/components/inbox-create-form.tsx:131:38",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 111,
+      "line": 131,
       "column": 38,
       "kind": "jsx",
       "tag": "p",
@@ -8612,10 +8737,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:111:112",
+      "id": "frontend/components/inbox-create-form.tsx:131:112",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 111,
+      "line": 131,
       "column": 112,
       "kind": "jsx",
       "tag": "Button",
@@ -8649,10 +8774,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:112:33",
+      "id": "frontend/components/inbox-create-form.tsx:132:33",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 112,
+      "line": 132,
       "column": 33,
       "kind": "jsx",
       "tag": "p",
@@ -8687,10 +8812,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:112:136",
+      "id": "frontend/components/inbox-create-form.tsx:132:136",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 112,
+      "line": 132,
       "column": 136,
       "kind": "jsx",
       "tag": "Button",
@@ -8729,10 +8854,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:113:37",
+      "id": "frontend/components/inbox-create-form.tsx:133:37",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 113,
+      "line": 133,
       "column": 37,
       "kind": "jsx",
       "tag": "p",
@@ -8772,10 +8897,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:113:144",
+      "id": "frontend/components/inbox-create-form.tsx:133:144",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 113,
+      "line": 133,
       "column": 144,
       "kind": "jsx",
       "tag": "Button",
@@ -8819,10 +8944,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:114:9",
+      "id": "frontend/components/inbox-create-form.tsx:134:9",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 114,
+      "line": 134,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -8865,10 +8990,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/inbox-create-form.tsx:115:15",
+      "id": "frontend/components/inbox-create-form.tsx:135:15",
       "path": "frontend/components/inbox-create-form.tsx",
       "owner": "InboxCreateForm",
-      "line": 115,
+      "line": 135,
       "column": 15,
       "kind": "jsx",
       "tag": "p",

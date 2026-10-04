@@ -157,4 +157,59 @@ describe("inbox stable capture through App", () => {
     expect(button("[data-create-retry]")).toBeTruthy();
   });
 
+  const draftKey = "memory-garden:inbox-draft:v1:contributor-route-auditor";
+  function unload() { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; }
+  async function source(value: string) {
+    const node = main().querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!;
+    await act(async () => {
+      node.value = value;
+      const prop = Object.keys(node).find(name => name.startsWith("__reactProps$"))!;
+      (node as unknown as Record<string, { onChange: (event: { currentTarget: HTMLInputElement }) => void }>)[prop]!.onChange({ currentTarget: node });
+    });
+  }
+  async function chooseLink() {
+    const node = main().querySelector("select")!;
+    await act(async () => {
+      node.value = "link";
+      node.dispatchEvent(new app!.browser.Event("change", { bubbles: true }));
+    });
+  }
+  it("keeps an unsent capture after refresh without sending", async () => {
+    await mount(); await chooseLink(); await source("https://example.com/note"); await change("Keep this capture");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this capture");
+    expect(unload()).toBe(true); expect(bodies).toHaveLength(0);
+    await forceRemount("/unknown"); await forceRemount("/inbox"); await waitForApp(() => !!content());
+    expect(content().value).toBe("Keep this capture");
+    expect(main().querySelector<HTMLInputElement>('input[aria-label="Source URL"]')!.value).toBe("https://example.com/note");
+    expect(bodies).toHaveLength(0); expect(unload()).toBe(true);
+  });
+  it("keeps the capture on screen when the tab cannot record the draft", async () => {
+    await mount();
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await change("Unrecorded capture");
+    expect(content().value).toBe("Unrecorded capture");
+    expect(main().textContent).toContain("could not record");
+    expect(bodies).toHaveLength(0);
+  });
+  it("allows leave when the capture draft cannot be read and records only after discard", async () => {
+    await mount("contributor-route-auditor", { [draftKey]: "{" });
+    expect(main().textContent).toContain("can't be read"); expect(unload()).toBe(false);
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
+    await act(async () => expect(writeWorkspaceHistory("push", "/inbox")).toBe("committed"));
+    await waitForApp(() => !!button("[data-inbox-draft-blocked] button"));
+    await click(button("[data-inbox-draft-blocked] button"));
+    await change("After discard");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("After discard");
+  });
+  it("drops the stored capture after a confirmed leave", async () => {
+    await mount(); await change("Keep this capture");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this capture");
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
+    await act(async () => expect(writeWorkspaceHistory("push", "/inbox")).toBe("committed"));
+    await waitForApp(() => !!content() && !content().disabled);
+    expect(content().value).toBe(""); expect(unload()).toBe(false);
+  });
+
 });
