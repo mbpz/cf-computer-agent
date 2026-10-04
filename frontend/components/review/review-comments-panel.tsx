@@ -24,6 +24,8 @@ function ReviewCommentsEditor({ locale, requester }: Props) {
       <Textarea aria-label={frontendText(locale, "ADMIN_REVIEW_COMMENT_PLACEHOLDER")} value={body} disabled={locked} onChange={event => owner.edit(event.currentTarget.value)} placeholder={frontendText(locale, "ADMIN_REVIEW_COMMENT_PLACEHOLDER")} maxLength={4000} />
       <Button size="sm" disabled={locked || !body.trim()} onClick={() => { void owner.save(); }}>{writeState === "saving" ? frontendText(locale, "ADMIN_REVIEW_ACTION_PENDING") : frontendText(locale, "ADMIN_REVIEW_COMMENT_ADD")}</Button>
     </>}
+    {owner.recordBlocked && <div role="alert" data-review-comment-record-blocked className="space-y-2 text-sm text-destructive"><p>{frontendText(locale, "ADMIN_REVIEW_COMMENT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" data-review-comment-record-discard onClick={owner.discardRecord}>{frontendText(locale, "ADMIN_REVIEW_COMMENT_RECORD_DISCARD")}</Button></div>}
+    {owner.recordNotice && <p role="alert" className="text-sm text-destructive">{owner.recordNotice}</p>}
     {(readState === "error" || writeState === "rejected") && <p role="status" className="text-sm text-destructive">{frontendText(locale, "ADMIN_REVIEW_COMMENT_ERROR")}</p>}
     {writeState === "unknown" && <Alert><AlertDescription>{frontendText(locale, "ADMIN_REVIEW_COMMENT_UNKNOWN")}</AlertDescription></Alert>}
     {writeState === "unknown" && readState === "ready" && <Button variant="outline" onClick={() => { void owner.retry(); }}>{frontendText(locale, "ADMIN_REVIEW_COMMENT_RETRY")}</Button>}

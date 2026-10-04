@@ -1,8 +1,9 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiRequestError, type Fetcher } from "../../lib/api";
-import type { LocaleRuntime } from "../../lib/i18n";
+import { frontendText, type LocaleRuntime } from "../../lib/i18n";
 import { useCreateDraft } from "../../lib/use-create-draft";
 import { writeReviewCommentOperation, readReviewCommentOperation, loadReviewComments, type ReviewCommentItem } from "./review-comments-data";
+import { clearReviewCommentIntent, discardBlockedReviewCommentIntent, loadReviewCommentIntent, saveReviewCommentIntent } from "../../lib/review-comment-intent";
 
 type ReadState = "loading" | "ready" | "error";
 type WriteState = "idle" | "saving" | "rejected" | "unknown";
@@ -10,28 +11,33 @@ type Owner = {
   comments: ReviewCommentItem[]; body: string; readState: ReadState; writeState: WriteState;
   locked: boolean; hasDraft: boolean; unresolved: boolean;
   edit: (body: string) => void; save: () => Promise<void>; reload: () => Promise<void>; retry: () => Promise<void>;
+  recordBlocked: boolean; recordNotice?: string; discardRecord: () => void;
   attach: () => () => void;
 };
 const Context = createContext<Owner | null>(null);
 export const useReviewCommentsOwner = () => useContext(Context);
 
 /** One target/session owns the draft and operation, not its permission-gated editor.
- * Memory only. Only an exact operation receipt can settle an unknown write.
+ * A signed-in member records the operation in this tab before sending. Only an exact receipt settles it.
  */
-export function ReviewCommentsProvider({ submissionId, requester = fetch, locale, children }: {
-  submissionId: string; requester?: Fetcher; locale?: LocaleRuntime; children: ReactNode;
+export function ReviewCommentsProvider({ submissionId, requester = fetch, locale, memberId, children }: {
+  submissionId: string; requester?: Fetcher; locale?: LocaleRuntime; memberId?: string; children: ReactNode;
 }) {
+  const [stored] = useState(() => memberId ? loadReviewCommentIntent(memberId, submissionId) : { kind: "empty" as const });
+  const blockedRef = useRef(stored.kind === "blocked");
+  const [recordBlocked, setRecordBlocked] = useState(blockedRef.current);
+  const [recordNotice, setRecordNotice] = useState<string | undefined>();
   const [comments, setComments] = useState<ReviewCommentItem[]>([]);
   const [readState, setReadState] = useState<ReadState>("loading");
-  const [writeState, setWriteState] = useState<WriteState>("idle");
+  const [writeState, setWriteState] = useState<WriteState>(stored.kind === "ready" ? "unknown" : "idle");
   const request = useRef(requester); request.current = requester;
   const lifetime = useRef<object | null>(null);
   const view = useRef<object | null>(null);
   const reading = useRef<object | null>(null);
   const authorized = useRef(false);
-  const operation = useRef<{ id: string; body: string } | null>(null);
+  const operation = useRef<{ id: string; body: string } | null>(stored.kind === "ready" ? stored.intent : null);
   const sending = useRef(false);
-  const draft = useCreateDraft({ body: "" }, { body: "" }, () => operation.current !== null, locale,
+  const draft = useCreateDraft({ body: stored.kind === "ready" ? stored.intent.body : "" }, { body: "" }, () => operation.current !== null, locale,
     () => !authorized.current || view.current === null);
   useLayoutEffect(() => {
     lifetime.current = {};
@@ -40,8 +46,11 @@ export function ReviewCommentsProvider({ submissionId, requester = fetch, locale
 
   // Synchronous refs own admission; render timing cannot admit a second write.
   const actions = useMemo(() => {
+    const release = (token: { id: string; body: string }) => !memberId || clearReviewCommentIntent(memberId, submissionId, token);
     const settle = (comment: ReviewCommentItem) => {
-      operation.current = null; draft.set("body", ""); setWriteState("idle");
+      const token = operation.current;
+      if (token && !release(token)) { setWriteState("unknown"); setRecordNotice(frontendText(locale, "ADMIN_REVIEW_COMMENT_RECORD_STUCK")); return; }
+      operation.current = null; draft.set("body", ""); setWriteState("idle"); setRecordNotice(undefined);
       if (view.current && authorized.current) setComments(rows => [...rows.filter(row => row.id !== comment.id), comment]);
     };
     const reload = async () => {
@@ -62,11 +71,14 @@ export function ReviewCommentsProvider({ submissionId, requester = fetch, locale
       } finally { if (reading.current === token) reading.current = null; }
     };
     const submit = async (retry: boolean) => {
-      if (!lifetime.current || !view.current || !authorized.current || sending.current || reading.current || draft.isConfirming()) return;
+      if (!lifetime.current || !view.current || !authorized.current || sending.current || reading.current || draft.isConfirming() || blockedRef.current) return;
       if (retry ? !operation.current : operation.current) return;
       const body = retry ? operation.current!.body : draft.current.current.body.trim();
       if (!body) return;
       const token = retry ? operation.current! : { id: crypto.randomUUID(), body };
+      if (!retry && memberId && !saveReviewCommentIntent(memberId, submissionId, token)) {
+        setRecordNotice(frontendText(locale, "ADMIN_REVIEW_COMMENT_NOT_RECORDED")); return;
+      }
       const owner = lifetime.current;
       operation.current = token; sending.current = true; setWriteState("saving");
       const current = () => lifetime.current === owner && operation.current === token;
@@ -80,7 +92,10 @@ export function ReviewCommentsProvider({ submissionId, requester = fetch, locale
         const rejected = !retry && error instanceof ApiRequestError &&
           ((error.status === 400 && error.code === "REVIEW_COMMENT_INVALID") ||
            (error.status === 404 && error.code === "REVIEW_COMMENT_NOT_FOUND"));
-        if (rejected) operation.current = null;
+        if (rejected) {
+          if (!release(token)) { setWriteState("unknown"); setRecordNotice(frontendText(locale, "ADMIN_REVIEW_COMMENT_RECORD_STUCK")); return; }
+          operation.current = null; setRecordNotice(undefined);
+        }
         setWriteState(rejected ? "rejected" : "unknown");
         if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
           authorized.current = false; setComments([]); setReadState("error");
@@ -106,8 +121,12 @@ export function ReviewCommentsProvider({ submissionId, requester = fetch, locale
       edit(body: string) { draft.edit("body", body); },
     };
   }, []);
-  return <Context.Provider value={{ ...actions, comments, body: draft.fields.body, readState, writeState,
-    locked: Boolean(operation.current) || !authorized.current || draft.confirming,
+  function discardRecord() {
+    if (!memberId || !blockedRef.current || !discardBlockedReviewCommentIntent(memberId, submissionId)) return;
+    blockedRef.current = false; setRecordBlocked(false); setRecordNotice(undefined);
+  }
+  return <Context.Provider value={{ ...actions, comments, body: draft.fields.body, readState, writeState, recordBlocked, recordNotice, discardRecord,
+    locked: Boolean(operation.current) || recordBlocked || !authorized.current || draft.confirming,
     hasDraft: draft.fields.body !== "", unresolved: operation.current !== null }}>
     {children}{draft.confirmation}
   </Context.Provider>;

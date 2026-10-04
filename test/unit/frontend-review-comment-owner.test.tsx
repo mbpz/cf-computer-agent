@@ -21,6 +21,7 @@ describe("review comment draft and write ownership", () => {
   beforeEach(async () => { browser = new Window({ url: "https://app.test/admin/submissions/sub-1" }); vi.stubGlobal("window", browser); vi.stubGlobal("document", browser.document); vi.stubGlobal("HTMLElement", browser.HTMLElement); vi.stubGlobal("navigator", browser.navigator); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = browser.document.createElement("div") as unknown as HTMLElement; browser.document.body.append(container as unknown as Node); const { createRoot } = await import("react-dom/client"); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); browser.close(); vi.unstubAllGlobals(); });
   async function render(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} locale={locale} requester={requester} />)); await flush(); }
+  async function renderMember(requester: Fetcher, id = "sub-1") { await act(async () => root.render(<ReviewDetailRoute id={id} memberId="member-a" locale={locale} requester={requester} />)); await flush(); }
   function button(label: string) { const found = [...container.querySelectorAll("button")].find(node => node.textContent === label); if (!found) throw new Error(`Missing ${label}: ${container.textContent}`); return found; }
   function text() { return container.querySelector("textarea")!; }
   async function type(value: string) { await act(async () => { const input = text(); if (!input) throw new Error(container.innerHTML); Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new browser.Event("input", { bubbles: true }) as unknown as Event); }); }
@@ -232,6 +233,52 @@ describe("review comment draft and write ownership", () => {
     await render(request); await type("Private note"); await act(async () => button("Add comment").click()); await flush();
     await act(async () => button("Reload current state").click()); await flush();
     expect(text()).toBeNull(); expect(container.textContent).not.toContain("Private note"); expect(container.textContent).not.toContain("Retry same comment"); expect(unload()).toBe(true);
+  });
+
+  it("keeps an unknown comment after refresh and retries the same operation", async () => {
+    const puts: string[] = [];
+    await renderMember(server(async (input) => { puts.push(String(input)); throw new TypeError("lost"); }));
+    await type("A note"); await act(async () => button("Add comment").click()); await flush();
+    const stored = browser.sessionStorage.getItem("memory-garden:review-comment:v1:member-a:sub-1");
+    expect(stored).toContain("A note");
+    const operationId = (JSON.parse(stored!) as { intent: { id: string } }).intent.id;
+    await act(async () => root.unmount());
+    const { createRoot } = await import("react-dom/client");
+    root = createRoot(container);
+    let retries = 0;
+    await renderMember(server(async (input, init) => {
+      if (init?.method === "PUT") { retries++; expect(String(input)).toContain(operationId); return receipt(); }
+      throw new TypeError("unexpected");
+    }));
+    expect(retries).toBe(0);
+    expect(container.textContent).toContain("outcome is unknown");
+    expect(unload()).toBe(true);
+    await act(async () => button("Retry same comment").click()); await flush();
+    expect(retries).toBe(1);
+    expect(browser.sessionStorage.getItem("memory-garden:review-comment:v1:member-a:sub-1")).toBeNull();
+  });
+
+  it("does not send a comment when the tab cannot record it", async () => {
+    let writes = 0;
+    await renderMember(server(async () => { writes++; return receipt(); }));
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await type("A note"); await act(async () => button("Add comment").click()); await flush();
+    expect(writes).toBe(0);
+    expect(container.textContent).toContain("could not record");
+  });
+
+  it("blocks a comment when its record cannot be read, and allows leave until it is discarded", async () => {
+    let writes = 0;
+    browser.sessionStorage.setItem("memory-garden:review-comment:v1:member-a:sub-1", "{");
+    await renderMember(server(async () => { writes++; return receipt(); }));
+    expect(container.textContent).toContain("can't be read");
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/submissions/sub-1");
+    await act(async () => button("Add comment").click()); await flush();
+    expect(writes).toBe(0);
+    await act(async () => button("Discard record").click());
+    await type("A note"); await act(async () => button("Add comment").click()); await flush();
+    expect(writes).toBe(1);
   });
 
 });

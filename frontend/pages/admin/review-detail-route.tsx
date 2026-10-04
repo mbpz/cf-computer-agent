@@ -11,9 +11,9 @@ import { ReviewCommentsPanel } from "../../components/review/review-comments-pan
 
 export type ReviewDetailRouteState = { kind: "loading" } | { kind: "ready"; data: ReviewDetailData } | { kind: "error" | "forbidden" | "not-found"; message: string };
 
-export function ReviewDetailRoute({ id, locale, requester = fetch }: { id: string; locale?: LocaleRuntime; requester?: Fetcher }) {
+export function ReviewDetailRoute({ id, locale, memberId, requester = fetch }: { id: string; locale?: LocaleRuntime; memberId?: string; requester?: Fetcher }) {
   // A newly selected object must never render the previous object's actions.
-  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider submissionId={id} locale={locale} requester={requester}><ReviewDetailSession id={id} locale={locale} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
+  return <ReviewDraftProvider key={id} locale={locale} preserveUnsent><ReviewCommentsProvider key={memberId ?? "preview"} submissionId={id} locale={locale} memberId={memberId} requester={requester}><ReviewDetailSession id={id} locale={locale} requester={requester} /></ReviewCommentsProvider></ReviewDraftProvider>;
 }
 
 function ReviewDetailSession({ id, locale, requester }: { id: string; locale?: LocaleRuntime; requester: Fetcher }) {

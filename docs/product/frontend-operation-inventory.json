@@ -159,6 +159,7 @@
     "frontend/lib/projects-data.ts",
     "frontend/lib/reader-note-intent.ts",
     "frontend/lib/responsive-contract.ts",
+    "frontend/lib/review-comment-intent.ts",
     "frontend/lib/review-data.ts",
     "frontend/lib/route-access.ts",
     "frontend/lib/router.ts",
@@ -2633,9 +2634,12 @@
         "frontend/components/review/review-comments-panel.tsx:13:116",
         "frontend/components/review/review-comments-panel.tsx:24:7",
         "frontend/components/review/review-comments-panel.tsx:25:7",
-        "frontend/components/review/review-comments-panel.tsx:27:62",
-        "frontend/components/review/review-comments-panel.tsx:29:59",
-        "frontend/components/review/review-comments-panel.tsx:30:61",
+        "frontend/components/review/review-comments-panel.tsx:27:29",
+        "frontend/components/review/review-comments-panel.tsx:27:197",
+        "frontend/components/review/review-comments-panel.tsx:28:28",
+        "frontend/components/review/review-comments-panel.tsx:29:62",
+        "frontend/components/review/review-comments-panel.tsx:31:59",
+        "frontend/components/review/review-comments-panel.tsx:32:61",
         "frontend/components/review/review-decision-controls.tsx:34:19",
         "frontend/components/review/review-decision-controls.tsx:35:50",
         "frontend/components/review/review-decision-controls.tsx:55:5",
@@ -9380,10 +9384,91 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-comments-panel.tsx:27:62",
+      "id": "frontend/components/review/review-comments-panel.tsx:27:29",
       "path": "frontend/components/review/review-comments-panel.tsx",
       "owner": "ReviewCommentsEditor",
       "line": 27,
+      "column": 29,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-review-comment-record-blocked": "true",
+        "className": "\"space-y-2 text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "owner.recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/review/review-comments-panel.tsx:27:197",
+      "path": "frontend/components/review/review-comments-panel.tsx",
+      "owner": "ReviewCommentsEditor",
+      "line": 27,
+      "column": 197,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "data-review-comment-record-discard": "true",
+        "onClick": "owner.discardRecord"
+      },
+      "handlers": {
+        "onClick": "owner.discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"ADMIN_REVIEW_COMMENT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "owner.recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/review/review-comments-panel.tsx:28:28",
+      "path": "frontend/components/review/review-comments-panel.tsx",
+      "owner": "ReviewCommentsEditor",
+      "line": 28,
+      "column": 28,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"text-sm text-destructive\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "owner.recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "owner.recordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/review/review-comments-panel.tsx:29:62",
+      "path": "frontend/components/review/review-comments-panel.tsx",
+      "owner": "ReviewCommentsEditor",
+      "line": 29,
       "column": 62,
       "kind": "jsx",
       "tag": "p",
@@ -9406,10 +9491,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-comments-panel.tsx:29:59",
+      "id": "frontend/components/review/review-comments-panel.tsx:31:59",
       "path": "frontend/components/review/review-comments-panel.tsx",
       "owner": "ReviewCommentsEditor",
-      "line": 29,
+      "line": 31,
       "column": 59,
       "kind": "jsx",
       "tag": "Button",
@@ -9434,10 +9519,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/review/review-comments-panel.tsx:30:61",
+      "id": "frontend/components/review/review-comments-panel.tsx:32:61",
       "path": "frontend/components/review/review-comments-panel.tsx",
       "owner": "ReviewCommentsEditor",
-      "line": 30,
+      "line": 32,
       "column": 61,
       "kind": "jsx",
       "tag": "Button",
