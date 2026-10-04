@@ -121,6 +121,7 @@ function normalizeRecentResearchItem(value: unknown): RecentResearchItem | null 
   if (typeof item.id !== "string" || !item.id || typeof item.knowledgeItemId !== "string" || !item.knowledgeItemId
     || typeof item.goal !== "string" || !item.goal.trim() || !isResearchRunStatus(status) || !isResearchQuotaState(quotaState)
     || !isRecord(plan) || !isRecord(checkpoint) || typeof item.createdAt !== "string" || typeof item.updatedAt !== "string") return null;
+  if (!Array.isArray(plan.spaceIds) || !Array.isArray(plan.collectionIds) || !Array.isArray(plan.knowledgeItemIds)) throw new Error("RESEARCH_RUNS_INVALID");
   const sourceScope = {
     spaceIds: boundedStringArray(plan.spaceIds),
     collectionIds: boundedStringArray(plan.collectionIds),

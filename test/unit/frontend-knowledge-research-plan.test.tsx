@@ -61,6 +61,23 @@ describe("knowledge research plan read", () => {
     expect(container.querySelector("[data-knowledge-section-error='research']")).toBeNull();
   });
 
+  it("does not show a missing source scope as zero sources", async () => {
+    const { spaceIds: _spaceIds, ...scope } = run.plan;
+    research = { items: [{ ...run, plan: { ...scope, collectionIds: [], knowledgeItemIds: [] } }] };
+    await mount();
+    expect(container.querySelector("[data-knowledge-section-error='research']")).not.toBeNull();
+    expect(container.textContent).not.toContain("Compare launch options");
+    expect(container.textContent).not.toContain("Source scopes: 0");
+  });
+
+  it("shows an explicit empty source scope as zero sources", async () => {
+    research = { items: [{ ...run, plan: { ...run.plan, spaceIds: [], collectionIds: [], knowledgeItemIds: [] } }] };
+    await mount();
+    expect(container.textContent).toContain("Compare launch options");
+    expect(container.textContent).toContain("Source scopes: 0");
+    expect(container.querySelector("[data-knowledge-section-error='research']")).toBeNull();
+  });
+
   async function mount() {
     await act(async () => root.render(<KnowledgeRoute locale={createLocaleRuntime({ navigatorLanguage: "en" })} search="" />));
     await flushUntil(() => urls.some((url) => url.includes("/research-runs")));
