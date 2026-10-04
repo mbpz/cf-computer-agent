@@ -130,6 +130,7 @@
     "frontend/lib/focus.ts",
     "frontend/lib/goal-tasks-data.ts",
     "frontend/lib/goals-data.ts",
+    "frontend/lib/graph-action-intent.ts",
     "frontend/lib/graph-actions.ts",
     "frontend/lib/graph-data.ts",
     "frontend/lib/graph-evidence.ts",
@@ -269,11 +270,11 @@
         "frontend/components/graph/graph-canvas.tsx:298:7",
         "frontend/components/graph/graph-canvas.tsx:330:15",
         "frontend/components/graph/graph-evidence-panel.tsx:43:277",
-        "frontend/components/graph/graph-inspector.tsx:32:5",
-        "frontend/components/graph/graph-inspector.tsx:39:23",
-        "frontend/components/graph/graph-inspector.tsx:49:21",
-        "frontend/components/graph/graph-inspector.tsx:67:15",
-        "frontend/components/graph/graph-inspector.tsx:82:44",
+        "frontend/components/graph/graph-inspector.tsx:33:5",
+        "frontend/components/graph/graph-inspector.tsx:40:23",
+        "frontend/components/graph/graph-inspector.tsx:50:21",
+        "frontend/components/graph/graph-inspector.tsx:68:15",
+        "frontend/components/graph/graph-inspector.tsx:83:44",
         "frontend/components/ui/alert.tsx:11:72",
         "frontend/components/ui/alert.tsx:12:98",
         "frontend/components/ui/alert.tsx:13:106",
@@ -288,35 +289,37 @@
         "frontend/lib/workspace-browser-history.ts:122:3",
         "frontend/lib/workspace-browser-history.ts:123:3",
         "frontend/lib/workspace-browser-history.ts:124:3",
-        "frontend/pages/graph-page.tsx:71:5",
-        "frontend/pages/graph-page.tsx:93:106",
-        "frontend/pages/graph-page.tsx:94:118",
-        "frontend/pages/graph-page.tsx:134:11",
-        "frontend/pages/graph-page.tsx:135:11",
-        "frontend/pages/graph-page.tsx:136:13",
-        "frontend/pages/graph-page.tsx:137:13",
-        "frontend/pages/graph-page.tsx:138:13",
-        "frontend/pages/graph-page.tsx:140:11",
-        "frontend/pages/graph-page.tsx:141:13",
-        "frontend/pages/graph-page.tsx:142:13",
-        "frontend/pages/graph-page.tsx:143:13",
-        "frontend/pages/graph-page.tsx:144:13",
-        "frontend/pages/graph-page.tsx:146:11",
-        "frontend/pages/graph-page.tsx:147:13",
-        "frontend/pages/graph-page.tsx:148:13",
-        "frontend/pages/graph-page.tsx:149:13",
-        "frontend/pages/graph-page.tsx:150:13",
-        "frontend/pages/graph-page.tsx:151:13",
-        "frontend/pages/graph-page.tsx:155:44",
-        "frontend/pages/graph-page.tsx:157:9",
-        "frontend/pages/graph-page.tsx:159:51",
-        "frontend/pages/graph-page.tsx:160:7",
-        "frontend/pages/graph-page.tsx:161:38",
-        "frontend/pages/graph-page.tsx:163:9",
-        "frontend/pages/graph-page.tsx:165:11",
-        "frontend/pages/graph-page.tsx:213:10",
-        "frontend/pages/graph-page.tsx:219:269",
-        "frontend/pages/graph-page.tsx:221:34"
+        "frontend/pages/graph-page.tsx:78:5",
+        "frontend/pages/graph-page.tsx:100:106",
+        "frontend/pages/graph-page.tsx:101:118",
+        "frontend/pages/graph-page.tsx:158:11",
+        "frontend/pages/graph-page.tsx:159:11",
+        "frontend/pages/graph-page.tsx:160:13",
+        "frontend/pages/graph-page.tsx:161:13",
+        "frontend/pages/graph-page.tsx:162:13",
+        "frontend/pages/graph-page.tsx:164:11",
+        "frontend/pages/graph-page.tsx:165:13",
+        "frontend/pages/graph-page.tsx:166:13",
+        "frontend/pages/graph-page.tsx:167:13",
+        "frontend/pages/graph-page.tsx:168:13",
+        "frontend/pages/graph-page.tsx:170:11",
+        "frontend/pages/graph-page.tsx:171:13",
+        "frontend/pages/graph-page.tsx:172:13",
+        "frontend/pages/graph-page.tsx:173:13",
+        "frontend/pages/graph-page.tsx:174:13",
+        "frontend/pages/graph-page.tsx:175:13",
+        "frontend/pages/graph-page.tsx:179:25",
+        "frontend/pages/graph-page.tsx:181:9",
+        "frontend/pages/graph-page.tsx:183:44",
+        "frontend/pages/graph-page.tsx:185:9",
+        "frontend/pages/graph-page.tsx:187:51",
+        "frontend/pages/graph-page.tsx:188:7",
+        "frontend/pages/graph-page.tsx:189:38",
+        "frontend/pages/graph-page.tsx:191:9",
+        "frontend/pages/graph-page.tsx:193:11",
+        "frontend/pages/graph-page.tsx:242:10",
+        "frontend/pages/graph-page.tsx:248:269",
+        "frontend/pages/graph-page.tsx:250:34"
       ],
       "unresolvedSymbols": []
     },
@@ -7639,10 +7642,10 @@
       ]
     },
     {
-      "id": "frontend/components/graph/graph-inspector.tsx:32:5",
+      "id": "frontend/components/graph/graph-inspector.tsx:33:5",
       "path": "frontend/components/graph/graph-inspector.tsx",
       "owner": "GraphInspector",
-      "line": 32,
+      "line": 33,
       "column": 5,
       "kind": "jsx",
       "tag": "aside",
@@ -7664,10 +7667,10 @@
       ]
     },
     {
-      "id": "frontend/components/graph/graph-inspector.tsx:39:23",
+      "id": "frontend/components/graph/graph-inspector.tsx:40:23",
       "path": "frontend/components/graph/graph-inspector.tsx",
       "owner": "GraphInspector",
-      "line": 39,
+      "line": 40,
       "column": 23,
       "kind": "jsx",
       "tag": "Button",
@@ -7700,10 +7703,10 @@
       ]
     },
     {
-      "id": "frontend/components/graph/graph-inspector.tsx:49:21",
+      "id": "frontend/components/graph/graph-inspector.tsx:50:21",
       "path": "frontend/components/graph/graph-inspector.tsx",
       "owner": "GraphInspector",
-      "line": 49,
+      "line": 50,
       "column": 21,
       "kind": "jsx",
       "tag": "a",
@@ -7731,17 +7734,17 @@
       ]
     },
     {
-      "id": "frontend/components/graph/graph-inspector.tsx:67:15",
+      "id": "frontend/components/graph/graph-inspector.tsx:68:15",
       "path": "frontend/components/graph/graph-inspector.tsx",
       "owner": "GraphInspector",
-      "line": 67,
+      "line": 68,
       "column": 15,
       "kind": "jsx",
       "tag": "Button",
       "attributes": {
         "type": "\"button\"",
         "variant": "actionStatus === \"success\" ? \"secondary\" : \"default\"",
-        "disabled": "actionStatus === \"running\" || actionStatus === \"success\"",
+        "disabled": "actionsDisabled || actionStatus === \"running\" || actionStatus === \"success\"",
         "aria-live": "\"polite\"",
         "onClick": "onAction"
       },
@@ -7767,10 +7770,10 @@
       ]
     },
     {
-      "id": "frontend/components/graph/graph-inspector.tsx:82:44",
+      "id": "frontend/components/graph/graph-inspector.tsx:83:44",
       "path": "frontend/components/graph/graph-inspector.tsx",
       "owner": "GraphInspector",
-      "line": 82,
+      "line": 83,
       "column": 44,
       "kind": "jsx",
       "tag": "p",
@@ -27764,10 +27767,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:71:5",
+      "id": "frontend/pages/graph-page.tsx:78:5",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 71,
+      "line": 78,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -27784,10 +27787,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:93:106",
+      "id": "frontend/pages/graph-page.tsx:100:106",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 93,
+      "line": 100,
       "column": 106,
       "kind": "jsx",
       "tag": "Button",
@@ -27818,10 +27821,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:94:118",
+      "id": "frontend/pages/graph-page.tsx:101:118",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 94,
+      "line": 101,
       "column": 118,
       "kind": "jsx",
       "tag": "Button",
@@ -27856,10 +27859,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:134:11",
+      "id": "frontend/pages/graph-page.tsx:158:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 134,
+      "line": 158,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -27900,10 +27903,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:135:11",
+      "id": "frontend/pages/graph-page.tsx:159:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 135,
+      "line": 159,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -27944,10 +27947,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:136:13",
+      "id": "frontend/pages/graph-page.tsx:160:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 136,
+      "line": 160,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -27984,10 +27987,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:137:13",
+      "id": "frontend/pages/graph-page.tsx:161:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 137,
+      "line": 161,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28024,10 +28027,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:138:13",
+      "id": "frontend/pages/graph-page.tsx:162:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 138,
+      "line": 162,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28064,10 +28067,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:140:11",
+      "id": "frontend/pages/graph-page.tsx:164:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 140,
+      "line": 164,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -28108,10 +28111,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:141:13",
+      "id": "frontend/pages/graph-page.tsx:165:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 141,
+      "line": 165,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28148,10 +28151,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:142:13",
+      "id": "frontend/pages/graph-page.tsx:166:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 142,
+      "line": 166,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28188,10 +28191,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:143:13",
+      "id": "frontend/pages/graph-page.tsx:167:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 143,
+      "line": 167,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28228,10 +28231,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:144:13",
+      "id": "frontend/pages/graph-page.tsx:168:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 144,
+      "line": 168,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28268,10 +28271,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:146:11",
+      "id": "frontend/pages/graph-page.tsx:170:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 146,
+      "line": 170,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -28312,10 +28315,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:147:13",
+      "id": "frontend/pages/graph-page.tsx:171:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 147,
+      "line": 171,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28352,10 +28355,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:148:13",
+      "id": "frontend/pages/graph-page.tsx:172:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 148,
+      "line": 172,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28392,10 +28395,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:149:13",
+      "id": "frontend/pages/graph-page.tsx:173:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 149,
+      "line": 173,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28432,10 +28435,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:150:13",
+      "id": "frontend/pages/graph-page.tsx:174:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 150,
+      "line": 174,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28472,10 +28475,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:151:13",
+      "id": "frontend/pages/graph-page.tsx:175:13",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 151,
+      "line": 175,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -28512,10 +28515,105 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:155:44",
+      "id": "frontend/pages/graph-page.tsx:179:25",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 155,
+      "line": 179,
+      "column": 25,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "data-graph-action-record-blocked": "true",
+        "role": "\"alert\"",
+        "className": "\"space-y-2 rounded-md border border-destructive/40 p-3 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:181:9",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 181,
+      "column": 9,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "variant": "\"outline\"",
+        "onClick": "() => { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); }"
+      },
+      "handlers": {
+        "onClick": "() => { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); }"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"GRAPH_ACTION_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": [
+        {
+          "condition": "state.kind === \"loading\"",
+          "source": "if (state.kind === \"loading\") return <section data-graph-page-loading><p className=\"mb-3 text-sm text-muted-foreground\">{frontendText(locale, \"GRAPH_LOADING\")}</p><PageState kind=\"loading\" title={frontendText(locale, \"GRAPH_LOADING\")} /></section>;"
+        },
+        {
+          "condition": "state.kind === \"error\"",
+          "source": "if (state.kind === \"error\") return <PageState kind=\"error\" title={frontendText(locale, \"GRAPH_ERROR\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"forbidden\"",
+          "source": "if (state.kind === \"forbidden\") return <PageState kind=\"forbidden\" title={frontendText(locale, \"GRAPH_FORBIDDEN\")}><Button className=\"mt-4\" variant=\"outline\" onClick={onRetry}>{frontendText(locale, \"GRAPH_RETRY\")}</Button></PageState>;"
+        },
+        {
+          "condition": "state.kind === \"empty\"",
+          "source": "if (state.kind === \"empty\") return <PageState kind=\"empty\" title={frontendText(locale, \"GRAPH_EMPTY\")} description={frontendText(locale, \"GRAPH_EMPTY_DESCRIPTION\")} />;"
+        },
+        {
+          "condition": "!filteredSnapshot",
+          "source": "if (!filteredSnapshot) return null;"
+        }
+      ]
+    },
+    {
+      "id": "frontend/pages/graph-page.tsx:183:44",
+      "path": "frontend/pages/graph-page.tsx",
+      "owner": "GraphPage",
+      "line": 183,
       "column": 44,
       "kind": "jsx",
       "tag": "div",
@@ -28558,10 +28656,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:157:9",
+      "id": "frontend/pages/graph-page.tsx:185:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 157,
+      "line": 185,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -28607,10 +28705,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:159:51",
+      "id": "frontend/pages/graph-page.tsx:187:51",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 159,
+      "line": 187,
       "column": 51,
       "kind": "jsx",
       "tag": "p",
@@ -28621,7 +28719,7 @@
       "handlers": {},
       "spreads": [],
       "labels": [
-        "frontendText(locale, outcome.status === \"rejected\" ? \"GRAPH_ACTION_REJECTED\" : \"GRAPH_ACTION_NOT_SENT\")"
+        "frontendText(locale, outcome.status === \"rejected\" ? \"GRAPH_ACTION_REJECTED\" : outcome.status === \"not_recorded\" ? \"GRAPH_ACTION_NOT_RECORDED\" : \"GRAPH_ACTION_NOT_SENT\")"
       ],
       "context": [
         {
@@ -28654,10 +28752,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:160:7",
+      "id": "frontend/pages/graph-page.tsx:188:7",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 160,
+      "line": 188,
       "column": 7,
       "kind": "jsx",
       "tag": "GraphSuggestionsPanel",
@@ -28696,10 +28794,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:161:38",
+      "id": "frontend/pages/graph-page.tsx:189:38",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 161,
+      "line": 189,
       "column": 38,
       "kind": "jsx",
       "tag": "div",
@@ -28744,10 +28842,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:163:9",
+      "id": "frontend/pages/graph-page.tsx:191:9",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 163,
+      "line": 191,
       "column": 9,
       "kind": "jsx",
       "tag": "GraphCanvas",
@@ -28790,10 +28888,10 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:165:11",
+      "id": "frontend/pages/graph-page.tsx:193:11",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphPage",
-      "line": 165,
+      "line": 193,
       "column": 11,
       "kind": "jsx",
       "tag": "GraphInspector",
@@ -28802,6 +28900,7 @@
         "node": "selectedNode",
         "onClose": "() => setSelectedId(null)",
         "onAction": "selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined",
+        "actionsDisabled": "recordBlocked",
         "actionStatus": "inspectorStatus"
       },
       "handlers": {
@@ -28835,14 +28934,15 @@
       ]
     },
     {
-      "id": "frontend/pages/graph-page.tsx:213:10",
+      "id": "frontend/pages/graph-page.tsx:242:10",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphRoute",
-      "line": 213,
+      "line": 242,
       "column": 10,
       "kind": "jsx",
       "tag": "GraphPage",
       "attributes": {
+        "memberId": "memberId",
         "locale": "locale",
         "state": "state",
         "onDenied": "() => setState({ kind: \"forbidden\" })",
@@ -28873,10 +28973,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:219:269",
+      "id": "frontend/pages/graph-page.tsx:248:269",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 219,
+      "line": 248,
       "column": 269,
       "kind": "jsx",
       "tag": "Button",
@@ -28896,10 +28996,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/graph-page.tsx:221:34",
+      "id": "frontend/pages/graph-page.tsx:250:34",
       "path": "frontend/pages/graph-page.tsx",
       "owner": "GraphSuggestionsPanel",
-      "line": 221,
+      "line": 250,
       "column": 34,
       "kind": "jsx",
       "tag": "p",

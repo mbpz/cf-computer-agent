@@ -10,6 +10,7 @@ import { frontendText, type LocaleRuntime } from "../lib/i18n";
 import { loadGraph, type GraphQueryInput, type GraphSnapshot } from "../lib/graph-data";
 import { loadGraphSuggestions, type GraphSuggestion, type GraphSuggestionResult } from "../lib/graph-suggestions";
 import { createGraphActionClientKey, dispatchGraphAction } from "../lib/graph-actions";
+import { clearGraphAction, discardBlockedGraphAction, loadGraphAction, saveGraphAction, type GraphActionIntent } from "../lib/graph-action-intent";
 import { ApiRequestError } from "../lib/api";
 import { registerWorkspaceLeaveGuard } from "../lib/workspace-location";
 import type { GraphNode } from "../lib/graph-data";
@@ -45,19 +46,24 @@ export interface GraphPageProps {
 }
 
 type GraphActionOwner = { node: GraphNode; clientKey: string; status: "running" | "unconfirmed" };
-type GraphActionOutcome = { nodeId: string; status: "success" } | { status: "rejected" | "not_sent" };
+type GraphActionOutcome = { nodeId: string; status: "success" } | { status: "rejected" | "not_sent" | "not_recorded" };
 
 export type GraphLoader = (query: GraphQueryInput, signal: AbortSignal) => Promise<GraphSnapshot>;
 
 const WORK_LENS_KINDS = new Set(["task", "project", "goal", "meeting", "decision", "action_item", "inbox", "calendar", "focus"]);
 
-export function GraphPage({ locale, state, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry, onDenied }: GraphPageProps) {
+export function GraphPage({ locale, state, memberId, query = "", lens = "workspace", temporalRange = "all", changeKind = "all", suggestionsState = { kind: "idle" }, onQueryChange, onLensChange, onTemporalRangeChange, onChangeKindChange, onGenerateSuggestions, onRetry, onDenied }: GraphPageProps & { memberId?: string }) {
+  const [stored] = useState(() => memberId ? loadGraphAction(memberId) : { kind: "empty" as const });
+  const restored: GraphActionOwner | null = stored.kind === "ready"
+    ? { node: stored.intent.node, clientKey: stored.intent.clientKey, status: "unconfirmed" } : null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // The running or unconfirmed action belongs to the page, not to the current selection:
   // changing node or lens must not drop its client key, and leaving waits for its result.
-  const [action, setAction] = useState<GraphActionOwner | null>(null);
+  // With a member, an unconfirmed action survives refresh in this tab.
+  const [action, setAction] = useState<GraphActionOwner | null>(restored);
+  const [recordBlocked, setRecordBlocked] = useState(stored.kind === "blocked");
   const [outcome, setOutcome] = useState<GraphActionOutcome | null>(null);
-  const actionRef = useRef<GraphActionOwner | null>(null);
+  const actionRef = useRef<GraphActionOwner | null>(restored);
   const aliveRef = useRef(true);
   const leaveGuardRef = useRef<(() => void) | null>(null);
   const syncLeaveGuard = useCallback(() => {
@@ -67,6 +73,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
   const publish = useCallback((next: GraphActionOwner | null) => { actionRef.current = next; syncLeaveGuard(); setAction(next); }, [syncLeaveGuard]);
   useEffect(() => {
     aliveRef.current = true;
+    syncLeaveGuard();
     const warn = (event: BeforeUnloadEvent) => { if (actionRef.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", warn);
     return () => { aliveRef.current = false; actionRef.current = null; syncLeaveGuard(); window.removeEventListener("beforeunload", warn); };
@@ -95,23 +102,40 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
   if (state.kind === "empty") return <PageState kind="empty" title={frontendText(locale, "GRAPH_EMPTY")} description={frontendText(locale, "GRAPH_EMPTY_DESCRIPTION")} />;
 
   if (!filteredSnapshot) return null;
+  const graphIntent = (owner: GraphActionOwner): GraphActionIntent => ({
+    clientKey: owner.clientKey,
+    node: { id: owner.node.id, kind: owner.node.kind, label: owner.node.label, status: owner.node.status, href: owner.node.href, metadata: {} },
+  });
+  const releaseAction = (owner: GraphActionOwner, next: GraphActionOwner | null, nextOutcome: GraphActionOutcome | null) => {
+    if (next === null && memberId && !clearGraphAction(memberId, graphIntent(owner))) {
+      publish({ ...owner, status: "unconfirmed" });
+      setOutcome(null);
+      return;
+    }
+    publish(next);
+    setOutcome(nextOutcome);
+  };
   const runGraphAction = (retry?: GraphActionOwner) => {
+    if (recordBlocked) return;
     const current = actionRef.current;
     if (current?.status === "running") return;
     if (current && current !== retry) return;
     const node = retry?.node ?? selectedNode;
     if (!node) return;
     const owner: GraphActionOwner = { node, clientKey: retry?.clientKey ?? createGraphActionClientKey(node), status: "running" };
+    if (memberId && !retry && !saveGraphAction(memberId, graphIntent(owner))) {
+      setOutcome({ status: "not_recorded" });
+      return;
+    }
     setOutcome(null); publish(owner);
     const live = () => aliveRef.current && actionRef.current === owner;
     void dispatchGraphAction({ node, clientKey: owner.clientKey }).then((result) => {
       if (!live()) return;
-      publish(null);
-      setOutcome(result.status === "completed" ? { nodeId: node.id, status: "success" } : { status: "not_sent" });
+      releaseAction(owner, null, result.status === "completed" ? { nodeId: node.id, status: "success" } : { status: "not_sent" });
     }).catch((error: unknown) => {
       if (!live()) return;
-      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { publish(null); setOutcome(null); onDenied?.(); return; }
-      if (isDefiniteGraphActionRejection(error)) { publish(null); setOutcome({ status: "rejected" }); return; }
+      if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) { releaseAction(owner, null, null); onDenied?.(); return; }
+      if (isDefiniteGraphActionRejection(error)) { releaseAction(owner, null, { status: "rejected" }); return; }
       publish({ ...owner, status: "unconfirmed" });
     });
   };
@@ -152,11 +176,15 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
           </select>
         </CardContent>
       </Card>
+      {recordBlocked && <div data-graph-action-record-blocked role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
+        <p>{frontendText(locale, "GRAPH_ACTION_RECORD_BLOCKED")}</p>
+        <Button variant="outline" onClick={() => { if (memberId && discardBlockedGraphAction(memberId)) setRecordBlocked(false); }}>{frontendText(locale, "GRAPH_ACTION_RECORD_DISCARD")}</Button>
+      </div>}
       {action?.status === "unconfirmed" && <div data-graph-action-unconfirmed role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3 text-sm">
         <p>{frontendText(locale, "GRAPH_ACTION_UNCONFIRMED").replace("{label}", action.node.label)}</p>
         <Button variant="outline" onClick={() => runGraphAction(action)}>{frontendText(locale, "GRAPH_ACTION_RETRY")}</Button>
       </div>}
-      {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : "GRAPH_ACTION_NOT_SENT")}</p>}
+      {outcome && outcome.status !== "success" && <p role="status" className="text-sm text-destructive">{frontendText(locale, outcome.status === "rejected" ? "GRAPH_ACTION_REJECTED" : outcome.status === "not_recorded" ? "GRAPH_ACTION_NOT_RECORDED" : "GRAPH_ACTION_NOT_SENT")}</p>}
       <GraphSuggestionsPanel locale={locale} state={suggestionsState} onGenerate={onGenerateSuggestions} />
       {state.kind === "truncated" && <div data-graph-truncated role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">{frontendText(locale, "GRAPH_TRUNCATED")}</div>}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -167,6 +195,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
             node={selectedNode}
             onClose={() => setSelectedId(null)}
             onAction={selectedNode && (!action || action.node.id === selectedNode.id) ? () => runGraphAction(action ?? undefined) : undefined}
+            actionsDisabled={recordBlocked}
             actionStatus={inspectorStatus}
           />
           <GraphEvidencePanel locale={locale} citationIds={selectedNode ? selectedCitationIds : undefined} />
@@ -176,7 +205,7 @@ export function GraphPage({ locale, state, query = "", lens = "workspace", tempo
   );
 }
 
-export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: LocaleRuntime; load?: GraphLoader }) {
+export function GraphRoute({ locale, memberId, load = defaultGraphLoader }: { locale: LocaleRuntime; memberId?: string; load?: GraphLoader }) {
   const [state, setState] = useState<GraphPageState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [lens, setLens] = useState<GraphLens>("workspace");
@@ -210,7 +239,7 @@ export function GraphRoute({ locale, load = defaultGraphLoader }: { locale: Loca
     setSuggestionsState({ kind: "loading" });
     void loadGraphSuggestions(fetch).then((result) => setSuggestionsState({ kind: "idle", result })).catch(() => setSuggestionsState({ kind: "error" }));
   };
-  return <GraphPage locale={locale} state={state} onDenied={() => setState({ kind: "forbidden" })} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
+  return <GraphPage memberId={memberId} locale={locale} state={state} onDenied={() => setState({ kind: "forbidden" })} query={query} lens={lens} temporalRange={temporalRange} changeKind={changeKind} suggestionsState={suggestionsState} onGenerateSuggestions={generateSuggestions} onQueryChange={setQuery} onLensChange={setLens} onTemporalRangeChange={setTemporalRange} onChangeKindChange={setChangeKind} onRetry={() => { setState({ kind: "loading" }); setRetry((value) => value + 1); }} />;
 }
 
 function GraphSuggestionsPanel({ locale, state, onGenerate }: { locale: LocaleRuntime; state: GraphSuggestionsState; onGenerate?: () => void }) {

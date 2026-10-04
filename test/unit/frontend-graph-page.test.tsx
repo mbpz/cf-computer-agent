@@ -194,6 +194,81 @@ describe("GraphPage", () => {
     expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
   });
 
+  it("restores an unconfirmed graph action after remount and retries the same identity", async () => {
+    const posts: string[] = [];
+    let fail = true;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        posts.push(String(init.body));
+        if (fail) throw new TypeError("network down");
+        return Response.json({ id: "focus-1" });
+      }
+      return Response.json({});
+    });
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    await clickButton("Start focus");
+    await flush();
+    const stored = browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a");
+    const clientKey = JSON.parse(posts[0]!).clientKey as string;
+    expect(stored).toContain("task:t1");
+    expect(stored).toContain(clientKey);
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    await renderMemberGraph();
+    expect(posts).toHaveLength(1);
+    expect(host.querySelector("[data-graph-action-unconfirmed]")?.textContent).toContain("was not confirmed");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("blocked");
+    fail = false;
+    await clickButton("Retry action");
+    await flush();
+    expect(posts).toHaveLength(2);
+    expect(JSON.parse(posts[1]!).clientKey).toBe(clientKey);
+    expect(browser.sessionStorage.getItem("memory-garden:graph-action:v1:member-a")).toBeNull();
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("does not send a graph action when this tab cannot record it", async () => {
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") posts += 1;
+      return Response.json({ id: "focus-1" });
+    });
+    await renderMemberGraph();
+    await clickNode("task:t1");
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await clickButton("Start focus");
+    await flush();
+    expect(posts).toBe(0);
+    expect(host.textContent).toContain("could not record");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+  });
+
+  it("blocks a new graph action but not leave when the stored action cannot be read, until it is discarded", async () => {
+    browser.sessionStorage.setItem("memory-garden:graph-action:v1:member-a", "{");
+    let posts = 0;
+    vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") posts += 1;
+      return Response.json({ id: "focus-1" });
+    });
+    await renderMemberGraph();
+    expect(host.textContent).toContain("can't be read");
+    expect(writeWorkspaceHistory("push", "/tasks")).toBe("committed");
+    await clickNode("task:t1");
+    const start = [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === "Start focus") as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    await act(async () => start.click());
+    expect(posts).toBe(0);
+    await clickButton("Discard record");
+    await flush();
+    expect(host.textContent).not.toContain("can't be read");
+    await clickButton("Start focus");
+    await flush();
+    expect(posts).toBe(1);
+  });
+
   it("releases the leave lock when a graph action is rejected before it is saved", async () => {
     const keys: string[] = [];
     let attempt = 0;
@@ -263,6 +338,12 @@ describe("GraphPage", () => {
 async function renderReadyGraph(graph: GraphSnapshot = snapshot) {
   const load = vi.fn(async () => graph);
   await act(async () => { root.render(<GraphRoute locale={createLocaleRuntime()} load={load} />); });
+  await flush();
+}
+
+async function renderMemberGraph(graph: GraphSnapshot = snapshot) {
+  const load = vi.fn(async () => graph);
+  await act(async () => { root.render(<GraphRoute memberId="member-a" locale={createLocaleRuntime()} load={load} />); });
   await flush();
 }
 

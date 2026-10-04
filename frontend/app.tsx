@@ -205,7 +205,7 @@ function renderPage(kind: ReturnType<typeof pageKindForPath>, pathname: string, 
     case "agent": return <AgentRoute key={session?.member.id} memberId={session?.member.id} locale={locale} search={search} />;
     case "submit": return session ? <SubmitRoute locale={locale} memberId={session.member.id} /> : <NotFoundPage locale={locale} />;
     case "my-submissions": return <MySubmissionsRoute locale={locale} search={search} />;
-    case "graph": return <GraphRoute locale={locale} />;
+    case "graph": return <GraphRoute key={session?.member.id} memberId={session?.member.id} locale={locale} />;
     case "tasks": return <TasksRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "inbox": return <InboxRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;
     case "goals": return <GoalsRoute memberId={session?.member.id} key={session?.member.id} locale={locale} search={search} />;

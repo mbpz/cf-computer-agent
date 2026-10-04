@@ -13,9 +13,10 @@ export interface GraphInspectorProps {
   onClose?: () => void;
   onAction?: () => void;
   actionStatus?: GraphInspectorActionStatus;
+  actionsDisabled?: boolean;
 }
 
-export function GraphInspector({ locale, node, onClose, onAction, actionStatus = "idle" }: GraphInspectorProps) {
+export function GraphInspector({ locale, node, onClose, onAction, actionStatus = "idle", actionsDisabled = false }: GraphInspectorProps) {
   const model = buildGraphInspectorModel(node);
   const copy = inspectorCopy(locale);
 
@@ -67,7 +68,7 @@ export function GraphInspector({ locale, node, onClose, onAction, actionStatus =
               <Button
                 type="button"
                 variant={actionStatus === "success" ? "secondary" : "default"}
-                disabled={actionStatus === "running" || actionStatus === "success"}
+                disabled={actionsDisabled || actionStatus === "running" || actionStatus === "success"}
                 aria-live="polite"
                 onClick={onAction}
               >
