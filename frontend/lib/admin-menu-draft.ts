@@ -88,3 +88,57 @@ export function discardBlockedAdminMenuDraft(memberId: string): boolean {
     return true;
   } catch { return false; }
 }
+
+export type MenuPositionEntry = { readonly menuId: string; readonly position: string };
+export type StoredMenuPositions = { kind: "empty" } | { kind: "blocked" } | { kind: "ready"; positions: readonly MenuPositionEntry[] };
+const positionKey = (memberId: string) => `memory-garden:admin-menu-position:v1:${encodeURIComponent(memberId)}`;
+
+function positionEntry(value: unknown): value is MenuPositionEntry {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return Object.keys(record).length === 2 && typeof record.menuId === "string" && idPattern.test(record.menuId) && typeof record.position === "string" && /^\d{0,6}$/u.test(record.position);
+}
+function validPositions(value: unknown): value is readonly MenuPositionEntry[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 40 || !value.every(positionEntry)) return false;
+  return new Set(value.map((entry) => entry.menuId)).size === value.length;
+}
+
+// Tab-scoped unsent row positions. Separate from the editor draft and from an in-flight write.
+export function loadMenuPositionDraft(memberId: string): StoredMenuPositions {
+  try {
+    if (!memberId || !idPattern.test(memberId)) return { kind: "blocked" };
+    const raw = storage().getItem(positionKey(memberId));
+    if (raw === null) return { kind: "empty" };
+    if (raw.length > MAX_RAW) return { kind: "blocked" };
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    if (!value || value.version !== 1 || value.memberId !== memberId || Object.keys(value).length !== 3 || !validPositions(value.positions)) return { kind: "blocked" };
+    return { kind: "ready", positions: Object.freeze(value.positions.map((entry) => Object.freeze({ menuId: entry.menuId, position: entry.position }))) };
+  } catch { return { kind: "blocked" }; }
+}
+
+export function persistMenuPositionDraft(memberId: string, positions: readonly MenuPositionEntry[]): boolean {
+  try {
+    if (!memberId || !idPattern.test(memberId)) return false;
+    if (positions.length === 0) { storage().removeItem(positionKey(memberId)); return true; }
+    if (!validPositions(positions)) return false;
+    const body = JSON.stringify({ version: 1, memberId, positions: positions.map((entry) => ({ menuId: entry.menuId, position: entry.position })) });
+    if (body.length > MAX_RAW) return false;
+    storage().setItem(positionKey(memberId), body);
+    return true;
+  } catch { return false; }
+}
+
+export function discardBlockedMenuPositionDraft(memberId: string): boolean {
+  try {
+    if (!memberId || !idPattern.test(memberId)) return false;
+    storage().removeItem(positionKey(memberId));
+    return true;
+  } catch { return false; }
+}
+
+export function releaseMenuPositionDraft(memberId: string, menuId: string): boolean {
+  const current = loadMenuPositionDraft(memberId);
+  if (current.kind === "blocked") return false;
+  if (current.kind === "empty") return true;
+  return persistMenuPositionDraft(memberId, current.positions.filter((entry) => entry.menuId !== menuId));
+}

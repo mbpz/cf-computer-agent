@@ -2269,25 +2269,25 @@
         "frontend/pages/admin/menu-editor.tsx:84:10",
         "frontend/pages/admin/menus-page.tsx:17:157",
         "frontend/pages/admin/menus-page.tsx:18:10",
-        "frontend/pages/admin/menus-page.tsx:57:5",
-        "frontend/pages/admin/menus-page.tsx:77:40",
-        "frontend/pages/admin/menus-page.tsx:77:200",
-        "frontend/pages/admin/menus-page.tsx:77:394",
-        "frontend/pages/admin/menus-page.tsx:77:527",
-        "frontend/pages/admin/menus-page.tsx:81:18",
-        "frontend/pages/admin/menus-page.tsx:83:22",
-        "frontend/pages/admin/menus-page.tsx:83:163",
-        "frontend/pages/admin/menus-page.tsx:84:21",
-        "frontend/pages/admin/menus-page.tsx:85:16",
-        "frontend/pages/admin/menus-page.tsx:89:176",
-        "frontend/pages/admin/menus-page.tsx:90:13",
-        "frontend/pages/admin/menus-page.tsx:114:699",
-        "frontend/pages/admin/menus-page.tsx:114:1020",
-        "frontend/pages/admin/menus-page.tsx:114:1259",
-        "frontend/pages/admin/menus-page.tsx:114:1773",
-        "frontend/pages/admin/menus-page.tsx:114:2095",
-        "frontend/pages/admin/menus-page.tsx:114:2393",
-        "frontend/pages/admin/menus-page.tsx:114:2624"
+        "frontend/pages/admin/menus-page.tsx:75:5",
+        "frontend/pages/admin/menus-page.tsx:100:40",
+        "frontend/pages/admin/menus-page.tsx:100:200",
+        "frontend/pages/admin/menus-page.tsx:100:394",
+        "frontend/pages/admin/menus-page.tsx:100:527",
+        "frontend/pages/admin/menus-page.tsx:104:18",
+        "frontend/pages/admin/menus-page.tsx:106:22",
+        "frontend/pages/admin/menus-page.tsx:106:163",
+        "frontend/pages/admin/menus-page.tsx:107:21",
+        "frontend/pages/admin/menus-page.tsx:108:16",
+        "frontend/pages/admin/menus-page.tsx:112:176",
+        "frontend/pages/admin/menus-page.tsx:113:13",
+        "frontend/pages/admin/menus-page.tsx:138:699",
+        "frontend/pages/admin/menus-page.tsx:138:1020",
+        "frontend/pages/admin/menus-page.tsx:138:1259",
+        "frontend/pages/admin/menus-page.tsx:138:1773",
+        "frontend/pages/admin/menus-page.tsx:138:2095",
+        "frontend/pages/admin/menus-page.tsx:138:2393",
+        "frontend/pages/admin/menus-page.tsx:138:2624"
       ],
       "unresolvedSymbols": []
     },
@@ -24732,10 +24732,10 @@
       ]
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:57:5",
+      "id": "frontend/pages/admin/menus-page.tsx:75:5",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 57,
+      "line": 75,
       "column": 5,
       "kind": "listener",
       "tag": "window.addEventListener",
@@ -24752,10 +24752,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:77:40",
+      "id": "frontend/pages/admin/menus-page.tsx:100:40",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 77,
+      "line": 100,
       "column": 40,
       "kind": "jsx",
       "tag": "div",
@@ -24777,10 +24777,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:77:200",
+      "id": "frontend/pages/admin/menus-page.tsx:100:200",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 77,
+      "line": 100,
       "column": 200,
       "kind": "jsx",
       "tag": "Button",
@@ -24806,10 +24806,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:77:394",
+      "id": "frontend/pages/admin/menus-page.tsx:100:394",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 77,
+      "line": 100,
       "column": 394,
       "kind": "jsx",
       "tag": "p",
@@ -24832,10 +24832,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:77:527",
+      "id": "frontend/pages/admin/menus-page.tsx:100:527",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 77,
+      "line": 100,
       "column": 527,
       "kind": "jsx",
       "tag": "Button",
@@ -24867,10 +24867,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:81:18",
+      "id": "frontend/pages/admin/menus-page.tsx:104:18",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 81,
+      "line": 104,
       "column": 18,
       "kind": "jsx",
       "tag": "Button",
@@ -24903,10 +24903,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:83:22",
+      "id": "frontend/pages/admin/menus-page.tsx:106:22",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 83,
+      "line": 106,
       "column": 22,
       "kind": "jsx",
       "tag": "div",
@@ -24935,10 +24935,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:83:163",
+      "id": "frontend/pages/admin/menus-page.tsx:106:163",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 83,
+      "line": 106,
       "column": 163,
       "kind": "jsx",
       "tag": "Button",
@@ -24971,10 +24971,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:84:21",
+      "id": "frontend/pages/admin/menus-page.tsx:107:21",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 84,
+      "line": 107,
       "column": 21,
       "kind": "jsx",
       "tag": "p",
@@ -25004,10 +25004,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:85:16",
+      "id": "frontend/pages/admin/menus-page.tsx:108:16",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 85,
+      "line": 108,
       "column": 16,
       "kind": "jsx",
       "tag": "MenuEditor",
@@ -25045,10 +25045,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:89:176",
+      "id": "frontend/pages/admin/menus-page.tsx:112:176",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 89,
+      "line": 112,
       "column": 176,
       "kind": "jsx",
       "tag": "MenuNode",
@@ -25058,6 +25058,8 @@
         "depth": "0",
         "positionAttempts": "positionAttempts",
         "locale": "locale",
+        "positionFor": "(id) => positionBlocked ? undefined : positions[id]",
+        "onPosition": "reportPosition",
         "onUpdate": "onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined",
         "onDelete": "onDelete ? menu => requestConfirmation(menu) : undefined",
         "onEdit": "onUpdate ? edit : undefined",
@@ -25066,6 +25068,7 @@
         "recordBlocked": "recordBlocked"
       },
       "handlers": {
+        "onPosition": "reportPosition",
         "onUpdate": "onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined",
         "onDelete": "onDelete ? menu => requestConfirmation(menu) : undefined",
         "onEdit": "onUpdate ? edit : undefined"
@@ -25093,10 +25096,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:90:13",
+      "id": "frontend/pages/admin/menus-page.tsx:113:13",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "ReadyMenus",
-      "line": 90,
+      "line": 113,
       "column": 13,
       "kind": "jsx",
       "tag": "ConfirmAction",
@@ -25120,10 +25123,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:699",
+      "id": "frontend/pages/admin/menus-page.tsx:138:699",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 699,
       "kind": "jsx",
       "tag": "Button",
@@ -25151,10 +25154,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:1020",
+      "id": "frontend/pages/admin/menus-page.tsx:138:1020",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 1020,
       "kind": "jsx",
       "tag": "input",
@@ -25175,10 +25178,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:1259",
+      "id": "frontend/pages/admin/menus-page.tsx:138:1259",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 1259,
       "kind": "jsx",
       "tag": "Button",
@@ -25200,10 +25203,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:1773",
+      "id": "frontend/pages/admin/menus-page.tsx:138:1773",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 1773,
       "kind": "jsx",
       "tag": "Button",
@@ -25225,10 +25228,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:2095",
+      "id": "frontend/pages/admin/menus-page.tsx:138:2095",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 2095,
       "kind": "jsx",
       "tag": "Button",
@@ -25250,10 +25253,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:2393",
+      "id": "frontend/pages/admin/menus-page.tsx:138:2393",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 2393,
       "kind": "jsx",
       "tag": "Button",
@@ -25281,10 +25284,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/pages/admin/menus-page.tsx:114:2624",
+      "id": "frontend/pages/admin/menus-page.tsx:138:2624",
       "path": "frontend/pages/admin/menus-page.tsx",
       "owner": "MenuNode",
-      "line": 114,
+      "line": 138,
       "column": 2624,
       "kind": "jsx",
       "tag": "MenuNode",
@@ -25294,6 +25297,8 @@
         "depth": "depth + 1",
         "positionAttempts": "positionAttempts",
         "locale": "locale",
+        "positionFor": "positionFor",
+        "onPosition": "onPosition",
         "onUpdate": "onUpdate",
         "onDelete": "onDelete",
         "onEdit": "onEdit",
@@ -25302,6 +25307,7 @@
         "recordBlocked": "recordBlocked"
       },
       "handlers": {
+        "onPosition": "onPosition",
         "onUpdate": "onUpdate",
         "onDelete": "onDelete",
         "onEdit": "onEdit"

@@ -8,7 +8,7 @@ import { menuSnapshot } from "../../../shared/admin-menu-fields";
 import { ConfirmAction } from "../../components/ui/confirm-action";
 import { MenuEditor, describeMenuChanges } from "./menu-editor";
 import { useCreateDraft } from "../../lib/use-create-draft";
-import { discardBlockedAdminMenuDraft, loadAdminMenuDraft, menuEditorBaseline, persistAdminMenuDraft, type MenuEditorFields } from "../../lib/admin-menu-draft";
+import { discardBlockedAdminMenuDraft, discardBlockedMenuPositionDraft, loadAdminMenuDraft, loadMenuPositionDraft, menuEditorBaseline, persistAdminMenuDraft, persistMenuPositionDraft, releaseMenuPositionDraft, type MenuEditorFields } from "../../lib/admin-menu-draft";
 import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../../lib/workspace-location";
 import type { AdminMenu, AdminMenuCreate, AdminMenuUpdate } from "../../lib/admin-menus-data";
 
@@ -25,15 +25,20 @@ function findMenu(menus: readonly AdminMenu[], id: string): AdminMenu | undefine
 }
 function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, pendingId, error, writeBlocked, readPending, readRequired, recordBlocked = false, onDiscardRecord, draftMemberId, suppressDraft = false }: ReadyProps) {
   const [composer] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadAdminMenuDraft(draftMemberId));
+  const [positionRecord] = useState(() => !draftMemberId || suppressDraft ? { kind: "empty" as const } : loadMenuPositionDraft(draftMemberId));
   const restored = composer.kind === "ready" ? composer.draft : null;
   const restoredMenu = restored?.mode === "edit" ? findMenu(menus, restored.menuId) : undefined;
-  const blockedRecord = composer.kind === "blocked" || Boolean(restored?.mode === "edit" && !restoredMenu);
-  const [draftBlocked, setDraftBlocked] = useState(blockedRecord);
+  const editorRecordBlocked = composer.kind === "blocked" || Boolean(restored?.mode === "edit" && !restoredMenu);
+  const [editorBlocked, setEditorBlocked] = useState(editorRecordBlocked);
+  const [positionBlocked, setPositionBlocked] = useState(positionRecord.kind === "blocked");
+  const draftBlocked = editorBlocked || positionBlocked;
   const [draftNotice, setDraftNotice] = useState<string>();
-  const [live, setLive] = useState<MenuEditorFields | null>(blockedRecord || !restored ? null : restored.fields);
+  const [live, setLive] = useState<MenuEditorFields | null>(editorRecordBlocked || !restored ? null : restored.fields);
+  const [positions, setPositions] = useState<Record<string, string>>(() => positionRecord.kind === "ready" ? Object.fromEntries(positionRecord.positions.map((entry) => [entry.menuId, entry.position])) : {});
+  const reportPosition = (menuId: string, position: string) => setPositions((current) => current[menuId] === position ? current : { ...current, [menuId]: position });
   const reportFields = (fields: MenuEditorFields) => setLive((current) => JSON.stringify(current) === JSON.stringify(fields) ? current : fields);
   const [positionAttempts, setPositionAttempts] = useState<Record<string, PositionAttempt>>({});
-  const [editor, setEditor] = useState<{ menu?: AdminMenu } | null>(blockedRecord || !restored ? null : restored.mode === "create" ? {} : { menu: restoredMenu });
+  const [editor, setEditor] = useState<{ menu?: AdminMenu } | null>(editorRecordBlocked || !restored ? null : restored.mode === "create" ? {} : { menu: restoredMenu });
   const busy = Boolean(pendingId) || Boolean(writeBlocked);
   type Confirmation = { menu: AdminMenu; input?: AdminMenuUpdate; menus: readonly AdminMenu[] };
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -45,19 +50,37 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
   useEffect(() => { if (confirmation && !validConfirmation) cancelConfirmation(); }, [confirmation, validConfirmation]);
   useEffect(() => () => { confirmationRef.current = null; }, []);
   useEffect(() => {
-    if (!draftMemberId || draftBlocked || suppressDraft) return;
+    if (!draftMemberId || editorBlocked || suppressDraft) return;
     if (!editor) { setDraftNotice(persistAdminMenuDraft(draftMemberId, null) ? undefined : frontendText(locale, "ADMIN_MENU_DRAFT_NOT_RECORDED")); return; }
     if (!live) return;
     const dirty = JSON.stringify(live) !== JSON.stringify(menuEditorBaseline(editor.menu));
     const saved = persistAdminMenuDraft(draftMemberId, dirty ? { mode: editor.menu ? "edit" : "create", menuId: editor.menu?.id ?? "", fields: live } : null);
     setDraftNotice(saved ? undefined : frontendText(locale, "ADMIN_MENU_DRAFT_NOT_RECORDED"));
-  }, [editor, live, draftBlocked, suppressDraft, draftMemberId, locale]);
+  }, [editor, live, editorBlocked, suppressDraft, draftMemberId, locale]);
   useEffect(() => {
-    const clearOnLeave = () => { if (draftMemberId && !draftBlocked && !suppressDraft) persistAdminMenuDraft(draftMemberId, null); };
+    if (!draftMemberId || positionBlocked || suppressDraft) return;
+    const dirty = Object.entries(positions).flatMap(([menuId, position]) => {
+      const menu = findMenu(menus, menuId);
+      return menu && position !== String(menu.position) ? [{ menuId, position }] : [];
+    });
+    const saved = persistMenuPositionDraft(draftMemberId, dirty);
+    if (!saved) setDraftNotice(frontendText(locale, "ADMIN_MENU_DRAFT_NOT_RECORDED"));
+  }, [positions, menus, positionBlocked, suppressDraft, draftMemberId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => {
+      if (!draftMemberId || suppressDraft) return;
+      if (!editorBlocked) persistAdminMenuDraft(draftMemberId, null);
+      if (!positionBlocked) persistMenuPositionDraft(draftMemberId, []);
+    };
     window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
     return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
-  }, [draftMemberId, draftBlocked, suppressDraft]);
-  const discardDraft = () => { if (!draftMemberId || !draftBlocked || !discardBlockedAdminMenuDraft(draftMemberId)) return; setDraftBlocked(false); setDraftNotice(undefined); };
+  }, [draftMemberId, editorBlocked, positionBlocked, suppressDraft]);
+  const discardDraft = () => {
+    if (!draftMemberId || !draftBlocked) return;
+    if (editorBlocked && !discardBlockedAdminMenuDraft(draftMemberId)) return;
+    if (positionBlocked && !discardBlockedMenuPositionDraft(draftMemberId)) return;
+    setEditorBlocked(false); setPositionBlocked(false); setDraftNotice(undefined);
+  };
   const requestConfirmation = (menu: AdminMenu, input?: AdminMenuUpdate) => {
     if (busy || readPending || editor || confirmationRef.current || menu.isSystem) return;
     if (input ? !onUpdate : !onDelete || menu.children.length > 0) return;
@@ -68,7 +91,7 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
     cancelConfirmation();
     if (confirmation.input) {
       const position = confirmation.input.position;
-      if (position !== undefined) setPositionAttempts(current => ({ ...current, [confirmation.menu.id]: { menu: confirmation.menu, position } }));
+      if (position !== undefined) { setPositionAttempts(current => ({ ...current, [confirmation.menu.id]: { menu: confirmation.menu, position } })); if (draftMemberId) releaseMenuPositionDraft(draftMemberId, confirmation.menu.id); }
       void onUpdate?.(confirmation.menu, confirmation.input);
     }
     else onDelete?.(confirmation.menu);
@@ -86,7 +109,7 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
       const saved = editor.menu ? await onUpdate?.(editor.menu, { ...input, expected: menuSnapshot(editor.menu) }) : await onCreate?.(input as AdminMenuCreate);
       if (saved) setEditor(null);
     }} />}
-    {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><div className="space-y-2">{menus.map(menu => <MenuNode key={menu.id} menu={menu} depth={0} positionAttempts={positionAttempts} locale={locale} onUpdate={onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined} onDelete={onDelete ? menu => requestConfirmation(menu) : undefined} onEdit={onUpdate ? edit : undefined} pendingId={pendingId} writeBlocked={busy || Boolean(editor) || validConfirmation} recordBlocked={recordBlocked} />)}</div></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
+    {menus.length ? <Card><CardHeader><CardTitle>{frontendText(locale, "ADMIN_MENUS_TREE")}</CardTitle></CardHeader><CardContent><div className="space-y-2">{menus.map(menu => <MenuNode key={menu.id} menu={menu} depth={0} positionAttempts={positionAttempts} locale={locale} positionFor={(id) => positionBlocked ? undefined : positions[id]} onPosition={reportPosition} onUpdate={onUpdate ? (menu, input) => requestConfirmation(menu, input) : undefined} onDelete={onDelete ? menu => requestConfirmation(menu) : undefined} onEdit={onUpdate ? edit : undefined} pendingId={pendingId} writeBlocked={busy || Boolean(editor) || validConfirmation} recordBlocked={recordBlocked} />)}</div></CardContent></Card> : <PageState kind="empty" title={frontendText(locale, "ADMIN_MENUS_EMPTY")} description={frontendText(locale, "ADMIN_MENUS_DESCRIPTION")} />}
   </section><ConfirmAction open={validConfirmation}
     title={frontendText(locale, confirmation?.input ? "ADMIN_MENUS_CONFIRM_TITLE" : "ADMIN_MENUS_DELETE_CONFIRM_TITLE")}
     description={confirmation ? `${confirmation.menu.key} · ${confirmation.menu.path || confirmation.menu.id}. ${confirmation.input ? describeMenuChanges(confirmation.menu, confirmation.input, locale) : frontendText(locale, "ADMIN_MENUS_DELETE_IMPACT")}` : ""}
@@ -96,10 +119,11 @@ function ReadyMenus({ menus, locale, onLoadRetry, onUpdate, onDelete, onCreate, 
 }
 function countMenus(menus: readonly AdminMenu[]): number { return menus.reduce((total, menu) => total + 1 + countMenus(menu.children), 0); }
 
-function MenuNode({ menu, depth, positionAttempts, locale, onUpdate, onDelete, onEdit, pendingId, writeBlocked, recordBlocked = false }: { menu: AdminMenu; depth: number; positionAttempts: Record<string, PositionAttempt>; locale?: LocaleRuntime; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onEdit?: (menu: AdminMenu) => void; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; writeBlocked?: boolean; recordBlocked?: boolean }) {
+function MenuNode({ menu, depth, positionAttempts, locale, positionFor, onPosition, onUpdate, onDelete, onEdit, pendingId, writeBlocked, recordBlocked = false }: { menu: AdminMenu; depth: number; positionAttempts: Record<string, PositionAttempt>; locale?: LocaleRuntime; positionFor?: (id: string) => string | undefined; onPosition?: (menuId: string, position: string) => void; onUpdate?: (menu: AdminMenu, input: AdminMenuUpdate) => Promise<boolean> | void; onEdit?: (menu: AdminMenu) => void; onDelete?: (menu: AdminMenu) => void; pendingId?: string | null; writeBlocked?: boolean; recordBlocked?: boolean }) {
   const busy = Boolean(pendingId) || writeBlocked || recordBlocked;
-  const initial = { position: String(menu.position) };
-  const rowDraft = useCreateDraft(initial, initial, () => false, locale, () => Boolean(busy));
+  const baselinePosition = { position: String(menu.position) };
+  const rowDraft = useCreateDraft({ position: positionFor?.(menu.id) ?? baselinePosition.position }, baselinePosition, () => false, locale, () => Boolean(busy));
+  useEffect(() => { onPosition?.(menu.id, rowDraft.fields.position); }, [rowDraft.fields.position, menu.id, onPosition]);
   const baseline = useRef(menu.position);
   const consumedAttempt = useRef<PositionAttempt | undefined>(undefined);
   const attempt = positionAttempts[menu.id];
@@ -111,5 +135,5 @@ function MenuNode({ menu, depth, positionAttempts, locale, onUpdate, onDelete, o
   }, [menu, attempt]);
   const position = Number(rowDraft.fields.position);
   const update = (input: AdminMenuUpdate) => { if (!busy && !rowDraft.isConfirming()) onUpdate?.(menu, input); };
-  return <><div className="space-y-2" style={{ marginLeft: `${Math.min(depth, 4) * 1.25}rem` }}><div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{menu.labelKey}</p><p className="truncate text-xs text-muted-foreground">{menu.path || menu.key} · {menu.requiredBits}</p></div>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{onEdit && !menu.isSystem && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); }}>{frontendText(locale, "ADMIN_MENUS_EDIT")}</Button>}<label className="flex items-center gap-2 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) })}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ visible: !menu.visible, expected: menuSnapshot(menu) })}>{frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW")}</Button>{!menu.isSystem && menu.children.length === 0 && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); }}>{frontendText(locale, "ADMIN_MENUS_DELETE")}</Button>}</div>{menu.children.map((child) => <MenuNode key={child.id} menu={child} depth={depth + 1} positionAttempts={positionAttempts} locale={locale} onUpdate={onUpdate} onDelete={onDelete} onEdit={onEdit} pendingId={pendingId} writeBlocked={writeBlocked} recordBlocked={recordBlocked} />)}</div>{rowDraft.confirmation}</>;
+  return <><div className="space-y-2" style={{ marginLeft: `${Math.min(depth, 4) * 1.25}rem` }}><div className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{menu.labelKey}</p><p className="truncate text-xs text-muted-foreground">{menu.path || menu.key} · {menu.requiredBits}</p></div>{menu.isSystem && <Badge variant="outline">{frontendText(locale, "ADMIN_MENUS_SYSTEM")}</Badge>}<Badge variant={menu.status === "active" ? "secondary" : "outline"}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_ACTIVE") : frontendText(locale, "ADMIN_MENUS_DISABLED")}</Badge>{onEdit && !menu.isSystem && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onEdit(menu); }}>{frontendText(locale, "ADMIN_MENUS_EDIT")}</Button>}<label className="flex items-center gap-2 text-xs"><span className="sr-only">{frontendText(locale, "ADMIN_MENUS_POSITION")}</span><input className="h-8 w-16 rounded-md border bg-background px-2 text-sm" type="number" min={0} value={rowDraft.fields.position} disabled={menu.isSystem || busy} onChange={(event) => rowDraft.edit("position", event.target.value)} /></label><Button type="button" size="sm" variant="outline" disabled={menu.isSystem || busy || position === menu.position || !rowDraft.fields.position.trim() || !Number.isSafeInteger(position) || position < 0 || position > 10000} onClick={() => { const value = rowDraft.current.current.position; const position = Number(value); if (value.trim() && Number.isSafeInteger(position) && position >= 0 && position <= 10000) update({ position, expected: menuSnapshot(menu) }); }}>{frontendText(locale, "ADMIN_MENUS_SAVE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ status: menu.status === "active" ? "disabled" : "active", expected: menuSnapshot(menu) })}>{menu.status === "active" ? frontendText(locale, "ADMIN_MENUS_DISABLE") : frontendText(locale, "ADMIN_MENUS_ENABLE")}</Button><Button type="button" size="sm" variant="ghost" disabled={menu.isSystem || busy} onClick={() => update({ visible: !menu.visible, expected: menuSnapshot(menu) })}>{frontendText(locale, menu.visible ? "ADMIN_MENUS_HIDE" : "ADMIN_MENUS_SHOW")}</Button>{!menu.isSystem && menu.children.length === 0 && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { if (!busy && !rowDraft.isConfirming()) onDelete?.(menu); }}>{frontendText(locale, "ADMIN_MENUS_DELETE")}</Button>}</div>{menu.children.map((child) => <MenuNode key={child.id} menu={child} depth={depth + 1} positionAttempts={positionAttempts} locale={locale} positionFor={positionFor} onPosition={onPosition} onUpdate={onUpdate} onDelete={onDelete} onEdit={onEdit} pendingId={pendingId} writeBlocked={writeBlocked} recordBlocked={recordBlocked} />)}</div>{rowDraft.confirmation}</>;
 }

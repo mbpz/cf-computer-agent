@@ -131,6 +131,58 @@ describe("menu write refresh recovery", () => {
     expect(path().value).toBe("/private-menu");
     expect(unloadBlocked()).toBe(false);
   });
+
+  const positionKey = "memory-garden:admin-menu-position:v1:member-a";
+  const position = () => container.querySelector('input[type="number"]') as HTMLInputElement;
+  async function typePosition(value: string) {
+    const el = position();
+    await act(async () => { Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value")!.set!.call(el, value); el.dispatchEvent(new browser.Event("input", { bubbles: true })); });
+    await flush();
+  }
+  it("keeps an unsent menu position after refresh without saving", async () => {
+    let patches = 0;
+    vi.stubGlobal("fetch", async (_: unknown, init?: RequestInit) => {
+      if (init?.method === "PATCH") { patches += 1; return json({ menu: menu() }); }
+      return json({ tree: [menu()] });
+    });
+    await render(); await typePosition("9");
+    expect(browser.sessionStorage.getItem(positionKey)).toContain("\"9\"");
+    expect(unloadBlocked()).toBe(true); expect(patches).toBe(0);
+    await remount();
+    expect(position().value).toBe("9");
+    expect(patches).toBe(0); expect(unloadBlocked()).toBe(true);
+  });
+  it("keeps the menu position on screen when the tab cannot record it", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    await render();
+    const storage = browser.sessionStorage;
+    const original = storage.setItem;
+    Object.defineProperty(storage, "setItem", { configurable: true, writable: true, value(key: string, value: string) { if (String(key).includes("admin-menu-position")) throw new Error("full"); return original.call(storage, key, value); } });
+    await typePosition("9");
+    expect(position().value).toBe("9");
+    expect(container.textContent).toContain("could not record");
+  });
+  it("allows leave when the menu position cannot be read and records only after discard", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    browser.sessionStorage.setItem(positionKey, "{");
+    await render();
+    expect(container.textContent).toContain("can't be read"); expect(unloadBlocked()).toBe(false);
+    await leave(); expect(browser.location.pathname).toBe("/home");
+    browser.history.replaceState({}, "", "/admin/menus");
+    await act(async () => writeWorkspaceHistory("push", "/admin/menus")); await flush();
+    await click("Discard record");
+    await typePosition("8");
+    expect(browser.sessionStorage.getItem(positionKey)).toContain("\"8\"");
+  });
+  it("drops the stored menu position after a confirmed leave", async () => {
+    vi.stubGlobal("fetch", async () => json({ tree: [menu()] }));
+    await render(); await typePosition("9");
+    expect(browser.sessionStorage.getItem(positionKey)).toContain("\"9\"");
+    await act(async () => expect(writeWorkspaceHistory("push", "/home")).toBe("deferred"));
+    await click("Discard changes");
+    expect(browser.sessionStorage.getItem(positionKey)).toBeNull();
+    expect(position().value).toBe("1"); expect(unloadBlocked()).toBe(false);
+  });
 });
 
 function menu(overrides: Record<string, unknown> = {}) { return { id: "custom", parentId: null, key: "custom", labelKey: "NAV_HOME", path: "/private-menu", icon: null, groupName: "workspace", position: 1, requiredBits: "0x0", status: "active", visible: true, isSystem: false, children: [], ...overrides }; }
