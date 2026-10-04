@@ -149,4 +149,46 @@ describe("calendar creation and cancellation through App", () => {
     denyRead=404;await click(main().querySelector("[data-planning-write-recover]")!);expect(main().querySelector("[data-planning-write-recover]")).not.toBeNull();expect(deletes).toHaveLength(1);
   });
 
+  const draftKey="memory-garden:calendar-draft:v1:contributor-route-auditor";
+  const calendarUrl=`/calendar?from=${from}&to=${to}`;
+  const field=(label:string)=>(main().querySelector(`input[aria-label="${label}"]`) as HTMLInputElement);
+  it("keeps an unsent event after refresh without creating",async()=>{
+    posts=[];await mount();await draft();
+    expect(window.sessionStorage.getItem(draftKey)).toContain("A stable event");
+    expect(unload()).toBe(true);expect(posts).toHaveLength(0);
+    await remount();
+    expect(field("Event title").value).toBe("A stable event");
+    expect(field("Starts").value).toBe("2026-09-28T10:00");
+    expect(field("Ends").value).toBe("2026-09-28T11:00");
+    expect(posts).toHaveLength(0);expect(unload()).toBe(true);
+  });
+  it("keeps the title on screen when the tab cannot record the draft",async()=>{
+    posts=[];await mount();
+    vi.spyOn(app!.browser.sessionStorage,"setItem").mockImplementation(()=>{throw new Error("full");});
+    await input("Event title","Unrecorded event");
+    expect(field("Event title").value).toBe("Unrecorded event");
+    expect(main().textContent).toContain("could not record");
+    expect(posts).toHaveLength(0);
+  });
+  it("allows leave when the event draft cannot be read and records only after discard",async()=>{
+    posts=[];await mount({[draftKey]:"{"});
+    expect(main().textContent).toContain("can't be read");expect(unload()).toBe(false);
+    await act(async()=>expect(writeWorkspaceHistory("push","/settings")).toBe("committed"));
+    await act(async()=>expect(writeWorkspaceHistory("push",calendarUrl)).toBe("committed"));
+    await waitForApp(()=>!!main().querySelector("[data-calendar-draft-blocked] button"));
+    await click(main().querySelector("[data-calendar-draft-blocked] button")!);
+    await input("Event title","After discard");
+    expect(window.sessionStorage.getItem(draftKey)).toContain("After discard");
+  });
+  it("drops the stored event after a confirmed leave",async()=>{
+    posts=[];await mount();await input("Event title","Keep this event");
+    expect(window.sessionStorage.getItem(draftKey)).toContain("Keep this event");
+    await act(async()=>expect(writeWorkspaceHistory("push","/settings")).toBe("deferred"));
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    expect(window.sessionStorage.getItem(draftKey)).toBeNull();
+    await act(async()=>expect(writeWorkspaceHistory("push",calendarUrl)).toBe("committed"));
+    await waitForApp(()=>!!field("Event title") && !field("Event title").disabled);
+    expect(field("Event title").value).toBe("");expect(unload()).toBe(false);
+  });
+
 });

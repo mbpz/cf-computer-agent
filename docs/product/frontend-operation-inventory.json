@@ -128,6 +128,7 @@
     "frontend/lib/board-move-intent.ts",
     "frontend/lib/calendar-create-intent.ts",
     "frontend/lib/calendar-data.ts",
+    "frontend/lib/calendar-draft.ts",
     "frontend/lib/calendar-query.ts",
     "frontend/lib/command-palette.ts",
     "frontend/lib/discussion-draft.ts",
@@ -813,17 +814,21 @@
         "frontend/app.tsx:2089:12",
         "frontend/app.tsx:2089:198",
         "frontend/components/calendar-cancel-confirmation.tsx:35:13",
-        "frontend/components/calendar-create-form.tsx:110:7",
-        "frontend/components/calendar-create-form.tsx:111:7",
-        "frontend/components/calendar-create-form.tsx:112:7",
-        "frontend/components/calendar-create-form.tsx:114:38",
-        "frontend/components/calendar-create-form.tsx:114:115",
-        "frontend/components/calendar-create-form.tsx:115:33",
-        "frontend/components/calendar-create-form.tsx:115:139",
-        "frontend/components/calendar-create-form.tsx:116:37",
-        "frontend/components/calendar-create-form.tsx:116:147",
-        "frontend/components/calendar-create-form.tsx:117:9",
-        "frontend/components/calendar-create-form.tsx:118:15",
+        "frontend/components/calendar-create-form.tsx:48:5",
+        "frontend/components/calendar-create-form.tsx:128:23",
+        "frontend/components/calendar-create-form.tsx:128:161",
+        "frontend/components/calendar-create-form.tsx:129:22",
+        "frontend/components/calendar-create-form.tsx:131:7",
+        "frontend/components/calendar-create-form.tsx:132:7",
+        "frontend/components/calendar-create-form.tsx:133:7",
+        "frontend/components/calendar-create-form.tsx:135:38",
+        "frontend/components/calendar-create-form.tsx:135:115",
+        "frontend/components/calendar-create-form.tsx:136:33",
+        "frontend/components/calendar-create-form.tsx:136:139",
+        "frontend/components/calendar-create-form.tsx:137:37",
+        "frontend/components/calendar-create-form.tsx:137:147",
+        "frontend/components/calendar-create-form.tsx:138:9",
+        "frontend/components/calendar-create-form.tsx:139:15",
         "frontend/components/calendar-range-filter.tsx:14:89",
         "frontend/components/calendar-range-filter.tsx:15:87",
         "frontend/components/calendar-range-filter.tsx:16:7",
@@ -6856,10 +6861,130 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:110:7",
+      "id": "frontend/components/calendar-create-form.tsx:48:5",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 110,
+      "line": 48,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "WORKSPACE_LOCATION_CHANGE_EVENT",
+      "arguments": [
+        "WORKSPACE_LOCATION_CHANGE_EVENT",
+        "clearOnLeave"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/calendar-create-form.tsx:128:23",
+      "path": "frontend/components/calendar-create-form.tsx",
+      "owner": "CalendarCreateForm",
+      "line": 128,
+      "column": 23,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-calendar-draft-blocked": "true",
+        "className": "\"space-y-2 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/calendar-create-form.tsx:128:161",
+      "path": "frontend/components/calendar-create-form.tsx",
+      "owner": "CalendarCreateForm",
+      "line": 128,
+      "column": 161,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"CALENDAR_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/calendar-create-form.tsx:129:22",
+      "path": "frontend/components/calendar-create-form.tsx",
+      "owner": "CalendarCreateForm",
+      "line": 129,
+      "column": 22,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "container",
+          "tag": "div",
+          "attributes": {
+            "aria-busy": "phase === \"writing\" || phase === \"reading\""
+          }
+        },
+        {
+          "kind": "logical",
+          "expression": "recordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/calendar-create-form.tsx:131:7",
+      "path": "frontend/components/calendar-create-form.tsx",
+      "owner": "CalendarCreateForm",
+      "line": 131,
       "column": 7,
       "kind": "jsx",
       "tag": "Input",
@@ -6888,10 +7013,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:111:7",
+      "id": "frontend/components/calendar-create-form.tsx:132:7",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 111,
+      "line": 132,
       "column": 7,
       "kind": "jsx",
       "tag": "Input",
@@ -6919,10 +7044,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:112:7",
+      "id": "frontend/components/calendar-create-form.tsx:133:7",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 112,
+      "line": 133,
       "column": 7,
       "kind": "jsx",
       "tag": "Input",
@@ -6950,10 +7075,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:114:38",
+      "id": "frontend/components/calendar-create-form.tsx:135:38",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 114,
+      "line": 135,
       "column": 38,
       "kind": "jsx",
       "tag": "p",
@@ -6982,10 +7107,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:114:115",
+      "id": "frontend/components/calendar-create-form.tsx:135:115",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 114,
+      "line": 135,
       "column": 115,
       "kind": "jsx",
       "tag": "Button",
@@ -7019,10 +7144,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:115:33",
+      "id": "frontend/components/calendar-create-form.tsx:136:33",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 115,
+      "line": 136,
       "column": 33,
       "kind": "jsx",
       "tag": "p",
@@ -7057,10 +7182,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:115:139",
+      "id": "frontend/components/calendar-create-form.tsx:136:139",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 115,
+      "line": 136,
       "column": 139,
       "kind": "jsx",
       "tag": "Button",
@@ -7099,10 +7224,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:116:37",
+      "id": "frontend/components/calendar-create-form.tsx:137:37",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 116,
+      "line": 137,
       "column": 37,
       "kind": "jsx",
       "tag": "p",
@@ -7142,10 +7267,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:116:147",
+      "id": "frontend/components/calendar-create-form.tsx:137:147",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 116,
+      "line": 137,
       "column": 147,
       "kind": "jsx",
       "tag": "Button",
@@ -7189,10 +7314,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:117:9",
+      "id": "frontend/components/calendar-create-form.tsx:138:9",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 117,
+      "line": 138,
       "column": 9,
       "kind": "jsx",
       "tag": "Button",
@@ -7235,10 +7360,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/calendar-create-form.tsx:118:15",
+      "id": "frontend/components/calendar-create-form.tsx:139:15",
       "path": "frontend/components/calendar-create-form.tsx",
       "owner": "CalendarCreateForm",
-      "line": 118,
+      "line": 139,
       "column": 15,
       "kind": "jsx",
       "tag": "p",

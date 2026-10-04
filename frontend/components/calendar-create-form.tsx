@@ -7,6 +7,8 @@ import { Input } from "./ui/input";
 import { localCalendarInstant, localCalendarTime } from "../lib/calendar-query";
 
 import { loadCalendarIntent, saveCalendarIntent, acknowledgeCalendarIntent, clearCalendarIntent, validCalendarIntent, type StoredCalendarIntent, type CalendarCreateIntent } from "../lib/calendar-create-intent";
+import { discardBlockedCalendarDraft, loadCalendarDraft, persistCalendarDraft } from "../lib/calendar-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../lib/workspace-location";
 export interface CalendarCreateCallbacks {
   createMemberId?: string;
   onCreate?: (input: CalendarCreateIntent) => Promise<unknown>;
@@ -21,16 +23,31 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, is
   locale: LocaleRuntime; pending?: boolean; isSubmitBlocked?: () => boolean;
 }) {
   const [stored] = useState<StoredCalendarIntent>(() => createMemberId ? loadCalendarIntent(createMemberId) : { kind: "blocked" });
+  const [composer] = useState(() => createMemberId && stored.kind === "empty" ? loadCalendarDraft(createMemberId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(composer.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
   const acknowledged = useRef(stored.kind === "ready" && stored.acknowledged);
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<CalendarCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
+  const blank = { title: "", startsAt: "", endsAt: "" };
+  const fromIntent = stored.kind === "ready" ? { title: stored.intent.title, startsAt: localCalendarTime(stored.intent.startsAt), endsAt: localCalendarTime(stored.intent.endsAt) } : blank;
   const draft = useCreateDraft<{ title: string; startsAt: string; endsAt: string }>(
-    { title: stored.kind === "ready" ? stored.intent.title : "", startsAt: stored.kind === "ready" ? localCalendarTime(stored.intent.startsAt) : "", endsAt: stored.kind === "ready" ? localCalendarTime(stored.intent.endsAt) : "" },
-    { title: "", startsAt: "", endsAt: "" },
+    composer.kind === "ready" ? composer.draft : fromIntent,
+    blank,
     () => phaseRef.current !== "editing", locale, () => pending || !!isSubmitBlocked?.());
+  useEffect(() => {
+    if (!createMemberId || recordBlocked || phase !== "editing") return;
+    const saved = persistCalendarDraft(createMemberId, draft.fields);
+    setRecordNotice(saved ? undefined : frontendText(locale, "CALENDAR_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.title, draft.fields.startsAt, draft.fields.endsAt, phase, recordBlocked, createMemberId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (createMemberId && !recordBlocked && phaseRef.current === "editing") persistCalendarDraft(createMemberId, blank); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [createMemberId, recordBlocked]);
   const { title, startsAt, endsAt } = draft.fields;
   const setTitle = (value: string) => draft.set("title", value);
   const setStartsAt = (value: string) => draft.set("startsAt", value);
@@ -87,6 +104,7 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, is
     const intent = intentRef.current;
     if (!intent) return;
     if (createMemberId && !saveCalendarIntent(createMemberId, intent)) { transition("storage-blocked"); return; }
+    if (createMemberId) persistCalendarDraft(createMemberId, blank);
     const current = generation.current;
     transition("writing"); setError(false);
     try {
@@ -105,7 +123,10 @@ export function CalendarCreateForm({ locale, createMemberId, pending = false, is
     }
   };
   const locked = draft.confirming || pending || phase !== "editing";
+  const discardRecord = () => { if (!createMemberId || !recordBlocked || !discardBlockedCalendarDraft(createMemberId)) return; setRecordBlocked(false); setRecordNotice(undefined); };
   return <div className="space-y-3" aria-busy={phase === "writing" || phase === "reading"}>
+    {recordBlocked && <div role="alert" data-calendar-draft-blocked className="space-y-2 text-sm"><p>{frontendText(locale, "CALENDAR_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "CALENDAR_DRAFT_RECORD_DISCARD")}</Button></div>}
+    {recordNotice && <p role="alert">{recordNotice}</p>}
     <div className="grid gap-3 sm:grid-cols-3">
       <Input aria-label={frontendText(locale, "CALENDAR_TITLE_FIELD")} value={title} disabled={locked} maxLength={240} onChange={e => draft.edit("title", e.currentTarget.value)} placeholder={frontendText(locale, "CALENDAR_TITLE_PLACEHOLDER")} />
       <Input aria-label={frontendText(locale, "CALENDAR_START_FIELD")} type="datetime-local" value={startsAt} disabled={locked} onChange={e => draft.edit("startsAt", e.currentTarget.value)} />
