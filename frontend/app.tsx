@@ -756,7 +756,6 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
   const [periodNotice, setPeriodNotice] = useState<string>();
   const restoredPeriod: ReviewPeriod = storedPeriod.kind === "ready" ? storedPeriod.period : "daily";
   const [reviewPeriod, setReviewPeriod] = useState<ReviewPeriod>(restoredPeriod);
-  const loadedPeriod = useRef(restoredPeriod);
   const [review, setReview] = useState<{ kind: "loading" } | { kind: "ready"; data: ReviewResult } | { kind: "error" }>({ kind: "loading" });
   const queryRef = useRef({ page, pageSize });
   useEffect(() => {
@@ -766,16 +765,17 @@ export function KnowledgeRoute({ locale, search, memberId }: { locale: LocaleRun
     void loadRecentResearch().then((items) => { if (active) setRecentResearch(items); }).catch(() => { if (active) setRecentResearch([]); });
     void loadPrivateKnowledgeNotes().then((items) => { if (active) setNotes(items); }).catch(() => { if (active) setNotes([]); });
     void loadWorkspaceActivity().then((page) => { if (active) { setActivity(page.items); setActivityNextCursor(page.nextCursor); } }).catch(() => { if (active) { setActivity([]); setActivityNextCursor(null); } });
-    void loadKnowledgeReview(loadedPeriod.current).then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (reviewPeriod === loadedPeriod.current) return;
-    loadedPeriod.current = reviewPeriod;
     let active = true;
+    const controller = new AbortController();
     setReview({ kind: "loading" });
-    void loadKnowledgeReview(reviewPeriod).then((data) => { if (active) setReview({ kind: "ready", data }); }).catch(() => { if (active) setReview({ kind: "error" }); });
-    return () => { active = false; };
+    void loadKnowledgeReview(reviewPeriod, fetch, controller.signal).then((data) => {
+      if (!active) return;
+      setReview(data.period === reviewPeriod ? { kind: "ready", data } : { kind: "error" });
+    }).catch((error: unknown) => { if (active && !isAbort(error)) setReview({ kind: "error" }); });
+    return () => { active = false; controller.abort(); };
   }, [reviewPeriod]);
   useEffect(() => {
     if (!memberId || periodBlocked) return;

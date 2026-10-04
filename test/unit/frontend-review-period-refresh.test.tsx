@@ -77,6 +77,42 @@ describe("review period refresh", () => {
     expect(browser.sessionStorage.getItem(knowledgeKey)).toContain("weekly");
   });
 
+  it("keeps the selected knowledge review when an older period responds later", async () => {
+    let releaseDaily: (response: Response) => void = () => {};
+    const daily = new Promise<Response>((resolve) => { releaseDaily = resolve; });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/knowledge/review")) {
+        reviews.push(url);
+        if (url.includes("period=weekly")) return json(reviewBody("weekly", "Weekly item"));
+        return daily;
+      }
+      return json({ items: [], nextCursor: null, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    });
+    await renderKnowledge();
+    expect(period().value).toBe("daily");
+    await choose("weekly");
+    expect(container.textContent).toContain("Weekly item");
+    await act(async () => { releaseDaily(json(reviewBody("daily", "Daily item"))); });
+    await flush();
+    expect(period().value).toBe("weekly");
+    expect(container.textContent).toContain("Weekly item");
+    expect(container.textContent).not.toContain("Daily item");
+  });
+
+  it("does not show knowledge from another period under the selected review", async () => {
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/knowledge/review")) return json(reviewBody("daily", "Daily item"));
+      return json({ items: [], nextCursor: null, pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    });
+    await renderKnowledge();
+    await choose("weekly");
+    expect(period().value).toBe("weekly");
+    expect(container.textContent).toContain("Unable to prepare the review list.");
+    expect(container.textContent).not.toContain("Daily item");
+  });
+
   it("keeps the weekly workbench review after refresh and reads that period", async () => {
     await renderReview();
     await click("Weekly");
@@ -90,6 +126,9 @@ describe("review period refresh", () => {
   });
 });
 
+function reviewBody(period: "daily" | "weekly", title: string) {
+  return { period, from: "2026-10-04T00:00:00.000Z", to: period === "daily" ? "2026-10-05T00:00:00.000Z" : "2026-10-11T00:00:00.000Z", items: [{ knowledgeItemId: period, revisionId: "rev-1", title, publishedAt: "2026-10-04T00:00:00.000Z", lastVisitedAt: null, reason: "new", favorite: false }] };
+}
 function json(value: unknown) { return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } }); }
 function locale() { return createLocaleRuntime({ navigatorLanguage: "en" }); }
 async function flush() { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); for (let index = 0; index < 12; index += 1) await Promise.resolve(); }); }
