@@ -18,9 +18,9 @@ describe("parameterized project timeline through real App", () => {
   const pageButton = (page = 2) => main().querySelector(`button[aria-label="Page ${page}"]`) as HTMLButtonElement;
   const title = () => main().querySelector('input[aria-label="Timeline title"]') as HTMLInputElement;
   const writes = () => requests.filter(r => r.init?.method === "POST");
-  async function mount() {
+  async function mount(saved?: Record<string, string>) {
     requests = []; override = undefined;
-    app = await mountAuthenticatedApp({ url: "https://app.test/projects/a/timeline", role: "contributor", permissionMask: "0x100000", fetch: async (input, init) => {
+    app = await mountAuthenticatedApp({ url: "https://app.test/projects/a/timeline", role: "contributor", permissionMask: "0x100000", configureBrowser: browser => { for (const [key, value] of Object.entries(saved ?? {})) browser.sessionStorage.setItem(key, value); }, fetch: async (input, init) => {
       const url = new URL(String(input), "https://app.test");
       if (url.pathname === "/api/navigation") return Response.json({ tree: currentNavigationFixture("contributor", "0x100000") });
       if (url.pathname === "/api/telemetry/pageview") return new Response(null, { status: 204 });
@@ -216,8 +216,54 @@ describe("parameterized project timeline through real App", () => {
       if (url.pathname.endsWith("/summary")) return Response.json({ goalCount: 0, taskCount: 0, completedTaskCount: 0, goals: [] });
     };
     await click(button("Back to projects")); await waitForApp(() => !!button("Timeline"));
-    expect(window.location.pathname).toBe("/projects"); await click(button("Timeline"));
+    expect(window.location.pathname).toBe("/projects");     await click(button("Timeline"));
     await waitForApp(() => !!title()); expect(window.location.pathname).toBe("/projects/a/timeline"); expect(main().textContent).toContain("a first");
+  });
+
+  const draftKey = "memory-garden:timeline-draft:v1:contributor-route-auditor:a";
+  function unload() { const event = new app!.browser.Event("beforeunload", { cancelable: true }); app!.browser.dispatchEvent(event); return event.defaultPrevented; }
+  async function details(value: string) {
+    const node = main().querySelector('textarea[aria-label="Details"]')!;
+    const prop = Object.keys(node).find(name => name.startsWith("__reactProps$"))!;
+    await act(async () => (node as unknown as Record<string, { onChange: (event: unknown) => void }>)[prop].onChange({ currentTarget: { value } }));
+  }
+  it("keeps an unsent timeline item after refresh without creating", async () => {
+    await mount(); await fill("Keep this title"); await details("Keep this note");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
+    expect(unload()).toBe(true); expect(writes()).toHaveLength(0);
+    await forceRemountAppAt(app!, "/not-a-route");
+    await forceRemountAppAt(app!, "/projects/a/timeline");
+    await waitForApp(() => title().value === "Keep this title");
+    expect(main().querySelector("textarea")!.value).toBe("Keep this note");
+    expect(writes()).toHaveLength(0); expect(unload()).toBe(true);
+  });
+  it("keeps the title on screen when the tab cannot record the draft", async () => {
+    await mount();
+    vi.spyOn(app!.browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await fill("Unrecorded title");
+    expect(title().value).toBe("Unrecorded title");
+    expect(main().textContent).toContain("could not record");
+    expect(writes()).toHaveLength(0);
+  });
+  it("allows leave when the timeline draft cannot be read and records only after discard", async () => {
+    await mount({ [draftKey]: "{" });
+    expect(main().textContent).toContain("can't be read"); expect(unload()).toBe(false);
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("committed"));
+    await act(async () => expect(writeWorkspaceHistory("push", "/projects/a/timeline")).toBe("committed"));
+    await waitForApp(() => !!main().querySelector("[data-timeline-draft-blocked] button"));
+    await click(main().querySelector<HTMLButtonElement>("[data-timeline-draft-blocked] button")!);
+    await fill("After discard");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("After discard");
+  });
+  it("drops the stored timeline draft after a confirmed leave", async () => {
+    await mount(); await fill("Keep this title");
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toContain("Keep this title");
+    await act(async () => expect(writeWorkspaceHistory("push", "/settings")).toBe("deferred"));
+    await click(main().querySelector<HTMLButtonElement>("[data-confirm-action]")!);
+    expect(app!.browser.sessionStorage.getItem(draftKey)).toBeNull();
+    await act(async () => expect(writeWorkspaceHistory("push", "/projects/a/timeline")).toBe("committed"));
+    await waitForApp(() => !!title() && !title().disabled);
+    expect(title().value).toBe(""); expect(unload()).toBe(false);
   });
 
 });

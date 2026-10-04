@@ -194,6 +194,7 @@
     "frontend/lib/tasks-data.ts",
     "frontend/lib/theme.ts",
     "frontend/lib/timeline-create-intent.ts",
+    "frontend/lib/timeline-draft.ts",
     "frontend/lib/today-data.ts",
     "frontend/lib/use-create-draft.tsx",
     "frontend/lib/use-notification-summary.ts",
@@ -364,23 +365,27 @@
         "frontend/components/planning-write-recovery.tsx:85:52",
         "frontend/components/planning-write-recovery.tsx:86:10",
         "frontend/components/planning-write-recovery.tsx:89:5",
-        "frontend/components/timeline-create-form.tsx:110:39",
-        "frontend/components/timeline-create-form.tsx:110:116",
-        "frontend/components/timeline-create-form.tsx:111:31",
-        "frontend/components/timeline-create-form.tsx:111:100",
-        "frontend/components/timeline-create-form.tsx:112:35",
-        "frontend/components/timeline-create-form.tsx:112:108",
-        "frontend/components/timeline-create-form.tsx:113:15",
-        "frontend/components/timeline-create-form.tsx:123:11",
-        "frontend/components/timeline-create-form.tsx:124:13",
-        "frontend/components/timeline-create-form.tsx:125:13",
-        "frontend/components/timeline-create-form.tsx:126:13",
-        "frontend/components/timeline-create-form.tsx:127:13",
-        "frontend/components/timeline-create-form.tsx:130:9",
-        "frontend/components/timeline-create-form.tsx:131:9",
-        "frontend/components/timeline-create-form.tsx:134:11",
-        "frontend/components/timeline-create-form.tsx:138:11",
-        "frontend/components/timeline-create-form.tsx:140:40",
+        "frontend/components/timeline-create-form.tsx:50:5",
+        "frontend/components/timeline-create-form.tsx:131:39",
+        "frontend/components/timeline-create-form.tsx:131:116",
+        "frontend/components/timeline-create-form.tsx:132:31",
+        "frontend/components/timeline-create-form.tsx:132:100",
+        "frontend/components/timeline-create-form.tsx:133:35",
+        "frontend/components/timeline-create-form.tsx:133:108",
+        "frontend/components/timeline-create-form.tsx:134:15",
+        "frontend/components/timeline-create-form.tsx:141:25",
+        "frontend/components/timeline-create-form.tsx:141:168",
+        "frontend/components/timeline-create-form.tsx:142:24",
+        "frontend/components/timeline-create-form.tsx:146:11",
+        "frontend/components/timeline-create-form.tsx:147:13",
+        "frontend/components/timeline-create-form.tsx:148:13",
+        "frontend/components/timeline-create-form.tsx:149:13",
+        "frontend/components/timeline-create-form.tsx:150:13",
+        "frontend/components/timeline-create-form.tsx:153:9",
+        "frontend/components/timeline-create-form.tsx:154:9",
+        "frontend/components/timeline-create-form.tsx:157:11",
+        "frontend/components/timeline-create-form.tsx:161:11",
+        "frontend/components/timeline-create-form.tsx:163:40",
         "frontend/components/timeline-item-editor.tsx:68:5",
         "frontend/components/timeline-item-editor.tsx:69:5",
         "frontend/components/timeline-item-editor.tsx:111:23",
@@ -14792,10 +14797,30 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:110:39",
+      "id": "frontend/components/timeline-create-form.tsx:50:5",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 110,
+      "line": 50,
+      "column": 5,
+      "kind": "listener",
+      "tag": "window.addEventListener",
+      "event": "WORKSPACE_LOCATION_CHANGE_EVENT",
+      "arguments": [
+        "WORKSPACE_LOCATION_CHANGE_EVENT",
+        "clearOnLeave"
+      ],
+      "attributes": {},
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/timeline-create-form.tsx:131:39",
+      "path": "frontend/components/timeline-create-form.tsx",
+      "owner": "TimelineCreateForm",
+      "line": 131,
       "column": 39,
       "kind": "jsx",
       "tag": "p",
@@ -14824,10 +14849,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:110:116",
+      "id": "frontend/components/timeline-create-form.tsx:131:116",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 110,
+      "line": 131,
       "column": 116,
       "kind": "jsx",
       "tag": "Button",
@@ -14860,10 +14885,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:111:31",
+      "id": "frontend/components/timeline-create-form.tsx:132:31",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 111,
+      "line": 132,
       "column": 31,
       "kind": "jsx",
       "tag": "p",
@@ -14892,10 +14917,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:111:100",
+      "id": "frontend/components/timeline-create-form.tsx:132:100",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 111,
+      "line": 132,
       "column": 100,
       "kind": "jsx",
       "tag": "Button",
@@ -14928,10 +14953,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:112:35",
+      "id": "frontend/components/timeline-create-form.tsx:133:35",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 112,
+      "line": 133,
       "column": 35,
       "kind": "jsx",
       "tag": "p",
@@ -14960,10 +14985,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:112:108",
+      "id": "frontend/components/timeline-create-form.tsx:133:108",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 112,
+      "line": 133,
       "column": 108,
       "kind": "jsx",
       "tag": "Button",
@@ -14996,10 +15021,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:113:15",
+      "id": "frontend/components/timeline-create-form.tsx:134:15",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 113,
+      "line": 134,
       "column": 15,
       "kind": "jsx",
       "tag": "p",
@@ -15029,10 +15054,90 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:123:11",
+      "id": "frontend/components/timeline-create-form.tsx:141:25",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 123,
+      "line": 141,
+      "column": 25,
+      "kind": "jsx",
+      "tag": "div",
+      "attributes": {
+        "role": "\"alert\"",
+        "data-timeline-draft-blocked": "true",
+        "className": "\"mb-3 space-y-2 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/timeline-create-form.tsx:141:168",
+      "path": "frontend/components/timeline-create-form.tsx",
+      "owner": "TimelineCreateForm",
+      "line": 141,
+      "column": 168,
+      "kind": "jsx",
+      "tag": "Button",
+      "attributes": {
+        "type": "\"button\"",
+        "variant": "\"outline\"",
+        "onClick": "discardRecord"
+      },
+      "handlers": {
+        "onClick": "discardRecord"
+      },
+      "spreads": [],
+      "labels": [
+        "frontendText(locale, \"TIMELINE_DRAFT_RECORD_DISCARD\")"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordBlocked",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/timeline-create-form.tsx:142:24",
+      "path": "frontend/components/timeline-create-form.tsx",
+      "owner": "TimelineCreateForm",
+      "line": 142,
+      "column": 24,
+      "kind": "jsx",
+      "tag": "p",
+      "attributes": {
+        "role": "\"alert\"",
+        "className": "\"mb-3 text-sm\""
+      },
+      "handlers": {},
+      "spreads": [],
+      "labels": [
+        "recordNotice"
+      ],
+      "context": [
+        {
+          "kind": "logical",
+          "expression": "recordNotice",
+          "operator": "&&"
+        }
+      ],
+      "earlyReturns": []
+    },
+    {
+      "id": "frontend/components/timeline-create-form.tsx:146:11",
+      "path": "frontend/components/timeline-create-form.tsx",
+      "owner": "TimelineCreateForm",
+      "line": 146,
       "column": 11,
       "kind": "jsx",
       "tag": "select",
@@ -15059,10 +15164,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:124:13",
+      "id": "frontend/components/timeline-create-form.tsx:147:13",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 124,
+      "line": 147,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -15093,10 +15198,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:125:13",
+      "id": "frontend/components/timeline-create-form.tsx:148:13",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 125,
+      "line": 148,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -15127,10 +15232,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:126:13",
+      "id": "frontend/components/timeline-create-form.tsx:149:13",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 126,
+      "line": 149,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -15161,10 +15266,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:127:13",
+      "id": "frontend/components/timeline-create-form.tsx:150:13",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 127,
+      "line": 150,
       "column": 13,
       "kind": "jsx",
       "tag": "option",
@@ -15195,10 +15300,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:130:9",
+      "id": "frontend/components/timeline-create-form.tsx:153:9",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 130,
+      "line": 153,
       "column": 9,
       "kind": "jsx",
       "tag": "Input",
@@ -15226,10 +15331,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:131:9",
+      "id": "frontend/components/timeline-create-form.tsx:154:9",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 131,
+      "line": 154,
       "column": 9,
       "kind": "jsx",
       "tag": "Textarea",
@@ -15259,10 +15364,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:134:11",
+      "id": "frontend/components/timeline-create-form.tsx:157:11",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 134,
+      "line": 157,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -15289,10 +15394,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:138:11",
+      "id": "frontend/components/timeline-create-form.tsx:161:11",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 138,
+      "line": 161,
       "column": 11,
       "kind": "jsx",
       "tag": "Input",
@@ -15319,10 +15424,10 @@
       "earlyReturns": []
     },
     {
-      "id": "frontend/components/timeline-create-form.tsx:140:40",
+      "id": "frontend/components/timeline-create-form.tsx:163:40",
       "path": "frontend/components/timeline-create-form.tsx",
       "owner": "TimelineCreateForm",
-      "line": 140,
+      "line": 163,
       "column": 40,
       "kind": "jsx",
       "tag": "Button",

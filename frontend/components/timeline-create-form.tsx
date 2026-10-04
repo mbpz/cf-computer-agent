@@ -9,6 +9,8 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { loadTimelineIntent, saveTimelineIntent, acknowledgeTimelineIntent, clearTimelineIntent } from "../lib/timeline-create-intent";
+import { discardBlockedTimelineDraft, loadTimelineDraft, persistTimelineDraft } from "../lib/timeline-draft";
+import { WORKSPACE_LOCATION_CHANGE_EVENT } from "../lib/workspace-location";
 export interface TimelineCreateCallbacks {
   createMemberId?: string;
   createProjectId?: string;
@@ -21,16 +23,33 @@ type Phase = "editing" | "writing" | "unknown" | "reading" | "read-failed" | "st
 // The keyed route owns this form; an unresolved intent never silently becomes a new request.
 export function TimelineCreateForm({ locale, createMemberId, createProjectId, pending = false, onCreate, onCreateReadback, onCreateDenied, onCreateLock }: TimelineCreateCallbacks & { locale: LocaleRuntime; pending?: boolean }) {
   const [stored] = useState(() => createMemberId && createProjectId ? loadTimelineIntent(createMemberId, createProjectId) : { kind: "empty" as const });
+  const [composer] = useState(() => createMemberId && createProjectId && stored.kind === "empty" ? loadTimelineDraft(createMemberId, createProjectId) : { kind: "empty" as const });
+  const [recordBlocked, setRecordBlocked] = useState(composer.kind === "blocked");
+  const [recordNotice, setRecordNotice] = useState<string>();
   const initialPhase: Phase = stored.kind === "blocked" ? "storage-blocked" : stored.kind === "ready" ? stored.acknowledged ? "read-failed" : "unknown" : "editing";
   const localTime = (v: string | null) => v ? new Date(Date.parse(v) - new Date(v).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   const [phase, setPhase] = useState<Phase>(initialPhase);
   const [error, setError] = useState(false);
   const intentRef = useRef<TimelineCreateIntent | null>(stored.kind === "ready" ? stored.intent : null);
   const phaseRef = useRef<Phase>(initialPhase);
+  const blank = { title: "", body: "", kind: "meeting" as const, startsAt: "", dueAt: "" };
+  const fromIntent = stored.kind === "ready"
+    ? { title: stored.intent.title, body: stored.intent.body, kind: stored.intent.kind, startsAt: localTime(stored.intent.startsAt), dueAt: localTime(stored.intent.dueAt) }
+    : blank;
   const draft = useCreateDraft<{ title: string; body: string; kind: ProjectTimelineKind; startsAt: string; dueAt: string }>(
-    { title: stored.kind === "ready" ? stored.intent.title : "", body: stored.kind === "ready" ? stored.intent.body : "", kind: stored.kind === "ready" ? stored.intent.kind : "meeting", startsAt: stored.kind === "ready" ? localTime(stored.intent.startsAt) : "", dueAt: stored.kind === "ready" ? localTime(stored.intent.dueAt) : "" },
-    { title: "", body: "", kind: "meeting", startsAt: "", dueAt: "" },
+    composer.kind === "ready" ? composer.draft : fromIntent,
+    blank,
     () => phaseRef.current !== "editing", locale, () => pending);
+  useEffect(() => {
+    if (!createMemberId || !createProjectId || recordBlocked || phase !== "editing") return;
+    const saved = persistTimelineDraft(createMemberId, createProjectId, draft.fields);
+    setRecordNotice(saved ? undefined : frontendText(locale, "TIMELINE_DRAFT_NOT_RECORDED"));
+  }, [draft.fields.title, draft.fields.body, draft.fields.kind, draft.fields.startsAt, draft.fields.dueAt, phase, recordBlocked, createMemberId, createProjectId, locale]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (createMemberId && createProjectId && !recordBlocked && phaseRef.current === "editing") persistTimelineDraft(createMemberId, createProjectId, blank); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [createMemberId, createProjectId, recordBlocked]);
   const { title, body, kind, startsAt, dueAt } = draft.fields;
   const setTitle = (value: string) => draft.set("title", value);
   const setBody = (value: string) => draft.set("body", value);
@@ -89,6 +108,7 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
     const intent = intentRef.current;
     if (!intent) return;
     if (createMemberId && createProjectId && !saveTimelineIntent(createMemberId, createProjectId, intent)) { transition("storage-blocked"); return; }
+    if (createMemberId && createProjectId) persistTimelineDraft(createMemberId, createProjectId, blank);
     const current = generation.current;
     transition("writing"); setError(false);
     try {
@@ -106,6 +126,7 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
     }
   };
   const locked = draft.confirming || pending || phase !== "editing";
+  const discardRecord = () => { if (!createMemberId || !createProjectId || !recordBlocked || !discardBlockedTimelineDraft(createMemberId, createProjectId)) return; setRecordBlocked(false); setRecordNotice(undefined); };
   const recovery = <div aria-busy={phase === "writing" || phase === "reading"}>
     {phase === "storage-blocked" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_STORAGE_BLOCKED")}</p><Button type="button" disabled={pending} onClick={reloadStored}>{frontendText(locale, "PLANNING_CREATE_STORAGE_RETRY")}</Button></>}
     {phase === "unknown" && <><p role="alert">{frontendText(locale, "PLANNING_CREATE_UNKNOWN")}</p><Button type="button" disabled={pending} onClick={() => void submit()}>{frontendText(locale, "PLANNING_CREATE_RETRY")}</Button></>}
@@ -117,6 +138,8 @@ export function TimelineCreateForm({ locale, createMemberId, createProjectId, pe
       <CardTitle className="flex items-center gap-2 text-base"><Plus size={18} />{frontendText(locale, "PROJECT_TIMELINE_CREATE_TITLE")}</CardTitle>
     </CardHeader>
     <CardContent>
+      {recordBlocked && <div role="alert" data-timeline-draft-blocked className="mb-3 space-y-2 text-sm"><p>{frontendText(locale, "TIMELINE_DRAFT_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardRecord}>{frontendText(locale, "TIMELINE_DRAFT_RECORD_DISCARD")}</Button></div>}
+      {recordNotice && <p role="alert" className="mb-3 text-sm">{recordNotice}</p>}
       <fieldset disabled={locked} className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span>{frontendText(locale, "PROJECT_TIMELINE_KIND")}</span>
