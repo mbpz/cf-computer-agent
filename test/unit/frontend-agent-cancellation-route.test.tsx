@@ -741,6 +741,66 @@ describe("agent request cancellation route", () => {
     await question("Question"); await submit(); await click("Useful");
     expect(feedback).toBe(1);
   });
+  const composerKey = "memory-garden:agent-composer:v1:composer-member";
+  it("keeps an unsent question and source after refresh without sending", async () => {
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
+    await question("Keep this question");
+    await act(async () => changeSource("#agent-scope-kind", "space"));
+    await act(async () => changeSource("#agent-scope-ids", "space-a"));
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("Keep this question");
+    expect(unloadBlocked()).toBe(true);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />)); await flush();
+    expect(questionInput().value).toBe("Keep this question");
+    expect(sourceIds()).toBe("space-a");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(unloadBlocked()).toBe(true);
+  });
+  it("keeps the question on screen when the tab cannot record the draft", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
+    vi.spyOn(browser.sessionStorage, "setItem").mockImplementation(() => { throw new Error("full"); });
+    await question("Unrecorded question");
+    expect(questionInput().value).toBe("Unrecorded question");
+    expect(container.textContent).toContain("could not record");
+  });
+  it("allows leave when the question draft cannot be read and records only after discard", async () => {
+    browser.sessionStorage.setItem(composerKey, "{");
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
+    expect(container.textContent).toContain("can't be read");
+    expect(unloadBlocked()).toBe(false);
+    await act(async () => expect(leave()).toBe("committed"));
+    browser.history.replaceState({}, "", "/agent");
+    await click("Discard record");
+    await question("After discard");
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("After discard");
+  });
+  it("drops the stored question after a confirmed leave", async () => {
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
+    await question("Keep this question");
+    expect(browser.sessionStorage.getItem(composerKey)).toContain("Keep this question");
+    await act(async () => expect(leave()).toBe("deferred"));
+    await decision(true);
+    expect(browser.sessionStorage.getItem(composerKey)).toBeNull();
+    browser.history.replaceState({}, "", "/agent");
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />)); await flush();
+    expect(questionInput().value).toBe("");
+    expect(unloadBlocked()).toBe(false);
+  });
+  it("does not restore a question that was already sent", async () => {
+    vi.stubGlobal("fetch", async (_url: unknown, init?: RequestInit) => {
+      const key = new Headers(init?.headers).get("idempotency-key");
+      return Response.json({ answer: "Answer", conversationId: "conv-1", evidenceConfidence: 0.3, citations: [], sources: [], idempotencyKey: key });
+    });
+    await act(async () => root.render(<AgentRoute locale={language} memberId="composer-member" />));
+    await question("Sent question"); await submit();
+    expect(browser.sessionStorage.getItem(composerKey)).toBeNull();
+    expect(unloadBlocked()).toBe(false);
+  });
   it("does not lock navigation for a read-only conversation restore", async () => {
     vi.stubGlobal("fetch", () => new Promise<Response>(() => undefined));
     await act(async () => root.render(<AgentRoute locale={language} memberId="navigation-member" search="?conversationId=conv-read" />));

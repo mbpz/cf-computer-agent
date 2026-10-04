@@ -68,6 +68,7 @@ import { type SavedViewItem } from "./lib/saved-views-data";
 import { useSavedViews } from "./lib/use-saved-views";
 import { clearAgentIntent, createAgentIntent, loadAgentIntent, saveAgentIntent, type AgentTurnIntent, type StoredAgentIntent } from "./lib/agent-turn-intent";
 import { clearAgentFeedback, discardBlockedAgentFeedback, loadAgentFeedback, type AgentFeedbackIntent } from "./lib/agent-feedback-intent";
+import { discardBlockedAgentComposerDraft, loadAgentComposerDraft, persistAgentComposerDraft } from "./lib/agent-composer-draft";
 import { agentScopeSearch, agentLocationFromSearch, loadAgentConversation, createAgentRequestController, submitAgentFeedback, type AgentConversation, type AgentAnswer, type AgentScope } from "./lib/agent-data";
 import { loadPrivateKnowledgeNotes, type PrivateKnowledgeNoteListItem } from "./lib/knowledge-note";
 import { createSubmission, type SimilarSubmissionCandidate } from "./lib/submission-data";
@@ -122,7 +123,7 @@ import { sessionSnapshot } from "./lib/session";
 import { isAnonymousSessionError } from "./lib/session-state";
 import { pageKindForPath } from "./app-routes";
 import type { SessionSnapshot } from "./contracts/api";
-import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, writeWorkspaceHistory } from "./lib/workspace-location";
+import { canonicalWorkspaceLocationKey, endWorkspaceSession, readWorkspaceHash, readWorkspaceLocation, registerWorkspaceLeaveGuard, subscribeWorkspaceLocation, WORKSPACE_LOCATION_CHANGE_EVENT, writeWorkspaceHistory } from "./lib/workspace-location";
 
 export function App() {
   const [location, setLocation] = useState(readWorkspaceLocation);
@@ -928,11 +929,31 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   // Submitted turns and unsent input share admission, but have distinct lifetimes.
   const locked = () => feedbackLock.current !== null || pendingRef.current || intentRef.current !== null
     || (!!memberId && loadAgentIntent(memberId).kind !== "empty");
-  const questionDraft = useCreateDraft({question: ""}, {question: ""}, locked, locale,
+  const [composerStored] = useState(() => memberId && stored.kind === "empty" ? loadAgentComposerDraft(memberId) : { kind: "empty" as const });
+  const [composerBlocked, setComposerBlocked] = useState(composerStored.kind === "blocked");
+  const [composerNotice, setComposerNotice] = useState<string>();
+  const questionBaseline = useRef("");
+  const questionInitial = composerStored.kind === "ready" ? composerStored.draft.question : "";
+  const sourceBaseline = agentSourceFields(initialScope ?? {kind: "all"});
+  const sourceInitial = composerStored.kind === "ready" && composerStored.draft.source ? composerStored.draft.source : sourceBaseline;
+  const questionDraft = useCreateDraft({question: questionInitial}, {question: ""}, locked, locale,
     (): boolean => !alive.current || sourceDraft.isConfirming() || recovery !== "ready" || storageBlocked || unconfirmed);
-  const sourceInitial = agentSourceFields(initialScope ?? {kind: "all"});
-  const sourceDraft = useCreateDraft(sourceInitial, sourceInitial, locked, locale,
+  const sourceDraft = useCreateDraft(sourceInitial, sourceBaseline, locked, locale,
     (): boolean => !alive.current || questionDraft.isConfirming() || recovery !== "ready" || storageBlocked || unconfirmed);
+  const rememberComposer = () => {
+    if (!memberId || composerBlocked) return;
+    const source = sourceDraft.current.current;
+    const dirtySource = source.kind !== sourceBaseline.kind || source.ids !== sourceBaseline.ids;
+    const question = questionDraft.current.current.question === questionBaseline.current ? "" : questionDraft.current.current.question;
+    const saved = persistAgentComposerDraft(memberId, { question, source: dirtySource ? { kind: source.kind, ids: source.ids } : null });
+    setComposerNotice(saved ? undefined : frontendText(locale, "AGENT_COMPOSER_NOT_RECORDED"));
+  };
+  useEffect(() => { if (memberId && !composerBlocked) rememberComposer(); }, [questionDraft.fields.question, sourceDraft.fields.kind, sourceDraft.fields.ids, composerBlocked, memberId]);
+  useEffect(() => {
+    const clearOnLeave = () => { if (memberId && !composerBlocked) persistAgentComposerDraft(memberId, { question: "", source: null }); };
+    window.addEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+    return () => window.removeEventListener(WORKSPACE_LOCATION_CHANGE_EVENT, clearOnLeave);
+  }, [memberId, composerBlocked]);
   if (!controllerRef.current) controllerRef.current = createAgentRequestController();
   useEffect(() => {alive.current = true; return () => {alive.current = false; controllerRef.current?.cancel(conversationIdRef.current);};}, []);
   const submit = (nextQuestion = questionDraft.current.current.question) => {
@@ -953,6 +974,8 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     const displayed = questionDraft.current.current.question.trim();
     if (!displayed || displayed === sentQuestion) questionDraft.set("question", sentQuestion);
     questionDraft.checkpoint({question: sentQuestion});
+    questionBaseline.current = sentQuestion;
+    rememberComposer();
     setLastQuestion(sentQuestion);
     setState({ kind: "loading" });
     const request = controllerRef.current.request(sentQuestion, intent?.scope ?? scopeRef.current, intent ? intent.conversationId : conversationIdRef.current, intent?.key);
@@ -989,7 +1012,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     writeWorkspaceHistory("push", `/agent${agentScopeSearch(nextScope)}`, () => {
       onCommit();
       controllerRef.current?.cancel(); conversationIdRef.current = undefined;
-      scopeRef.current = nextScope; setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
+      scopeRef.current = nextScope; setScope(nextScope); setHistory([]); questionDraft.checkpoint({question: ""}); questionBaseline.current = ""; questionDraft.reset(); setLastQuestion("");
       setState({ kind: "ready", answer: frontendText(locale, "AGENT_DEFAULT_ANSWER"), confidence: "low", citations: [] });
     }, onSettled);
   };
@@ -998,7 +1021,7 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     if (memberId && !clearAgentIntent(memberId)) { setStorageBlocked(true); return; }
     controllerRef.current?.cancel(); intentRef.current = null; conversationIdRef.current = undefined;
     setStorageBlocked(false); setUnconfirmed(false); setRecovery("ready");
-    scopeRef.current = initialScope ?? { kind: "all" }; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionDraft.reset(); setLastQuestion("");
+    scopeRef.current = initialScope ?? { kind: "all" }; setScope(scopeRef.current); setHistory([]); questionDraft.checkpoint({question: ""}); questionBaseline.current = ""; questionDraft.reset(); setLastQuestion("");
     setState({ kind: "cancelled" });
   };
   const retryFeedback = () => {
@@ -1014,6 +1037,10 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
   const discardFeedback = () => {
     if (!memberId || !feedbackRecordBlocked || !discardBlockedAgentFeedback(memberId)) return;
     setFeedbackRecordBlocked(false); setFeedbackBlocked(false); setFeedbackNotice(undefined);
+  };
+  const discardComposer = () => {
+    if (!memberId || !composerBlocked || !discardBlockedAgentComposerDraft(memberId)) return;
+    setComposerBlocked(false); setComposerNotice(undefined);
   };
   const feedbackAdmission = {
     begin: (id: string) => {
@@ -1036,6 +1063,8 @@ function AgentConversationRoute({ locale, initialScope, restoreId, memberId }: {
     if (recovery === "error") return <PageState kind="error" title={frontendText(locale, "AGENT_RESTORE_FAILED")} description={frontendText(locale, "AGENT_RESTORE_FAILED_DETAIL")}><Button onClick={() => setRecoveryVersion((value) => value + 1)}>{frontendText(locale, "AGENT_RETRY")}</Button><a className="ml-4" href="/agent">{frontendText(locale, "AGENT_NEW_CONVERSATION")}</a></PageState>;
     const visibleConversation = state.kind === "ready" ? state.conversationId : undefined;
     return <div className="space-y-6">
+      {composerBlocked && <div role="alert" data-agent-composer-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_COMPOSER_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardComposer}>{frontendText(locale, "AGENT_COMPOSER_RECORD_DISCARD")}</Button></div>}
+      {composerNotice && <p role="alert">{composerNotice}</p>}
       {feedbackRecordBlocked && <div role="alert" data-agent-feedback-record-blocked className="space-y-2 rounded-md border p-4 text-sm"><p>{frontendText(locale, "AGENT_FEEDBACK_RECORD_BLOCKED")}</p><Button type="button" variant="outline" onClick={discardFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RECORD_DISCARD")}</Button></div>}
       {feedbackIntent && visibleConversation !== feedbackIntent.conversationId && <div role="alert" data-agent-feedback-unconfirmed className="space-y-2 rounded-md border p-4"><p>{feedbackNotice ?? frontendText(locale, "AGENT_FEEDBACK_UNKNOWN")}</p><Button type="button" variant="outline" onClick={retryFeedback}>{frontendText(locale, "AGENT_FEEDBACK_RETRY")}</Button></div>}
       {history.length > 0 && <section aria-label={frontendText(locale, "AGENT_HISTORY")} className="space-y-3"><h2>{frontendText(locale, "AGENT_HISTORY")}</h2><p className="text-sm text-muted-foreground">{frontendText(locale, "AGENT_HISTORY_DETAIL")}</p>{history.map((message, index) => <article key={index} className="rounded-md border p-3"><h3 className="font-medium">{frontendText(locale, message.role === "user" ? "AGENT_QUESTION_LABEL" : "AGENT_HISTORY_ANSWER")}</h3><p className="whitespace-pre-wrap">{message.content}</p>{message.citations.map((citation) => <a key={citation.id} className="mr-3 underline" href={citation.href}>{citation.title ?? citation.id}</a>)}</article>)}</section>}
